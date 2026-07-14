@@ -1,2 +1,2 @@
-// Mobile plugins initialize themselves; web currently keeps the existing setup.
+// Mobile sqflite plugins initialize their database factory automatically.
 void initializeDatabaseFactory() {}
