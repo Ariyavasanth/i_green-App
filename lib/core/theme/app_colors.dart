@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
 abstract final class AppColors {
-  static const primary = Color(0xFF9CC70A);
-  static const active = Color(0xFF414A51);
-  static const canvas = Color(0xFFF5F6F8);
+  // Professional navy and blue palette replaces the earlier green/gray branding.
+  static const primary = Color(0xFF17233C);
+  static const active = Color(0xFF2563EB);
+  static const canvas = Color(0xFFF6F8FC);
   static const surface = Colors.white;
-  static const textPrimary = Color(0xFF25313C);
-  static const textSecondary = Color(0xFF6B7785);
-  static const divider = Color(0xFFE4E7EB);
+  static const textPrimary = Color(0xFF172033);
+  static const textSecondary = Color(0xFF64748B);
+  static const divider = Color(0xFFE2E8F0);
   static const sidebarText = Colors.white;
 }

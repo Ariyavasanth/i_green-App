@@ -9,9 +9,9 @@ class BooksApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => MaterialApp.router(
-        title: 'Books',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
-        routerConfig: ref.watch(appRouterProvider),
-      );
+    title: 'Books',
+    debugShowCheckedModeBanner: false,
+    theme: AppTheme.light,
+    routerConfig: ref.watch(appRouterProvider),
+  );
 }
