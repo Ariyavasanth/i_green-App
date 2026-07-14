@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/visual_effects.dart';
 import '../domain/books_repository.dart';
 import '../providers/books_providers.dart';
 
@@ -20,7 +21,7 @@ class HomePage extends ConsumerWidget {
       .when(
         loading: loading,
         error: error,
-        data: (m) => ListView(
+        data: (m) => FadeSlideIn(child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
             const Text(
@@ -72,7 +73,7 @@ class HomePage extends ConsumerWidget {
               ),
             ),
           ],
-        ),
+        )),
       );
   static Widget _metric(
     String title,
@@ -397,10 +398,15 @@ class PageFrame extends StatelessWidget {
   final VoidCallback? onAdd;
   final Widget? header;
   @override
-  Widget build(BuildContext context) => Column(
-    children: [
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      // Responsive gutters keep the content comfortable on phones and desktops.
+      final gutter = constraints.maxWidth < 600 ? 14.0 : 28.0;
+      return Padding(
+        padding: EdgeInsets.fromLTRB(gutter, 18, gutter, gutter),
+        child: Column(children: [
       Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 12, 12),
+        padding: const EdgeInsets.only(bottom: 16),
         child: Row(
           children: [
             Expanded(
@@ -421,14 +427,18 @@ class PageFrame extends StatelessWidget {
           ],
         ),
       ),
-      ?header,
-      const Divider(height: 1),
-      Expanded(child: child),
-    ],
+      if (header != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: header),
+      Expanded(child: GlassPanel(child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: FadeSlideIn(child: child),
+      ))),
+    ]),
+      );
+    },
   );
 }
 
-Widget loading() => const Center(child: CircularProgressIndicator());
+Widget loading() => const ShimmerLoading();
 Widget error(Object e, StackTrace s) =>
     Center(child: Text('Unable to load data\n$e', textAlign: TextAlign.center));
 

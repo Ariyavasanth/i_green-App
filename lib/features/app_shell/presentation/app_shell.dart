@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/visual_effects.dart';
 import '../../books/providers/books_providers.dart';
 
 final sidebarExpandedProvider = StateProvider<bool>((ref) => true);
@@ -44,7 +45,15 @@ class AppShell extends ConsumerWidget {
         );
         return Scaffold(
           drawer: compact ? Drawer(width: 250, child: sidebar) : null,
-          body: Builder(
+          body: DecoratedBox(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFF7FAEF), Color(0xFFE8EEE2)],
+              ),
+            ),
+            child: Builder(
             builder: (scaffoldContext) {
               return Row(
                 children: [
@@ -72,6 +81,7 @@ class AppShell extends ConsumerWidget {
                 ],
               );
             },
+            ),
           ),
         );
       },
@@ -90,12 +100,10 @@ class _TopBar extends StatelessWidget {
   final VoidCallback onMenuPressed;
 
   @override
-  Widget build(BuildContext context) => Container(
-    height: 58,
-    decoration: const BoxDecoration(
-      color: AppColors.surface,
-      border: Border(bottom: BorderSide(color: AppColors.divider)),
-    ),
+  Widget build(BuildContext context) => GlassPanel(
+    radius: 0,
+    child: SizedBox(
+    height: 64,
     child: Row(
       children: [
         IconButton(
@@ -176,6 +184,7 @@ class _TopBar extends StatelessWidget {
         ),
       ],
     ),
+    ),
   );
 }
 
@@ -193,7 +202,13 @@ class _Sidebar extends StatelessWidget {
   Widget build(BuildContext context) => AnimatedContainer(
     duration: const Duration(milliseconds: 180),
     width: expanded ? 250 : 72,
-    color: AppColors.primary,
+    decoration: const BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [AppColors.active, Color(0xFF252C31)],
+      ),
+    ),
     child: SafeArea(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -263,11 +278,11 @@ class _SidebarItem extends StatelessWidget {
   Widget build(BuildContext context) => Tooltip(
     message: expanded ? '' : destination.label,
     child: Material(
-      color: selected ? AppColors.active : Colors.transparent,
-      borderRadius: BorderRadius.circular(3),
+      color: selected ? AppColors.primary : Colors.transparent,
+      borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(3),
+        borderRadius: BorderRadius.circular(14),
         child: SizedBox(
           height: 44,
           child: Row(

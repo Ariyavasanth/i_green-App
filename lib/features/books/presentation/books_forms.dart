@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/visual_effects.dart';
 import '../domain/books_repository.dart';
 import '../providers/books_providers.dart';
 
@@ -232,11 +233,31 @@ class FormPage extends StatelessWidget {
   final VoidCallback onSave;
   final bool saving;
   @override
-  Widget build(BuildContext context) => Column(
-    children: [
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: const BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFFF7FAEF), Color(0xFFE8EEE2)],
+      ),
+    ),
+    child: Column(children: [
       AppBar(title: Text(title)),
       Expanded(
-        child: ListView(padding: const EdgeInsets.all(16), children: children),
+        child: LayoutBuilder(builder: (context, constraints) {
+          final horizontal = constraints.maxWidth > 760
+              ? (constraints.maxWidth - 700) / 2
+              : 16.0;
+          return FadeSlideIn(
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(horizontal, 20, horizontal, 24),
+              children: [GlassPanel(padding: const EdgeInsets.all(20), child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: children,
+              ))],
+            ),
+          );
+        }),
       ),
       SafeArea(
         top: false,
@@ -263,7 +284,7 @@ class FormPage extends StatelessWidget {
           ),
         ),
       ),
-    ],
+    ]),
   );
 }
 
