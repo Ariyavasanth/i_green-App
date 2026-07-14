@@ -69,9 +69,9 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         height: 58,
+      decoration: const BoxDecoration(
         color: AppColors.surface,
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: AppColors.divider)),
+        border: Border(bottom: BorderSide(color: AppColors.divider)),
         ),
         child: Row(children: [
           IconButton(
