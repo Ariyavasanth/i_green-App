@@ -6,6 +6,8 @@ import 'app_text_styles.dart';
 abstract final class AppTheme {
   static ThemeData get light => ThemeData(
     useMaterial3: true,
+    fontFamily: AppTextStyles.fontFamily,
+    fontFamilyFallback: AppTextStyles.fontFamilyFallback,
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.primary,
       primary: AppColors.primary,
@@ -15,10 +17,28 @@ abstract final class AppTheme {
     scaffoldBackgroundColor: AppColors.canvas,
     dividerColor: AppColors.divider,
     textTheme: const TextTheme(
+      displayLarge: TextStyle(
+        fontFamily: AppTextStyles.displayFontFamily,
+        fontSize: 34,
+        fontWeight: FontWeight.w700,
+        height: 1.12,
+        letterSpacing: -0.7,
+      ),
+      headlineMedium: TextStyle(
+        fontFamily: AppTextStyles.displayFontFamily,
+        fontSize: 28,
+        fontWeight: FontWeight.w700,
+        height: 1.16,
+        letterSpacing: -0.5,
+      ),
       titleLarge: AppTextStyles.pageTitle,
       titleMedium: AppTextStyles.heading,
+      titleSmall: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, height: 1.3),
+      bodyLarge: TextStyle(fontSize: 16, fontWeight: FontWeight.w400, height: 1.45),
       bodyMedium: AppTextStyles.body,
       bodySmall: AppTextStyles.caption,
+      labelLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, height: 1.2),
+      labelMedium: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, height: 1.2),
     ),
     appBarTheme: const AppBarTheme(
       elevation: 0,
