@@ -16,6 +16,7 @@ class NewCustomerForm extends ConsumerStatefulWidget {
 
 class _NewCustomerFormState extends ConsumerState<NewCustomerForm> with SingleTickerProviderStateMixin {
   final formKey = GlobalKey<FormState>();
+  final pageScroll = ScrollController();
   late final TabController tabs;
   CustomerType type = CustomerType.business;
   TaxPreference taxPreference = TaxPreference.taxable;
@@ -32,43 +33,63 @@ class _NewCustomerFormState extends ConsumerState<NewCustomerForm> with SingleTi
   static const gstOptions = ['Registered Business - Regular', 'Registered Business - Composition', 'Unregistered Business', 'Consumer', 'Overseas'];
 
   @override void initState() { super.initState(); tabs = TabController(length: 6, vsync: this); }
-  @override void dispose() { tabs.dispose(); for (final c in [first,last,company,display,email,workPhone,mobile,pan,gstin,opening,remarks]) { c.dispose(); } billing.dispose(); shipping.dispose(); for (final c in contacts) { c.dispose(); } for (final c in customFields) { c.dispose(); } super.dispose(); }
+  @override void dispose() { tabs.dispose(); pageScroll.dispose(); for (final c in [first,last,company,display,email,workPhone,mobile,pan,gstin,opening,remarks]) { c.dispose(); } billing.dispose(); shipping.dispose(); for (final c in contacts) { c.dispose(); } for (final c in customFields) { c.dispose(); } super.dispose(); }
 
-  @override Widget build(BuildContext context) => ColoredBox(color: AppColors.canvas, child: Column(children: [
-    AppBar(title: const Text('New Customer')),
-    Expanded(child: LayoutBuilder(builder: (_, box) { final gutter = AppLayout.gutter(box.maxWidth); return ResponsiveContent(maxWidth: 1200, child: Form(key: formKey, child: ListView(padding: EdgeInsets.all(gutter), children: [
+  @override Widget build(BuildContext context) => ColoredBox(color: AppColors.canvas, child: SafeArea(top: false, child: LayoutBuilder(builder: (_, box) { final gutter = AppLayout.gutter(box.maxWidth); return ResponsiveContent(maxWidth: 1200, child: Form(key: formKey, child: Scrollbar(controller: pageScroll, child: ListView(controller: pageScroll, padding: EdgeInsets.fromLTRB(gutter, gutter, gutter, gutter + 16), children: [
+      Row(children: [IconButton(onPressed: () => context.pop(), tooltip: 'Back', icon: const Icon(Icons.arrow_back)), const SizedBox(width: 4), const Expanded(child: Text('New Customer', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600)))]),
+      const SizedBox(height: 16),
       Card(child: Padding(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('Customer Type', style: TextStyle(fontWeight: FontWeight.w600)),
         Wrap(children: CustomerType.values.map((v) => SizedBox(width: 150, child: RadioListTile<CustomerType>(contentPadding: EdgeInsets.zero, title: Text(v == CustomerType.business ? 'Business' : 'Individual'), value: v, groupValue: type, onChanged: (x) => setState(() => type = x!)))).toList()),
         const Divider(), const SizedBox(height: 10),
         ResponsiveFieldGrid(children: [
-          DropdownButtonFormField<String>(initialValue: salutation, decoration: const InputDecoration(labelText: 'Salutation', border: OutlineInputBorder()), items: ['Mr.','Mrs.','Ms.','Dr.'].map(_item).toList(), onChanged: (v) => salutation = v!),
+          DropdownButtonFormField<String>(initialValue: salutation, isExpanded: true, decoration: _fieldDecoration('Salutation'), items: ['Mr.','Mrs.','Ms.','Dr.'].map(_item).toList(), onChanged: (v) => salutation = v!),
           CustomerTextField(controller: first, label: 'First Name'), CustomerTextField(controller: last, label: 'Last Name'),
           CustomerTextField(controller: company, label: 'Company Name'), CustomerTextField(controller: display, label: 'Display Name', required: true),
           CustomerTextField(controller: email, label: 'Email Address', keyboardType: TextInputType.emailAddress, validator: (v) { if (v == null || v.isEmpty) return null; return RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(v) ? null : 'Enter a valid email'; }),
           PhoneField(controller: workPhone, label: 'Work Phone'), PhoneField(controller: mobile, label: 'Mobile'),
-          DropdownButtonFormField<String>(initialValue: language, decoration: const InputDecoration(labelText: 'Customer Language', border: OutlineInputBorder()), items: ['English','Hindi','Tamil','Telugu','Kannada','Malayalam'].map(_item).toList(), onChanged: (v) => language = v!),
+          DropdownButtonFormField<String>(initialValue: language, isExpanded: true, decoration: _fieldDecoration('Customer Language'), items: ['English','Hindi','Tamil','Telugu','Kannada','Malayalam'].map(_item).toList(), onChanged: (v) => language = v!),
         ]),
       ]))), const SizedBox(height: 16),
-      Card(child: Column(children: [TabBar(controller: tabs, isScrollable: true, tabs: const [Tab(text: 'Other Details'),Tab(text: 'Address'),Tab(text: 'Contact Persons'),Tab(text: 'Custom Fields'),Tab(text: 'Reporting Tags'),Tab(text: 'Remarks')]), SizedBox(height: box.maxWidth < 600 ? 700 : 560, child: TabBarView(controller: tabs, children: [_otherDetails(), _addresses(), _contactPersons(), _customFields(), _reportingTags(), _remarks()]))])),
-      const SizedBox(height: 16), Row(children: [FilledButton(onPressed: saving ? null : _save, child: saving ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Save')), const SizedBox(width: 12), OutlinedButton(onPressed: saving ? null : () => context.pop(), child: const Text('Cancel'))]),
-    ]))); })),
-  ]));
+      Card(child: Column(children: [TabBar(controller: tabs, isScrollable: true, tabAlignment: TabAlignment.start, tabs: const [Tab(text: 'Other Details'),Tab(text: 'Address'),Tab(text: 'Contact Persons'),Tab(text: 'Custom Fields'),Tab(text: 'Reporting Tags'),Tab(text: 'Remarks')]), SizedBox(height: box.maxWidth < 600 ? 700 : 560, child: TabBarView(controller: tabs, children: [_otherDetails(), _addresses(), _contactPersons(), _customFields(), _reportingTags(), _remarks()]))])),
+      const SizedBox(height: 20), Row(children: [FilledButton(onPressed: saving ? null : _save, child: saving ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Save')), const SizedBox(width: 12), OutlinedButton(onPressed: saving ? null : () => context.pop(), child: const Text('Cancel'))]),
+    ])))); })));
 
   DropdownMenuItem<String> _item(String value) => DropdownMenuItem(value: value, child: Text(value));
-  Widget _pad(Widget child) => SingleChildScrollView(padding: const EdgeInsets.all(20), child: child);
+  InputDecoration _fieldDecoration(String label) => InputDecoration(labelText: label, border: const OutlineInputBorder());
+  Widget _pad(Widget child) => NotificationListener<OverscrollNotification>(
+    // Hand boundary drags back to the page so nested tab content cannot trap scrolling.
+    onNotification: (notification) {
+      if (!pageScroll.hasClients || notification.overscroll == 0) return false;
+      final nextOffset = (pageScroll.offset + notification.overscroll).clamp(
+        pageScroll.position.minScrollExtent,
+        pageScroll.position.maxScrollExtent,
+      );
+      pageScroll.jumpTo(nextOffset);
+      return true;
+    },
+    child: SingleChildScrollView(
+      primary: false,
+      physics: const AlwaysScrollableScrollPhysics(parent: ClampingScrollPhysics()),
+      padding: const EdgeInsets.all(20),
+      child: child,
+    ),
+  );
 
   Widget _otherDetails() => _pad(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
     ResponsiveFieldGrid(children: [
-      DropdownButtonFormField<String>(value: gstTreatment.isEmpty ? null : gstTreatment, decoration: const InputDecoration(labelText: 'GST Treatment *', border: OutlineInputBorder()), items: gstOptions.map(_item).toList(), validator: (v) => v == null ? 'GST Treatment is required' : null, onChanged: (v) => setState(() => gstTreatment = v!)),
-      DropdownButtonFormField<String>(value: supply.isEmpty ? null : supply, decoration: const InputDecoration(labelText: 'Place of Supply *', border: OutlineInputBorder()), items: states.map(_item).toList(), validator: (v) => v == null ? 'Place of Supply is required' : null, onChanged: (v) => setState(() => supply = v!)),
+      // Expanded dropdown content keeps long GST/state labels inside narrow grid cells.
+      DropdownButtonFormField<String>(value: gstTreatment.isEmpty ? null : gstTreatment, isExpanded: true, decoration: _fieldDecoration('GST Treatment *'), items: gstOptions.map(_item).toList(), validator: (v) => v == null ? 'GST Treatment is required' : null, onChanged: (v) => setState(() => gstTreatment = v!)),
+      DropdownButtonFormField<String>(value: supply.isEmpty ? null : supply, isExpanded: true, decoration: _fieldDecoration('Place of Supply *'), items: states.map(_item).toList(), validator: (v) => v == null ? 'Place of Supply is required' : null, onChanged: (v) => setState(() => supply = v!)),
       CustomerTextField(controller: gstin, label: 'GSTIN'), CustomerTextField(controller: pan, label: 'PAN'),
-      DropdownButtonFormField<String>(initialValue: currency, decoration: const InputDecoration(labelText: 'Currency', border: OutlineInputBorder()), items: const [DropdownMenuItem(value: 'INR', child: Text('INR - Indian Rupee'))], onChanged: (v) => currency = v!),
+      DropdownButtonFormField<String>(initialValue: currency, isExpanded: true, decoration: _fieldDecoration('Currency'), items: const [DropdownMenuItem(value: 'INR', child: Text('INR - Indian Rupee'))], onChanged: (v) => currency = v!),
       CustomerTextField(controller: opening, label: 'Opening Balance', keyboardType: TextInputType.number),
-      DropdownButtonFormField<String>(initialValue: paymentTerms, decoration: const InputDecoration(labelText: 'Payment Terms', border: OutlineInputBorder()), items: ['Due on Receipt','Net 15','Net 30','Net 45','Net 60'].map(_item).toList(), onChanged: (v) => paymentTerms = v!),
-    ]), const SizedBox(height: 12),
-    Wrap(spacing: 12, children: [const Text('Tax Preference:'), ChoiceChip(label: const Text('Taxable'), selected: taxPreference == TaxPreference.taxable, onSelected: (_) => setState(() => taxPreference = TaxPreference.taxable)), ChoiceChip(label: const Text('Tax Exempt'), selected: taxPreference == TaxPreference.taxExempt, onSelected: (_) => setState(() => taxPreference = TaxPreference.taxExempt))]),
-    CheckboxListTile(contentPadding: EdgeInsets.zero, value: portal, title: const Text('Enable Customer Portal'), onChanged: (v) => setState(() => portal = v!)),
+      DropdownButtonFormField<String>(initialValue: paymentTerms, isExpanded: true, decoration: _fieldDecoration('Payment Terms'), items: ['Due on Receipt','Net 15','Net 30','Net 45','Net 60'].map(_item).toList(), onChanged: (v) => paymentTerms = v!),
+    ]), const SizedBox(height: 20),
+    Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [const Text('Tax Preference:'), ChoiceChip(label: const Text('Taxable'), selected: taxPreference == TaxPreference.taxable, onSelected: (_) => setState(() => taxPreference = TaxPreference.taxable)), ChoiceChip(label: const Text('Tax Exempt'), selected: taxPreference == TaxPreference.taxExempt, onSelected: (_) => setState(() => taxPreference = TaxPreference.taxExempt))]),
+    const SizedBox(height: 16),
+    InkWell(onTap: () => setState(() => portal = !portal), child: Row(mainAxisSize: MainAxisSize.min, children: [const Text('Enable Customer Portal'), const SizedBox(width: 8), Checkbox(value: portal, onChanged: (v) => setState(() => portal = v!))])),
+    const SizedBox(height: 16),
     Wrap(spacing: 12, runSpacing: 8, children: [OutlinedButton.icon(onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('GST portal prefill will be available soon.'))), icon: const Icon(Icons.auto_fix_high), label: const Text('Prefill from GST portal')), OutlinedButton.icon(onPressed: _pickFiles, icon: const Icon(Icons.upload_file), label: Text(documents.isEmpty ? 'Upload Documents' : '${documents.length} document(s)'))]),
     const Padding(padding: EdgeInsets.only(top: 8), child: Text('Up to 10 files, maximum 10 MB each.', style: TextStyle(color: AppColors.textSecondary))),
   ]));
