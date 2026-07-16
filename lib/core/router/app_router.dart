@@ -6,6 +6,8 @@ import '../../features/books/domain/books_repository.dart';
 import '../../features/books/presentation/books_forms.dart';
 import '../../features/books/presentation/books_pages.dart';
 import '../../screens/login_screen.dart';
+import '../../screens/customers/active_customers_list.dart';
+import '../../screens/customers/new_customer_form.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
@@ -26,7 +28,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/customers',
-            builder: (_, _) => const CustomersPage(),
+            builder: (_, _) => const ActiveCustomersList(),
+            routes: [
+              GoRoute(path: 'new', builder: (_, _) => const NewCustomerForm()),
+            ],
           ),
           GoRoute(
             path: '/quotes',
