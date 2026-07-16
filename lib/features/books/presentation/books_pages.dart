@@ -8,6 +8,7 @@ import '../../../core/widgets/visual_effects.dart';
 import '../domain/books_repository.dart';
 import '../providers/books_providers.dart';
 import 'dashboard_sections.dart';
+import 'item_details_screen.dart';
 
 final money = NumberFormat.currency(
   locale: 'en_IN',
@@ -138,6 +139,11 @@ class ItemsPage extends ConsumerWidget {
                 final r = rows[i];
                 return ListTile(
                   minVerticalPadding: 14,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ItemDetailsScreen(item: r),
+                    ),
+                  ),
                   leading: Container(
                     width: 48,
                     height: 48,
