@@ -188,8 +188,200 @@ class DottedImageDropZone extends StatelessWidget {
   );
 }
 
-/// Shared empty state for the Transactions/History tabs — no per-item
-/// transaction linkage exists in the data model yet.
+/// Responsive transaction filters and empty state. Transaction linkage is not
+/// added here so the existing data and business behavior remain unchanged.
+class ItemTransactionsTab extends StatefulWidget {
+  const ItemTransactionsTab({super.key});
+
+  @override
+  State<ItemTransactionsTab> createState() => _ItemTransactionsTabState();
+}
+
+class _ItemTransactionsTabState extends State<ItemTransactionsTab> {
+  static const _transactionTypes = [
+    'Quotes',
+    'Sales Orders',
+    'Invoices',
+    'Delivery Challans',
+    'Credit Notes',
+    'Recurring Invoices',
+    'Purchase Orders',
+    'Bills',
+    'Vendor Credits',
+  ];
+
+  String _selectedType = _transactionTypes.first;
+  String _selectedStatus = 'All';
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final isDesktop = constraints.maxWidth >= AppBreakpoints.laptop;
+      final gutter = AppLayout.gutter(constraints.maxWidth);
+
+      return ResponsiveContent(
+        child: Padding(
+          padding: EdgeInsets.all(gutter),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildFilters(constraints.maxWidth - (gutter * 2), isDesktop),
+              Expanded(
+                child: _TransactionEmptyState(
+                  transactionType: _selectedType,
+                  // The desktop reference uses a restrained text-only state.
+                  showIcon: !isDesktop,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+
+  Widget _buildFilters(double availableWidth, bool isDesktop) {
+    final typeFilter = TransactionFilterDropdown(
+      label: 'Filter By',
+      value: _selectedType,
+      items: _transactionTypes,
+      onChanged: (value) => setState(() => _selectedType = value),
+    );
+    final statusFilter = TransactionFilterDropdown(
+      label: 'Status',
+      value: _selectedStatus,
+      items: const ['All'],
+      onChanged: (value) => setState(() => _selectedStatus = value),
+    );
+
+    if (isDesktop) {
+      return Row(
+        children: [
+          SizedBox(width: 190, child: typeFilter),
+          const SizedBox(width: 10),
+          SizedBox(width: 130, child: statusFilter),
+        ],
+      );
+    }
+
+    // Keep both controls aligned on phones; stack only when the viewport is
+    // too narrow to retain comfortable touch targets.
+    if (availableWidth >= 280) {
+      return Row(
+        children: [
+          Expanded(flex: 3, child: typeFilter),
+          const SizedBox(width: 10),
+          Expanded(flex: 2, child: statusFilter),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [typeFilter, const SizedBox(height: 10), statusFilter],
+    );
+  }
+}
+
+class TransactionFilterDropdown extends StatelessWidget {
+  const TransactionFilterDropdown({
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+    super.key,
+  });
+
+  final String label;
+  final String value;
+  final List<String> items;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) => DropdownButtonFormField<String>(
+    initialValue: value,
+    isExpanded: true,
+    decoration: InputDecoration(
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 12,
+      ),
+    ),
+    // Build the closed field as one row so its label and value cannot overlap.
+    selectedItemBuilder: (context) => items
+        .map(
+          (item) => Row(
+            children: [
+              Text('$label: ', style: AppTextStyles.caption),
+              Expanded(
+                child: Text(
+                  item,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.body.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        )
+        .toList(),
+    items: items
+        .map(
+          (item) => DropdownMenuItem(
+            value: item,
+            child: Text(
+              item,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.body,
+            ),
+          ),
+        )
+        .toList(),
+    onChanged: (selection) {
+      if (selection != null) onChanged(selection);
+    },
+  );
+}
+
+class _TransactionEmptyState extends StatelessWidget {
+  const _TransactionEmptyState({
+    required this.transactionType,
+    required this.showIcon,
+  });
+
+  final String transactionType;
+  final bool showIcon;
+
+  @override
+  Widget build(BuildContext context) {
+    final type = transactionType.toLowerCase();
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (showIcon) ...const [
+            Icon(
+              Icons.receipt_long_outlined,
+              size: 52,
+              color: AppColors.textSecondary,
+            ),
+            SizedBox(height: 16),
+          ],
+          Text(
+            showIcon ? 'No transactions to display' : 'There are no $type',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.caption.copyWith(fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shared empty state for tabs that do not require additional controls.
 class ItemEmptyTab extends StatelessWidget {
   const ItemEmptyTab({required this.message, super.key});
   final String message;

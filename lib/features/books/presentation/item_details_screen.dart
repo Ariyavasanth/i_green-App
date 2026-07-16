@@ -27,7 +27,7 @@ class ItemDetailsScreen extends StatelessWidget {
       body: TabBarView(
         children: [
           ItemOverviewTab(item: item),
-          const ItemEmptyTab(message: 'No transactions to display'),
+          const ItemTransactionsTab(),
           const ItemEmptyTab(message: 'No history to display'),
         ],
       ),
