@@ -251,7 +251,7 @@ class FormPage extends StatelessWidget {
       gradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [Color(0xFFF7FAEF), Color(0xFFE8EEE2)],
+        colors: [Color(0xFFECF2FC), Color(0xFFECF2FC)],
       ),
     ),
     child: Column(
