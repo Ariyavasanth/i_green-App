@@ -5,11 +5,13 @@ import '../../features/app_shell/presentation/app_shell.dart';
 import '../../features/books/domain/books_repository.dart';
 import '../../features/books/presentation/books_forms.dart';
 import '../../features/books/presentation/books_pages.dart';
+import '../../screens/login_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
-    initialLocation: '/home',
+    initialLocation: '/login',
     routes: [
+      GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       ShellRoute(
         builder: (context, state, child) =>
             AppShell(currentLocation: state.uri.path, child: child),

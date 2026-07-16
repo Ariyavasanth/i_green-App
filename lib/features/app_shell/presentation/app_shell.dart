@@ -7,6 +7,7 @@ import '../../../core/layout/responsive_layout.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/visual_effects.dart';
+import '../../authentication/providers/authentication_providers.dart';
 import '../../books/providers/books_providers.dart';
 
 final sidebarExpandedProvider = StateProvider<bool>((ref) => true);
@@ -53,6 +54,10 @@ class AppShell extends ConsumerWidget {
           onSelected: (path) {
             context.go(path);
             if (compact) Navigator.of(context).pop();
+          },
+          onLogout: () async {
+            await ref.read(authenticationRepositoryProvider).signOut();
+            if (context.mounted) context.go('/login');
           },
         );
         return Scaffold(
@@ -220,10 +225,12 @@ class _Sidebar extends StatelessWidget {
     required this.currentLocation,
     required this.expanded,
     required this.onSelected,
+    required this.onLogout,
   });
   final String currentLocation;
   final bool expanded;
   final ValueChanged<String> onSelected;
+  final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) => AnimatedContainer(
@@ -296,6 +303,21 @@ class _Sidebar extends StatelessWidget {
                   ),
                 ],
               ],
+            ),
+          ),
+          const Divider(height: 1, color: Color(0x33FFFFFF)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 12),
+            child: _SidebarItem(
+              destination: const _Destination(
+                'Logout',
+                '/login',
+                Icons.logout,
+                'Account',
+              ),
+              selected: false,
+              expanded: expanded,
+              onTap: onLogout,
             ),
           ),
         ],
