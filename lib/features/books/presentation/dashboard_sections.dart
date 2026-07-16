@@ -394,10 +394,13 @@ class _ProjectsCard extends StatelessWidget {
 class _BankAndCreditCardsCard extends StatelessWidget {
   const _BankAndCreditCardsCard();
 
+  // Deep-to-vivid diagonal gradients stand in for the textured card artwork.
+  static const _hdfcGradient = [Color(0xFF4A0404), Color(0xFFB71C1C), Color(0xFF7A0E0E)];
+  static const _iciciGradient = [Color(0xFF071B33), Color(0xFF1565C0), Color(0xFF0D47A1)];
+
   static const _accounts = [
-    ('HDFC Bank · Current A/c', '•••• 4321', 245320.50, false),
-    ('ICICI Bank · Savings', '•••• 7765', 96840.00, false),
-    ('HDFC Credit Card', '•••• 9087', 18560.75, true),
+    ('HDFC Bank', '•••• 4321', 245320.50, _hdfcGradient),
+    ('ICICI Bank', '•••• 7765', 96840.00, _iciciGradient),
   ];
 
   @override
@@ -411,18 +414,27 @@ class _BankAndCreditCardsCard extends StatelessWidget {
           const SizedBox(height: 12),
           LayoutBuilder(
             builder: (context, constraints) {
-              final columns = constraints.maxWidth >= AppBreakpoints.laptop
-                  ? 3
-                  : constraints.maxWidth >= AppBreakpoints.tablet
-                  ? 2
-                  : 1;
-              final width = (constraints.maxWidth - (columns - 1) * 12) / columns;
-              return Wrap(
-                spacing: 12,
-                runSpacing: 12,
+              final cards = [
+                for (final (name, number, balance, gradient) in _accounts)
+                  _bankCard(name, number, balance, gradient),
+              ];
+              if (constraints.maxWidth < AppBreakpoints.tablet) {
+                return Column(
+                  children: [
+                    for (var i = 0; i < cards.length; i++) ...[
+                      if (i > 0) const SizedBox(height: 12),
+                      cards[i],
+                    ],
+                  ],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final (name, number, balance, isCredit) in _accounts)
-                    SizedBox(width: width, child: _accountTile(name, number, balance, isCredit)),
+                  for (var i = 0; i < cards.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 12),
+                    Expanded(child: cards[i]),
+                  ],
                 ],
               );
             },
@@ -432,49 +444,76 @@ class _BankAndCreditCardsCard extends StatelessWidget {
     ),
   );
 
-  static Widget _accountTile(String name, String number, double balance, bool isCredit) => Container(
-    padding: const EdgeInsets.all(14),
+  static Widget _bankCard(String name, String number, double balance, List<Color> gradient) => Container(
+    height: 176,
+    padding: const EdgeInsets.all(20),
     decoration: BoxDecoration(
-      color: AppColors.canvas,
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: AppColors.divider),
+      borderRadius: BorderRadius.circular(20),
+      gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: gradient),
+      boxShadow: [
+        BoxShadow(color: gradient.last.withValues(alpha: .35), blurRadius: 16, offset: const Offset(0, 8)),
+      ],
     ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    child: Stack(
       children: [
-        Row(
-          children: [
-            Icon(
-              isCredit ? Icons.credit_card : Icons.account_balance_outlined,
-              size: 18,
-              color: AppColors.active,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                name,
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                overflow: TextOverflow.ellipsis,
+        // Faint circular highlights approximate a textured card surface.
+        Positioned(
+          right: -30,
+          top: -30,
+          child: _circle(140, Colors.white.withValues(alpha: .06)),
+        ),
+        Positioned(left: -20, bottom: -40, child: _circle(120, Colors.black.withValues(alpha: .12))),
+        // Bottom-weighted dark overlay keeps text legible over the texture.
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Colors.transparent, Colors.black.withValues(alpha: .25)],
               ),
             ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(number, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-        const SizedBox(height: 10),
-        Text(
-          money.format(balance),
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: isCredit ? const Color(0xFFDB4437) : AppColors.textPrimary,
           ),
         ),
-        Text(
-          isCredit ? 'Outstanding' : 'Available balance',
-          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.account_balance, color: Colors.white, size: 22),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    name,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            Text(
+              number,
+              style: TextStyle(color: Colors.white.withValues(alpha: .85), fontSize: 13, letterSpacing: 1.2),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  money.format(balance),
+                  style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
+                ),
+                const Text('Available balance', style: TextStyle(color: Colors.white70, fontSize: 11)),
+              ],
+            ),
+          ],
         ),
       ],
     ),
   );
+
+  static Widget _circle(double size, Color color) =>
+      Container(width: size, height: size, decoration: BoxDecoration(shape: BoxShape.circle, color: color));
 }
