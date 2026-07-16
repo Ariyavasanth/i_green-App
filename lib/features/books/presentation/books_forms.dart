@@ -1,3 +1,7 @@
+import 'dart:typed_data';
+
+import 'package:desktop_drop/desktop_drop.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -17,14 +21,23 @@ class NewItemPage extends ConsumerStatefulWidget {
 class _NewItemState extends ConsumerState<NewItemPage> {
   final name = TextEditingController(),
       sku = TextEditingController(),
-      rate = TextEditingController();
+      rate = TextEditingController(),
+      hsnCode = TextEditingController(),
+      salesDescription = TextEditingController(),
+      costPrice = TextEditingController(),
+      purchaseDescription = TextEditingController();
   bool saving = false;
+  bool trackInventory = false;
   String itemType = 'Goods';
   @override
   void dispose() {
     name.dispose();
     sku.dispose();
     rate.dispose();
+    hsnCode.dispose();
+    salesDescription.dispose();
+    costPrice.dispose();
+    purchaseDescription.dispose();
     super.dispose();
   }
 
@@ -33,31 +46,100 @@ class _NewItemState extends ConsumerState<NewItemPage> {
     title: 'New Item',
     saving: saving,
     onSave: save,
+    maxWidth: 1120,
     children: [
-      field(name, 'Name*'),
-      const SizedBox(height: 14),
-      const Text('Type'),
-      const SizedBox(height: 8),
-      SegmentedButton<String>(
-        segments: const [
-          ButtonSegment(value: 'Goods', label: Text('Goods')),
-          ButtonSegment(value: 'Service', label: Text('Service')),
-        ],
-        selected: {itemType},
-        onSelectionChanged: (values) => setState(() => itemType = values.first),
+      const SectionTitle('Basic Information'),
+      LayoutBuilder(
+        builder: (context, constraints) {
+          final details = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              field(name, 'Name*'),
+              const SizedBox(height: 14),
+              const Text('Type'),
+              const SizedBox(height: 8),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'Goods', label: Text('Goods')),
+                  ButtonSegment(value: 'Service', label: Text('Service')),
+                ],
+                selected: {itemType},
+                onSelectionChanged: (values) =>
+                    setState(() => itemType = values.first),
+              ),
+              const SizedBox(height: 14),
+              field(sku, 'SKU'),
+              const SizedBox(height: 14),
+              const StaticSelect('Unit', 'pcs'),
+              const SizedBox(height: 14),
+              field(hsnCode, 'HSN Code'),
+              const SizedBox(height: 14),
+              const StaticSelect('Tax Preference*', 'Taxable'),
+            ],
+          );
+          // The reference moves the image beside basic fields on wide screens.
+          if (constraints.maxWidth < AppBreakpoints.laptop) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                details,
+                const SizedBox(height: 18),
+                const ItemImageUpload(),
+              ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: 3, child: details),
+              const SizedBox(width: 32),
+              const Expanded(flex: 2, child: ItemImageUpload()),
+            ],
+          );
+        },
       ),
-      field(sku, 'SKU'),
-      const SizedBox(height: 14),
-      const StaticSelect('Tax Preference*', 'Taxable'),
-      const SizedBox(height: 24),
-      const SectionTitle('Sales Information'),
-      field(rate, 'Selling Price*', prefix: 'INR', number: true),
-      const SizedBox(height: 14),
-      const StaticSelect('Account*', 'Sales'),
-      const SizedBox(height: 24),
-      const SectionTitle('Purchase Information'),
-      const StaticSelect('Account*', 'Cost of Goods Sold'),
-      const SizedBox(height: 24),
+      const SizedBox(height: 28),
+      LayoutBuilder(
+        builder: (context, constraints) {
+          final sales = _ItemInfoSection(
+            title: 'Sales Information',
+            children: [
+              field(rate, 'Selling Price*', prefix: 'INR', number: true),
+              const SizedBox(height: 14),
+              field(salesDescription, 'Description', lines: 3),
+              const SizedBox(height: 14),
+              const StaticSelect('Account*', 'Sales'),
+            ],
+          );
+          final purchase = _ItemInfoSection(
+            title: 'Purchase Information',
+            children: [
+              field(costPrice, 'Cost Price', prefix: 'INR', number: true),
+              const SizedBox(height: 14),
+              field(purchaseDescription, 'Description', lines: 3),
+              const SizedBox(height: 14),
+              const StaticSelect('Account*', 'Cost of Goods Sold'),
+              const SizedBox(height: 14),
+              const StaticSelect('Preferred Vendor', 'Select a vendor'),
+            ],
+          );
+          if (constraints.maxWidth < AppBreakpoints.tablet) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [sales, const SizedBox(height: 28), purchase],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: sales),
+              const SizedBox(width: 28),
+              Expanded(child: purchase),
+            ],
+          );
+        },
+      ),
+      const SizedBox(height: 28),
       const SectionTitle('Default Tax Rates'),
       const ListTile(
         contentPadding: EdgeInsets.zero,
@@ -69,11 +151,20 @@ class _NewItemState extends ConsumerState<NewItemPage> {
         title: Text('Inter State Tax Rate'),
         trailing: Text('IGST18 (18 %)'),
       ),
-      const CheckboxListTile(
+      const SizedBox(height: 18),
+      const SectionTitle('Inventory'),
+      CheckboxListTile(
         contentPadding: EdgeInsets.zero,
-        value: false,
-        onChanged: null,
-        title: Text('Track Inventory for this item'),
+        controlAffinity: ListTileControlAffinity.leading,
+        value: trackInventory,
+        onChanged: (value) => setState(() => trackInventory = value ?? false),
+        title: const Text('Track Inventory for this item'),
+        subtitle: const Padding(
+          padding: EdgeInsets.only(top: 6),
+          child: Text(
+            'You cannot enable/disable inventory tracking once you\'ve created transactions for this item.',
+          ),
+        ),
       ),
     ],
   );
@@ -239,12 +330,14 @@ class FormPage extends StatelessWidget {
     required this.children,
     required this.onSave,
     required this.saving,
+    this.maxWidth = AppLayout.maxFormWidth,
     super.key,
   });
   final String title;
   final List<Widget> children;
   final VoidCallback onSave;
   final bool saving;
+  final double maxWidth;
   @override
   Widget build(BuildContext context) => DecoratedBox(
     decoration: const BoxDecoration(
@@ -263,7 +356,7 @@ class FormPage extends StatelessWidget {
               final gutter = AppLayout.gutter(constraints.maxWidth);
               return FadeSlideIn(
                 child: ResponsiveContent(
-                  maxWidth: AppLayout.maxFormWidth,
+                  maxWidth: maxWidth,
                   child: ListView(
                     keyboardDismissBehavior:
                         ScrollViewKeyboardDismissBehavior.onDrag,
@@ -357,6 +450,128 @@ class StaticSelect extends StatelessWidget {
       ],
     ),
   );
+}
+
+class _ItemInfoSection extends StatelessWidget {
+  const _ItemInfoSection({required this.title, required this.children});
+
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [SectionTitle(title), ...children],
+  );
+}
+
+class ItemImageUpload extends StatefulWidget {
+  const ItemImageUpload({super.key});
+
+  @override
+  State<ItemImageUpload> createState() => _ItemImageUploadState();
+}
+
+class _ItemImageUploadState extends State<ItemImageUpload> {
+  Uint8List? imageBytes;
+  bool dragging = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final desktop = MediaQuery.sizeOf(context).width >= AppBreakpoints.laptop;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Item Image', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 10),
+        DropTarget(
+          onDragEntered: (_) => setState(() => dragging = true),
+          onDragExited: (_) => setState(() => dragging = false),
+          onDragDone: (details) async {
+            setState(() => dragging = false);
+            if (details.files.isNotEmpty) {
+              await _setImage(await details.files.first.readAsBytes());
+            }
+          },
+          child: InkWell(
+            onTap: _pickImage,
+            borderRadius: BorderRadius.circular(14),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              height: desktop ? 290 : 190,
+              decoration: BoxDecoration(
+                color: dragging
+                    ? AppColors.primary.withValues(alpha: .08)
+                    : Colors.white.withValues(alpha: .72),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: dragging ? AppColors.primary : AppColors.divider,
+                  width: dragging ? 2 : 1,
+                ),
+              ),
+              child: imageBytes == null
+                  ? Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.add_photo_alternate_outlined,
+                          size: 42,
+                          color: AppColors.active,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          desktop
+                              ? 'Drag & drop an image here'
+                              : 'Tap to upload an image',
+                          textAlign: TextAlign.center,
+                        ),
+                        if (desktop) ...[
+                          const SizedBox(height: 5),
+                          const Text(
+                            'or Browse',
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ],
+                    )
+                  : ClipRRect(
+                      borderRadius: BorderRadius.circular(13),
+                      child: Image.memory(imageBytes!, fit: BoxFit.cover),
+                    ),
+            ),
+          ),
+        ),
+        if (imageBytes != null)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => setState(() => imageBytes = null),
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Remove image'),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _pickImage() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+    if (result?.files.single.bytes != null) {
+      await _setImage(result!.files.single.bytes!);
+    }
+  }
+
+  Future<void> _setImage(Uint8List bytes) async {
+    if (!mounted) return;
+    // The selected image is intentionally local form state; save APIs stay unchanged.
+    setState(() => imageBytes = bytes);
+  }
 }
 
 Widget field(
