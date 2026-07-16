@@ -6,7 +6,7 @@ class SqliteBooksRepository implements BooksRepository {
   Database? _database;
   Future<Database> get _db async => _database ??= await openDatabase(
     p.join(await getDatabasesPath(), 'igreen_books.db'),
-    version: 2,
+    version: 3,
     onCreate: (db, _) async {
       // SQL is isolated in this repository so UI code remains backend-agnostic.
       await db.execute(
@@ -23,6 +23,9 @@ class SqliteBooksRepository implements BooksRepository {
       );
       await db.execute(
         'CREATE TABLE adjustment_items(id INTEGER PRIMARY KEY AUTOINCREMENT, adjustment_id INTEGER NOT NULL, item_id INTEGER NOT NULL, quantity_adjusted REAL NOT NULL, value_adjusted REAL NOT NULL DEFAULT 0, FOREIGN KEY(adjustment_id) REFERENCES adjustments(id), FOREIGN KEY(item_id) REFERENCES items(id))',
+      );
+      await db.execute(
+        'CREATE TABLE item_history(id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER NOT NULL, occurred_at TEXT NOT NULL, details TEXT NOT NULL, FOREIGN KEY(item_id) REFERENCES items(id))',
       );
       await _seed(db);
     },
@@ -56,6 +59,19 @@ class SqliteBooksRepository implements BooksRepository {
           'CREATE TABLE adjustment_items(id INTEGER PRIMARY KEY AUTOINCREMENT, adjustment_id INTEGER NOT NULL, item_id INTEGER NOT NULL, quantity_adjusted REAL NOT NULL, value_adjusted REAL NOT NULL DEFAULT 0)',
         );
       }
+      if (oldVersion < 3) {
+        await db.execute(
+          'CREATE TABLE item_history(id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER NOT NULL, occurred_at TEXT NOT NULL, details TEXT NOT NULL, FOREIGN KEY(item_id) REFERENCES items(id))',
+        );
+        // Existing items need an initial event so their History tab is useful after migration.
+        await db.rawInsert(
+          'INSERT INTO item_history(item_id, occurred_at, details) SELECT id, ?, ? FROM items',
+          [
+            DateTime(2026, 6, 28, 10, 35).toIso8601String(),
+            'created by - iGreenTec Engineering india Pvt.Ltd.',
+          ],
+        );
+      }
     },
   );
 
@@ -68,13 +84,18 @@ class SqliteBooksRepository implements BooksRepository {
       'Bore plug Gauge',
       '3 Jaw Chuck',
     ]) {
-      await db.insert('items', {
+      final itemId = await db.insert('items', {
         'name': name,
         'sku': '',
         'rate': 0.0,
         'cost_price': 0.0,
         'track_inventory': 1,
         'stock_on_hand': 10.0,
+      });
+      await db.insert('item_history', {
+        'item_id': itemId,
+        'occurred_at': DateTime(2026, 6, 28, 10, 35).toIso8601String(),
+        'details': 'created by - iGreenTec Engineering india Pvt.Ltd.',
       });
     }
     for (final name in [
@@ -132,17 +153,42 @@ class SqliteBooksRepository implements BooksRepository {
           )
           .toList();
   @override
+  Future<List<ItemHistoryEntry>> getItemHistory(int itemId) async =>
+      (await (await _db).query(
+            'item_history',
+            where: 'item_id = ?',
+            whereArgs: [itemId],
+            orderBy: 'occurred_at DESC',
+          ))
+          .map(
+            (r) => ItemHistoryEntry(
+              date: DateTime.parse(r['occurred_at'] as String),
+              details: r['details'] as String,
+            ),
+          )
+          .toList();
+
+  @override
   Future<void> addItem({
     required String name,
     String sku = '',
     double rate = 0,
     String type = 'Goods',
   }) async {
-    await (await _db).insert('items', {
-      'name': name,
-      'sku': sku,
-      'rate': rate,
-      'type': type,
+    final db = await _db;
+    await db.transaction((txn) async {
+      final itemId = await txn.insert('items', {
+        'name': name,
+        'sku': sku,
+        'rate': rate,
+        'type': type,
+      });
+      // Keep item creation and its audit event atomic.
+      await txn.insert('item_history', {
+        'item_id': itemId,
+        'occurred_at': DateTime.now().toIso8601String(),
+        'details': 'created by - iGreenTec Engineering india Pvt.Ltd.',
+      });
     });
   }
 

@@ -9,6 +9,11 @@ final booksRepositoryProvider = Provider<BooksRepository>(
 final itemsProvider = FutureProvider<List<BookItem>>(
   (ref) => ref.watch(booksRepositoryProvider).getItems(),
 );
+final itemHistoryProvider =
+    FutureProvider.family<List<ItemHistoryEntry>, int>(
+      (ref, itemId) =>
+          ref.watch(booksRepositoryProvider).getItemHistory(itemId),
+    );
 final customersProvider = FutureProvider<List<Customer>>(
   (ref) => ref.watch(booksRepositoryProvider).getCustomers(),
 );

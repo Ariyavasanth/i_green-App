@@ -24,6 +24,9 @@ class FirebaseBooksRepository implements BooksRepository {
   @override
   Future<List<BookItem>> getItems() async => _pending();
   @override
+  Future<List<ItemHistoryEntry>> getItemHistory(int itemId) async =>
+      _pending();
+  @override
   Future<List<SalesTransaction>> getTransactions(TransactionType type) async =>
       _pending();
   @override

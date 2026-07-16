@@ -21,6 +21,13 @@ class BookItem {
   final bool trackInventory;
 }
 
+class ItemHistoryEntry {
+  const ItemHistoryEntry({required this.date, required this.details});
+
+  final DateTime date;
+  final String details;
+}
+
 class Customer {
   const Customer({
     required this.id,
@@ -136,6 +143,7 @@ class DashboardMetrics {
 
 abstract interface class BooksRepository {
   Future<List<BookItem>> getItems();
+  Future<List<ItemHistoryEntry>> getItemHistory(int itemId);
   Future<void> addItem({
     required String name,
     String sku = '',
