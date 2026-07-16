@@ -12,13 +12,24 @@ class CustomerListCard extends StatelessWidget {
 
   @override Widget build(BuildContext context) {
     final money = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
+    final secondary = [
+      if (customer.gstin.isNotEmpty) 'GSTIN: ${customer.gstin}',
+      if (customer.placeOfSupply.isNotEmpty) 'Place of supply: ${customer.placeOfSupply}',
+    ];
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
-      child: CheckboxListTile(
-        value: selected, onChanged: onSelected, controlAffinity: ListTileControlAffinity.leading,
-        title: Text(customer.displayName, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.active)),
-        subtitle: Padding(padding: const EdgeInsets.only(top: 6), child: Text([customer.companyName, customer.email, customer.workPhone].where((e) => e.isNotEmpty).join('\n'))),
-        secondary: Text(money.format(customer.receivables), style: const TextStyle(fontWeight: FontWeight.w600)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 12, 16, 12),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Checkbox(value: selected, onChanged: onSelected, visualDensity: VisualDensity.compact),
+          const SizedBox(width: 4),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(customer.displayName, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.active)),
+            if (secondary.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6), child: Text(secondary.join('\n'))),
+          ])),
+          const SizedBox(width: 12),
+          Text(money.format(customer.receivables), style: const TextStyle(fontWeight: FontWeight.w600)),
+        ]),
       ),
     );
   }

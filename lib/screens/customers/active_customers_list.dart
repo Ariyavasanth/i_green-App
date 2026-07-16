@@ -23,26 +23,38 @@ class _ActiveCustomersListState extends ConsumerState<ActiveCustomersList> {
   @override Widget build(BuildContext context) {
     final async = ref.watch(activeCustomersProvider);
     return ColoredBox(color: AppColors.canvas, child: Column(children: [
-      AppBar(title: const Text('Active Customers'), actions: [
-        Padding(padding: const EdgeInsets.all(8), child: FilledButton.icon(onPressed: () => context.go('/customers/new'), icon: const Icon(Icons.add), label: const Text('New'))),
-      ]),
       Expanded(child: LayoutBuilder(builder: (context, box) {
         final gutter = AppLayout.gutter(box.maxWidth);
         return ResponsiveContent(child: Padding(padding: EdgeInsets.all(gutter), child: Column(children: [
-          _toolbar(async.valueOrNull ?? const []), const SizedBox(height: 14),
+          _pageHeader(), const SizedBox(height: 12),
+          _toolbar(async.valueOrNull ?? const []), const SizedBox(height: 12),
           Expanded(child: async.when(loading: () => const Center(child: CircularProgressIndicator()), error: (e, _) => Center(child: Text('Unable to load customers: $e')), data: (all) => _content(all, box.maxWidth))),
         ])));
       })),
     ]));
   }
 
+  Widget _pageHeader() => Row(children: [
+    const Expanded(child: Text('Active Customers', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600))),
+    FilledButton(
+      onPressed: () => context.go('/customers/new'),
+      style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8)),
+      child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.add), SizedBox(width: 6), Text('New')]),
+    ),
+  ]);
+
   Widget _toolbar(List<Customer> all) {
     final supplies = ['All', ...{for (final c in all) c.placeOfSupply}.where((e) => e.isNotEmpty)];
-    return LayoutBuilder(builder: (_, c) => Wrap(spacing: 12, runSpacing: 10, alignment: WrapAlignment.spaceBetween, children: [
-      SizedBox(width: c.maxWidth < 600 ? c.maxWidth : 360, child: TextField(onChanged: (v) => setState(() => query = v), decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search customers', border: OutlineInputBorder(), isDense: true))),
-      DropdownButton<String>(value: supplies.contains(supplyFilter) ? supplyFilter : 'All', items: supplies.map((e) => DropdownMenuItem(value: e, child: Text(e == 'All' ? 'All places of supply' : e))).toList(), onChanged: (v) => setState(() => supplyFilter = v!)),
-      if (selected.isNotEmpty) Text('${selected.length} selected', style: const TextStyle(fontWeight: FontWeight.w600)),
-    ]));
+    return LayoutBuilder(builder: (_, c) {
+      final search = TextField(onChanged: (v) => setState(() => query = v), decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search customers', border: OutlineInputBorder(), isDense: true));
+      final filter = DropdownButton<String>(value: supplies.contains(supplyFilter) ? supplyFilter : 'All', items: supplies.map((e) => DropdownMenuItem(value: e, child: Text(e == 'All' ? 'All places of supply' : e))).toList(), onChanged: (v) => setState(() => supplyFilter = v!));
+      final selection = selected.isEmpty ? null : Text('${selected.length} selected', style: const TextStyle(fontWeight: FontWeight.w600));
+      if (c.maxWidth < 600) {
+        // Keep wrapped controls compact so the customer list starts immediately below them.
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [search, const SizedBox(height: 8), filter, if (selection != null) ...[const SizedBox(height: 8), selection]]);
+      }
+      return Row(children: [Expanded(child: search), const SizedBox(width: 12), filter, if (selection != null) ...[const SizedBox(width: 12), selection]]);
+    });
   }
 
   List<Customer> _rows(List<Customer> all) {
