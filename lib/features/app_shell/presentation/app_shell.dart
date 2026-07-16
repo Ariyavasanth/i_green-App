@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -21,13 +22,23 @@ class AppShell extends ConsumerWidget {
   final Widget child;
 
   static const destinations = <_Destination>[
-    _Destination('Home', '/home', Icons.home_outlined),
-    _Destination('Items', '/items', Icons.inventory_2_outlined),
-    _Destination('Customers', '/customers', Icons.people_outline),
-    _Destination('Quotes', '/quotes', Icons.request_quote_outlined),
-    _Destination('Sales Orders', '/sales-orders', Icons.shopping_cart_outlined),
-    _Destination('Invoices', '/invoices', Icons.receipt_long_outlined),
-    _Destination('Inventory Adjustments', '/inventory-adjustments', Icons.tune),
+    _Destination('Home', '/home', Icons.home_outlined, 'Overview'),
+    _Destination('Items', '/items', Icons.inventory_2_outlined, 'Stock'),
+    _Destination(
+      'Inventory Adjustments',
+      '/inventory-adjustments',
+      Icons.tune,
+      'Stock',
+    ),
+    _Destination('Customers', '/customers', Icons.people_outline, 'Sales'),
+    _Destination('Quotes', '/quotes', Icons.request_quote_outlined, 'Sales'),
+    _Destination(
+      'Sales Orders',
+      '/sales-orders',
+      Icons.shopping_cart_outlined,
+      'Sales',
+    ),
+    _Destination('Invoices', '/invoices', Icons.receipt_long_outlined, 'Sales'),
   ];
 
   @override
@@ -217,6 +228,7 @@ class _Sidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) => AnimatedContainer(
     duration: const Duration(milliseconds: 180),
+    curve: Curves.easeInOutCubic,
     width: expanded ? 250 : 72,
     decoration: const BoxDecoration(
       gradient: LinearGradient(
@@ -230,23 +242,23 @@ class _Sidebar extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 58),
+            constraints: const BoxConstraints(minHeight: 64),
             child: Row(
               mainAxisAlignment: expanded
                   ? MainAxisAlignment.start
                   : MainAxisAlignment.center,
               children: [
-                if (expanded) const SizedBox(width: 20),
-                const Icon(Icons.auto_stories, color: Colors.white, size: 28),
+                if (expanded) const SizedBox(width: 18),
+                const Icon(Icons.auto_stories, color: Colors.white, size: 26),
                 if (expanded) ...[
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 11),
                   const Text(
                     'BOOKS',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 18,
+                      fontSize: 19,
                       fontWeight: FontWeight.w700,
-                      letterSpacing: 1.2,
+                      letterSpacing: 0.8,
                     ),
                   ),
                 ],
@@ -254,25 +266,69 @@ class _Sidebar extends StatelessWidget {
             ),
           ),
           const Divider(height: 1, color: Color(0x33FFFFFF)),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 20),
               children: [
-                for (final destination in AppShell.destinations)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: _SidebarItem(
-                      destination: destination,
-                      selected: currentLocation == destination.path,
+                for (
+                  var index = 0;
+                  index < AppShell.destinations.length;
+                  index++
+                ) ...[
+                  // A header is rendered only when the destination's section changes.
+                  if (index == 0 ||
+                      AppShell.destinations[index - 1].section !=
+                          AppShell.destinations[index].section)
+                    _SidebarSectionHeader(
+                      label: AppShell.destinations[index].section,
                       expanded: expanded,
-                      onTap: () => onSelected(destination.path),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 3),
+                    child: _SidebarItem(
+                      destination: AppShell.destinations[index],
+                      selected:
+                          currentLocation == AppShell.destinations[index].path,
+                      expanded: expanded,
+                      onTap: () => onSelected(AppShell.destinations[index].path),
                     ),
                   ),
+                ],
               ],
             ),
           ),
         ],
+      ),
+    ),
+  );
+}
+
+class _SidebarSectionHeader extends StatelessWidget {
+  const _SidebarSectionHeader({required this.label, required this.expanded});
+
+  final String label;
+  final bool expanded;
+
+  @override
+  Widget build(BuildContext context) => AnimatedContainer(
+    duration: const Duration(milliseconds: 180),
+    curve: Curves.easeInOutCubic,
+    height: expanded ? 38 : 16,
+    padding: EdgeInsets.only(left: expanded ? 12 : 0, top: expanded ? 14 : 0),
+    alignment: Alignment.centerLeft,
+    child: AnimatedOpacity(
+      duration: const Duration(milliseconds: 120),
+      opacity: expanded ? 1 : 0,
+      child: Text(
+        label.toUpperCase(),
+        maxLines: 1,
+        style: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
+          color: Colors.white70,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          letterSpacing: 0.7,
+        ),
       ),
     ),
   );
@@ -293,34 +349,53 @@ class _SidebarItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Tooltip(
     message: expanded ? '' : destination.label,
-    child: Material(
-      color: selected ? AppColors.primary : Colors.transparent,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 48),
-          child: Row(
-            mainAxisAlignment: expanded
-                ? MainAxisAlignment.start
-                : MainAxisAlignment.center,
-            children: [
-              if (expanded) const SizedBox(width: 14),
-              Icon(destination.icon, color: Colors.white, size: 21),
-              if (expanded) ...[
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Text(
-                    destination.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.navigation,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      decoration: BoxDecoration(
+        color: selected ? AppColors.primary : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 46),
+            child: Row(
+              mainAxisAlignment: expanded
+                  ? MainAxisAlignment.start
+                  : MainAxisAlignment.center,
+              children: [
+                if (expanded) const SizedBox(width: 13),
+                Icon(destination.icon, color: Colors.white, size: 20),
+                if (expanded) ...[
+                  const SizedBox(width: 13),
+                  Expanded(
+                    child: AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 180),
+                      style: CupertinoTheme.of(context).textTheme.textStyle
+                          .copyWith(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: selected
+                                ? FontWeight.w600
+                                : FontWeight.w500,
+                            letterSpacing: -0.2,
+                          ),
+                      child: Text(
+                        destination.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
+                  const SizedBox(width: 8),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -329,8 +404,9 @@ class _SidebarItem extends StatelessWidget {
 }
 
 class _Destination {
-  const _Destination(this.label, this.path, this.icon);
+  const _Destination(this.label, this.path, this.icon, this.section);
   final String label;
   final String path;
   final IconData icon;
+  final String section;
 }
