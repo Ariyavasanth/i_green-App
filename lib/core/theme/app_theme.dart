@@ -8,6 +8,8 @@ abstract final class AppTheme {
     useMaterial3: true,
     fontFamily: AppTextStyles.fontFamily,
     fontFamilyFallback: AppTextStyles.fontFamilyFallback,
+    splashFactory: NoSplash.splashFactory,
+    visualDensity: VisualDensity.standard,
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.primary,
       primary: AppColors.primary,
@@ -16,6 +18,12 @@ abstract final class AppTheme {
     ),
     scaffoldBackgroundColor: AppColors.canvas,
     dividerColor: AppColors.divider,
+    dividerTheme: const DividerThemeData(
+      color: AppColors.divider,
+      thickness: 0.5,
+      space: 1,
+    ),
+    iconTheme: const IconThemeData(color: AppColors.active, size: 22),
     textTheme: const TextTheme(
       displayLarge: TextStyle(
         fontFamily: AppTextStyles.displayFontFamily,
@@ -46,27 +54,65 @@ abstract final class AppTheme {
       backgroundColor: AppColors.surface,
       foregroundColor: AppColors.textPrimary,
       surfaceTintColor: Colors.transparent,
+      centerTitle: true,
+      titleTextStyle: AppTextStyles.heading,
+      toolbarHeight: 52,
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        backgroundColor: AppColors.active,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        minimumSize: const Size(44, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
-        elevation: 2,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        elevation: 0,
+        minimumSize: const Size(44, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.active,
+        minimumSize: const Size(44, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+        side: const BorderSide(color: AppColors.divider),
+        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: AppColors.active,
+        minimumSize: const Size(44, 44),
+        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: Colors.white.withValues(alpha: .72),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+      fillColor: AppColors.surface,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      hintStyle: AppTextStyles.body.copyWith(color: AppColors.textSecondary),
+      labelStyle: AppTextStyles.body.copyWith(color: AppColors.textSecondary),
+      floatingLabelStyle: AppTextStyles.caption.copyWith(color: AppColors.active),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(10),
         borderSide: const BorderSide(color: AppColors.divider),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: AppColors.primary, width: 2),
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: AppColors.active, width: 1.5),
       ),
     ),
     cardTheme: const CardThemeData(
@@ -75,8 +121,45 @@ abstract final class AppTheme {
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
         side: BorderSide(color: AppColors.divider),
-        borderRadius: BorderRadius.all(Radius.circular(20)),
+        borderRadius: BorderRadius.all(Radius.circular(16)),
       ),
+    ),
+    dialogTheme: const DialogThemeData(
+      backgroundColor: AppColors.surface,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: AppColors.divider),
+        borderRadius: BorderRadius.all(Radius.circular(16)),
+      ),
+    ),
+    popupMenuTheme: const PopupMenuThemeData(
+      color: AppColors.surface,
+      surfaceTintColor: Colors.transparent,
+      elevation: 4,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: AppColors.divider),
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+      ),
+    ),
+    checkboxTheme: CheckboxThemeData(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+      side: const BorderSide(color: AppColors.divider, width: 1.5),
+    ),
+    switchTheme: SwitchThemeData(
+      trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+      trackColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected)
+            ? AppColors.primary
+            : AppColors.divider,
+      ),
+      thumbColor: const WidgetStatePropertyAll(Colors.white),
+    ),
+    listTileTheme: const ListTileThemeData(
+      iconColor: AppColors.active,
+      textColor: AppColors.textPrimary,
+      minTileHeight: 48,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
     ),
     pageTransitionsTheme: const PageTransitionsTheme(
       builders: {
