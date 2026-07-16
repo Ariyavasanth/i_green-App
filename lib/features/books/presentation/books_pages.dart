@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/visual_effects.dart';
 import '../domain/books_repository.dart';
 import '../providers/books_providers.dart';
+import 'dashboard_sections.dart';
 
 final money = NumberFormat.currency(
   locale: 'en_IN',
@@ -72,34 +73,7 @@ class HomePage extends ConsumerWidget {
                     },
                   ),
                   const SizedBox(height: 12),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(18),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Financial Overview',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          _line('Revenue', money.format(m.revenue)),
-                          _line('Net Profit', money.format(m.netProfit)),
-                          _line(
-                            'Inventory at Risk',
-                            '${m.inventoryAtRisk} items',
-                          ),
-                          const SizedBox(height: 18),
-                          const Text('Cash Flow · Last 6 Months'),
-                          const SizedBox(height: 12),
-                          const SizedBox(height: 110, child: _CashFlowChart()),
-                        ],
-                      ),
-                    ),
-                  ),
+                  DashboardSections(metrics: m),
                 ],
               ),
             ),
@@ -137,18 +111,6 @@ class HomePage extends ConsumerWidget {
           ),
         ],
       ),
-    ),
-  );
-  static Widget _line(String label, String value) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 10),
-    child: Wrap(
-      alignment: WrapAlignment.spaceBetween,
-      spacing: 16,
-      runSpacing: 4,
-      children: [
-        Text(label),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
-      ],
     ),
   );
 }
@@ -513,40 +475,3 @@ class PageFrame extends StatelessWidget {
 Widget loading() => const ShimmerLoading();
 Widget error(Object e, StackTrace s) =>
     Center(child: Text('Unable to load data\n$e', textAlign: TextAlign.center));
-
-class _CashFlowChart extends StatelessWidget {
-  const _CashFlowChart();
-  @override
-  Widget build(BuildContext context) =>
-      CustomPaint(painter: _CashPainter(), child: const SizedBox.expand());
-}
-
-class _CashPainter extends CustomPainter {
-  @override
-  void paint(Canvas c, Size s) {
-    final inside = Paint()
-      ..color = AppColors.primary
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-    final outside = Paint()
-      ..color = AppColors.active
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-    final a = [120, 140, 180, 150, 200, 170], b = [80, 90, 100, 110, 130, 95];
-    Path path(List<int> values) {
-      final p = Path();
-      for (var i = 0; i < values.length; i++) {
-        final x = s.width * i / (values.length - 1),
-            y = s.height - (values[i] / 220 * s.height);
-        i == 0 ? p.moveTo(x, y) : p.lineTo(x, y);
-      }
-      return p;
-    }
-
-    c.drawPath(path(a), inside);
-    c.drawPath(path(b), outside);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
