@@ -402,3 +402,154 @@ class ItemEmptyTab extends StatelessWidget {
     ),
   );
 }
+
+/// Read-only product information using the same card and row treatment as the
+/// existing Overview tab.
+class ItemProductDetailsTab extends StatelessWidget {
+  const ItemProductDetailsTab({required this.item, super.key});
+
+  final BookItem item;
+
+  @override
+  Widget build(BuildContext context) => _ItemFieldsTab(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const DetailRow('Product', 'Gear Shaft Assembly'),
+        const DetailRow('Drawing', 'GS-1001.pdf'),
+        const DetailRow('Product Name', 'Industrial Gear Shaft'),
+        const DetailRow('Master Serial No.', 'MSN-GS-001'),
+        const DetailRow('Part No.', 'GS-1001'),
+      ],
+    ),
+  );
+}
+
+/// BOM information. Size and Quantity are intentionally the only editable
+/// fields; the remaining values stay read-only.
+class ItemBomTab extends StatefulWidget {
+  const ItemBomTab({required this.item, super.key});
+
+  final BookItem item;
+
+  @override
+  State<ItemBomTab> createState() => _ItemBomTabState();
+}
+
+class _ItemBomTabState extends State<ItemBomTab> {
+  @override
+  Widget build(BuildContext context) => _ItemFieldsTab(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const DetailRow('Part Name', 'Gear Shaft'),
+        const DetailRow('Drawing', 'Gear Shaft Drawing'),
+        const DetailRow('Drawing No.', 'DRW-GS-1001'),
+        const DetailRow('Part No.', 'GS-1001-P01'),
+        const DetailRow('Raw Material (RM)', 'Alloy Steel Round Bar'),
+        const DetailRow('Material Grade', 'EN19'),
+        const _EditableDetailRow(label: 'Size', initialValue: '50 x 300 mm'),
+        const _EditableDetailRow(
+          label: 'Quantity',
+          initialValue: '2',
+          keyboardType: TextInputType.numberWithOptions(decimal: true),
+        ),
+        const DetailRow('Child Part / Outsourcing', 'Outsourcing'),
+        const DetailRow('Vendor (if outsourced)', 'Precision Heat Treaters'),
+      ],
+    ),
+  );
+}
+
+/// Read-only process information, ready for repository-backed values when the
+/// item model exposes them.
+class ItemProcessFlowTab extends StatelessWidget {
+  const ItemProcessFlowTab({super.key});
+
+  @override
+  Widget build(BuildContext context) => const _ItemFieldsTab(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DetailRow('Operation No.', '10'),
+        DetailRow('Operation Name', 'Turning'),
+        DetailRow('Machine', 'CNC Lathe'),
+        DetailRow('Standard Duration (min)', '45'),
+        DetailRow('Vendor Job', 'No'),
+        DetailRow('Vendor Name', '-'),
+      ],
+    ),
+  );
+}
+
+class _ItemFieldsTab extends StatelessWidget {
+  const _ItemFieldsTab({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) => SingleChildScrollView(
+      padding: EdgeInsets.all(AppLayout.gutter(constraints.maxWidth)),
+      child: ResponsiveContent(
+        child: Card(
+          child: Padding(padding: const EdgeInsets.all(20), child: child),
+        ),
+      ),
+    ),
+  );
+}
+
+class _EditableDetailRow extends StatelessWidget {
+  const _EditableDetailRow({
+    required this.label,
+    this.initialValue,
+    this.keyboardType,
+  });
+
+  final String label;
+  final String? initialValue;
+  final TextInputType? keyboardType;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final field = TextFormField(
+          initialValue: initialValue,
+          keyboardType: keyboardType,
+          style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+          decoration: const InputDecoration(isDense: true),
+        );
+
+        // Stack on narrow screens so labels and editable fields remain usable.
+        if (constraints.maxWidth < 360) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(label, style: AppTextStyles.caption),
+              const SizedBox(height: 8),
+              field,
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 170,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(label, style: AppTextStyles.caption),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: field),
+          ],
+        );
+      },
+    ),
+  );
+}
