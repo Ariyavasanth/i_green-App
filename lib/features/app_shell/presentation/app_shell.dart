@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/layout/responsive_layout.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/visual_effects.dart';
@@ -34,7 +35,7 @@ class AppShell extends ConsumerWidget {
     final expanded = ref.watch(sidebarExpandedProvider);
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < 900;
+        final compact = constraints.maxWidth < AppBreakpoints.laptop;
         final sidebar = _Sidebar(
           currentLocation: currentLocation,
           expanded: compact || expanded,
@@ -54,33 +55,35 @@ class AppShell extends ConsumerWidget {
               ),
             ),
             child: Builder(
-            builder: (scaffoldContext) {
-              return Row(
-                children: [
-                  if (!compact) sidebar,
-                  Expanded(
-                    child: Column(
-                      children: [
-                        _TopBar(
-                          compact: compact,
-                          expanded: expanded,
-                          onMenuPressed: compact
-                              ? () => Scaffold.of(scaffoldContext).openDrawer()
-                              : () =>
-                                    ref
-                                            .read(
-                                              sidebarExpandedProvider.notifier,
-                                            )
-                                            .state =
-                                        !expanded,
-                        ),
-                        Expanded(child: child),
-                      ],
+              builder: (scaffoldContext) {
+                return Row(
+                  children: [
+                    if (!compact) sidebar,
+                    Expanded(
+                      child: Column(
+                        children: [
+                          _TopBar(
+                            compact: compact,
+                            expanded: expanded,
+                            onMenuPressed: compact
+                                ? () =>
+                                      Scaffold.of(scaffoldContext).openDrawer()
+                                : () =>
+                                      ref
+                                              .read(
+                                                sidebarExpandedProvider
+                                                    .notifier,
+                                              )
+                                              .state =
+                                          !expanded,
+                          ),
+                          Expanded(child: child),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              );
-            },
+                  ],
+                );
+              },
             ),
           ),
         );
@@ -102,88 +105,101 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) => GlassPanel(
     radius: 0,
-    child: SizedBox(
-    height: 64,
-    child: Row(
-      children: [
-        IconButton(
-          tooltip: compact ? 'Open navigation' : 'Toggle navigation',
-          onPressed: onMenuPressed,
-          icon: Icon(expanded && !compact ? Icons.menu_open : Icons.menu),
-        ),
-        const SizedBox(width: 8),
-        const Expanded(
-          child: Text('My Organization', style: AppTextStyles.heading),
-        ),
-        IconButton(
-          tooltip: 'Search current section',
-          onPressed: () => showDialog<void>(
-            context: context,
-            builder: (dialogContext) => AlertDialog(
-              title: const Text('Search'),
-              content: TextField(
-                autofocus: true,
-                decoration: const InputDecoration(
-                  hintText: 'Search records',
-                  prefixIcon: Icon(Icons.search),
-                ),
-                onChanged: (value) => ProviderScope.containerOf(
-                  context,
-                ).read(booksSearchQueryProvider.notifier).state = value,
-                onSubmitted: (_) => Navigator.pop(dialogContext),
+    child: SafeArea(
+      bottom: false,
+      child: ConstrainedBox(
+        // A minimum height preserves the design while allowing large text to grow.
+        constraints: const BoxConstraints(minHeight: 64),
+        child: Row(
+          children: [
+            IconButton(
+              tooltip: compact ? 'Open navigation' : 'Toggle navigation',
+              onPressed: onMenuPressed,
+              icon: Icon(expanded && !compact ? Icons.menu_open : Icons.menu),
+            ),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'My Organization',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.heading,
               ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    ProviderScope.containerOf(
+            ),
+            IconButton(
+              tooltip: 'Search current section',
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (dialogContext) => AlertDialog(
+                  title: const Text('Search'),
+                  content: TextField(
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      hintText: 'Search records',
+                      prefixIcon: Icon(Icons.search),
+                    ),
+                    onChanged: (value) => ProviderScope.containerOf(
                       context,
-                    ).read(booksSearchQueryProvider.notifier).state = '';
-                    Navigator.pop(dialogContext);
-                  },
-                  child: const Text('Clear'),
+                    ).read(booksSearchQueryProvider.notifier).state = value,
+                    onSubmitted: (_) => Navigator.pop(dialogContext),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () {
+                        ProviderScope.containerOf(
+                          context,
+                        ).read(booksSearchQueryProvider.notifier).state = '';
+                        Navigator.pop(dialogContext);
+                      },
+                      child: const Text('Clear'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      child: const Text('Done'),
+                    ),
+                  ],
                 ),
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('Done'),
+              ),
+              icon: const Icon(Icons.search),
+            ),
+            PopupMenuButton<String>(
+              tooltip: 'Quick create',
+              icon: const Icon(Icons.add_box_outlined, color: AppColors.active),
+              onSelected: (path) => context.push(path),
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: '/items/new', child: Text('New Item')),
+                PopupMenuItem(value: '/quotes/new', child: Text('New Quote')),
+                PopupMenuItem(
+                  value: '/sales-orders/new',
+                  child: Text('New Sales Order'),
+                ),
+                PopupMenuItem(
+                  value: '/invoices/new',
+                  child: Text('New Invoice'),
+                ),
+                PopupMenuItem(
+                  value: '/inventory-adjustments/new',
+                  child: Text('New Adjustment'),
                 ),
               ],
             ),
-          ),
-          icon: const Icon(Icons.search),
-        ),
-        PopupMenuButton<String>(
-          tooltip: 'Quick create',
-          icon: const Icon(Icons.add_box_outlined, color: AppColors.active),
-          onSelected: (path) => context.push(path),
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: '/items/new', child: Text('New Item')),
-            PopupMenuItem(value: '/quotes/new', child: Text('New Quote')),
-            PopupMenuItem(
-              value: '/sales-orders/new',
-              child: Text('New Sales Order'),
+            IconButton(
+              tooltip: 'Notifications',
+              onPressed: () {},
+              icon: const Icon(Icons.notifications_none),
             ),
-            PopupMenuItem(value: '/invoices/new', child: Text('New Invoice')),
-            PopupMenuItem(
-              value: '/inventory-adjustments/new',
-              child: Text('New Adjustment'),
-            ),
+            if (MediaQuery.sizeOf(context).width >= 520)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: CircleAvatar(
+                  radius: 16,
+                  backgroundColor: AppColors.active,
+                  child: Text('A', style: TextStyle(color: Colors.white)),
+                ),
+              ),
           ],
         ),
-        IconButton(
-          tooltip: 'Notifications',
-          onPressed: () {},
-          icon: const Icon(Icons.notifications_none),
-        ),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16),
-          child: CircleAvatar(
-            radius: 16,
-            backgroundColor: AppColors.active,
-            child: Text('A', style: TextStyle(color: Colors.white)),
-          ),
-        ),
-      ],
-    ),
+      ),
     ),
   );
 }
@@ -213,8 +229,8 @@ class _Sidebar extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(
-            height: 58,
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 58),
             child: Row(
               mainAxisAlignment: expanded
                   ? MainAxisAlignment.start
@@ -283,8 +299,8 @@ class _SidebarItem extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
-        child: SizedBox(
-          height: 44,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
           child: Row(
             mainAxisAlignment: expanded
                 ? MainAxisAlignment.start

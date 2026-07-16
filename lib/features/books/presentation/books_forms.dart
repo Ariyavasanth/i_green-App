@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import '../../../core/layout/responsive_layout.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/visual_effects.dart';
 import '../domain/books_repository.dart';
@@ -148,26 +149,38 @@ class _NewTransactionState extends ConsumerState<NewTransactionPage> {
         const SectionTitle('Item Table'),
         field(item, 'Item details'),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: field(
-                quantity,
-                'Quantity',
-                number: true,
-                onChanged: (_) => setState(() {}),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: field(
-                rate,
-                'Rate',
-                number: true,
-                onChanged: (_) => setState(() {}),
-              ),
-            ),
-          ],
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final quantityField = field(
+              quantity,
+              'Quantity',
+              number: true,
+              onChanged: (_) => setState(() {}),
+            );
+            final rateField = field(
+              rate,
+              'Rate',
+              number: true,
+              onChanged: (_) => setState(() {}),
+            );
+            // Keep fields full-width on small phones and pair them when readable.
+            if (constraints.maxWidth < 420) {
+              return Column(
+                children: [
+                  quantityField,
+                  const SizedBox(height: 12),
+                  rateField,
+                ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(child: quantityField),
+                const SizedBox(width: 12),
+                Expanded(child: rateField),
+              ],
+            );
+          },
         ),
         const SizedBox(height: 12),
         ListTile(
@@ -241,50 +254,72 @@ class FormPage extends StatelessWidget {
         colors: [Color(0xFFF7FAEF), Color(0xFFE8EEE2)],
       ),
     ),
-    child: Column(children: [
-      AppBar(title: Text(title)),
-      Expanded(
-        child: LayoutBuilder(builder: (context, constraints) {
-          final horizontal = constraints.maxWidth > 760
-              ? (constraints.maxWidth - 700) / 2
-              : 16.0;
-          return FadeSlideIn(
-            child: ListView(
-              padding: EdgeInsets.fromLTRB(horizontal, 20, horizontal, 24),
-              children: [GlassPanel(padding: const EdgeInsets.all(20), child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: children,
-              ))],
-            ),
-          );
-        }),
-      ),
-      SafeArea(
-        top: false,
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(top: BorderSide(color: AppColors.divider)),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: saving ? null : onSave,
-                  child: Text(saving ? 'Saving...' : 'Save as Draft'),
+    child: Column(
+      children: [
+        AppBar(title: Text(title)),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final gutter = AppLayout.gutter(constraints.maxWidth);
+              return FadeSlideIn(
+                child: ResponsiveContent(
+                  maxWidth: AppLayout.maxFormWidth,
+                  child: ListView(
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    padding: EdgeInsets.fromLTRB(gutter, 20, gutter, 24),
+                    children: [
+                      GlassPanel(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: children,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              OutlinedButton(
-                onPressed: saving ? null : () => context.pop(),
-                child: const Text('Cancel'),
-              ),
-            ],
+              );
+            },
           ),
         ),
-      ),
-    ]),
+        SafeArea(
+          top: false,
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(top: BorderSide(color: AppColors.divider)),
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final save = ElevatedButton(
+                  onPressed: saving ? null : onSave,
+                  child: Text(saving ? 'Saving...' : 'Save as Draft'),
+                );
+                final cancel = OutlinedButton(
+                  onPressed: saving ? null : () => context.pop(),
+                  child: const Text('Cancel'),
+                );
+                if (constraints.maxWidth < 380) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [save, const SizedBox(height: 8), cancel],
+                  );
+                }
+                return Row(
+                  children: [
+                    Expanded(child: save),
+                    const SizedBox(width: 10),
+                    cancel,
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    ),
   );
 }
 
@@ -298,9 +333,11 @@ class SectionTitle extends StatelessWidget {
       children: [
         const Icon(Icons.check_box, color: AppColors.active, size: 20),
         const SizedBox(width: 8),
-        Text(
-          text,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+        Flexible(
+          child: Text(
+            text,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
         ),
       ],
     ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import '../../../core/layout/responsive_layout.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/visual_effects.dart';
 import '../domain/books_repository.dart';
@@ -21,59 +22,89 @@ class HomePage extends ConsumerWidget {
       .when(
         loading: loading,
         error: error,
-        data: (m) => FadeSlideIn(child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            const Text(
-              'Hello, iGreenTec Engineering India Pvt. Ltd.,',
-              style: TextStyle(fontSize: 21, fontWeight: FontWeight.w600),
-            ),
-            const Text(
-              'Here’s your business overview',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 20),
-            _metric(
-              'Total Receivables',
-              'Current ${money.format(m.currentReceivables)}',
-              money.format(m.receivables),
-              'Overdue ${money.format(m.overdueReceivables)}',
-            ),
-            const SizedBox(height: 12),
-            _metric(
-              'Total Payables',
-              'Current ${money.format(m.currentPayables)}',
-              money.format(m.payables),
-              'Overdue ${money.format(m.overduePayables)}',
-            ),
-            const SizedBox(height: 12),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Financial Overview',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
+        data: (m) => FadeSlideIn(
+          child: LayoutBuilder(
+            builder: (context, constraints) => ResponsiveContent(
+              child: ListView(
+                padding: EdgeInsets.all(AppLayout.gutter(constraints.maxWidth)),
+                children: [
+                  const Text(
+                    'Hello, iGreenTec Engineering India Pvt. Ltd.,',
+                    style: TextStyle(fontSize: 21, fontWeight: FontWeight.w600),
+                  ),
+                  const Text(
+                    'Here’s your business overview',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 20),
+                  // Dashboard cards reflow without duplicating their data or behavior.
+                  LayoutBuilder(
+                    builder: (context, cardConstraints) {
+                      final receivables = _metric(
+                        'Total Receivables',
+                        'Current ${money.format(m.currentReceivables)}',
+                        money.format(m.receivables),
+                        'Overdue ${money.format(m.overdueReceivables)}',
+                      );
+                      final payables = _metric(
+                        'Total Payables',
+                        'Current ${money.format(m.currentPayables)}',
+                        money.format(m.payables),
+                        'Overdue ${money.format(m.overduePayables)}',
+                      );
+                      if (cardConstraints.maxWidth < AppBreakpoints.tablet) {
+                        return Column(
+                          children: [
+                            receivables,
+                            const SizedBox(height: 12),
+                            payables,
+                          ],
+                        );
+                      }
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: receivables),
+                          const SizedBox(width: 16),
+                          Expanded(child: payables),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(18),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Financial Overview',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          _line('Revenue', money.format(m.revenue)),
+                          _line('Net Profit', money.format(m.netProfit)),
+                          _line(
+                            'Inventory at Risk',
+                            '${m.inventoryAtRisk} items',
+                          ),
+                          const SizedBox(height: 18),
+                          const Text('Cash Flow · Last 6 Months'),
+                          const SizedBox(height: 12),
+                          const SizedBox(height: 110, child: _CashFlowChart()),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    _line('Revenue', money.format(m.revenue)),
-                    _line('Net Profit', money.format(m.netProfit)),
-                    _line('Inventory at Risk', '${m.inventoryAtRisk} items'),
-                    const SizedBox(height: 18),
-                    const Text('Cash Flow · Last 6 Months'),
-                    const SizedBox(height: 12),
-                    const SizedBox(height: 110, child: _CashFlowChart()),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-          ],
-        )),
+          ),
+        ),
       );
   static Widget _metric(
     String title,
@@ -98,19 +129,27 @@ class HomePage extends ConsumerWidget {
           const SizedBox(height: 16),
           Container(height: 8, color: const Color(0xFFFF8618)),
           const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            spacing: 16,
+            runSpacing: 6,
             children: [Text(current), Text(overdue)],
           ),
         ],
       ),
     ),
   );
-  static Widget _line(String label, String value) => ListTile(
-    contentPadding: EdgeInsets.zero,
-    dense: true,
-    title: Text(label),
-    trailing: Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
+  static Widget _line(String label, String value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 10),
+    child: Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      spacing: 16,
+      runSpacing: 4,
+      children: [
+        Text(label),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
+      ],
+    ),
   );
 }
 
@@ -153,7 +192,14 @@ class ItemsPage extends ConsumerWidget {
                   subtitle: Text(
                     '${r.type} · Stock ${r.stockOnHand.toStringAsFixed(0)}',
                   ),
-                  trailing: Text(money.format(r.rate)),
+                  trailing: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 120),
+                    child: Text(
+                      money.format(r.rate),
+                      textAlign: TextAlign.end,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 );
               },
             );
@@ -201,7 +247,14 @@ class CustomersPage extends ConsumerWidget {
                   ),
                   subtitle: Text('${r.company}\n${r.gstTreatment}'),
                   isThreeLine: true,
-                  trailing: Text(money.format(r.receivables)),
+                  trailing: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 120),
+                    child: Text(
+                      money.format(r.receivables),
+                      textAlign: TextAlign.end,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 );
               },
             );
@@ -251,27 +304,26 @@ class TransactionsPage extends ConsumerWidget {
                     horizontal: 16,
                     vertical: 8,
                   ),
-                  title: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          r.number,
-                          style: const TextStyle(
-                            color: AppColors.active,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      Text(money.format(r.amount)),
-                    ],
+                  title: Text(
+                    r.number,
+                    style: const TextStyle(
+                      color: AppColors.active,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   subtitle: Padding(
                     padding: const EdgeInsets.only(top: 7),
-                    child: Row(
+                    child: Wrap(
+                      spacing: 10,
+                      runSpacing: 5,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Expanded(child: Text(r.customer)),
+                        Text(r.customer),
+                        Text(
+                          money.format(r.amount),
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
                         Text(DateFormat('dd/MM/yyyy').format(r.date)),
-                        const SizedBox(width: 8),
                         Text(
                           r.status,
                           style: TextStyle(
@@ -377,7 +429,14 @@ class InventoryAdjustmentsPage extends ConsumerWidget {
                       subtitle: Text(
                         '${r.reason} · ${DateFormat('dd/MM/yyyy').format(r.date)}',
                       ),
-                      trailing: Text(r.status),
+                      trailing: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 100),
+                        child: Text(
+                          r.status,
+                          textAlign: TextAlign.end,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     );
                   },
                 ),
@@ -400,39 +459,52 @@ class PageFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      // Responsive gutters keep the content comfortable on phones and desktops.
-      final gutter = constraints.maxWidth < 600 ? 14.0 : 28.0;
-      return Padding(
-        padding: EdgeInsets.fromLTRB(gutter, 18, gutter, gutter),
-        child: Column(children: [
-      Padding(
-        padding: const EdgeInsets.only(bottom: 16),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 21,
-                  fontWeight: FontWeight.w600,
+      final gutter = AppLayout.gutter(constraints.maxWidth);
+      return ResponsiveContent(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(gutter, 18, gutter, gutter),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 16,
+                  runSpacing: 10,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 21,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (onAdd != null)
+                      ElevatedButton.icon(
+                        onPressed: onAdd,
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('New'),
+                      ),
+                  ],
                 ),
               ),
-            ),
-            if (onAdd != null)
-              ElevatedButton.icon(
-                onPressed: onAdd,
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('New'),
+              if (header != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: header,
+                ),
+              Expanded(
+                child: GlassPanel(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: FadeSlideIn(child: child),
+                  ),
+                ),
               ),
-          ],
+            ],
+          ),
         ),
-      ),
-      if (header != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: header),
-      Expanded(child: GlassPanel(child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: FadeSlideIn(child: child),
-      ))),
-    ]),
       );
     },
   );
