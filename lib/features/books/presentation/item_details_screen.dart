@@ -15,7 +15,7 @@ class ItemDetailsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => DefaultTabController(
-    length: 5,
+    length: 4,
     child: Scaffold(
       appBar: AppBar(
         title: Text(item.name),
@@ -25,7 +25,6 @@ class ItemDetailsScreen extends ConsumerWidget {
             Tab(text: 'Overview'),
             Tab(text: 'Transactions'),
             Tab(text: 'History'),
-            Tab(text: 'Bill of Materials (BOM)'),
             Tab(text: 'Process Flow'),
           ],
         ),
@@ -35,7 +34,6 @@ class ItemDetailsScreen extends ConsumerWidget {
           ItemOverviewTab(item: item),
           const ItemTransactionsTab(),
           _ItemHistoryTab(itemId: item.id),
-          ItemBomTab(item: item),
           const ItemProcessFlowTab(),
         ],
       ),
