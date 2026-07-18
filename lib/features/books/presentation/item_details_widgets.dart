@@ -1,3 +1,6 @@
+import 'dart:ui' as ui;
+
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
 import '../../../core/layout/responsive_layout.dart';
@@ -134,6 +137,35 @@ class ItemImagePanel extends StatelessWidget {
 
   static const _pullingSwivelAsset =
       'assets/images/3_5_pulling_swivel.png';
+  static const _pullingSwivelImage = AssetImage(_pullingSwivelAsset);
+
+  void _openPullingSwivel(BuildContext context) {
+    precacheImage(_pullingSwivelImage, context);
+    Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        opaque: false,
+        barrierDismissible: false,
+        transitionDuration: const Duration(milliseconds: 220),
+        reverseTransitionDuration: const Duration(milliseconds: 180),
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            const _PullingSwivelViewer(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          );
+          return FadeTransition(
+            opacity: curved,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: .96, end: 1).animate(curved),
+              child: child,
+            ),
+          );
+        },
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) => Card(
@@ -142,6 +174,9 @@ class ItemImagePanel extends StatelessWidget {
       child: DottedImageDropZone(
         imageAsset: item.name == '3.5" Pulling Swivel'
             ? _pullingSwivelAsset
+            : null,
+        onImageTap: item.name == '3.5" Pulling Swivel'
+            ? () => _openPullingSwivel(context)
             : null,
         onBrowse: () => ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Image upload is not available yet')),
@@ -152,9 +187,15 @@ class ItemImagePanel extends StatelessWidget {
 }
 
 class DottedImageDropZone extends StatelessWidget {
-  const DottedImageDropZone({this.imageAsset, this.onBrowse, super.key});
+  const DottedImageDropZone({
+    this.imageAsset,
+    this.onBrowse,
+    this.onImageTap,
+    super.key,
+  });
   final String? imageAsset;
   final VoidCallback? onBrowse;
+  final VoidCallback? onImageTap;
 
   @override
   Widget build(BuildContext context) => AspectRatio(
@@ -171,10 +212,20 @@ class DottedImageDropZone extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Image.asset(imageAsset!, fit: BoxFit.contain),
-                  ),
+                   Semantics(
+                     button: onImageTap != null,
+                     label: 'Open exploded pulling swivel inspection',
+                     child: InkWell(
+                       onTap: onImageTap,
+                       child: Hero(
+                         tag: 'pulling-swivel-exploded-image',
+                         child: Padding(
+                           padding: const EdgeInsets.all(12),
+                           child: Image.asset(imageAsset!, fit: BoxFit.contain),
+                         ),
+                       ),
+                     ),
+                   ),
                   Positioned(
                     right: 8,
                     bottom: 8,
@@ -218,6 +269,285 @@ class DottedImageDropZone extends StatelessWidget {
       ),
     ),
   );
+}
+
+class _SwivelPart {
+  const _SwivelPart(this.name, this.anchor, this.label);
+
+  final String name;
+  final Offset anchor;
+  final Offset label;
+}
+
+const _swivelParts = <_SwivelPart>[
+  _SwivelPart('Shaft', Offset(.29, .39), Offset(.10, .20)),
+  _SwivelPart('Bearing Housing', Offset(.43, .34), Offset(.36, .08)),
+  _SwivelPart('Oil Seal', Offset(.34, .68), Offset(.12, .84)),
+  _SwivelPart('Bearing', Offset(.47, .58), Offset(.47, .86)),
+  _SwivelPart('Lock Nut', Offset(.56, .43), Offset(.57, .15)),
+  _SwivelPart('Depth Screw R15', Offset(.62, .31), Offset(.73, .10)),
+  _SwivelPart('Housing Lock Nut', Offset(.70, .67), Offset(.84, .84)),
+];
+
+class _PullingSwivelViewer extends StatefulWidget {
+  const _PullingSwivelViewer();
+
+  @override
+  State<_PullingSwivelViewer> createState() => _PullingSwivelViewerState();
+}
+
+class _PullingSwivelViewerState extends State<_PullingSwivelViewer> {
+  final ValueNotifier<Set<int>> _selection = ValueNotifier(
+    Set<int>.from(List<int>.generate(_swivelParts.length, (index) => index)),
+  );
+
+  @override
+  void dispose() {
+    _selection.dispose();
+    super.dispose();
+  }
+
+  void _select(int index) => _selection.value = {index};
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: ColoredBox(
+          color: Colors.black.withValues(alpha: .58),
+          child: SafeArea(
+            child: Stack(
+              children: [
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 52, 12, 16),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1100),
+                      child: Material(
+                        elevation: 18,
+                        color: theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        clipBehavior: Clip.antiAlias,
+                        child: AspectRatio(
+                          aspectRatio: 1974 / 797,
+                          child: _SwivelInspectionCanvas(
+                            selection: _selection,
+                            onSelect: _select,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 4,
+                  right: 12,
+                  child: Semantics(
+                    button: true,
+                    label: 'Close exploded view',
+                    child: IconButton.filled(
+                      tooltip: 'Close',
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SwivelInspectionCanvas extends StatelessWidget {
+  const _SwivelInspectionCanvas({
+    required this.selection,
+    required this.onSelect,
+  });
+
+  final ValueListenable<Set<int>> selection;
+  final ValueChanged<int> onSelect;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final size = Size(constraints.maxWidth, constraints.maxHeight);
+      return RepaintBoundary(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Hero(
+              tag: 'pulling-swivel-exploded-image',
+              child: Image.asset(
+                ItemImagePanel._pullingSwivelAsset,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+              ),
+            ),
+            ListenableBuilder(
+              listenable: selection,
+              builder: (context, child) => CustomPaint(
+                painter: _CalloutPainter(selection.value),
+              ),
+            ),
+            for (var index = 0; index < _swivelParts.length; index++) ...[
+              _ComponentTarget(
+                part: _swivelParts[index],
+                canvasSize: size,
+                onTap: () => onSelect(index),
+              ),
+              _PartCallout(
+                index: index,
+                part: _swivelParts[index],
+                canvasSize: size,
+                selection: selection,
+                onTap: () => onSelect(index),
+              ),
+            ],
+          ],
+        ),
+      );
+    },
+  );
+}
+
+class _ComponentTarget extends StatelessWidget {
+  const _ComponentTarget({
+    required this.part,
+    required this.canvasSize,
+    required this.onTap,
+  });
+
+  final _SwivelPart part;
+  final Size canvasSize;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Positioned(
+    left: part.anchor.dx * canvasSize.width - 24,
+    top: part.anchor.dy * canvasSize.height - 24,
+    width: 48,
+    height: 48,
+    child: Semantics(
+      button: true,
+      label: '${part.name} component',
+      child: GestureDetector(behavior: HitTestBehavior.translucent, onTap: onTap),
+    ),
+  );
+}
+
+class _PartCallout extends StatelessWidget {
+  const _PartCallout({
+    required this.index,
+    required this.part,
+    required this.canvasSize,
+    required this.selection,
+    required this.onTap,
+  });
+
+  final int index;
+  final _SwivelPart part;
+  final Size canvasSize;
+  final ValueListenable<Set<int>> selection;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Positioned(
+    left: part.label.dx * canvasSize.width - 70,
+    top: part.label.dy * canvasSize.height - 24,
+    width: 140,
+    height: 48,
+    child: Center(
+      child: ListenableBuilder(
+        listenable: selection,
+        builder: (context, child) {
+          final selected = selection.value.contains(index);
+          final colors = Theme.of(context).colorScheme;
+          return Semantics(
+            button: true,
+            selected: selected,
+            label: part.name,
+            child: Material(
+              animationDuration: const Duration(milliseconds: 180),
+              color: selected ? colors.primary : colors.surface,
+              shape: StadiumBorder(
+                side: BorderSide(
+                  color: selected ? colors.primary : colors.outline,
+                ),
+              ),
+              child: InkWell(
+                customBorder: const StadiumBorder(),
+                onTap: onTap,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  child: Text(
+                    part.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      height: 1.15,
+                      fontWeight: FontWeight.w600,
+                      color: selected
+                          ? colors.onPrimary
+                          : colors.onSurface,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    ),
+  );
+}
+
+class _CalloutPainter extends CustomPainter {
+  const _CalloutPainter(this.selection);
+
+  final Set<int> selection;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (var index = 0; index < _swivelParts.length; index++) {
+      final part = _swivelParts[index];
+      final active = selection.contains(index);
+      final anchor = Offset(
+        part.anchor.dx * size.width,
+        part.anchor.dy * size.height,
+      );
+      final label = Offset(
+        part.label.dx * size.width,
+        part.label.dy * size.height,
+      );
+      final color = active ? AppColors.primary : AppColors.active;
+      final linePaint = Paint()
+        ..color = color
+        ..strokeWidth = active ? 1.5 : 1
+        ..style = PaintingStyle.stroke;
+      canvas.drawLine(anchor, label, linePaint);
+      canvas.drawCircle(anchor, 3, Paint()..color = color);
+      if (active) {
+        canvas.drawCircle(
+          anchor,
+          13,
+          Paint()
+            ..color = AppColors.primary.withValues(alpha: .24)
+            ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 8),
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _CalloutPainter oldDelegate) =>
+      oldDelegate.selection != selection;
 }
 
 /// Responsive transaction filters and empty state. Transaction linkage is not
