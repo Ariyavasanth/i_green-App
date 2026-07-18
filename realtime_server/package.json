@@ -1,0 +1,7 @@
+{
+  "name": "invoice-gemini-token-server",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node server.mjs" },
+  "dependencies": { "@google/genai": "^1.30.0", "express": "^5.1.0" }
+}

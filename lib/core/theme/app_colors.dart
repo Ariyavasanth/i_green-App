@@ -4,7 +4,8 @@ abstract final class AppColors {
   // Brand replacements required by the project design specification.
   static const primary = Color(0xFF9CC70A);
   static const active = Color(0xFF414A51);
-  static const canvas = Color(0xFFECF2FC);
+  // Neutral page background sampled from the supplied reference image.
+  static const canvas = Color(0xFFFAFAFA);
   static const surface = Color(0xD9FFFFFF);
   static const textPrimary = Color(0xFF22282D);
   static const textSecondary = Color(0xFF69737A);

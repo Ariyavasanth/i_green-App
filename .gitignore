@@ -33,6 +33,12 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Keep local API credentials and installed Node packages out of Git.
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules/
+
 # Symbolication related
 app.*.symbols
 

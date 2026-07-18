@@ -35,7 +35,7 @@ class _ActiveCustomersListState extends ConsumerState<ActiveCustomersList> {
   }
 
   Widget _pageHeader() => Row(children: [
-    const Expanded(child: Text('Active Customers', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600))),
+    const Expanded(child: Text('Active Customers', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600))),
     FilledButton(
       onPressed: () => context.go('/customers/new'),
       style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8)),

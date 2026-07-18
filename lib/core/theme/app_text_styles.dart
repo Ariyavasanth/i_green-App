@@ -20,7 +20,7 @@ abstract final class AppTextStyles {
     color: AppColors.textPrimary,
     fontFamily: displayFontFamily,
     fontFamilyFallback: fontFamilyFallback,
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: FontWeight.w600,
     height: 1.18,
     letterSpacing: -0.35,
@@ -29,28 +29,28 @@ abstract final class AppTextStyles {
     color: AppColors.textPrimary,
     fontFamily: displayFontFamily,
     fontFamilyFallback: fontFamilyFallback,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: FontWeight.w600,
     height: 1.25,
     letterSpacing: -0.2,
   );
   static const body = TextStyle(
     color: AppColors.textPrimary,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: FontWeight.w400,
     height: 1.42,
     letterSpacing: -0.05,
   );
   static const navigation = TextStyle(
     color: AppColors.sidebarText,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: FontWeight.w500,
     height: 1.3,
     letterSpacing: -0.05,
   );
   static const caption = TextStyle(
     color: AppColors.textSecondary,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: FontWeight.w400,
     height: 1.35,
   );

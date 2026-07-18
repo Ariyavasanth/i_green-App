@@ -6,7 +6,7 @@ class SqliteBooksRepository implements BooksRepository {
   Database? _database;
   Future<Database> get _db async => _database ??= await openDatabase(
     p.join(await getDatabasesPath(), 'igreen_books.db'),
-    version: 3,
+    version: 4,
     onCreate: (db, _) async {
       // SQL is isolated in this repository so UI code remains backend-agnostic.
       await db.execute(
@@ -16,8 +16,9 @@ class SqliteBooksRepository implements BooksRepository {
         'CREATE TABLE customers(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, company TEXT NOT NULL, email TEXT NOT NULL DEFAULT "", phone TEXT NOT NULL, gst_treatment TEXT NOT NULL, receivables REAL NOT NULL DEFAULT 0)',
       );
       await db.execute(
-        'CREATE TABLE transactions(id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL, number TEXT NOT NULL UNIQUE, customer_id INTEGER, customer TEXT NOT NULL, date TEXT NOT NULL, due_date TEXT, reference_number TEXT NOT NULL DEFAULT "", amount REAL NOT NULL, discount REAL NOT NULL DEFAULT 0, tax_amount REAL NOT NULL DEFAULT 0, amount_paid REAL NOT NULL DEFAULT 0, notes TEXT NOT NULL DEFAULT "", terms TEXT NOT NULL DEFAULT "", status TEXT NOT NULL, FOREIGN KEY(customer_id) REFERENCES customers(id))',
+        'CREATE TABLE transactions(id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL, number TEXT NOT NULL UNIQUE, customer_id INTEGER, customer TEXT NOT NULL, date TEXT NOT NULL, due_date TEXT, reference_number TEXT NOT NULL DEFAULT "", amount REAL NOT NULL, discount REAL NOT NULL DEFAULT 0, discount_type TEXT NOT NULL DEFAULT "%", tax_amount REAL NOT NULL DEFAULT 0, amount_paid REAL NOT NULL DEFAULT 0, payment_terms TEXT NOT NULL DEFAULT "", notes TEXT NOT NULL DEFAULT "", terms TEXT NOT NULL DEFAULT "", status TEXT NOT NULL, FOREIGN KEY(customer_id) REFERENCES customers(id))',
       );
+      await db.execute('CREATE TABLE invoice_items(id INTEGER PRIMARY KEY AUTOINCREMENT, transaction_id INTEGER NOT NULL, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT "", quantity REAL NOT NULL, rate REAL NOT NULL, tax TEXT NOT NULL DEFAULT "No Tax", FOREIGN KEY(transaction_id) REFERENCES transactions(id))');
       await db.execute(
         'CREATE TABLE adjustments(id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, reason TEXT NOT NULL, description TEXT NOT NULL, status TEXT NOT NULL, reference_number TEXT NOT NULL UNIQUE, type TEXT NOT NULL, created_by TEXT NOT NULL, created_time TEXT NOT NULL)',
       );
@@ -71,6 +72,12 @@ class SqliteBooksRepository implements BooksRepository {
             'created by - iGreenTec Engineering india Pvt.Ltd.',
           ],
         );
+      }
+      if (oldVersion < 4) {
+        // Invoice-only fields stay in the repository so screens remain storage agnostic.
+        await db.execute('ALTER TABLE transactions ADD COLUMN payment_terms TEXT NOT NULL DEFAULT ""');
+        await db.execute('ALTER TABLE transactions ADD COLUMN discount_type TEXT NOT NULL DEFAULT "%"');
+        await db.execute('CREATE TABLE invoice_items(id INTEGER PRIMARY KEY AUTOINCREMENT, transaction_id INTEGER NOT NULL, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT "", quantity REAL NOT NULL, rate REAL NOT NULL, tax TEXT NOT NULL DEFAULT "No Tax", FOREIGN KEY(transaction_id) REFERENCES transactions(id))');
       }
     },
   );
@@ -238,6 +245,12 @@ class SqliteBooksRepository implements BooksRepository {
               date: DateTime.parse(r['date'] as String),
               amount: (r['amount'] as num).toDouble(),
               status: r['status'] as String,
+              referenceNumber: r['reference_number'] as String? ?? '',
+              dueDate: r['due_date'] == null
+                  ? null
+                  : DateTime.parse(r['due_date'] as String),
+              notes: r['notes'] as String? ?? '',
+              terms: r['terms'] as String? ?? '',
             ),
           )
           .toList();
@@ -245,7 +258,7 @@ class SqliteBooksRepository implements BooksRepository {
   Future<void> addTransaction(TransactionDraft d) async {
     final db = await _db;
     await db.transaction((txn) async {
-      await txn.insert('transactions', {
+      final transactionId = await txn.insert('transactions', {
         'type': d.type.name,
         'number': d.number,
         'customer_id': d.customerId,
@@ -259,8 +272,20 @@ class SqliteBooksRepository implements BooksRepository {
         'amount_paid': d.amountPaid,
         'notes': d.notes,
         'terms': d.terms,
+        'payment_terms': d.paymentTerms,
+        'discount_type': d.discountType,
         'status': 'Draft',
       });
+      for (final item in d.items) {
+        await txn.insert('invoice_items', {
+          'transaction_id': transactionId,
+          'name': item.name,
+          'description': item.description,
+          'quantity': item.quantity,
+          'rate': item.rate,
+          'tax': item.tax,
+        });
+      }
       if (d.type == TransactionType.invoice && d.customerId != null) {
         await txn.rawUpdate(
           'UPDATE customers SET receivables = receivables + ? WHERE id = ?',

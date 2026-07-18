@@ -55,6 +55,30 @@ class AppShell extends ConsumerWidget {
       Icons.receipt_long_outlined,
       'Sales',
     ),
+    SidebarDestination(
+      'Delivery Challans',
+      '/delivery-challans',
+      Icons.local_shipping_outlined,
+      'Sales',
+    ),
+    SidebarDestination(
+      'Payments Received',
+      '/payments-received',
+      Icons.payments_outlined,
+      'Sales',
+    ),
+    SidebarDestination(
+      'Credit Notes',
+      '/credit-notes',
+      Icons.assignment_return_outlined,
+      'Sales',
+    ),
+    SidebarDestination(
+      'e-Way Bills',
+      '/e-way-bills',
+      Icons.qr_code_outlined,
+      'Sales',
+    ),
   ];
 
   @override
@@ -83,7 +107,7 @@ class AppShell extends ConsumerWidget {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFFECF2FC), Color(0xFFECF2FC)],
+                colors: [AppColors.canvas, AppColors.canvas],
               ),
             ),
             child: Builder(

@@ -13,7 +13,7 @@ class SocialLoginButton extends StatelessWidget {
       onPressed: isLoading ? null : onPressed,
       icon: isLoading
           ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
-          : const Text('G', style: TextStyle(color: Color(0xFF4285F4), fontWeight: FontWeight.w700, fontSize: 18)),
+          : const Text('G', style: TextStyle(color: Color(0xFF4285F4), fontWeight: FontWeight.w700, fontSize: 17)),
       label: const Text('Continue with Google'),
       style: OutlinedButton.styleFrom(
         foregroundColor: const Color(0xFF22282D),

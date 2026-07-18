@@ -36,7 +36,7 @@ class _NewCustomerFormState extends ConsumerState<NewCustomerForm> with SingleTi
   @override void dispose() { tabs.dispose(); pageScroll.dispose(); for (final c in [first,last,company,display,email,workPhone,mobile,pan,gstin,opening,remarks]) { c.dispose(); } billing.dispose(); shipping.dispose(); for (final c in contacts) { c.dispose(); } for (final c in customFields) { c.dispose(); } super.dispose(); }
 
   @override Widget build(BuildContext context) => ColoredBox(color: AppColors.canvas, child: SafeArea(top: false, child: LayoutBuilder(builder: (_, box) { final gutter = AppLayout.gutter(box.maxWidth); return ResponsiveContent(maxWidth: 1200, child: Form(key: formKey, child: Scrollbar(controller: pageScroll, child: ListView(controller: pageScroll, padding: EdgeInsets.fromLTRB(gutter, gutter, gutter, gutter + 16), children: [
-      Row(children: [IconButton(onPressed: () => context.pop(), tooltip: 'Back', icon: const Icon(Icons.arrow_back)), const SizedBox(width: 4), const Expanded(child: Text('New Customer', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600)))]),
+      Row(children: [IconButton(onPressed: () => context.pop(), tooltip: 'Back', icon: const Icon(Icons.arrow_back)), const SizedBox(width: 4), const Expanded(child: Text('New Customer', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)))]),
       const SizedBox(height: 16),
       Card(child: Padding(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('Customer Type', style: TextStyle(fontWeight: FontWeight.w600)),

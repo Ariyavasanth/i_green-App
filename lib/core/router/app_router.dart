@@ -2,9 +2,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/app_shell/presentation/app_shell.dart';
+import '../../features/app_shell/presentation/section_page.dart';
 import '../../features/books/domain/books_repository.dart';
 import '../../features/books/presentation/books_forms.dart';
 import '../../features/books/presentation/books_pages.dart';
+import '../../features/quotes/presentation/quote_form_screen.dart';
 import '../../screens/login_screen.dart';
 import '../../screens/customers/active_customers_list.dart';
 import '../../screens/customers/new_customer_form.dart';
@@ -40,8 +42,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: 'new',
-                builder: (_, _) =>
-                    const NewTransactionPage(type: TransactionType.quote),
+                builder: (_, _) => const QuoteFormScreen(),
               ),
             ],
           ),
@@ -68,6 +69,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     const NewTransactionPage(type: TransactionType.invoice),
               ),
             ],
+          ),
+          GoRoute(
+            path: '/delivery-challans',
+            builder: (_, _) => const SectionPage(title: 'Delivery Challans'),
+          ),
+          GoRoute(
+            path: '/payments-received',
+            builder: (_, _) => const SectionPage(title: 'Payments Received'),
+          ),
+          GoRoute(
+            path: '/credit-notes',
+            builder: (_, _) => const SectionPage(title: 'Credit Notes'),
+          ),
+          GoRoute(
+            path: '/e-way-bills',
+            builder: (_, _) => const SectionPage(title: 'e-Way Bills'),
           ),
           GoRoute(
             path: '/inventory-adjustments',

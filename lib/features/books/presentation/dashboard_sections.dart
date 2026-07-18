@@ -70,8 +70,8 @@ class DashboardSections extends ConsumerWidget {
 Widget _cardTitle(String title, String subtitle) => Column(
   crossAxisAlignment: CrossAxisAlignment.start,
   children: [
-    Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-    Text(subtitle, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+    Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+    Text(subtitle, style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
   ],
 );
 
@@ -145,7 +145,7 @@ class _CashFlowCard extends StatelessWidget {
                                   padding: const EdgeInsets.only(top: 6),
                                   child: Text(
                                     months[i],
-                                    style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                    style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
                                   ),
                                 );
                               },
@@ -177,7 +177,7 @@ class _CashFlowCard extends StatelessWidget {
     children: [
       Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
       const SizedBox(width: 6),
-      Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+      Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
     ],
   );
 }
@@ -232,10 +232,10 @@ class _IncomeExpenseCard extends StatelessWidget {
                     Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text('Net Profit', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                        const Text('Net Profit', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                         Text(
                           money.format(metrics.netProfit),
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
                         ),
                       ],
                     ),
@@ -367,7 +367,7 @@ class _ProjectsCard extends StatelessWidget {
               color: _statusColor(status).withValues(alpha: .12),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: Text(status, style: TextStyle(fontSize: 11, color: _statusColor(status), fontWeight: FontWeight.w600)),
+            child: Text(status, style: TextStyle(fontSize: 10, color: _statusColor(status), fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -487,7 +487,7 @@ class _BankAndCreditCardsCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     name,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -495,7 +495,7 @@ class _BankAndCreditCardsCard extends StatelessWidget {
             ),
             Text(
               number,
-              style: TextStyle(color: Colors.white.withValues(alpha: .85), fontSize: 13, letterSpacing: 1.2),
+              style: TextStyle(color: Colors.white.withValues(alpha: .85), fontSize: 12, letterSpacing: 1.2),
             ),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -503,9 +503,9 @@ class _BankAndCreditCardsCard extends StatelessWidget {
               children: [
                 Text(
                   money.format(balance),
-                  style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
+                  style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700),
                 ),
-                const Text('Available balance', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                const Text('Available balance', style: TextStyle(color: Colors.white70, fontSize: 10)),
               ],
             ),
           ],

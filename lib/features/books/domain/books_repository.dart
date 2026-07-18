@@ -58,6 +58,10 @@ class SalesTransaction {
     required this.date,
     this.amount = 0,
     this.status = 'DRAFT',
+    this.referenceNumber = '',
+    this.dueDate,
+    this.notes = '',
+    this.terms = '',
   });
   final int id;
   final TransactionType type;
@@ -66,6 +70,10 @@ class SalesTransaction {
   final DateTime date;
   final double amount;
   final String status;
+  final String referenceNumber;
+  final DateTime? dueDate;
+  final String notes;
+  final String terms;
 }
 
 class TransactionDraft {
@@ -83,6 +91,9 @@ class TransactionDraft {
     this.amountPaid = 0,
     this.notes = '',
     this.terms = '',
+    this.paymentTerms = '',
+    this.discountType = '%',
+    this.items = const [],
   });
   final TransactionType type;
   final String customer;
@@ -92,7 +103,15 @@ class TransactionDraft {
   final int? customerId;
   final DateTime? dueDate;
   final String referenceNumber, notes, terms;
+  final String paymentTerms, discountType;
   final double discount, taxAmount, amountPaid;
+  final List<InvoiceLineDraft> items;
+}
+
+class InvoiceLineDraft {
+  const InvoiceLineDraft({required this.name, this.description = '', required this.quantity, required this.rate, this.tax = 'No Tax'});
+  final String name, description, tax;
+  final double quantity, rate;
 }
 
 class InventoryAdjustment {

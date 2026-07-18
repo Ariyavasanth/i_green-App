@@ -114,7 +114,7 @@ class DetailRow extends StatelessWidget {
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+            style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
           ),
         ),
       ],
@@ -373,7 +373,7 @@ class _TransactionEmptyState extends StatelessWidget {
           Text(
             showIcon ? 'No transactions to display' : 'There are no $type',
             textAlign: TextAlign.center,
-            style: AppTextStyles.caption.copyWith(fontSize: 14),
+            style: AppTextStyles.caption.copyWith(fontSize: 13),
           ),
         ],
       ),
@@ -519,7 +519,7 @@ class _EditableDetailRow extends StatelessWidget {
         final field = TextFormField(
           initialValue: initialValue,
           keyboardType: keyboardType,
-          style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+          style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
           decoration: const InputDecoration(isDense: true),
         );
 
