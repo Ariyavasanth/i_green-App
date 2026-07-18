@@ -6,7 +6,7 @@ class SqliteBooksRepository implements BooksRepository {
   Database? _database;
   Future<Database> get _db async => _database ??= await openDatabase(
     p.join(await getDatabasesPath(), 'igreen_books.db'),
-    version: 4,
+    version: 5,
     onCreate: (db, _) async {
       // SQL is isolated in this repository so UI code remains backend-agnostic.
       await db.execute(
@@ -79,6 +79,10 @@ class SqliteBooksRepository implements BooksRepository {
         await db.execute('ALTER TABLE transactions ADD COLUMN discount_type TEXT NOT NULL DEFAULT "%"');
         await db.execute('CREATE TABLE invoice_items(id INTEGER PRIMARY KEY AUTOINCREMENT, transaction_id INTEGER NOT NULL, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT "", quantity REAL NOT NULL, rate REAL NOT NULL, tax TEXT NOT NULL DEFAULT "No Tax", FOREIGN KEY(transaction_id) REFERENCES transactions(id))');
       }
+      if (oldVersion < 5) {
+        // Add the new catalog item for existing databases without changing the schema.
+        await _insertPullingSwivel(db);
+      }
     },
   );
 
@@ -90,6 +94,7 @@ class SqliteBooksRepository implements BooksRepository {
       'Fixture',
       'Bore plug Gauge',
       '3 Jaw Chuck',
+      '3.5" Pulling Swivel',
     ]) {
       final itemId = await db.insert('items', {
         'name': name,
@@ -138,6 +143,30 @@ class SqliteBooksRepository implements BooksRepository {
         });
       }
     }
+  }
+
+  static Future<void> _insertPullingSwivel(Database db) async {
+    final existing = Sqflite.firstIntValue(
+      await db.rawQuery(
+        'SELECT COUNT(*) FROM items WHERE name = ?',
+        ['3.5" Pulling Swivel'],
+      ),
+    );
+    if ((existing ?? 0) > 0) return;
+
+    final itemId = await db.insert('items', {
+      'name': '3.5" Pulling Swivel',
+      'sku': '',
+      'rate': 0.0,
+      'cost_price': 0.0,
+      'track_inventory': 1,
+      'stock_on_hand': 10.0,
+    });
+    await db.insert('item_history', {
+      'item_id': itemId,
+      'occurred_at': DateTime(2026, 6, 28, 10, 35).toIso8601String(),
+      'details': 'created by - iGreenTec Engineering india Pvt.Ltd.',
+    });
   }
 
   @override

@@ -16,7 +16,7 @@ class ItemOverviewTab extends StatelessWidget {
     builder: (context, constraints) {
       final gutter = AppLayout.gutter(constraints.maxWidth);
       final details = ItemDetailsCard(item: item);
-      final image = const ItemImagePanel();
+      final image = ItemImagePanel(item: item);
       return SingleChildScrollView(
         padding: EdgeInsets.all(gutter),
         child: ResponsiveContent(
@@ -52,6 +52,8 @@ class ItemDetailsCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           DetailRow('Item Type', item.type == 'Service' ? 'Sales and Purchase Services' : 'Sales and Purchase Items'),
+          if (item.name == '3.5" Pulling Swivel')
+            const DetailRow('Category', 'Pulling Accessories'),
           DetailRow('HSN Code', item.hsnCode.isEmpty ? '-' : item.hsnCode),
           const DetailRow('Created Source', 'User'),
           const DetailRow('Tax Preference', 'Taxable'),
@@ -126,13 +128,21 @@ class DetailRow extends StatelessWidget {
 /// design. No image picking dependency exists in this project, so "Browse
 /// images" surfaces a lightweight acknowledgement rather than a real picker.
 class ItemImagePanel extends StatelessWidget {
-  const ItemImagePanel({super.key});
+  const ItemImagePanel({required this.item, super.key});
+
+  final BookItem item;
+
+  static const _pullingSwivelAsset =
+      'assets/images/3_5_pulling_swivel.png';
 
   @override
   Widget build(BuildContext context) => Card(
     child: Padding(
       padding: const EdgeInsets.all(20),
       child: DottedImageDropZone(
+        imageAsset: item.name == '3.5" Pulling Swivel'
+            ? _pullingSwivelAsset
+            : null,
         onBrowse: () => ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Image upload is not available yet')),
         ),
@@ -142,7 +152,8 @@ class ItemImagePanel extends StatelessWidget {
 }
 
 class DottedImageDropZone extends StatelessWidget {
-  const DottedImageDropZone({this.onBrowse, super.key});
+  const DottedImageDropZone({this.imageAsset, this.onBrowse, super.key});
+  final String? imageAsset;
   final VoidCallback? onBrowse;
 
   @override
@@ -154,7 +165,28 @@ class DottedImageDropZone extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.divider),
       ),
-      child: Center(
+      child: imageAsset != null
+          ? ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Image.asset(imageAsset!, fit: BoxFit.contain),
+                  ),
+                  Positioned(
+                    right: 8,
+                    bottom: 8,
+                    child: TextButton(
+                      onPressed: onBrowse,
+                      child: const Text('Browse images'),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : Center(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
