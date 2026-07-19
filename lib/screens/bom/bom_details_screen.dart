@@ -25,28 +25,7 @@ class BomDetailsScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _BomDetailRow(
-                            label: 'Sl. No.', value: part.serialNumber),
-                        _BomDetailRow(label: 'Part name', value: part.name),
-                        _BomDetailRow(
-                            label: 'Part no.', value: part.partNumber),
-                        _BomDetailRow(label: 'Rm Grade', value: part.rmGrade),
-                        _BomDetailRow(label: 'RM size', value: part.rmSize),
-                        _BomDetailRow(
-                            label: 'RM weight', value: part.rmWeight),
-                        _BomDetailRow(
-                            label: 'FG Weight', value: part.fgWeight),
-                        _BomDetailRow(label: 'Qty', value: part.quantity),
-                      ],
-                    ),
-                  ),
-                ),
+                BomInfoCard(part: part),
                 if (hasProcessFlow) ...[
                   const SizedBox(height: 16),
                   OutlinedButton.icon(
@@ -74,8 +53,35 @@ class BomDetailsScreen extends StatelessWidget {
   }
 }
 
-class _BomDetailRow extends StatelessWidget {
-  const _BomDetailRow({required this.label, required this.value});
+class BomInfoCard extends StatelessWidget {
+  const BomInfoCard({required this.part, super.key});
+
+  final _BomPart part;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    child: Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          BomInfoRow(label: 'Sl. No.', value: part.serialNumber),
+          BomInfoRow(label: 'Part Name', value: part.name),
+          BomInfoRow(label: 'Part No.', value: part.partNumber),
+          BomInfoRow(label: 'RM Grade', value: part.rmGrade),
+          BomInfoRow(label: 'RM Size', value: part.rmSize),
+          BomInfoRow(label: 'RM Weight', value: part.rmWeight),
+          BomInfoRow(label: 'FG Weight', value: part.fgWeight),
+          BomInfoRow(label: 'Quantity', value: part.quantity),
+        ],
+      ),
+    ),
+  );
+}
+
+class BomInfoRow extends StatelessWidget {
+  const BomInfoRow({required this.label, required this.value, super.key});
   final String label;
   final String value;
 
@@ -113,16 +119,18 @@ class _BomPart {
 const _bomParts = <String, _BomPart>{
   'Shaft': _BomPart('1', 'Shaft', 'IG-PS-3.5-SH', 'EN8',
       'Dia 50 x 250L', '4kg', '3kg', '1'),
-  'Bearing Housing': _BomPart('2', 'Bearing Housing', 'IG-PS-3.5-BH', 'EN8',
-      'Dia 90 x 60L', '5kg', '3kg', '1'),
+  'Bearing Shaft': _BomPart('2', 'Bearing Shaft', 'IG-PS-3.5-BRS', 'EN8',
+      'Dia 76 × 185L', '8 kg', '5 kg', '1'),
+  'Bearing Housing': _BomPart('3', 'Bearing Housing', 'IG-PS-3.5-BRH', 'EN8',
+      'Dia 89 × 135L', '15 kg', '8 kg', '1'),
   'Oil Seal': _BomPart('3', 'Oil Seal', 'IG-PS-3.5-OS', 'NBR',
       '50 x 72 x 10', '0.2kg', '0.2kg', '1'),
   'Bearing': _BomPart('4', 'Bearing', 'IG-PS-3.5-BR', 'Bearing Steel',
       '50 x 90 x 20', '0.8kg', '0.8kg', '1'),
-  'Lock Nut': _BomPart('5', 'Lock nut', 'IG-PS-3.5-BRLN', 'EN8',
-      'Dia 50 x 25L', '2kg', '1kg', '1'),
+  'Lock Nut': _BomPart('1', 'Lock Nut', 'IG-PS-3.5-BRLN', 'EN8',
+      'Dia 50 × 25L', '2 kg', '1 kg', '1'),
   'Depth Screw R15': _BomPart('6', 'Depth Screw R15', 'IG-PS-3.5-DSR15',
       'EN8', 'Dia 20 x 45L', '0.3kg', '0.2kg', '1'),
-  'Housing Lock Nut': _BomPart('7', 'Housing Lock Nut', 'IG-PS-3.5-HLN',
-      'EN8', 'Dia 90 x 20L', '1.5kg', '1kg', '1'),
+  'Housing Lock Nut': _BomPart('4', 'Housing Lock Nut', 'IG-PS-3.5-HLN',
+      'EN8', 'Dia 90 × 140L', '16 kg', '9 kg', '1'),
 };

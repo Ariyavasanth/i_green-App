@@ -233,6 +233,7 @@ class _SwivelPart {
 
 const _swivelParts = <_SwivelPart>[
   _SwivelPart('Shaft', Offset(.29, .39), Offset(.10, .20)),
+  _SwivelPart('Bearing Shaft', Offset(.53, .48), Offset(.42, .72)),
   _SwivelPart('Bearing Housing', Offset(.43, .34), Offset(.36, .08)),
   _SwivelPart('Oil Seal', Offset(.34, .68), Offset(.12, .84)),
   _SwivelPart('Bearing', Offset(.47, .58), Offset(.47, .86)),
@@ -259,7 +260,16 @@ class _PullingSwivelViewerState extends State<_PullingSwivelViewer> {
     super.dispose();
   }
 
-  void _select(int index) => _selection.value = {index};
+  void _select(int index) {
+    _selection.value = {index};
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => BomDetailsScreen(
+          partIdentifier: _swivelParts[index].name,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -502,6 +512,34 @@ class _CalloutPainter extends CustomPainter {
       oldDelegate.selection != selection;
 }
 
+/// Original product image for the Product Details tab.
+class LabeledSwivelDiagram extends StatelessWidget {
+  const LabeledSwivelDiagram({super.key});
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: AppColors.canvas,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: AppColors.divider),
+    ),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: AspectRatio(
+        aspectRatio: 1974 / 797,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Image.asset(
+            ItemImagePanel._pullingSwivelAsset,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.high,
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 /// Responsive transaction filters and empty state. Transaction linkage is not
 /// added here so the existing data and business behavior remain unchanged.
 class ItemTransactionsTab extends StatefulWidget {
@@ -718,22 +756,162 @@ class ItemEmptyTab extends StatelessWidget {
 }
 
 /// Read-only product information using the same card and row treatment as the
-/// existing Overview tab.
-class ItemProductDetailsTab extends StatelessWidget {
+/// existing Overview tab, with the image panel shown above the fields.
+class ItemProductDetailsTab extends StatefulWidget {
   const ItemProductDetailsTab({required this.item, super.key});
 
   final BookItem item;
 
   @override
-  Widget build(BuildContext context) => _ItemFieldsTab(
+  State<ItemProductDetailsTab> createState() => _ItemProductDetailsTabState();
+}
+
+class _ItemProductDetailsTabState extends State<ItemProductDetailsTab> {
+  bool _arePartsVisible = false;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final gutter = AppLayout.gutter(constraints.maxWidth);
+      final image = Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const LabeledSwivelDiagram(),
+              const SizedBox(height: 16),
+              _PartsDropdown(
+                isExpanded: _arePartsVisible,
+                onPressed: () => setState(
+                  () => _arePartsVisible = !_arePartsVisible,
+                ),
+                onPartSelected: (partIdentifier) => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => BomDetailsScreen(
+                      partIdentifier: partIdentifier,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      final fields = Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: const [
+              DetailRow('Product', 'Gear Shaft Assembly'),
+              DetailRow('Drawing', 'GS-1001.pdf'),
+              DetailRow('Product Name', 'Industrial Gear Shaft'),
+              DetailRow('Master Serial No.', 'MSN-GS-001'),
+              DetailRow('Part No.', 'GS-1001'),
+            ],
+          ),
+        ),
+      );
+
+      return SingleChildScrollView(
+        padding: EdgeInsets.all(gutter),
+        child: ResponsiveContent(
+          child: constraints.maxWidth < AppBreakpoints.laptop
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [image, const SizedBox(height: 16), fields],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(width: 260, child: image),
+                    const SizedBox(width: 20),
+                    Expanded(flex: 3, child: fields),
+                  ],
+                ),
+        ),
+      );
+    },
+  );
+}
+
+class _PartsDropdown extends StatelessWidget {
+  const _PartsDropdown({
+    required this.isExpanded,
+    required this.onPressed,
+    required this.onPartSelected,
+  });
+
+  final bool isExpanded;
+  final VoidCallback onPressed;
+  final ValueChanged<String> onPartSelected;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      border: Border.all(color: AppColors.divider),
+      borderRadius: BorderRadius.circular(8),
+    ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const DetailRow('Product', 'Gear Shaft Assembly'),
-        const DetailRow('Drawing', 'GS-1001.pdf'),
-        const DetailRow('Product Name', 'Industrial Gear Shaft'),
-        const DetailRow('Master Serial No.', 'MSN-GS-001'),
-        const DetailRow('Part No.', 'GS-1001'),
+        InkWell(
+          key: const Key('view-parts-toggle'),
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'View Parts',
+                    style: AppTextStyles.body.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                AnimatedRotation(
+                  turns: isExpanded ? .5 : 0,
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeInOut,
+                  child: const Icon(Icons.keyboard_arrow_down, size: 22),
+                ),
+              ],
+            ),
+          ),
+        ),
+        ClipRect(
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOut,
+            alignment: Alignment.topCenter,
+            child: isExpanded
+                ? Column(
+                    key: const Key('parts-list'),
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Divider(height: 1),
+                      for (final part in _swivelParts)
+                        InkWell(
+                          onTap: () => onPartSelected(part.name),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 9,
+                            ),
+                            child: Text(
+                              part.name,
+                              style: AppTextStyles.body,
+                            ),
+                          ),
+                        ),
+                    ],
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
+        ),
       ],
     ),
   );

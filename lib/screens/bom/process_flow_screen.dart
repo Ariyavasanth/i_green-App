@@ -36,32 +36,90 @@ class ProcessFlowOperation {
   final String? vendor;
 }
 
-/// Mock process-flow data keyed by the same part identifier used by
-/// [BomDetailsScreen]/`_bomParts`. A part with no entry here (or an empty
-/// list) has no process flow to show.
+/// Process-flow data keyed by the part identifier passed from BOM Details.
 const processFlowByPart = <String, List<ProcessFlowOperation>>{
-  'Shaft': [
+  'Lock Nut': [
     ProcessFlowOperation(
       operationNumber: 1,
       operationName: 'Turning',
-      machine: 'CNC Lathe',
+      machine: 'CNC',
       remarks: ProcessRemarks.inhouse,
-      duration: '45 min',
+      duration: '40 mins',
     ),
     ProcessFlowOperation(
       operationNumber: 2,
-      operationName: 'Grinding',
-      machine: 'Cylindrical Grinder',
+      operationName: 'Milling',
+      machine: 'VMC / Manual Milling',
       remarks: ProcessRemarks.inhouse,
-      duration: '30 min',
+      duration: '30 mins',
     ),
     ProcessFlowOperation(
       operationNumber: 3,
-      operationName: 'Heat Treatment',
-      machine: 'Induction Hardening Unit',
+      operationName: 'Hardening (30–32 HRC)',
+      machine: 'Electric Furnace',
       remarks: ProcessRemarks.outsourcing,
-      duration: '2 hr',
-      vendor: 'Precision Heat Treaters Pvt Ltd',
+      duration: '24 hrs',
+      vendor: 'Immanuel Heat Treatment',
+    ),
+    ProcessFlowOperation(
+      operationNumber: 4,
+      operationName: 'Descaling',
+      machine: 'Manual',
+      remarks: ProcessRemarks.inhouse,
+      duration: '15 mins',
+    ),
+    ProcessFlowOperation(
+      operationNumber: 5,
+      operationName: 'QC',
+      machine: 'Manual',
+      remarks: ProcessRemarks.inhouse,
+      duration: '15 mins',
+    ),
+  ],
+  'Bearing Shaft': [
+    ProcessFlowOperation(
+      operationNumber: 1,
+      operationName: 'Turning',
+      machine: 'CNC',
+      remarks: ProcessRemarks.inhouse,
+      duration: '60 mins',
+    ),
+    ProcessFlowOperation(
+      operationNumber: 2,
+      operationName: 'Milling',
+      machine: 'VMC / Manual Milling',
+      remarks: ProcessRemarks.inhouse,
+      duration: '30 mins',
+    ),
+    ProcessFlowOperation(
+      operationNumber: 3,
+      operationName: 'Hardening (30–32 HRC)',
+      machine: 'Electric Furnace',
+      remarks: ProcessRemarks.outsourcing,
+      duration: '24 hrs',
+      vendor: 'Immanuel Heat Treatment',
+    ),
+    ProcessFlowOperation(
+      operationNumber: 4,
+      operationName: 'Descaling',
+      machine: 'Manual',
+      remarks: ProcessRemarks.inhouse,
+      duration: '15 mins',
+    ),
+    ProcessFlowOperation(
+      operationNumber: 5,
+      operationName: 'OD Grinding',
+      machine: 'Grinding',
+      remarks: ProcessRemarks.outsourcing,
+      duration: '60 mins',
+      vendor: 'Ambika Grinding Works',
+    ),
+    ProcessFlowOperation(
+      operationNumber: 6,
+      operationName: 'QC',
+      machine: 'Manual',
+      remarks: ProcessRemarks.inhouse,
+      duration: '15 mins',
     ),
   ],
   'Bearing Housing': [
@@ -74,11 +132,11 @@ const processFlowByPart = <String, List<ProcessFlowOperation>>{
     ),
     ProcessFlowOperation(
       operationNumber: 2,
-      operationName: 'Hardening 30-32 HRC',
+      operationName: 'Hardening (30–32 HRC)',
       machine: 'Electric Furnace',
       remarks: ProcessRemarks.outsourcing,
       duration: '24 hrs',
-      vendor: 'Immanuvel Heat treatment',
+      vendor: 'Immanuel Heat Treatment',
     ),
     ProcessFlowOperation(
       operationNumber: 3,
@@ -93,7 +151,7 @@ const processFlowByPart = <String, List<ProcessFlowOperation>>{
       machine: 'Grinding',
       remarks: ProcessRemarks.outsourcing,
       duration: '60 mins',
-      vendor: 'Ambika Gringing works',
+      vendor: 'Ambika Grinding Works',
     ),
     ProcessFlowOperation(
       operationNumber: 5,
@@ -103,21 +161,42 @@ const processFlowByPart = <String, List<ProcessFlowOperation>>{
       duration: '15 mins',
     ),
   ],
-  'Depth Screw R15': [
+  'Housing Lock Nut': [
     ProcessFlowOperation(
       operationNumber: 1,
       operationName: 'Turning',
-      machine: 'CNC Lathe',
+      machine: 'CNC',
       remarks: ProcessRemarks.inhouse,
-      duration: '20 min',
+      duration: '90 mins',
     ),
     ProcessFlowOperation(
       operationNumber: 2,
-      operationName: 'Thread Rolling',
-      machine: 'Thread Rolling Machine',
+      operationName: 'Milling',
+      machine: 'VMC',
+      remarks: ProcessRemarks.inhouse,
+      duration: '90 mins',
+    ),
+    ProcessFlowOperation(
+      operationNumber: 3,
+      operationName: 'Hardening (30–32 HRC)',
+      machine: 'Electric Furnace',
       remarks: ProcessRemarks.outsourcing,
-      duration: '35 min',
-      vendor: 'Apex Threading Works',
+      duration: '24 hrs',
+      vendor: 'Immanuel Heat Treatment',
+    ),
+    ProcessFlowOperation(
+      operationNumber: 4,
+      operationName: 'Descaling',
+      machine: 'Manual',
+      remarks: ProcessRemarks.inhouse,
+      duration: '15 mins',
+    ),
+    ProcessFlowOperation(
+      operationNumber: 5,
+      operationName: 'QC',
+      machine: 'Manual',
+      remarks: ProcessRemarks.inhouse,
+      duration: '15 mins',
     ),
   ],
 };
@@ -148,16 +227,13 @@ class ProcessFlowScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(partName, style: AppTextStyles.pageTitle),
-                const SizedBox(height: 4),
-                Text(
-                  '${operations.length} operation'
-                  '${operations.length == 1 ? '' : 's'}',
-                  style: AppTextStyles.caption,
+                ProcessHeader(
+                  partName: partName,
+                  operationCount: operations.length,
                 ),
                 const SizedBox(height: 20),
                 for (final operation in operations) ...[
-                  _ProcessFlowCard(operation: operation),
+                  ProcessFlowCard(operation: operation),
                   const SizedBox(height: 16),
                 ],
               ],
@@ -169,8 +245,32 @@ class ProcessFlowScreen extends StatelessWidget {
   }
 }
 
-class _ProcessFlowCard extends StatelessWidget {
-  const _ProcessFlowCard({required this.operation});
+class ProcessHeader extends StatelessWidget {
+  const ProcessHeader({
+    required this.partName,
+    required this.operationCount,
+    super.key,
+  });
+
+  final String partName;
+  final int operationCount;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(partName, style: AppTextStyles.pageTitle),
+      const SizedBox(height: 4),
+      Text(
+        '$operationCount ${operationCount == 1 ? 'Operation' : 'Operations'}',
+        style: AppTextStyles.caption,
+      ),
+    ],
+  );
+}
+
+class ProcessFlowCard extends StatelessWidget {
+  const ProcessFlowCard({required this.operation, super.key});
 
   final ProcessFlowOperation operation;
 
@@ -193,14 +293,14 @@ class _ProcessFlowCard extends StatelessWidget {
             const SizedBox(height: 12),
             const Divider(height: 1),
             const SizedBox(height: 12),
-            _ProcessFlowRow(
+            ProcessInfoRow(
               label: 'Operation Name',
               value: operation.operationName,
             ),
-            _ProcessFlowRow(label: 'Machine', value: operation.machine),
-            _ProcessFlowRow(label: 'Duration', value: operation.duration),
-            _ProcessFlowRow(label: 'Remarks', value: operation.remarks.label),
-            _ProcessFlowRow(label: 'Vendor', value: operation.vendor ?? '-'),
+            ProcessInfoRow(label: 'Machine', value: operation.machine),
+            ProcessInfoRow(label: 'Duration', value: operation.duration),
+            ProcessInfoRow(label: 'Remarks', value: operation.remarks.label),
+            ProcessInfoRow(label: 'Vendor', value: operation.vendor ?? '-'),
           ],
         ),
       ),
@@ -208,8 +308,12 @@ class _ProcessFlowCard extends StatelessWidget {
   }
 }
 
-class _ProcessFlowRow extends StatelessWidget {
-  const _ProcessFlowRow({required this.label, required this.value});
+class ProcessInfoRow extends StatelessWidget {
+  const ProcessInfoRow({
+    required this.label,
+    required this.value,
+    super.key,
+  });
   final String label;
   final String value;
 
