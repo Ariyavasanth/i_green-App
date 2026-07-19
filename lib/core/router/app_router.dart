@@ -8,6 +8,7 @@ import '../../features/books/presentation/books_forms.dart';
 import '../../features/books/presentation/books_pages.dart';
 import '../../features/quotes/presentation/quote_form_screen.dart';
 import '../../features/vendors/presentation/vendors_page.dart';
+import '../../features/expenses/presentation/expenses_page.dart';
 import '../../screens/login_screen.dart';
 import '../../screens/customers/active_customers_list.dart';
 import '../../screens/customers/new_customer_form.dart';
@@ -97,7 +98,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/expenses',
-            builder: (_, _) => const SectionPage(title: 'Expenses'),
+            builder: (_, _) => const ExpensesPage(),
           ),
           GoRoute(
             path: '/purchase-orders',
