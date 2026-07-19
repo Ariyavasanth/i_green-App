@@ -36,8 +36,6 @@ class ItemOverviewTab extends StatelessWidget {
                 ),
               const SizedBox(height: 16),
               details,
-              const SizedBox(height: 16),
-              const ItemProductDetailsCard(),
             ],
           ),
         ),
@@ -817,24 +815,24 @@ class ItemEmptyTab extends StatelessWidget {
   );
 }
 
-/// Read-only product information displayed within the Overview tab.
-class ItemProductDetailsCard extends StatelessWidget {
-  const ItemProductDetailsCard({super.key});
+/// Read-only product information using the same card and row treatment as the
+/// existing Overview tab.
+class ItemProductDetailsTab extends StatelessWidget {
+  const ItemProductDetailsTab({required this.item, super.key});
+
+  final BookItem item;
 
   @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const DetailRow('Product', 'Gear Shaft Assembly'),
-          const DetailRow('Drawing', 'GS-1001.pdf'),
-          const DetailRow('Product Name', 'Industrial Gear Shaft'),
-          const DetailRow('Master Serial No.', 'MSN-GS-001'),
-          const DetailRow('Part No.', 'GS-1001'),
-        ],
-      ),
+  Widget build(BuildContext context) => _ItemFieldsTab(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const DetailRow('Product', 'Gear Shaft Assembly'),
+        const DetailRow('Drawing', 'GS-1001.pdf'),
+        const DetailRow('Product Name', 'Industrial Gear Shaft'),
+        const DetailRow('Master Serial No.', 'MSN-GS-001'),
+        const DetailRow('Part No.', 'GS-1001'),
+      ],
     ),
   );
 }
