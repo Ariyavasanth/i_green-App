@@ -26,6 +26,17 @@ class BomDetailsScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 BomInfoCard(part: part),
+                const SizedBox(height: 16),
+                const BomImageSection(),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: null,
+                  icon: const Icon(Icons.download_outlined),
+                  label: const Text('Download PDF'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
                 if (hasProcessFlow) ...[
                   const SizedBox(height: 16),
                   OutlinedButton.icon(
@@ -51,6 +62,40 @@ class BomDetailsScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+class BomImageSection extends StatelessWidget {
+  const BomImageSection({super.key});
+
+  @override
+  Widget build(BuildContext context) => Card(
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    child: Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('BOM Image', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 16),
+          Container(
+            height: 220,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.image_outlined, size: 48),
+                SizedBox(height: 8),
+                Text('Image placeholder'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class BomInfoCard extends StatelessWidget {
