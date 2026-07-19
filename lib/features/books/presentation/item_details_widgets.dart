@@ -10,7 +10,8 @@ import '../../../screens/bom/bom_details_screen.dart';
 import '../domain/books_repository.dart';
 import 'books_pages.dart' show money;
 
-/// Overview tab: image upload first, followed by the item details.
+/// Overview tab: item fields on the left, image panel on the right (desktop),
+/// stacked vertically on mobile — matching the reference layout.
 class ItemOverviewTab extends StatelessWidget {
   const ItemOverviewTab({required this.item, super.key});
   final BookItem item;
@@ -24,20 +25,19 @@ class ItemOverviewTab extends StatelessWidget {
       return SingleChildScrollView(
         padding: EdgeInsets.all(gutter),
         child: ResponsiveContent(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (constraints.maxWidth < AppBreakpoints.laptop)
-                image
-              else
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: SizedBox(width: 260, child: image),
+          child: constraints.maxWidth < AppBreakpoints.laptop
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [details, const SizedBox(height: 16), image],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 3, child: details),
+                    const SizedBox(width: 20),
+                    SizedBox(width: 260, child: image),
+                  ],
                 ),
-              const SizedBox(height: 16),
-              details,
-            ],
-          ),
         ),
       );
     },
