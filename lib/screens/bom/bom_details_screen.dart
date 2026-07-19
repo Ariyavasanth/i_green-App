@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/layout/responsive_layout.dart';
 import '../../core/theme/app_text_styles.dart';
+import 'process_flow_screen.dart';
 
 /// Displays the BOM record for the single part selected in the exploded view.
 class BomDetailsScreen extends StatelessWidget {
@@ -12,6 +13,8 @@ class BomDetailsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final part = _bomParts[partIdentifier] ?? _BomPart.fallback(partIdentifier);
+    final hasProcessFlow =
+        processFlowByPart[partIdentifier]?.isNotEmpty ?? false;
     return Scaffold(
       appBar: AppBar(title: const Text('BOM Details')),
       body: LayoutBuilder(
@@ -19,23 +22,50 @@ class BomDetailsScreen extends StatelessWidget {
           padding: EdgeInsets.all(AppLayout.gutter(constraints.maxWidth)),
           child: ResponsiveContent(
             maxWidth: AppLayout.maxFormWidth,
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _BomDetailRow(label: 'Sl. No.', value: part.serialNumber),
-                    _BomDetailRow(label: 'Part name', value: part.name),
-                    _BomDetailRow(label: 'Part no.', value: part.partNumber),
-                    _BomDetailRow(label: 'Rm Grade', value: part.rmGrade),
-                    _BomDetailRow(label: 'RM size', value: part.rmSize),
-                    _BomDetailRow(label: 'RM weight', value: part.rmWeight),
-                    _BomDetailRow(label: 'FG Weight', value: part.fgWeight),
-                    _BomDetailRow(label: 'Qty', value: part.quantity),
-                  ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _BomDetailRow(
+                            label: 'Sl. No.', value: part.serialNumber),
+                        _BomDetailRow(label: 'Part name', value: part.name),
+                        _BomDetailRow(
+                            label: 'Part no.', value: part.partNumber),
+                        _BomDetailRow(label: 'Rm Grade', value: part.rmGrade),
+                        _BomDetailRow(label: 'RM size', value: part.rmSize),
+                        _BomDetailRow(
+                            label: 'RM weight', value: part.rmWeight),
+                        _BomDetailRow(
+                            label: 'FG Weight', value: part.fgWeight),
+                        _BomDetailRow(label: 'Qty', value: part.quantity),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+                if (hasProcessFlow) ...[
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => ProcessFlowScreen(
+                          partIdentifier: partIdentifier,
+                          partName: part.name,
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.account_tree_outlined),
+                    label: const Text('View Process Flow'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ),
