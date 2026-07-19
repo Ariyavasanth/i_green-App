@@ -25,9 +25,9 @@ class BomDetailsScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                BomInfoCard(part: part),
-                const SizedBox(height: 16),
                 const BomImageSection(),
+                const SizedBox(height: 16),
+                BomInfoCard(part: part),
                 const SizedBox(height: 16),
                 FilledButton.icon(
                   onPressed: null,
