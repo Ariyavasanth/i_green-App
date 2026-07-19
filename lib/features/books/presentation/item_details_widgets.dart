@@ -1,6 +1,3 @@
-import 'dart:ui' as ui;
-
-import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
 import '../../../core/layout/responsive_layout.dart';
@@ -137,35 +134,6 @@ class ItemImagePanel extends StatelessWidget {
 
   static const _pullingSwivelAsset =
       'assets/images/3_5_pulling_swivel.png';
-  static const _pullingSwivelImage = AssetImage(_pullingSwivelAsset);
-
-  void _openPullingSwivel(BuildContext context) {
-    precacheImage(_pullingSwivelImage, context);
-    Navigator.of(context).push(
-      PageRouteBuilder<void>(
-        opaque: false,
-        barrierDismissible: false,
-        transitionDuration: const Duration(milliseconds: 220),
-        reverseTransitionDuration: const Duration(milliseconds: 180),
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            const _PullingSwivelViewer(),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          final curved = CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutCubic,
-            reverseCurve: Curves.easeInCubic,
-          );
-          return FadeTransition(
-            opacity: curved,
-            child: ScaleTransition(
-              scale: Tween<double>(begin: .96, end: 1).animate(curved),
-              child: child,
-            ),
-          );
-        },
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) => Card(
@@ -174,9 +142,6 @@ class ItemImagePanel extends StatelessWidget {
       child: DottedImageDropZone(
         imageAsset: item.name == '3.5" Pulling Swivel'
             ? _pullingSwivelAsset
-            : null,
-        onImageTap: item.name == '3.5" Pulling Swivel'
-            ? () => _openPullingSwivel(context)
             : null,
         onBrowse: () => ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Image upload is not available yet')),
@@ -187,15 +152,9 @@ class ItemImagePanel extends StatelessWidget {
 }
 
 class DottedImageDropZone extends StatelessWidget {
-  const DottedImageDropZone({
-    this.imageAsset,
-    this.onBrowse,
-    this.onImageTap,
-    super.key,
-  });
+  const DottedImageDropZone({this.imageAsset, this.onBrowse, super.key});
   final String? imageAsset;
   final VoidCallback? onBrowse;
-  final VoidCallback? onImageTap;
 
   @override
   Widget build(BuildContext context) => AspectRatio(
@@ -212,20 +171,10 @@ class DottedImageDropZone extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                   Semantics(
-                     button: onImageTap != null,
-                     label: 'Open exploded pulling swivel inspection',
-                     child: InkWell(
-                       onTap: onImageTap,
-                       child: Hero(
-                         tag: 'pulling-swivel-exploded-image',
-                         child: Padding(
-                           padding: const EdgeInsets.all(12),
-                           child: Image.asset(imageAsset!, fit: BoxFit.contain),
-                         ),
-                       ),
-                     ),
-                   ),
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Image.asset(imageAsset!, fit: BoxFit.contain),
+                  ),
                   Positioned(
                     right: 8,
                     bottom: 8,
@@ -272,22 +221,21 @@ class DottedImageDropZone extends StatelessWidget {
 }
 
 class _SwivelPart {
-  const _SwivelPart(this.name, this.anchor, this.label, {this.curve = 0});
+  const _SwivelPart(this.name, this.anchor, this.label);
 
   final String name;
   final Offset anchor;
   final Offset label;
-  final double curve;
 }
 
 const _swivelParts = <_SwivelPart>[
-  _SwivelPart('Shaft', Offset(.189, .250), Offset(.09, .40), curve: -.08),
-  _SwivelPart('Bearing Housing', Offset(.378, .196), Offset(.32, .08)),
-  _SwivelPart('Oil Seal', Offset(.294, .610), Offset(.10, .76), curve: .08),
-  _SwivelPart('Bearing', Offset(.467, .626), Offset(.40, .90), curve: -.06),
-  _SwivelPart('Lock Nut', Offset(.504, .357), Offset(.53, .21), curve: .05),
-  _SwivelPart('Depth Screw R15', Offset(.626, .191), Offset(.76, .08), curve: .08),
-  _SwivelPart('Housing Lock Nut', Offset(.701, .650), Offset(.80, .80), curve: -.08),
+  _SwivelPart('Shaft', Offset(.29, .39), Offset(.10, .20)),
+  _SwivelPart('Bearing Housing', Offset(.43, .34), Offset(.36, .08)),
+  _SwivelPart('Oil Seal', Offset(.34, .68), Offset(.12, .84)),
+  _SwivelPart('Bearing', Offset(.47, .58), Offset(.47, .86)),
+  _SwivelPart('Lock Nut', Offset(.56, .43), Offset(.57, .15)),
+  _SwivelPart('Depth Screw R15', Offset(.62, .31), Offset(.73, .10)),
+  _SwivelPart('Housing Lock Nut', Offset(.70, .67), Offset(.84, .84)),
 ];
 
 class _PullingSwivelViewer extends StatefulWidget {
@@ -312,6 +260,7 @@ class _PullingSwivelViewerState extends State<_PullingSwivelViewer> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: BackdropFilter(
@@ -323,15 +272,21 @@ class _PullingSwivelViewerState extends State<_PullingSwivelViewer> {
               children: [
                 Center(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(28, 64, 28, 28),
+                    padding: const EdgeInsets.fromLTRB(12, 52, 12, 16),
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        maxWidth: 1200,
-                        maxHeight: 760,
-                      ),
-                      child: _SwivelInspectionCanvas(
-                        selection: _selection,
-                        onSelect: _select,
+                      constraints: const BoxConstraints(maxWidth: 1100),
+                      child: Material(
+                        elevation: 18,
+                        color: theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        clipBehavior: Clip.antiAlias,
+                        child: AspectRatio(
+                          aspectRatio: 1974 / 797,
+                          child: _SwivelInspectionCanvas(
+                            selection: _selection,
+                            onSelect: _select,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -371,50 +326,36 @@ class _SwivelInspectionCanvas extends StatelessWidget {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final size = Size(constraints.maxWidth, constraints.maxHeight);
-      final geometry = _SwivelGeometry(size);
       return RepaintBoundary(
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Positioned.fromRect(
-              rect: geometry.imageRect,
-              child: Hero(
-                tag: 'pulling-swivel-exploded-image',
-                child: Image.asset(
-                  ItemImagePanel._pullingSwivelAsset,
-                  fit: BoxFit.contain,
-                  filterQuality: FilterQuality.high,
-                ),
+            Hero(
+              tag: 'pulling-swivel-exploded-image',
+              child: Image.asset(
+                ItemImagePanel._pullingSwivelAsset,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
               ),
             ),
             ListenableBuilder(
               listenable: selection,
               builder: (context, child) => CustomPaint(
-                painter: _CalloutPainter(selection.value, geometry),
+                painter: _CalloutPainter(selection.value),
               ),
             ),
             for (var index = 0; index < _swivelParts.length; index++) ...[
               _ComponentTarget(
                 part: _swivelParts[index],
-                geometry: geometry,
+                canvasSize: size,
                 onTap: () => onSelect(index),
               ),
               _PartCallout(
                 index: index,
                 part: _swivelParts[index],
-                geometry: geometry,
+                canvasSize: size,
                 selection: selection,
-                onTap: () {
-                  onSelect(index);
-                  // Pass only the selected diagram part into its BOM view.
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => BomDetailsScreen(
-                        partIdentifier: _swivelParts[index].name,
-                      ),
-                    ),
-                  );
-                },
+                onTap: () => onSelect(index),
               ),
             ],
           ],
@@ -423,60 +364,24 @@ class _SwivelInspectionCanvas extends StatelessWidget {
     },
   );
 }
-class _SwivelGeometry {
-  const _SwivelGeometry(this.size);
-
-  final Size size;
-
-  Rect get imageRect {
-    const imageRatio = 1974 / 797;
-    // Keep open canvas around the assembly so labels can occupy independent
-    // zones instead of competing with the mechanical detail.
-    final maxWidth = size.width * (size.width < 600 ? .86 : .78);
-    final maxHeight = size.height * (size.width < 600 ? .34 : .52);
-    final width = maxWidth.clamp(0.0, maxHeight * imageRatio).toDouble();
-    final height = width / imageRatio;
-    return Rect.fromCenter(
-      center: Offset(size.width / 2, size.height / 2),
-      width: width,
-      height: height,
-    );
-  }
-
-  Offset anchorFor(_SwivelPart part) => Offset(
-    imageRect.left + (part.anchor.dx * imageRect.width),
-    imageRect.top + (part.anchor.dy * imageRect.height),
-  );
-
-  Rect labelRectFor(_SwivelPart part) {
-    final width = (size.width * .30).clamp(110.0, 150.0).toDouble();
-    const height = 48.0;
-    final center = Offset(
-      (part.label.dx * size.width)
-          .clamp(width / 2, size.width - width / 2)
-          .toDouble(),
-      (part.label.dy * size.height)
-          .clamp(height / 2, size.height - height / 2)
-          .toDouble(),
-    );
-    return Rect.fromCenter(center: center, width: width, height: height);
-  }
-}
 
 class _ComponentTarget extends StatelessWidget {
   const _ComponentTarget({
     required this.part,
-    required this.geometry,
+    required this.canvasSize,
     required this.onTap,
   });
 
   final _SwivelPart part;
-  final _SwivelGeometry geometry;
+  final Size canvasSize;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Positioned.fromRect(
-    rect: Rect.fromCircle(center: geometry.anchorFor(part), radius: 24),
+  Widget build(BuildContext context) => Positioned(
+    left: part.anchor.dx * canvasSize.width - 24,
+    top: part.anchor.dy * canvasSize.height - 24,
+    width: 48,
+    height: 48,
     child: Semantics(
       button: true,
       label: '${part.name} component',
@@ -489,20 +394,23 @@ class _PartCallout extends StatelessWidget {
   const _PartCallout({
     required this.index,
     required this.part,
-    required this.geometry,
+    required this.canvasSize,
     required this.selection,
     required this.onTap,
   });
 
   final int index;
   final _SwivelPart part;
-  final _SwivelGeometry geometry;
+  final Size canvasSize;
   final ValueListenable<Set<int>> selection;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Positioned.fromRect(
-    rect: geometry.labelRectFor(part),
+  Widget build(BuildContext context) => Positioned(
+    left: part.label.dx * canvasSize.width - 70,
+    top: part.label.dy * canvasSize.height - 24,
+    width: 140,
+    height: 48,
     child: Center(
       child: ListenableBuilder(
         listenable: selection,
@@ -515,9 +423,7 @@ class _PartCallout extends StatelessWidget {
             label: part.name,
             child: Material(
               animationDuration: const Duration(milliseconds: 180),
-              color: selected
-                  ? colors.primary.withValues(alpha: .88)
-                  : colors.surface.withValues(alpha: .78),
+              color: selected ? colors.primary : colors.surface,
               shape: StadiumBorder(
                 side: BorderSide(
                   color: selected ? colors.primary : colors.outline,
@@ -527,10 +433,7 @@ class _PartCallout extends StatelessWidget {
                 customBorder: const StadiumBorder(),
                 onTap: onTap,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   child: Text(
                     part.name,
                     maxLines: 1,
@@ -555,33 +458,29 @@ class _PartCallout extends StatelessWidget {
 }
 
 class _CalloutPainter extends CustomPainter {
-  const _CalloutPainter(this.selection, this.geometry);
+  const _CalloutPainter(this.selection);
 
   final Set<int> selection;
-  final _SwivelGeometry geometry;
 
   @override
   void paint(Canvas canvas, Size size) {
     for (var index = 0; index < _swivelParts.length; index++) {
       final part = _swivelParts[index];
       final active = selection.contains(index);
-      final anchor = geometry.anchorFor(part);
-      final label = geometry.labelRectFor(part).center;
+      final anchor = Offset(
+        part.anchor.dx * size.width,
+        part.anchor.dy * size.height,
+      );
+      final label = Offset(
+        part.label.dx * size.width,
+        part.label.dy * size.height,
+      );
       final color = active ? AppColors.primary : AppColors.active;
       final linePaint = Paint()
         ..color = color
         ..strokeWidth = active ? 1.5 : 1
         ..style = PaintingStyle.stroke;
-      final delta = label - anchor;
-      final midpoint = Offset(
-        (anchor.dx + label.dx) / 2,
-        (anchor.dy + label.dy) / 2,
-      );
-      final control = midpoint + Offset(-delta.dy, delta.dx) * part.curve;
-      final connector = Path()
-        ..moveTo(anchor.dx, anchor.dy)
-        ..quadraticBezierTo(control.dx, control.dy, label.dx, label.dy);
-      canvas.drawPath(connector, linePaint);
+      canvas.drawLine(anchor, label, linePaint);
       canvas.drawCircle(anchor, 3, Paint()..color = color);
       if (active) {
         canvas.drawCircle(
@@ -597,7 +496,7 @@ class _CalloutPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _CalloutPainter oldDelegate) =>
-      oldDelegate.selection != selection || oldDelegate.geometry.size != geometry.size;
+      oldDelegate.selection != selection;
 }
 
 /// Responsive transaction filters and empty state. Transaction linkage is not
