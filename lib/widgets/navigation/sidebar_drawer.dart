@@ -82,7 +82,11 @@ class SidebarDrawer extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
               children: [
-                for (var index = 0; index < destinations.length; index++) ...[
+                for (
+                  var index = 0;
+                  index < destinations.length;
+                  index++
+                ) ...[
                   // Group labels keep the longer navigation list easy to scan.
                   if (index == 0 ||
                       destinations[index - 1].section !=

@@ -87,6 +87,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (_, _) => const SectionPage(title: 'e-Way Bills'),
           ),
           GoRoute(
+            path: '/vendors',
+            builder: (_, _) => const SectionPage(title: 'Vendors'),
+          ),
+          GoRoute(
+            path: '/expenses',
+            builder: (_, _) => const SectionPage(title: 'Expenses'),
+          ),
+          GoRoute(
+            path: '/purchase-orders',
+            builder: (_, _) => const SectionPage(title: 'Purchase Orders'),
+          ),
+          GoRoute(
+            path: '/bills',
+            builder: (_, _) => const SectionPage(title: 'Bills'),
+          ),
+          GoRoute(
             path: '/inventory-adjustments',
             builder: (_, _) => const InventoryAdjustmentsPage(),
             routes: [

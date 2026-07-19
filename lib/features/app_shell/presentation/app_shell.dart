@@ -79,6 +79,30 @@ class AppShell extends ConsumerWidget {
       Icons.qr_code_outlined,
       'Sales',
     ),
+    SidebarDestination(
+      'Vendors',
+      '/vendors',
+      Icons.storefront_outlined,
+      'Purchase',
+    ),
+    SidebarDestination(
+      'Expenses',
+      '/expenses',
+      Icons.account_balance_wallet_outlined,
+      'Purchase',
+    ),
+    SidebarDestination(
+      'Purchase Orders',
+      '/purchase-orders',
+      Icons.shopping_bag_outlined,
+      'Purchase',
+    ),
+    SidebarDestination(
+      'Bills',
+      '/bills',
+      Icons.receipt_outlined,
+      'Purchase',
+    ),
   ];
 
   @override
