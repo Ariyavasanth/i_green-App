@@ -14,7 +14,13 @@ import '../../domain/books_repository.dart';
 import '../../providers/books_providers.dart';
 
 const _salespeople = ['Anwar', 'Priya', 'Ravi Kumar'];
-const _paymentTermsOptions = ['Due on Receipt', 'Net 15', 'Net 30', 'Net 45', 'Net 60'];
+const _paymentTermsOptions = [
+  'Due on Receipt',
+  'Net 15',
+  'Net 30',
+  'Net 45',
+  'Net 60',
+];
 const _deliveryMethodOptions = ['Courier', 'Road', 'Air', 'Hand Delivery'];
 
 /// Zoho Books-style "New Sales Order" creation form, with full feature
@@ -91,7 +97,8 @@ class _SalesOrderFormState extends ConsumerState<SalesOrderForm> {
 
   @override
   Widget build(BuildContext context) {
-    final customers = ref.watch(customersProvider).valueOrNull ?? const <Customer>[];
+    final customers =
+        ref.watch(customersProvider).valueOrNull ?? const <Customer>[];
     final catalog = ref.watch(itemsProvider).valueOrNull ?? const <BookItem>[];
     final subTotal = _lines.fold<double>(0, (sum, l) => sum + l.amount);
     final taxTotal = _lines.fold<double>(0, (sum, l) => sum + l.taxAmount);
@@ -99,9 +106,19 @@ class _SalesOrderFormState extends ConsumerState<SalesOrderForm> {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth < AppBreakpoints.tablet) {
-          return _buildMobile(customers: customers, catalog: catalog, subTotal: subTotal, taxTotal: taxTotal);
+          return _buildMobile(
+            customers: customers,
+            catalog: catalog,
+            subTotal: subTotal,
+            taxTotal: taxTotal,
+          );
         }
-        return _buildDesktop(customers: customers, catalog: catalog, subTotal: subTotal, taxTotal: taxTotal);
+        return _buildDesktop(
+          customers: customers,
+          catalog: catalog,
+          subTotal: subTotal,
+          taxTotal: taxTotal,
+        );
       },
     );
   }
@@ -127,7 +144,8 @@ class _SalesOrderFormState extends ConsumerState<SalesOrderForm> {
               child: Form(
                 key: _formKey,
                 child: ListView(
-                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: const EdgeInsets.fromLTRB(14, 16, 14, 24),
                   children: [
                     GlassPanel(
@@ -145,8 +163,11 @@ class _SalesOrderFormState extends ConsumerState<SalesOrderForm> {
                             displayStringForOption: (c) => c.name,
                             optionSubtitle: (c) => c.company,
                             validator: (value) =>
-                                value == null || value.trim().isEmpty ? 'Customer Name is required' : null,
-                            onSelected: (customer) => setState(() => _selectedCustomer = customer),
+                                value == null || value.trim().isEmpty
+                                ? 'Customer Name is required'
+                                : null,
+                            onSelected: (customer) =>
+                                setState(() => _selectedCustomer = customer),
                           ),
                         ],
                       ),
@@ -161,18 +182,33 @@ class _SalesOrderFormState extends ConsumerState<SalesOrderForm> {
                           const SizedBox(height: 10),
                           TextFormField(
                             controller: _referenceController,
-                            decoration: const InputDecoration(labelText: 'Reference Number'),
+                            decoration: const InputDecoration(
+                              labelText: 'Reference Number',
+                            ),
                           ),
                           const SizedBox(height: 12),
                           _numberField(),
                           const SizedBox(height: 12),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(child: _orderDateField()),
-                              const SizedBox(width: 12),
-                              Expanded(child: _shipDateField()),
-                            ],
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              if (constraints.maxWidth < 360) {
+                                return Column(
+                                  children: [
+                                    _orderDateField(),
+                                    const SizedBox(height: 12),
+                                    _shipDateField(),
+                                  ],
+                                );
+                              }
+                              return Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(child: _orderDateField()),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: _shipDateField()),
+                                ],
+                              );
+                            },
                           ),
                           const SizedBox(height: 12),
                           _paymentTermsField(),
@@ -186,7 +222,10 @@ class _SalesOrderFormState extends ConsumerState<SalesOrderForm> {
                     const SizedBox(height: 20),
                     GlassPanel(
                       padding: const EdgeInsets.all(14),
-                      child: _itemTable(catalog, showInlineActionButtons: false),
+                      child: _itemTable(
+                        catalog,
+                        showInlineActionButtons: false,
+                      ),
                     ),
                     const SizedBox(height: 20),
                     GlassPanel(
@@ -208,14 +247,18 @@ class _SalesOrderFormState extends ConsumerState<SalesOrderForm> {
                           _CollapsibleSection(
                             title: 'Customer Notes',
                             expanded: _notesExpanded,
-                            onToggle: () => setState(() => _notesExpanded = !_notesExpanded),
+                            onToggle: () => setState(
+                              () => _notesExpanded = !_notesExpanded,
+                            ),
                             child: _notesField(),
                           ),
                           const Divider(height: 1, indent: 14, endIndent: 14),
                           _CollapsibleSection(
                             title: 'Terms & Conditions',
                             expanded: _termsExpanded,
-                            onToggle: () => setState(() => _termsExpanded = !_termsExpanded),
+                            onToggle: () => setState(
+                              () => _termsExpanded = !_termsExpanded,
+                            ),
                             child: _termsField(),
                           ),
                         ],
@@ -281,7 +324,8 @@ class _SalesOrderFormState extends ConsumerState<SalesOrderForm> {
                     child: Form(
                       key: _formKey,
                       child: ListView(
-                        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
                         padding: EdgeInsets.fromLTRB(gutter, 20, gutter, 24),
                         children: [
                           GlassPanel(
@@ -291,15 +335,28 @@ class _SalesOrderFormState extends ConsumerState<SalesOrderForm> {
                               children: [
                                 _topFieldsGrid(customers),
                                 const SizedBox(height: 28),
-                                _itemTable(catalog, showInlineActionButtons: true),
+                                _itemTable(
+                                  catalog,
+                                  showInlineActionButtons: true,
+                                ),
                                 const SizedBox(height: 20),
                                 LayoutBuilder(
                                   builder: (context, constraints) {
-                                    final totals = _totalsSection(subTotal, taxTotal, compact: false);
-                                    if (constraints.maxWidth < AppBreakpoints.laptop) return totals;
+                                    final totals = _totalsSection(
+                                      subTotal,
+                                      taxTotal,
+                                      compact: false,
+                                    );
+                                    if (constraints.maxWidth <
+                                        AppBreakpoints.laptop) {
+                                      return totals;
+                                    }
                                     return Align(
                                       alignment: Alignment.centerRight,
-                                      child: SizedBox(width: 380, child: totals),
+                                      child: SizedBox(
+                                        width: 380,
+                                        child: totals,
+                                      ),
                                     );
                                   },
                                 ),
@@ -307,7 +364,8 @@ class _SalesOrderFormState extends ConsumerState<SalesOrderForm> {
                                 _notesAndTermsDesktop(),
                                 const SizedBox(height: 20),
                                 Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
                                   children: [
                                     _sectionLabel('Attachments'),
                                     const SizedBox(height: 10),
@@ -347,9 +405,11 @@ class _SalesOrderFormState extends ConsumerState<SalesOrderForm> {
           options: customers,
           displayStringForOption: (c) => c.name,
           optionSubtitle: (c) => c.company,
-          validator: (value) =>
-              value == null || value.trim().isEmpty ? 'Customer Name is required' : null,
-          onSelected: (customer) => setState(() => _selectedCustomer = customer),
+          validator: (value) => value == null || value.trim().isEmpty
+              ? 'Customer Name is required'
+              : null,
+          onSelected: (customer) =>
+              setState(() => _selectedCustomer = customer),
         ),
         TextFormField(
           controller: _referenceController,
@@ -365,7 +425,9 @@ class _SalesOrderFormState extends ConsumerState<SalesOrderForm> {
       if (!twoColumn) {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [for (final f in fields) ...[f, const SizedBox(height: 14)]],
+          children: [
+            for (final f in fields) ...[f, const SizedBox(height: 14)],
+          ],
         );
       }
       const gap = 20.0;
@@ -373,7 +435,9 @@ class _SalesOrderFormState extends ConsumerState<SalesOrderForm> {
       return Wrap(
         spacing: gap,
         runSpacing: 16,
-        children: [for (final f in fields) SizedBox(width: columnWidth, child: f)],
+        children: [
+          for (final f in fields) SizedBox(width: columnWidth, child: f),
+        ],
       );
     },
   );
@@ -381,11 +445,17 @@ class _SalesOrderFormState extends ConsumerState<SalesOrderForm> {
   Widget _notesAndTermsDesktop() => LayoutBuilder(
     builder: (context, constraints) {
       if (constraints.maxWidth < AppBreakpoints.tablet) {
-        return Column(children: [_notesField(), const SizedBox(height: 14), _termsField()]);
+        return Column(
+          children: [_notesField(), const SizedBox(height: 14), _termsField()],
+        );
       }
       return Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [Expanded(child: _notesField()), const SizedBox(width: 20), Expanded(child: _termsField())],
+        children: [
+          Expanded(child: _notesField()),
+          const SizedBox(width: 20),
+          Expanded(child: _termsField()),
+        ],
       );
     },
   );
@@ -396,13 +466,15 @@ class _SalesOrderFormState extends ConsumerState<SalesOrderForm> {
 
   Widget _numberField() => TextFormField(
     controller: _numberController,
-    validator: (v) => v == null || v.trim().isEmpty ? 'Sales Order# is required' : null,
+    validator: (v) =>
+        v == null || v.trim().isEmpty ? 'Sales Order# is required' : null,
     decoration: InputDecoration(
       labelText: 'Sales Order#*',
       suffixIcon: IconButton(
         icon: const Icon(Icons.refresh, size: 18),
         tooltip: 'Generate new number',
-        onPressed: () => setState(() => _numberController.text = _generateNumber()),
+        onPressed: () =>
+            setState(() => _numberController.text = _generateNumber()),
       ),
     ),
   );
@@ -425,21 +497,27 @@ class _SalesOrderFormState extends ConsumerState<SalesOrderForm> {
   Widget _paymentTermsField() => DropdownButtonFormField<String>(
     initialValue: _paymentTerms,
     decoration: const InputDecoration(labelText: 'Payment Terms'),
-    items: _paymentTermsOptions.map((o) => DropdownMenuItem(value: o, child: Text(o))).toList(),
+    items: _paymentTermsOptions
+        .map((o) => DropdownMenuItem(value: o, child: Text(o)))
+        .toList(),
     onChanged: (v) => setState(() => _paymentTerms = v),
   );
 
   Widget _deliveryMethodField() => DropdownButtonFormField<String>(
     initialValue: _deliveryMethod,
     decoration: const InputDecoration(labelText: 'Delivery Method'),
-    items: _deliveryMethodOptions.map((o) => DropdownMenuItem(value: o, child: Text(o))).toList(),
+    items: _deliveryMethodOptions
+        .map((o) => DropdownMenuItem(value: o, child: Text(o)))
+        .toList(),
     onChanged: (v) => setState(() => _deliveryMethod = v),
   );
 
   Widget _salespersonField() => DropdownButtonFormField<String>(
     initialValue: _salesperson,
     decoration: const InputDecoration(labelText: 'Salesperson'),
-    items: _salespeople.map((o) => DropdownMenuItem(value: o, child: Text(o))).toList(),
+    items: _salespeople
+        .map((o) => DropdownMenuItem(value: o, child: Text(o)))
+        .toList(),
     onChanged: (v) => setState(() => _salesperson = v),
   );
 
@@ -456,10 +534,16 @@ class _SalesOrderFormState extends ConsumerState<SalesOrderForm> {
   Widget _termsField() => TextFormField(
     controller: _termsController,
     maxLines: 4,
-    decoration: const InputDecoration(labelText: 'Terms & Conditions', alignLabelWithHint: true),
+    decoration: const InputDecoration(
+      labelText: 'Terms & Conditions',
+      alignLabelWithHint: true,
+    ),
   );
 
-  Widget _itemTable(List<BookItem> catalog, {required bool showInlineActionButtons}) => QuoteItemTable(
+  Widget _itemTable(
+    List<BookItem> catalog, {
+    required bool showInlineActionButtons,
+  }) => QuoteItemTable(
     lines: _lines,
     catalog: catalog,
     showInlineActionButtons: showInlineActionButtons,
@@ -467,7 +551,13 @@ class _SalesOrderFormState extends ConsumerState<SalesOrderForm> {
     onAddRow: () => setState(() => _lines.add(QuoteLineItem())),
     onAddRows: (items) => setState(
       () => _lines.addAll(
-        items.map((item) => QuoteLineItem(item: item, rate: item.rate, taxPercent: item.taxRate)),
+        items.map(
+          (item) => QuoteLineItem(
+            item: item,
+            rate: item.rate,
+            taxPercent: item.taxRate,
+          ),
+        ),
       ),
     ),
     onRemoveRow: (index) => setState(() {
@@ -484,7 +574,11 @@ class _SalesOrderFormState extends ConsumerState<SalesOrderForm> {
     }),
   );
 
-  Widget _totalsSection(double subTotal, double taxTotal, {required bool compact}) => QuoteTotalsSection(
+  Widget _totalsSection(
+    double subTotal,
+    double taxTotal, {
+    required bool compact,
+  }) => QuoteTotalsSection(
     compact: compact,
     subTotal: subTotal,
     taxTotal: taxTotal,
@@ -535,14 +629,25 @@ class _SalesOrderFormState extends ConsumerState<SalesOrderForm> {
             padding: const EdgeInsets.only(bottom: 6),
             child: Row(
               children: [
-                const Icon(Icons.insert_drive_file_outlined, size: 16, color: AppColors.textSecondary),
+                const Icon(
+                  Icons.insert_drive_file_outlined,
+                  size: 16,
+                  color: AppColors.textSecondary,
+                ),
                 const SizedBox(width: 6),
                 Expanded(
-                  child: Text(file.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+                  child: Text(
+                    file.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12),
+                  ),
                 ),
                 Text(
                   '${(file.size / 1024).toStringAsFixed(0)} KB',
-                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close, size: 16),
@@ -578,7 +683,9 @@ class _SalesOrderFormState extends ConsumerState<SalesOrderForm> {
               enabled: canDuplicate,
               leading: Icon(
                 Icons.copy_all_outlined,
-                color: canDuplicate ? AppColors.primary : AppColors.textSecondary,
+                color: canDuplicate
+                    ? AppColors.primary
+                    : AppColors.textSecondary,
               ),
               title: const Text('Duplicate Last Item'),
               onTap: () => Navigator.pop(sheetContext, 'duplicate'),
@@ -610,13 +717,22 @@ class _SalesOrderFormState extends ConsumerState<SalesOrderForm> {
     if (!mounted || result == null || result.isEmpty) return;
     setState(
       () => _lines.addAll(
-        result.map((item) => QuoteLineItem(item: item, rate: item.rate, taxPercent: item.taxRate)),
+        result.map(
+          (item) => QuoteLineItem(
+            item: item,
+            rate: item.rate,
+            taxPercent: item.taxRate,
+          ),
+        ),
       ),
     );
   }
 
   Future<void> _pickAttachments() async {
-    final result = await FilePicker.pickFiles(allowMultiple: true, withData: false);
+    final result = await FilePicker.pickFiles(
+      allowMultiple: true,
+      withData: false,
+    );
     if (result == null) return;
     final remaining = 5 - _attachments.length;
     if (remaining <= 0) {
@@ -632,11 +748,15 @@ class _SalesOrderFormState extends ConsumerState<SalesOrderForm> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _pickDate({required bool isShipment}) async {
-    final initial = isShipment ? (_expectedShipmentDate ?? _orderDate) : _orderDate;
+    final initial = isShipment
+        ? (_expectedShipmentDate ?? _orderDate)
+        : _orderDate;
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
@@ -649,7 +769,8 @@ class _SalesOrderFormState extends ConsumerState<SalesOrderForm> {
         _expectedShipmentDate = picked;
       } else {
         _orderDate = picked;
-        if (_expectedShipmentDate != null && _expectedShipmentDate!.isBefore(_orderDate)) {
+        if (_expectedShipmentDate != null &&
+            _expectedShipmentDate!.isBefore(_orderDate)) {
           _expectedShipmentDate = null;
         }
       }
@@ -663,19 +784,25 @@ class _SalesOrderFormState extends ConsumerState<SalesOrderForm> {
     final subTotal = _lines.fold<double>(0, (sum, l) => sum + l.amount);
     final taxTotal = _lines.fold<double>(0, (sum, l) => sum + l.taxAmount);
     final discountValue = double.tryParse(_discountController.text) ?? 0;
-    final discountAmount = _discountIsPercent ? subTotal * discountValue / 100 : discountValue;
+    final discountAmount = _discountIsPercent
+        ? subTotal * discountValue / 100
+        : discountValue;
     final taxAdjustmentAmount = _taxAdjustmentType == TaxAdjustmentType.none
         ? 0.0
         : (subTotal - discountAmount) * _taxAdjustmentRate / 100;
-    final total = (subTotal - discountAmount + taxTotal - taxAdjustmentAmount).clamp(0, double.infinity);
-    final amountPaid = _advanceReceiveEnabled ? (double.tryParse(_advanceAmountController.text) ?? 0) : 0.0;
+    final total = (subTotal - discountAmount + taxTotal - taxAdjustmentAmount)
+        .clamp(0, double.infinity);
+    final amountPaid = _advanceReceiveEnabled
+        ? (double.tryParse(_advanceAmountController.text) ?? 0)
+        : 0.0;
 
     await ref
         .read(booksRepositoryProvider)
         .addTransaction(
           TransactionDraft(
             type: TransactionType.salesOrder,
-            customer: _selectedCustomer?.name ?? _customerController.text.trim(),
+            customer:
+                _selectedCustomer?.name ?? _customerController.text.trim(),
             customerId: _selectedCustomer?.id,
             number: _numberController.text.trim(),
             date: _orderDate,
@@ -700,7 +827,7 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    height: 56,
+    constraints: const BoxConstraints(minHeight: 64),
     padding: const EdgeInsets.symmetric(horizontal: 16),
     decoration: const BoxDecoration(
       color: AppColors.surface,
@@ -708,12 +835,42 @@ class _Header extends StatelessWidget {
     ),
     child: Row(
       children: [
-        const Icon(Icons.receipt_long_outlined, color: AppColors.active, size: 20),
-        const SizedBox(width: 10),
-        const Expanded(
-          child: Text('New Sales Order', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: .14),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(
+            Icons.receipt_long_outlined,
+            color: AppColors.primary,
+            size: 20,
+          ),
         ),
-        IconButton(icon: const Icon(Icons.close), tooltip: 'Close', onPressed: onClose),
+        const SizedBox(width: 12),
+        const Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'New Sales Order',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+              SizedBox(height: 2),
+              Text(
+                'Create and send an order to your customer',
+                style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.close),
+          tooltip: 'Close',
+          onPressed: onClose,
+        ),
       ],
     ),
   );
@@ -747,11 +904,22 @@ class _CollapsibleSection extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
           child: Row(
             children: [
-              Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14))),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
               AnimatedRotation(
                 turns: expanded ? 0.5 : 0,
                 duration: const Duration(milliseconds: 180),
-                child: const Icon(Icons.expand_more, color: AppColors.textSecondary),
+                child: const Icon(
+                  Icons.expand_more,
+                  color: AppColors.textSecondary,
+                ),
               ),
             ],
           ),
@@ -763,7 +931,9 @@ class _CollapsibleSection extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
           child: child,
         ),
-        crossFadeState: expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+        crossFadeState: expanded
+            ? CrossFadeState.showSecond
+            : CrossFadeState.showFirst,
         duration: const Duration(milliseconds: 180),
         sizeCurve: Curves.easeInOut,
       ),
@@ -788,50 +958,75 @@ class _MobileFooter extends StatelessWidget {
   final VoidCallback onCancel;
 
   @override
-  Widget build(BuildContext context) => SafeArea(
-    top: false,
-    child: Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: AppColors.divider)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: saving ? null : onSaveDraft,
-                  style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                  child: Text(
-                    saving ? 'Saving...' : 'Save as Draft',
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: FilledButton(
-                  onPressed: saving ? null : onSaveAndSend,
-                  style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                  child: const Text('Save and Send', overflow: TextOverflow.ellipsis, maxLines: 1),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
+  Widget build(BuildContext context) => Container(
+    decoration: const BoxDecoration(
+      color: Colors.white,
+      border: Border(top: BorderSide(color: AppColors.divider)),
+      boxShadow: [
+        BoxShadow(
+          color: Color(0x14000000),
+          blurRadius: 12,
+          offset: Offset(0, -3),
+        ),
+      ],
+    ),
+    child: SafeArea(
+      top: false,
+      minimum: const EdgeInsets.only(bottom: 6),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        child: Row(
+          children: [
+            IconButton.outlined(
               onPressed: saving ? null : onCancel,
-              style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(44)),
-              child: const Text('Cancel'),
+              tooltip: 'Cancel',
+              icon: const Icon(Icons.close, size: 20),
             ),
-          ),
-        ],
+            const SizedBox(width: 8),
+            Expanded(
+              child: OutlinedButton(
+                onPressed: saving ? null : onSaveDraft,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                ),
+                child: const Text(
+                  'Save Draft',
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              flex: 2,
+              child: FilledButton(
+                onPressed: saving ? null : onSaveAndSend,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                ),
+                child: saving
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.send_outlined, size: 17),
+                          SizedBox(width: 7),
+                          Flexible(
+                            child: Text(
+                              'Save & Send',
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+          ],
+        ),
       ),
     ),
   );
@@ -873,7 +1068,10 @@ class _DesktopFooter extends StatelessWidget {
             child: const Text('Save and Send'),
           ),
           const SizedBox(width: 10),
-          OutlinedButton(onPressed: saving ? null : onCancel, child: const Text('Cancel')),
+          OutlinedButton(
+            onPressed: saving ? null : onCancel,
+            child: const Text('Cancel'),
+          ),
         ],
       ),
     ),
@@ -905,7 +1103,9 @@ class _DateField extends StatelessWidget {
       ),
       child: Text(
         value != null ? format.format(value!) : (placeholder ?? ''),
-        style: value != null ? null : const TextStyle(color: AppColors.textSecondary),
+        style: value != null
+            ? null
+            : const TextStyle(color: AppColors.textSecondary),
       ),
     ),
   );

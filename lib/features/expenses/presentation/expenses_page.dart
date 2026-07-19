@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../domain/expense.dart';
 import '../providers/expense_providers.dart';
+import 'expense_form.dart';
 
 class ExpensesPage extends ConsumerStatefulWidget {
   const ExpensesPage({super.key});
@@ -15,6 +16,7 @@ class ExpensesPage extends ConsumerStatefulWidget {
 
 class _ExpensesPageState extends ConsumerState<ExpensesPage> {
   final Set<int> _selected = {};
+  bool _showForm = false;
   final _date = DateFormat('dd/MM/yyyy');
   final _money = NumberFormat.currency(
     locale: 'en_IN',
@@ -24,6 +26,15 @@ class _ExpensesPageState extends ConsumerState<ExpensesPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_showForm) {
+      return ExpenseForm(
+        onCancel: () => setState(() => _showForm = false),
+        onSaved: () {
+          ref.invalidate(expensesProvider);
+          setState(() => _showForm = false);
+        },
+      );
+    }
     final result = ref.watch(expensesProvider);
     return ColoredBox(
       color: Colors.white,
@@ -75,7 +86,7 @@ class _ExpensesPageState extends ConsumerState<ExpensesPage> {
         const SizedBox(width: 8),
         FilledButton.icon(
           style: FilledButton.styleFrom(backgroundColor: AppColors.active),
-          onPressed: _showNewExpenseDialog,
+          onPressed: () => setState(() => _showForm = true),
           icon: const Icon(Icons.add, size: 18),
           label: Text(MediaQuery.sizeOf(context).width < 500 ? 'New' : 'New Expense'),
         ),
@@ -207,48 +218,4 @@ class _ExpensesPageState extends ConsumerState<ExpensesPage> {
     SnackBar(content: Text('$feature is ready to be connected.')),
   );
 
-  Future<void> _showNewExpenseDialog() async {
-    final account = TextEditingController();
-    final vendor = TextEditingController();
-    final customer = TextEditingController(text: 'iGreentec Engineering India Pvt Ltd');
-    final amount = TextEditingController();
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('New Expense'),
-        content: SizedBox(
-          width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: account, decoration: const InputDecoration(labelText: 'Expense Account')),
-              TextField(controller: vendor, decoration: const InputDecoration(labelText: 'Vendor Name')),
-              TextField(controller: customer, decoration: const InputDecoration(labelText: 'Customer Name')),
-              TextField(controller: amount, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Amount')),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-    if (saved != true || account.text.trim().isEmpty) return;
-    await ref.read(expenseRepositoryProvider).addExpense(
-      date: DateTime.now(),
-      account: account.text.trim(),
-      reference: '',
-      vendor: vendor.text.trim(),
-      paidThrough: 'Petty Cash',
-      customer: customer.text.trim(),
-      status: 'NON-BILLABLE',
-      amount: double.tryParse(amount.text.trim()) ?? 0,
-    );
-    ref.invalidate(expensesProvider);
-  }
 }
-
