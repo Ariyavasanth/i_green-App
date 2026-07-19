@@ -9,6 +9,10 @@ import '../../features/books/presentation/books_pages.dart';
 import '../../features/quotes/presentation/quote_form_screen.dart';
 import '../../features/vendors/presentation/vendors_page.dart';
 import '../../features/expenses/presentation/expenses_page.dart';
+import '../../features/purchase_orders/presentation/new_purchase_order_page.dart';
+import '../../features/purchase_orders/presentation/purchase_orders_page.dart';
+import '../../features/bills/presentation/bills_page.dart';
+import '../../features/bills/presentation/new_bill_page.dart';
 import '../../screens/login_screen.dart';
 import '../../screens/customers/active_customers_list.dart';
 import '../../screens/customers/new_customer_form.dart';
@@ -102,11 +106,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/purchase-orders',
-            builder: (_, _) => const SectionPage(title: 'Purchase Orders'),
+            builder: (_, _) => const PurchaseOrdersPage(),
+            routes: [
+              GoRoute(
+                path: 'new',
+                builder: (_, _) => const NewPurchaseOrderPage(),
+              ),
+            ],
           ),
           GoRoute(
             path: '/bills',
-            builder: (_, _) => const SectionPage(title: 'Bills'),
+            builder: (_, _) => const BillsPage(),
+            routes: [
+              GoRoute(path: 'new', builder: (_, _) => const NewBillPage()),
+            ],
           ),
           GoRoute(
             path: '/inventory-adjustments',
