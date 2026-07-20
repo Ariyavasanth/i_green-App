@@ -9,6 +9,7 @@ import '../domain/books_repository.dart';
 import '../providers/books_providers.dart';
 import 'dashboard_sections.dart';
 import 'item_details_screen.dart';
+import 'items_desktop_view.dart';
 import 'widgets/quote_mobile_view.dart';
 import 'widgets/sales_order_desktop_view.dart';
 import 'widgets/sales_order_mobile_view.dart';
@@ -122,12 +123,30 @@ class HomePage extends ConsumerWidget {
 class ItemsPage extends ConsumerWidget {
   const ItemsPage({super.key});
   @override
-  Widget build(BuildContext context, WidgetRef ref) => PageFrame(
-    title: 'Active Items',
-    onAdd: () => context.push('/items/new'),
-    child: ref
-        .watch(itemsProvider)
-        .when(
+  Widget build(BuildContext context, WidgetRef ref) => LayoutBuilder(
+    builder: (context, constraints) {
+      final items = ref.watch(itemsProvider);
+      if (constraints.maxWidth >= AppBreakpoints.laptop) {
+        return items.when(
+          loading: loading,
+          error: error,
+          data: (all) => ItemsDesktopView(
+            items: all,
+            onAdd: () => context.push('/items/new'),
+            onOpen: (item) => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ItemDetailsScreen(item: item),
+              ),
+            ),
+          ),
+        );
+      }
+
+      // The mobile layout intentionally remains the original compact list.
+      return PageFrame(
+        title: 'Active Items',
+        onAdd: () => context.push('/items/new'),
+        child: items.when(
           loading: loading,
           error: error,
           data: (all) {
@@ -176,6 +195,8 @@ class ItemsPage extends ConsumerWidget {
             );
           },
         ),
+      );
+    },
   );
 }
 
