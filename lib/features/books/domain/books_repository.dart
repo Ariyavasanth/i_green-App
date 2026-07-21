@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 class BookItem {
   const BookItem({
     required this.id,
@@ -158,12 +160,34 @@ class StockEntryDraft {
     required this.basicPrice,
     required this.taxPercentage,
     required this.netAverage,
+    required this.totalAmountWithTax,
+    required this.grandTotal,
+    required this.paid,
   });
 
   final String purchaseOrderNumber, invoiceNumber, item, description;
   final String size, measurement;
   final DateTime purchaseOrderDate, invoiceDate;
   final double quantity, basicPrice, taxPercentage, netAverage;
+  final double totalAmountWithTax, grandTotal, paid;
+}
+
+class MaterialDraft {
+  const MaterialDraft({
+    required this.sourceType,
+    required this.description,
+    required this.size,
+    required this.weight,
+    required this.usedFor,
+    required this.stockAlert,
+    required this.vendorId,
+    this.image,
+  });
+
+  final String sourceType, description, size, weight, usedFor;
+  final double stockAlert;
+  final int vendorId;
+  final Uint8List? image;
 }
 
 class DashboardMetrics {
@@ -202,6 +226,7 @@ abstract interface class BooksRepository {
   Future<List<InventoryAdjustment>> getAdjustments();
   Future<void> addAdjustment(AdjustmentDraft draft);
   Future<void> addStock(StockEntryDraft draft);
+  Future<void> addMaterial(MaterialDraft draft);
   Future<DashboardMetrics> getDashboardMetrics();
   Future<void> recordInvoicePaid(int invoiceId);
   Future<void> convertQuote(int quoteId, TransactionType targetType);

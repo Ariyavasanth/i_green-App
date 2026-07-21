@@ -186,7 +186,7 @@ class _InventoryAdjustmentDashboardPageState
                   onAddStock: () => context.push('/inventory-adjustments/add-stock'),
                   onMoveStock: () => context.push('/inventory-adjustments/new'),
                   onHistory: () => _showHistory(context),
-                  onAddMaterial: () => context.push('/items/new'),
+                  onAddMaterial: () => context.push('/inventory-adjustments/add-material'),
                 ),
                 const SizedBox(height: 24),
                 _SectionHeader(

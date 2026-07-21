@@ -6,7 +6,7 @@ class SqliteBooksRepository implements BooksRepository {
   Database? _database;
   Future<Database> get _db async => _database ??= await openDatabase(
     p.join(await getDatabasesPath(), 'igreen_books.db'),
-    version: 6,
+    version: 7,
     onCreate: (db, _) async {
       // SQL is isolated in this repository so UI code remains backend-agnostic.
       await db.execute(
@@ -29,7 +29,10 @@ class SqliteBooksRepository implements BooksRepository {
         'CREATE TABLE item_history(id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER NOT NULL, occurred_at TEXT NOT NULL, details TEXT NOT NULL, FOREIGN KEY(item_id) REFERENCES items(id))',
       );
       await db.execute(
-        'CREATE TABLE stock_entries(id INTEGER PRIMARY KEY AUTOINCREMENT, purchase_order_number TEXT NOT NULL, purchase_order_date TEXT NOT NULL, invoice_number TEXT NOT NULL, invoice_date TEXT NOT NULL, item TEXT NOT NULL, description TEXT NOT NULL DEFAULT "", size TEXT NOT NULL DEFAULT "", measurement TEXT NOT NULL DEFAULT "", quantity REAL NOT NULL, basic_price REAL NOT NULL, tax_percentage REAL NOT NULL, net_average REAL NOT NULL, created_at TEXT NOT NULL)',
+        'CREATE TABLE stock_entries(id INTEGER PRIMARY KEY AUTOINCREMENT, purchase_order_number TEXT NOT NULL, purchase_order_date TEXT NOT NULL, invoice_number TEXT NOT NULL, invoice_date TEXT NOT NULL, item TEXT NOT NULL, description TEXT NOT NULL DEFAULT "", size TEXT NOT NULL DEFAULT "", measurement TEXT NOT NULL DEFAULT "", quantity REAL NOT NULL, basic_price REAL NOT NULL, tax_percentage REAL NOT NULL, net_average REAL NOT NULL, total_amount_with_tax REAL NOT NULL DEFAULT 0, grand_total REAL NOT NULL DEFAULT 0, paid REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL)',
+      );
+      await db.execute(
+        'CREATE TABLE materials(id INTEGER PRIMARY KEY AUTOINCREMENT, source_type TEXT NOT NULL, description TEXT NOT NULL, size TEXT NOT NULL DEFAULT "", weight TEXT NOT NULL DEFAULT "", used_for TEXT NOT NULL DEFAULT "", image BLOB, stock_alert REAL NOT NULL DEFAULT 0, vendor_id INTEGER NOT NULL, created_at TEXT NOT NULL)',
       );
       await _seed(db);
     },
@@ -89,6 +92,14 @@ class SqliteBooksRepository implements BooksRepository {
       if (oldVersion < 6) {
         await db.execute(
           'CREATE TABLE stock_entries(id INTEGER PRIMARY KEY AUTOINCREMENT, purchase_order_number TEXT NOT NULL, purchase_order_date TEXT NOT NULL, invoice_number TEXT NOT NULL, invoice_date TEXT NOT NULL, item TEXT NOT NULL, description TEXT NOT NULL DEFAULT "", size TEXT NOT NULL DEFAULT "", measurement TEXT NOT NULL DEFAULT "", quantity REAL NOT NULL, basic_price REAL NOT NULL, tax_percentage REAL NOT NULL, net_average REAL NOT NULL, created_at TEXT NOT NULL)',
+        );
+      }
+      if (oldVersion < 7) {
+        await db.execute('ALTER TABLE stock_entries ADD COLUMN total_amount_with_tax REAL NOT NULL DEFAULT 0');
+        await db.execute('ALTER TABLE stock_entries ADD COLUMN grand_total REAL NOT NULL DEFAULT 0');
+        await db.execute('ALTER TABLE stock_entries ADD COLUMN paid REAL NOT NULL DEFAULT 0');
+        await db.execute(
+          'CREATE TABLE materials(id INTEGER PRIMARY KEY AUTOINCREMENT, source_type TEXT NOT NULL, description TEXT NOT NULL, size TEXT NOT NULL DEFAULT "", weight TEXT NOT NULL DEFAULT "", used_for TEXT NOT NULL DEFAULT "", image BLOB, stock_alert REAL NOT NULL DEFAULT 0, vendor_id INTEGER NOT NULL, created_at TEXT NOT NULL)',
         );
       }
     },
@@ -393,6 +404,9 @@ class SqliteBooksRepository implements BooksRepository {
         'basic_price': d.basicPrice,
         'tax_percentage': d.taxPercentage,
         'net_average': d.netAverage,
+        'total_amount_with_tax': d.totalAmountWithTax,
+        'grand_total': d.grandTotal,
+        'paid': d.paid,
         'created_at': DateTime.now().toIso8601String(),
       });
       final matches = await txn.query(
@@ -419,6 +433,21 @@ class SqliteBooksRepository implements BooksRepository {
           [d.quantity, d.netAverage, d.taxPercentage, matches.first['id']],
         );
       }
+    });
+  }
+
+  @override
+  Future<void> addMaterial(MaterialDraft d) async {
+    await (await _db).insert('materials', {
+      'source_type': d.sourceType,
+      'description': d.description,
+      'size': d.size,
+      'weight': d.weight,
+      'used_for': d.usedFor,
+      'image': d.image,
+      'stock_alert': d.stockAlert,
+      'vendor_id': d.vendorId,
+      'created_at': DateTime.now().toIso8601String(),
     });
   }
 

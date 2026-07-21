@@ -25,6 +25,9 @@ class _AddStockPageState extends ConsumerState<AddStockPage> {
   final basicPrice = TextEditingController();
   final taxPercentage = TextEditingController();
   final netAverage = TextEditingController(text: '0.00');
+  final totalAmountWithTax = TextEditingController(text: '0.00');
+  final grandTotal = TextEditingController(text: '0.00');
+  final paid = TextEditingController(text: '0.00');
   DateTime purchaseOrderDate = DateTime.now();
   DateTime invoiceDate = DateTime.now();
   bool saving = false;
@@ -34,11 +37,12 @@ class _AddStockPageState extends ConsumerState<AddStockPage> {
     super.initState();
     basicPrice.addListener(_calculateNetAverage);
     taxPercentage.addListener(_calculateNetAverage);
+    quantity.addListener(_calculateNetAverage);
   }
 
   @override
   void dispose() {
-    for (final controller in [purchaseOrderNumber, invoiceNumber, item, description, size, measurement, quantity, basicPrice, taxPercentage, netAverage]) {
+    for (final controller in [purchaseOrderNumber, invoiceNumber, item, description, size, measurement, quantity, basicPrice, taxPercentage, netAverage, totalAmountWithTax, grandTotal, paid]) {
       controller.dispose();
     }
     super.dispose();
@@ -78,6 +82,12 @@ class _AddStockPageState extends ConsumerState<AddStockPage> {
         _numberField(taxPercentage, 'Tax percentage', suffix: '%'),
         const SizedBox(height: 14),
         TextFormField(controller: netAverage, readOnly: true, decoration: const InputDecoration(labelText: 'Net average', prefixText: '₹  ')),
+        const SizedBox(height: 14),
+        TextFormField(controller: totalAmountWithTax, readOnly: true, decoration: const InputDecoration(labelText: 'Total amount with tax')),
+        const SizedBox(height: 14),
+        TextFormField(controller: grandTotal, readOnly: true, decoration: const InputDecoration(labelText: 'Grand total for all item')),
+        const SizedBox(height: 14),
+        _numberField(paid, 'Paid'),
       ]),
     )],
   );
@@ -115,7 +125,11 @@ class _AddStockPageState extends ConsumerState<AddStockPage> {
   void _calculateNetAverage() {
     final basic = double.tryParse(basicPrice.text) ?? 0;
     final tax = double.tryParse(taxPercentage.text) ?? 0;
-    netAverage.text = (basic * (1 + tax / 100)).toStringAsFixed(2);
+    final net = basic * (1 + tax / 100);
+    final total = net * (double.tryParse(quantity.text) ?? 0);
+    netAverage.text = net.toStringAsFixed(2);
+    totalAmountWithTax.text = total.toStringAsFixed(2);
+    grandTotal.text = total.toStringAsFixed(2);
   }
 
   Future<void> _save() async {
@@ -128,6 +142,8 @@ class _AddStockPageState extends ConsumerState<AddStockPage> {
         description: description.text.trim(), size: size.text.trim(), measurement: measurement.text.trim(),
         quantity: double.parse(quantity.text), basicPrice: double.parse(basicPrice.text),
         taxPercentage: double.parse(taxPercentage.text), netAverage: double.parse(netAverage.text),
+        totalAmountWithTax: double.parse(totalAmountWithTax.text),
+        grandTotal: double.parse(grandTotal.text), paid: double.parse(paid.text),
       ));
       ref.invalidate(itemsProvider);
       ref.invalidate(dashboardMetricsProvider);
