@@ -41,13 +41,7 @@ class SidebarDrawer extends StatelessWidget {
     duration: const Duration(milliseconds: 180),
     curve: Curves.easeInOutCubic,
     width: expanded ? 250 : 72,
-    decoration: const BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [AppColors.active, Color(0xFF252C31)],
-      ),
-    ),
+    decoration: const BoxDecoration(color: Colors.white),
     child: SafeArea(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -60,13 +54,13 @@ class SidebarDrawer extends StatelessWidget {
                   : MainAxisAlignment.center,
               children: [
                 if (expanded) const SizedBox(width: 16),
-                const Icon(Icons.auto_stories, color: Colors.white, size: 20),
+                const Icon(Icons.auto_stories, color: Colors.black, size: 20),
                 if (expanded) ...[
                   const SizedBox(width: 9),
                   const Text(
                     'BOOKS',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: Colors.black,
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 0.6,
@@ -76,17 +70,13 @@ class SidebarDrawer extends StatelessWidget {
               ],
             ),
           ),
-          const Divider(height: 1, color: Color(0x33FFFFFF)),
+          const Divider(height: 1, color: Color(0x1F000000)),
           const SizedBox(height: 4),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
               children: [
-                for (
-                  var index = 0;
-                  index < destinations.length;
-                  index++
-                ) ...[
+                for (var index = 0; index < destinations.length; index++) ...[
                   // Group labels keep the longer navigation list easy to scan.
                   if (index == 0 ||
                       destinations[index - 1].section !=
@@ -100,7 +90,7 @@ class SidebarDrawer extends StatelessWidget {
                         ),
                         child: const Divider(
                           height: 1,
-                          color: Color(0x1AFFFFFF),
+                          color: Color(0x1A000000),
                         ),
                       ),
                     _SectionHeader(
@@ -121,7 +111,7 @@ class SidebarDrawer extends StatelessWidget {
               ],
             ),
           ),
-          const Divider(height: 1, color: Color(0x33FFFFFF)),
+          const Divider(height: 1, color: Color(0x1F000000)),
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
             child: _SidebarItem(
@@ -162,7 +152,7 @@ class _SectionHeader extends StatelessWidget {
         label.toUpperCase(),
         maxLines: 1,
         style: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
-          color: Colors.white70,
+          color: Colors.black54,
           fontSize: 10,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.6,
@@ -192,7 +182,7 @@ class _SidebarItem extends StatelessWidget {
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOutCubic,
       decoration: BoxDecoration(
-        color: selected ? AppColors.primary : Colors.transparent,
+        color: selected ? AppColors.active : Colors.transparent,
         borderRadius: BorderRadius.circular(7),
       ),
       child: Material(
@@ -209,7 +199,11 @@ class _SidebarItem extends StatelessWidget {
                   : MainAxisAlignment.center,
               children: [
                 if (expanded) const SizedBox(width: 10),
-                Icon(destination.icon, color: Colors.white, size: 18),
+                Icon(
+                  destination.icon,
+                  color: selected ? Colors.white : Colors.black,
+                  size: 18,
+                ),
                 if (expanded) ...[
                   const SizedBox(width: 10),
                   Expanded(
@@ -218,6 +212,7 @@ class _SidebarItem extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.navigation.copyWith(
+                        color: selected ? Colors.white : Colors.black,
                         fontWeight: selected
                             ? FontWeight.w600
                             : FontWeight.w500,
@@ -248,13 +243,13 @@ class _BadgeCount extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
     decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: 0.16),
+      color: Colors.black.withValues(alpha: 0.12),
       borderRadius: BorderRadius.circular(20),
     ),
     child: Text(
       count > 99 ? '99+' : '$count',
       style: const TextStyle(
-        color: Colors.white,
+        color: Colors.black,
         fontSize: 10,
         fontWeight: FontWeight.w600,
         height: 1.2,
