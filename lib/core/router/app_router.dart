@@ -6,6 +6,8 @@ import '../../features/app_shell/presentation/section_page.dart';
 import '../../features/books/domain/books_repository.dart';
 import '../../features/books/presentation/books_forms.dart';
 import '../../features/books/presentation/books_pages.dart';
+import '../../features/books/presentation/inventory_adjustments_page.dart';
+import '../../features/books/presentation/add_stock_page.dart';
 import '../../features/quotes/presentation/quote_form_screen.dart';
 import '../../features/vendors/presentation/vendors_page.dart';
 import '../../features/expenses/presentation/expenses_page.dart';
@@ -123,8 +125,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/inventory-adjustments',
-            builder: (_, _) => const InventoryAdjustmentsPage(),
+            builder: (_, _) => const InventoryAdjustmentDashboardPage(),
             routes: [
+              GoRoute(
+                path: 'add-stock',
+                builder: (_, _) => const AddStockPage(),
+              ),
               GoRoute(
                 path: 'new',
                 builder: (_, _) => const NewAdjustmentPage(),

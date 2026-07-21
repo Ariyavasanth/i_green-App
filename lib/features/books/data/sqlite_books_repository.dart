@@ -6,7 +6,7 @@ class SqliteBooksRepository implements BooksRepository {
   Database? _database;
   Future<Database> get _db async => _database ??= await openDatabase(
     p.join(await getDatabasesPath(), 'igreen_books.db'),
-    version: 5,
+    version: 6,
     onCreate: (db, _) async {
       // SQL is isolated in this repository so UI code remains backend-agnostic.
       await db.execute(
@@ -27,6 +27,9 @@ class SqliteBooksRepository implements BooksRepository {
       );
       await db.execute(
         'CREATE TABLE item_history(id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER NOT NULL, occurred_at TEXT NOT NULL, details TEXT NOT NULL, FOREIGN KEY(item_id) REFERENCES items(id))',
+      );
+      await db.execute(
+        'CREATE TABLE stock_entries(id INTEGER PRIMARY KEY AUTOINCREMENT, purchase_order_number TEXT NOT NULL, purchase_order_date TEXT NOT NULL, invoice_number TEXT NOT NULL, invoice_date TEXT NOT NULL, item TEXT NOT NULL, description TEXT NOT NULL DEFAULT "", size TEXT NOT NULL DEFAULT "", measurement TEXT NOT NULL DEFAULT "", quantity REAL NOT NULL, basic_price REAL NOT NULL, tax_percentage REAL NOT NULL, net_average REAL NOT NULL, created_at TEXT NOT NULL)',
       );
       await _seed(db);
     },
@@ -82,6 +85,11 @@ class SqliteBooksRepository implements BooksRepository {
       if (oldVersion < 5) {
         // Add the new catalog item for existing databases without changing the schema.
         await _insertPullingSwivel(db);
+      }
+      if (oldVersion < 6) {
+        await db.execute(
+          'CREATE TABLE stock_entries(id INTEGER PRIMARY KEY AUTOINCREMENT, purchase_order_number TEXT NOT NULL, purchase_order_date TEXT NOT NULL, invoice_number TEXT NOT NULL, invoice_date TEXT NOT NULL, item TEXT NOT NULL, description TEXT NOT NULL DEFAULT "", size TEXT NOT NULL DEFAULT "", measurement TEXT NOT NULL DEFAULT "", quantity REAL NOT NULL, basic_price REAL NOT NULL, tax_percentage REAL NOT NULL, net_average REAL NOT NULL, created_at TEXT NOT NULL)',
+        );
       }
     },
   );
@@ -363,6 +371,52 @@ class SqliteBooksRepository implements BooksRepository {
         await txn.rawUpdate(
           'UPDATE items SET stock_on_hand = stock_on_hand + ? WHERE id = ?',
           [d.quantityAdjusted, d.itemId],
+        );
+      }
+    });
+  }
+
+  @override
+  Future<void> addStock(StockEntryDraft d) async {
+    final db = await _db;
+    await db.transaction((txn) async {
+      await txn.insert('stock_entries', {
+        'purchase_order_number': d.purchaseOrderNumber,
+        'purchase_order_date': d.purchaseOrderDate.toIso8601String(),
+        'invoice_number': d.invoiceNumber,
+        'invoice_date': d.invoiceDate.toIso8601String(),
+        'item': d.item,
+        'description': d.description,
+        'size': d.size,
+        'measurement': d.measurement,
+        'quantity': d.quantity,
+        'basic_price': d.basicPrice,
+        'tax_percentage': d.taxPercentage,
+        'net_average': d.netAverage,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+      final matches = await txn.query(
+        'items',
+        columns: ['id'],
+        where: 'LOWER(name) = ?',
+        whereArgs: [d.item.toLowerCase()],
+        limit: 1,
+      );
+      if (matches.isEmpty) {
+        await txn.insert('items', {
+          'name': d.item,
+          'sku': '',
+          'rate': d.netAverage,
+          'cost_price': d.netAverage,
+          'tax_rate': d.taxPercentage,
+          'unit': d.measurement.isEmpty ? 'pcs' : d.measurement,
+          'track_inventory': 1,
+          'stock_on_hand': d.quantity,
+        });
+      } else {
+        await txn.rawUpdate(
+          'UPDATE items SET stock_on_hand = stock_on_hand + ?, cost_price = ?, tax_rate = ? WHERE id = ?',
+          [d.quantity, d.netAverage, d.taxPercentage, matches.first['id']],
         );
       }
     });

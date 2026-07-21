@@ -783,6 +783,7 @@ class FormPage extends StatelessWidget {
     required this.onSave,
     required this.saving,
     this.maxWidth = AppLayout.maxFormWidth,
+    this.saveLabel = 'Save as Draft',
     super.key,
   });
   final String title;
@@ -790,6 +791,7 @@ class FormPage extends StatelessWidget {
   final VoidCallback onSave;
   final bool saving;
   final double maxWidth;
+  final String saveLabel;
   @override
   Widget build(BuildContext context) => DecoratedBox(
     decoration: const BoxDecoration(
@@ -840,7 +842,7 @@ class FormPage extends StatelessWidget {
               builder: (context, constraints) {
                 final save = ElevatedButton(
                   onPressed: saving ? null : onSave,
-                  child: Text(saving ? 'Saving...' : 'Save as Draft'),
+                  child: Text(saving ? 'Saving...' : saveLabel),
                 );
                 final cancel = OutlinedButton(
                   onPressed: saving ? null : () => context.pop(),

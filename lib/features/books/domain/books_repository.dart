@@ -144,6 +144,28 @@ class AdjustmentDraft {
   final bool applyNow;
 }
 
+class StockEntryDraft {
+  const StockEntryDraft({
+    required this.purchaseOrderNumber,
+    required this.purchaseOrderDate,
+    required this.invoiceNumber,
+    required this.invoiceDate,
+    required this.item,
+    required this.description,
+    required this.size,
+    required this.measurement,
+    required this.quantity,
+    required this.basicPrice,
+    required this.taxPercentage,
+    required this.netAverage,
+  });
+
+  final String purchaseOrderNumber, invoiceNumber, item, description;
+  final String size, measurement;
+  final DateTime purchaseOrderDate, invoiceDate;
+  final double quantity, basicPrice, taxPercentage, netAverage;
+}
+
 class DashboardMetrics {
   const DashboardMetrics({
     required this.receivables,
@@ -179,6 +201,7 @@ abstract interface class BooksRepository {
   Future<void> addTransaction(TransactionDraft draft);
   Future<List<InventoryAdjustment>> getAdjustments();
   Future<void> addAdjustment(AdjustmentDraft draft);
+  Future<void> addStock(StockEntryDraft draft);
   Future<DashboardMetrics> getDashboardMetrics();
   Future<void> recordInvoicePaid(int invoiceId);
   Future<void> convertQuote(int quoteId, TransactionType targetType);
