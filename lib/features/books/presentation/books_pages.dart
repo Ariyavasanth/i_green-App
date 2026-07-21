@@ -35,10 +35,6 @@ class HomePage extends ConsumerWidget {
                 padding: EdgeInsets.all(AppLayout.gutter(constraints.maxWidth)),
                 children: [
                   const Text(
-                    'Hello, iGreenTec Engineering India Pvt. Ltd.,',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-                  ),
-                  const Text(
                     'Here’s your business overview',
                     style: TextStyle(color: AppColors.textSecondary),
                   ),
@@ -66,15 +62,6 @@ class HomePage extends ConsumerWidget {
                             ? const Color(0xFFFFD6EA)
                             : null,
                       );
-                      if (cardConstraints.maxWidth < AppBreakpoints.tablet) {
-                        return Column(
-                          children: [
-                            receivables,
-                            const SizedBox(height: 12),
-                            payables,
-                          ],
-                        );
-                      }
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -115,8 +102,6 @@ class HomePage extends ConsumerWidget {
             value,
             style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 16),
-          Container(height: 8, color: const Color(0xFFFF8618)),
           const SizedBox(height: 12),
           Wrap(
             alignment: WrapAlignment.spaceBetween,
