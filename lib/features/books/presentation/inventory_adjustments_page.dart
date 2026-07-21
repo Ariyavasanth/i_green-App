@@ -100,18 +100,6 @@ class _InventoryAdjustmentDashboardPageState
 
         return Scaffold(
           backgroundColor: AppColors.canvas,
-          floatingActionButton: Semantics(
-            button: true,
-            label: 'Add inventory item',
-            child: FloatingActionButton.extended(
-              heroTag: 'inventory-add-item',
-              onPressed: () => context.push('/items/new'),
-              backgroundColor: AppColors.primary,
-              foregroundColor: AppColors.textPrimary,
-              icon: const Icon(Icons.add),
-              label: const Text('Add Item'),
-            ),
-          ),
           body: SafeArea(
             top: false,
             child: _InventoryDashboardBody(
@@ -439,74 +427,89 @@ class _StatCard extends StatelessWidget {
     button: onTap != null,
     label: '$title, $value, $subtitle',
     child: Card(
-      elevation: 2,
-      shadowColor: AppColors.active.withValues(alpha: .12),
+      elevation: 0,
+      color: selected
+          ? AppColors.primary.withValues(alpha: .12)
+          : AppColors.active.withValues(alpha: .045),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(22),
         side: BorderSide(
           color: selected
-              ? AppColors.primary
-              : AppColors.primary.withValues(alpha: .13),
-          width: selected ? 2 : 1,
+              ? AppColors.primary.withValues(alpha: .8)
+              : AppColors.active.withValues(alpha: .07),
+          width: selected ? 1.25 : 1,
         ),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.fromLTRB(18, 17, 16, 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-            Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: .13),
-                    borderRadius: BorderRadius.circular(11),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                   ),
-                  child: Icon(icon, size: 20, color: AppColors.active),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelLarge,
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(11),
+                      border: Border.all(
+                        color: AppColors.active.withValues(alpha: .07),
+                      ),
+                    ),
+                    child: Icon(icon, size: 17, color: AppColors.active),
                   ),
+                ],
+              ),
+              const Spacer(),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -.55,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                  if (onTap != null)
+                    const Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      size: 14,
+                      color: AppColors.active,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.textSecondary,
                 ),
-              ],
-            ),
-            const Spacer(),
-            Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-                letterSpacing: -.35,
               ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              subtitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.caption,
-            ),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: const LinearProgressIndicator(
-                value: .72,
-                minHeight: 3,
-                backgroundColor: AppColors.divider,
-                color: AppColors.primary,
-              ),
-            ),
             ],
           ),
         ),
