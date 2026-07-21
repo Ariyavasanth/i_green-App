@@ -97,12 +97,7 @@ class AppShell extends ConsumerWidget {
       Icons.shopping_bag_outlined,
       'Purchase',
     ),
-    SidebarDestination(
-      'Bills',
-      '/bills',
-      Icons.receipt_outlined,
-      'Purchase',
-    ),
+    SidebarDestination('Bills', '/bills', Icons.receipt_outlined, 'Purchase'),
   ];
 
   @override
@@ -183,9 +178,8 @@ class _TopBar extends StatelessWidget {
   final VoidCallback onMenuPressed;
 
   @override
-  Widget build(BuildContext context) => GlassPanel(
-    radius: 0,
-    child: SafeArea(
+  Widget build(BuildContext context) {
+    final content = SafeArea(
       bottom: false,
       child: ConstrainedBox(
         // A minimum height preserves the design while allowing large text to grow.
@@ -198,21 +192,24 @@ class _TopBar extends StatelessWidget {
               icon: Icon(expanded && !compact ? Icons.menu_open : Icons.menu),
             ),
             const SizedBox(width: 8),
-            Expanded(
-              child: InkWell(
-                onTap: onMenuPressed,
-                borderRadius: BorderRadius.circular(8),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 10),
-                  child: Text(
-                    'My Organization',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.heading,
+            if (!compact)
+              Expanded(
+                child: InkWell(
+                  onTap: onMenuPressed,
+                  borderRadius: BorderRadius.circular(8),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 10),
+                    child: Text(
+                      'My Organization',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.heading,
+                    ),
                   ),
                 ),
-              ),
-            ),
+              )
+            else
+              const Spacer(),
             IconButton(
               tooltip: 'Search current section',
               onPressed: () => showDialog<void>(
@@ -249,27 +246,31 @@ class _TopBar extends StatelessWidget {
               ),
               icon: const Icon(Icons.search),
             ),
-            PopupMenuButton<String>(
-              tooltip: 'Quick create',
-              icon: const Icon(Icons.add_box_outlined, color: AppColors.active),
-              onSelected: (path) => context.push(path),
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: '/items/new', child: Text('New Item')),
-                PopupMenuItem(value: '/quotes/new', child: Text('New Quote')),
-                PopupMenuItem(
-                  value: '/sales-orders/new',
-                  child: Text('New Sales Order'),
+            if (!compact)
+              PopupMenuButton<String>(
+                tooltip: 'Quick create',
+                icon: const Icon(
+                  Icons.add_box_outlined,
+                  color: AppColors.active,
                 ),
-                PopupMenuItem(
-                  value: '/invoices/new',
-                  child: Text('New Invoice'),
-                ),
-                PopupMenuItem(
-                  value: '/inventory-adjustments/new',
-                  child: Text('New Adjustment'),
-                ),
-              ],
-            ),
+                onSelected: (path) => context.push(path),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: '/items/new', child: Text('New Item')),
+                  PopupMenuItem(value: '/quotes/new', child: Text('New Quote')),
+                  PopupMenuItem(
+                    value: '/sales-orders/new',
+                    child: Text('New Sales Order'),
+                  ),
+                  PopupMenuItem(
+                    value: '/invoices/new',
+                    child: Text('New Invoice'),
+                  ),
+                  PopupMenuItem(
+                    value: '/inventory-adjustments/new',
+                    child: Text('New Adjustment'),
+                  ),
+                ],
+              ),
             IconButton(
               tooltip: 'Notifications',
               onPressed: () {},
@@ -287,6 +288,9 @@ class _TopBar extends StatelessWidget {
           ],
         ),
       ),
-    ),
-  );
+    );
+
+    if (compact) return content;
+    return GlassPanel(radius: 0, child: content);
+  }
 }

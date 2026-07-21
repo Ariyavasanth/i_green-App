@@ -31,6 +31,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('BOOKS'), findsNothing);
+    expect(find.text('My Organization'), findsNothing);
+    expect(find.byTooltip('Quick create'), findsNothing);
     await tester.tap(find.byTooltip('Open navigation'));
     await tester.pumpAndSettle();
 
@@ -43,9 +45,7 @@ void main() {
   ) async {
     setViewport(tester, const Size(390, 844));
     tester.platformDispatcher.textScaleFactorTestValue = 2;
-    addTearDown(
-      tester.platformDispatcher.clearTextScaleFactorTestValue,
-    );
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
 
     await tester.pumpWidget(const ProviderScope(child: BooksApp()));
     await tester.pumpAndSettle();
