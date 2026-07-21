@@ -18,7 +18,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('BOOKS'), findsOneWidget);
-    expect(find.text('My Organization'), findsOneWidget);
+    expect(find.text('Welcome back'), findsOneWidget);
 
     await tester.tap(find.text('Invoices').first);
     await tester.pumpAndSettle();
@@ -31,7 +31,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('BOOKS'), findsNothing);
-    expect(find.text('My Organization'), findsNothing);
+    expect(find.text('Welcome back'), findsOneWidget);
     expect(find.byTooltip('Quick create'), findsNothing);
     await tester.tap(find.byTooltip('Open navigation'));
     await tester.pumpAndSettle();

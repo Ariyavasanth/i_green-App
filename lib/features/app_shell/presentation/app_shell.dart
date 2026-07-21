@@ -186,30 +186,26 @@ class _TopBar extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 64),
         child: Row(
           children: [
-            IconButton(
+            _AnimatedMenuButton(
               tooltip: compact ? 'Open navigation' : 'Toggle navigation',
               onPressed: onMenuPressed,
-              icon: Icon(expanded && !compact ? Icons.menu_open : Icons.menu),
             ),
             const SizedBox(width: 8),
-            if (!compact)
-              Expanded(
-                child: InkWell(
-                  onTap: onMenuPressed,
-                  borderRadius: BorderRadius.circular(8),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 10),
-                    child: Text(
-                      'My Organization',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.heading,
-                    ),
+            Expanded(
+              child: InkWell(
+                onTap: onMenuPressed,
+                borderRadius: BorderRadius.circular(8),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 10),
+                  child: Text(
+                    'Welcome back',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.heading,
                   ),
                 ),
-              )
-            else
-              const Spacer(),
+              ),
+            ),
             IconButton(
               tooltip: 'Search current section',
               onPressed: () => showDialog<void>(
@@ -293,4 +289,79 @@ class _TopBar extends StatelessWidget {
     if (compact) return content;
     return GlassPanel(radius: 0, child: content);
   }
+}
+
+class _AnimatedMenuButton extends StatefulWidget {
+  const _AnimatedMenuButton({
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  State<_AnimatedMenuButton> createState() => _AnimatedMenuButtonState();
+}
+
+class _AnimatedMenuButtonState extends State<_AnimatedMenuButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
+  );
+  late final Animation<double> _turn = TweenSequence<double>([
+    TweenSequenceItem(tween: Tween(begin: 0, end: 0.125), weight: 50),
+    TweenSequenceItem(tween: Tween(begin: 0.125, end: 0), weight: 50),
+  ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  late final Animation<double> _scale = TweenSequence<double>([
+    TweenSequenceItem(tween: Tween(begin: 1, end: 0.88), weight: 35),
+    TweenSequenceItem(tween: Tween(begin: 0.88, end: 1), weight: 65),
+  ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handlePressed() {
+    _controller.forward(from: 0);
+    widget.onPressed();
+  }
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    tooltip: widget.tooltip,
+    onPressed: _handlePressed,
+    icon: AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) => RotationTransition(
+        turns: _turn,
+        child: ScaleTransition(scale: _scale, child: child),
+      ),
+      child: const _FourTileMenuIcon(),
+    ),
+  );
+}
+
+class _FourTileMenuIcon extends StatelessWidget {
+  const _FourTileMenuIcon();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 24,
+    height: 24,
+    padding: const EdgeInsets.all(3),
+    child: GridView.count(
+      crossAxisCount: 2,
+      mainAxisSpacing: 4.5,
+      crossAxisSpacing: 4.5,
+      physics: const NeverScrollableScrollPhysics(),
+      children: List.generate(
+        4,
+        (_) => const ColoredBox(color: AppColors.active),
+      ),
+    ),
+  );
 }

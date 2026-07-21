@@ -382,6 +382,8 @@ class _SummaryGrid extends StatelessWidget {
           title: 'Raw material',
           value: '$rawMaterials Items',
           subtitle: 'Production inventory',
+          backgroundColor: const Color(0xFFF4EFEB),
+          borderColor: const Color(0xFFD1BC97),
           selected: selectedCategory == _InventoryCategory.rawMaterial,
           onTap: () => onCategorySelected(_InventoryCategory.rawMaterial),
         ),
@@ -390,6 +392,8 @@ class _SummaryGrid extends StatelessWidget {
           title: 'Outsource',
           value: '$outsource Items',
           subtitle: 'External services',
+          backgroundColor: const Color(0xFFE8F5FF),
+          borderColor: const Color(0xFFC8DAE6),
           selected: selectedCategory == _InventoryCategory.outsource,
           onTap: () => onCategorySelected(_InventoryCategory.outsource),
         ),
@@ -410,6 +414,8 @@ class _StatCard extends StatelessWidget {
     required this.title,
     required this.value,
     required this.subtitle,
+    this.backgroundColor,
+    this.borderColor,
     this.onTap,
     this.selected = false,
   });
@@ -418,6 +424,8 @@ class _StatCard extends StatelessWidget {
   final String title;
   final String value;
   final String subtitle;
+  final Color? backgroundColor;
+  final Color? borderColor;
   final VoidCallback? onTap;
   final bool selected;
 
@@ -428,15 +436,17 @@ class _StatCard extends StatelessWidget {
     label: '$title, $value, $subtitle',
     child: Card(
       elevation: 0,
-      color: selected
-          ? AppColors.primary.withValues(alpha: .12)
-          : AppColors.active.withValues(alpha: .045),
+      color: backgroundColor ??
+          (selected
+              ? AppColors.primary.withValues(alpha: .12)
+              : AppColors.active.withValues(alpha: .045)),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(22),
         side: BorderSide(
-          color: selected
-              ? AppColors.primary.withValues(alpha: .8)
-              : AppColors.active.withValues(alpha: .07),
+          color: borderColor ??
+              (selected
+                  ? AppColors.primary.withValues(alpha: .8)
+                  : AppColors.active.withValues(alpha: .07)),
           width: selected ? 1.25 : 1,
         ),
       ),

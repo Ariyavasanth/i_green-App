@@ -1,24 +1,21 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../core/layout/responsive_layout.dart';
 import '../../../core/theme/app_colors.dart';
 import '../domain/books_repository.dart';
-import '../providers/books_providers.dart';
 import 'books_pages.dart' show money;
 
 /// Replaces the old "Financial Overview" card with the Cash Flow,
-/// Income and Expense, Top Expenses, Projects and Bank & Credit Cards
+/// Income and Expense, Projects and Bank & Credit Cards
 /// widgets, reflowing between a stacked mobile layout and a grid on
 /// larger viewports.
-class DashboardSections extends ConsumerWidget {
+class DashboardSections extends StatelessWidget {
   const DashboardSections({required this.metrics, super.key});
   final DashboardMetrics metrics;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final items = ref.watch(itemsProvider);
+  Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= AppBreakpoints.tablet;
@@ -30,10 +27,7 @@ class DashboardSections extends ConsumerWidget {
               (2, _IncomeExpenseCard(metrics: metrics)),
             ]),
             const SizedBox(height: 12),
-            _responsiveRow(wide, [
-              (1, _TopExpensesCard(items: items)),
-              (1, const _ProjectsCard()),
-            ]),
+            const _ProjectsCard(),
             const SizedBox(height: 12),
             const _BankAndCreditCardsCard(),
           ],
@@ -205,26 +199,26 @@ class _IncomeExpenseCard extends StatelessWidget {
               _emptyState(Icons.pie_chart_outline, 'No income or expense data')
             else
               SizedBox(
-                height: 150,
+                height: 210,
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
                     PieChart(
                       PieChartData(
                         sectionsSpace: 2,
-                        centerSpaceRadius: 44,
+                        centerSpaceRadius: 62,
                         sections: [
                           PieChartSectionData(
                             value: income,
                             color: AppColors.primary,
                             showTitle: false,
-                            radius: 22,
+                            radius: 30,
                           ),
                           PieChartSectionData(
                             value: expense,
                             color: AppColors.active,
                             showTitle: false,
-                            radius: 22,
+                            radius: 30,
                           ),
                         ],
                       ),
@@ -232,10 +226,10 @@ class _IncomeExpenseCard extends StatelessWidget {
                     Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text('Net Profit', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                        const Text('Net Profit', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
                         Text(
                           money.format(metrics.netProfit),
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                         ),
                       ],
                     ),
@@ -258,70 +252,6 @@ class _IncomeExpenseCard extends StatelessWidget {
       const SizedBox(width: 8),
       Expanded(child: Text(label, style: const TextStyle(color: AppColors.textSecondary))),
       Text(money.format(value), style: const TextStyle(fontWeight: FontWeight.w600)),
-    ],
-  );
-}
-
-class _TopExpensesCard extends StatelessWidget {
-  const _TopExpensesCard({required this.items});
-  final AsyncValue<List<BookItem>> items;
-
-  @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _cardTitle('Top Expenses', 'By inventory cost'),
-          const SizedBox(height: 12),
-          items.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-            error: (e, s) => _emptyState(Icons.error_outline, 'Unable to load expenses'),
-            data: (all) {
-              final ranked =
-                  all.where((r) => r.costPrice > 0 && r.stockOnHand > 0).map((r) => (r, r.costPrice * r.stockOnHand)).toList()
-                    ..sort((a, b) => b.$2.compareTo(a.$2));
-              final top = ranked.take(5).toList();
-              if (top.isEmpty) return _emptyState(Icons.trending_down, 'No expense data to display');
-              final maxValue = top.first.$2;
-              return Column(
-                children: [
-                  for (final (item, value) in top) ...[
-                    _expenseRow(item.name, value, maxValue),
-                    const SizedBox(height: 12),
-                  ],
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    ),
-  );
-
-  static Widget _expenseRow(String name, double value, double maxValue) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Row(
-        children: [
-          Expanded(child: Text(name, overflow: TextOverflow.ellipsis)),
-          Text(money.format(value), style: const TextStyle(fontWeight: FontWeight.w600)),
-        ],
-      ),
-      const SizedBox(height: 6),
-      ClipRRect(
-        borderRadius: BorderRadius.circular(4),
-        child: LinearProgressIndicator(
-          value: maxValue == 0 ? 0 : value / maxValue,
-          minHeight: 6,
-          backgroundColor: AppColors.canvas,
-          color: AppColors.primary,
-        ),
-      ),
     ],
   );
 }
