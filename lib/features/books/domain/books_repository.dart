@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 class BookItem {
   const BookItem({
     required this.id,
@@ -174,19 +172,29 @@ class StockEntryDraft {
 class MaterialDraft {
   const MaterialDraft({
     required this.sourceType,
+    required this.code,
     required this.description,
+    required this.materialType,
+    required this.grade,
+    required this.make,
+    required this.model,
     required this.size,
-    required this.weight,
-    required this.usedFor,
-    required this.stockAlert,
-    required this.vendorId,
-    this.image,
+    required this.unit,
+    required this.density,
+    required this.supplier,
+    required this.heatNumber,
+    required this.batchNumber,
+    required this.warehouseLocation,
+    required this.rackLocation,
+    required this.minimumStock,
+    required this.maximumStock,
+    required this.reorderLevel,
   });
 
-  final String sourceType, description, size, weight, usedFor;
-  final double stockAlert;
-  final int vendorId;
-  final Uint8List? image;
+  final String sourceType, code, description, materialType, grade, make, model;
+  final String size, unit, density, supplier, heatNumber, batchNumber;
+  final String warehouseLocation, rackLocation;
+  final String minimumStock, maximumStock, reorderLevel;
 }
 
 class MoveStockDraft {

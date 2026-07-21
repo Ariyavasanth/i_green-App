@@ -6,7 +6,7 @@ class SqliteBooksRepository implements BooksRepository {
   Database? _database;
   Future<Database> get _db async => _database ??= await openDatabase(
     p.join(await getDatabasesPath(), 'igreen_books.db'),
-    version: 10,
+    version: 11,
     onCreate: (db, _) async {
       // SQL is isolated in this repository so UI code remains backend-agnostic.
       await db.execute(
@@ -32,7 +32,7 @@ class SqliteBooksRepository implements BooksRepository {
         'CREATE TABLE stock_entries(id INTEGER PRIMARY KEY AUTOINCREMENT, grn_number TEXT NOT NULL, supplier TEXT NOT NULL, po_number TEXT NOT NULL, po_date TEXT NOT NULL, invoice_number TEXT NOT NULL, invoice_date TEXT NOT NULL, material_code TEXT NOT NULL, description TEXT NOT NULL DEFAULT "", heat_number TEXT NOT NULL, batch_number TEXT NOT NULL, quantity REAL NOT NULL, weight REAL NOT NULL, inspection_status TEXT NOT NULL, store_location TEXT NOT NULL, created_at TEXT NOT NULL)',
       );
       await db.execute(
-        'CREATE TABLE materials(id INTEGER PRIMARY KEY AUTOINCREMENT, source_type TEXT NOT NULL, description TEXT NOT NULL, size TEXT NOT NULL DEFAULT "", weight TEXT NOT NULL DEFAULT "", used_for TEXT NOT NULL DEFAULT "", image BLOB, stock_alert REAL NOT NULL DEFAULT 0, vendor_id INTEGER NOT NULL, created_at TEXT NOT NULL)',
+        'CREATE TABLE materials(id INTEGER PRIMARY KEY AUTOINCREMENT, source_type TEXT NOT NULL, code TEXT NOT NULL DEFAULT "", description TEXT NOT NULL, material_type TEXT NOT NULL DEFAULT "", grade TEXT NOT NULL DEFAULT "", make TEXT NOT NULL DEFAULT "", model TEXT NOT NULL DEFAULT "", size TEXT NOT NULL DEFAULT "", unit TEXT NOT NULL DEFAULT "", density TEXT NOT NULL DEFAULT "", supplier TEXT NOT NULL DEFAULT "", heat_number TEXT NOT NULL DEFAULT "", batch_number TEXT NOT NULL DEFAULT "", warehouse_location TEXT NOT NULL DEFAULT "", rack_location TEXT NOT NULL DEFAULT "", minimum_stock TEXT NOT NULL DEFAULT "", maximum_stock TEXT NOT NULL DEFAULT "", reorder_level TEXT NOT NULL DEFAULT "", weight TEXT NOT NULL DEFAULT "", used_for TEXT NOT NULL DEFAULT "", image BLOB, stock_alert REAL NOT NULL DEFAULT 0, vendor_id INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)',
       );
       await db.execute(
         'CREATE TABLE stock_movements(id INTEGER PRIMARY KEY AUTOINCREMENT, work_order TEXT NOT NULL, production_order TEXT NOT NULL, job_card TEXT NOT NULL, date TEXT NOT NULL, machine TEXT NOT NULL, operator_name TEXT NOT NULL, capture_work_order TEXT NOT NULL, material_id INTEGER NOT NULL, quantity_issued REAL NOT NULL, weight_issued REAL NOT NULL, issued_by TEXT NOT NULL, received_by TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(material_id) REFERENCES items(id))',
@@ -121,6 +121,17 @@ class SqliteBooksRepository implements BooksRepository {
         await db.execute('ALTER TABLE stock_entries ADD COLUMN invoice_number TEXT NOT NULL DEFAULT ""');
         await db.execute('ALTER TABLE stock_entries ADD COLUMN invoice_date TEXT NOT NULL DEFAULT ""');
         await db.execute('ALTER TABLE stock_entries ADD COLUMN description TEXT NOT NULL DEFAULT ""');
+      }
+      if (oldVersion < 11) {
+        for (final column in [
+          'code', 'material_type', 'grade', 'make', 'model', 'unit', 'density',
+          'supplier', 'heat_number', 'batch_number', 'warehouse_location',
+          'rack_location', 'minimum_stock', 'maximum_stock', 'reorder_level',
+        ]) {
+          await db.execute(
+            'ALTER TABLE materials ADD COLUMN $column TEXT NOT NULL DEFAULT ""',
+          );
+        }
       }
     },
   );
@@ -458,13 +469,27 @@ class SqliteBooksRepository implements BooksRepository {
   Future<void> addMaterial(MaterialDraft d) async {
     await (await _db).insert('materials', {
       'source_type': d.sourceType,
+      'code': d.code,
       'description': d.description,
+      'material_type': d.materialType,
+      'grade': d.grade,
+      'make': d.make,
+      'model': d.model,
       'size': d.size,
-      'weight': d.weight,
-      'used_for': d.usedFor,
-      'image': d.image,
-      'stock_alert': d.stockAlert,
-      'vendor_id': d.vendorId,
+      'unit': d.unit,
+      'density': d.density,
+      'supplier': d.supplier,
+      'heat_number': d.heatNumber,
+      'batch_number': d.batchNumber,
+      'warehouse_location': d.warehouseLocation,
+      'rack_location': d.rackLocation,
+      'minimum_stock': d.minimumStock,
+      'maximum_stock': d.maximumStock,
+      'reorder_level': d.reorderLevel,
+      'weight': '',
+      'used_for': '',
+      'stock_alert': 0,
+      'vendor_id': 0,
       'created_at': DateTime.now().toIso8601String(),
     });
   }
