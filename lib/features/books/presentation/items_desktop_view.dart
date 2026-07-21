@@ -10,12 +10,14 @@ class ItemsDesktopView extends StatefulWidget {
     required this.items,
     required this.onAdd,
     required this.onOpen,
+    required this.onRequestMaterial,
     super.key,
   });
 
   final List<BookItem> items;
   final VoidCallback onAdd;
   final ValueChanged<BookItem> onOpen;
+  final VoidCallback onRequestMaterial;
 
   @override
   State<ItemsDesktopView> createState() => _ItemsDesktopViewState();
@@ -71,7 +73,14 @@ class _ItemsDesktopViewState extends State<ItemsDesktopView> {
     final allVisibleSelected = visible.isNotEmpty &&
         visible.every((item) => _selected.contains(item.id));
 
-    return LayoutBuilder(
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: widget.onAdd,
+        icon: const Icon(Icons.add),
+        label: const Text('New Item'),
+      ),
+      body: LayoutBuilder(
       builder: (context, constraints) {
         final gutter = AppLayout.gutter(constraints.maxWidth);
         return Padding(
@@ -87,9 +96,9 @@ class _ItemsDesktopViewState extends State<ItemsDesktopView> {
                   ),
                   const SizedBox(width: 14),
                   ElevatedButton.icon(
-                    onPressed: widget.onAdd,
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('New'),
+                    onPressed: widget.onRequestMaterial,
+                    icon: const Icon(Icons.inventory_2_outlined, size: 18),
+                    label: const Text('Request Material'),
                   ),
                 ],
               ),
@@ -227,6 +236,7 @@ class _ItemsDesktopViewState extends State<ItemsDesktopView> {
           ),
         );
       },
+      ),
     );
   }
 }

@@ -6,7 +6,7 @@ class SqliteBooksRepository implements BooksRepository {
   Database? _database;
   Future<Database> get _db async => _database ??= await openDatabase(
     p.join(await getDatabasesPath(), 'igreen_books.db'),
-    version: 11,
+    version: 12,
     onCreate: (db, _) async {
       // SQL is isolated in this repository so UI code remains backend-agnostic.
       await db.execute(
@@ -36,6 +36,9 @@ class SqliteBooksRepository implements BooksRepository {
       );
       await db.execute(
         'CREATE TABLE stock_movements(id INTEGER PRIMARY KEY AUTOINCREMENT, work_order TEXT NOT NULL, production_order TEXT NOT NULL, job_card TEXT NOT NULL, date TEXT NOT NULL, machine TEXT NOT NULL, operator_name TEXT NOT NULL, capture_work_order TEXT NOT NULL, material_id INTEGER NOT NULL, quantity_issued REAL NOT NULL, weight_issued REAL NOT NULL, issued_by TEXT NOT NULL, received_by TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(material_id) REFERENCES items(id))',
+      );
+      await db.execute(
+        'CREATE TABLE material_requests(id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, machine TEXT NOT NULL, operator_name TEXT NOT NULL, work_order TEXT NOT NULL, material TEXT NOT NULL, quantity_issued REAL NOT NULL, weight_issued REAL NOT NULL, created_at TEXT NOT NULL)',
       );
       await _seed(db);
     },
@@ -132,6 +135,11 @@ class SqliteBooksRepository implements BooksRepository {
             'ALTER TABLE materials ADD COLUMN $column TEXT NOT NULL DEFAULT ""',
           );
         }
+      }
+      if (oldVersion < 12) {
+        await db.execute(
+          'CREATE TABLE material_requests(id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, machine TEXT NOT NULL, operator_name TEXT NOT NULL, work_order TEXT NOT NULL, material TEXT NOT NULL, quantity_issued REAL NOT NULL, weight_issued REAL NOT NULL, created_at TEXT NOT NULL)',
+        );
       }
     },
   );
@@ -517,6 +525,20 @@ class SqliteBooksRepository implements BooksRepository {
         'UPDATE items SET stock_on_hand = stock_on_hand - ? WHERE id = ?',
         [d.quantityIssued, d.materialId],
       );
+    });
+  }
+
+  @override
+  Future<void> requestMaterial(MaterialRequestDraft d) async {
+    await (await _db).insert('material_requests', {
+      'date': d.date.toIso8601String(),
+      'machine': d.machine,
+      'operator_name': d.operatorName,
+      'work_order': d.workOrder,
+      'material': d.material,
+      'quantity_issued': d.quantityIssued,
+      'weight_issued': d.weightIssued,
+      'created_at': DateTime.now().toIso8601String(),
     });
   }
 

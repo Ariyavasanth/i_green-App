@@ -133,6 +133,7 @@ class ItemsPage extends ConsumerWidget {
           data: (all) => ItemsDesktopView(
             items: all,
             onAdd: () => context.push('/items/new'),
+            onRequestMaterial: () => context.push('/items/request-material'),
             onOpen: (item) => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => ItemDetailsScreen(item: item),
@@ -143,9 +144,20 @@ class ItemsPage extends ConsumerWidget {
       }
 
       // The mobile layout intentionally remains the original compact list.
-      return PageFrame(
+      return Scaffold(
+        backgroundColor: Colors.transparent,
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: () => context.push('/items/new'),
+          icon: const Icon(Icons.add),
+          label: const Text('New Item'),
+        ),
+        body: PageFrame(
         title: 'Active Items',
-        onAdd: () => context.push('/items/new'),
+        headerAction: ElevatedButton.icon(
+          onPressed: () => context.push('/items/request-material'),
+          icon: const Icon(Icons.inventory_2_outlined, size: 18),
+          label: const Text('Request Material'),
+        ),
         child: items.when(
           loading: loading,
           error: error,
@@ -194,6 +206,7 @@ class ItemsPage extends ConsumerWidget {
               },
             );
           },
+        ),
         ),
       );
     },
@@ -755,12 +768,14 @@ class PageFrame extends StatelessWidget {
     required this.child,
     this.onAdd,
     this.header,
+    this.headerAction,
     super.key,
   });
   final String title;
   final Widget child;
   final VoidCallback? onAdd;
   final Widget? header;
+  final Widget? headerAction;
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
@@ -785,7 +800,9 @@ class PageFrame extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    if (onAdd != null)
+                    if (headerAction != null)
+                      headerAction!,
+                    if (headerAction == null && onAdd != null)
                       ElevatedButton.icon(
                         onPressed: onAdd,
                         icon: const Icon(Icons.add, size: 18),
