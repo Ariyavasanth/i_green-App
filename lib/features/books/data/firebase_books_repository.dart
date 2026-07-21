@@ -40,6 +40,8 @@ class FirebaseBooksRepository implements BooksRepository {
   @override
   Future<void> requestMaterial(MaterialRequestDraft draft) async => _pending();
   @override
+  Future<void> returnMaterial(MaterialReturnDraft draft) async => _pending();
+  @override
   Future<void> convertQuote(int quoteId, TransactionType targetType) async =>
       _pending();
   @override

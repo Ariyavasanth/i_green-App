@@ -11,6 +11,7 @@ class ItemsDesktopView extends StatefulWidget {
     required this.onAdd,
     required this.onOpen,
     required this.onRequestMaterial,
+    required this.onReturn,
     super.key,
   });
 
@@ -18,6 +19,7 @@ class ItemsDesktopView extends StatefulWidget {
   final VoidCallback onAdd;
   final ValueChanged<BookItem> onOpen;
   final VoidCallback onRequestMaterial;
+  final VoidCallback onReturn;
 
   @override
   State<ItemsDesktopView> createState() => _ItemsDesktopViewState();
@@ -99,6 +101,12 @@ class _ItemsDesktopViewState extends State<ItemsDesktopView> {
                     onPressed: widget.onRequestMaterial,
                     icon: const Icon(Icons.inventory_2_outlined, size: 18),
                     label: const Text('Request Material'),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton.icon(
+                    onPressed: widget.onReturn,
+                    icon: const Icon(Icons.assignment_return_outlined, size: 18),
+                    label: const Text('Return'),
                   ),
                 ],
               ),

@@ -134,6 +134,7 @@ class ItemsPage extends ConsumerWidget {
             items: all,
             onAdd: () => context.push('/items/new'),
             onRequestMaterial: () => context.push('/items/request-material'),
+            onReturn: () => context.push('/items/return'),
             onOpen: (item) => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => ItemDetailsScreen(item: item),
@@ -153,10 +154,20 @@ class ItemsPage extends ConsumerWidget {
         ),
         body: PageFrame(
         title: 'Active Items',
-        headerAction: ElevatedButton.icon(
-          onPressed: () => context.push('/items/request-material'),
-          icon: const Icon(Icons.inventory_2_outlined, size: 18),
-          label: const Text('Request Material'),
+        headerAction: Wrap(
+          spacing: 8,
+          children: [
+            ElevatedButton.icon(
+              onPressed: () => context.push('/items/request-material'),
+              icon: const Icon(Icons.inventory_2_outlined, size: 18),
+              label: const Text('Request Material'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () => context.push('/items/return'),
+              icon: const Icon(Icons.assignment_return_outlined, size: 18),
+              label: const Text('Return'),
+            ),
+          ],
         ),
         child: items.when(
           loading: loading,

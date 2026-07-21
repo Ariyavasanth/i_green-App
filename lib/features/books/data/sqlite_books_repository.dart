@@ -6,7 +6,7 @@ class SqliteBooksRepository implements BooksRepository {
   Database? _database;
   Future<Database> get _db async => _database ??= await openDatabase(
     p.join(await getDatabasesPath(), 'igreen_books.db'),
-    version: 12,
+    version: 13,
     onCreate: (db, _) async {
       // SQL is isolated in this repository so UI code remains backend-agnostic.
       await db.execute(
@@ -39,6 +39,9 @@ class SqliteBooksRepository implements BooksRepository {
       );
       await db.execute(
         'CREATE TABLE material_requests(id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, machine TEXT NOT NULL, operator_name TEXT NOT NULL, work_order TEXT NOT NULL, material TEXT NOT NULL, quantity_issued REAL NOT NULL, weight_issued REAL NOT NULL, created_at TEXT NOT NULL)',
+      );
+      await db.execute(
+        'CREATE TABLE material_returns(id INTEGER PRIMARY KEY AUTOINCREMENT, work_order TEXT NOT NULL, material TEXT NOT NULL, quantity_returned REAL NOT NULL, weight REAL NOT NULL, reason TEXT NOT NULL, created_at TEXT NOT NULL)',
       );
       await _seed(db);
     },
@@ -139,6 +142,11 @@ class SqliteBooksRepository implements BooksRepository {
       if (oldVersion < 12) {
         await db.execute(
           'CREATE TABLE material_requests(id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, machine TEXT NOT NULL, operator_name TEXT NOT NULL, work_order TEXT NOT NULL, material TEXT NOT NULL, quantity_issued REAL NOT NULL, weight_issued REAL NOT NULL, created_at TEXT NOT NULL)',
+        );
+      }
+      if (oldVersion < 13) {
+        await db.execute(
+          'CREATE TABLE material_returns(id INTEGER PRIMARY KEY AUTOINCREMENT, work_order TEXT NOT NULL, material TEXT NOT NULL, quantity_returned REAL NOT NULL, weight REAL NOT NULL, reason TEXT NOT NULL, created_at TEXT NOT NULL)',
         );
       }
     },
@@ -538,6 +546,18 @@ class SqliteBooksRepository implements BooksRepository {
       'material': d.material,
       'quantity_issued': d.quantityIssued,
       'weight_issued': d.weightIssued,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  @override
+  Future<void> returnMaterial(MaterialReturnDraft d) async {
+    await (await _db).insert('material_returns', {
+      'work_order': d.workOrder,
+      'material': d.material,
+      'quantity_returned': d.quantityReturned,
+      'weight': d.weight,
+      'reason': d.reason,
       'created_at': DateTime.now().toIso8601String(),
     });
   }
