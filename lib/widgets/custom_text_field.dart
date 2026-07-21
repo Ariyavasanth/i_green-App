@@ -11,12 +11,16 @@ class CustomTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => TextFormField(
-    controller: controller, keyboardType: keyboardType, maxLength: maxLength, validator: validator,
+    controller: controller,
+    keyboardType: keyboardType,
+    maxLength: maxLength,
+    validator: validator,
+    style: Theme.of(context).textTheme.bodyMedium,
     decoration: InputDecoration(
-      labelText: label, hintText: hint, counterText: '', prefixIcon: prefixIcon == null ? null : Icon(prefixIcon, size: 20),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFDDE1E5))),
+      labelText: label,
+      hintText: hint,
+      counterText: '',
+      prefixIcon: prefixIcon == null ? null : Icon(prefixIcon, size: 17),
     ),
   );
 }
