@@ -9,6 +9,7 @@ import '../../features/books/presentation/books_pages.dart';
 import '../../features/books/presentation/inventory_adjustments_page.dart';
 import '../../features/books/presentation/add_stock_page.dart';
 import '../../features/books/presentation/add_material_page.dart';
+import '../../features/books/presentation/move_stock_page.dart';
 import '../../features/quotes/presentation/quote_form_screen.dart';
 import '../../features/vendors/presentation/vendors_page.dart';
 import '../../features/expenses/presentation/expenses_page.dart';
@@ -135,6 +136,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: 'add-material',
                 builder: (_, _) => const AddMaterialPage(),
+              ),
+              GoRoute(
+                path: 'move-stock',
+                builder: (_, _) => const MoveStockPage(),
               ),
               GoRoute(
                 path: 'new',

@@ -190,6 +190,30 @@ class MaterialDraft {
   final Uint8List? image;
 }
 
+class MoveStockDraft {
+  const MoveStockDraft({
+    required this.workOrder,
+    required this.productionOrder,
+    required this.jobCard,
+    required this.date,
+    required this.machine,
+    required this.operatorName,
+    required this.captureWorkOrder,
+    required this.materialId,
+    required this.quantityIssued,
+    required this.weightIssued,
+    required this.issuedBy,
+    required this.receivedBy,
+  });
+
+  final String workOrder, productionOrder, jobCard;
+  final DateTime date;
+  final String machine, operatorName, captureWorkOrder;
+  final int materialId;
+  final double quantityIssued, weightIssued;
+  final String issuedBy, receivedBy;
+}
+
 class DashboardMetrics {
   const DashboardMetrics({
     required this.receivables,
@@ -227,6 +251,7 @@ abstract interface class BooksRepository {
   Future<void> addAdjustment(AdjustmentDraft draft);
   Future<void> addStock(StockEntryDraft draft);
   Future<void> addMaterial(MaterialDraft draft);
+  Future<void> moveStock(MoveStockDraft draft);
   Future<DashboardMetrics> getDashboardMetrics();
   Future<void> recordInvoicePaid(int invoiceId);
   Future<void> convertQuote(int quoteId, TransactionType targetType);

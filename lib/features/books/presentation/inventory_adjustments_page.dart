@@ -172,7 +172,7 @@ class _InventoryAdjustmentDashboardPageState
                 const SizedBox(height: 12),
                 _QuickActions(
                   onAddStock: () => context.push('/inventory-adjustments/add-stock'),
-                  onMoveStock: () => context.push('/inventory-adjustments/new'),
+                  onMoveStock: () => context.push('/inventory-adjustments/move-stock'),
                   onHistory: () => _showHistory(context),
                   onAddMaterial: () => context.push('/inventory-adjustments/add-material'),
                 ),

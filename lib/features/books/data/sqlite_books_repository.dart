@@ -6,7 +6,7 @@ class SqliteBooksRepository implements BooksRepository {
   Database? _database;
   Future<Database> get _db async => _database ??= await openDatabase(
     p.join(await getDatabasesPath(), 'igreen_books.db'),
-    version: 7,
+    version: 8,
     onCreate: (db, _) async {
       // SQL is isolated in this repository so UI code remains backend-agnostic.
       await db.execute(
@@ -33,6 +33,9 @@ class SqliteBooksRepository implements BooksRepository {
       );
       await db.execute(
         'CREATE TABLE materials(id INTEGER PRIMARY KEY AUTOINCREMENT, source_type TEXT NOT NULL, description TEXT NOT NULL, size TEXT NOT NULL DEFAULT "", weight TEXT NOT NULL DEFAULT "", used_for TEXT NOT NULL DEFAULT "", image BLOB, stock_alert REAL NOT NULL DEFAULT 0, vendor_id INTEGER NOT NULL, created_at TEXT NOT NULL)',
+      );
+      await db.execute(
+        'CREATE TABLE stock_movements(id INTEGER PRIMARY KEY AUTOINCREMENT, work_order TEXT NOT NULL, production_order TEXT NOT NULL, job_card TEXT NOT NULL, date TEXT NOT NULL, machine TEXT NOT NULL, operator_name TEXT NOT NULL, capture_work_order TEXT NOT NULL, material_id INTEGER NOT NULL, quantity_issued REAL NOT NULL, weight_issued REAL NOT NULL, issued_by TEXT NOT NULL, received_by TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(material_id) REFERENCES items(id))',
       );
       await _seed(db);
     },
@@ -100,6 +103,11 @@ class SqliteBooksRepository implements BooksRepository {
         await db.execute('ALTER TABLE stock_entries ADD COLUMN paid REAL NOT NULL DEFAULT 0');
         await db.execute(
           'CREATE TABLE materials(id INTEGER PRIMARY KEY AUTOINCREMENT, source_type TEXT NOT NULL, description TEXT NOT NULL, size TEXT NOT NULL DEFAULT "", weight TEXT NOT NULL DEFAULT "", used_for TEXT NOT NULL DEFAULT "", image BLOB, stock_alert REAL NOT NULL DEFAULT 0, vendor_id INTEGER NOT NULL, created_at TEXT NOT NULL)',
+        );
+      }
+      if (oldVersion < 8) {
+        await db.execute(
+          'CREATE TABLE stock_movements(id INTEGER PRIMARY KEY AUTOINCREMENT, work_order TEXT NOT NULL, production_order TEXT NOT NULL, job_card TEXT NOT NULL, date TEXT NOT NULL, machine TEXT NOT NULL, operator_name TEXT NOT NULL, capture_work_order TEXT NOT NULL, material_id INTEGER NOT NULL, quantity_issued REAL NOT NULL, weight_issued REAL NOT NULL, issued_by TEXT NOT NULL, received_by TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(material_id) REFERENCES items(id))',
         );
       }
     },
@@ -448,6 +456,32 @@ class SqliteBooksRepository implements BooksRepository {
       'stock_alert': d.stockAlert,
       'vendor_id': d.vendorId,
       'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  @override
+  Future<void> moveStock(MoveStockDraft d) async {
+    final db = await _db;
+    await db.transaction((txn) async {
+      await txn.insert('stock_movements', {
+        'work_order': d.workOrder,
+        'production_order': d.productionOrder,
+        'job_card': d.jobCard,
+        'date': d.date.toIso8601String(),
+        'machine': d.machine,
+        'operator_name': d.operatorName,
+        'capture_work_order': d.captureWorkOrder,
+        'material_id': d.materialId,
+        'quantity_issued': d.quantityIssued,
+        'weight_issued': d.weightIssued,
+        'issued_by': d.issuedBy,
+        'received_by': d.receivedBy,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+      await txn.rawUpdate(
+        'UPDATE items SET stock_on_hand = stock_on_hand - ? WHERE id = ?',
+        [d.quantityIssued, d.materialId],
+      );
     });
   }
 
