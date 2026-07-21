@@ -784,6 +784,7 @@ class FormPage extends StatelessWidget {
     required this.saving,
     this.maxWidth = AppLayout.maxFormWidth,
     this.saveLabel = 'Save as Draft',
+    this.showLeading = true,
     super.key,
   });
   final String title;
@@ -792,6 +793,7 @@ class FormPage extends StatelessWidget {
   final bool saving;
   final double maxWidth;
   final String saveLabel;
+  final bool showLeading;
   @override
   Widget build(BuildContext context) => DecoratedBox(
     decoration: const BoxDecoration(
@@ -803,7 +805,7 @@ class FormPage extends StatelessWidget {
     ),
     child: Column(
       children: [
-        AppBar(title: Text(title)),
+        AppBar(automaticallyImplyLeading: showLeading, title: Text(title)),
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {

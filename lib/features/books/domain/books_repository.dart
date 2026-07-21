@@ -148,28 +148,27 @@ class AdjustmentDraft {
 
 class StockEntryDraft {
   const StockEntryDraft({
-    required this.purchaseOrderNumber,
-    required this.purchaseOrderDate,
+    required this.grnNumber,
+    required this.supplier,
+    required this.poNumber,
+    required this.poDate,
     required this.invoiceNumber,
     required this.invoiceDate,
-    required this.item,
+    required this.materialCode,
     required this.description,
-    required this.size,
-    required this.measurement,
+    required this.heatNumber,
+    required this.batchNumber,
     required this.quantity,
-    required this.basicPrice,
-    required this.taxPercentage,
-    required this.netAverage,
-    required this.totalAmountWithTax,
-    required this.grandTotal,
-    required this.paid,
+    required this.weight,
+    required this.inspectionStatus,
+    required this.storeLocation,
   });
 
-  final String purchaseOrderNumber, invoiceNumber, item, description;
-  final String size, measurement;
-  final DateTime purchaseOrderDate, invoiceDate;
-  final double quantity, basicPrice, taxPercentage, netAverage;
-  final double totalAmountWithTax, grandTotal, paid;
+  final String grnNumber, supplier, poNumber, invoiceNumber, materialCode;
+  final String description;
+  final String heatNumber, batchNumber, inspectionStatus, storeLocation;
+  final DateTime poDate, invoiceDate;
+  final double quantity, weight;
 }
 
 class MaterialDraft {

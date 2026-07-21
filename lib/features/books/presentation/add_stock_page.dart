@@ -9,40 +9,45 @@ import 'books_forms.dart';
 
 class AddStockPage extends ConsumerStatefulWidget {
   const AddStockPage({super.key});
+
   @override
   ConsumerState<AddStockPage> createState() => _AddStockPageState();
 }
 
 class _AddStockPageState extends ConsumerState<AddStockPage> {
   final formKey = GlobalKey<FormState>();
-  final purchaseOrderNumber = TextEditingController();
+  final grnNumber = TextEditingController();
+  final supplier = TextEditingController();
+  final poNumber = TextEditingController();
   final invoiceNumber = TextEditingController();
-  final item = TextEditingController();
+  final materialCode = TextEditingController();
   final description = TextEditingController();
-  final size = TextEditingController();
-  final measurement = TextEditingController();
+  final heatNumber = TextEditingController();
+  final batchNumber = TextEditingController();
   final quantity = TextEditingController();
-  final basicPrice = TextEditingController();
-  final taxPercentage = TextEditingController();
-  final netAverage = TextEditingController(text: '0.00');
-  final totalAmountWithTax = TextEditingController(text: '0.00');
-  final grandTotal = TextEditingController(text: '0.00');
-  final paid = TextEditingController(text: '0.00');
-  DateTime purchaseOrderDate = DateTime.now();
+  final weight = TextEditingController();
+  final inspectionStatus = TextEditingController();
+  final storeLocation = TextEditingController();
+  DateTime poDate = DateTime.now();
   DateTime invoiceDate = DateTime.now();
   bool saving = false;
 
   @override
-  void initState() {
-    super.initState();
-    basicPrice.addListener(_calculateNetAverage);
-    taxPercentage.addListener(_calculateNetAverage);
-    quantity.addListener(_calculateNetAverage);
-  }
-
-  @override
   void dispose() {
-    for (final controller in [purchaseOrderNumber, invoiceNumber, item, description, size, measurement, quantity, basicPrice, taxPercentage, netAverage, totalAmountWithTax, grandTotal, paid]) {
+    for (final controller in [
+      grnNumber,
+      supplier,
+      poNumber,
+      invoiceNumber,
+      materialCode,
+      description,
+      heatNumber,
+      batchNumber,
+      quantity,
+      weight,
+      inspectionStatus,
+      storeLocation,
+    ]) {
       controller.dispose();
     }
     super.dispose();
@@ -53,98 +58,119 @@ class _AddStockPageState extends ConsumerState<AddStockPage> {
     title: 'ADD STOCK',
     saving: saving,
     saveLabel: 'Add Stock',
+    showLeading: false,
     onSave: _save,
-    children: [Form(
-      key: formKey,
-      child: Column(children: [
-        _requiredField(purchaseOrderNumber, 'Purchase order no'),
-        const SizedBox(height: 14),
-        _dateField('Purchase order date', purchaseOrderDate, (date) => setState(() => purchaseOrderDate = date)),
-        const SizedBox(height: 14),
-        _requiredField(invoiceNumber, 'Invoice no'),
-        const SizedBox(height: 14),
-        _dateField('Invoice date', invoiceDate, (date) => setState(() => invoiceDate = date)),
-        const SizedBox(height: 14),
-        _requiredField(item, 'Item (manual)'),
-        const SizedBox(height: 14),
-        _textField(description, 'Description', lines: 3),
-        const SizedBox(height: 14),
-        Row(children: [
-          Expanded(child: _textField(size, 'Size')),
-          const SizedBox(width: 12),
-          Expanded(child: _textField(measurement, 'Measurement')),
-        ]),
-        const SizedBox(height: 14),
-        _numberField(quantity, 'Quantity'),
-        const SizedBox(height: 14),
-        _numberField(basicPrice, 'Basic Price', prefix: '₹'),
-        const SizedBox(height: 14),
-        _numberField(taxPercentage, 'Tax percentage', suffix: '%'),
-        const SizedBox(height: 14),
-        TextFormField(controller: netAverage, readOnly: true, decoration: const InputDecoration(labelText: 'Net average', prefixText: '₹  ')),
-        const SizedBox(height: 14),
-        TextFormField(controller: totalAmountWithTax, readOnly: true, decoration: const InputDecoration(labelText: 'Total amount with tax')),
-        const SizedBox(height: 14),
-        TextFormField(controller: grandTotal, readOnly: true, decoration: const InputDecoration(labelText: 'Grand total for all item')),
-        const SizedBox(height: 14),
-        _numberField(paid, 'Paid'),
-      ]),
-    )],
+    children: [
+      Form(
+        key: formKey,
+        child: Column(
+          children: [
+            _requiredField(grnNumber, 'GRN Number'),
+            const SizedBox(height: 14),
+            _requiredField(supplier, 'Supplier'),
+            const SizedBox(height: 14),
+            _requiredField(poNumber, 'PO Number'),
+            const SizedBox(height: 14),
+            _dateField('PO Date', poDate, (date) => setState(() => poDate = date)),
+            const SizedBox(height: 14),
+            _requiredField(invoiceNumber, 'Invoice Number'),
+            const SizedBox(height: 14),
+            _dateField('Invoice Date', invoiceDate, (date) => setState(() => invoiceDate = date)),
+            const SizedBox(height: 14),
+            _requiredField(materialCode, 'Material Code'),
+            const SizedBox(height: 14),
+            _requiredField(description, 'Description', maxLines: 3),
+            const SizedBox(height: 14),
+            _requiredField(heatNumber, 'Heat Number'),
+            const SizedBox(height: 14),
+            _requiredField(batchNumber, 'Batch Number'),
+            const SizedBox(height: 14),
+            _numberField(quantity, 'Quantity'),
+            const SizedBox(height: 14),
+            _numberField(weight, 'Weight'),
+            const SizedBox(height: 14),
+            _requiredField(inspectionStatus, 'Inspection Status'),
+            const SizedBox(height: 14),
+            _requiredField(storeLocation, 'Store Location'),
+          ],
+        ),
+      ),
+    ],
   );
 
-  Widget _textField(TextEditingController controller, String label, {int lines = 1}) => TextFormField(controller: controller, maxLines: lines, decoration: InputDecoration(labelText: label));
+  Widget _requiredField(
+    TextEditingController controller,
+    String label, {
+    int maxLines = 1,
+  }) =>
+      TextFormField(
+        controller: controller,
+        maxLines: maxLines,
+        decoration: InputDecoration(labelText: '$label*'),
+        validator: (value) => value == null || value.trim().isEmpty
+            ? '$label is required'
+            : null,
+      );
 
-  Widget _requiredField(TextEditingController controller, String label) => TextFormField(
-    controller: controller,
-    decoration: InputDecoration(labelText: '$label*'),
-    validator: (value) => value == null || value.trim().isEmpty ? '$label is required' : null,
-  );
-
-  Widget _numberField(TextEditingController controller, String label, {String? prefix, String? suffix}) => TextFormField(
-    controller: controller,
-    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-    decoration: InputDecoration(labelText: '$label*', prefixText: prefix == null ? null : '$prefix  ', suffixText: suffix),
-    validator: (value) {
-      final number = double.tryParse(value ?? '');
-      return number == null || number < 0 || (label == 'Quantity' && number == 0) ? 'Enter a valid $label' : null;
-    },
-  );
-
-  Widget _dateField(String label, DateTime value, ValueChanged<DateTime> onChanged) => InkWell(
+  Widget _dateField(
+    String label,
+    DateTime value,
+    ValueChanged<DateTime> onChanged,
+  ) => InkWell(
     borderRadius: BorderRadius.circular(10),
     onTap: () async {
-      final date = await showDatePicker(context: context, initialDate: value, firstDate: DateTime(2000), lastDate: DateTime(2100));
+      final date = await showDatePicker(
+        context: context,
+        initialDate: value,
+        firstDate: DateTime(2000),
+        lastDate: DateTime(2100),
+      );
       if (date != null) onChanged(date);
     },
     child: InputDecorator(
-      decoration: InputDecoration(labelText: '$label*', suffixIcon: const Icon(Icons.calendar_today_outlined)),
+      decoration: InputDecoration(
+        labelText: '$label*',
+        suffixIcon: const Icon(Icons.calendar_today_outlined),
+      ),
       child: Text(DateFormat('dd/MM/yyyy').format(value)),
     ),
   );
 
-  void _calculateNetAverage() {
-    final basic = double.tryParse(basicPrice.text) ?? 0;
-    final tax = double.tryParse(taxPercentage.text) ?? 0;
-    final net = basic * (1 + tax / 100);
-    final total = net * (double.tryParse(quantity.text) ?? 0);
-    netAverage.text = net.toStringAsFixed(2);
-    totalAmountWithTax.text = total.toStringAsFixed(2);
-    grandTotal.text = total.toStringAsFixed(2);
-  }
+  Widget _numberField(TextEditingController controller, String label) =>
+      TextFormField(
+        controller: controller,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: InputDecoration(labelText: '$label*'),
+        validator: (value) {
+          final number = double.tryParse(value ?? '');
+          return number == null || number <= 0
+              ? 'Enter a valid $label'
+              : null;
+        },
+      );
 
   Future<void> _save() async {
     if (!(formKey.currentState?.validate() ?? false)) return;
     setState(() => saving = true);
     try {
-      await ref.read(booksRepositoryProvider).addStock(StockEntryDraft(
-        purchaseOrderNumber: purchaseOrderNumber.text.trim(), purchaseOrderDate: purchaseOrderDate,
-        invoiceNumber: invoiceNumber.text.trim(), invoiceDate: invoiceDate, item: item.text.trim(),
-        description: description.text.trim(), size: size.text.trim(), measurement: measurement.text.trim(),
-        quantity: double.parse(quantity.text), basicPrice: double.parse(basicPrice.text),
-        taxPercentage: double.parse(taxPercentage.text), netAverage: double.parse(netAverage.text),
-        totalAmountWithTax: double.parse(totalAmountWithTax.text),
-        grandTotal: double.parse(grandTotal.text), paid: double.parse(paid.text),
-      ));
+      await ref.read(booksRepositoryProvider).addStock(
+        StockEntryDraft(
+          grnNumber: grnNumber.text.trim(),
+          supplier: supplier.text.trim(),
+          poNumber: poNumber.text.trim(),
+          poDate: poDate,
+          invoiceNumber: invoiceNumber.text.trim(),
+          invoiceDate: invoiceDate,
+          materialCode: materialCode.text.trim(),
+          description: description.text.trim(),
+          heatNumber: heatNumber.text.trim(),
+          batchNumber: batchNumber.text.trim(),
+          quantity: double.parse(quantity.text),
+          weight: double.parse(weight.text),
+          inspectionStatus: inspectionStatus.text.trim(),
+          storeLocation: storeLocation.text.trim(),
+        ),
+      );
       ref.invalidate(itemsProvider);
       ref.invalidate(dashboardMetricsProvider);
       if (mounted) context.pop();

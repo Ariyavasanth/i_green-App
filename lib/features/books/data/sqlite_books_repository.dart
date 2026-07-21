@@ -6,7 +6,7 @@ class SqliteBooksRepository implements BooksRepository {
   Database? _database;
   Future<Database> get _db async => _database ??= await openDatabase(
     p.join(await getDatabasesPath(), 'igreen_books.db'),
-    version: 8,
+    version: 10,
     onCreate: (db, _) async {
       // SQL is isolated in this repository so UI code remains backend-agnostic.
       await db.execute(
@@ -29,7 +29,7 @@ class SqliteBooksRepository implements BooksRepository {
         'CREATE TABLE item_history(id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER NOT NULL, occurred_at TEXT NOT NULL, details TEXT NOT NULL, FOREIGN KEY(item_id) REFERENCES items(id))',
       );
       await db.execute(
-        'CREATE TABLE stock_entries(id INTEGER PRIMARY KEY AUTOINCREMENT, purchase_order_number TEXT NOT NULL, purchase_order_date TEXT NOT NULL, invoice_number TEXT NOT NULL, invoice_date TEXT NOT NULL, item TEXT NOT NULL, description TEXT NOT NULL DEFAULT "", size TEXT NOT NULL DEFAULT "", measurement TEXT NOT NULL DEFAULT "", quantity REAL NOT NULL, basic_price REAL NOT NULL, tax_percentage REAL NOT NULL, net_average REAL NOT NULL, total_amount_with_tax REAL NOT NULL DEFAULT 0, grand_total REAL NOT NULL DEFAULT 0, paid REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL)',
+        'CREATE TABLE stock_entries(id INTEGER PRIMARY KEY AUTOINCREMENT, grn_number TEXT NOT NULL, supplier TEXT NOT NULL, po_number TEXT NOT NULL, po_date TEXT NOT NULL, invoice_number TEXT NOT NULL, invoice_date TEXT NOT NULL, material_code TEXT NOT NULL, description TEXT NOT NULL DEFAULT "", heat_number TEXT NOT NULL, batch_number TEXT NOT NULL, quantity REAL NOT NULL, weight REAL NOT NULL, inspection_status TEXT NOT NULL, store_location TEXT NOT NULL, created_at TEXT NOT NULL)',
       );
       await db.execute(
         'CREATE TABLE materials(id INTEGER PRIMARY KEY AUTOINCREMENT, source_type TEXT NOT NULL, description TEXT NOT NULL, size TEXT NOT NULL DEFAULT "", weight TEXT NOT NULL DEFAULT "", used_for TEXT NOT NULL DEFAULT "", image BLOB, stock_alert REAL NOT NULL DEFAULT 0, vendor_id INTEGER NOT NULL, created_at TEXT NOT NULL)',
@@ -109,6 +109,18 @@ class SqliteBooksRepository implements BooksRepository {
         await db.execute(
           'CREATE TABLE stock_movements(id INTEGER PRIMARY KEY AUTOINCREMENT, work_order TEXT NOT NULL, production_order TEXT NOT NULL, job_card TEXT NOT NULL, date TEXT NOT NULL, machine TEXT NOT NULL, operator_name TEXT NOT NULL, capture_work_order TEXT NOT NULL, material_id INTEGER NOT NULL, quantity_issued REAL NOT NULL, weight_issued REAL NOT NULL, issued_by TEXT NOT NULL, received_by TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(material_id) REFERENCES items(id))',
         );
+      }
+      if (oldVersion < 9) {
+        await db.execute('ALTER TABLE stock_entries RENAME TO legacy_stock_entries');
+        await db.execute(
+          'CREATE TABLE stock_entries(id INTEGER PRIMARY KEY AUTOINCREMENT, grn_number TEXT NOT NULL, supplier TEXT NOT NULL, po_number TEXT NOT NULL, material_code TEXT NOT NULL, heat_number TEXT NOT NULL, batch_number TEXT NOT NULL, quantity REAL NOT NULL, weight REAL NOT NULL, inspection_status TEXT NOT NULL, store_location TEXT NOT NULL, created_at TEXT NOT NULL)',
+        );
+      }
+      if (oldVersion < 10) {
+        await db.execute('ALTER TABLE stock_entries ADD COLUMN po_date TEXT NOT NULL DEFAULT ""');
+        await db.execute('ALTER TABLE stock_entries ADD COLUMN invoice_number TEXT NOT NULL DEFAULT ""');
+        await db.execute('ALTER TABLE stock_entries ADD COLUMN invoice_date TEXT NOT NULL DEFAULT ""');
+        await db.execute('ALTER TABLE stock_entries ADD COLUMN description TEXT NOT NULL DEFAULT ""');
       }
     },
   );
@@ -400,45 +412,43 @@ class SqliteBooksRepository implements BooksRepository {
     final db = await _db;
     await db.transaction((txn) async {
       await txn.insert('stock_entries', {
-        'purchase_order_number': d.purchaseOrderNumber,
-        'purchase_order_date': d.purchaseOrderDate.toIso8601String(),
+        'grn_number': d.grnNumber,
+        'supplier': d.supplier,
+        'po_number': d.poNumber,
+        'po_date': d.poDate.toIso8601String(),
         'invoice_number': d.invoiceNumber,
         'invoice_date': d.invoiceDate.toIso8601String(),
-        'item': d.item,
+        'material_code': d.materialCode,
         'description': d.description,
-        'size': d.size,
-        'measurement': d.measurement,
+        'heat_number': d.heatNumber,
+        'batch_number': d.batchNumber,
         'quantity': d.quantity,
-        'basic_price': d.basicPrice,
-        'tax_percentage': d.taxPercentage,
-        'net_average': d.netAverage,
-        'total_amount_with_tax': d.totalAmountWithTax,
-        'grand_total': d.grandTotal,
-        'paid': d.paid,
+        'weight': d.weight,
+        'inspection_status': d.inspectionStatus,
+        'store_location': d.storeLocation,
         'created_at': DateTime.now().toIso8601String(),
       });
       final matches = await txn.query(
         'items',
         columns: ['id'],
         where: 'LOWER(name) = ?',
-        whereArgs: [d.item.toLowerCase()],
+        whereArgs: [d.materialCode.toLowerCase()],
         limit: 1,
       );
       if (matches.isEmpty) {
         await txn.insert('items', {
-          'name': d.item,
+          'name': d.materialCode,
           'sku': '',
-          'rate': d.netAverage,
-          'cost_price': d.netAverage,
-          'tax_rate': d.taxPercentage,
-          'unit': d.measurement.isEmpty ? 'pcs' : d.measurement,
+          'rate': 0.0,
+          'cost_price': 0.0,
+          'unit': 'pcs',
           'track_inventory': 1,
           'stock_on_hand': d.quantity,
         });
       } else {
         await txn.rawUpdate(
-          'UPDATE items SET stock_on_hand = stock_on_hand + ?, cost_price = ?, tax_rate = ? WHERE id = ?',
-          [d.quantity, d.netAverage, d.taxPercentage, matches.first['id']],
+          'UPDATE items SET stock_on_hand = stock_on_hand + ? WHERE id = ?',
+          [d.quantity, matches.first['id']],
         );
       }
     });
