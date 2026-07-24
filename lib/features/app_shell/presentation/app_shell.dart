@@ -24,6 +24,18 @@ class AppShell extends ConsumerWidget {
 
   static const destinations = <SidebarDestination>[
     SidebarDestination('Home', '/home', Icons.home_outlined, 'Overview'),
+    SidebarDestination(
+      'Organization Management',
+      '/organization-management',
+      Icons.corporate_fare_outlined,
+      'Organization',
+    ),
+    SidebarDestination(
+      'Organization Structure',
+      '/organization-structure',
+      Icons.account_tree_outlined,
+      'Organization',
+    ),
     SidebarDestination('Items', '/items', Icons.inventory_2_outlined, 'Stock'),
     SidebarDestination(
       'Inventory Adjustments',

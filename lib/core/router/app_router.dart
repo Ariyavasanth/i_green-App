@@ -19,6 +19,8 @@ import '../../features/purchase_orders/presentation/new_purchase_order_page.dart
 import '../../features/purchase_orders/presentation/purchase_orders_page.dart';
 import '../../features/bills/presentation/bills_page.dart';
 import '../../features/bills/presentation/new_bill_page.dart';
+import '../../features/organization/presentation/organization_management_page.dart';
+import '../../features/organization/presentation/organization_structure_page.dart';
 import '../../screens/login_screen.dart';
 import '../../screens/customers/active_customers_list.dart';
 import '../../screens/customers/new_customer_form.dart';
@@ -26,7 +28,7 @@ import '../../screens/vendors/new_vendor_form.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
-    initialLocation: '/login',
+    initialLocation: '/home',
     routes: [
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       ShellRoute(
@@ -34,6 +36,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             AppShell(currentLocation: state.uri.path, child: child),
         routes: [
           GoRoute(path: '/home', builder: (_, _) => const HomePage()),
+          GoRoute(
+            path: '/organization-management',
+            builder: (_, _) => const OrganizationManagementPage(),
+          ),
+          GoRoute(
+            path: '/organization-structure',
+            builder: (_, _) => const OrganizationStructurePage(),
+          ),
           GoRoute(
             path: '/items',
             builder: (_, _) => const ItemsPage(),
