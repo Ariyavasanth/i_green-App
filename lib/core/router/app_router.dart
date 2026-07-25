@@ -21,6 +21,8 @@ import '../../features/bills/presentation/bills_page.dart';
 import '../../features/bills/presentation/new_bill_page.dart';
 import '../../features/organization/presentation/organization_management_page.dart';
 import '../../features/organization/presentation/organization_structure_page.dart';
+import '../../features/employee/presentation/employee_management_page.dart';
+import '../../features/employee/presentation/employee_registration_page.dart';
 import '../../screens/login_screen.dart';
 import '../../screens/customers/active_customers_list.dart';
 import '../../screens/customers/new_customer_form.dart';
@@ -31,6 +33,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     initialLocation: '/home',
     routes: [
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
+      GoRoute(
+        path: '/employee/register/:linkId',
+        builder: (_, state) => EmployeeRegistrationPage(
+          linkId: state.pathParameters['linkId'] ?? '',
+        ),
+      ),
       ShellRoute(
         builder: (context, state, child) =>
             AppShell(currentLocation: state.uri.path, child: child),
@@ -43,6 +51,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/organization-structure',
             builder: (_, _) => const OrganizationStructurePage(),
+          ),
+          GoRoute(
+            path: '/employee',
+            builder: (_, _) => const EmployeeManagementPage(),
+          ),
+          GoRoute(
+            path: '/employee-management',
+            builder: (_, _) => const EmployeeManagementPage(),
           ),
           GoRoute(
             path: '/items',
