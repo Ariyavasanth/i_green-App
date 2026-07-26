@@ -1,3 +1,105 @@
+import 'dart:convert';
+
+class EducationItem {
+  const EducationItem({
+    required this.id,
+    required this.degreeName,
+    required this.instituteName,
+    required this.result,
+    required this.passingYear,
+    this.certificateName = '',
+  });
+
+  final String id;
+  final String degreeName;
+  final String instituteName;
+  final String result;
+  final String passingYear;
+  final String certificateName;
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'degree_name': degreeName,
+        'institute_name': instituteName,
+        'result': result,
+        'passing_year': passingYear,
+        'certificate_name': certificateName,
+      };
+
+  factory EducationItem.fromMap(Map<String, dynamic> map) => EducationItem(
+        id: map['id'] as String? ?? '',
+        degreeName: map['degree_name'] as String? ?? '',
+        instituteName: map['institute_name'] as String? ?? '',
+        result: map['result'] as String? ?? '',
+        passingYear: map['passing_year'] as String? ?? '',
+        certificateName: map['certificate_name'] as String? ?? '',
+      );
+}
+
+class ExperienceItem {
+  const ExperienceItem({
+    required this.id,
+    required this.companyName,
+    required this.position,
+    required this.address,
+    required this.workingDuration,
+  });
+
+  final String id;
+  final String companyName;
+  final String position;
+  final String address;
+  final String workingDuration;
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'company_name': companyName,
+        'position': position,
+        'address': address,
+        'working_duration': workingDuration,
+      };
+
+  factory ExperienceItem.fromMap(Map<String, dynamic> map) => ExperienceItem(
+        id: map['id'] as String? ?? '',
+        companyName: map['company_name'] as String? ?? '',
+        position: map['position'] as String? ?? '',
+        address: map['address'] as String? ?? '',
+        workingDuration: map['working_duration'] as String? ?? '',
+      );
+}
+
+class DocumentItem {
+  const DocumentItem({
+    required this.id,
+    required this.documentType,
+    required this.documentNumber,
+    required this.fileName,
+    required this.uploadedDate,
+  });
+
+  final String id;
+  final String documentType;
+  final String documentNumber;
+  final String fileName;
+  final String uploadedDate;
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'document_type': documentType,
+        'document_number': documentNumber,
+        'file_name': fileName,
+        'uploaded_date': uploadedDate,
+      };
+
+  factory DocumentItem.fromMap(Map<String, dynamic> map) => DocumentItem(
+        id: map['id'] as String? ?? '',
+        documentType: map['document_type'] as String? ?? '',
+        documentNumber: map['document_number'] as String? ?? '',
+        fileName: map['file_name'] as String? ?? '',
+        uploadedDate: map['uploaded_date'] as String? ?? '',
+      );
+}
+
 class Employee {
   const Employee({
     required this.id,
@@ -14,27 +116,63 @@ class Employee {
     required this.employmentType,
     required this.joiningDate,
     required this.status,
+    this.bloodGroup = '',
+    this.userType = 'ADMIN',
+    this.contractEndDate = '',
+    this.profileImageUrl = '',
     this.street = '',
     this.city = '',
     this.state = '',
     this.postalCode = '',
     this.country = 'India',
+    this.permanentAddress = '',
+    this.permanentCity = '',
+    this.permanentCountry = 'India',
+    this.sameAsPermanent = false,
+    this.presentAddress = '',
+    this.presentCity = '',
+    this.presentCountry = 'India',
     this.educationDegree = '',
     this.educationInstitution = '',
     this.educationYear = '',
     this.educationGrade = '',
+    this.educationListJson = '',
     this.experienceCompany = '',
     this.experienceRole = '',
     this.experienceYears = '',
+    this.experienceListJson = '',
+    this.originalDob = '',
+    this.personalMobile = '',
+    this.passportNumber = '',
+    this.drivingLicenseNumber = '',
+    this.drivingLicenseBatch = '',
+    this.healthIssues = '',
+    this.emergencyName = '',
+    this.emergencyMobile = '',
+    this.referredByName = '',
+    this.referredByMobile = '',
+    this.fatherName = '',
+    this.motherName = '',
+    this.maritalStatus = 'Unmarried',
+    this.spouseName = '',
+    this.kids1Name = '',
+    this.kids2Name = '',
+    this.kids3Name = '',
     this.bankAccountHolder = '',
     this.bankName = '',
     this.bankAccountNumber = '',
     this.bankIfsc = '',
     this.bankBranch = '',
+    this.bankAccountType = 'Savings',
     this.panNumber = '',
     this.aadhaarNumber = '',
     this.eduCertificatesUrl = '',
     this.bloodGroupReport = '',
+    this.documentListJson = '',
+    this.facebookUrl = '',
+    this.twitterUrl = '',
+    this.linkedinUrl = '',
+    this.googleUrl = '',
     this.personalHistoryDetails = '',
     this.salaryBasic = 0.0,
     this.salaryHra = 0.0,
@@ -69,31 +207,71 @@ class Employee {
   final String joiningDate;
   final String status;
 
+  final String bloodGroup;
+  final String userType;
+  final String contractEndDate;
+  final String profileImageUrl;
+
   final String street;
   final String city;
   final String state;
   final String postalCode;
   final String country;
 
+  final String permanentAddress;
+  final String permanentCity;
+  final String permanentCountry;
+  final bool sameAsPermanent;
+  final String presentAddress;
+  final String presentCity;
+  final String presentCountry;
+
   final String educationDegree;
   final String educationInstitution;
   final String educationYear;
   final String educationGrade;
+  final String educationListJson;
 
   final String experienceCompany;
   final String experienceRole;
   final String experienceYears;
+  final String experienceListJson;
+
+  final String originalDob;
+  final String personalMobile;
+  final String passportNumber;
+  final String drivingLicenseNumber;
+  final String drivingLicenseBatch;
+  final String healthIssues;
+  final String emergencyName;
+  final String emergencyMobile;
+  final String referredByName;
+  final String referredByMobile;
+  final String fatherName;
+  final String motherName;
+  final String maritalStatus;
+  final String spouseName;
+  final String kids1Name;
+  final String kids2Name;
+  final String kids3Name;
 
   final String bankAccountHolder;
   final String bankName;
   final String bankAccountNumber;
   final String bankIfsc;
   final String bankBranch;
+  final String bankAccountType;
 
   final String panNumber;
   final String aadhaarNumber;
   final String eduCertificatesUrl;
   final String bloodGroupReport;
+  final String documentListJson;
+
+  final String facebookUrl;
+  final String twitterUrl;
+  final String linkedinUrl;
+  final String googleUrl;
 
   final String personalHistoryDetails;
 
@@ -121,6 +299,36 @@ class Employee {
 
   String get fullName => '$firstName $lastName'.trim();
 
+  List<EducationItem> get educationItems {
+    if (educationListJson.isEmpty) return [];
+    try {
+      final decoded = jsonDecode(educationListJson) as List;
+      return decoded.map((e) => EducationItem.fromMap(e as Map<String, dynamic>)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  List<ExperienceItem> get experienceItems {
+    if (experienceListJson.isEmpty) return [];
+    try {
+      final decoded = jsonDecode(experienceListJson) as List;
+      return decoded.map((e) => ExperienceItem.fromMap(e as Map<String, dynamic>)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  List<DocumentItem> get documentItems {
+    if (documentListJson.isEmpty) return [];
+    try {
+      final decoded = jsonDecode(documentListJson) as List;
+      return decoded.map((e) => DocumentItem.fromMap(e as Map<String, dynamic>)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   Map<String, dynamic> toMap() {
     return {
       if (id != 0) 'id': id,
@@ -137,27 +345,63 @@ class Employee {
       'employment_type': employmentType,
       'joining_date': joiningDate,
       'status': status,
+      'blood_group': bloodGroup,
+      'user_type': userType,
+      'contract_end_date': contractEndDate,
+      'profile_image_url': profileImageUrl,
       'street': street,
       'city': city,
       'state': state,
       'postal_code': postalCode,
       'country': country,
+      'permanent_address': permanentAddress,
+      'permanent_city': permanentCity,
+      'permanent_country': permanentCountry,
+      'same_as_permanent': sameAsPermanent ? 1 : 0,
+      'present_address': presentAddress,
+      'present_city': presentCity,
+      'present_country': presentCountry,
       'education_degree': educationDegree,
       'education_institution': educationInstitution,
       'education_year': educationYear,
       'education_grade': educationGrade,
+      'education_list_json': educationListJson,
       'experience_company': experienceCompany,
       'experience_role': experienceRole,
       'experience_years': experienceYears,
+      'experience_list_json': experienceListJson,
+      'original_dob': originalDob,
+      'personal_mobile': personalMobile,
+      'passport_number': passportNumber,
+      'driving_license_number': drivingLicenseNumber,
+      'driving_license_batch': drivingLicenseBatch,
+      'health_issues': healthIssues,
+      'emergency_name': emergencyName,
+      'emergency_mobile': emergencyMobile,
+      'referred_by_name': referredByName,
+      'referred_by_mobile': referredByMobile,
+      'father_name': fatherName,
+      'mother_name': motherName,
+      'marital_status': maritalStatus,
+      'spouse_name': spouseName,
+      'kids1_name': kids1Name,
+      'kids2_name': kids2Name,
+      'kids3_name': kids3Name,
       'bank_account_holder': bankAccountHolder,
       'bank_name': bankName,
       'bank_account_number': bankAccountNumber,
       'bank_ifsc': bankIfsc,
       'bank_branch': bankBranch,
+      'bank_account_type': bankAccountType,
       'pan_number': panNumber,
       'aadhaar_number': aadhaarNumber,
       'edu_certificates_url': eduCertificatesUrl,
       'blood_group_report': bloodGroupReport,
+      'document_list_json': documentListJson,
+      'facebook_url': facebookUrl,
+      'twitter_url': twitterUrl,
+      'linkedin_url': linkedinUrl,
+      'google_url': googleUrl,
       'personal_history_details': personalHistoryDetails,
       'salary_basic': salaryBasic,
       'salary_hra': salaryHra,
@@ -194,27 +438,63 @@ class Employee {
       employmentType: map['employment_type'] as String? ?? 'Full-Time',
       joiningDate: map['joining_date'] as String? ?? '',
       status: map['status'] as String? ?? 'Active',
+      bloodGroup: map['blood_group'] as String? ?? '',
+      userType: map['user_type'] as String? ?? 'ADMIN',
+      contractEndDate: map['contract_end_date'] as String? ?? '',
+      profileImageUrl: map['profile_image_url'] as String? ?? '',
       street: map['street'] as String? ?? '',
       city: map['city'] as String? ?? '',
       state: map['state'] as String? ?? '',
       postalCode: map['postal_code'] as String? ?? '',
       country: map['country'] as String? ?? 'India',
+      permanentAddress: map['permanent_address'] as String? ?? '',
+      permanentCity: map['permanent_city'] as String? ?? '',
+      permanentCountry: map['permanent_country'] as String? ?? 'India',
+      sameAsPermanent: (map['same_as_permanent'] as int? ?? 0) == 1,
+      presentAddress: map['present_address'] as String? ?? '',
+      presentCity: map['present_city'] as String? ?? '',
+      presentCountry: map['present_country'] as String? ?? 'India',
       educationDegree: map['education_degree'] as String? ?? '',
       educationInstitution: map['education_institution'] as String? ?? '',
       educationYear: map['education_year'] as String? ?? '',
       educationGrade: map['education_grade'] as String? ?? '',
+      educationListJson: map['education_list_json'] as String? ?? '',
       experienceCompany: map['experience_company'] as String? ?? '',
       experienceRole: map['experience_role'] as String? ?? '',
       experienceYears: map['experience_years'] as String? ?? '',
+      experienceListJson: map['experience_list_json'] as String? ?? '',
+      originalDob: map['original_dob'] as String? ?? '',
+      personalMobile: map['personal_mobile'] as String? ?? '',
+      passportNumber: map['passport_number'] as String? ?? '',
+      drivingLicenseNumber: map['driving_license_number'] as String? ?? '',
+      drivingLicenseBatch: map['driving_license_batch'] as String? ?? '',
+      healthIssues: map['health_issues'] as String? ?? '',
+      emergencyName: map['emergency_name'] as String? ?? '',
+      emergencyMobile: map['emergency_mobile'] as String? ?? '',
+      referredByName: map['referred_by_name'] as String? ?? '',
+      referredByMobile: map['referred_by_mobile'] as String? ?? '',
+      fatherName: map['father_name'] as String? ?? '',
+      motherName: map['mother_name'] as String? ?? '',
+      maritalStatus: map['marital_status'] as String? ?? 'Unmarried',
+      spouseName: map['spouse_name'] as String? ?? '',
+      kids1Name: map['kids1_name'] as String? ?? '',
+      kids2Name: map['kids2_name'] as String? ?? '',
+      kids3Name: map['kids3_name'] as String? ?? '',
       bankAccountHolder: map['bank_account_holder'] as String? ?? '',
       bankName: map['bank_name'] as String? ?? '',
       bankAccountNumber: map['bank_account_number'] as String? ?? '',
       bankIfsc: map['bank_ifsc'] as String? ?? '',
       bankBranch: map['bank_branch'] as String? ?? '',
+      bankAccountType: map['bank_account_type'] as String? ?? 'Savings',
       panNumber: map['pan_number'] as String? ?? '',
       aadhaarNumber: map['aadhaar_number'] as String? ?? '',
       eduCertificatesUrl: map['edu_certificates_url'] as String? ?? '',
       bloodGroupReport: map['blood_group_report'] as String? ?? '',
+      documentListJson: map['document_list_json'] as String? ?? '',
+      facebookUrl: map['facebook_url'] as String? ?? '',
+      twitterUrl: map['twitter_url'] as String? ?? '',
+      linkedinUrl: map['linkedin_url'] as String? ?? '',
+      googleUrl: map['google_url'] as String? ?? '',
       personalHistoryDetails: map['personal_history_details'] as String? ?? '',
       salaryBasic: (map['salary_basic'] as num?)?.toDouble() ?? 0.0,
       salaryHra: (map['salary_hra'] as num?)?.toDouble() ?? 0.0,
@@ -250,27 +530,63 @@ class Employee {
     String? employmentType,
     String? joiningDate,
     String? status,
+    String? bloodGroup,
+    String? userType,
+    String? contractEndDate,
+    String? profileImageUrl,
     String? street,
     String? city,
     String? state,
     String? postalCode,
     String? country,
+    String? permanentAddress,
+    String? permanentCity,
+    String? permanentCountry,
+    bool? sameAsPermanent,
+    String? presentAddress,
+    String? presentCity,
+    String? presentCountry,
     String? educationDegree,
     String? educationInstitution,
     String? educationYear,
     String? educationGrade,
+    String? educationListJson,
     String? experienceCompany,
     String? experienceRole,
     String? experienceYears,
+    String? experienceListJson,
+    String? originalDob,
+    String? personalMobile,
+    String? passportNumber,
+    String? drivingLicenseNumber,
+    String? drivingLicenseBatch,
+    String? healthIssues,
+    String? emergencyName,
+    String? emergencyMobile,
+    String? referredByName,
+    String? referredByMobile,
+    String? fatherName,
+    String? motherName,
+    String? maritalStatus,
+    String? spouseName,
+    String? kids1Name,
+    String? kids2Name,
+    String? kids3Name,
     String? bankAccountHolder,
     String? bankName,
     String? bankAccountNumber,
     String? bankIfsc,
     String? bankBranch,
+    String? bankAccountType,
     String? panNumber,
     String? aadhaarNumber,
     String? eduCertificatesUrl,
     String? bloodGroupReport,
+    String? documentListJson,
+    String? facebookUrl,
+    String? twitterUrl,
+    String? linkedinUrl,
+    String? googleUrl,
     String? personalHistoryDetails,
     double? salaryBasic,
     double? salaryHra,
@@ -304,27 +620,63 @@ class Employee {
       employmentType: employmentType ?? this.employmentType,
       joiningDate: joiningDate ?? this.joiningDate,
       status: status ?? this.status,
+      bloodGroup: bloodGroup ?? this.bloodGroup,
+      userType: userType ?? this.userType,
+      contractEndDate: contractEndDate ?? this.contractEndDate,
+      profileImageUrl: profileImageUrl ?? this.profileImageUrl,
       street: street ?? this.street,
       city: city ?? this.city,
       state: state ?? this.state,
       postalCode: postalCode ?? this.postalCode,
       country: country ?? this.country,
+      permanentAddress: permanentAddress ?? this.permanentAddress,
+      permanentCity: permanentCity ?? this.permanentCity,
+      permanentCountry: permanentCountry ?? this.permanentCountry,
+      sameAsPermanent: sameAsPermanent ?? this.sameAsPermanent,
+      presentAddress: presentAddress ?? this.presentAddress,
+      presentCity: presentCity ?? this.presentCity,
+      presentCountry: presentCountry ?? this.presentCountry,
       educationDegree: educationDegree ?? this.educationDegree,
       educationInstitution: educationInstitution ?? this.educationInstitution,
       educationYear: educationYear ?? this.educationYear,
       educationGrade: educationGrade ?? this.educationGrade,
+      educationListJson: educationListJson ?? this.educationListJson,
       experienceCompany: experienceCompany ?? this.experienceCompany,
       experienceRole: experienceRole ?? this.experienceRole,
       experienceYears: experienceYears ?? this.experienceYears,
+      experienceListJson: experienceListJson ?? this.experienceListJson,
+      originalDob: originalDob ?? this.originalDob,
+      personalMobile: personalMobile ?? this.personalMobile,
+      passportNumber: passportNumber ?? this.passportNumber,
+      drivingLicenseNumber: drivingLicenseNumber ?? this.drivingLicenseNumber,
+      drivingLicenseBatch: drivingLicenseBatch ?? this.drivingLicenseBatch,
+      healthIssues: healthIssues ?? this.healthIssues,
+      emergencyName: emergencyName ?? this.emergencyName,
+      emergencyMobile: emergencyMobile ?? this.emergencyMobile,
+      referredByName: referredByName ?? this.referredByName,
+      referredByMobile: referredByMobile ?? this.referredByMobile,
+      fatherName: fatherName ?? this.fatherName,
+      motherName: motherName ?? this.motherName,
+      maritalStatus: maritalStatus ?? this.maritalStatus,
+      spouseName: spouseName ?? this.spouseName,
+      kids1Name: kids1Name ?? this.kids1Name,
+      kids2Name: kids2Name ?? this.kids2Name,
+      kids3Name: kids3Name ?? this.kids3Name,
       bankAccountHolder: bankAccountHolder ?? this.bankAccountHolder,
       bankName: bankName ?? this.bankName,
       bankAccountNumber: bankAccountNumber ?? this.bankAccountNumber,
       bankIfsc: bankIfsc ?? this.bankIfsc,
       bankBranch: bankBranch ?? this.bankBranch,
+      bankAccountType: bankAccountType ?? this.bankAccountType,
       panNumber: panNumber ?? this.panNumber,
       aadhaarNumber: aadhaarNumber ?? this.aadhaarNumber,
       eduCertificatesUrl: eduCertificatesUrl ?? this.eduCertificatesUrl,
       bloodGroupReport: bloodGroupReport ?? this.bloodGroupReport,
+      documentListJson: documentListJson ?? this.documentListJson,
+      facebookUrl: facebookUrl ?? this.facebookUrl,
+      twitterUrl: twitterUrl ?? this.twitterUrl,
+      linkedinUrl: linkedinUrl ?? this.linkedinUrl,
+      googleUrl: googleUrl ?? this.googleUrl,
       personalHistoryDetails: personalHistoryDetails ?? this.personalHistoryDetails,
       salaryBasic: salaryBasic ?? this.salaryBasic,
       salaryHra: salaryHra ?? this.salaryHra,
