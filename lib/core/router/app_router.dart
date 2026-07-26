@@ -61,6 +61,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (_, _) => const EmployeeManagementPage(),
           ),
           GoRoute(
+            path: '/responses',
+            builder: (_, _) => const SectionPage(title: 'Responses'),
+          ),
+          GoRoute(
             path: '/items',
             builder: (_, _) => const ItemsPage(),
             routes: [
