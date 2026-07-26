@@ -35,3 +35,9 @@ final empSearchQueryProvider = StateProvider<String>((ref) => '');
 final empOrgFilterProvider = StateProvider<String>((ref) => 'All Organizations');
 final empDeptFilterProvider = StateProvider<String>((ref) => 'All Departments');
 final empStatusFilterProvider = StateProvider<String>((ref) => 'All Statuses');
+
+final responseSearchQueryProvider = StateProvider<String>((ref) => '');
+final responseOrgFilterProvider = StateProvider<String>((ref) => 'All Organizations');
+final responseDeptFilterProvider = StateProvider<String>((ref) => 'All Departments');
+final responseStatusFilterProvider = StateProvider<String>((ref) => 'All Statuses');
+

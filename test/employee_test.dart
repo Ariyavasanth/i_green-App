@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_application_1/features/employee/domain/employee.dart';
 import 'package:flutter_application_1/features/employee/domain/registration_link.dart';
-import 'package:flutter_application_1/features/employee/data/sqlite_employee_repository.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
