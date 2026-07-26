@@ -21,8 +21,21 @@ final registrationLinksProvider = FutureProvider<List<RegistrationLink>>(
 
 final registrationLinkByIdProvider =
     FutureProvider.family<RegistrationLink?, String>(
-  (ref, linkId) =>
-      ref.watch(employeeRepositoryProvider).getRegistrationLinkById(linkId),
+  (ref, linkId) async {
+    if (linkId == 'new' || linkId.isEmpty) {
+      return const RegistrationLink(
+        id: 0,
+        linkId: 'new',
+        generatedBy: 'Admin',
+        generatedDate: '',
+        expiryDate: '',
+        linkStatus: 'Pending',
+        organizationName: '',
+        department: '',
+      );
+    }
+    return ref.watch(employeeRepositoryProvider).getRegistrationLinkById(linkId);
+  },
 );
 
 final empColumnPreferenceProvider =

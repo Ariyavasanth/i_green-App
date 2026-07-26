@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../organization/presentation/widgets/column_selection_dialog.dart';
@@ -280,7 +281,7 @@ class _EmployeeManagementPageState
                         vertical: 10,
                       ),
                     ),
-                    onPressed: () => _openAddLinkDialog(context),
+                    onPressed: () => GoRouter.of(context).push('/employee/register/new'),
                     icon: const Icon(Icons.add, size: 18),
                     label: Text(
                       isCompact ? 'Add' : 'Add Employee',

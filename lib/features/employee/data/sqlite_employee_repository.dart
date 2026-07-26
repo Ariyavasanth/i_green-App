@@ -352,7 +352,7 @@ class SqliteEmployeeRepository implements EmployeeRepository {
 
     final finalEmployee = employeeData.copyWith(
       employeeId: newEmpId,
-      status: 'Active',
+      status: employeeData.status.isEmpty ? 'Pending' : employeeData.status,
       temporaryPassword: tempPassword,
     );
 

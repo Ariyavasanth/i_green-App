@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../domain/employee.dart';
@@ -109,6 +110,93 @@ class _EmployeeRegistrationPageState
 
   bool _isSubmitting = false;
   Employee? _submittedEmployee;
+  String _registrationMode = 'manual';
+  int? _selectedAcceptedEmpId;
+
+  void _populateFromEmployee(Employee emp) {
+    setState(() {
+      _firstNameController.text = emp.firstName;
+      _lastNameController.text = emp.lastName;
+      if (emp.bloodGroup.isNotEmpty) _bloodGroup = emp.bloodGroup;
+      if (emp.gender.isNotEmpty) _gender = emp.gender;
+      if (emp.userType.isNotEmpty) _userType = emp.userType;
+      if (emp.status.isNotEmpty) _status = emp.status;
+      _dobController.text = emp.dob;
+      _aadhaarController.text = emp.aadhaarNumber;
+      _phoneController.text = emp.phoneNumber;
+      if (emp.department.isNotEmpty) _department = emp.department;
+      if (emp.designation.isNotEmpty) _designation = emp.designation;
+      _joiningDateController.text = emp.joiningDate;
+      _contractEndDateController.text = emp.contractEndDate;
+      _emailController.text = emp.emailAddress;
+      _pfNumberController.text = emp.pfNumber;
+      _esiNumberController.text = emp.esiNumber;
+      if (emp.reportingManager.isNotEmpty) _reportingTo = emp.reportingManager;
+
+      _permAddressController.text = emp.permanentAddress;
+      _permCityController.text = emp.permanentCity;
+      if (emp.permanentCountry.isNotEmpty) _permCountryController.text = emp.permanentCountry;
+      _sameAsPermanent = emp.sameAsPermanent;
+      _presAddressController.text = emp.presentAddress;
+      _presCityController.text = emp.presentCity;
+      if (emp.presentCountry.isNotEmpty) _presCountryController.text = emp.presentCountry;
+
+      _originalDobController.text = emp.originalDob;
+      _personalMobileController.text = emp.personalMobile;
+      _panController.text = emp.panNumber;
+      _passportController.text = emp.passportNumber;
+      _drivingLicenseController.text = emp.drivingLicenseNumber;
+      _drivingLicenseBatchController.text = emp.drivingLicenseBatch;
+      _healthIssuesController.text = emp.healthIssues;
+      _emergencyNameController.text = emp.emergencyName;
+      _emergencyMobileController.text = emp.emergencyMobile;
+      _referredByNameController.text = emp.referredByName;
+      _referredByMobileController.text = emp.referredByMobile;
+      _fatherNameController.text = emp.fatherName;
+      _motherNameController.text = emp.motherName;
+      if (emp.maritalStatus.isNotEmpty) _maritalStatus = emp.maritalStatus;
+      _spouseNameController.text = emp.spouseName;
+      _kids1NameController.text = emp.kids1Name;
+      _kids2NameController.text = emp.kids2Name;
+      _kids3NameController.text = emp.kids3Name;
+
+      _bankHolderController.text = emp.bankAccountHolder;
+      _bankNameController.text = emp.bankName;
+      _bankAccNumController.text = emp.bankAccountNumber;
+      _bankIfscController.text = emp.bankIfsc;
+      _bankBranchController.text = emp.bankBranch;
+      if (emp.bankAccountType.isNotEmpty) _bankAccountType = emp.bankAccountType;
+
+      _facebookController.text = emp.facebookUrl;
+      _twitterController.text = emp.twitterUrl;
+      _linkedinController.text = emp.linkedinUrl;
+      _googleController.text = emp.googleUrl;
+
+      if (emp.educationListJson.isNotEmpty) {
+        try {
+          final List parsed = jsonDecode(emp.educationListJson);
+          _educationList.clear();
+          _educationList.addAll(parsed.map((e) => EducationItem.fromMap(Map<String, dynamic>.from(e))));
+        } catch (_) {}
+      }
+
+      if (emp.experienceListJson.isNotEmpty) {
+        try {
+          final List parsed = jsonDecode(emp.experienceListJson);
+          _experienceList.clear();
+          _experienceList.addAll(parsed.map((e) => ExperienceItem.fromMap(Map<String, dynamic>.from(e))));
+        } catch (_) {}
+      }
+
+      if (emp.documentListJson.isNotEmpty) {
+        try {
+          final List parsed = jsonDecode(emp.documentListJson);
+          _documentList.clear();
+          _documentList.addAll(parsed.map((e) => DocumentItem.fromMap(Map<String, dynamic>.from(e))));
+        } catch (_) {}
+      }
+    });
+  }
 
   final List<String> _tabs = [
     'Personal Info',
@@ -288,6 +376,29 @@ class _EmployeeRegistrationPageState
         reportingManager: _reportingTo,
       );
 
+      if (widget.linkId == 'new' || widget.linkId.isEmpty) {
+        await repo.addEmployee(employeeData);
+        ref.invalidate(employeesProvider);
+        setState(() {
+          _isSubmitting = false;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Employee registered successfully!'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          if (GoRouter.of(context).canPop()) {
+            GoRouter.of(context).pop();
+          } else {
+            GoRouter.of(context).go('/employee');
+          }
+        }
+        return;
+      }
+
       final created = await repo.submitEmployeeRegistration(
         linkId: widget.linkId,
         employeeData: employeeData,
@@ -464,6 +575,151 @@ class _EmployeeRegistrationPageState
     final formGrid = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Registration Mode Selection (Radio buttons) & Accepted Response Dropdown
+        Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8F9FA),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: const Color(0xFFE9ECEF)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Registration Entry Mode:',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Radio<String>(
+                    value: 'manual',
+                    groupValue: _registrationMode,
+                    activeColor: AppColors.active,
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() {
+                          _registrationMode = val;
+                          _selectedAcceptedEmpId = null;
+                        });
+                      }
+                    },
+                  ),
+                  const Text('Manual Entry', style: TextStyle(fontSize: 13)),
+                  const SizedBox(width: 24),
+                  Radio<String>(
+                    value: 'accepted_response',
+                    groupValue: _registrationMode,
+                    activeColor: AppColors.active,
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() {
+                          _registrationMode = val;
+                        });
+                      }
+                    },
+                  ),
+                  const Text('Import Accepted Response', style: TextStyle(fontSize: 13)),
+                ],
+              ),
+              if (_registrationMode == 'accepted_response') ...[
+                const SizedBox(height: 10),
+                Consumer(
+                  builder: (context, ref, child) {
+                    final employeesAsync = ref.watch(employeesProvider);
+                    return employeesAsync.when(
+                      loading: () => const SizedBox(
+                        height: 36,
+                        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                      ),
+                      error: (err, _) => Text(
+                        'Error loading responses: $err',
+                        style: const TextStyle(color: Colors.red, fontSize: 12),
+                      ),
+                      data: (allEmps) {
+                        final acceptedList = allEmps
+                            .where((e) => e.status.toLowerCase() == 'accepted')
+                            .toList();
+
+                        if (acceptedList.isEmpty) {
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 4),
+                            child: Text(
+                              'No accepted responses available yet. (Accept candidate responses in the Response UI first).',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.orange,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          );
+                        }
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Select Accepted Applicant / Member Name *',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            DropdownButtonFormField<int>(
+                              value: acceptedList.any((e) => e.id == _selectedAcceptedEmpId)
+                                  ? _selectedAcceptedEmpId
+                                  : null,
+                              hint: const Text('Choose accepted member name...', style: TextStyle(fontSize: 12)),
+                              isDense: true,
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                border: OutlineInputBorder(),
+                              ),
+                              items: acceptedList.map((emp) {
+                                return DropdownMenuItem<int>(
+                                  value: emp.id,
+                                  child: Text(
+                                    '${emp.fullName} (${emp.emailAddress.isEmpty ? emp.department : emp.emailAddress})',
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (selectedId) {
+                                if (selectedId != null) {
+                                  final selectedEmp = acceptedList.firstWhere((e) => e.id == selectedId);
+                                  setState(() {
+                                    _selectedAcceptedEmpId = selectedId;
+                                  });
+                                  _populateFromEmployee(selectedEmp);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Auto-fetched all details for ${selectedEmp.fullName}'),
+                                      behavior: SnackBarBehavior.floating,
+                                      duration: const Duration(seconds: 2),
+                                    ),
+                                  );
+                                }
+                              },
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  },
+                ),
+              ],
+            ],
+          ),
+        ),
         _buildRow2or3(
           isMobile: isMobile,
           children: [
