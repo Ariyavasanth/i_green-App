@@ -465,22 +465,6 @@ class _EmployeeManagementPageState
     }
   }
 
-  Future<void> _updateEmployeeStatus(
-    BuildContext context,
-    Employee emp,
-    String newStatus,
-  ) async {
-    final updated = emp.copyWith(status: newStatus);
-    await ref.read(employeeRepositoryProvider).updateEmployee(updated);
-    ref.invalidate(employeesProvider);
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Employee status updated to "$newStatus" for ${emp.fullName}'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
 
   Color _getStatusColor(String status) {
     switch (status) {
@@ -590,48 +574,6 @@ class _EmployeeManagementPageState
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                   color: AppColors.textPrimary,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            TextButton.icon(
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 4),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              onPressed: () => _updateEmployeeStatus(
-                                  context, emp, 'Accepted'),
-                              icon: const Icon(Icons.check_circle_outline,
-                                  size: 16, color: Colors.green),
-                              label: const Text(
-                                'Accept',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.green,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            TextButton.icon(
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 4),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              onPressed: () => _updateEmployeeStatus(
-                                  context, emp, 'Rejected'),
-                              icon: const Icon(Icons.cancel_outlined,
-                                  size: 16, color: Colors.redAccent),
-                              label: const Text(
-                                'Reject',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.redAccent,
                                 ),
                               ),
                             ),
@@ -861,26 +803,7 @@ class _EmployeeManagementPageState
                       icon: const Icon(Icons.remove_red_eye_outlined, size: 16, color: AppColors.active),
                       label: const Text('View', style: TextStyle(fontSize: 12, color: AppColors.active)),
                     ),
-                    TextButton.icon(
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      onPressed: () => _updateEmployeeStatus(context, emp, 'Accepted'),
-                      icon: const Icon(Icons.check_circle_outline, size: 16, color: Colors.green),
-                      label: const Text('Accept', style: TextStyle(fontSize: 12, color: Colors.green)),
-                    ),
-                    TextButton.icon(
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      onPressed: () => _updateEmployeeStatus(context, emp, 'Rejected'),
-                      icon: const Icon(Icons.cancel_outlined, size: 16, color: Colors.redAccent),
-                      label: const Text('Reject', style: TextStyle(fontSize: 12, color: Colors.redAccent)),
-                    ),
+
                     TextButton.icon(
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
