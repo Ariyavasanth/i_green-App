@@ -421,10 +421,7 @@ class _EmployeeManagementPageState
   }
 
   void _openEditDialog(BuildContext context, Employee emp) {
-    showDialog<bool>(
-      context: context,
-      builder: (context) => EmployeeFormDialog(employee: emp),
-    );
+    GoRouter.of(context).push('/employee/register/edit', extra: emp);
   }
 
   Future<void> _confirmDelete(BuildContext context, Employee emp) async {

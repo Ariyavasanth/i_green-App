@@ -23,6 +23,7 @@ import '../../features/organization/presentation/organization_management_page.da
 import '../../features/organization/presentation/organization_structure_page.dart';
 import '../../features/employee/presentation/responses_page.dart';
 import '../../features/employee/presentation/employee_management_page.dart';
+import '../../features/employee/domain/employee.dart';
 import '../../features/employee/presentation/employee_registration_page.dart';
 import '../../screens/login_screen.dart';
 import '../../screens/customers/active_customers_list.dart';
@@ -38,6 +39,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/employee/register/:linkId',
         builder: (_, state) => EmployeeRegistrationPage(
           linkId: state.pathParameters['linkId'] ?? '',
+          employee: state.extra is Employee ? state.extra as Employee : null,
         ),
       ),
       ShellRoute(

@@ -21,7 +21,7 @@ final registrationLinksProvider = FutureProvider<List<RegistrationLink>>(
 final registrationLinkByIdProvider =
     FutureProvider.family<RegistrationLink?, String>(
   (ref, linkId) async {
-    if (linkId == 'new' || linkId.isEmpty) {
+    if (linkId == 'new' || linkId == 'edit' || linkId.isEmpty) {
       return const RegistrationLink(
         id: 0,
         linkId: 'new',

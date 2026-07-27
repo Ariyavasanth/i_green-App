@@ -10,9 +10,14 @@ import '../providers/employee_providers.dart';
 import '../services/offer_letter_generator.dart';
 
 class EmployeeRegistrationPage extends ConsumerStatefulWidget {
-  const EmployeeRegistrationPage({required this.linkId, super.key});
+  const EmployeeRegistrationPage({
+    required this.linkId,
+    this.employee,
+    super.key,
+  });
 
   final String linkId;
+  final Employee? employee;
 
   @override
   ConsumerState<EmployeeRegistrationPage> createState() =>
@@ -154,7 +159,13 @@ class _EmployeeRegistrationPageState
     });
   }
 
-  bool get _isManagementAdd => widget.linkId == 'new' || widget.linkId.isEmpty;
+  bool get _isManagementAdd =>
+      widget.linkId == 'new' ||
+      widget.linkId == 'edit' ||
+      widget.linkId.isEmpty ||
+      widget.employee != null;
+
+  bool get _isEditing => widget.employee != null || widget.linkId == 'edit';
 
   bool _isSubmitting = false;
   Employee? _submittedEmployee;
@@ -220,6 +231,20 @@ class _EmployeeRegistrationPageState
       _linkedinController.text = emp.linkedinUrl;
       _googleController.text = emp.googleUrl;
 
+      // Salary fields
+      if (emp.salaryType.isNotEmpty) _salaryType = emp.salaryType;
+      if (emp.salaryTotalCtc > 0) _totalSalaryController.text = emp.salaryTotalCtc.toStringAsFixed(2);
+      if (emp.salaryBasic > 0) _basicPayController.text = emp.salaryBasic.toStringAsFixed(2);
+      if (emp.salaryHra > 0) _hraController.text = emp.salaryHra.toStringAsFixed(2);
+      if (emp.salaryEducationAllowance > 0) _eduAllowanceController.text = emp.salaryEducationAllowance.toStringAsFixed(2);
+      if (emp.salarySpecialAllowance > 0) _specialAllowanceController.text = emp.salarySpecialAllowance.toStringAsFixed(2);
+      if (emp.salaryTax > 0) _taxController.text = emp.salaryTax.toStringAsFixed(2);
+      if (emp.salaryPf > 0) _pfController.text = emp.salaryPf.toStringAsFixed(2);
+
+      // Credentials fields
+      if (emp.employeeId.isNotEmpty) _employeeCustomIdController.text = emp.employeeId;
+      if (emp.temporaryPassword.isNotEmpty) _passwordController.text = emp.temporaryPassword;
+
       if (emp.educationListJson.isNotEmpty) {
         try {
           final List parsed = jsonDecode(emp.educationListJson);
@@ -263,6 +288,9 @@ class _EmployeeRegistrationPageState
   void initState() {
     super.initState();
     _tabController = TabController(length: _tabs.length, vsync: this);
+    if (widget.employee != null) {
+      _populateFromEmployee(widget.employee!);
+    }
   }
 
   @override
@@ -456,6 +484,32 @@ class _EmployeeRegistrationPageState
         salaryPf: double.tryParse(_pfController.text.trim().replaceAll(',', '')) ?? 0.0,
       );
 
+      if (_isEditing) {
+        final updatedData = employeeData.copyWith(
+          id: widget.employee?.id ?? 0,
+        );
+        await repo.updateEmployee(updatedData);
+        ref.invalidate(employeesProvider);
+        setState(() {
+          _isSubmitting = false;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Employee details updated successfully!'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          if (GoRouter.of(context).canPop()) {
+            GoRouter.of(context).pop();
+          } else {
+            GoRouter.of(context).go('/employee');
+          }
+        }
+        return;
+      }
+
       if (widget.linkId == 'new' || widget.linkId.isEmpty) {
         await repo.addEmployee(employeeData);
         ref.invalidate(employeesProvider);
@@ -526,6 +580,38 @@ class _EmployeeRegistrationPageState
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (err, _) => Center(child: Text('Error loading link: $err')),
                 data: (link) {
+                  if (_isEditing) {
+                    final editLink = link ??
+                        const RegistrationLink(
+                          id: 0,
+                          linkId: 'edit',
+                          generatedBy: '',
+                          generatedDate: '',
+                          expiryDate: '',
+                          linkStatus: 'Pending',
+                          organizationName: 'iGreen Tech',
+                          department: 'Management',
+                        );
+                    return Form(
+                      key: _formKey,
+                      child: TabBarView(
+                        controller: _tabController,
+                        children: [
+                          _buildPersonalInfoTab(editLink, isMobile),
+                          _buildAddressTab(editLink, isMobile),
+                          _buildEducationTab(editLink, isMobile),
+                          _buildExperienceTab(editLink, isMobile),
+                          _buildHistoryTab(editLink, isMobile),
+                          _buildBankAccountTab(editLink, isMobile),
+                          _buildDocumentTab(editLink, isMobile),
+                          _buildSocialMediaTab(editLink, isMobile),
+                          if (_isManagementAdd) _buildSalaryOfferLetterTab(editLink, isMobile),
+                          if (_isManagementAdd) _buildCredentialsTab(editLink, isMobile),
+                        ],
+                      ),
+                    );
+                  }
+
                   if (link == null) {
                     return _buildStatusCard(
                       icon: Icons.error_outline,
@@ -586,6 +672,11 @@ class _EmployeeRegistrationPageState
 
   Widget _buildTopNavBar(RegistrationLink? link) {
     final name = '${_firstNameController.text} ${_lastNameController.text}'.trim();
+    final isEditMode = _isEditing;
+    final titleText = name.isEmpty
+        ? (isEditMode ? 'Edit Employee Details' : 'Employee Registration')
+        : (isEditMode ? 'Edit: $name' : name);
+
     return Container(
       height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -597,11 +688,11 @@ class _EmployeeRegistrationPageState
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.person, size: 18, color: AppColors.active),
+                Icon(isEditMode ? Icons.edit : Icons.person, size: 18, color: AppColors.active),
                 const SizedBox(width: 8),
                 Flexible(
                   child: Text(
-                    name.isEmpty ? 'Employee Registration' : name,
+                    titleText,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: 14,
@@ -617,7 +708,7 @@ class _EmployeeRegistrationPageState
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (link != null && link.linkStatus != 'Completed' && _submittedEmployee == null)
+              if (isEditMode || (link != null && link.linkStatus != 'Completed' && _submittedEmployee == null))
                 Padding(
                   padding: const EdgeInsets.only(right: 12),
                   child: ElevatedButton.icon(
@@ -628,16 +719,29 @@ class _EmployeeRegistrationPageState
                       minimumSize: const Size(0, 32),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                     ),
-                    onPressed: _isSubmitting ? null : () => _submitForm(link),
+                    onPressed: _isSubmitting
+                        ? null
+                        : () => _submitForm(link ??
+                            const RegistrationLink(
+                                id: 0,
+                                linkId: 'edit',
+                                generatedBy: '',
+                                generatedDate: '',
+                                expiryDate: '',
+                                linkStatus: 'Pending',
+                                organizationName: '',
+                                department: '')),
                     icon: _isSubmitting
                         ? const SizedBox(
                             width: 14,
                             height: 14,
                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
-                        : const Icon(Icons.check_circle_outline, size: 16),
+                        : Icon(isEditMode ? Icons.save_outlined : Icons.check_circle_outline, size: 16),
                     label: Text(
-                      _isSubmitting ? 'Submitting...' : 'Submit Registration',
+                      _isSubmitting
+                          ? 'Saving...'
+                          : (isEditMode ? 'Save Changes' : 'Submit Registration'),
                       style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                     ),
                   ),
