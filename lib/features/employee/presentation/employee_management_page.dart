@@ -6,9 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../organization/presentation/widgets/column_selection_dialog.dart';
 import '../domain/employee.dart';
 import '../providers/employee_providers.dart';
-import 'dialogs/add_employee_link_dialog.dart';
 import 'dialogs/employee_details_dialog.dart';
-import 'dialogs/employee_form_dialog.dart';
 import 'dialogs/registration_links_dialog.dart';
 
 class EmployeeManagementPage extends ConsumerStatefulWidget {
@@ -62,7 +60,13 @@ class _EmployeeManagementPageState
               error: (err, _) => Center(
                 child: Text('Unable to load employees: $err'),
               ),
-              data: (employees) {
+              data: (allEmployees) {
+                // Only employees accepted in responses (or active) come into Employee Management module table
+                final employees = allEmployees.where((emp) {
+                  final s = emp.status.trim().toLowerCase();
+                  return s == 'accepted' || s == 'active';
+                }).toList();
+
                 // Populate unique dropdown filter choices
                 final orgList = ['All Organizations', ...{for (final e in employees) if (e.organizationName.isNotEmpty) e.organizationName}];
                 final deptList = ['All Departments', ...{for (final e in employees) if (e.department.isNotEmpty) e.department}];
@@ -381,13 +385,6 @@ class _EmployeeManagementPageState
         content: Text('Exporting Employee list to Excel / PDF...'),
         behavior: SnackBarBehavior.floating,
       ),
-    );
-  }
-
-  void _openAddLinkDialog(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder: (context) => const AddEmployeeLinkDialog(),
     );
   }
 
