@@ -48,12 +48,6 @@ class AppShell extends ConsumerWidget {
       Icons.badge_outlined,
       'Employee',
     ),
-    SidebarDestination(
-      'Employee',
-      '/employee',
-      Icons.person_outline,
-      'Employee',
-    ),
     SidebarDestination('Items', '/items', Icons.inventory_2_outlined, 'Stock'),
     SidebarDestination(
       'Inventory Adjustments',
