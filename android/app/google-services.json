@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "583868776785",
+    "project_id": "i-green-tech",
+    "storage_bucket": "i-green-tech.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:583868776785:android:9d7f2b927ded8c1df6d370",
+        "android_client_info": {
+          "package_name": "com.igreen.tech"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDWFHhjAb_uH-5XMnkF__N29WSkYc71-3M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,14 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../organization/domain/column_preference.dart';
-import '../data/sqlite_employee_repository.dart';
+import '../data/firebase_employee_repository.dart';
 import '../domain/employee.dart';
 import '../domain/employee_repository.dart';
 import '../domain/registration_link.dart';
 
-// Change only this line when the Firebase implementation is ready.
+// Switched to Firebase implementation to sync directly with Cloud Firestore.
 final employeeRepositoryProvider = Provider<EmployeeRepository>(
-  (ref) => SqliteEmployeeRepository(),
+  (ref) => FirebaseEmployeeRepository(),
 );
 
 final employeesProvider = FutureProvider<List<Employee>>(

@@ -1,72 +1,237 @@
+import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../../organization/domain/column_preference.dart';
 import '../domain/employee.dart';
 import '../domain/employee_repository.dart';
 import '../domain/registration_link.dart';
 
 class FirebaseEmployeeRepository implements EmployeeRepository {
-  @override
-  Future<List<Employee>> getEmployees() => throw UnimplementedError(
-        'Firebase employee repository is not configured yet.',
-      );
+  final FirebaseFirestore _firestore;
+
+  FirebaseEmployeeRepository({FirebaseFirestore? firestore})
+      : _firestore = firestore ?? FirebaseFirestore.instance;
+
+  CollectionReference<Map<String, dynamic>> get _employeesRef =>
+      _firestore.collection('employees');
+
+  CollectionReference<Map<String, dynamic>> get _registrationLinksRef =>
+      _firestore.collection('registration_links');
+
+  CollectionReference<Map<String, dynamic>> get _columnPreferencesRef =>
+      _firestore.collection('column_preferences');
+
+  CollectionReference<Map<String, dynamic>> get _responsesRef =>
+      _firestore.collection('employee_responses');
+
+  // Helper: Map Employee object to Firestore document map
+  Map<String, dynamic> _employeeToFirestore(Employee emp) {
+    final map = emp.toMap();
+
+    // Convert list objects into native Firestore Array of Maps instead of raw JSON strings
+    map['education_items'] =
+        emp.educationItems.map((e) => e.toMap()).toList();
+    map['experience_items'] =
+        emp.experienceItems.map((e) => e.toMap()).toList();
+    map['document_items'] =
+        emp.documentItems.map((e) => e.toMap()).toList();
+
+    map['updated_at'] = FieldValue.serverTimestamp();
+    return map;
+  }
+
+  // Helper: Map Firestore document data to Employee object
+  Employee _employeeFromFirestore(Map<String, dynamic> map, String docId) {
+    final mutableMap = Map<String, dynamic>.from(map);
+
+    // If ID is missing, try parsing numeric part of docId or default to 0
+    if (!mutableMap.containsKey('id') || mutableMap['id'] == null) {
+      mutableMap['id'] = int.tryParse(docId.replaceAll(RegExp(r'\D'), '')) ?? 0;
+    }
+
+    // Convert Firestore native array lists back to JSON strings for domain model compatibility
+    if (mutableMap['education_items'] is List) {
+      mutableMap['education_list_json'] =
+          jsonEncode(mutableMap['education_items']);
+    }
+    if (mutableMap['experience_items'] is List) {
+      mutableMap['experience_list_json'] =
+          jsonEncode(mutableMap['experience_items']);
+    }
+    if (mutableMap['document_items'] is List) {
+      mutableMap['document_list_json'] =
+          jsonEncode(mutableMap['document_items']);
+    }
+
+    return Employee.fromMap(mutableMap);
+  }
 
   @override
-  Future<Employee?> getEmployeeById(int id) => throw UnimplementedError(
-        'Firebase employee repository is not configured yet.',
-      );
+  Future<List<Employee>> getEmployees() async {
+    final snapshot = await _employeesRef.get();
+    return snapshot.docs
+        .map((doc) => _employeeFromFirestore(doc.data(), doc.id))
+        .toList();
+  }
 
   @override
-  Future<void> addEmployee(Employee employee) => throw UnimplementedError(
-        'Firebase employee repository is not configured yet.',
+  Future<Employee?> getEmployeeById(int id) async {
+    final snapshot =
+        await _employeesRef.where('id', isEqualTo: id).limit(1).get();
+    if (snapshot.docs.isNotEmpty) {
+      return _employeeFromFirestore(
+        snapshot.docs.first.data(),
+        snapshot.docs.first.id,
       );
+    }
+    return null;
+  }
 
   @override
-  Future<void> updateEmployee(Employee employee) => throw UnimplementedError(
-        'Firebase employee repository is not configured yet.',
-      );
+  Future<void> addEmployee(Employee employee) async {
+    final docId = employee.employeeId.isNotEmpty
+        ? employee.employeeId
+        : (employee.id != 0 ? employee.id.toString() : _employeesRef.doc().id);
+
+    final data = _employeeToFirestore(employee);
+    data['created_at'] = FieldValue.serverTimestamp();
+
+    await _employeesRef.doc(docId).set(data, SetOptions(merge: true));
+  }
 
   @override
-  Future<void> deleteEmployee(int id) => throw UnimplementedError(
-        'Firebase employee repository is not configured yet.',
-      );
+  Future<void> updateEmployee(Employee employee) async {
+    final docId = employee.employeeId.isNotEmpty
+        ? employee.employeeId
+        : employee.id.toString();
+
+    final data = _employeeToFirestore(employee);
+    await _employeesRef.doc(docId).set(data, SetOptions(merge: true));
+  }
+
+  @override
+  Future<void> deleteEmployee(int id) async {
+    final snapshot =
+        await _employeesRef.where('id', isEqualTo: id).limit(1).get();
+    if (snapshot.docs.isNotEmpty) {
+      await _employeesRef.doc(snapshot.docs.first.id).delete();
+    }
+  }
 
   @override
   Future<RegistrationLink> createRegistrationLink({
     required String generatedBy,
     String? organizationName,
     String? department,
-  }) => throw UnimplementedError(
-        'Firebase employee repository is not configured yet.',
-      );
+  }) async {
+    final docRef = _registrationLinksRef.doc();
+    final linkId = 'lnk_${docRef.id.substring(0, 8)}';
+    final now = DateTime.now();
+    final expiry = now.add(const Duration(days: 7));
+
+    final link = RegistrationLink(
+      id: now.millisecondsSinceEpoch ~/ 1000,
+      linkId: linkId,
+      generatedBy: generatedBy,
+      generatedDate: now.toIso8601String(),
+      expiryDate: expiry.toIso8601String(),
+      linkStatus: 'Pending',
+      organizationName: organizationName ?? '',
+      department: department ?? '',
+    );
+
+    final data = link.toMap();
+    data['created_at'] = FieldValue.serverTimestamp();
+    data['updated_at'] = FieldValue.serverTimestamp();
+
+    await _registrationLinksRef.doc(linkId).set(data);
+    return link;
+  }
 
   @override
-  Future<List<RegistrationLink>> getRegistrationLinks() =>
-      throw UnimplementedError(
-        'Firebase employee repository is not configured yet.',
-      );
+  Future<List<RegistrationLink>> getRegistrationLinks() async {
+    final snapshot = await _registrationLinksRef.get();
+    return snapshot.docs
+        .map((doc) => RegistrationLink.fromMap(doc.data()))
+        .toList();
+  }
 
   @override
-  Future<RegistrationLink?> getRegistrationLinkById(String linkId) =>
-      throw UnimplementedError(
-        'Firebase employee repository is not configured yet.',
-      );
+  Future<RegistrationLink?> getRegistrationLinkById(String linkId) async {
+    final doc = await _registrationLinksRef.doc(linkId).get();
+    if (doc.exists && doc.data() != null) {
+      return RegistrationLink.fromMap(doc.data()!);
+    }
+
+    final query = await _registrationLinksRef
+        .where('link_id', isEqualTo: linkId)
+        .limit(1)
+        .get();
+    if (query.docs.isNotEmpty) {
+      return RegistrationLink.fromMap(query.docs.first.data());
+    }
+
+    return null;
+  }
 
   @override
   Future<Employee> submitEmployeeRegistration({
     required String linkId,
     required Employee employeeData,
-  }) => throw UnimplementedError(
-        'Firebase employee repository is not configured yet.',
-      );
+  }) async {
+    final batch = _firestore.batch();
+    final nowIso = DateTime.now().toIso8601String();
+
+    // 1. Record submission response in `employee_responses` collection
+    final responseRef = _responsesRef.doc(linkId);
+    batch.set(responseRef, {
+      'response_id': 'resp_${responseRef.id}',
+      'link_id': linkId,
+      'submission_status': 'Submitted',
+      'submitted_at': FieldValue.serverTimestamp(),
+      'submitted_by': employeeData.emailAddress,
+      'candidate_data': _employeeToFirestore(employeeData),
+    }, SetOptions(merge: true));
+
+    // 2. Update status of `registration_links` document to Completed
+    final linkRef = _registrationLinksRef.doc(linkId);
+    batch.set(linkRef, {
+      'link_status': 'Completed',
+      'submitted_date': nowIso,
+      'submitted_by': employeeData.emailAddress,
+      'employee_name': employeeData.fullName,
+      'employee_id': employeeData.employeeId,
+      'updated_at': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    // 3. Save candidate data into `employees` collection
+    final empDocId = employeeData.employeeId.isNotEmpty
+        ? employeeData.employeeId
+        : (employeeData.id != 0
+            ? employeeData.id.toString()
+            : _employeesRef.doc().id);
+
+    final empData = _employeeToFirestore(employeeData);
+    empData['created_at'] = FieldValue.serverTimestamp();
+    batch.set(_employeesRef.doc(empDocId), empData, SetOptions(merge: true));
+
+    await batch.commit();
+    return employeeData;
+  }
 
   @override
-  Future<ColumnPreference?> getColumnPreference(String tableId) =>
-      throw UnimplementedError(
-        'Firebase employee repository is not configured yet.',
-      );
+  Future<ColumnPreference?> getColumnPreference(String tableId) async {
+    final doc = await _columnPreferencesRef.doc(tableId).get();
+    if (doc.exists && doc.data() != null) {
+      return ColumnPreference.fromMap(doc.data()!);
+    }
+    return null;
+  }
 
   @override
-  Future<void> saveColumnPreference(ColumnPreference preference) =>
-      throw UnimplementedError(
-        'Firebase employee repository is not configured yet.',
-      );
+  Future<void> saveColumnPreference(ColumnPreference preference) async {
+    await _columnPreferencesRef
+        .doc(preference.tableId)
+        .set(preference.toMap(), SetOptions(merge: true));
+  }
 }
