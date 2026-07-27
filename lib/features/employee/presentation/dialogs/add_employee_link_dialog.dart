@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../domain/registration_link.dart';
@@ -20,15 +21,29 @@ class _AddEmployeeLinkDialogState
   final _generatedByController = TextEditingController(text: 'HR Admin');
   final _orgController = TextEditingController();
   final _deptController = TextEditingController();
+  late final TextEditingController _baseUrlController;
 
   RegistrationLink? _generatedLink;
   bool _isGenerating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final origin = Uri.base.origin;
+    final initialUrl = (origin.startsWith('http') &&
+            !origin.contains('localhost') &&
+            !origin.contains('127.0.0.1'))
+        ? origin
+        : 'https://app.igreentech.in';
+    _baseUrlController = TextEditingController(text: initialUrl);
+  }
 
   @override
   void dispose() {
     _generatedByController.dispose();
     _orgController.dispose();
     _deptController.dispose();
+    _baseUrlController.dispose();
     super.dispose();
   }
 
@@ -66,17 +81,39 @@ class _AddEmployeeLinkDialogState
     );
   }
 
-  void _shareViaAction(String channel, String url) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Sharing registration link via $channel...'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+  Future<void> _shareViaAction(String channel, String url) async {
+    final text = Uri.encodeComponent(
+        'Please complete your employee onboarding registration using this link:\n$url');
+
+    Uri? uri;
+    if (channel == 'Email') {
+      uri = Uri.parse(
+          'mailto:?subject=${Uri.encodeComponent("Employee Onboarding Registration Link")}&body=$text');
+    } else if (channel == 'WhatsApp') {
+      uri = Uri.parse('https://wa.me/?text=$text');
+    } else if (channel == 'SMS') {
+      uri = Uri.parse('sms:?body=$text');
+    }
+
+    if (uri != null) {
+      try {
+        final launched =
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (!launched) {
+          _copyToClipboard(url);
+        }
+      } catch (_) {
+        _copyToClipboard(url);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final displayUrl = _generatedLink?.buildFullUrl(
+      customBaseUrl: _baseUrlController.text,
+    );
+
     return AlertDialog(
       title: Row(
         children: [
@@ -107,6 +144,15 @@ class _AddEmployeeLinkDialogState
               const SizedBox(height: 16),
 
               if (_generatedLink == null) ...[
+                TextField(
+                  controller: _baseUrlController,
+                  decoration: const InputDecoration(
+                    labelText: 'Production App Domain / Base URL *',
+                    hintText: 'e.g. https://app.igreentech.in',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 TextField(
                   controller: _generatedByController,
                   decoration: const InputDecoration(
@@ -190,7 +236,7 @@ class _AddEmployeeLinkDialogState
                       ),
                       const SizedBox(height: 10),
                       SelectableText(
-                        _generatedLink!.fullUrl,
+                        displayUrl ?? _generatedLink!.fullUrl,
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -233,22 +279,22 @@ class _AddEmployeeLinkDialogState
                       label: const Text('Open Registration Form'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: () => _copyToClipboard(_generatedLink!.fullUrl),
+                      onPressed: () => _copyToClipboard(displayUrl ?? _generatedLink!.fullUrl),
                       icon: const Icon(Icons.copy, size: 16),
                       label: const Text('Copy Link'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: () => _shareViaAction('Email', _generatedLink!.fullUrl),
+                      onPressed: () => _shareViaAction('Email', displayUrl ?? _generatedLink!.fullUrl),
                       icon: const Icon(Icons.email_outlined, size: 16),
                       label: const Text('Email'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: () => _shareViaAction('WhatsApp', _generatedLink!.fullUrl),
+                      onPressed: () => _shareViaAction('WhatsApp', displayUrl ?? _generatedLink!.fullUrl),
                       icon: const Icon(Icons.chat_bubble_outline, size: 16),
                       label: const Text('WhatsApp'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: () => _shareViaAction('SMS', _generatedLink!.fullUrl),
+                      onPressed: () => _shareViaAction('SMS', displayUrl ?? _generatedLink!.fullUrl),
                       icon: const Icon(Icons.sms_outlined, size: 16),
                       label: const Text('SMS'),
                     ),

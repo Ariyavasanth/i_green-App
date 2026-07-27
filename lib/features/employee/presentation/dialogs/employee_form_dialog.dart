@@ -152,6 +152,25 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
 
+    final employmentTypeItems = {
+      'Full-Time',
+      'Part-Time',
+      'Contract',
+      'Intern',
+      if (_employmentType.isNotEmpty) _employmentType,
+    }.toList();
+
+    final statusItems = {
+      'Active',
+      'Inactive',
+      'Onboarding',
+      'Terminated',
+      'Accepted',
+      'Pending',
+      'Rejected',
+      if (_status.isNotEmpty) _status,
+    }.toList();
+
     return AlertDialog(
       title: Row(
         children: [
@@ -258,12 +277,14 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                 _buildFieldPair(
                   isMobile: isMobile,
                   child1: DropdownButtonFormField<String>(
-                    initialValue: _employmentType,
+                    initialValue: employmentTypeItems.contains(_employmentType)
+                        ? _employmentType
+                        : employmentTypeItems.first,
                     decoration: const InputDecoration(
                       labelText: 'Employment Type',
                       border: OutlineInputBorder(),
                     ),
-                    items: ['Full-Time', 'Part-Time', 'Contract', 'Intern']
+                    items: employmentTypeItems
                         .map((t) => DropdownMenuItem(value: t, child: Text(t)))
                         .toList(),
                     onChanged: (val) {
@@ -271,12 +292,14 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                     },
                   ),
                   child2: DropdownButtonFormField<String>(
-                    initialValue: _status,
+                    initialValue: statusItems.contains(_status)
+                        ? _status
+                        : statusItems.first,
                     decoration: const InputDecoration(
                       labelText: 'Status',
                       border: OutlineInputBorder(),
                     ),
-                    items: ['Active', 'Inactive', 'Onboarding', 'Terminated']
+                    items: statusItems
                         .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                         .toList(),
                     onChanged: (val) {

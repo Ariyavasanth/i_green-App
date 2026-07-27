@@ -292,7 +292,19 @@ class _EmployeeRegistrationPageState
   }
 
   Future<void> _submitForm(RegistrationLink link) async {
+    if (_firstNameController.text.trim().isEmpty) {
+      _tabController.animateTo(0);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter First Name under Personal Info tab.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) {
+      _tabController.animateTo(0);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please fill mandatory fields marked with *'),
@@ -433,8 +445,11 @@ class _EmployeeRegistrationPageState
       body: SafeArea(
         child: Column(
           children: [
-            // Top App Bar
-            _buildTopNavBar(),
+            // Top App Bar with persistent submit action
+            linkAsync.maybeWhen(
+              data: (link) => _buildTopNavBar(link),
+              orElse: () => _buildTopNavBar(null),
+            ),
             // Scrollable Tab Bar
             _buildTabBar(),
             // Main Content Area
@@ -499,7 +514,7 @@ class _EmployeeRegistrationPageState
     );
   }
 
-  Widget _buildTopNavBar() {
+  Widget _buildTopNavBar(RegistrationLink? link) {
     final name = '${_firstNameController.text} ${_lastNameController.text}'.trim();
     return Container(
       height: 48,
@@ -529,18 +544,43 @@ class _EmployeeRegistrationPageState
             ),
           ),
           const SizedBox(width: 8),
-          const Row(
+          Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
+              if (link != null && link.linkStatus != 'Completed' && _submittedEmployee == null)
+                Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.active,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      minimumSize: const Size(0, 32),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                    ),
+                    onPressed: _isSubmitting ? null : () => _submitForm(link),
+                    icon: _isSubmitting
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.check_circle_outline, size: 16),
+                    label: Text(
+                      _isSubmitting ? 'Submitting...' : 'Submit Registration',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              const Text(
                 'Home',
                 style: TextStyle(fontSize: 12, color: AppColors.active),
               ),
-              Text(
+              const Text(
                 ' > ',
                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
               ),
-              Text(
+              const Text(
                 'Profile',
                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
               ),
@@ -1860,7 +1900,7 @@ class _EmployeeRegistrationPageState
         ),
         const SizedBox(height: 4),
         DropdownButtonFormField<String>(
-          value: items.contains(value) ? value : items.first,
+          initialValue: items.contains(value) ? value : items.first,
           onChanged: onChanged,
           style: const TextStyle(fontSize: 12, color: Colors.black87),
           icon: const Icon(Icons.keyboard_arrow_down, size: 16),
@@ -1916,7 +1956,7 @@ class _EmployeeRegistrationPageState
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withOpacity(0.3)),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
           boxShadow: const [
             BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
           ],

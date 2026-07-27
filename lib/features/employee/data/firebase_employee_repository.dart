@@ -44,9 +44,10 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   Employee _employeeFromFirestore(Map<String, dynamic> map, String docId) {
     final mutableMap = Map<String, dynamic>.from(map);
 
-    // If ID is missing, try parsing numeric part of docId or default to 0
-    if (!mutableMap.containsKey('id') || mutableMap['id'] == null) {
-      mutableMap['id'] = int.tryParse(docId.replaceAll(RegExp(r'\D'), '')) ?? 0;
+    // If ID is missing or 0, try parsing numeric part of docId or generate deterministic hash
+    if (!mutableMap.containsKey('id') || mutableMap['id'] == null || mutableMap['id'] == 0) {
+      final parsed = int.tryParse(docId.replaceAll(RegExp(r'\D'), ''));
+      mutableMap['id'] = (parsed != null && parsed != 0) ? parsed : (docId.hashCode & 0x7FFFFFFF);
     }
 
     // Convert Firestore native array lists back to JSON strings for domain model compatibility
@@ -69,6 +70,36 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   @override
   Future<List<Employee>> getEmployees() async {
     final snapshot = await _employeesRef.get();
+    if (snapshot.docs.isEmpty) {
+      // Seed sample employee if collection is currently empty
+      const sampleEmp = Employee(
+        id: 1,
+        employeeId: 'EMP-0001',
+        firstName: 'Saravanan',
+        lastName: 'G S',
+        emailAddress: 'Saravanan@igreentec.in',
+        phoneNumber: '8760098789',
+        gender: 'Male',
+        dob: '13-05-1982',
+        organizationName: 'iGreen Tech',
+        department: 'Management',
+        designation: 'Company Director',
+        employmentType: 'Full-Time',
+        joiningDate: '29-04-2017',
+        status: 'Active',
+        bloodGroup: 'B+',
+        userType: 'ADMIN',
+        aadhaarNumber: '833750993144',
+        pfNumber: '100338738050',
+        city: 'Chennai',
+        state: 'Tamil Nadu',
+      );
+      await addEmployee(sampleEmp);
+      final newSnapshot = await _employeesRef.get();
+      return newSnapshot.docs
+          .map((doc) => _employeeFromFirestore(doc.data(), doc.id))
+          .toList();
+    }
     return snapshot.docs
         .map((doc) => _employeeFromFirestore(doc.data(), doc.id))
         .toList();
@@ -83,6 +114,10 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         snapshot.docs.first.data(),
         snapshot.docs.first.id,
       );
+    }
+    final doc = await _employeesRef.doc(id.toString()).get();
+    if (doc.exists && doc.data() != null) {
+      return _employeeFromFirestore(doc.data()!, doc.id);
     }
     return null;
   }
@@ -101,9 +136,19 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
   @override
   Future<void> updateEmployee(Employee employee) async {
-    final docId = employee.employeeId.isNotEmpty
+    String docId = employee.employeeId.isNotEmpty
         ? employee.employeeId
-        : employee.id.toString();
+        : (employee.id != 0 ? employee.id.toString() : '');
+
+    if (docId.isEmpty) {
+      final snapshot =
+          await _employeesRef.where('id', isEqualTo: employee.id).limit(1).get();
+      if (snapshot.docs.isNotEmpty) {
+        docId = snapshot.docs.first.id;
+      } else {
+        docId = _employeesRef.doc().id;
+      }
+    }
 
     final data = _employeeToFirestore(employee);
     await _employeesRef.doc(docId).set(data, SetOptions(merge: true));
@@ -115,6 +160,11 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         await _employeesRef.where('id', isEqualTo: id).limit(1).get();
     if (snapshot.docs.isNotEmpty) {
       await _employeesRef.doc(snapshot.docs.first.id).delete();
+    } else {
+      final doc = await _employeesRef.doc(id.toString()).get();
+      if (doc.exists) {
+        await _employeesRef.doc(id.toString()).delete();
+      }
     }
   }
 
@@ -235,3 +285,4 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         .set(preference.toMap(), SetOptions(merge: true));
   }
 }
+

@@ -27,7 +27,23 @@ class RegistrationLink {
   final String submittedDate;
   final String submittedBy;
 
-  String get fullUrl => 'https://app.company.com/employee/register/$linkId';
+  String get fullUrl {
+    final origin = Uri.base.origin;
+    if (origin.startsWith('http') &&
+        !origin.contains('localhost') &&
+        !origin.contains('127.0.0.1')) {
+      return '$origin/#/employee/register/$linkId';
+    }
+    return 'https://app.igreentech.in/#/employee/register/$linkId';
+  }
+
+  String buildFullUrl({String? customBaseUrl}) {
+    if (customBaseUrl != null && customBaseUrl.trim().isNotEmpty) {
+      final base = customBaseUrl.trim().replaceAll(RegExp(r'/$'), '');
+      return '$base/#/employee/register/$linkId';
+    }
+    return fullUrl;
+  }
 
   Map<String, dynamic> toMap() {
     return {
