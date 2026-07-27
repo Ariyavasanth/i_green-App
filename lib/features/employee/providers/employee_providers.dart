@@ -1,14 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../organization/domain/column_preference.dart';
-import '../data/firebase_employee_repository.dart';
+import '../data/sqlite_employee_repository.dart';
 import '../domain/employee.dart';
 import '../domain/employee_repository.dart';
 import '../domain/registration_link.dart';
 
-// Switched to Firebase implementation to sync directly with Cloud Firestore.
 final employeeRepositoryProvider = Provider<EmployeeRepository>(
-  (ref) => FirebaseEmployeeRepository(),
+  (ref) => SqliteEmployeeRepository(),
 );
 
 final employeesProvider = FutureProvider<List<Employee>>(
@@ -30,11 +29,24 @@ final registrationLinkByIdProvider =
         generatedDate: '',
         expiryDate: '',
         linkStatus: 'Pending',
-        organizationName: '',
-        department: '',
+        organizationName: 'iGreen Tech',
+        department: 'Management',
       );
     }
-    return ref.watch(employeeRepositoryProvider).getRegistrationLinkById(linkId);
+    try {
+      final link = await ref.watch(employeeRepositoryProvider).getRegistrationLinkById(linkId);
+      if (link != null) return link;
+    } catch (_) {}
+    return const RegistrationLink(
+      id: 0,
+      linkId: 'new',
+      generatedBy: 'Admin',
+      generatedDate: '',
+      expiryDate: '',
+      linkStatus: 'Pending',
+      organizationName: 'iGreen Tech',
+      department: 'Management',
+    );
   },
 );
 

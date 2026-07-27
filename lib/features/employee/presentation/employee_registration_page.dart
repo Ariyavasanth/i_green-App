@@ -7,6 +7,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../domain/employee.dart';
 import '../domain/registration_link.dart';
 import '../providers/employee_providers.dart';
+import '../services/offer_letter_generator.dart';
 
 class EmployeeRegistrationPage extends ConsumerStatefulWidget {
   const EmployeeRegistrationPage({required this.linkId, super.key});
@@ -108,6 +109,53 @@ class _EmployeeRegistrationPageState
   final _linkedinController = TextEditingController();
   final _googleController = TextEditingController();
 
+  // Tab 9: Salary & Offer Letter
+  String _salaryType = 'Monthly';
+  final _totalSalaryController = TextEditingController();
+  final _basicPayController = TextEditingController();
+  final _hraController = TextEditingController();
+  final _eduAllowanceController = TextEditingController();
+  final _specialAllowanceController = TextEditingController();
+  final _taxController = TextEditingController();
+  final _pfController = TextEditingController();
+  void _onTotalSalaryChanged(String val) {
+    final cleanVal = val.replaceAll(',', '').trim();
+    final total = double.tryParse(cleanVal);
+    if (total != null && total >= 0) {
+      final basic = total * 0.50;
+      final hra = total * 0.25;
+      final edu = total * 0.25;
+      setState(() {
+        _basicPayController.text = basic == 0 ? '' : basic.toStringAsFixed(2);
+        _hraController.text = hra == 0 ? '' : hra.toStringAsFixed(2);
+        _eduAllowanceController.text = edu == 0 ? '' : edu.toStringAsFixed(2);
+      });
+    }
+  }
+
+  // Tab 10: Credentials
+  final _employeeCustomIdController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _isPasswordVisible = false;
+
+  void _generateSampleEmpId() {
+    final stamp = DateTime.now().millisecondsSinceEpoch.toString();
+    final suffix = stamp.length > 4 ? stamp.substring(stamp.length - 4) : stamp;
+    setState(() {
+      _employeeCustomIdController.text = 'EMP-$suffix';
+    });
+  }
+
+  void _generateRandomPassword() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@#';
+    final rnd = List.generate(8, (i) => chars[(DateTime.now().microsecondsSinceEpoch + i * 17) % chars.length]).join();
+    setState(() {
+      _passwordController.text = rnd;
+    });
+  }
+
+  bool get _isManagementAdd => widget.linkId == 'new' || widget.linkId.isEmpty;
+
   bool _isSubmitting = false;
   Employee? _submittedEmployee;
   String _registrationMode = 'manual';
@@ -198,7 +246,7 @@ class _EmployeeRegistrationPageState
     });
   }
 
-  final List<String> _tabs = [
+  List<String> get _tabs => [
     'Personal Info',
     'Address',
     'Education',
@@ -207,6 +255,8 @@ class _EmployeeRegistrationPageState
     'Bank Account',
     'Document',
     'Social Media',
+    if (_isManagementAdd) 'Salary & Offer Letter',
+    if (_isManagementAdd) 'Credentials',
   ];
 
   @override
@@ -270,6 +320,15 @@ class _EmployeeRegistrationPageState
     _twitterController.dispose();
     _linkedinController.dispose();
     _googleController.dispose();
+    _totalSalaryController.dispose();
+    _basicPayController.dispose();
+    _hraController.dispose();
+    _eduAllowanceController.dispose();
+    _specialAllowanceController.dispose();
+    _taxController.dispose();
+    _pfController.dispose();
+    _employeeCustomIdController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
@@ -320,7 +379,8 @@ class _EmployeeRegistrationPageState
 
       final employeeData = Employee(
         id: 0,
-        employeeId: '',
+        employeeId: _employeeCustomIdController.text.trim(),
+        temporaryPassword: _passwordController.text.trim(),
         firstName: _firstNameController.text.trim(),
         lastName: _lastNameController.text.trim(),
         emailAddress: _emailController.text.trim(),
@@ -386,6 +446,14 @@ class _EmployeeRegistrationPageState
         pfNumber: _pfNumberController.text.trim(),
         esiNumber: _esiNumberController.text.trim(),
         reportingManager: _reportingTo,
+        salaryType: _salaryType,
+        salaryTotalCtc: double.tryParse(_totalSalaryController.text.trim().replaceAll(',', '')) ?? 0.0,
+        salaryBasic: double.tryParse(_basicPayController.text.trim().replaceAll(',', '')) ?? 0.0,
+        salaryHra: double.tryParse(_hraController.text.trim().replaceAll(',', '')) ?? 0.0,
+        salaryEducationAllowance: double.tryParse(_eduAllowanceController.text.trim().replaceAll(',', '')) ?? 0.0,
+        salarySpecialAllowance: double.tryParse(_specialAllowanceController.text.trim().replaceAll(',', '')) ?? 0.0,
+        salaryTax: double.tryParse(_taxController.text.trim().replaceAll(',', '')) ?? 0.0,
+        salaryPf: double.tryParse(_pfController.text.trim().replaceAll(',', '')) ?? 0.0,
       );
 
       if (widget.linkId == 'new' || widget.linkId.isEmpty) {
@@ -502,6 +570,8 @@ class _EmployeeRegistrationPageState
                         _buildBankAccountTab(link, isMobile),
                         _buildDocumentTab(link, isMobile),
                         _buildSocialMediaTab(link, isMobile),
+                        if (_isManagementAdd) _buildSalaryOfferLetterTab(link, isMobile),
+                        if (_isManagementAdd) _buildCredentialsTab(link, isMobile),
                       ],
                     ),
                   );
@@ -1812,6 +1882,7 @@ class _EmployeeRegistrationPageState
     TextEditingController controller, {
     String? placeholder,
     int maxLines = 1,
+    ValueChanged<String>? onChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1825,6 +1896,7 @@ class _EmployeeRegistrationPageState
         TextFormField(
           controller: controller,
           maxLines: maxLines,
+          onChanged: onChanged,
           style: const TextStyle(fontSize: 12, color: Colors.black87),
           decoration: InputDecoration(
             hintText: placeholder,
@@ -1938,6 +2010,407 @@ class _EmployeeRegistrationPageState
       child: Text(
         label,
         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+      ),
+    );
+  }
+
+  // TAB 9: SALARY & OFFER LETTER
+  Widget _buildSalaryOfferLetterTab(RegistrationLink link, bool isMobile) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: const Color(0xFFEAECF0)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Section 1: Basic Salary
+            const Text(
+              'Basic Slary',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF475467),
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildRow2or3(
+              isMobile: isMobile,
+              children: [
+                _buildDropdown(
+                  'Salary Type',
+                  _salaryType,
+                  ['Monthly', 'Yearly'],
+                  (val) => setState(() => _salaryType = val ?? 'Monthly'),
+                ),
+                _buildTextField(
+                  'Total Salary',
+                  _totalSalaryController,
+                  placeholder: '85000',
+                  onChanged: _onTotalSalaryChanged,
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+
+            // Section 2: Addition
+            const Text(
+              'Addition',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF475467),
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildRow2or3(
+              isMobile: isMobile,
+              children: [
+                _buildTextField('Basic', _basicPayController, placeholder: '42500.00'),
+                _buildTextField('House Rent Allowance', _hraController, placeholder: '21250.00'),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildRow2or3(
+              isMobile: isMobile,
+              children: [
+                _buildTextField('Special Allowance', _specialAllowanceController, placeholder: '21500.00'),
+                _buildTextField('Education Allowance', _eduAllowanceController, placeholder: 'Education Allowance'),
+              ],
+            ),
+            const SizedBox(height: 24),
+
+            // Section 3: Deduction
+            const Text(
+              'Deduction',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF475467),
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildRow2or3(
+              isMobile: isMobile,
+              children: [
+                _buildTextField('Tax', _taxController, placeholder: 'tax...'),
+                _buildTextField('Provident Fund', _pfController, placeholder: '1800'),
+              ],
+            ),
+            const SizedBox(height: 28),
+
+            // Section 4: Offer Letter Generation
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAFB),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFFEAECF0)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.description_outlined, color: AppColors.primary, size: 28),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text(
+                          'Offer Letter Generation',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Generate and download Microsoft Word (.docx) offer letter with candidate details, salary structure, and company terms & conditions.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF00BFA5),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                    ),
+                    onPressed: () => OfferLetterGenerator.downloadOfferLetter(
+                      context,
+                      _buildCurrentEmployeeFromForm(link),
+                    ),
+                    icon: const Icon(Icons.file_download_outlined, size: 18),
+                    label: const Text(
+                      'Generate Offer Letter',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.active,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+              ),
+              onPressed: _isSubmitting ? null : () => _submitForm(link),
+              icon: const Icon(Icons.check, size: 16),
+              label: const Text('Save', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Employee _buildCurrentEmployeeFromForm(RegistrationLink link) {
+    return Employee(
+      id: 0,
+      employeeId: _employeeCustomIdController.text.trim(),
+      temporaryPassword: _passwordController.text.trim(),
+      firstName: _firstNameController.text.trim(),
+      lastName: _lastNameController.text.trim(),
+      emailAddress: _emailController.text.trim(),
+      phoneNumber: _phoneController.text.trim(),
+      gender: _gender,
+      dob: _dobController.text.trim(),
+      organizationName: link.organizationName.isEmpty
+          ? 'iGreen Tech'
+          : link.organizationName,
+      department: _department,
+      designation: _designation,
+      employmentType: 'Full-Time',
+      joiningDate: _joiningDateController.text.trim(),
+      status: _status,
+      bloodGroup: _bloodGroup,
+      userType: _userType,
+      contractEndDate: _contractEndDateController.text.trim(),
+      permanentAddress: _permAddressController.text.trim(),
+      permanentCity: _permCityController.text.trim(),
+      permanentCountry: _permCountryController.text.trim(),
+      sameAsPermanent: _sameAsPermanent,
+      presentAddress: _sameAsPermanent
+          ? _permAddressController.text.trim()
+          : _presAddressController.text.trim(),
+      presentCity: _sameAsPermanent
+          ? _permCityController.text.trim()
+          : _presCityController.text.trim(),
+      presentCountry: _sameAsPermanent
+          ? _permCountryController.text.trim()
+          : _presCountryController.text.trim(),
+      educationListJson: jsonEncode(_educationList.map((e) => e.toMap()).toList()),
+      experienceListJson: jsonEncode(_experienceList.map((e) => e.toMap()).toList()),
+      originalDob: _originalDobController.text.trim(),
+      personalMobile: _personalMobileController.text.trim(),
+      passportNumber: _passportController.text.trim(),
+      drivingLicenseNumber: _drivingLicenseController.text.trim(),
+      drivingLicenseBatch: _drivingLicenseBatchController.text.trim(),
+      healthIssues: _healthIssuesController.text.trim(),
+      emergencyName: _emergencyNameController.text.trim(),
+      emergencyMobile: _emergencyMobileController.text.trim(),
+      referredByName: _referredByNameController.text.trim(),
+      referredByMobile: _referredByMobileController.text.trim(),
+      fatherName: _fatherNameController.text.trim(),
+      motherName: _motherNameController.text.trim(),
+      maritalStatus: _maritalStatus,
+      spouseName: _spouseNameController.text.trim(),
+      kids1Name: _kids1NameController.text.trim(),
+      kids2Name: _kids2NameController.text.trim(),
+      kids3Name: _kids3NameController.text.trim(),
+      bankAccountHolder: _bankHolderController.text.trim(),
+      bankName: _bankNameController.text.trim(),
+      bankAccountNumber: _bankAccNumController.text.trim(),
+      bankIfsc: _bankIfscController.text.trim(),
+      bankBranch: _bankBranchController.text.trim(),
+      bankAccountType: _bankAccountType,
+      panNumber: _panController.text.trim(),
+      aadhaarNumber: _aadhaarController.text.trim(),
+      documentListJson: jsonEncode(_documentList.map((e) => e.toMap()).toList()),
+      facebookUrl: _facebookController.text.trim(),
+      twitterUrl: _twitterController.text.trim(),
+      linkedinUrl: _linkedinController.text.trim(),
+      googleUrl: _googleController.text.trim(),
+      pfNumber: _pfNumberController.text.trim(),
+      esiNumber: _esiNumberController.text.trim(),
+      reportingManager: _reportingTo,
+      salaryType: _salaryType,
+      salaryTotalCtc: double.tryParse(_totalSalaryController.text.trim().replaceAll(',', '')) ?? 0.0,
+      salaryBasic: double.tryParse(_basicPayController.text.trim().replaceAll(',', '')) ?? 0.0,
+      salaryHra: double.tryParse(_hraController.text.trim().replaceAll(',', '')) ?? 0.0,
+      salaryEducationAllowance: double.tryParse(_eduAllowanceController.text.trim().replaceAll(',', '')) ?? 0.0,
+      salarySpecialAllowance: double.tryParse(_specialAllowanceController.text.trim().replaceAll(',', '')) ?? 0.0,
+      salaryTax: double.tryParse(_taxController.text.trim().replaceAll(',', '')) ?? 0.0,
+      salaryPf: double.tryParse(_pfController.text.trim().replaceAll(',', '')) ?? 0.0,
+    );
+  }
+
+  // TAB 10: CREDENTIALS
+  Widget _buildCredentialsTab(RegistrationLink link, bool isMobile) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: const Color(0xFFEAECF0)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Account Credentials',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF475467),
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildRow2or3(
+              isMobile: isMobile,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Employee ID / Username',
+                          style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                        ),
+                        InkWell(
+                          onTap: _generateSampleEmpId,
+                          child: const Text(
+                            'Auto Generate ID',
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.active),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    TextFormField(
+                      controller: _employeeCustomIdController,
+                      style: const TextStyle(fontSize: 12, color: Colors.black87),
+                      decoration: const InputDecoration(
+                        hintText: 'e.g. EMP-0002 (Leave blank for auto-id)',
+                        hintStyle: TextStyle(fontSize: 12, color: Colors.black38),
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                        border: OutlineInputBorder(
+                          borderSide: BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderSide: BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderSide: BorderSide(color: AppColors.active, width: 1.2),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                _buildDropdown(
+                  'User Role / Type',
+                  _userType,
+                  ['ADMIN', 'EMPLOYEE', 'HR', 'MANAGER'],
+                  (val) => setState(() => _userType = val ?? 'ADMIN'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _buildRow2or3(
+              isMobile: isMobile,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Temporary Password',
+                          style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                        ),
+                        InkWell(
+                          onTap: _generateRandomPassword,
+                          child: const Text(
+                            'Generate Password',
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.active),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    TextFormField(
+                      controller: _passwordController,
+                      obscureText: !_isPasswordVisible,
+                      style: const TextStyle(fontSize: 12, color: Colors.black87),
+                      decoration: InputDecoration(
+                        hintText: 'Enter password or generate',
+                        hintStyle: const TextStyle(fontSize: 12, color: Colors.black38),
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                            size: 16,
+                            color: AppColors.textSecondary,
+                          ),
+                          onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+                        ),
+                        border: const OutlineInputBorder(
+                          borderSide: BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+                        ),
+                        enabledBorder: const OutlineInputBorder(
+                          borderSide: BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+                        ),
+                        focusedBorder: const OutlineInputBorder(
+                          borderSide: BorderSide(color: AppColors.active, width: 1.2),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                _buildDropdown(
+                  'Account Status',
+                  _status,
+                  ['ACTIVE', 'INACTIVE', 'SUSPENDED'],
+                  (val) => setState(() => _status = val ?? 'ACTIVE'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 28),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.active,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+              ),
+              onPressed: _isSubmitting ? null : () => _submitForm(link),
+              icon: const Icon(Icons.check, size: 16),
+              label: const Text('Save Credentials', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -9,9 +9,13 @@ import 'firebase_options.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    debugPrint('Firebase initializeApp notice: $e');
+  }
   // Configure the native SQLite factory before any repository opens the DB.
   initializeDatabaseFactory();
   runApp(const ProviderScope(child: BooksApp()));

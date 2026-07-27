@@ -112,9 +112,14 @@ class SqliteEmployeeRepository implements EmployeeRepository {
         linkedin_url TEXT,
         google_url TEXT,
         personal_history_details TEXT,
+        salary_type TEXT,
         salary_basic REAL,
         salary_hra REAL,
+        salary_education_allowance REAL,
+        salary_special_allowance REAL,
         salary_allowances REAL,
+        salary_tax REAL,
+        salary_pf REAL,
         salary_total_ctc REAL,
         insurance_policy_no TEXT,
         insurance_provider TEXT,
@@ -198,6 +203,11 @@ class SqliteEmployeeRepository implements EmployeeRepository {
       'twitter_url': 'TEXT',
       'linkedin_url': 'TEXT',
       'google_url': 'TEXT',
+      'salary_type': 'TEXT',
+      'salary_education_allowance': 'REAL',
+      'salary_special_allowance': 'REAL',
+      'salary_tax': 'REAL',
+      'salary_pf': 'REAL',
     };
 
     for (final entry in requiredColumns.entries) {
