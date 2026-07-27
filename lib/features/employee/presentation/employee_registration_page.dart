@@ -790,150 +790,152 @@ class _EmployeeRegistrationPageState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Registration Mode Selection (Radio buttons) & Accepted Response Dropdown
-        Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8F9FA),
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: const Color(0xFFE9ECEF)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Registration Entry Mode:',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
+        if (_isManagementAdd) ...[
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8F9FA),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: const Color(0xFFE9ECEF)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Registration Entry Mode:',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Radio<String>(
-                    value: 'manual',
-                    groupValue: _registrationMode,
-                    activeColor: AppColors.active,
-                    onChanged: (val) {
-                      if (val != null) {
-                        setState(() {
-                          _registrationMode = val;
-                          _selectedAcceptedEmpId = null;
-                        });
-                      }
-                    },
-                  ),
-                  const Text('Manual Entry', style: TextStyle(fontSize: 13)),
-                  const SizedBox(width: 24),
-                  Radio<String>(
-                    value: 'accepted_response',
-                    groupValue: _registrationMode,
-                    activeColor: AppColors.active,
-                    onChanged: (val) {
-                      if (val != null) {
-                        setState(() {
-                          _registrationMode = val;
-                        });
-                      }
-                    },
-                  ),
-                  const Text('Import Accepted Response', style: TextStyle(fontSize: 13)),
-                ],
-              ),
-              if (_registrationMode == 'accepted_response') ...[
-                const SizedBox(height: 10),
-                Consumer(
-                  builder: (context, ref, child) {
-                    final employeesAsync = ref.watch(employeesProvider);
-                    return employeesAsync.when(
-                      loading: () => const SizedBox(
-                        height: 36,
-                        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                      ),
-                      error: (err, _) => Text(
-                        'Error loading responses: $err',
-                        style: const TextStyle(color: Colors.red, fontSize: 12),
-                      ),
-                      data: (allEmps) {
-                        final acceptedList = allEmps
-                            .where((e) => e.status.toLowerCase() == 'accepted')
-                            .toList();
-
-                        if (acceptedList.isEmpty) {
-                          return const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 4),
-                            child: Text(
-                              'No accepted responses available yet. (Accept candidate responses in the Response UI first).',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.orange,
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                          );
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Radio<String>(
+                      value: 'manual',
+                      groupValue: _registrationMode,
+                      activeColor: AppColors.active,
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() {
+                            _registrationMode = val;
+                            _selectedAcceptedEmpId = null;
+                          });
                         }
+                      },
+                    ),
+                    const Text('Manual Entry', style: TextStyle(fontSize: 13)),
+                    const SizedBox(width: 24),
+                    Radio<String>(
+                      value: 'accepted_response',
+                      groupValue: _registrationMode,
+                      activeColor: AppColors.active,
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() {
+                            _registrationMode = val;
+                          });
+                        }
+                      },
+                    ),
+                    const Text('Import Accepted Response', style: TextStyle(fontSize: 13)),
+                  ],
+                ),
+                if (_registrationMode == 'accepted_response') ...[
+                  const SizedBox(height: 10),
+                  Consumer(
+                    builder: (context, ref, child) {
+                      final employeesAsync = ref.watch(employeesProvider);
+                      return employeesAsync.when(
+                        loading: () => const SizedBox(
+                          height: 36,
+                          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                        ),
+                        error: (err, _) => Text(
+                          'Error loading responses: $err',
+                          style: const TextStyle(color: Colors.red, fontSize: 12),
+                        ),
+                        data: (allEmps) {
+                          final acceptedList = allEmps
+                              .where((e) => e.status.toLowerCase() == 'accepted')
+                              .toList();
 
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Select Accepted Applicant / Member Name *',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textSecondary,
+                          if (acceptedList.isEmpty) {
+                            return const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 4),
+                              child: Text(
+                                'No accepted responses available yet. (Accept candidate responses in the Response UI first).',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.orange,
+                                  fontStyle: FontStyle.italic,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            DropdownButtonFormField<int>(
-                              value: acceptedList.any((e) => e.id == _selectedAcceptedEmpId)
-                                  ? _selectedAcceptedEmpId
-                                  : null,
-                              hint: const Text('Choose accepted member name...', style: TextStyle(fontSize: 12)),
-                              isDense: true,
-                              decoration: const InputDecoration(
+                            );
+                          }
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Select Accepted Applicant / Member Name *',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              DropdownButtonFormField<int>(
+                                value: acceptedList.any((e) => e.id == _selectedAcceptedEmpId)
+                                    ? _selectedAcceptedEmpId
+                                    : null,
+                                hint: const Text('Choose accepted member name...', style: TextStyle(fontSize: 12)),
                                 isDense: true,
-                                contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                border: OutlineInputBorder(),
-                              ),
-                              items: acceptedList.map((emp) {
-                                return DropdownMenuItem<int>(
-                                  value: emp.id,
-                                  child: Text(
-                                    '${emp.fullName} (${emp.emailAddress.isEmpty ? emp.department : emp.emailAddress})',
-                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                                  ),
-                                );
-                              }).toList(),
-                              onChanged: (selectedId) {
-                                if (selectedId != null) {
-                                  final selectedEmp = acceptedList.firstWhere((e) => e.id == selectedId);
-                                  setState(() {
-                                    _selectedAcceptedEmpId = selectedId;
-                                  });
-                                  _populateFromEmployee(selectedEmp);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Auto-fetched all details for ${selectedEmp.fullName}'),
-                                      behavior: SnackBarBehavior.floating,
-                                      duration: const Duration(seconds: 2),
+                                decoration: const InputDecoration(
+                                  isDense: true,
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  border: OutlineInputBorder(),
+                                ),
+                                items: acceptedList.map((emp) {
+                                  return DropdownMenuItem<int>(
+                                    value: emp.id,
+                                    child: Text(
+                                      '${emp.fullName} (${emp.emailAddress.isEmpty ? emp.department : emp.emailAddress})',
+                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                                     ),
                                   );
-                                }
-                              },
-                            ),
-                          ],
-                        );
-                      },
-                    );
-                  },
-                ),
+                                }).toList(),
+                                onChanged: (selectedId) {
+                                  if (selectedId != null) {
+                                    final selectedEmp = acceptedList.firstWhere((e) => e.id == selectedId);
+                                    setState(() {
+                                      _selectedAcceptedEmpId = selectedId;
+                                    });
+                                    _populateFromEmployee(selectedEmp);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Auto-fetched all details for ${selectedEmp.fullName}'),
+                                        behavior: SnackBarBehavior.floating,
+                                        duration: const Duration(seconds: 2),
+                                      ),
+                                    );
+                                  }
+                                },
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
-        ),
+        ],
         _buildRow2or3(
           isMobile: isMobile,
           children: [
