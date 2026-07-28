@@ -1039,13 +1039,13 @@ class _EmployeeRegistrationPageState
               _buildDropdown(
                 'Department',
                 _department,
-                ['Management', 'Engineering', 'HR', 'Finance', 'Operations', 'Sales', 'Marketing'],
+                {...Employee.departmentOptions, if (_department.isNotEmpty) _department}.toList(),
                 (val) => setState(() => _department = val!),
               ),
               _buildDropdown(
                 'Designation',
                 _designation,
-                ['Company Director', 'Software Engineer', 'HR Manager', 'Financial Analyst', 'Team Lead', 'Associate'],
+                {...Employee.designationOptions, if (_designation.isNotEmpty) _designation}.toList(),
                 (val) => setState(() => _designation = val!),
               ),
               _buildDateField('Date Of Joining', _joiningDateController, placeholder: '29-04-2017'),

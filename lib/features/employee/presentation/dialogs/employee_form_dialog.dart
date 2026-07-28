@@ -42,8 +42,16 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
     _emailController = TextEditingController(text: emp?.emailAddress ?? '');
     _phoneController = TextEditingController(text: emp?.phoneNumber ?? '');
     _orgController = TextEditingController(text: emp?.organizationName ?? '');
-    _deptController = TextEditingController(text: emp?.department ?? '');
-    _designationController = TextEditingController(text: emp?.designation ?? '');
+    _deptController = TextEditingController(
+      text: (emp?.department ?? '').isNotEmpty
+          ? emp!.department
+          : Employee.departmentOptions.first,
+    );
+    _designationController = TextEditingController(
+      text: (emp?.designation ?? '').isNotEmpty
+          ? emp!.designation
+          : Employee.designationOptions.first,
+    );
     _joiningDateController = TextEditingController(
       text: emp?.joiningDate ?? DateTime.now().toString().split(' ')[0],
     );
@@ -253,25 +261,47 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                     ),
                     validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
                   ),
-                  child2: TextFormField(
-                    controller: _deptController,
+                  child2: DropdownButtonFormField<String>(
+                    initialValue: {
+                      ...Employee.departmentOptions,
+                      if (_deptController.text.isNotEmpty) _deptController.text,
+                    }.contains(_deptController.text)
+                        ? _deptController.text
+                        : Employee.departmentOptions.first,
                     decoration: const InputDecoration(
                       labelText: 'Department *',
                       border: OutlineInputBorder(),
                     ),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                    items: {
+                      ...Employee.departmentOptions,
+                      if (_deptController.text.isNotEmpty) _deptController.text,
+                    }.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
+                    onChanged: (val) {
+                      if (val != null) setState(() => _deptController.text = val);
+                    },
                   ),
                 ),
                 const SizedBox(height: 12),
                 _buildFieldPair(
                   isMobile: isMobile,
-                  child1: TextFormField(
-                    controller: _designationController,
+                  child1: DropdownButtonFormField<String>(
+                    initialValue: {
+                      ...Employee.designationOptions,
+                      if (_designationController.text.isNotEmpty) _designationController.text,
+                    }.contains(_designationController.text)
+                        ? _designationController.text
+                        : Employee.designationOptions.first,
                     decoration: const InputDecoration(
                       labelText: 'Designation *',
                       border: OutlineInputBorder(),
                     ),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                    items: {
+                      ...Employee.designationOptions,
+                      if (_designationController.text.isNotEmpty) _designationController.text,
+                    }.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
+                    onChanged: (val) {
+                      if (val != null) setState(() => _designationController.text = val);
+                    },
                   ),
                   child2: TextFormField(
                     controller: _joiningDateController,
