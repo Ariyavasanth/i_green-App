@@ -50,6 +50,7 @@ class _EmployeeRegistrationPageState
   final _pfNumberController = TextEditingController();
   final _esiNumberController = TextEditingController();
   String _reportingTo = 'Saravanan G S';
+  String _leaveType = 'As Needed';
   String _selectedFileName = 'No file chosen';
 
   // Tab 2: Address
@@ -196,6 +197,7 @@ class _EmployeeRegistrationPageState
       _pfNumberController.text = emp.pfNumber;
       _esiNumberController.text = emp.esiNumber;
       if (emp.reportingManager.isNotEmpty) _reportingTo = emp.reportingManager;
+      if (emp.leaveType.isNotEmpty) _leaveType = emp.leaveType;
 
       _permAddressController.text = emp.permanentAddress;
       _permCityController.text = emp.permanentCity;
@@ -505,6 +507,7 @@ class _EmployeeRegistrationPageState
         pfNumber: _pfNumberController.text.trim(),
         esiNumber: _esiNumberController.text.trim(),
         reportingManager: _reportingTo,
+        leaveType: _leaveType,
         salaryType: _salaryType,
         salaryTotalCtc: double.tryParse(_totalSalaryController.text.trim().replaceAll(',', '')) ?? 0.0,
         salaryBasic: double.tryParse(_basicPayController.text.trim().replaceAll(',', '')) ?? 0.0,
@@ -1071,7 +1074,12 @@ class _EmployeeRegistrationPageState
                 ['Saravanan G S', 'John Doe', 'Jane Smith', 'None'],
                 (val) => setState(() => _reportingTo = val!),
               ),
-              const SizedBox.shrink(),
+              _buildDropdown(
+                'Leave Type',
+                _leaveType,
+                Employee.leaveTypeOptions,
+                (val) => setState(() => _leaveType = val!),
+              ),
             ],
           ),
         ] else ...[

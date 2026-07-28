@@ -29,6 +29,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
 
   String _employmentType = 'Full-Time';
   String _status = 'Active';
+  String _leaveType = 'As Needed';
   bool _isSaving = false;
   late Set<String> _selectedPermissions;
 
@@ -58,6 +59,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
     if (emp != null) {
       _employmentType = emp.employmentType.isEmpty ? 'Full-Time' : emp.employmentType;
       _status = emp.status.isEmpty ? 'Active' : emp.status;
+      _leaveType = emp.leaveType.isEmpty ? 'As Needed' : emp.leaveType;
       _selectedPermissions = emp.accessPermissions.isNotEmpty
           ? Set<String>.from(emp.accessPermissions)
           : Set<String>.from(Employee.allSidebarPermissions);
@@ -118,6 +120,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
         employmentType: _employmentType,
         joiningDate: _joiningDateController.text.trim(),
         status: _status,
+        leaveType: _leaveType,
         accessPermissions: _selectedPermissions.toList(),
       );
 
@@ -344,6 +347,22 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                       if (val != null) setState(() => _status = val);
                     },
                   ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: Employee.leaveTypeOptions.contains(_leaveType)
+                      ? _leaveType
+                      : Employee.leaveTypeOptions.first,
+                  decoration: const InputDecoration(
+                    labelText: 'Leave Type',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: Employee.leaveTypeOptions
+                      .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                      .toList(),
+                  onChanged: (val) {
+                    if (val != null) setState(() => _leaveType = val);
+                  },
                 ),
                 const SizedBox(height: 20),
                 const Divider(),

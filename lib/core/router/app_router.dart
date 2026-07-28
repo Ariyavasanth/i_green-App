@@ -25,6 +25,7 @@ import '../../features/employee/presentation/responses_page.dart';
 import '../../features/employee/presentation/employee_management_page.dart';
 import '../../features/employee/domain/employee.dart';
 import '../../features/employee/presentation/employee_registration_page.dart';
+import '../../features/leave/presentation/leave_page.dart';
 import '../../screens/login_screen.dart';
 import '../../screens/customers/active_customers_list.dart';
 import '../../screens/customers/new_customer_form.dart';
@@ -74,7 +75,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/leave',
-            builder: (_, _) => const SectionPage(title: 'Leave'),
+            builder: (_, _) => const LeavePage(),
           ),
           GoRoute(
             path: '/loan',

@@ -210,6 +210,7 @@ class SqliteEmployeeRepository implements EmployeeRepository {
       'salary_tax': 'REAL',
       'salary_pf': 'REAL',
       'access_permissions': 'TEXT',
+      'leave_type': 'TEXT',
     };
 
     for (final entry in requiredColumns.entries) {

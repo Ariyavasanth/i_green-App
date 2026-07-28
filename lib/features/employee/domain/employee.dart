@@ -190,6 +190,7 @@ class Employee {
     this.pfUan = '',
     this.esiNumber = '',
     this.leaveDetails = '',
+    this.leaveType = 'As Needed',
     this.companyAssets = '',
     this.reportingManager = '',
     this.teamName = '',
@@ -330,6 +331,12 @@ class Employee {
     'Factory Manager',
   ];
 
+  static const List<String> leaveTypeOptions = [
+    'As Needed',
+    'Once a Month',
+    'No Leave',
+  ];
+
   final int id;
   final String employeeId;
   final String firstName;
@@ -432,6 +439,7 @@ class Employee {
   final String esiNumber;
 
   final String leaveDetails;
+  final String leaveType;
   final String companyAssets;
 
   final String reportingManager;
@@ -563,6 +571,7 @@ class Employee {
       'pf_uan': pfUan,
       'esi_number': esiNumber,
       'leave_details': leaveDetails,
+      'leave_type': leaveType,
       'company_assets': companyAssets,
       'reporting_manager': reportingManager,
       'team_name': teamName,
@@ -662,6 +671,7 @@ class Employee {
       pfUan: map['pf_uan'] as String? ?? '',
       esiNumber: map['esi_number'] as String? ?? '',
       leaveDetails: map['leave_details'] as String? ?? '',
+      leaveType: map['leave_type'] as String? ?? 'As Needed',
       companyAssets: map['company_assets'] as String? ?? '',
       reportingManager: map['reporting_manager'] as String? ?? '',
       teamName: map['team_name'] as String? ?? '',
@@ -765,6 +775,7 @@ class Employee {
     String? pfUan,
     String? esiNumber,
     String? leaveDetails,
+    String? leaveType,
     String? companyAssets,
     String? reportingManager,
     String? teamName,
@@ -856,6 +867,7 @@ class Employee {
       pfUan: pfUan ?? this.pfUan,
       esiNumber: esiNumber ?? this.esiNumber,
       leaveDetails: leaveDetails ?? this.leaveDetails,
+      leaveType: leaveType ?? this.leaveType,
       companyAssets: companyAssets ?? this.companyAssets,
       reportingManager: reportingManager ?? this.reportingManager,
       teamName: teamName ?? this.teamName,
