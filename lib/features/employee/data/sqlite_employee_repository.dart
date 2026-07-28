@@ -132,7 +132,8 @@ class SqliteEmployeeRepository implements EmployeeRepository {
         reporting_manager TEXT,
         team_name TEXT,
         disciplinary_records TEXT,
-        temporary_password TEXT
+        temporary_password TEXT,
+        access_permissions TEXT
       )
     ''');
 
@@ -208,6 +209,7 @@ class SqliteEmployeeRepository implements EmployeeRepository {
       'salary_special_allowance': 'REAL',
       'salary_tax': 'REAL',
       'salary_pf': 'REAL',
+      'access_permissions': 'TEXT',
     };
 
     for (final entry in requiredColumns.entries) {

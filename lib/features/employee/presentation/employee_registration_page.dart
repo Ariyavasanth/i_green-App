@@ -143,6 +143,9 @@ class _EmployeeRegistrationPageState
   final _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
 
+  // Tab 11: Access Permissions
+  late Set<String> _selectedPermissions;
+
   void _generateSampleEmpId() {
     final stamp = DateTime.now().millisecondsSinceEpoch.toString();
     final suffix = stamp.length > 4 ? stamp.substring(stamp.length - 4) : stamp;
@@ -268,6 +271,10 @@ class _EmployeeRegistrationPageState
           _documentList.addAll(parsed.map((e) => DocumentItem.fromMap(Map<String, dynamic>.from(e))));
         } catch (_) {}
       }
+
+      if (emp.accessPermissions.isNotEmpty) {
+        _selectedPermissions = Set<String>.from(emp.accessPermissions);
+      }
     });
   }
 
@@ -282,11 +289,15 @@ class _EmployeeRegistrationPageState
     'Social Media',
     if (_isManagementAdd) 'Salary & Offer Letter',
     if (_isManagementAdd) 'Credentials',
+    if (_isManagementAdd) 'Access Permissions',
   ];
 
   @override
   void initState() {
     super.initState();
+    _selectedPermissions = widget.employee != null && widget.employee!.accessPermissions.isNotEmpty
+        ? Set<String>.from(widget.employee!.accessPermissions)
+        : Set<String>.from(Employee.allSidebarPermissions);
     _tabController = TabController(length: _tabs.length, vsync: this);
     if (widget.employee != null) {
       _populateFromEmployee(widget.employee!);
@@ -378,7 +389,7 @@ class _EmployeeRegistrationPageState
     }
   }
 
-  Future<void> _submitForm(RegistrationLink link) async {
+  Future<void> _submitForm(RegistrationLink? link) async {
     if (_firstNameController.text.trim().isEmpty) {
       _tabController.animateTo(0);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -415,9 +426,9 @@ class _EmployeeRegistrationPageState
         phoneNumber: _phoneController.text.trim(),
         gender: _gender,
         dob: _dobController.text.trim(),
-        organizationName: link.organizationName.isEmpty
+        organizationName: (link?.organizationName ?? '').isEmpty
             ? 'iGreen Tech'
-            : link.organizationName,
+            : link!.organizationName,
         department: _department,
         designation: _designation,
         employmentType: 'Full-Time',
@@ -482,6 +493,7 @@ class _EmployeeRegistrationPageState
         salarySpecialAllowance: double.tryParse(_specialAllowanceController.text.trim().replaceAll(',', '')) ?? 0.0,
         salaryTax: double.tryParse(_taxController.text.trim().replaceAll(',', '')) ?? 0.0,
         salaryPf: double.tryParse(_pfController.text.trim().replaceAll(',', '')) ?? 0.0,
+        accessPermissions: _selectedPermissions.toList(),
       );
 
       if (_isEditing) {
@@ -607,6 +619,7 @@ class _EmployeeRegistrationPageState
                           _buildSocialMediaTab(editLink, isMobile),
                           if (_isManagementAdd) _buildSalaryOfferLetterTab(editLink, isMobile),
                           if (_isManagementAdd) _buildCredentialsTab(editLink, isMobile),
+                          if (_isManagementAdd) _buildAccessPermissionsTab(editLink, isMobile),
                         ],
                       ),
                     );
@@ -658,6 +671,7 @@ class _EmployeeRegistrationPageState
                         _buildSocialMediaTab(link, isMobile),
                         if (_isManagementAdd) _buildSalaryOfferLetterTab(link, isMobile),
                         if (_isManagementAdd) _buildCredentialsTab(link, isMobile),
+                        if (_isManagementAdd) _buildAccessPermissionsTab(link, isMobile),
                       ],
                     ),
                   );
@@ -2486,7 +2500,7 @@ class _EmployeeRegistrationPageState
   }
 
   // TAB 10: CREDENTIALS
-  Widget _buildCredentialsTab(RegistrationLink link, bool isMobile) {
+  Widget _buildCredentialsTab(RegistrationLink? link, bool isMobile) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Container(
@@ -2637,6 +2651,182 @@ class _EmployeeRegistrationPageState
               label: const Text('Save Credentials', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAccessPermissionsTab(RegistrationLink? link, bool isMobile) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Center(
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 900),
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFE4E7EC)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.security, size: 22, color: AppColors.active),
+                  const SizedBox(width: 10),
+                  const Text(
+                    'Access Permissions',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF475467),
+                    ),
+                  ),
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        if (_selectedPermissions.length ==
+                            Employee.allSidebarPermissions.length) {
+                          _selectedPermissions.clear();
+                        } else {
+                          _selectedPermissions =
+                              Set<String>.from(Employee.allSidebarPermissions);
+                        }
+                      });
+                    },
+                    icon: Icon(
+                      _selectedPermissions.length ==
+                              Employee.allSidebarPermissions.length
+                          ? Icons.deselect
+                          : Icons.select_all,
+                      size: 16,
+                      color: AppColors.active,
+                    ),
+                    label: Text(
+                      _selectedPermissions.length ==
+                              Employee.allSidebarPermissions.length
+                          ? 'Deselect All'
+                          : 'Select All',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.active,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Select which sidebar menu options this employee is allowed to view and access upon login:',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9FAFB),
+                  border: Border.all(color: const Color(0xFFEAECF0)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Wrap(
+                  spacing: 12,
+                  runSpacing: 10,
+                  children: Employee.allSidebarPermissions.map((permission) {
+                    final isSelected = _selectedPermissions.contains(permission);
+                    return InkWell(
+                      onTap: () {
+                        setState(() {
+                          if (isSelected) {
+                            _selectedPermissions.remove(permission);
+                          } else {
+                            _selectedPermissions.add(permission);
+                          }
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        width: isMobile ? double.infinity : 270,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppColors.active.withValues(alpha: 0.05)
+                              : Colors.white,
+                          border: Border.all(
+                            color: isSelected
+                                ? AppColors.active.withValues(alpha: 0.4)
+                                : const Color(0xFFD0D5DD),
+                          ),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: Checkbox(
+                                value: isSelected,
+                                activeColor: AppColors.active,
+                                onChanged: (val) {
+                                  setState(() {
+                                    if (val == true) {
+                                      _selectedPermissions.add(permission);
+                                    } else {
+                                      _selectedPermissions.remove(permission);
+                                    }
+                                  });
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                permission,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w600
+                                      : FontWeight.w400,
+                                  color: isSelected
+                                      ? Colors.black87
+                                      : Colors.black54,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 28),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.active,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                onPressed: _isSubmitting ? null : () => _submitForm(link),
+                icon: const Icon(Icons.check, size: 16),
+                label: const Text(
+                  'Save Permissions',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

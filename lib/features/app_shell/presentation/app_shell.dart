@@ -9,8 +9,39 @@ import '../../../core/widgets/visual_effects.dart';
 import '../../../widgets/navigation/sidebar_drawer.dart';
 import '../../authentication/providers/authentication_providers.dart';
 import '../../books/providers/books_providers.dart';
+import '../../employee/domain/employee.dart';
+import '../../employee/providers/employee_providers.dart';
 
 final sidebarExpandedProvider = StateProvider<bool>((ref) => true);
+
+final userDestinationsProvider = Provider<List<SidebarDestination>>((ref) {
+  final userEmail = ref.watch(currentUserEmailProvider);
+  if (userEmail == null || userEmail.trim().isEmpty) {
+    return AppShell.destinations;
+  }
+
+  final employeesAsync = ref.watch(employeesProvider);
+  return employeesAsync.maybeWhen(
+    data: (employees) {
+      final matchingEmp = employees.where(
+        (e) => e.emailAddress.trim().toLowerCase() == userEmail.trim().toLowerCase(),
+      ).toList();
+
+      if (matchingEmp.isNotEmpty) {
+        final emp = matchingEmp.first;
+        // If employee has custom access permissions defined, filter sidebar options
+        if (emp.accessPermissions.isNotEmpty) {
+          final allowed = emp.accessPermissions.toSet();
+          return AppShell.destinations
+              .where((d) => allowed.contains(d.label))
+              .toList();
+        }
+      }
+      return AppShell.destinations;
+    },
+    orElse: () => AppShell.destinations,
+  );
+});
 
 class AppShell extends ConsumerWidget {
   const AppShell({
@@ -127,11 +158,13 @@ class AppShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final expanded = ref.watch(sidebarExpandedProvider);
+    final activeDestinations = ref.watch(userDestinationsProvider);
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < AppBreakpoints.laptop;
         final sidebar = SidebarDrawer(
-          destinations: destinations,
+          destinations: activeDestinations,
           currentLocation: currentLocation,
           expanded: compact || expanded,
           onSelected: (path) {
@@ -139,6 +172,7 @@ class AppShell extends ConsumerWidget {
             if (compact) Navigator.of(context).pop();
           },
           onLogout: () async {
+            ref.read(currentUserEmailProvider.notifier).state = null;
             await ref.read(authenticationRepositoryProvider).signOut();
             if (context.mounted) context.go('/login');
           },

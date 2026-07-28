@@ -7,3 +7,5 @@ import '../domain/authentication_repository.dart';
 final authenticationRepositoryProvider = Provider<AuthenticationRepository>(
   (ref) => SqliteAuthenticationRepository(),
 );
+
+final currentUserEmailProvider = StateProvider<String?>((ref) => null);

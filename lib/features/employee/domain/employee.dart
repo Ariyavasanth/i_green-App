@@ -195,7 +195,30 @@ class Employee {
     this.teamName = '',
     this.disciplinaryRecords = '',
     this.temporaryPassword = '',
+    this.accessPermissions = const [],
   });
+
+  static const List<String> allSidebarPermissions = [
+    'Home',
+    'Organization Management',
+    'Organization Structure',
+    'Responses',
+    'Employee Management',
+    'Items',
+    'Inventory Adjustments',
+    'Customers',
+    'Quotes',
+    'Sales Orders',
+    'Invoices',
+    'Delivery Challans',
+    'Payments Received',
+    'Credit Notes',
+    'e-Way Bills',
+    'Vendors',
+    'Expenses',
+    'Purchase Orders',
+    'Bills',
+  ];
 
   final int id;
   final String employeeId;
@@ -306,6 +329,7 @@ class Employee {
 
   final String disciplinaryRecords;
   final String temporaryPassword;
+  final List<String> accessPermissions;
 
   String get fullName => '$firstName $lastName'.trim();
 
@@ -434,6 +458,7 @@ class Employee {
       'team_name': teamName,
       'disciplinary_records': disciplinaryRecords,
       'temporary_password': temporaryPassword,
+      'access_permissions': jsonEncode(accessPermissions),
     };
   }
 
@@ -532,6 +557,17 @@ class Employee {
       teamName: map['team_name'] as String? ?? '',
       disciplinaryRecords: map['disciplinary_records'] as String? ?? '',
       temporaryPassword: map['temporary_password'] as String? ?? '',
+      accessPermissions: map['access_permissions'] != null && (map['access_permissions'] as String).isNotEmpty
+          ? () {
+              try {
+                final decoded = jsonDecode(map['access_permissions'] as String);
+                if (decoded is List) {
+                  return decoded.map((e) => e.toString()).toList();
+                }
+              } catch (_) {}
+              return <String>[];
+            }()
+          : <String>[],
     );
   }
 
@@ -624,6 +660,7 @@ class Employee {
     String? teamName,
     String? disciplinaryRecords,
     String? temporaryPassword,
+    List<String>? accessPermissions,
   }) {
     return Employee(
       id: id ?? this.id,
@@ -714,6 +751,7 @@ class Employee {
       teamName: teamName ?? this.teamName,
       disciplinaryRecords: disciplinaryRecords ?? this.disciplinaryRecords,
       temporaryPassword: temporaryPassword ?? this.temporaryPassword,
+      accessPermissions: accessPermissions ?? this.accessPermissions,
     );
   }
 }

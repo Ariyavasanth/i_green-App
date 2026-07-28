@@ -30,6 +30,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
   String _employmentType = 'Full-Time';
   String _status = 'Active';
   bool _isSaving = false;
+  late Set<String> _selectedPermissions;
 
   @override
   void initState() {
@@ -49,6 +50,11 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
     if (emp != null) {
       _employmentType = emp.employmentType.isEmpty ? 'Full-Time' : emp.employmentType;
       _status = emp.status.isEmpty ? 'Active' : emp.status;
+      _selectedPermissions = emp.accessPermissions.isNotEmpty
+          ? Set<String>.from(emp.accessPermissions)
+          : Set<String>.from(Employee.allSidebarPermissions);
+    } else {
+      _selectedPermissions = Set<String>.from(Employee.allSidebarPermissions);
     }
   }
 
@@ -90,6 +96,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                 employmentType: _employmentType,
                 joiningDate: _joiningDateController.text.trim(),
                 status: _status,
+                accessPermissions: _selectedPermissions.toList(),
               ))
           .copyWith(
         employeeId: _empIdController.text.trim(),
@@ -103,6 +110,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
         employmentType: _employmentType,
         joiningDate: _joiningDateController.text.trim(),
         status: _status,
+        accessPermissions: _selectedPermissions.toList(),
       );
 
       if (isEdit) {
@@ -188,7 +196,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
         ],
       ),
       content: SizedBox(
-        width: (screenWidth * 0.9).clamp(280.0, 580.0),
+        width: (screenWidth * 0.9).clamp(280.0, 640.0),
         child: SingleChildScrollView(
           child: Form(
             key: _formKey,
@@ -305,6 +313,112 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                     onChanged: (val) {
                       if (val != null) setState(() => _status = val);
                     },
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Divider(),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(Icons.security, size: 20, color: AppColors.active),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Access Permissions',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: () {
+                        setState(() {
+                          if (_selectedPermissions.length ==
+                              Employee.allSidebarPermissions.length) {
+                            _selectedPermissions.clear();
+                          } else {
+                            _selectedPermissions =
+                                Set<String>.from(Employee.allSidebarPermissions);
+                          }
+                        });
+                      },
+                      child: Text(
+                        _selectedPermissions.length ==
+                                Employee.allSidebarPermissions.length
+                            ? 'Deselect All'
+                            : 'Select All',
+                        style: const TextStyle(color: AppColors.active),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Select sidebar menu options accessible by this employee upon login:',
+                  style: TextStyle(fontSize: 12, color: Colors.black54),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: Employee.allSidebarPermissions.map((permission) {
+                      final isSelected = _selectedPermissions.contains(permission);
+                      return InkWell(
+                        onTap: () {
+                          setState(() {
+                            if (isSelected) {
+                              _selectedPermissions.remove(permission);
+                            } else {
+                              _selectedPermissions.add(permission);
+                            }
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          width: isMobile ? double.infinity : 260,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 4,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: Checkbox(
+                                  value: isSelected,
+                                  activeColor: AppColors.active,
+                                  onChanged: (val) {
+                                    setState(() {
+                                      if (val == true) {
+                                        _selectedPermissions.add(permission);
+                                      } else {
+                                        _selectedPermissions.remove(permission);
+                                      }
+                                    });
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  permission,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
                   ),
                 ),
               ],

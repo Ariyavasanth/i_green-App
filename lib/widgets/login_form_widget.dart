@@ -57,6 +57,7 @@ class _LoginFormWidgetState extends ConsumerState<LoginFormWidget> {
         final valid = await repository.verifyOtp(email: _email.text.trim(), otp: _otp.text);
         if (!mounted) return;
         if (valid) {
+          ref.read(currentUserEmailProvider.notifier).state = _email.text.trim();
           context.go('/home');
         } else {
           setState(() { _error = true; _message = 'That code could not be verified. Please try again.'; });

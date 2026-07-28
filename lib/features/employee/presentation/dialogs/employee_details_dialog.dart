@@ -116,6 +116,27 @@ class EmployeeDetailsDialog extends StatelessWidget {
           _InfoItem('PF Number', employee.pfNumber),
           _InfoItem('ESI Number', employee.esiNumber),
         ]),
+        const SizedBox(height: 20),
+        _buildSectionHeader('Access Permissions'),
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: (employee.accessPermissions.isNotEmpty
+                    ? employee.accessPermissions
+                    : Employee.allSidebarPermissions)
+                .map(
+                  (perm) => Chip(
+                    label: Text(perm, style: const TextStyle(fontSize: 11)),
+                    backgroundColor: AppColors.active.withValues(alpha: 0.1),
+                    side: BorderSide.none,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                )
+                .toList(),
+          ),
+        ),
       ],
     );
   }
