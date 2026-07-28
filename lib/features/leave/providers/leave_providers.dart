@@ -68,14 +68,16 @@ final salaryCalculationProvider = FutureProvider.family<SalaryCalculation, Salar
 );
 
 final currentEmployeeProvider = Provider<Employee?>((ref) {
-  final email = ref.watch(currentUserEmailProvider);
+  final emailOrId = ref.watch(currentUserEmailProvider);
   final employeesAsync = ref.watch(employeesProvider);
   return employeesAsync.maybeWhen(
     data: (list) {
       if (list.isEmpty) return null;
-      if (email == null) return list.first;
+      if (emailOrId == null) return list.first;
       final matches = list
-          .where((e) => e.emailAddress.trim().toLowerCase() == email.trim().toLowerCase())
+          .where((e) =>
+              e.emailAddress.trim().toLowerCase() == emailOrId.trim().toLowerCase() ||
+              e.employeeId.trim().toLowerCase() == emailOrId.trim().toLowerCase())
           .toList();
       return matches.isNotEmpty ? matches.first : list.first;
     },

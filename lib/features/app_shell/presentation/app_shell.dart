@@ -24,7 +24,8 @@ final userDestinationsProvider = Provider<List<SidebarDestination>>((ref) {
   return employeesAsync.maybeWhen(
     data: (employees) {
       final matchingEmp = employees.where(
-        (e) => e.emailAddress.trim().toLowerCase() == userEmail.trim().toLowerCase(),
+        (e) => e.emailAddress.trim().toLowerCase() == userEmail.trim().toLowerCase() ||
+               e.employeeId.trim().toLowerCase() == userEmail.trim().toLowerCase(),
       ).toList();
 
       if (matchingEmp.isNotEmpty) {
