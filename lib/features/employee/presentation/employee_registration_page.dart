@@ -746,18 +746,6 @@ class _EmployeeRegistrationPageState
                     ),
                   ),
                 ),
-              const Text(
-                'Home',
-                style: TextStyle(fontSize: 12, color: AppColors.active),
-              ),
-              const Text(
-                ' > ',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-              ),
-              const Text(
-                'Profile',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-              ),
             ],
           ),
         ],
@@ -936,94 +924,142 @@ class _EmployeeRegistrationPageState
             ),
           ),
         ],
-        _buildRow2or3(
-          isMobile: isMobile,
-          children: [
-            _buildTextField('First Name', _firstNameController, placeholder: 'First Name'),
-            _buildTextField('Last Name', _lastNameController, placeholder: 'Last Name'),
-            _buildDropdown(
-              'Blood Group',
-              _bloodGroup,
-              ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'],
-              (val) => setState(() => _bloodGroup = val!),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _buildRow2or3(
-          isMobile: isMobile,
-          children: [
-            _buildDropdown(
-              'Gender',
-              _gender,
-              ['Male', 'Female', 'Other'],
-              (val) => setState(() => _gender = val!),
-            ),
-            _buildDropdown(
-              'User Type',
-              _userType,
-              ['ADMIN', 'EMPLOYEE', 'MANAGER'],
-              (val) => setState(() => _userType = val!),
-            ),
-            _buildDropdown(
-              'Status',
-              _status,
-              ['ACTIVE', 'INACTIVE'],
-              (val) => setState(() => _status = val!),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _buildRow2or3(
-          isMobile: isMobile,
-          children: [
-            _buildDateField('Date Of Birth', _dobController, placeholder: '13-05-1982'),
-            _buildTextField('Aadhar Number', _aadhaarController, placeholder: '833750993144'),
-            _buildTextField('Contact Number', _phoneController, placeholder: '8760098789'),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _buildRow2or3(
-          isMobile: isMobile,
-          children: [
-            _buildDropdown(
-              'Department',
-              _department,
-              ['Management', 'Engineering', 'HR', 'Finance', 'Operations', 'Sales', 'Marketing'],
-              (val) => setState(() => _department = val!),
-            ),
-            _buildDropdown(
-              'Designation',
-              _designation,
-              ['Company Director', 'Software Engineer', 'HR Manager', 'Financial Analyst', 'Team Lead', 'Associate'],
-              (val) => setState(() => _designation = val!),
-            ),
-            _buildDateField('Date Of Joining', _joiningDateController, placeholder: '29-04-2017'),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _buildRow2or3(
-          isMobile: isMobile,
-          children: [
-            _buildDateField('Contract End Date', _contractEndDateController, placeholder: 'dd-mm-yyyy'),
-            _buildTextField('Email', _emailController, placeholder: 'Saravanan@igreentec.in'),
-            _buildTextField('PF Number', _pfNumberController, placeholder: '100338738050'),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _buildRow2or3(
-          isMobile: isMobile,
-          children: [
-            _buildTextField('ESI Number', _esiNumberController, placeholder: 'ESI Number'),
-            _buildDropdown(
-              'Reporting To',
-              _reportingTo,
-              ['Saravanan G S', 'John Doe', 'Jane Smith', 'None'],
-              (val) => setState(() => _reportingTo = val!),
-            ),
-            const SizedBox.shrink(),
-          ],
-        ),
+        if (_isManagementAdd) ...[
+          _buildRow2or3(
+            isMobile: isMobile,
+            children: [
+              _buildTextField('First Name', _firstNameController, placeholder: 'First Name'),
+              _buildTextField('Last Name', _lastNameController, placeholder: 'Last Name'),
+              _buildDropdown(
+                'Blood Group',
+                _bloodGroup,
+                ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'],
+                (val) => setState(() => _bloodGroup = val!),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildRow2or3(
+            isMobile: isMobile,
+            children: [
+              _buildDropdown(
+                'Gender',
+                _gender,
+                ['Male', 'Female', 'Other'],
+                (val) => setState(() => _gender = val!),
+              ),
+              _buildDropdown(
+                'User Type',
+                _userType,
+                ['ADMIN', 'EMPLOYEE', 'MANAGER'],
+                (val) => setState(() => _userType = val!),
+              ),
+              _buildDropdown(
+                'Status',
+                _status,
+                ['ACTIVE', 'INACTIVE'],
+                (val) => setState(() => _status = val!),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildRow2or3(
+            isMobile: isMobile,
+            children: [
+              _buildDateField('Date Of Birth', _dobController, placeholder: '13-05-1982'),
+              _buildTextField('Aadhar Number', _aadhaarController, placeholder: '833750993144'),
+              _buildTextField('Contact Number', _phoneController, placeholder: '8760098789'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildRow2or3(
+            isMobile: isMobile,
+            children: [
+              _buildDropdown(
+                'Department',
+                _department,
+                ['Management', 'Engineering', 'HR', 'Finance', 'Operations', 'Sales', 'Marketing'],
+                (val) => setState(() => _department = val!),
+              ),
+              _buildDropdown(
+                'Designation',
+                _designation,
+                ['Company Director', 'Software Engineer', 'HR Manager', 'Financial Analyst', 'Team Lead', 'Associate'],
+                (val) => setState(() => _designation = val!),
+              ),
+              _buildDateField('Date Of Joining', _joiningDateController, placeholder: '29-04-2017'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildRow2or3(
+            isMobile: isMobile,
+            children: [
+              _buildDateField('Contract End Date', _contractEndDateController, placeholder: 'dd-mm-yyyy'),
+              _buildTextField('Email', _emailController, placeholder: 'Saravanan@igreentec.in'),
+              _buildTextField('PF Number', _pfNumberController, placeholder: '100338738050'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildRow2or3(
+            isMobile: isMobile,
+            children: [
+              _buildTextField('ESI Number', _esiNumberController, placeholder: 'ESI Number'),
+              _buildDropdown(
+                'Reporting To',
+                _reportingTo,
+                ['Saravanan G S', 'John Doe', 'Jane Smith', 'None'],
+                (val) => setState(() => _reportingTo = val!),
+              ),
+              const SizedBox.shrink(),
+            ],
+          ),
+        ] else ...[
+          _buildRow2or3(
+            isMobile: isMobile,
+            children: [
+              _buildTextField('First Name', _firstNameController, placeholder: 'First Name'),
+              _buildTextField('Last Name', _lastNameController, placeholder: 'Last Name'),
+              _buildDropdown(
+                'Blood Group',
+                _bloodGroup,
+                ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'],
+                (val) => setState(() => _bloodGroup = val!),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildRow2or3(
+            isMobile: isMobile,
+            children: [
+              _buildDropdown(
+                'Gender',
+                _gender,
+                ['Male', 'Female', 'Other'],
+                (val) => setState(() => _gender = val!),
+              ),
+              _buildDateField('Date Of Birth', _dobController, placeholder: '13-05-1982'),
+              _buildTextField('Aadhar Number', _aadhaarController, placeholder: '833750993144'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildRow2or3(
+            isMobile: isMobile,
+            children: [
+              _buildTextField('Contact Number', _phoneController, placeholder: '8760098789'),
+              _buildDateField('Date Of Joining', _joiningDateController, placeholder: '29-04-2017'),
+              _buildDateField('Contract End Date', _contractEndDateController, placeholder: 'dd-mm-yyyy'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildRow2or3(
+            isMobile: isMobile,
+            children: [
+              _buildTextField('Email', _emailController, placeholder: 'Saravanan@igreentec.in'),
+              _buildTextField('PF Number', _pfNumberController, placeholder: '100338738050'),
+              _buildTextField('ESI Number', _esiNumberController, placeholder: 'ESI Number'),
+            ],
+          ),
+        ],
         const SizedBox(height: 20),
         // Image Picker Section
         Row(
@@ -1353,48 +1389,55 @@ class _EmployeeRegistrationPageState
                 border: Border.all(color: const Color(0xFFE4E7EC)),
                 borderRadius: BorderRadius.circular(2),
               ),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                  columnSpacing: 28,
-                  headingRowHeight: 38,
-                  dataRowMinHeight: 36,
-                  dataRowMaxHeight: 48,
-                  columns: const [
-                    DataColumn(label: Text('ID ↕', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
-                    DataColumn(label: Text('Certificate name ↕', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
-                    DataColumn(label: Text('Institute ↕', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
-                    DataColumn(label: Text('Result ↕', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
-                    DataColumn(label: Text('year ↕', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
-                    DataColumn(label: Text('Action ↕', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
-                  ],
-                  rows: _educationList.isEmpty
-                      ? [
-                          const DataRow(cells: [
-                            DataCell(Text('No data available in table', style: TextStyle(fontSize: 12, color: Colors.black54))),
-                            DataCell(Text('')),
-                            DataCell(Text('')),
-                            DataCell(Text('')),
-                            DataCell(Text('')),
-                            DataCell(Text('')),
-                          ])
-                        ]
-                      : _educationList.map((item) {
-                          return DataRow(cells: [
-                            DataCell(Text(item.id, style: const TextStyle(fontSize: 12))),
-                            DataCell(Text(item.degreeName, style: const TextStyle(fontSize: 12))),
-                            DataCell(Text(item.instituteName, style: const TextStyle(fontSize: 12))),
-                            DataCell(Text(item.result, style: const TextStyle(fontSize: 12))),
-                            DataCell(Text(item.passingYear, style: const TextStyle(fontSize: 12))),
-                            DataCell(IconButton(
-                              icon: const Icon(Icons.delete, size: 16, color: Colors.red),
-                              onPressed: () {
-                                setState(() => _educationList.removeWhere((e) => e.id == item.id));
-                              },
-                            )),
-                          ]);
-                        }).toList(),
-                ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                      child: DataTable(
+                        columnSpacing: 28,
+                        headingRowHeight: 38,
+                        dataRowMinHeight: 36,
+                        dataRowMaxHeight: 48,
+                        columns: const [
+                          DataColumn(label: Text('ID ↕', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text('Certificate name ↕', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text('Institute ↕', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text('Result ↕', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text('year ↕', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text('Action ↕', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+                        ],
+                        rows: _educationList.isEmpty
+                            ? [
+                                const DataRow(cells: [
+                                  DataCell(Text('No data available in table', style: TextStyle(fontSize: 12, color: Colors.black54))),
+                                  DataCell(Text('')),
+                                  DataCell(Text('')),
+                                  DataCell(Text('')),
+                                  DataCell(Text('')),
+                                  DataCell(Text('')),
+                                ])
+                              ]
+                            : _educationList.map((item) {
+                                return DataRow(cells: [
+                                  DataCell(Text(item.id, style: const TextStyle(fontSize: 12))),
+                                  DataCell(Text(item.degreeName, style: const TextStyle(fontSize: 12))),
+                                  DataCell(Text(item.instituteName, style: const TextStyle(fontSize: 12))),
+                                  DataCell(Text(item.result, style: const TextStyle(fontSize: 12))),
+                                  DataCell(Text(item.passingYear, style: const TextStyle(fontSize: 12))),
+                                  DataCell(IconButton(
+                                    icon: const Icon(Icons.delete, size: 16, color: Colors.red),
+                                    onPressed: () {
+                                      setState(() => _educationList.removeWhere((e) => e.id == item.id));
+                                    },
+                                  )),
+                                ]);
+                              }).toList(),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
             const SizedBox(height: 8),
@@ -1411,17 +1454,9 @@ class _EmployeeRegistrationPageState
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    OutlinedButton(
-                      style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4)),
-                      onPressed: null,
-                      child: const Text('Previous', style: TextStyle(fontSize: 11)),
-                    ),
-                    const SizedBox(width: 4),
-                    OutlinedButton(
-                      style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4)),
-                      onPressed: null,
-                      child: const Text('Next', style: TextStyle(fontSize: 11)),
-                    ),
+                    _buildPaginationBtn('Previous', null),
+                    const SizedBox(width: 6),
+                    _buildPaginationBtn('Next', null),
                   ],
                 ),
               ],
@@ -1498,46 +1533,74 @@ class _EmployeeRegistrationPageState
                 border: Border.all(color: const Color(0xFFE4E7EC)),
                 borderRadius: BorderRadius.circular(2),
               ),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                  columnSpacing: 36,
-                  headingRowHeight: 38,
-                  dataRowMinHeight: 36,
-                  dataRowMaxHeight: 48,
-                  columns: const [
-                    DataColumn(label: Text('ID', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
-                    DataColumn(label: Text('Company name', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
-                    DataColumn(label: Text('Position', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
-                    DataColumn(label: Text('Work Duration', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
-                    DataColumn(label: Text('Action', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
-                  ],
-                  rows: _experienceList.isEmpty
-                      ? [
-                          const DataRow(cells: [
-                            DataCell(Text('No data available in table', style: TextStyle(fontSize: 12, color: Colors.black54))),
-                            DataCell(Text('')),
-                            DataCell(Text('')),
-                            DataCell(Text('')),
-                            DataCell(Text('')),
-                          ])
-                        ]
-                      : _experienceList.map((item) {
-                          return DataRow(cells: [
-                            DataCell(Text(item.id, style: const TextStyle(fontSize: 12))),
-                            DataCell(Text(item.companyName, style: const TextStyle(fontSize: 12))),
-                            DataCell(Text(item.position, style: const TextStyle(fontSize: 12))),
-                            DataCell(Text(item.workingDuration, style: const TextStyle(fontSize: 12))),
-                            DataCell(IconButton(
-                              icon: const Icon(Icons.delete, size: 16, color: Colors.red),
-                              onPressed: () {
-                                setState(() => _experienceList.removeWhere((e) => e.id == item.id));
-                              },
-                            )),
-                          ]);
-                        }).toList(),
-                ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                      child: DataTable(
+                        columnSpacing: 36,
+                        headingRowHeight: 38,
+                        dataRowMinHeight: 36,
+                        dataRowMaxHeight: 48,
+                        columns: const [
+                          DataColumn(label: Text('ID', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text('Company name', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text('Position', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text('Work Duration', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text('Action', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+                        ],
+                        rows: _experienceList.isEmpty
+                            ? [
+                                const DataRow(cells: [
+                                  DataCell(Text('No data available in table', style: TextStyle(fontSize: 12, color: Colors.black54))),
+                                  DataCell(Text('')),
+                                  DataCell(Text('')),
+                                  DataCell(Text('')),
+                                  DataCell(Text('')),
+                                ])
+                              ]
+                            : _experienceList.map((item) {
+                                return DataRow(cells: [
+                                  DataCell(Text(item.id, style: const TextStyle(fontSize: 12))),
+                                  DataCell(Text(item.companyName, style: const TextStyle(fontSize: 12))),
+                                  DataCell(Text(item.position, style: const TextStyle(fontSize: 12))),
+                                  DataCell(Text(item.workingDuration, style: const TextStyle(fontSize: 12))),
+                                  DataCell(IconButton(
+                                    icon: const Icon(Icons.delete, size: 16, color: Colors.red),
+                                    onPressed: () {
+                                      setState(() => _experienceList.removeWhere((e) => e.id == item.id));
+                                    },
+                                  )),
+                                ]);
+                              }).toList(),
+                      ),
+                    ),
+                  );
+                },
               ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                Text(
+                  'Showing ${_experienceList.isEmpty ? 0 : 1} to ${_experienceList.length} of ${_experienceList.length} entries',
+                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildPaginationBtn('Previous', null),
+                    const SizedBox(width: 6),
+                    _buildPaginationBtn('Next', null),
+                  ],
+                ),
+              ],
             ),
             const SizedBox(height: 24),
             _buildRow2or3(
@@ -1803,43 +1866,71 @@ class _EmployeeRegistrationPageState
                 border: Border.all(color: const Color(0xFFE4E7EC)),
                 borderRadius: BorderRadius.circular(2),
               ),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                  columnSpacing: 28,
-                  headingRowHeight: 38,
-                  dataRowMinHeight: 36,
-                  dataRowMaxHeight: 48,
-                  columns: const [
-                    DataColumn(label: Text('ID', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
-                    DataColumn(label: Text('Document Type', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
-                    DataColumn(label: Text('Document Number / File', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
-                    DataColumn(label: Text('Action', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
-                  ],
-                  rows: _documentList.isEmpty
-                      ? [
-                          const DataRow(cells: [
-                            DataCell(Text('No documents uploaded yet', style: TextStyle(fontSize: 12, color: Colors.black54))),
-                            DataCell(Text('')),
-                            DataCell(Text('')),
-                            DataCell(Text('')),
-                          ])
-                        ]
-                      : _documentList.map((item) {
-                          return DataRow(cells: [
-                            DataCell(Text(item.id, style: const TextStyle(fontSize: 12))),
-                            DataCell(Text(item.documentType, style: const TextStyle(fontSize: 12))),
-                            DataCell(Text('${item.documentNumber} (${item.fileName})', style: const TextStyle(fontSize: 12))),
-                            DataCell(IconButton(
-                              icon: const Icon(Icons.delete, size: 16, color: Colors.red),
-                              onPressed: () {
-                                setState(() => _documentList.removeWhere((e) => e.id == item.id));
-                              },
-                            )),
-                          ]);
-                        }).toList(),
-                ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                      child: DataTable(
+                        columnSpacing: 28,
+                        headingRowHeight: 38,
+                        dataRowMinHeight: 36,
+                        dataRowMaxHeight: 48,
+                        columns: const [
+                          DataColumn(label: Text('ID', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text('Document Type', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text('Document Number / File', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text('Action', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+                        ],
+                        rows: _documentList.isEmpty
+                            ? [
+                                const DataRow(cells: [
+                                  DataCell(Text('No documents uploaded yet', style: TextStyle(fontSize: 12, color: Colors.black54))),
+                                  DataCell(Text('')),
+                                  DataCell(Text('')),
+                                  DataCell(Text('')),
+                                ])
+                              ]
+                            : _documentList.map((item) {
+                                return DataRow(cells: [
+                                  DataCell(Text(item.id, style: const TextStyle(fontSize: 12))),
+                                  DataCell(Text(item.documentType, style: const TextStyle(fontSize: 12))),
+                                  DataCell(Text('${item.documentNumber} (${item.fileName})', style: const TextStyle(fontSize: 12))),
+                                  DataCell(IconButton(
+                                    icon: const Icon(Icons.delete, size: 16, color: Colors.red),
+                                    onPressed: () {
+                                      setState(() => _documentList.removeWhere((e) => e.id == item.id));
+                                    },
+                                  )),
+                                ]);
+                              }).toList(),
+                      ),
+                    ),
+                  );
+                },
               ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                Text(
+                  'Showing ${_documentList.isEmpty ? 0 : 1} to ${_documentList.length} of ${_documentList.length} entries',
+                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildPaginationBtn('Previous', null),
+                    const SizedBox(width: 6),
+                    _buildPaginationBtn('Next', null),
+                  ],
+                ),
+              ],
             ),
             const SizedBox(height: 24),
             _buildRow2or3(
@@ -1958,7 +2049,37 @@ class _EmployeeRegistrationPageState
     );
   }
 
-  // HELPER WIDGETS
+  Widget _buildPaginationBtn(String label, VoidCallback? onPressed) {
+    final isDisabled = onPressed == null;
+    return OutlinedButton(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.textPrimary,
+        disabledForegroundColor: const Color(0xFF98A2B3),
+        backgroundColor: Colors.white,
+        disabledBackgroundColor: const Color(0xFFF9FAFB),
+        side: BorderSide(
+          color: isDisabled ? const Color(0xFFEAECF0) : const Color(0xFFD0D5DD),
+          width: 1,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        minimumSize: const Size(0, 32),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(4),
+        ),
+      ),
+      onPressed: onPressed,
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: isDisabled ? const Color(0xFF98A2B3) : AppColors.textPrimary,
+        ),
+      ),
+    );
+  }
+
   Widget _buildRow2or3({
     required bool isMobile,
     required List<Widget> children,
