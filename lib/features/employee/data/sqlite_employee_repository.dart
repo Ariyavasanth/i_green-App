@@ -133,7 +133,11 @@ class SqliteEmployeeRepository implements EmployeeRepository {
         team_name TEXT,
         disciplinary_records TEXT,
         temporary_password TEXT,
-        access_permissions TEXT
+        access_permissions TEXT,
+        leave_type TEXT,
+        leave_allocation_frequency TEXT,
+        allowed_leaves REAL,
+        effective_date TEXT
       )
     ''');
 
@@ -211,6 +215,9 @@ class SqliteEmployeeRepository implements EmployeeRepository {
       'salary_pf': 'REAL',
       'access_permissions': 'TEXT',
       'leave_type': 'TEXT',
+      'leave_allocation_frequency': 'TEXT',
+      'allowed_leaves': 'REAL',
+      'effective_date': 'TEXT',
     };
 
     for (final entry in requiredColumns.entries) {
@@ -221,36 +228,93 @@ class SqliteEmployeeRepository implements EmployeeRepository {
   }
 
   Future<void> _seedSampleData(Database db) async {
-    final count = Sqflite.firstIntValue(
-      await db.rawQuery('SELECT COUNT(*) FROM employees'),
-    );
-    if (count == 0) {
-      final sampleEmployees = [
-        const Employee(
-          id: 1,
-          employeeId: 'EMP-0001',
-          firstName: 'Saravanan',
-          lastName: 'G S',
-          emailAddress: 'Saravanan@igreentec.in',
-          phoneNumber: '8760098789',
-          gender: 'Male',
-          dob: '13-05-1982',
-          organizationName: 'iGreen Tech',
-          department: 'Management',
-          designation: 'Company Director',
-          employmentType: 'Full-Time',
-          joiningDate: '29-04-2017',
-          status: 'Active',
-          bloodGroup: 'B+',
-          userType: 'ADMIN',
-          aadhaarNumber: '833750993144',
-          pfNumber: '100338738050',
-          city: 'Chennai',
-          state: 'Tamil Nadu',
-        ),
-      ];
+    final sampleEmployees = [
+      const Employee(
+        id: 1,
+        employeeId: 'EMP-0001',
+        firstName: 'Saravanan',
+        lastName: 'G S',
+        emailAddress: 'Saravanan@igreentec.in',
+        phoneNumber: '8760098789',
+        gender: 'Male',
+        dob: '13-05-1982',
+        organizationName: 'iGreen Tech',
+        department: 'Management',
+        designation: 'Company Director',
+        employmentType: 'Full-Time',
+        joiningDate: '29-04-2017',
+        status: 'Active',
+        bloodGroup: 'B+',
+        userType: 'ADMIN',
+        aadhaarNumber: '833750993144',
+        pfNumber: '100338738050',
+        city: 'Chennai',
+        state: 'Tamil Nadu',
+        salaryTotalCtc: 1200000.0,
+        leaveType: 'Casual Leave',
+        leaveAllocationFrequency: 'Monthly',
+        allowedLeaves: 1.5,
+        effectiveDate: '01-01-2026',
+      ),
+      const Employee(
+        id: 2,
+        employeeId: 'EMP-0002',
+        firstName: 'John',
+        lastName: 'Doe',
+        emailAddress: 'john.doe@igreentec.in',
+        phoneNumber: '9876543210',
+        gender: 'Male',
+        dob: '15-08-1990',
+        organizationName: 'iGreen Tech',
+        department: 'Engineering',
+        designation: 'Software Engineer',
+        employmentType: 'Full-Time',
+        joiningDate: '01-06-2022',
+        status: 'Active',
+        bloodGroup: 'O+',
+        userType: 'EMPLOYEE',
+        city: 'Bangalore',
+        state: 'Karnataka',
+        salaryTotalCtc: 600000.0,
+        leaveType: 'Casual Leave',
+        leaveAllocationFrequency: 'Monthly',
+        allowedLeaves: 1.0,
+        effectiveDate: '01-01-2026',
+        accessPermissions: ['Home', 'Leave', 'Loan', 'Pay Slip'],
+      ),
+      const Employee(
+        id: 3,
+        employeeId: 'EMP-0003',
+        firstName: 'Jane',
+        lastName: 'Smith',
+        emailAddress: 'jane.smith@igreentec.in',
+        phoneNumber: '9123456780',
+        gender: 'Female',
+        dob: '22-11-1993',
+        organizationName: 'iGreen Tech',
+        department: 'HR',
+        designation: 'HR Executive',
+        employmentType: 'Full-Time',
+        joiningDate: '15-03-2021',
+        status: 'Active',
+        bloodGroup: 'A-',
+        userType: 'EMPLOYEE',
+        city: 'Hyderabad',
+        state: 'Telangana',
+        salaryTotalCtc: 450000.0,
+        leaveType: 'Casual Leave',
+        leaveAllocationFrequency: 'Monthly',
+        allowedLeaves: 1.0,
+        effectiveDate: '01-01-2026',
+        accessPermissions: ['Home', 'Leave', 'Loan', 'Pay Slip'],
+      ),
+    ];
 
-      for (final emp in sampleEmployees) {
+    for (final emp in sampleEmployees) {
+      final exists = Sqflite.firstIntValue(
+        await db.rawQuery('SELECT COUNT(*) FROM employees WHERE employee_id = ?', [emp.employeeId]),
+      ) ?? 0;
+      if (exists == 0) {
         await db.insert('employees', emp.toMap());
       }
     }

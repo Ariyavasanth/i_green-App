@@ -8,4 +8,4 @@ final authenticationRepositoryProvider = Provider<AuthenticationRepository>(
   (ref) => SqliteAuthenticationRepository(),
 );
 
-final currentUserEmailProvider = StateProvider<String?>((ref) => null);
+final currentUserEmailProvider = StateProvider<String?>((ref) => 'Saravanan@igreentec.in');

@@ -3,20 +3,27 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
 import '../domain/leave_request.dart';
 import '../providers/leave_providers.dart';
 
-class LeavePage extends ConsumerStatefulWidget {
-  const LeavePage({super.key});
+class LeaveManagementPage extends ConsumerStatefulWidget {
+  const LeaveManagementPage({super.key});
 
   @override
-  ConsumerState<LeavePage> createState() => _LeavePageState();
+  ConsumerState<LeaveManagementPage> createState() => _LeaveManagementPageState();
 }
 
-class _LeavePageState extends ConsumerState<LeavePage> {
+class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
   DateTime _focusedMonth = DateTime.now();
+  int? _selectedEmployeeFilterId; // null means 'All Employees'
+  final _workingDaysController = TextEditingController(text: '26');
+
+  @override
+  void dispose() {
+    _workingDaysController.dispose();
+    super.dispose();
+  }
 
   DateTime? _parseDate(String dateStr) {
     try {
@@ -32,11 +39,13 @@ class _LeavePageState extends ConsumerState<LeavePage> {
     return null;
   }
 
-  Color? _getCellColor(DateTime cellDate, List<LeaveRequest> requests) {
+  Color? _getCellColor(DateTime cellDate, List<LeaveRequest> requests, {int? filterEmpId}) {
     final dateStr =
         '${cellDate.day.toString().padLeft(2, '0')}-${cellDate.month.toString().padLeft(2, '0')}-${cellDate.year}';
 
     for (final req in requests) {
+      if (filterEmpId != null && req.employeeId != filterEmpId) continue;
+
       if (req.status == 'Approved') {
         if (req.approvedDates.contains(dateStr)) {
           return const Color(0xFF2E7D32); // Green
@@ -61,11 +70,13 @@ class _LeavePageState extends ConsumerState<LeavePage> {
     return null;
   }
 
-  String? _getCellTooltip(DateTime cellDate, List<LeaveRequest> requests) {
+  String? _getCellTooltip(DateTime cellDate, List<LeaveRequest> requests, {int? filterEmpId}) {
     final dateStr =
         '${cellDate.day.toString().padLeft(2, '0')}-${cellDate.month.toString().padLeft(2, '0')}-${cellDate.year}';
 
     for (final req in requests) {
+      if (filterEmpId != null && req.employeeId != filterEmpId) continue;
+
       bool match = false;
       String status = '';
       if (req.status == 'Approved') {
@@ -133,6 +144,8 @@ class _LeavePageState extends ConsumerState<LeavePage> {
           );
         }
 
+        final String adminName = currentEmp.fullName;
+
         return Scaffold(
           backgroundColor: const Color(0xFFEFF3F6),
           body: SingleChildScrollView(
@@ -141,47 +154,28 @@ class _LeavePageState extends ConsumerState<LeavePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Page Header
-                Row(
+                const Row(
                   children: [
-                    const Icon(Icons.calendar_month, size: 24, color: AppColors.active),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Leave Requests',
+                    Icon(Icons.calendar_month, size: 24, color: AppColors.active),
+                    SizedBox(width: 8),
+                    Text(
+                      'Leave Management',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                         color: AppColors.textPrimary,
                       ),
                     ),
-                    const Spacer(),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.active,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                      ),
-                      onPressed: () => _showNewLeaveDialog(currentEmp),
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text(
-                        '+ New Leave',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                      ),
-                    ),
                   ],
                 ),
                 const SizedBox(height: 16),
-
-                // Leave balance description
-                _buildEmployeeBalanceCard(currentEmp),
-                const SizedBox(height: 20),
 
                 // Content Grid
                 LayoutBuilder(
                   builder: (context, constraints) {
                     final isWide = constraints.maxWidth > 900;
-                    final calendarWidget = _buildCalendarCard(currentEmp.id);
-                    final requestListWidget = _buildLeaveListCard(currentEmp.id);
+                    final calendarWidget = _buildCalendarCard();
+                    final requestListWidget = _buildLeaveListCard(adminName);
 
                     if (isWide) {
                       return Row(
@@ -206,7 +200,7 @@ class _LeavePageState extends ConsumerState<LeavePage> {
 
                 const SizedBox(height: 24),
                 // Salary calculation section
-                _buildSalaryLopCalculationCard(currentEmp.id),
+                _buildSalaryLopCalculationCard(),
               ],
             ),
           ),
@@ -215,66 +209,21 @@ class _LeavePageState extends ConsumerState<LeavePage> {
     );
   }
 
-  Widget _buildEmployeeBalanceCard(Employee emp) {
-    final balancesAsync = ref.watch(leaveBalancesProvider(emp.id));
-
-    return balancesAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Text('Error loading balances: $e'),
-      data: (balances) {
-        if (balances.isEmpty) {
-          return Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFF3E0),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
-            ),
-            child: Text(
-              'No leave entitlements configured. Current leave policy: ${emp.leaveType} (${emp.allowedLeaves} leaves per ${emp.leaveAllocationFrequency.toLowerCase()}). Effective Date: ${emp.effectiveDate}.',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.orange),
-            ),
-          );
-        }
-
-        final b = balances.first;
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: const Color(0xFFE8F5E9),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.info_outline, color: Color(0xFF2E7D32), size: 24),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Entitled leave policy: ${b.leaveType} (${b.allowedLeaves} days, ${b.allocationFrequency.toLowerCase()}). Used: ${b.usedLeaves} days, Available: ${b.availableLeaves} days. Excess leaves will be marked as Loss of Pay (LOP).',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF2E7D32),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildCalendarCard(int currentEmpId) {
-    final leaveAsync = ref.watch(leaveRequestsProvider(currentEmpId));
+  Widget _buildCalendarCard() {
+    final leaveAsync = ref.watch(allLeaveRequestsProvider);
+    final employeesAsync = ref.watch(employeesProvider);
 
     return leaveAsync.when(
       loading: () => const Card(child: Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator()))),
       error: (e, _) => Card(child: Text('Error: $e')),
-      data: (requests) {
+      data: (allRequests) {
+        final filteredRequests = allRequests.where((req) {
+          if (_selectedEmployeeFilterId != null) {
+            return req.employeeId == _selectedEmployeeFilterId;
+          }
+          return true;
+        }).toList();
+
         return Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
@@ -285,7 +234,7 @@ class _LeavePageState extends ConsumerState<LeavePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header with Month Navigation
+              // Header with Month Navigation and Employee Filter
               Row(
                 children: [
                   IconButton(
@@ -311,6 +260,43 @@ class _LeavePageState extends ConsumerState<LeavePage> {
                         _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
                       });
                     },
+                  ),
+                  const Spacer(),
+                  // Filter dropdown
+                  employeesAsync.maybeWhen(
+                    data: (employees) {
+                      return SizedBox(
+                        width: 220,
+                        child: DropdownButtonFormField<int?>(
+                          initialValue: _selectedEmployeeFilterId,
+                          isDense: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Filter Employee',
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            border: OutlineInputBorder(),
+                          ),
+                          items: [
+                            const DropdownMenuItem<int?>(
+                              value: null,
+                              child: Text('All Employees', style: TextStyle(fontSize: 12)),
+                            ),
+                            ...employees.map((e) {
+                              return DropdownMenuItem<int?>(
+                                value: e.id,
+                                child: Text(e.fullName, style: const TextStyle(fontSize: 12)),
+                              );
+                            }),
+                          ],
+                          onChanged: (val) {
+                            setState(() {
+                              _selectedEmployeeFilterId = val;
+                            });
+                          },
+                        ),
+                      );
+                    },
+                    orElse: () => const SizedBox.shrink(),
                   ),
                 ],
               ),
@@ -338,7 +324,7 @@ class _LeavePageState extends ConsumerState<LeavePage> {
               const SizedBox(height: 8),
 
               // Grid Rows
-              ..._buildCalendarRows(requests),
+              ..._buildCalendarRows(filteredRequests),
 
               const SizedBox(height: 16),
               // Legend
@@ -398,8 +384,8 @@ class _LeavePageState extends ConsumerState<LeavePage> {
           final dateNorm = DateTime(year, month, day);
           final isToday = dateNorm == todayNorm;
 
-          final leaveColor = _getCellColor(dateNorm, requests);
-          final tooltipMsg = _getCellTooltip(dateNorm, requests);
+          final leaveColor = _getCellColor(dateNorm, requests, filterEmpId: _selectedEmployeeFilterId);
+          final tooltipMsg = _getCellTooltip(dateNorm, requests, filterEmpId: _selectedEmployeeFilterId);
 
           Widget dayCell = Container(
             height: 40,
@@ -444,8 +430,8 @@ class _LeavePageState extends ConsumerState<LeavePage> {
     return rows;
   }
 
-  Widget _buildLeaveListCard(int currentEmpId) {
-    final requestsAsync = ref.watch(leaveRequestsProvider(currentEmpId));
+  Widget _buildLeaveListCard(String adminName) {
+    final requestsAsync = ref.watch(allLeaveRequestsProvider);
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -462,7 +448,7 @@ class _LeavePageState extends ConsumerState<LeavePage> {
               Icon(Icons.list_alt, size: 20, color: AppColors.active),
               SizedBox(width: 8),
               Text(
-                'Your Leave Requests',
+                'Incoming Requests',
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.bold,
@@ -475,7 +461,14 @@ class _LeavePageState extends ConsumerState<LeavePage> {
           requestsAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Text('Error loading requests: $e'),
-            data: (list) {
+            data: (allReqs) {
+              final list = allReqs.where((req) {
+                if (_selectedEmployeeFilterId != null) {
+                  return req.employeeId == _selectedEmployeeFilterId;
+                }
+                return true;
+              }).toList();
+
               if (list.isEmpty) {
                 return Container(
                   width: double.infinity,
@@ -499,7 +492,7 @@ class _LeavePageState extends ConsumerState<LeavePage> {
                 itemCount: list.length,
                 itemBuilder: (context, index) {
                   final req = list[index];
-                  return _buildLeaveRequestTile(req);
+                  return _buildLeaveRequestTile(req, adminName);
                 },
               );
             },
@@ -509,7 +502,7 @@ class _LeavePageState extends ConsumerState<LeavePage> {
     );
   }
 
-  Widget _buildLeaveRequestTile(LeaveRequest req) {
+  Widget _buildLeaveRequestTile(LeaveRequest req, String adminName) {
     Color statusColor;
     IconData statusIcon;
 
@@ -579,6 +572,11 @@ class _LeavePageState extends ConsumerState<LeavePage> {
           ),
           const SizedBox(height: 6),
           Text(
+            'Employee: ${req.employeeName} (${req.employeeCustomId})',
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: 4),
+          Text(
             'Type: ${req.leaveType}  •  Days: ${req.numDays}',
             style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
           ),
@@ -589,28 +587,88 @@ class _LeavePageState extends ConsumerState<LeavePage> {
               style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontStyle: FontStyle.italic),
             ),
           ],
+
+          // Audit logs view button
           TextButton.icon(
             style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 20)),
             onPressed: () => _showAuditHistoryDialog(req.id),
             icon: const Icon(Icons.history, size: 12),
             label: const Text('View Audit History', style: TextStyle(fontSize: 10)),
           ),
+
+          // Admin action buttons
+          if (req.status == 'Pending') ...[
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFC62828),
+                    side: const BorderSide(color: Color(0xFFC62828)),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  onPressed: () => _handleDenyRequest(req.id, adminName),
+                  child: const Text('Deny', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2E7D32),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  onPressed: () => _handleApproveRequest(req.id, adminName),
+                  child: const Text('Approve', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildSalaryLopCalculationCard(int employeeId) {
+  Widget _buildSalaryLopCalculationCard() {
+    if (_selectedEmployeeFilterId == null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.black12),
+        ),
+        child: const Column(
+          children: [
+            Icon(Icons.info_outline, color: AppColors.textSecondary, size: 36),
+            SizedBox(height: 8),
+            Text(
+              'Salary & Loss of Pay Calculation',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+            ),
+            SizedBox(height: 4),
+            Text(
+              'Please select a specific employee from the filter dropdown above to view calculation.',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final int targetId = _selectedEmployeeFilterId!;
     final int currentYear = _focusedMonth.year;
     final int currentMonth = _focusedMonth.month;
+    final workingDays = int.tryParse(_workingDaysController.text.trim()) ?? 26;
 
     final calcAsync = ref.watch(
       salaryCalculationProvider(
         SalaryCalcParam(
-          employeeId: employeeId,
+          employeeId: targetId,
           year: currentYear,
           month: currentMonth,
-          workingDays: 26,
+          workingDays: workingDays,
         ),
       ),
     );
@@ -626,13 +684,32 @@ class _LeavePageState extends ConsumerState<LeavePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.calculate_outlined, color: AppColors.active, size: 22),
-              SizedBox(width: 8),
-              Text(
+              const Icon(Icons.calculate_outlined, color: AppColors.active, size: 22),
+              const SizedBox(width: 8),
+              const Text(
                 'Salary & Loss of Pay Calculation',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              ),
+              const Spacer(),
+              const Text('Total Working Days: ', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              const SizedBox(width: 4),
+              SizedBox(
+                width: 50,
+                child: TextFormField(
+                  controller: _workingDaysController,
+                  keyboardType: TextInputType.number,
+                  style: const TextStyle(fontSize: 12),
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (val) {
+                    setState(() {});
+                  },
+                ),
               ),
             ],
           ),
@@ -714,243 +791,44 @@ class _LeavePageState extends ConsumerState<LeavePage> {
     );
   }
 
-  void _showNewLeaveDialog(Employee currentEmp) {
-    final fromDateController = TextEditingController();
-    final toDateController = TextEditingController();
-    final reasonController = TextEditingController();
-    String leaveType = 'Casual Leave';
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              title: Row(
-                children: [
-                  const Icon(Icons.event_available, color: AppColors.active, size: 22),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'New Leave Request',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close, size: 20),
-                    onPressed: () => Navigator.of(dialogContext).pop(),
-                  ),
-                ],
-              ),
-              content: SizedBox(
-                width: 400,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Leave Type',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
-                    ),
-                    const SizedBox(height: 6),
-                    DropdownButtonFormField<String>(
-                      initialValue: leaveType,
-                      decoration: const InputDecoration(
-                        isDense: true,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        border: OutlineInputBorder(),
-                      ),
-                      items: ['Casual Leave', 'Sick Leave', 'Earned Leave']
-                          .map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 13))))
-                          .toList(),
-                      onChanged: (val) {
-                        if (val != null) {
-                          setDialogState(() {
-                            leaveType = val;
-                          });
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'From Date',
-                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
-                              ),
-                              const SizedBox(height: 6),
-                              TextFormField(
-                                controller: fromDateController,
-                                readOnly: true,
-                                decoration: const InputDecoration(
-                                  hintText: 'Select date',
-                                  hintStyle: TextStyle(fontSize: 13),
-                                  border: OutlineInputBorder(),
-                                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                  suffixIcon: Icon(Icons.calendar_today, size: 16),
-                                ),
-                                onTap: () async {
-                                  final picked = await showDatePicker(
-                                    context: dialogContext,
-                                    initialDate: DateTime.now(),
-                                    firstDate: DateTime(2020),
-                                    lastDate: DateTime(2040),
-                                  );
-                                  if (picked != null) {
-                                    final day = picked.day.toString().padLeft(2, '0');
-                                    final month = picked.month.toString().padLeft(2, '0');
-                                    fromDateController.text = '$day-$month-${picked.year}';
-                                  }
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'To Date',
-                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
-                              ),
-                              const SizedBox(height: 6),
-                              TextFormField(
-                                controller: toDateController,
-                                readOnly: true,
-                                decoration: const InputDecoration(
-                                  hintText: 'Select date',
-                                  hintStyle: TextStyle(fontSize: 13),
-                                  border: OutlineInputBorder(),
-                                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                  suffixIcon: Icon(Icons.calendar_today, size: 16),
-                                ),
-                                onTap: () async {
-                                  final picked = await showDatePicker(
-                                    context: dialogContext,
-                                    initialDate: DateTime.now(),
-                                    firstDate: DateTime(2020),
-                                    lastDate: DateTime(2040),
-                                  );
-                                  if (picked != null) {
-                                    final day = picked.day.toString().padLeft(2, '0');
-                                    final month = picked.month.toString().padLeft(2, '0');
-                                    toDateController.text = '$day-$month-${picked.year}';
-                                  }
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Reason',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
-                    ),
-                    const SizedBox(height: 6),
-                    TextFormField(
-                      controller: reasonController,
-                      maxLines: 3,
-                      decoration: const InputDecoration(
-                        hintText: 'Enter reason for leave',
-                        hintStyle: TextStyle(fontSize: 13),
-                        border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.active,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                  ),
-                  onPressed: () async {
-                    if (fromDateController.text.trim().isEmpty || toDateController.text.trim().isEmpty) {
-                      ScaffoldMessenger.of(dialogContext).showSnackBar(
-                        const SnackBar(
-                          content: Text('Please select both From and To dates'),
-                          backgroundColor: Colors.orange,
-                        ),
-                      );
-                      return;
-                    }
-
-                    final fromDate = _parseDate(fromDateController.text.trim());
-                    final toDate = _parseDate(toDateController.text.trim());
-                    if (fromDate == null || toDate == null || fromDate.isAfter(toDate)) {
-                      ScaffoldMessenger.of(dialogContext).showSnackBar(
-                        const SnackBar(
-                          content: Text('Invalid date range selected.'),
-                          backgroundColor: Colors.orange,
-                        ),
-                      );
-                      return;
-                    }
-
-                    final days = toDate.difference(fromDate).inDays + 1.0;
-
-                    final request = LeaveRequest(
-                      id: 0,
-                      employeeId: currentEmp.id,
-                      employeeName: currentEmp.fullName,
-                      employeeCustomId: currentEmp.employeeId,
-                      leaveType: leaveType,
-                      fromDate: fromDateController.text.trim(),
-                      toDate: toDateController.text.trim(),
-                      numDays: days,
-                      reason: reasonController.text.trim(),
-                      status: 'Pending',
-                      createdAt: DateTime.now().toIso8601String(),
-                    );
-
-                    try {
-                      await ref.read(leaveRepositoryProvider).submitLeaveRequest(request);
-                      ref.invalidate(leaveRequestsProvider(currentEmp.id));
-                      ref.invalidate(leaveBalancesProvider(currentEmp.id));
-                      ref.invalidate(salaryCalculationProvider);
-                      if (dialogContext.mounted) {
-                        Navigator.of(dialogContext).pop();
-                      }
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Leave request submitted successfully!'),
-                            backgroundColor: Colors.green,
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      }
-                    } catch (e) {
-                      if (dialogContext.mounted) {
-                        ScaffoldMessenger.of(dialogContext).showSnackBar(
-                          SnackBar(content: Text('Failed to submit: $e')),
-                        );
-                      }
-                    }
-                  },
-                  child: const Text('Request', style: TextStyle(fontWeight: FontWeight.w600)),
-                ),
-              ],
-            );
-          },
+  Future<void> _handleApproveRequest(int id, String adminName) async {
+    try {
+      await ref.read(leaveRepositoryProvider).approveLeaveRequest(id, adminName);
+      ref.invalidate(allLeaveRequestsProvider);
+      ref.invalidate(leaveBalancesProvider);
+      ref.invalidate(salaryCalculationProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Leave request approved successfully!'), backgroundColor: Colors.green),
         );
-      },
-    );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleDenyRequest(int id, String adminName) async {
+    try {
+      await ref.read(leaveRepositoryProvider).denyLeaveRequest(id, adminName);
+      ref.invalidate(allLeaveRequestsProvider);
+      ref.invalidate(leaveBalancesProvider);
+      ref.invalidate(salaryCalculationProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Leave request denied.'), backgroundColor: Colors.orange),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   void _showAuditHistoryDialog(int reqId) {

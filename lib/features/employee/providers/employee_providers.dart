@@ -1,13 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../organization/domain/column_preference.dart';
-import '../data/firebase_employee_repository.dart';
+import '../data/sqlite_employee_repository.dart';
 import '../domain/employee.dart';
 import '../domain/employee_repository.dart';
 import '../domain/registration_link.dart';
 
 final employeeRepositoryProvider = Provider<EmployeeRepository>(
-  (ref) => FirebaseEmployeeRepository(),
+  (ref) => SqliteEmployeeRepository(),
 );
 
 final employeesProvider = FutureProvider<List<Employee>>(

@@ -29,7 +29,10 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
 
   String _employmentType = 'Full-Time';
   String _status = 'Active';
-  String _leaveType = 'As Needed';
+  String _leaveType = 'Casual Leave';
+  String _leaveAllocationFrequency = 'Monthly';
+  late final TextEditingController _allowedLeavesController;
+  late final TextEditingController _leaveEffectiveDateController;
   bool _isSaving = false;
   late Set<String> _selectedPermissions;
 
@@ -56,10 +59,13 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
     _joiningDateController = TextEditingController(
       text: emp?.joiningDate ?? DateTime.now().toString().split(' ')[0],
     );
+    _leaveAllocationFrequency = emp?.leaveAllocationFrequency ?? 'Monthly';
+    _allowedLeavesController = TextEditingController(text: emp?.allowedLeaves.toString() ?? '1.0');
+    _leaveEffectiveDateController = TextEditingController(text: emp?.effectiveDate ?? '');
     if (emp != null) {
       _employmentType = emp.employmentType.isEmpty ? 'Full-Time' : emp.employmentType;
       _status = emp.status.isEmpty ? 'Active' : emp.status;
-      _leaveType = emp.leaveType.isEmpty ? 'As Needed' : emp.leaveType;
+      _leaveType = emp.leaveType.isEmpty ? 'Casual Leave' : emp.leaveType;
       _selectedPermissions = emp.accessPermissions.isNotEmpty
           ? Set<String>.from(emp.accessPermissions)
           : Set<String>.from(Employee.allSidebarPermissions);
@@ -79,6 +85,8 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
     _deptController.dispose();
     _designationController.dispose();
     _joiningDateController.dispose();
+    _allowedLeavesController.dispose();
+    _leaveEffectiveDateController.dispose();
     super.dispose();
   }
 
@@ -121,6 +129,9 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
         joiningDate: _joiningDateController.text.trim(),
         status: _status,
         leaveType: _leaveType,
+        leaveAllocationFrequency: _leaveAllocationFrequency,
+        allowedLeaves: double.tryParse(_allowedLeavesController.text.trim()) ?? 1.0,
+        effectiveDate: _leaveEffectiveDateController.text.trim(),
         accessPermissions: _selectedPermissions.toList(),
       );
 
@@ -349,20 +360,69 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: Employee.leaveTypeOptions.contains(_leaveType)
-                      ? _leaveType
-                      : Employee.leaveTypeOptions.first,
-                  decoration: const InputDecoration(
-                    labelText: 'Leave Type',
-                    border: OutlineInputBorder(),
+                _buildFieldPair(
+                  child1: DropdownButtonFormField<String>(
+                    value: ['Casual Leave', 'Sick Leave', 'Earned Leave'].contains(_leaveType)
+                        ? _leaveType
+                        : 'Casual Leave',
+                    decoration: const InputDecoration(
+                      labelText: 'Leave Type',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: ['Casual Leave', 'Sick Leave', 'Earned Leave']
+                        .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                        .toList(),
+                    onChanged: (val) {
+                      if (val != null) setState(() => _leaveType = val);
+                    },
                   ),
-                  items: Employee.leaveTypeOptions
-                      .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                      .toList(),
-                  onChanged: (val) {
-                    if (val != null) setState(() => _leaveType = val);
-                  },
+                  child2: DropdownButtonFormField<String>(
+                    value: _leaveAllocationFrequency,
+                    decoration: const InputDecoration(
+                      labelText: 'Allocation Frequency',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: ['Monthly', 'Quarterly', 'Yearly']
+                        .map((f) => DropdownMenuItem(value: f, child: Text(f)))
+                        .toList(),
+                    onChanged: (val) {
+                      if (val != null) setState(() => _leaveAllocationFrequency = val);
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildFieldPair(
+                  child1: TextFormField(
+                    controller: _allowedLeavesController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Allowed Leaves',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  child2: TextFormField(
+                    controller: _leaveEffectiveDateController,
+                    readOnly: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Effective Date',
+                      border: OutlineInputBorder(),
+                      suffixIcon: Icon(Icons.calendar_today),
+                    ),
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: DateTime.now(),
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (picked != null) {
+                        setState(() {
+                          _leaveEffectiveDateController.text =
+                              '${picked.day.toString().padLeft(2, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.year}';
+                        });
+                      }
+                    },
+                  ),
                 ),
                 const SizedBox(height: 20),
                 const Divider(),

@@ -50,7 +50,10 @@ class _EmployeeRegistrationPageState
   final _pfNumberController = TextEditingController();
   final _esiNumberController = TextEditingController();
   String _reportingTo = 'Saravanan G S';
-  String _leaveType = 'As Needed';
+  String _leaveType = 'Casual Leave';
+  String _leaveAllocationFrequency = 'Monthly';
+  final _allowedLeavesController = TextEditingController(text: '1.0');
+  final _leaveEffectiveDateController = TextEditingController();
   String _selectedFileName = 'No file chosen';
 
   // Tab 2: Address
@@ -198,6 +201,9 @@ class _EmployeeRegistrationPageState
       _esiNumberController.text = emp.esiNumber;
       if (emp.reportingManager.isNotEmpty) _reportingTo = emp.reportingManager;
       if (emp.leaveType.isNotEmpty) _leaveType = emp.leaveType;
+      _leaveAllocationFrequency = emp.leaveAllocationFrequency.isEmpty ? 'Monthly' : emp.leaveAllocationFrequency;
+      _allowedLeavesController.text = emp.allowedLeaves.toString();
+      _leaveEffectiveDateController.text = emp.effectiveDate;
 
       _permAddressController.text = emp.permanentAddress;
       _permCityController.text = emp.permanentCity;
@@ -508,6 +514,9 @@ class _EmployeeRegistrationPageState
         esiNumber: _esiNumberController.text.trim(),
         reportingManager: _reportingTo,
         leaveType: _leaveType,
+        leaveAllocationFrequency: _leaveAllocationFrequency,
+        allowedLeaves: double.tryParse(_allowedLeavesController.text.trim()) ?? 1.0,
+        effectiveDate: _leaveEffectiveDateController.text.trim(),
         salaryType: _salaryType,
         salaryTotalCtc: double.tryParse(_totalSalaryController.text.trim().replaceAll(',', '')) ?? 0.0,
         salaryBasic: double.tryParse(_basicPayController.text.trim().replaceAll(',', '')) ?? 0.0,
@@ -1077,8 +1086,30 @@ class _EmployeeRegistrationPageState
               _buildDropdown(
                 'Leave Type',
                 _leaveType,
-                Employee.leaveTypeOptions,
+                ['Casual Leave', 'Sick Leave', 'Earned Leave'],
                 (val) => setState(() => _leaveType = val!),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildRow2or3(
+            isMobile: isMobile,
+            children: [
+              _buildDropdown(
+                'Leave Allocation Frequency',
+                _leaveAllocationFrequency,
+                ['Monthly', 'Quarterly', 'Yearly'],
+                (val) => setState(() => _leaveAllocationFrequency = val!),
+              ),
+              _buildTextField(
+                'Number of Allowed Leaves',
+                _allowedLeavesController,
+                placeholder: 'e.g. 1.0',
+              ),
+              _buildDateField(
+                'Effective Date',
+                _leaveEffectiveDateController,
+                placeholder: 'dd-mm-yyyy',
               ),
             ],
           ),

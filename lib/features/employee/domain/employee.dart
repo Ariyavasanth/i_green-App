@@ -190,7 +190,10 @@ class Employee {
     this.pfUan = '',
     this.esiNumber = '',
     this.leaveDetails = '',
-    this.leaveType = 'As Needed',
+    this.leaveType = 'Casual Leave',
+    this.leaveAllocationFrequency = 'Monthly',
+    this.allowedLeaves = 1.0,
+    this.effectiveDate = '',
     this.companyAssets = '',
     this.reportingManager = '',
     this.teamName = '',
@@ -206,6 +209,7 @@ class Employee {
     'Responses',
     'Employee Management',
     'Leave',
+    'Leave Management',
     'Loan',
     'Pay Slip',
     'Items',
@@ -236,6 +240,7 @@ class Employee {
       'Responses',
       'Employee Management',
       'Leave',
+      'Leave Management',
       'Loan',
       'Pay Slip',
     ],
@@ -440,6 +445,9 @@ class Employee {
 
   final String leaveDetails;
   final String leaveType;
+  final String leaveAllocationFrequency;
+  final double allowedLeaves;
+  final String effectiveDate;
   final String companyAssets;
 
   final String reportingManager;
@@ -572,6 +580,9 @@ class Employee {
       'esi_number': esiNumber,
       'leave_details': leaveDetails,
       'leave_type': leaveType,
+      'leave_allocation_frequency': leaveAllocationFrequency,
+      'allowed_leaves': allowedLeaves,
+      'effective_date': effectiveDate,
       'company_assets': companyAssets,
       'reporting_manager': reportingManager,
       'team_name': teamName,
@@ -671,7 +682,10 @@ class Employee {
       pfUan: map['pf_uan'] as String? ?? '',
       esiNumber: map['esi_number'] as String? ?? '',
       leaveDetails: map['leave_details'] as String? ?? '',
-      leaveType: map['leave_type'] as String? ?? 'As Needed',
+      leaveType: map['leave_type'] as String? ?? 'Casual Leave',
+      leaveAllocationFrequency: map['leave_allocation_frequency'] as String? ?? 'Monthly',
+      allowedLeaves: (map['allowed_leaves'] as num?)?.toDouble() ?? 1.0,
+      effectiveDate: map['effective_date'] as String? ?? '',
       companyAssets: map['company_assets'] as String? ?? '',
       reportingManager: map['reporting_manager'] as String? ?? '',
       teamName: map['team_name'] as String? ?? '',
@@ -776,6 +790,9 @@ class Employee {
     String? esiNumber,
     String? leaveDetails,
     String? leaveType,
+    String? leaveAllocationFrequency,
+    double? allowedLeaves,
+    String? effectiveDate,
     String? companyAssets,
     String? reportingManager,
     String? teamName,
@@ -868,6 +885,9 @@ class Employee {
       esiNumber: esiNumber ?? this.esiNumber,
       leaveDetails: leaveDetails ?? this.leaveDetails,
       leaveType: leaveType ?? this.leaveType,
+      leaveAllocationFrequency: leaveAllocationFrequency ?? this.leaveAllocationFrequency,
+      allowedLeaves: allowedLeaves ?? this.allowedLeaves,
+      effectiveDate: effectiveDate ?? this.effectiveDate,
       companyAssets: companyAssets ?? this.companyAssets,
       reportingManager: reportingManager ?? this.reportingManager,
       teamName: teamName ?? this.teamName,
