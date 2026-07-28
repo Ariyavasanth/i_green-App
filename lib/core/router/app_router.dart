@@ -73,6 +73,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (_, _) => const ResponsesPage(),
           ),
           GoRoute(
+            path: '/leave',
+            builder: (_, _) => const SectionPage(title: 'Leave'),
+          ),
+          GoRoute(
+            path: '/loan',
+            builder: (_, _) => const SectionPage(title: 'Loan'),
+          ),
+          GoRoute(
+            path: '/pay-slip',
+            builder: (_, _) => const SectionPage(title: 'Pay Slip'),
+          ),
+          GoRoute(
             path: '/items',
             builder: (_, _) => const ItemsPage(),
             routes: [

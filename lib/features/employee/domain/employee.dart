@@ -204,6 +204,9 @@ class Employee {
     'Organization Structure',
     'Responses',
     'Employee Management',
+    'Leave',
+    'Loan',
+    'Pay Slip',
     'Items',
     'Inventory Adjustments',
     'Customers',
@@ -231,6 +234,9 @@ class Employee {
     'EMPLOYEE': [
       'Responses',
       'Employee Management',
+      'Leave',
+      'Loan',
+      'Pay Slip',
     ],
     'STOCK': [
       'Items',
