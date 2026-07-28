@@ -37,10 +37,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       GoRoute(
         path: '/employee/register/:linkId',
-        builder: (_, state) => EmployeeRegistrationPage(
-          linkId: state.pathParameters['linkId'] ?? '',
-          employee: state.extra is Employee ? state.extra as Employee : null,
-        ),
+        builder: (_, state) {
+          final rawAcceptedId = state.uri.queryParameters['acceptedId'];
+          final acceptedEmpId = rawAcceptedId != null ? int.tryParse(rawAcceptedId) : null;
+          return EmployeeRegistrationPage(
+            linkId: state.pathParameters['linkId'] ?? '',
+            employee: state.extra is Employee ? state.extra as Employee : null,
+            acceptedEmpId: acceptedEmpId,
+          );
+        },
       ),
       ShellRoute(
         builder: (context, state, child) =>

@@ -13,11 +13,13 @@ class EmployeeRegistrationPage extends ConsumerStatefulWidget {
   const EmployeeRegistrationPage({
     required this.linkId,
     this.employee,
+    this.acceptedEmpId,
     super.key,
   });
 
   final String linkId;
   final Employee? employee;
+  final int? acceptedEmpId;
 
   @override
   ConsumerState<EmployeeRegistrationPage> createState() =>
@@ -301,6 +303,24 @@ class _EmployeeRegistrationPageState
     _tabController = TabController(length: _tabs.length, vsync: this);
     if (widget.employee != null) {
       _populateFromEmployee(widget.employee!);
+    } else if (widget.acceptedEmpId != null) {
+      _registrationMode = 'accepted_response';
+      _selectedAcceptedEmpId = widget.acceptedEmpId;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final emps = await ref.read(employeesProvider.future);
+        final matches = emps.where((e) => e.id == widget.acceptedEmpId).toList();
+        if (matches.isNotEmpty && mounted) {
+          final match = matches.first;
+          _populateFromEmployee(match);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Auto-fetched details for ${match.fullName}. Configure credentials & permissions to complete registration.'),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      });
     }
   }
 
@@ -495,6 +515,33 @@ class _EmployeeRegistrationPageState
         salaryPf: double.tryParse(_pfController.text.trim().replaceAll(',', '')) ?? 0.0,
         accessPermissions: _selectedPermissions.toList(),
       );
+
+      if (_registrationMode == 'accepted_response' && _selectedAcceptedEmpId != null) {
+        final updatedData = employeeData.copyWith(
+          id: _selectedAcceptedEmpId!,
+          status: _status.isEmpty || _status == 'PENDING' ? 'ACTIVE' : _status,
+        );
+        await repo.updateEmployee(updatedData);
+        ref.invalidate(employeesProvider);
+        setState(() {
+          _isSubmitting = false;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Accepted response imported and employee registered successfully!'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          if (GoRouter.of(context).canPop()) {
+            GoRouter.of(context).pop();
+          } else {
+            GoRouter.of(context).go('/employee');
+          }
+        }
+        return;
+      }
 
       if (_isEditing) {
         final updatedData = employeeData.copyWith(
@@ -722,7 +769,7 @@ class _EmployeeRegistrationPageState
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (isEditMode || (link != null && link.linkStatus != 'Completed' && _submittedEmployee == null))
+              if (_isManagementAdd || isEditMode || (link != null && link.linkStatus != 'Completed' && _submittedEmployee == null))
                 Padding(
                   padding: const EdgeInsets.only(right: 12),
                   child: ElevatedButton.icon(

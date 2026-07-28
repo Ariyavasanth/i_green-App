@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../organization/presentation/widgets/column_selection_dialog.dart';
@@ -545,6 +546,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                 ],
                 rows: employees.map((emp) {
                   final isSelected = _selectedIds.contains(emp.id);
+                  final isAccepted = emp.status.trim().toLowerCase() == 'accepted';
                   return DataRow(
                     selected: isSelected,
                     onSelectChanged: (selected) {
@@ -584,27 +586,49 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            TextButton.icon(
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 4),
-                                minimumSize: Size.zero,
-                                tapTargetSize:
-                                    MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              onPressed: () => _updateEmployeeStatus(
-                                  context, emp, 'Accepted'),
-                              icon: const Icon(Icons.check_circle_outline,
-                                  size: 16, color: Colors.green),
-                              label: const Text(
-                                'Accept',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.green,
+                            if (isAccepted)
+                              TextButton.icon(
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 4),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                onPressed: () => GoRouter.of(context).push('/employee/register/new?acceptedId=${emp.id}'),
+                                icon: const Icon(Icons.download_rounded,
+                                    size: 16, color: AppColors.active),
+                                label: const Text(
+                                  'Import',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.active,
+                                  ),
+                                ),
+                              )
+                            else
+                              TextButton.icon(
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 4),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                onPressed: () => _updateEmployeeStatus(
+                                    context, emp, 'Accepted'),
+                                icon: const Icon(Icons.check_circle_outline,
+                                    size: 16, color: Colors.green),
+                                label: const Text(
+                                  'Accept',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.green,
+                                  ),
                                 ),
                               ),
-                            ),
                             const SizedBox(width: 8),
                             TextButton.icon(
                               style: TextButton.styleFrom(
@@ -613,7 +637,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                                 minimumSize: Size.zero,
                                 tapTargetSize:
                                     MaterialTapTargetSize.shrinkWrap,
-                              ),
+                                ),
                               onPressed: () => _updateEmployeeStatus(
                                   context, emp, 'Rejected'),
                               icon: const Icon(Icons.cancel_outlined,
@@ -823,20 +847,38 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                           style: TextStyle(
                               fontSize: 12, color: AppColors.active)),
                     ),
-                    TextButton.icon(
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 4),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    if (emp.status.trim().toLowerCase() == 'accepted')
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () => GoRouter.of(context).push('/employee/register/new?acceptedId=${emp.id}'),
+                        icon: const Icon(Icons.download_rounded,
+                            size: 16, color: AppColors.active),
+                        label: const Text('Import',
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.active)),
+                      )
+                    else
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () =>
+                            _updateEmployeeStatus(context, emp, 'Accepted'),
+                        icon: const Icon(Icons.check_circle_outline,
+                            size: 16, color: Colors.green),
+                        label: const Text('Accept',
+                            style: TextStyle(fontSize: 12, color: Colors.green)),
                       ),
-                      onPressed: () =>
-                          _updateEmployeeStatus(context, emp, 'Accepted'),
-                      icon: const Icon(Icons.check_circle_outline,
-                          size: 16, color: Colors.green),
-                      label: const Text('Accept',
-                          style: TextStyle(fontSize: 12, color: Colors.green)),
-                    ),
                     TextButton.icon(
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
