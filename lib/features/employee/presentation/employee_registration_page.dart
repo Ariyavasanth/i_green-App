@@ -2731,76 +2731,105 @@ class _EmployeeRegistrationPageState
                   border: Border.all(color: const Color(0xFFEAECF0)),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Wrap(
-                  spacing: 12,
-                  runSpacing: 10,
-                  children: Employee.allSidebarPermissions.map((permission) {
-                    final isSelected = _selectedPermissions.contains(permission);
-                    return InkWell(
-                      onTap: () {
-                        setState(() {
-                          if (isSelected) {
-                            _selectedPermissions.remove(permission);
-                          } else {
-                            _selectedPermissions.add(permission);
-                          }
-                        });
-                      },
-                      borderRadius: BorderRadius.circular(6),
-                      child: Container(
-                        width: isMobile ? double.infinity : 270,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? AppColors.active.withValues(alpha: 0.05)
-                              : Colors.white,
-                          border: Border.all(
-                            color: isSelected
-                                ? AppColors.active.withValues(alpha: 0.4)
-                                : const Color(0xFFD0D5DD),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: Employee.sidebarPermissionsByCategory.entries.map((entry) {
+                    final categoryName = entry.key;
+                    final categoryPermissions = entry.value;
+                    final isFirst = entry.key == Employee.sidebarPermissionsByCategory.keys.first;
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: EdgeInsets.only(
+                            top: isFirst ? 0.0 : 16.0,
+                            bottom: 8.0,
                           ),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Row(
-                          children: [
-                            SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: Checkbox(
-                                value: isSelected,
-                                activeColor: AppColors.active,
-                                onChanged: (val) {
-                                  setState(() {
-                                    if (val == true) {
-                                      _selectedPermissions.add(permission);
-                                    } else {
-                                      _selectedPermissions.remove(permission);
-                                    }
-                                  });
-                                },
-                              ),
+                          child: Text(
+                            categoryName,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF667085),
+                              letterSpacing: 0.8,
                             ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                permission,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: isSelected
-                                      ? FontWeight.w600
-                                      : FontWeight.w400,
+                          ),
+                        ),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 10,
+                          children: categoryPermissions.map((permission) {
+                            final isSelected = _selectedPermissions.contains(permission);
+                            return InkWell(
+                              onTap: () {
+                                setState(() {
+                                  if (isSelected) {
+                                    _selectedPermissions.remove(permission);
+                                  } else {
+                                    _selectedPermissions.add(permission);
+                                  }
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(6),
+                              child: Container(
+                                width: isMobile ? double.infinity : 270,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
                                   color: isSelected
-                                      ? Colors.black87
-                                      : Colors.black54,
+                                      ? AppColors.active.withValues(alpha: 0.05)
+                                      : Colors.white,
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? AppColors.active.withValues(alpha: 0.4)
+                                        : const Color(0xFFD0D5DD),
+                                  ),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: Checkbox(
+                                        value: isSelected,
+                                        activeColor: AppColors.active,
+                                        onChanged: (val) {
+                                          setState(() {
+                                            if (val == true) {
+                                              _selectedPermissions.add(permission);
+                                            } else {
+                                              _selectedPermissions.remove(permission);
+                                            }
+                                          });
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        permission,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: isSelected
+                                              ? FontWeight.w600
+                                              : FontWeight.w400,
+                                          color: isSelected
+                                              ? Colors.black87
+                                              : Colors.black54,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ),
-                          ],
+                            );
+                          }).toList(),
                         ),
-                      ),
+                      ],
                     );
                   }).toList(),
                 ),

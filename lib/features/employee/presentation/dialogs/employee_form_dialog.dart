@@ -362,61 +362,90 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                     border: Border.all(color: Colors.grey.shade300),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: Employee.allSidebarPermissions.map((permission) {
-                      final isSelected = _selectedPermissions.contains(permission);
-                      return InkWell(
-                        onTap: () {
-                          setState(() {
-                            if (isSelected) {
-                              _selectedPermissions.remove(permission);
-                            } else {
-                              _selectedPermissions.add(permission);
-                            }
-                          });
-                        },
-                        borderRadius: BorderRadius.circular(6),
-                        child: Container(
-                          width: isMobile ? double.infinity : 260,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 4,
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: Checkbox(
-                                  value: isSelected,
-                                  activeColor: AppColors.active,
-                                  onChanged: (val) {
-                                    setState(() {
-                                      if (val == true) {
-                                        _selectedPermissions.add(permission);
-                                      } else {
-                                        _selectedPermissions.remove(permission);
-                                      }
-                                    });
-                                  },
-                                ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: Employee.sidebarPermissionsByCategory.entries.map((entry) {
+                      final categoryName = entry.key;
+                      final categoryPermissions = entry.value;
+                      final isFirst = entry.key == Employee.sidebarPermissionsByCategory.keys.first;
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: EdgeInsets.only(
+                              top: isFirst ? 0.0 : 12.0,
+                              bottom: 6.0,
+                            ),
+                            child: Text(
+                              categoryName,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF667085),
+                                letterSpacing: 0.8,
                               ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  permission,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: categoryPermissions.map((permission) {
+                              final isSelected = _selectedPermissions.contains(permission);
+                              return InkWell(
+                                onTap: () {
+                                  setState(() {
+                                    if (isSelected) {
+                                      _selectedPermissions.remove(permission);
+                                    } else {
+                                      _selectedPermissions.add(permission);
+                                    }
+                                  });
+                                },
+                                borderRadius: BorderRadius.circular(6),
+                                child: Container(
+                                  width: isMobile ? double.infinity : 260,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 4,
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: Checkbox(
+                                          value: isSelected,
+                                          activeColor: AppColors.active,
+                                          onChanged: (val) {
+                                            setState(() {
+                                              if (val == true) {
+                                                _selectedPermissions.add(permission);
+                                              } else {
+                                                _selectedPermissions.remove(permission);
+                                              }
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          permission,
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ),
-                            ],
+                              );
+                            }).toList(),
                           ),
-                        ),
+                        ],
                       );
                     }).toList(),
                   ),

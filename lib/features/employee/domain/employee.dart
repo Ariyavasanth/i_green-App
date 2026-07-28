@@ -220,6 +220,40 @@ class Employee {
     'Bills',
   ];
 
+  static const Map<String, List<String>> sidebarPermissionsByCategory = {
+    'OVERVIEW': [
+      'Home',
+    ],
+    'ORGANIZATION': [
+      'Organization Management',
+      'Organization Structure',
+    ],
+    'EMPLOYEE': [
+      'Responses',
+      'Employee Management',
+    ],
+    'STOCK': [
+      'Items',
+      'Inventory Adjustments',
+    ],
+    'SALES': [
+      'Customers',
+      'Quotes',
+      'Sales Orders',
+      'Invoices',
+      'Delivery Challans',
+      'Payments Received',
+      'Credit Notes',
+      'e-Way Bills',
+    ],
+    'PURCHASE': [
+      'Vendors',
+      'Expenses',
+      'Purchase Orders',
+      'Bills',
+    ],
+  };
+
   final int id;
   final String employeeId;
   final String firstName;

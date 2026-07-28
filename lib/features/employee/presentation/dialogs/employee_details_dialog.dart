@@ -118,25 +118,45 @@ class EmployeeDetailsDialog extends StatelessWidget {
         ]),
         const SizedBox(height: 20),
         _buildSectionHeader('Access Permissions'),
-        Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: (employee.accessPermissions.isNotEmpty
-                    ? employee.accessPermissions
-                    : Employee.allSidebarPermissions)
-                .map(
+        ...Employee.sidebarPermissionsByCategory.entries.map((entry) {
+          final categoryName = entry.key;
+          final availablePerms = employee.accessPermissions.isNotEmpty
+              ? employee.accessPermissions.toSet()
+              : Employee.allSidebarPermissions.toSet();
+          final categoryPerms = entry.value.where((p) => availablePerms.contains(p)).toList();
+
+          if (categoryPerms.isEmpty) return const SizedBox.shrink();
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 12, bottom: 6),
+                child: Text(
+                  categoryName,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF667085),
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: categoryPerms.map(
                   (perm) => Chip(
                     label: Text(perm, style: const TextStyle(fontSize: 11)),
                     backgroundColor: AppColors.active.withValues(alpha: 0.1),
                     side: BorderSide.none,
                     visualDensity: VisualDensity.compact,
                   ),
-                )
-                .toList(),
-          ),
-        ),
+                ).toList(),
+              ),
+            ],
+          );
+        }),
       ],
     );
   }
