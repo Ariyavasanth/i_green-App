@@ -17,13 +17,6 @@ class LeaveManagementPage extends ConsumerStatefulWidget {
 class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
   DateTime _focusedMonth = DateTime.now();
   int? _selectedEmployeeFilterId; // null means 'All Employees'
-  final _workingDaysController = TextEditingController(text: '26');
-
-  @override
-  void dispose() {
-    _workingDaysController.dispose();
-    super.dispose();
-  }
 
   DateTime? _parseDate(String dateStr) {
     try {
@@ -198,9 +191,6 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
                   },
                 ),
 
-                const SizedBox(height: 24),
-                // Salary calculation section
-                _buildSalaryLopCalculationCard(),
               ],
             ),
           ),
@@ -332,8 +322,6 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   _buildLegendItem(const Color(0xFF2E7D32), 'Approved'),
-                  const SizedBox(width: 16),
-                  _buildLegendItem(const Color(0xFFE53935), 'Loss of Pay (LOP)'),
                   const SizedBox(width: 16),
                   _buildLegendItem(const Color(0xFFFBC02D), 'Pending'),
                 ],
@@ -629,167 +617,6 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
     );
   }
 
-  Widget _buildSalaryLopCalculationCard() {
-    if (_selectedEmployeeFilterId == null) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.black12),
-        ),
-        child: const Column(
-          children: [
-            Icon(Icons.info_outline, color: AppColors.textSecondary, size: 36),
-            SizedBox(height: 8),
-            Text(
-              'Salary & Loss of Pay Calculation',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-            ),
-            SizedBox(height: 4),
-            Text(
-              'Please select a specific employee from the filter dropdown above to view calculation.',
-              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final int targetId = _selectedEmployeeFilterId!;
-    final int currentYear = _focusedMonth.year;
-    final int currentMonth = _focusedMonth.month;
-    final workingDays = int.tryParse(_workingDaysController.text.trim()) ?? 26;
-
-    final calcAsync = ref.watch(
-      salaryCalculationProvider(
-        SalaryCalcParam(
-          employeeId: targetId,
-          year: currentYear,
-          month: currentMonth,
-          workingDays: workingDays,
-        ),
-      ),
-    );
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.black12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.calculate_outlined, color: AppColors.active, size: 22),
-              const SizedBox(width: 8),
-              const Text(
-                'Salary & Loss of Pay Calculation',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-              ),
-              const Spacer(),
-              const Text('Total Working Days: ', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-              const SizedBox(width: 4),
-              SizedBox(
-                width: 50,
-                child: TextFormField(
-                  controller: _workingDaysController,
-                  keyboardType: TextInputType.number,
-                  style: const TextStyle(fontSize: 12),
-                  decoration: const InputDecoration(
-                    isDense: true,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (val) {
-                    setState(() {});
-                  },
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          calcAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Text('Error fetching calculations: $e'),
-            data: (calc) {
-              return Column(
-                children: [
-                  Row(
-                    children: [
-                      _buildCalcTile('Gross Monthly Salary', '₹${NumberFormat('#,##,###').format(calc.grossMonthlySalary)}'),
-                      _buildCalcTile('Total Working Days', '${calc.totalWorkingDays} days'),
-                      _buildCalcTile('Per Day Salary', '₹${calc.perDaySalary.toStringAsFixed(2)}'),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      _buildCalcTile('Approved Leave Days', '${calc.totalApprovedLeaveDays} days'),
-                      _buildCalcTile('Total LOP Days', '${calc.totalLopDays} days', valueColor: const Color(0xFFE53935)),
-                      _buildCalcTile('LOP Deduction Amount', '₹${calc.lopDeductionAmount.toStringAsFixed(2)}', valueColor: const Color(0xFFE53935)),
-                    ],
-                  ),
-                  const Divider(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Final Payable Salary',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                      ),
-                      Text(
-                        '₹${NumberFormat('#,##,###.00').format(calc.finalPayableSalary)}',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF2E7D32),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCalcTile(String label, String value, {Color? valueColor}) {
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8F9FA),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: const Color(0xFFE9ECEF)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: valueColor ?? AppColors.textPrimary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Future<void> _handleApproveRequest(int id, String adminName) async {
     try {

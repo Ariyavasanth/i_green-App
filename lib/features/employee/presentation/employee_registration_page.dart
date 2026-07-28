@@ -50,7 +50,7 @@ class _EmployeeRegistrationPageState
   final _pfNumberController = TextEditingController();
   final _esiNumberController = TextEditingController();
   String _reportingTo = 'Saravanan G S';
-  String _leaveType = 'Casual Leave';
+  String _leaveType = 'As Needed';
   String _leaveAllocationFrequency = 'Monthly';
   final _allowedLeavesController = TextEditingController(text: '1.0');
   final _leaveEffectiveDateController = TextEditingController();
@@ -1086,7 +1086,7 @@ class _EmployeeRegistrationPageState
               _buildDropdown(
                 'Leave Type',
                 _leaveType,
-                ['Casual Leave', 'Sick Leave', 'Earned Leave'],
+                ['As Needed', 'Once a Month', 'No Leave'],
                 (val) => setState(() => _leaveType = val!),
               ),
             ],

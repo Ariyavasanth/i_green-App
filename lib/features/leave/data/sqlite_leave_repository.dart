@@ -14,6 +14,8 @@ class SqliteLeaveRepository implements LeaveRepository {
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDatabase();
+    await _createTables(_database!);
+    await _ensureColumnsExist(_database!);
     return _database!;
   }
 
@@ -104,9 +106,9 @@ class SqliteLeaveRepository implements LeaveRepository {
       await db.rawQuery('SELECT COUNT(*) FROM leave_types'),
     );
     if (count == 0) {
-      await db.insert('leave_types', {'name': 'Casual Leave', 'description': 'Casual leave entitlement'});
-      await db.insert('leave_types', {'name': 'Sick Leave', 'description': 'Sick leave entitlement'});
-      await db.insert('leave_types', {'name': 'Earned Leave', 'description': 'Earned leave entitlement'});
+      await db.insert('leave_types', {'name': 'As Needed', 'description': 'You can take leave whenever required.'});
+      await db.insert('leave_types', {'name': 'Once a Month', 'description': 'You are allowed to take one day of leave this month.'});
+      await db.insert('leave_types', {'name': 'No Leave', 'description': 'You are not eligible to take leave.'});
     }
 
     // Seed default leave balances if empty
@@ -117,48 +119,21 @@ class SqliteLeaveRepository implements LeaveRepository {
       // Seed balances for Employee 1 (Saravanan G S)
       await db.insert('leave_balances', {
         'employee_id': 1,
-        'leave_type': 'Casual Leave',
-        'allowed_leaves': 12.0,
+        'leave_type': 'As Needed',
+        'allowed_leaves': 30.0,
         'used_leaves': 3.0,
-        'available_leaves': 9.0,
+        'available_leaves': 27.0,
         'effective_date': '01-01-2026',
-        'allocation_frequency': 'Monthly',
-      });
-      await db.insert('leave_balances', {
-        'employee_id': 1,
-        'leave_type': 'Sick Leave',
-        'allowed_leaves': 8.0,
-        'used_leaves': 1.0,
-        'available_leaves': 7.0,
-        'effective_date': '01-01-2026',
-        'allocation_frequency': 'Monthly',
-      });
-      await db.insert('leave_balances', {
-        'employee_id': 1,
-        'leave_type': 'Earned Leave',
-        'allowed_leaves': 15.0,
-        'used_leaves': 2.0,
-        'available_leaves': 13.0,
-        'effective_date': '01-01-2026',
-        'allocation_frequency': 'Monthly',
+        'allocation_frequency': 'Yearly',
       });
 
       // Seed balances for Employee 2 (John Doe)
       await db.insert('leave_balances', {
         'employee_id': 2,
-        'leave_type': 'Casual Leave',
+        'leave_type': 'Once a Month',
         'allowed_leaves': 12.0,
         'used_leaves': 2.0,
         'available_leaves': 10.0,
-        'effective_date': '01-01-2026',
-        'allocation_frequency': 'Monthly',
-      });
-      await db.insert('leave_balances', {
-        'employee_id': 2,
-        'leave_type': 'Sick Leave',
-        'allowed_leaves': 8.0,
-        'used_leaves': 0.0,
-        'available_leaves': 8.0,
         'effective_date': '01-01-2026',
         'allocation_frequency': 'Monthly',
       });
@@ -166,10 +141,10 @@ class SqliteLeaveRepository implements LeaveRepository {
       // Seed balances for Employee 3 (Jane Smith)
       await db.insert('leave_balances', {
         'employee_id': 3,
-        'leave_type': 'Casual Leave',
-        'allowed_leaves': 12.0,
-        'used_leaves': 1.0,
-        'available_leaves': 11.0,
+        'leave_type': 'No Leave',
+        'allowed_leaves': 0.0,
+        'used_leaves': 0.0,
+        'available_leaves': 0.0,
         'effective_date': '01-01-2026',
         'allocation_frequency': 'Monthly',
       });
@@ -185,7 +160,7 @@ class SqliteLeaveRepository implements LeaveRepository {
         'employee_id': 1,
         'employee_name': 'Saravanan G S',
         'employee_custom_id': 'EMP-0001',
-        'leave_type': 'Casual Leave',
+        'leave_type': 'As Needed',
         'from_date': '10-07-2026',
         'to_date': '12-07-2026',
         'num_days': 3.0,
@@ -199,7 +174,7 @@ class SqliteLeaveRepository implements LeaveRepository {
         'employee_id': 1,
         'employee_name': 'Saravanan G S',
         'employee_custom_id': 'EMP-0001',
-        'leave_type': 'Sick Leave',
+        'leave_type': 'As Needed',
         'from_date': '18-07-2026',
         'to_date': '18-07-2026',
         'num_days': 1.0,
@@ -213,7 +188,7 @@ class SqliteLeaveRepository implements LeaveRepository {
         'employee_id': 1,
         'employee_name': 'Saravanan G S',
         'employee_custom_id': 'EMP-0001',
-        'leave_type': 'Earned Leave',
+        'leave_type': 'As Needed',
         'from_date': '01-08-2026',
         'to_date': '03-08-2026',
         'num_days': 3.0,
@@ -229,7 +204,7 @@ class SqliteLeaveRepository implements LeaveRepository {
         'employee_id': 2,
         'employee_name': 'John Doe',
         'employee_custom_id': 'EMP-0002',
-        'leave_type': 'Casual Leave',
+        'leave_type': 'Once a Month',
         'from_date': '14-07-2026',
         'to_date': '15-07-2026',
         'num_days': 2.0,
@@ -243,7 +218,7 @@ class SqliteLeaveRepository implements LeaveRepository {
         'employee_id': 2,
         'employee_name': 'John Doe',
         'employee_custom_id': 'EMP-0002',
-        'leave_type': 'Casual Leave',
+        'leave_type': 'Once a Month',
         'from_date': '28-07-2026',
         'to_date': '30-07-2026',
         'num_days': 3.0,
@@ -259,7 +234,7 @@ class SqliteLeaveRepository implements LeaveRepository {
         'employee_id': 3,
         'employee_name': 'Jane Smith',
         'employee_custom_id': 'EMP-0003',
-        'leave_type': 'Casual Leave',
+        'leave_type': 'No Leave',
         'from_date': '20-07-2026',
         'to_date': '20-07-2026',
         'num_days': 1.0,

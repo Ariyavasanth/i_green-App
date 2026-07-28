@@ -154,20 +154,21 @@ class _LeavePageState extends ConsumerState<LeavePage> {
                       ),
                     ),
                     const Spacer(),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.active,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    if (currentEmp.leaveType != 'No Leave')
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.active,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        ),
+                        onPressed: () => _showNewLeaveDialog(currentEmp),
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text(
+                          '+ New Leave',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
                       ),
-                      onPressed: () => _showNewLeaveDialog(currentEmp),
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text(
-                        '+ New Leave',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                      ),
-                    ),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -216,55 +217,59 @@ class _LeavePageState extends ConsumerState<LeavePage> {
   }
 
   Widget _buildEmployeeBalanceCard(Employee emp) {
-    final balancesAsync = ref.watch(leaveBalancesProvider(emp.id));
+    final type = emp.leaveType;
+    String message = '';
+    Color bgColor = const Color(0xFFE8F5E9); // Light green
+    Color textColor = const Color(0xFF2E7D32); // Dark green
+    Color borderColor = const Color(0xFFC8E6C9);
+    IconData icon = Icons.info_outline;
 
-    return balancesAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Text('Error loading balances: $e'),
-      data: (balances) {
-        if (balances.isEmpty) {
-          return Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFF3E0),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
-            ),
+    if (type == 'As Needed') {
+      message = 'You can take leave whenever required.';
+      bgColor = const Color(0xFFE8F5E9); // Light green
+      textColor = const Color(0xFF2E7D32);
+      borderColor = const Color(0xFFC8E6C9);
+      icon = Icons.check_circle_outline;
+    } else if (type == 'Once a Month') {
+      message = 'You are allowed to take one day of leave this month.';
+      bgColor = const Color(0xFFE3F2FD); // Light blue
+      textColor = const Color(0xFF1565C0);
+      borderColor = const Color(0xFFBBDEFB);
+      icon = Icons.info_outline;
+    } else if (type == 'No Leave') {
+      message = 'You are not eligible to take leave.';
+      bgColor = const Color(0xFFFFEBEE); // Light red
+      textColor = const Color(0xFFC62828);
+      borderColor = const Color(0xFFFFCDD2);
+      icon = Icons.warning_amber_outlined;
+    } else {
+      message = 'Leave Policy: $type. You can take leave whenever required.';
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: textColor, size: 24),
+          const SizedBox(width: 12),
+          Expanded(
             child: Text(
-              'No leave entitlements configured. Current leave policy: ${emp.leaveType} (${emp.allowedLeaves} leaves per ${emp.leaveAllocationFrequency.toLowerCase()}). Effective Date: ${emp.effectiveDate}.',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.orange),
-            ),
-          );
-        }
-
-        final b = balances.first;
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: const Color(0xFFE8F5E9),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.info_outline, color: Color(0xFF2E7D32), size: 24),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Entitled leave policy: ${b.leaveType} (${b.allowedLeaves} days, ${b.allocationFrequency.toLowerCase()}). Used: ${b.usedLeaves} days, Available: ${b.availableLeaves} days. Excess leaves will be marked as Loss of Pay (LOP).',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF2E7D32),
-                  ),
-                ),
+              message,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: textColor,
               ),
-            ],
+            ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
@@ -718,7 +723,7 @@ class _LeavePageState extends ConsumerState<LeavePage> {
     final fromDateController = TextEditingController();
     final toDateController = TextEditingController();
     final reasonController = TextEditingController();
-    String leaveType = 'Casual Leave';
+    String leaveType = currentEmp.leaveType.isNotEmpty ? currentEmp.leaveType : 'As Needed';
 
     showDialog(
       context: context,
@@ -748,30 +753,6 @@ class _LeavePageState extends ConsumerState<LeavePage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Leave Type',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
-                    ),
-                    const SizedBox(height: 6),
-                    DropdownButtonFormField<String>(
-                      initialValue: leaveType,
-                      decoration: const InputDecoration(
-                        isDense: true,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        border: OutlineInputBorder(),
-                      ),
-                      items: ['Casual Leave', 'Sick Leave', 'Earned Leave']
-                          .map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 13))))
-                          .toList(),
-                      onChanged: (val) {
-                        if (val != null) {
-                          setDialogState(() {
-                            leaveType = val;
-                          });
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 16),
                     Row(
                       children: [
                         Expanded(

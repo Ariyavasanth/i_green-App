@@ -14,6 +14,9 @@ class SqliteEmployeeRepository implements EmployeeRepository {
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDatabase();
+    await _createTables(_database!);
+    await _ensureColumnsExist(_database!);
+    await _seedSampleData(_database!);
     return _database!;
   }
 
@@ -251,7 +254,7 @@ class SqliteEmployeeRepository implements EmployeeRepository {
         city: 'Chennai',
         state: 'Tamil Nadu',
         salaryTotalCtc: 1200000.0,
-        leaveType: 'Casual Leave',
+        leaveType: 'As Needed',
         leaveAllocationFrequency: 'Monthly',
         allowedLeaves: 1.5,
         effectiveDate: '01-01-2026',
@@ -276,7 +279,7 @@ class SqliteEmployeeRepository implements EmployeeRepository {
         city: 'Bangalore',
         state: 'Karnataka',
         salaryTotalCtc: 600000.0,
-        leaveType: 'Casual Leave',
+        leaveType: 'Once a Month',
         leaveAllocationFrequency: 'Monthly',
         allowedLeaves: 1.0,
         effectiveDate: '01-01-2026',
@@ -302,7 +305,7 @@ class SqliteEmployeeRepository implements EmployeeRepository {
         city: 'Hyderabad',
         state: 'Telangana',
         salaryTotalCtc: 450000.0,
-        leaveType: 'Casual Leave',
+        leaveType: 'No Leave',
         leaveAllocationFrequency: 'Monthly',
         allowedLeaves: 1.0,
         effectiveDate: '01-01-2026',

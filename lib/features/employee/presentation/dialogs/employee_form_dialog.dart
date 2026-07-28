@@ -29,7 +29,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
 
   String _employmentType = 'Full-Time';
   String _status = 'Active';
-  String _leaveType = 'Casual Leave';
+  String _leaveType = 'As Needed';
   String _leaveAllocationFrequency = 'Monthly';
   late final TextEditingController _allowedLeavesController;
   late final TextEditingController _leaveEffectiveDateController;
@@ -65,7 +65,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
     if (emp != null) {
       _employmentType = emp.employmentType.isEmpty ? 'Full-Time' : emp.employmentType;
       _status = emp.status.isEmpty ? 'Active' : emp.status;
-      _leaveType = emp.leaveType.isEmpty ? 'Casual Leave' : emp.leaveType;
+      _leaveType = emp.leaveType.isEmpty ? 'As Needed' : emp.leaveType;
       _selectedPermissions = emp.accessPermissions.isNotEmpty
           ? Set<String>.from(emp.accessPermissions)
           : Set<String>.from(Employee.allSidebarPermissions);
@@ -361,15 +361,16 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                 ),
                 const SizedBox(height: 12),
                 _buildFieldPair(
+                  isMobile: isMobile,
                   child1: DropdownButtonFormField<String>(
-                    value: ['Casual Leave', 'Sick Leave', 'Earned Leave'].contains(_leaveType)
+                    value: ['As Needed', 'Once a Month', 'No Leave'].contains(_leaveType)
                         ? _leaveType
-                        : 'Casual Leave',
+                        : 'As Needed',
                     decoration: const InputDecoration(
                       labelText: 'Leave Type',
                       border: OutlineInputBorder(),
                     ),
-                    items: ['Casual Leave', 'Sick Leave', 'Earned Leave']
+                    items: ['As Needed', 'Once a Month', 'No Leave']
                         .map((t) => DropdownMenuItem(value: t, child: Text(t)))
                         .toList(),
                     onChanged: (val) {
@@ -392,6 +393,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                 ),
                 const SizedBox(height: 12),
                 _buildFieldPair(
+                  isMobile: isMobile,
                   child1: TextFormField(
                     controller: _allowedLeavesController,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
