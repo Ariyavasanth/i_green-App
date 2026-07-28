@@ -391,7 +391,8 @@ class SqliteEmployeeRepository implements EmployeeRepository {
   Future<String> _generateNextEmployeeId() async {
     final db = await database;
     final maps = await db.rawQuery(
-      'SELECT employee_id FROM employees WHERE employee_id LIKE "EMP-%"',
+      'SELECT employee_id FROM employees WHERE employee_id LIKE ?',
+      ['EMP-%'],
     );
 
     int maxNum = 0;

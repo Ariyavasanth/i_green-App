@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../organization/domain/column_preference.dart';
@@ -232,6 +233,21 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     final batch = _firestore.batch();
     final nowIso = DateTime.now().toIso8601String();
 
+    String newEmpId = employeeData.employeeId;
+    if (newEmpId.isEmpty) {
+      newEmpId = await _generateNextEmployeeId();
+    }
+
+    final tempPassword = employeeData.temporaryPassword.isNotEmpty
+        ? employeeData.temporaryPassword
+        : _generateRandomCode(10);
+
+    final finalEmployee = employeeData.copyWith(
+      employeeId: newEmpId,
+      status: employeeData.status.isEmpty ? 'Pending' : employeeData.status,
+      temporaryPassword: tempPassword,
+    );
+
     // 1. Record submission response in `employee_responses` collection
     final responseRef = _responsesRef.doc(linkId);
     batch.set(responseRef, {
@@ -239,8 +255,8 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       'link_id': linkId,
       'submission_status': 'Submitted',
       'submitted_at': FieldValue.serverTimestamp(),
-      'submitted_by': employeeData.emailAddress,
-      'candidate_data': _employeeToFirestore(employeeData),
+      'submitted_by': finalEmployee.emailAddress,
+      'candidate_data': _employeeToFirestore(finalEmployee),
     }, SetOptions(merge: true));
 
     // 2. Update status of `registration_links` document to Completed
@@ -248,25 +264,46 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     batch.set(linkRef, {
       'link_status': 'Completed',
       'submitted_date': nowIso,
-      'submitted_by': employeeData.emailAddress,
-      'employee_name': employeeData.fullName,
-      'employee_id': employeeData.employeeId,
+      'submitted_by': finalEmployee.fullName,
+      'employee_name': finalEmployee.fullName,
+      'employee_id': newEmpId,
       'updated_at': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
 
     // 3. Save candidate data into `employees` collection
-    final empDocId = employeeData.employeeId.isNotEmpty
-        ? employeeData.employeeId
-        : (employeeData.id != 0
-            ? employeeData.id.toString()
+    final empDocId = newEmpId.isNotEmpty
+        ? newEmpId
+        : (finalEmployee.id != 0
+            ? finalEmployee.id.toString()
             : _employeesRef.doc().id);
 
-    final empData = _employeeToFirestore(employeeData);
+    final empData = _employeeToFirestore(finalEmployee);
     empData['created_at'] = FieldValue.serverTimestamp();
     batch.set(_employeesRef.doc(empDocId), empData, SetOptions(merge: true));
 
     await batch.commit();
-    return employeeData;
+    return finalEmployee;
+  }
+
+  Future<String> _generateNextEmployeeId() async {
+    final snapshot = await _employeesRef.get();
+    int maxNum = 0;
+    for (final doc in snapshot.docs) {
+      final code = (doc.data()['employee_id'] as String?) ?? doc.id;
+      final numPart = code.replaceAll(RegExp(r'[^0-9]'), '');
+      if (numPart.isNotEmpty) {
+        final val = int.tryParse(numPart) ?? 0;
+        if (val > maxNum) maxNum = val;
+      }
+    }
+    final nextNum = maxNum + 1;
+    return 'EMP-${nextNum.toString().padLeft(4, '0')}';
+  }
+
+  String _generateRandomCode(int length) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final rand = Random();
+    return List.generate(length, (_) => chars[rand.nextInt(chars.length)]).join();
   }
 
   @override
