@@ -34,7 +34,7 @@ class _AddEmployeeLinkDialogState
             !origin.contains('localhost') &&
             !origin.contains('127.0.0.1'))
         ? origin
-        : 'https://app.igreentech.in';
+        : 'https://i-green-tech.web.app';
     _baseUrlController = TextEditingController(text: initialUrl);
   }
 
