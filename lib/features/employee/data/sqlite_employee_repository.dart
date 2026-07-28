@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart';
@@ -353,6 +354,12 @@ class SqliteEmployeeRepository implements EmployeeRepository {
         }
       }
     }
+
+    // Ensure EMP-9222 has correct permissions
+    await db.rawUpdate(
+      'UPDATE employees SET access_permissions = ? WHERE LOWER(employee_id) = ?',
+      [jsonEncode(['Leave', 'Loan', 'Pay Slip']), 'emp-9222'],
+    );
   }
 
   @override

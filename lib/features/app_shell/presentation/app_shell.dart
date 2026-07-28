@@ -9,7 +9,6 @@ import '../../../core/widgets/visual_effects.dart';
 import '../../../widgets/navigation/sidebar_drawer.dart';
 import '../../authentication/providers/authentication_providers.dart';
 import '../../books/providers/books_providers.dart';
-import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
 
 final sidebarExpandedProvider = StateProvider<bool>((ref) => true);
@@ -30,11 +29,24 @@ final userDestinationsProvider = Provider<List<SidebarDestination>>((ref) {
 
       if (matchingEmp.isNotEmpty) {
         final emp = matchingEmp.first;
+        
+        // Explicitly check for EMP-9222
+        if (emp.employeeId.trim().toLowerCase() == 'emp-9222') {
+          return AppShell.destinations
+              .where((d) => const ['Leave', 'Loan', 'Pay Slip'].contains(d.label))
+              .toList();
+        }
+
         // If employee has custom access permissions defined, filter sidebar options
         if (emp.accessPermissions.isNotEmpty) {
           final allowed = emp.accessPermissions.toSet();
           return AppShell.destinations
               .where((d) => allowed.contains(d.label))
+              .toList();
+        } else if (emp.userType == 'EMPLOYEE') {
+          // Default other employees to only Leave, Loan, and Pay Slip
+          return AppShell.destinations
+              .where((d) => const ['Leave', 'Loan', 'Pay Slip'].contains(d.label))
               .toList();
         }
       }

@@ -1,16 +1,12 @@
 import 'dart:convert';
-import 'dart:io' show File;
 import 'package:archive/archive.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/material.dart';
 
-// Conditionally import html only for web
-import 'dart:html' as html if (dart.library.io) 'dart:ui';
-
 import '../domain/employee.dart';
+import 'offer_letter_save_stub.dart'
+    if (dart.library.html) 'offer_letter_save_web.dart'
+    if (dart.library.io) 'offer_letter_save_io.dart';
 
 class OfferLetterGenerator {
   /// Generates a Microsoft Word (.docx) file byte array containing the full
@@ -277,43 +273,11 @@ class OfferLetterGenerator {
       final rawName = employee.fullName.trim().replaceAll(RegExp(r'[^\w\s\-]'), '');
       final fileName = 'Offer_Letter_${rawName.isEmpty ? "Employee" : rawName.replaceAll(" ", "_")}.docx';
 
-      if (kIsWeb) {
-        final blob = html.Blob([docxBytes], 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-        final url = html.Url.createObjectUrlFromBlob(blob);
-        html.AnchorElement(href: url)
-          ..setAttribute('download', fileName)
-          ..click();
-        html.Url.revokeObjectUrl(url);
-
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Offer Letter ($fileName) downloaded successfully!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } else {
-        final dir = await getApplicationDocumentsDirectory();
-        final file = File('${dir.path}/$fileName');
-        await file.writeAsBytes(docxBytes);
-
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Offer Letter saved to: ${file.path}'),
-              backgroundColor: Colors.green,
-              action: SnackBarAction(
-                label: 'Open',
-                textColor: Colors.white,
-                onPressed: () {
-                  launchUrl(Uri.file(file.path));
-                },
-              ),
-            ),
-          );
-        }
-      }
+      await saveAndDownloadOfferLetter(
+        context: context,
+        bytes: docxBytes,
+        fileName: fileName,
+      );
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
