@@ -14,9 +14,6 @@ class SqliteEmployeeRepository implements EmployeeRepository {
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDatabase();
-    await _createTables(_database!);
-    await _ensureColumnsExist(_database!);
-    await _seedSampleData(_database!);
     return _database!;
   }
 
@@ -318,7 +315,15 @@ class SqliteEmployeeRepository implements EmployeeRepository {
         await db.rawQuery('SELECT COUNT(*) FROM employees WHERE employee_id = ?', [emp.employeeId]),
       ) ?? 0;
       if (exists == 0) {
-        await db.insert('employees', emp.toMap());
+        final idExists = Sqflite.firstIntValue(
+          await db.rawQuery('SELECT COUNT(*) FROM employees WHERE id = ?', [emp.id]),
+        ) ?? 0;
+        if (idExists > 0) {
+          final map = emp.toMap()..remove('id');
+          await db.insert('employees', map);
+        } else {
+          await db.insert('employees', emp.toMap());
+        }
       }
     }
   }
