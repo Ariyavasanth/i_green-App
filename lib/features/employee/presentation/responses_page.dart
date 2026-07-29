@@ -21,7 +21,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
   static const String _tableId = 'employee_responses_table';
 
   static const List<String> _defaultAllColumns = [
-    'Employee ID',
+    'Candidate ID',
     'Employee Name',
     'Organization Name',
     'Department',
@@ -85,8 +85,13 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
 
                 final filtered = employees.where((emp) {
                   final q = searchQuery.toLowerCase().trim();
+                  // Use the display-form of the ID (EMP- → CAN-) so search
+                  // matches what the user sees in the Candidate ID column.
+                  final displayId = emp.employeeId.startsWith('EMP-')
+                      ? emp.employeeId.replaceFirst('EMP-', 'CAN-')
+                      : emp.employeeId;
                   final matchesSearch = q.isEmpty ||
-                      emp.employeeId.toLowerCase().contains(q) ||
+                      displayId.toLowerCase().contains(q) ||
                       emp.fullName.toLowerCase().contains(q) ||
                       emp.organizationName.toLowerCase().contains(q) ||
                       emp.department.toLowerCase().contains(q) ||
@@ -671,8 +676,13 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     TextStyle? style;
 
     switch (columnName) {
-      case 'Employee ID':
-        value = emp.employeeId;
+      case 'Candidate ID':
+        // Display-only: render stored EMP- prefix as CAN- on Responses page.
+        // Existing records pre-date the CAN- sequence; this keeps display consistent
+        // without mutating any backend data.
+        value = emp.employeeId.startsWith('EMP-')
+            ? emp.employeeId.replaceFirst('EMP-', 'CAN-')
+            : emp.employeeId;
         style = const TextStyle(
             fontWeight: FontWeight.bold, color: AppColors.active);
         break;

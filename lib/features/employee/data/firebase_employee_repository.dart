@@ -235,7 +235,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
     String newEmpId = employeeData.employeeId;
     if (newEmpId.isEmpty) {
-      newEmpId = await _generateNextEmployeeId();
+      newEmpId = await _generateNextCandidateId();
     }
 
     final tempPassword = employeeData.temporaryPassword.isNotEmpty
@@ -285,6 +285,27 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     return finalEmployee;
   }
 
+  /// Generates the next CAN-XXXX candidate ID for registration form submissions.
+  /// This sequence is independent from the EMP-XXXX employee ID sequence.
+  Future<String> _generateNextCandidateId() async {
+    final snapshot = await _employeesRef.get();
+    int maxNum = 0;
+    for (final doc in snapshot.docs) {
+      final code = (doc.data()['employee_id'] as String?) ?? doc.id;
+      if (!code.startsWith('CAN-')) continue;
+      final numPart = code.replaceAll(RegExp(r'[^0-9]'), '');
+      if (numPart.isNotEmpty) {
+        final val = int.tryParse(numPart) ?? 0;
+        if (val > maxNum) maxNum = val;
+      }
+    }
+    final nextNum = maxNum + 1;
+    return 'CAN-${nextNum.toString().padLeft(4, '0')}';
+  }
+
+  /// Generates the next EMP-XXXX employee ID for manually created employees.
+  /// Used only by the Employee Management module — do NOT call from registration flow.
+  // ignore: unused_element
   Future<String> _generateNextEmployeeId() async {
     final snapshot = await _employeesRef.get();
     int maxNum = 0;
