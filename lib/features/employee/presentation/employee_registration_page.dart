@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -55,6 +57,8 @@ class _EmployeeRegistrationPageState
   final _allowedLeavesController = TextEditingController(text: '1.0');
   final _leaveEffectiveDateController = TextEditingController();
   String _selectedFileName = 'No file chosen';
+  String _profileImageDataUrl = '';
+  Uint8List? _profileImageBytes;
 
   // Tab 2: Address
   final _permAddressController = TextEditingController();
@@ -247,6 +251,17 @@ class _EmployeeRegistrationPageState
       _twitterController.text = emp.twitterUrl;
       _linkedinController.text = emp.linkedinUrl;
       _googleController.text = emp.googleUrl;
+      _profileImageDataUrl = emp.profileImageUrl;
+      if (_profileImageDataUrl.isNotEmpty) {
+        final commaIndex = _profileImageDataUrl.indexOf(',');
+        if (commaIndex > 0) {
+          try {
+            _profileImageBytes = base64Decode(_profileImageDataUrl.substring(commaIndex + 1));
+          } catch (_) {
+            _profileImageBytes = null;
+          }
+        }
+      }
 
       // Salary fields
       if (emp.salaryType.isNotEmpty) _salaryType = emp.salaryType;
@@ -421,6 +436,43 @@ class _EmployeeRegistrationPageState
     }
   }
 
+  Future<void> _pickProfileImage() async {
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
+        withData: true,
+      );
+      final file = result?.files.isNotEmpty == true ? result!.files.first : null;
+      if (file == null) return;
+      final bytes = file.bytes;
+      if (bytes == null) {
+        throw Exception('Unable to read the selected image.');
+      }
+
+      final ext = (file.extension ?? 'jpg').toLowerCase();
+      final mimeType = switch (ext) {
+        'png' => 'image/png',
+        'webp' => 'image/webp',
+        'gif' => 'image/gif',
+        'bmp' => 'image/bmp',
+        'jpg' || 'jpeg' => 'image/jpeg',
+        _ => 'image/jpeg',
+      };
+
+      setState(() {
+        _selectedFileName = file.name;
+        _profileImageBytes = bytes;
+        _profileImageDataUrl = 'data:$mimeType;base64,${base64Encode(bytes)}';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Image selection failed: $e')),
+      );
+    }
+  }
+
   Future<void> _submitForm(RegistrationLink? link, {bool isSubmit = true}) async {
     final isEditMode = _isEditing;
 
@@ -551,6 +603,9 @@ class _EmployeeRegistrationPageState
         salaryTax: double.tryParse(_taxController.text.trim().replaceAll(',', '')) ?? 0.0,
         salaryPf: double.tryParse(_pfController.text.trim().replaceAll(',', '')) ?? 0.0,
         accessPermissions: _selectedPermissions.toList(),
+        profileImageUrl: _profileImageDataUrl.isNotEmpty
+            ? _profileImageDataUrl
+            : (_currentEmployee?.profileImageUrl ?? widget.employee?.profileImageUrl ?? ''),
       );
 
       Employee savedEmployee;
@@ -1231,12 +1286,15 @@ class _EmployeeRegistrationPageState
             CircleAvatar(
               radius: 30,
               backgroundColor: AppColors.active,
-              child: Text(
-                _firstNameController.text.trim().isNotEmpty
-                    ? _firstNameController.text.trim()[0].toUpperCase()
-                    : 'E',
-                style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
-              ),
+              backgroundImage: _profileImageBytes != null ? MemoryImage(_profileImageBytes!) : null,
+              child: _profileImageBytes == null
+                  ? Text(
+                      _firstNameController.text.trim().isNotEmpty
+                          ? _firstNameController.text.trim()[0].toUpperCase()
+                          : 'E',
+                      style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                    )
+                  : null,
             ),
             const SizedBox(width: 14),
             Column(
@@ -1254,9 +1312,7 @@ class _EmployeeRegistrationPageState
                         side: const BorderSide(color: Colors.grey),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
                       ),
-                      onPressed: () {
-                        setState(() => _selectedFileName = 'profile_photo.jpg');
-                      },
+                      onPressed: _pickProfileImage,
                       child: const Text('Choose file', style: TextStyle(fontSize: 12, color: Colors.black)),
                     ),
                     const SizedBox(width: 8),
