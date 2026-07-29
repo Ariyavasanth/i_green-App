@@ -157,14 +157,35 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
   @override
   Future<void> deleteEmployee(int id) async {
+    // 1. Try querying by the stored integer 'id' field
     final snapshot =
         await _employeesRef.where('id', isEqualTo: id).limit(1).get();
     if (snapshot.docs.isNotEmpty) {
       await _employeesRef.doc(snapshot.docs.first.id).delete();
-    } else {
-      final doc = await _employeesRef.doc(id.toString()).get();
-      if (doc.exists) {
-        await _employeesRef.doc(id.toString()).delete();
+      return;
+    }
+
+    // 2. Try doc ID = id.toString() (e.g. "1", "2")
+    final doc = await _employeesRef.doc(id.toString()).get();
+    if (doc.exists) {
+      await _employeesRef.doc(id.toString()).delete();
+      return;
+    }
+
+    // 3. Try querying by 'employee_id' field that contains the numeric part
+    //    (handles cases where id == hashCode of the employeeId doc key)
+    final allDocs = await _employeesRef.get();
+    for (final d in allDocs.docs) {
+      final data = d.data();
+      // Reconstruct the id that _employeeFromFirestore would have assigned
+      final docId = d.id;
+      final parsed = int.tryParse(docId.replaceAll(RegExp(r'\D'), ''));
+      final assignedId = (parsed != null && parsed != 0)
+          ? parsed
+          : (docId.hashCode & 0x7FFFFFFF);
+      if (assignedId == id || data['id'] == id) {
+        await _employeesRef.doc(d.id).delete();
+        return;
       }
     }
   }
