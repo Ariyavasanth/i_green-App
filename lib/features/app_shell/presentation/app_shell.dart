@@ -23,38 +23,36 @@ final userDestinationsProvider = Provider<List<SidebarDestination>>((ref) {
   return employeesAsync.maybeWhen(
     data: (employees) {
       final matchingEmp = employees.where(
-        (e) => e.emailAddress.trim().toLowerCase() == userEmail.trim().toLowerCase() ||
-               e.employeeId.trim().toLowerCase() == userEmail.trim().toLowerCase(),
+        (e) =>
+            e.emailAddress.trim().toLowerCase() == userEmail.trim().toLowerCase() ||
+            e.employeeId.trim().toLowerCase() == userEmail.trim().toLowerCase(),
       ).toList();
 
-      if (matchingEmp.isNotEmpty) {
-        final emp = matchingEmp.first;
-        
-        // Explicitly check for EMP-9222
-        if (emp.employeeId.trim().toLowerCase() == 'emp-9222') {
-          return AppShell.destinations
-              .where((d) => const ['Leave', 'Loan', 'Pay Slip'].contains(d.label))
-              .toList();
-        }
+      if (matchingEmp.isEmpty) return AppShell.destinations;
 
-        // If employee has custom access permissions defined, filter sidebar options
-        if (emp.accessPermissions.isNotEmpty) {
-          final allowed = emp.accessPermissions.toSet();
-          return AppShell.destinations
-              .where((d) => allowed.contains(d.label))
-              .toList();
-        } else if (emp.userType == 'EMPLOYEE') {
-          // Default other employees to only Leave, Loan, and Pay Slip
-          return AppShell.destinations
-              .where((d) => const ['Leave', 'Loan', 'Pay Slip'].contains(d.label))
-              .toList();
-        }
+      final emp = matchingEmp.first;
+
+      // ── SUPER_ADMIN: unrestricted full access ──────────────────────────────
+      if (emp.userType.toUpperCase() == 'SUPER_ADMIN') {
+        return AppShell.destinations;
       }
+
+      // ── ADMIN / EMPLOYEE / any other role:
+      //    Only show what Super Admin has explicitly granted via accessPermissions
+      if (emp.accessPermissions.isNotEmpty) {
+        final allowed = emp.accessPermissions.toSet();
+        return AppShell.destinations
+            .where((d) => allowed.contains(d.label))
+            .toList();
+      }
+
+      // No permissions assigned → fall back to full access
       return AppShell.destinations;
     },
     orElse: () => AppShell.destinations,
   );
 });
+
 
 class AppShell extends ConsumerWidget {
   const AppShell({

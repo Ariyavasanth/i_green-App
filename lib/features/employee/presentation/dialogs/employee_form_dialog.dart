@@ -29,6 +29,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
 
   String _employmentType = 'Full-Time';
   String _status = 'Active';
+  String _userType = 'EMPLOYEE';
   String _leaveType = 'As Needed';
   String _leaveAllocationFrequency = 'Monthly';
   late final TextEditingController _allowedLeavesController;
@@ -65,6 +66,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
     if (emp != null) {
       _employmentType = emp.employmentType.isEmpty ? 'Full-Time' : emp.employmentType;
       _status = emp.status.isEmpty ? 'Active' : emp.status;
+      _userType = emp.userType.isEmpty ? 'EMPLOYEE' : emp.userType;
       _leaveType = emp.leaveType.isEmpty ? 'As Needed' : emp.leaveType;
       _selectedPermissions = emp.accessPermissions.isNotEmpty
           ? Set<String>.from(emp.accessPermissions)
@@ -128,6 +130,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
         employmentType: _employmentType,
         joiningDate: _joiningDateController.text.trim(),
         status: _status,
+        userType: _userType,
         leaveType: _leaveType,
         leaveAllocationFrequency: _leaveAllocationFrequency,
         allowedLeaves: double.tryParse(_allowedLeavesController.text.trim()) ?? 1.0,
@@ -329,6 +332,24 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                 _buildFieldPair(
                   isMobile: isMobile,
                   child1: DropdownButtonFormField<String>(
+                    value: {
+                      'SUPER_ADMIN', 'ADMIN', 'EMPLOYEE', 'HR', 'MANAGER',
+                      if (_userType.isNotEmpty) _userType,
+                    }.contains(_userType)
+                        ? _userType
+                        : 'EMPLOYEE',
+                    decoration: const InputDecoration(
+                      labelText: 'User Role *',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: ['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE', 'HR', 'MANAGER']
+                        .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+                        .toList(),
+                    onChanged: (val) {
+                      if (val != null) setState(() => _userType = val);
+                    },
+                  ),
+                  child2: DropdownButtonFormField<String>(
                     initialValue: employmentTypeItems.contains(_employmentType)
                         ? _employmentType
                         : employmentTypeItems.first,
@@ -343,7 +364,11 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                       if (val != null) setState(() => _employmentType = val);
                     },
                   ),
-                  child2: DropdownButtonFormField<String>(
+                ),
+                const SizedBox(height: 12),
+                _buildFieldPair(
+                  isMobile: isMobile,
+                  child1: DropdownButtonFormField<String>(
                     initialValue: statusItems.contains(_status)
                         ? _status
                         : statusItems.first,
@@ -358,6 +383,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                       if (val != null) setState(() => _status = val);
                     },
                   ),
+                  child2: const SizedBox.shrink(),
                 ),
                 const SizedBox(height: 12),
                 _buildFieldPair(

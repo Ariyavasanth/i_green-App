@@ -50,14 +50,17 @@ class LeaveRequest {
   }
 
   factory LeaveRequest.fromMap(Map<String, dynamic> map) {
-    List<String> parseJsonList(String? jsonStr) {
-      if (jsonStr == null || jsonStr.isEmpty) return [];
-      try {
-        final decoded = jsonDecode(jsonStr);
-        if (decoded is List) {
-          return decoded.map((e) => e.toString()).toList();
-        }
-      } catch (_) {}
+    List<String> parseList(dynamic raw) {
+      if (raw == null) return [];
+      // Firestore native array of strings
+      if (raw is List) return raw.map((e) => e.toString()).toList();
+      // SQLite JSON-encoded string
+      if (raw is String && raw.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(raw);
+          if (decoded is List) return decoded.map((e) => e.toString()).toList();
+        } catch (_) {}
+      }
       return [];
     }
 
@@ -73,8 +76,8 @@ class LeaveRequest {
       reason: map['reason'] as String? ?? '',
       status: map['status'] as String? ?? 'Pending',
       createdAt: map['created_at'] as String? ?? '',
-      approvedDates: parseJsonList(map['approved_dates'] as String?),
-      lopDates: parseJsonList(map['lop_dates'] as String?),
+      approvedDates: parseList(map['approved_dates']),
+      lopDates: parseList(map['lop_dates']),
     );
   }
 

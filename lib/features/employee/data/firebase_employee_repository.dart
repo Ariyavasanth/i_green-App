@@ -89,7 +89,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         joiningDate: '29-04-2017',
         status: 'Active',
         bloodGroup: 'B+',
-        userType: 'ADMIN',
+        userType: 'SUPER_ADMIN',
         aadhaarNumber: '833750993144',
         pfNumber: '100338738050',
         city: 'Chennai',

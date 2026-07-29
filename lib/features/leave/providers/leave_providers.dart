@@ -3,16 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../authentication/providers/authentication_providers.dart';
 import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
-import '../data/sqlite_leave_repository.dart';
+import '../data/firebase_leave_repository.dart';
 import '../domain/leave_repository.dart';
 import '../domain/leave_request.dart';
 import '../domain/leave_balance.dart';
 import '../domain/leave_type.dart';
 import '../domain/salary_calculation.dart';
 
-/// Swap to FirebaseLeaveRepository() to switch backends — no screen changes needed.
+/// Swap to SqliteLeaveRepository() to switch back to SQLite — no screen changes needed.
 final leaveRepositoryProvider = Provider<LeaveRepository>(
-  (ref) => SqliteLeaveRepository(),
+  (ref) => FirebaseLeaveRepository(),
 );
 
 final leaveRequestsProvider = FutureProvider.family<List<LeaveRequest>, int>(

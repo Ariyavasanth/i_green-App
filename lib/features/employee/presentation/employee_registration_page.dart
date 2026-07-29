@@ -37,7 +37,7 @@ class _EmployeeRegistrationPageState
   final _lastNameController = TextEditingController();
   String _bloodGroup = 'B+';
   String _gender = 'Male';
-  String _userType = 'ADMIN';
+  String _userType = 'EMPLOYEE';
   String _status = 'ACTIVE';
   final _dobController = TextEditingController();
   final _aadhaarController = TextEditingController();
@@ -1024,7 +1024,7 @@ class _EmployeeRegistrationPageState
               _buildDropdown(
                 'User Type',
                 _userType,
-                ['ADMIN', 'EMPLOYEE', 'MANAGER'],
+                ['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE', 'HR', 'MANAGER'],
                 (val) => setState(() => _userType = val!),
               ),
               _buildDropdown(
@@ -2656,8 +2656,8 @@ class _EmployeeRegistrationPageState
                 _buildDropdown(
                   'User Role / Type',
                   _userType,
-                  ['ADMIN', 'EMPLOYEE', 'HR', 'MANAGER'],
-                  (val) => setState(() => _userType = val ?? 'ADMIN'),
+                  ['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE', 'HR', 'MANAGER'],
+                  (val) => setState(() => _userType = val ?? 'EMPLOYEE'),
                 ),
               ],
             ),
