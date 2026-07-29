@@ -301,8 +301,8 @@ class _EmployeeRegistrationPageState
     'Document',
     'Social Media',
     if (_isManagementAdd) 'Salary & Offer Letter',
-    'Credentials',
     if (_isManagementAdd) 'Access Permissions',
+    if (_isManagementAdd) 'Credentials',
   ];
 
   @override
@@ -429,21 +429,6 @@ class _EmployeeRegistrationPageState
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Please enter First Name under Personal Info tab.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
-      // Check if password is empty in candidate registration mode
-      if (!_isManagementAdd && _passwordController.text.trim().isEmpty) {
-        final credIndex = _tabs.indexOf('Credentials');
-        if (credIndex != -1) {
-          _tabController.animateTo(credIndex);
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please enter your secure Login Password under Credentials tab.'),
             backgroundColor: Colors.orange,
           ),
         );
@@ -698,8 +683,8 @@ class _EmployeeRegistrationPageState
                           _buildDocumentTab(editLink, isMobile),
                           _buildSocialMediaTab(editLink, isMobile),
                           if (_isManagementAdd) _buildSalaryOfferLetterTab(editLink, isMobile),
-                          _buildCredentialsTab(editLink, isMobile),
                           if (_isManagementAdd) _buildAccessPermissionsTab(editLink, isMobile),
+                          if (_isManagementAdd) _buildCredentialsTab(editLink, isMobile),
                         ],
                       ),
                     );
@@ -765,8 +750,8 @@ class _EmployeeRegistrationPageState
                         _buildDocumentTab(link, isMobile),
                         _buildSocialMediaTab(link, isMobile),
                         if (_isManagementAdd) _buildSalaryOfferLetterTab(link, isMobile),
-                        _buildCredentialsTab(link, isMobile),
                         if (_isManagementAdd) _buildAccessPermissionsTab(link, isMobile),
+                        if (_isManagementAdd) _buildCredentialsTab(link, isMobile),
                       ],
                     ),
                   );

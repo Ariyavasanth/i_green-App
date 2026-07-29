@@ -48,7 +48,7 @@ class EmployeeDetailsDialog extends StatelessWidget {
       ),
       content: SizedBox(
         width: (screenWidth * 0.9).clamp(280.0, 720.0),
-        height: 520,
+        height: 620,
         child: DefaultTabController(
           length: 8,
           child: Column(
@@ -398,6 +398,64 @@ class EmployeeDetailsDialog extends StatelessWidget {
     );
   }
 
+  Widget _buildSalaryTab() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _buildSectionHeader('Salary Details'),
+        _buildInfoGrid([
+          _InfoItem('Salary Type', employee.salaryType),
+          _InfoItem('Total CTC', employee.salaryTotalCtc == 0 ? '' : employee.salaryTotalCtc.toStringAsFixed(2)),
+          _InfoItem('Basic Pay', employee.salaryBasic == 0 ? '' : employee.salaryBasic.toStringAsFixed(2)),
+          _InfoItem('HRA', employee.salaryHra == 0 ? '' : employee.salaryHra.toStringAsFixed(2)),
+          _InfoItem('Education Allowance', employee.salaryEducationAllowance == 0 ? '' : employee.salaryEducationAllowance.toStringAsFixed(2)),
+          _InfoItem('Special Allowance', employee.salarySpecialAllowance == 0 ? '' : employee.salarySpecialAllowance.toStringAsFixed(2)),
+          _InfoItem('Tax', employee.salaryTax == 0 ? '' : employee.salaryTax.toStringAsFixed(2)),
+          _InfoItem('PF', employee.salaryPf == 0 ? '' : employee.salaryPf.toStringAsFixed(2)),
+        ]),
+      ],
+    );
+  }
+
+  Widget _buildCredentialsTab() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _buildSectionHeader('Credentials'),
+        _buildInfoGrid([
+          _InfoItem('Employee ID', employee.employeeId),
+          _InfoItem('Temporary Password', employee.temporaryPassword),
+          _InfoItem('User Type', employee.userType),
+          _InfoItem('Status', employee.status),
+        ]),
+      ],
+    );
+  }
+
+  Widget _buildPermissionsTab() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _buildSectionHeader('Access Permissions'),
+        if (employee.accessPermissions.isNotEmpty)
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: employee.accessPermissions
+                .map((perm) => Chip(
+                      label: Text(perm, style: const TextStyle(fontSize: 11)),
+                      backgroundColor: AppColors.active.withValues(alpha: 0.1),
+                      side: BorderSide.none,
+                      visualDensity: VisualDensity.compact,
+                    ))
+                .toList(),
+          )
+        else
+          const Text('No access permissions assigned.', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+      ],
+    );
+  }
+
   Widget _buildSectionHeader(String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -451,4 +509,3 @@ class _InfoItem {
   final String label;
   final String value;
 }
-

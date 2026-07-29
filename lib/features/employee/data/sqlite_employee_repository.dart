@@ -459,6 +459,20 @@ class SqliteEmployeeRepository implements EmployeeRepository {
   }
 
   @override
+  Future<void> updateRegistrationLinkStatus({
+    required String linkId,
+    required String linkStatus,
+  }) async {
+    final db = await database;
+    await db.update(
+      'registration_links',
+      {'link_status': linkStatus},
+      where: 'link_id = ?',
+      whereArgs: [linkId],
+    );
+  }
+
+  @override
   Future<Employee> submitEmployeeRegistration({
     required String linkId,
     required Employee employeeData,

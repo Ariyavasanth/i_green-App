@@ -273,6 +273,20 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   }
 
   @override
+  Future<void> updateRegistrationLinkStatus({
+    required String linkId,
+    required String linkStatus,
+  }) async {
+    await _registrationLinksRef.doc(linkId).set(
+      {
+        'link_status': linkStatus,
+        'updated_at': FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true),
+    );
+  }
+
+  @override
   Future<Employee> submitEmployeeRegistration({
     required String linkId,
     required Employee employeeData,

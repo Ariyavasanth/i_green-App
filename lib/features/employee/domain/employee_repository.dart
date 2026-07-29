@@ -16,6 +16,10 @@ abstract class EmployeeRepository {
   });
   Future<List<RegistrationLink>> getRegistrationLinks();
   Future<RegistrationLink?> getRegistrationLinkById(String linkId);
+  Future<void> updateRegistrationLinkStatus({
+    required String linkId,
+    required String linkStatus,
+  });
   Future<Employee> submitEmployeeRegistration({
     required String linkId,
     required Employee employeeData,
