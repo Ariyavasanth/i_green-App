@@ -8,7 +8,7 @@ import '../domain/attendance_record.dart';
 import '../domain/attendance_repository.dart';
 
 final attendanceRepositoryProvider = Provider<AttendanceRepository>(
-  (ref) => FirebaseAttendanceRepository(),
+  (ref) => SqliteAttendanceRepository(),
 );
 
 final attendanceRecordsProvider = FutureProvider.family<List<AttendanceRecord>, int>(
