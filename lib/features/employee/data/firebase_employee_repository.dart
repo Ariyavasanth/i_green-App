@@ -250,13 +250,25 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   Future<Employee> submitEmployeeRegistration({
     required String linkId,
     required Employee employeeData,
+    bool isSubmit = true,
   }) async {
     final batch = _firestore.batch();
     final nowIso = DateTime.now().toIso8601String();
 
+    final linkDoc = await _registrationLinksRef.doc(linkId).get();
+    if (!linkDoc.exists) {
+      throw Exception('Invalid registration link.');
+    }
+    final linkData = linkDoc.data()!;
+    final linkStatus = linkData['link_status'] as String? ?? 'Pending';
+    if (linkStatus != 'Pending') {
+      throw Exception('This registration link has already been used or expired.');
+    }
+    final existingEmpId = linkData['employee_id'] as String? ?? '';
+
     String newEmpId = employeeData.employeeId;
     if (newEmpId.isEmpty) {
-      newEmpId = await _generateNextCandidateId();
+      newEmpId = existingEmpId.isNotEmpty ? existingEmpId : await _generateNextCandidateId();
     }
 
     final tempPassword = employeeData.temporaryPassword.isNotEmpty
@@ -265,7 +277,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
     final finalEmployee = employeeData.copyWith(
       employeeId: newEmpId,
-      status: employeeData.status.isEmpty ? 'Pending' : employeeData.status,
+      status: isSubmit ? 'Pending' : 'Draft',
       temporaryPassword: tempPassword,
     );
 
@@ -274,29 +286,25 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     batch.set(responseRef, {
       'response_id': 'resp_${responseRef.id}',
       'link_id': linkId,
-      'submission_status': 'Submitted',
+      'submission_status': isSubmit ? 'Submitted' : 'Draft',
       'submitted_at': FieldValue.serverTimestamp(),
       'submitted_by': finalEmployee.emailAddress,
       'candidate_data': _employeeToFirestore(finalEmployee),
     }, SetOptions(merge: true));
 
-    // 2. Update status of `registration_links` document to Completed
+    // 2. Update status of `registration_links` document
     final linkRef = _registrationLinksRef.doc(linkId);
     batch.set(linkRef, {
-      'link_status': 'Completed',
-      'submitted_date': nowIso,
-      'submitted_by': finalEmployee.fullName,
+      'link_status': isSubmit ? 'Completed' : 'Pending',
+      'submitted_date': isSubmit ? nowIso : '',
+      'submitted_by': isSubmit ? finalEmployee.fullName : '',
       'employee_name': finalEmployee.fullName,
       'employee_id': newEmpId,
       'updated_at': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
 
     // 3. Save candidate data into `employees` collection
-    final empDocId = newEmpId.isNotEmpty
-        ? newEmpId
-        : (finalEmployee.id != 0
-            ? finalEmployee.id.toString()
-            : _employeesRef.doc().id);
+    final empDocId = newEmpId;
 
     final empData = _employeeToFirestore(finalEmployee);
     empData['created_at'] = FieldValue.serverTimestamp();

@@ -180,6 +180,7 @@ class _EmployeeRegistrationPageState
   Employee? _submittedEmployee;
   String _registrationMode = 'manual';
   int? _selectedAcceptedEmpId;
+  bool _draftLoaded = false;
 
   void _populateFromEmployee(Employee emp) {
     setState(() {
@@ -417,26 +418,39 @@ class _EmployeeRegistrationPageState
     }
   }
 
-  Future<void> _submitForm(RegistrationLink? link) async {
-    if (_firstNameController.text.trim().isEmpty) {
-      _tabController.animateTo(0);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter First Name under Personal Info tab.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
+  Future<void> _submitForm(RegistrationLink? link, {bool isSubmit = true}) async {
+    if (isSubmit) {
+      if (_firstNameController.text.trim().isEmpty) {
+        _tabController.animateTo(0);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter First Name under Personal Info tab.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
 
-    if (!_formKey.currentState!.validate()) {
-      _tabController.animateTo(0);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please fill mandatory fields marked with *'),
-        ),
-      );
-      return;
+      if (!_formKey.currentState!.validate()) {
+        _tabController.animateTo(0);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please fill mandatory fields marked with *'),
+          ),
+        );
+        return;
+      }
+    } else {
+      if (_firstNameController.text.trim().isEmpty) {
+        _tabController.animateTo(0);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter at least First Name under Personal Info tab to save draft.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
     }
 
     setState(() => _isSubmitting = true);
@@ -607,6 +621,7 @@ class _EmployeeRegistrationPageState
       final created = await repo.submitEmployeeRegistration(
         linkId: widget.linkId,
         employeeData: employeeData,
+        isSubmit: isSubmit,
       );
 
       ref.invalidate(employeesProvider);
@@ -614,9 +629,23 @@ class _EmployeeRegistrationPageState
       ref.invalidate(registrationLinkByIdProvider(widget.linkId));
 
       setState(() {
-        _submittedEmployee = created;
+        if (isSubmit) {
+          _submittedEmployee = created;
+        }
         _isSubmitting = false;
       });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isSubmit
+                ? 'Registration submitted successfully!'
+                : 'Draft progress saved successfully!'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } catch (e) {
       setState(() => _isSubmitting = false);
       if (mounted) {
@@ -713,6 +742,21 @@ class _EmployeeRegistrationPageState
                       message:
                           'This registration link has expired. Please contact HR for a new invite link.',
                     );
+                  }
+
+                  if (link.employeeId.isNotEmpty && !_draftLoaded) {
+                    _draftLoaded = true;
+                    WidgetsBinding.instance.addPostFrameCallback((_) async {
+                      try {
+                        final emps = await ref.read(employeesProvider.future);
+                        final matches = emps.where((e) => e.employeeId == link.employeeId).toList();
+                        if (matches.isNotEmpty && mounted) {
+                          _populateFromEmployee(matches.first);
+                        }
+                      } catch (e) {
+                        debugPrint('Error loading draft employee: $e');
+                      }
+                    });
                   }
 
                   return Form(
@@ -1215,7 +1259,7 @@ class _EmployeeRegistrationPageState
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
               ),
-              onPressed: _isSubmitting ? null : () => _submitForm(link),
+              onPressed: _isSubmitting ? null : () => _submitForm(link, isSubmit: _isManagementAdd),
               icon: _isSubmitting
                   ? const SizedBox(
                       width: 14,
@@ -1415,7 +1459,7 @@ class _EmployeeRegistrationPageState
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
               ),
-              onPressed: _isSubmitting ? null : () => _submitForm(link),
+              onPressed: _isSubmitting ? null : () => _submitForm(link, isSubmit: _isManagementAdd),
               icon: const Icon(Icons.check, size: 16),
               label: const Text('Save', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
             ),
@@ -1600,7 +1644,7 @@ class _EmployeeRegistrationPageState
                     _eduYearController.clear();
                   });
                 }
-                _submitForm(link);
+                _submitForm(link, isSubmit: _isManagementAdd);
               },
               icon: const Icon(Icons.check, size: 16),
               label: const Text('Save', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
@@ -1740,7 +1784,7 @@ class _EmployeeRegistrationPageState
                     _expDurationController.clear();
                   });
                 }
-                _submitForm(link);
+                _submitForm(link, isSubmit: _isManagementAdd);
               },
               icon: const Icon(Icons.check, size: 16),
               label: const Text('Save', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
@@ -1864,7 +1908,7 @@ class _EmployeeRegistrationPageState
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
               ),
-              onPressed: _isSubmitting ? null : () => _submitForm(link),
+              onPressed: _isSubmitting ? null : () => _submitForm(link, isSubmit: _isManagementAdd),
               icon: const Icon(Icons.check, size: 16),
               label: const Text('Save', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
             ),
@@ -1929,7 +1973,7 @@ class _EmployeeRegistrationPageState
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
               ),
-              onPressed: _isSubmitting ? null : () => _submitForm(link),
+              onPressed: _isSubmitting ? null : () => _submitForm(link, isSubmit: _isManagementAdd),
               icon: const Icon(Icons.check, size: 16),
               label: const Text('Save', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
             ),
@@ -2084,7 +2128,7 @@ class _EmployeeRegistrationPageState
                     _docFileName = 'No file chosen';
                   });
                 }
-                _submitForm(link);
+                _submitForm(link, isSubmit: _isManagementAdd);
               },
               icon: const Icon(Icons.check, size: 16),
               label: const Text('Save', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
@@ -2137,7 +2181,7 @@ class _EmployeeRegistrationPageState
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
               ),
-              onPressed: _isSubmitting ? null : () => _submitForm(link),
+              onPressed: _isSubmitting ? null : () => _submitForm(link, isSubmit: _isManagementAdd),
               icon: const Icon(Icons.check, size: 16),
               label: const Text('Save', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
             ),
@@ -2492,7 +2536,7 @@ class _EmployeeRegistrationPageState
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
               ),
-              onPressed: _isSubmitting ? null : () => _submitForm(link),
+              onPressed: _isSubmitting ? null : () => _submitForm(link, isSubmit: _isManagementAdd),
               icon: const Icon(Icons.check, size: 16),
               label: const Text('Save', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
             ),
@@ -2730,7 +2774,7 @@ class _EmployeeRegistrationPageState
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
               ),
-              onPressed: _isSubmitting ? null : () => _submitForm(link),
+              onPressed: _isSubmitting ? null : () => _submitForm(link, isSubmit: _isManagementAdd),
               icon: const Icon(Icons.check, size: 16),
               label: const Text('Save Credentials', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
             ),
@@ -2931,7 +2975,7 @@ class _EmployeeRegistrationPageState
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
-                onPressed: _isSubmitting ? null : () => _submitForm(link),
+                onPressed: _isSubmitting ? null : () => _submitForm(link, isSubmit: _isManagementAdd),
                 icon: const Icon(Icons.check, size: 16),
                 label: const Text(
                   'Save Permissions',

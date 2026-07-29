@@ -19,6 +19,7 @@ abstract class EmployeeRepository {
   Future<Employee> submitEmployeeRegistration({
     required String linkId,
     required Employee employeeData,
+    bool isSubmit = true,
   });
 
   Future<ColumnPreference?> getColumnPreference(String tableId);

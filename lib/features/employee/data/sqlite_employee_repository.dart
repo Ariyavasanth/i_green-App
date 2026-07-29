@@ -455,6 +455,7 @@ class SqliteEmployeeRepository implements EmployeeRepository {
   Future<Employee> submitEmployeeRegistration({
     required String linkId,
     required Employee employeeData,
+    bool isSubmit = true,
   }) async {
     final db = await database;
     final link = await getRegistrationLinkById(linkId);
@@ -465,26 +466,54 @@ class SqliteEmployeeRepository implements EmployeeRepository {
       throw Exception('This registration link has already been used or expired.');
     }
 
-    final newEmpId = await _generateNextCandidateId();
+    String newEmpId = employeeData.employeeId;
+    if (newEmpId.isEmpty) {
+      newEmpId = link.employeeId.isNotEmpty ? link.employeeId : await _generateNextCandidateId();
+    }
+
     final tempPassword = _generateRandomCode(10);
     final nowStr = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
 
-    final finalEmployee = employeeData.copyWith(
-      employeeId: newEmpId,
-      status: employeeData.status.isEmpty ? 'Pending' : employeeData.status,
-      temporaryPassword: tempPassword,
+    final existing = await db.query(
+      'employees',
+      where: 'employee_id = ?',
+      whereArgs: [newEmpId],
     );
 
-    final empDbId = await db.insert('employees', finalEmployee.toMap());
-    final createdEmployee = finalEmployee.copyWith(id: empDbId);
+    Employee createdEmployee;
+    if (existing.isNotEmpty) {
+      final existingId = existing.first['id'] as int;
+      final existingTempPassword = existing.first['temporary_password'] as String? ?? '';
+      final finalEmployee = employeeData.copyWith(
+        id: existingId,
+        employeeId: newEmpId,
+        status: isSubmit ? 'Pending' : 'Draft',
+        temporaryPassword: existingTempPassword.isNotEmpty ? existingTempPassword : tempPassword,
+      );
+      await db.update(
+        'employees',
+        finalEmployee.toMap(),
+        where: 'id = ?',
+        whereArgs: [existingId],
+      );
+      createdEmployee = finalEmployee;
+    } else {
+      final finalEmployee = employeeData.copyWith(
+        employeeId: newEmpId,
+        status: isSubmit ? 'Pending' : 'Draft',
+        temporaryPassword: tempPassword,
+      );
+      final empDbId = await db.insert('employees', finalEmployee.toMap());
+      createdEmployee = finalEmployee.copyWith(id: empDbId);
+    }
 
-    // Update Registration Link to Completed
+    // Update Registration Link details
     final updatedLink = link.copyWith(
-      linkStatus: 'Completed',
+      linkStatus: isSubmit ? 'Completed' : 'Pending',
       employeeName: createdEmployee.fullName,
       employeeId: newEmpId,
-      submittedDate: nowStr,
-      submittedBy: createdEmployee.fullName,
+      submittedDate: isSubmit ? nowStr : '',
+      submittedBy: isSubmit ? createdEmployee.fullName : '',
     );
 
     await db.update(
