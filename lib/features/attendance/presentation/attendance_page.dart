@@ -275,6 +275,8 @@ class AttendanceVerificationDialog extends StatefulWidget {
 
 class _AttendanceVerificationDialogState extends State<AttendanceVerificationDialog> {
   CameraController? _controller;
+  List<CameraDescription> _cameras = const [];
+  int _cameraIndex = 0;
   bool _loading = true;
   bool _verifying = false;
   String? _message;
@@ -291,6 +293,7 @@ class _AttendanceVerificationDialogState extends State<AttendanceVerificationDia
   Future<void> _initCamera() async {
     final cameras = await availableCameras();
     if (!mounted) return;
+    _cameras = cameras;
     if (cameras.isEmpty) {
       setState(() {
         _loading = false;
@@ -298,10 +301,41 @@ class _AttendanceVerificationDialogState extends State<AttendanceVerificationDia
       });
       return;
     }
-    _controller = CameraController(cameras.first, ResolutionPreset.medium, enableAudio: false);
-    await _controller!.initialize();
-    if (!mounted) return;
+    await _startCamera(_cameraIndex);
+  }
+
+  Future<void> _startCamera(int index) async {
+    if (_cameras.isEmpty) return;
+    final safeIndex = index % _cameras.length;
+    setState(() {
+      _loading = true;
+      _message = null;
+    });
+    final previousController = _controller;
+    _controller = null;
+    if (previousController != null) {
+      await previousController.dispose();
+    }
+
+    final nextController = CameraController(
+      _cameras[safeIndex],
+      ResolutionPreset.high,
+      enableAudio: false,
+    );
+    await nextController.initialize();
+    if (!mounted) {
+      await nextController.dispose();
+      return;
+    }
+    _controller = nextController;
+    _cameraIndex = safeIndex;
     setState(() => _loading = false);
+  }
+
+  Future<void> _switchCamera() async {
+    if (_cameras.length < 2 || _verifying) return;
+    final nextIndex = (_cameraIndex + 1) % _cameras.length;
+    await _startCamera(nextIndex);
   }
 
   Future<void> _captureAndVerify() async {
@@ -353,7 +387,8 @@ class _AttendanceVerificationDialogState extends State<AttendanceVerificationDia
 
   Future<void> _retry() async {
     setState(() => _message = null);
-    await _controller?.resumePreview();
+    if (_controller == null) return;
+    await _controller!.resumePreview();
   }
 
   Future<void> _cancel() async {
@@ -399,7 +434,25 @@ class _AttendanceVerificationDialogState extends State<AttendanceVerificationDia
                           : Stack(
                               fit: StackFit.expand,
                               children: [
-                                if (_controller != null) CameraPreview(_controller!),
+                                if (_controller != null)
+                                  KeyedSubtree(
+                                    key: ValueKey<int>(_cameraIndex),
+                                    child: CameraPreview(_controller!),
+                                  ),
+                                Positioned(
+                                  top: 12,
+                                  right: 12,
+                                  child: Material(
+                                    color: Colors.black87,
+                                    shape: const CircleBorder(),
+                                    elevation: 4,
+                                    child: IconButton(
+                                      tooltip: 'Switch camera',
+                                      onPressed: _cameras.length < 2 || _loading ? null : _switchCamera,
+                                      icon: const Icon(Icons.cameraswitch, color: Colors.white),
+                                    ),
+                                  ),
+                                ),
                                 Center(
                                   child: Container(
                                     width: 200,
@@ -407,6 +460,7 @@ class _AttendanceVerificationDialogState extends State<AttendanceVerificationDia
                                     decoration: BoxDecoration(
                                       border: Border.all(color: const Color(0xFF9CC70A), width: 3),
                                       borderRadius: BorderRadius.circular(18),
+                                      color: Colors.transparent,
                                     ),
                                   ),
                                 ),
