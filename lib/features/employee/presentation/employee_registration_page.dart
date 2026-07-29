@@ -301,7 +301,7 @@ class _EmployeeRegistrationPageState
     'Document',
     'Social Media',
     if (_isManagementAdd) 'Salary & Offer Letter',
-    if (_isManagementAdd) 'Credentials',
+    'Credentials',
     if (_isManagementAdd) 'Access Permissions',
   ];
 
@@ -310,7 +310,7 @@ class _EmployeeRegistrationPageState
     super.initState();
     _selectedPermissions = widget.employee != null && widget.employee!.accessPermissions.isNotEmpty
         ? Set<String>.from(widget.employee!.accessPermissions)
-        : Set<String>.from(Employee.allSidebarPermissions);
+        : (!_isManagementAdd ? <String>{} : Set<String>.from(Employee.allSidebarPermissions));
     _tabController = TabController(length: _tabs.length, vsync: this);
     if (widget.employee != null) {
       _populateFromEmployee(widget.employee!);
@@ -429,6 +429,21 @@ class _EmployeeRegistrationPageState
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Please enter First Name under Personal Info tab.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      // Check if password is empty in candidate registration mode
+      if (!_isManagementAdd && _passwordController.text.trim().isEmpty) {
+        final credIndex = _tabs.indexOf('Credentials');
+        if (credIndex != -1) {
+          _tabController.animateTo(credIndex);
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter your secure Login Password under Credentials tab.'),
             backgroundColor: Colors.orange,
           ),
         );
@@ -554,7 +569,24 @@ class _EmployeeRegistrationPageState
 
       Employee savedEmployee;
 
-      if (widget.linkId == 'new' || widget.linkId.isEmpty) {
+      if (isEditMode) {
+        // Edit existing employee record
+        final targetId = widget.employee?.id ?? _currentEmployee?.id ?? 0;
+        final updated = employeeData.copyWith(id: targetId);
+        await repo.updateEmployee(updated);
+        savedEmployee = updated;
+      } else if (_registrationMode == 'accepted_response' && _selectedAcceptedEmpId != null) {
+        // Import an accepted candidate as a brand-new employee record.
+        // The accepted ID is only for navigation context, not the target employee row.
+        final imported = employeeData.copyWith(status: 'Active');
+        if (_currentEmployee != null) {
+          final updated = imported.copyWith(id: _currentEmployee!.id);
+          await repo.updateEmployee(updated);
+          savedEmployee = updated;
+        } else {
+          savedEmployee = await repo.addEmployee(imported);
+        }
+      } else if (widget.linkId == 'new' || widget.linkId.isEmpty) {
         // Manual Add mode
         if (_currentEmployee != null) {
           final updated = employeeData.copyWith(id: _currentEmployee!.id);
@@ -563,12 +595,6 @@ class _EmployeeRegistrationPageState
         } else {
           savedEmployee = await repo.addEmployee(employeeData);
         }
-      } else if (isEditMode || (_registrationMode == 'accepted_response' && _selectedAcceptedEmpId != null)) {
-        // Edit mode or accepted response import mode
-        final targetId = _selectedAcceptedEmpId ?? widget.employee?.id ?? _currentEmployee?.id ?? 0;
-        final updated = employeeData.copyWith(id: targetId);
-        await repo.updateEmployee(updated);
-        savedEmployee = updated;
       } else {
         // Link-based registration (candidate mode)
         savedEmployee = await repo.submitEmployeeRegistration(
@@ -672,7 +698,7 @@ class _EmployeeRegistrationPageState
                           _buildDocumentTab(editLink, isMobile),
                           _buildSocialMediaTab(editLink, isMobile),
                           if (_isManagementAdd) _buildSalaryOfferLetterTab(editLink, isMobile),
-                          if (_isManagementAdd) _buildCredentialsTab(editLink, isMobile),
+                          _buildCredentialsTab(editLink, isMobile),
                           if (_isManagementAdd) _buildAccessPermissionsTab(editLink, isMobile),
                         ],
                       ),
@@ -739,7 +765,7 @@ class _EmployeeRegistrationPageState
                         _buildDocumentTab(link, isMobile),
                         _buildSocialMediaTab(link, isMobile),
                         if (_isManagementAdd) _buildSalaryOfferLetterTab(link, isMobile),
-                        if (_isManagementAdd) _buildCredentialsTab(link, isMobile),
+                        _buildCredentialsTab(link, isMobile),
                         if (_isManagementAdd) _buildAccessPermissionsTab(link, isMobile),
                       ],
                     ),
@@ -929,9 +955,14 @@ class _EmployeeRegistrationPageState
                           style: const TextStyle(color: Colors.red, fontSize: 12),
                         ),
                         data: (allEmps) {
-                          final acceptedList = allEmps
-                              .where((e) => e.status.toLowerCase() == 'accepted')
-                              .toList();
+                          final acceptedList = <Employee>[];
+                          final seenIds = <int>{};
+                          for (final emp in allEmps) {
+                            if (emp.status.toLowerCase() != 'accepted') continue;
+                            if (seenIds.add(emp.id)) {
+                              acceptedList.add(emp);
+                            }
+                          }
 
                           if (acceptedList.isEmpty) {
                             return const Padding(
@@ -2616,60 +2647,62 @@ class _EmployeeRegistrationPageState
               ),
             ),
             const SizedBox(height: 16),
-            _buildRow2or3(
-              isMobile: isMobile,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Employee ID / Username',
-                          style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                        ),
-                        InkWell(
-                          onTap: _generateSampleEmpId,
-                          child: const Text(
-                            'Auto Generate ID',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.active),
+            if (_isManagementAdd) ...[
+              _buildRow2or3(
+                isMobile: isMobile,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Employee ID / Username',
+                            style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    TextFormField(
-                      controller: _employeeCustomIdController,
-                      style: const TextStyle(fontSize: 12, color: Colors.black87),
-                      decoration: const InputDecoration(
-                        hintText: 'e.g. EMP-0002 (Leave blank for auto-id)',
-                        hintStyle: TextStyle(fontSize: 12, color: Colors.black38),
-                        isDense: true,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                        border: OutlineInputBorder(
-                          borderSide: BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderSide: BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderSide: BorderSide(color: AppColors.active, width: 1.2),
+                          InkWell(
+                            onTap: _generateSampleEmpId,
+                            child: const Text(
+                              'Auto Generate ID',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.active),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      TextFormField(
+                        controller: _employeeCustomIdController,
+                        style: const TextStyle(fontSize: 12, color: Colors.black87),
+                        decoration: const InputDecoration(
+                          hintText: 'e.g. EMP-0002 (Leave blank for auto-id)',
+                          hintStyle: TextStyle(fontSize: 12, color: Colors.black38),
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                          border: OutlineInputBorder(
+                            borderSide: BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: AppColors.active, width: 1.2),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                _buildDropdown(
-                  'User Role / Type',
-                  _userType,
-                  ['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE', 'HR', 'MANAGER'],
-                  (val) => setState(() => _userType = val ?? 'EMPLOYEE'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
+                    ],
+                  ),
+                  _buildDropdown(
+                    'User Role / Type',
+                    _userType,
+                    ['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE', 'HR', 'MANAGER'],
+                    (val) => setState(() => _userType = val ?? 'EMPLOYEE'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
             _buildRow2or3(
               isMobile: isMobile,
               children: [
@@ -2680,17 +2713,18 @@ class _EmployeeRegistrationPageState
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'Temporary Password',
-                          style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                        Text(
+                          _isManagementAdd ? 'Temporary Password' : 'Login Password *',
+                          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
                         ),
-                        InkWell(
-                          onTap: _generateRandomPassword,
-                          child: const Text(
-                            'Generate Password',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.active),
+                        if (_isManagementAdd)
+                          InkWell(
+                            onTap: _generateRandomPassword,
+                            child: const Text(
+                              'Generate Password',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.active),
+                            ),
                           ),
-                        ),
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -2699,7 +2733,7 @@ class _EmployeeRegistrationPageState
                       obscureText: !_isPasswordVisible,
                       style: const TextStyle(fontSize: 12, color: Colors.black87),
                       decoration: InputDecoration(
-                        hintText: 'Enter password or generate',
+                        hintText: _isManagementAdd ? 'Enter password or generate' : 'Enter your secure login password',
                         hintStyle: const TextStyle(fontSize: 12, color: Colors.black38),
                         isDense: true,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
@@ -2724,26 +2758,31 @@ class _EmployeeRegistrationPageState
                     ),
                   ],
                 ),
-                _buildDropdown(
-                  'Account Status',
-                  _status,
-                  ['ACTIVE', 'INACTIVE', 'SUSPENDED'],
-                  (val) => setState(() => _status = val ?? 'ACTIVE'),
-                ),
+                if (_isManagementAdd)
+                  _buildDropdown(
+                    'Account Status',
+                    _status,
+                    ['ACTIVE', 'INACTIVE', 'SUSPENDED'],
+                    (val) => setState(() => _status = val ?? 'ACTIVE'),
+                  )
+                else
+                  const SizedBox.shrink(),
               ],
             ),
-            const SizedBox(height: 28),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.active,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+            if (_isManagementAdd) ...[
+              const SizedBox(height: 28),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.active,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                ),
+                onPressed: _isSubmitting ? null : () => _submitForm(link, isSubmit: false),
+                icon: const Icon(Icons.check, size: 16),
+                label: const Text('Save Credentials', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
               ),
-              onPressed: _isSubmitting ? null : () => _submitForm(link, isSubmit: false),
-              icon: const Icon(Icons.check, size: 16),
-              label: const Text('Save Credentials', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-            ),
+            ],
           ],
         ),
       ),

@@ -1,11 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../data/sqlite_authentication_repository.dart';
+import '../data/firebase_authentication_repository.dart';
 import '../domain/authentication_repository.dart';
 
-// Change only this line when the Firebase implementation is ready.
+// Changed to Firebase authentication implementation as requested.
 final authenticationRepositoryProvider = Provider<AuthenticationRepository>(
-  (ref) => SqliteAuthenticationRepository(),
+  (ref) => FirebaseAuthenticationRepository(),
 );
 
 final currentUserEmailProvider = StateProvider<String?>((ref) => 'Saravanan@igreentec.in');

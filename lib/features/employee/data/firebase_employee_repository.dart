@@ -22,9 +22,6 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   CollectionReference<Map<String, dynamic>> get _columnPreferencesRef =>
       _firestore.collection('column_preferences');
 
-  CollectionReference<Map<String, dynamic>> get _responsesRef =>
-      _firestore.collection('employee_responses');
-
   // Helper: Map Employee object to Firestore document map
   Map<String, dynamic> _employeeToFirestore(Employee emp) {
     final map = emp.toMap();
@@ -71,6 +68,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   @override
   Future<List<Employee>> getEmployees() async {
     final snapshot = await _employeesRef.get();
+    
     if (snapshot.docs.isEmpty) {
       // Seed sample employee if collection is currently empty
       const sampleEmp = Employee(
@@ -101,9 +99,27 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
           .map((doc) => _employeeFromFirestore(doc.data(), doc.id))
           .toList();
     }
-    return snapshot.docs
-        .map((doc) => _employeeFromFirestore(doc.data(), doc.id))
-        .toList();
+    
+    final employees = snapshot.docs.map((doc) {
+      return _employeeFromFirestore(doc.data(), doc.id);
+    }).toList();
+    
+    // Auto-fix: Ensure the root admin account maintains full access
+    for (var i = 0; i < employees.length; i++) {
+      if (employees[i].emailAddress.toLowerCase() == 'saravanan@igreentec.in') {
+        if (employees[i].userType != 'SUPER_ADMIN' || employees[i].status != 'Active') {
+          final updatedAdmin = employees[i].copyWith(
+            userType: 'SUPER_ADMIN',
+            status: 'Active',
+          );
+          // Silently update Firestore to permanently fix the record
+          updateEmployee(updatedAdmin);
+          employees[i] = updatedAdmin;
+        }
+      }
+    }
+    
+    return employees;
   }
 
   @override
@@ -278,7 +294,11 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
     String newEmpId = employeeData.employeeId;
     if (newEmpId.isEmpty) {
-      newEmpId = existingEmpId.isNotEmpty ? existingEmpId : await _generateNextCandidateId();
+      newEmpId = existingEmpId.isNotEmpty && existingEmpId.startsWith('EMP-')
+          ? existingEmpId
+          : (isSubmit ? await _generateNextEmployeeId() : await _generateNextCandidateId());
+    } else if (isSubmit && newEmpId.startsWith('CAN-')) {
+      newEmpId = await _generateNextEmployeeId();
     }
 
     final tempPassword = employeeData.temporaryPassword.isNotEmpty
@@ -287,22 +307,11 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
     final finalEmployee = employeeData.copyWith(
       employeeId: newEmpId,
-      status: isSubmit ? 'Pending' : 'Draft',
+      status: isSubmit ? 'Active' : 'Draft',
       temporaryPassword: tempPassword,
     );
 
-    // 1. Record submission response in `employee_responses` collection
-    final responseRef = _responsesRef.doc(linkId);
-    batch.set(responseRef, {
-      'response_id': 'resp_${responseRef.id}',
-      'link_id': linkId,
-      'submission_status': isSubmit ? 'Submitted' : 'Draft',
-      'submitted_at': FieldValue.serverTimestamp(),
-      'submitted_by': finalEmployee.emailAddress,
-      'candidate_data': _employeeToFirestore(finalEmployee),
-    }, SetOptions(merge: true));
-
-    // 2. Update status of `registration_links` document
+    // Update status of `registration_links` document
     final linkRef = _registrationLinksRef.doc(linkId);
     batch.set(linkRef, {
       'link_status': isSubmit ? 'Completed' : 'Pending',
@@ -313,7 +322,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       'updated_at': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
 
-    // 3. Save candidate data into `employees` collection
+    // Save candidate data into `employees` collection
     final empDocId = newEmpId;
 
     final empData = _employeeToFirestore(finalEmployee);
@@ -382,4 +391,3 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         .set(preference.toMap(), SetOptions(merge: true));
   }
 }
-

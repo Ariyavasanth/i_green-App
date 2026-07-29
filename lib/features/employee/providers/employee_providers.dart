@@ -11,7 +11,17 @@ final employeeRepositoryProvider = Provider<EmployeeRepository>(
 );
 
 final employeesProvider = FutureProvider<List<Employee>>(
-  (ref) => ref.watch(employeeRepositoryProvider).getEmployees(),
+  (ref) async {
+    final employees = await ref.watch(employeeRepositoryProvider).getEmployees();
+    final uniqueEmployees = <Employee>[];
+    final seenIds = <int>{};
+    for (final emp in employees) {
+      if (seenIds.add(emp.id)) {
+        uniqueEmployees.add(emp);
+      }
+    }
+    return uniqueEmployees;
+  },
 );
 
 final registrationLinksProvider = FutureProvider<List<RegistrationLink>>(
@@ -65,4 +75,3 @@ final responseSearchQueryProvider = StateProvider<String>((ref) => '');
 final responseOrgFilterProvider = StateProvider<String>((ref) => 'All Organizations');
 final responseDeptFilterProvider = StateProvider<String>((ref) => 'All Departments');
 final responseStatusFilterProvider = StateProvider<String>((ref) => 'All Statuses');
-

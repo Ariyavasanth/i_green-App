@@ -461,13 +461,14 @@ class _EmployeeManagementPageState
 
 
   Color _getStatusColor(String status) {
-    switch (status) {
-      case 'Accepted':
-      case 'Active':
+    final normalized = status.trim().toLowerCase();
+    switch (normalized) {
+      case 'accepted':
+      case 'active':
         return Colors.green;
-      case 'Rejected':
+      case 'rejected':
         return Colors.redAccent;
-      case 'Pending':
+      case 'pending':
         return Colors.orange;
       default:
         return Colors.grey;

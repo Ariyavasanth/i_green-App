@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/layout/responsive_layout.dart';
+import '../../../core/storage/sidebar_state_storage.dart';
+import '../../../core/storage/sidebar_state_storage_factory.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/visual_effects.dart';
@@ -11,7 +13,13 @@ import '../../authentication/providers/authentication_providers.dart';
 import '../../books/providers/books_providers.dart';
 import '../../employee/providers/employee_providers.dart';
 
-final sidebarExpandedProvider = StateProvider<bool>((ref) => true);
+final sidebarStateStorageProvider = Provider<SidebarStateStorage>(
+  (_) => createSidebarStateStorage(),
+);
+
+final sidebarExpandedProvider = StateProvider<bool>((ref) {
+  return ref.read(sidebarStateStorageProvider).readExpanded() ?? true;
+});
 
 final userDestinationsProvider = Provider<List<SidebarDestination>>((ref) {
   final userEmail = ref.watch(currentUserEmailProvider);
@@ -39,19 +47,19 @@ final userDestinationsProvider = Provider<List<SidebarDestination>>((ref) {
 
       // ── ADMIN / EMPLOYEE / any other role:
       //    Only show what Super Admin has explicitly granted via accessPermissions
-      if (emp.accessPermissions.isNotEmpty) {
-        final allowed = emp.accessPermissions.toSet();
-        return AppShell.destinations
-            .where((d) => allowed.contains(d.label))
-            .toList();
-      }
-
-      // No permissions assigned → fall back to full access
-      return AppShell.destinations;
+      final allowed = emp.accessPermissions.toSet();
+      return AppShell.destinations
+          .where((d) => d.label == 'Home' || allowed.contains(d.label))
+          .toList();
     },
     orElse: () => AppShell.destinations,
   );
 });
+
+void _toggleSidebarExpanded(WidgetRef ref, bool expanded) {
+  ref.read(sidebarExpandedProvider.notifier).state = expanded;
+  ref.read(sidebarStateStorageProvider).writeExpanded(expanded);
+}
 
 
 class AppShell extends ConsumerWidget {
@@ -237,13 +245,7 @@ class AppShell extends ConsumerWidget {
                                 ? () =>
                                       Scaffold.of(scaffoldContext).openDrawer()
                                 : () =>
-                                      ref
-                                              .read(
-                                                sidebarExpandedProvider
-                                                    .notifier,
-                                              )
-                                              .state =
-                                          !expanded,
+                                      _toggleSidebarExpanded(ref, !expanded),
                           ),
                           Expanded(child: child),
                         ],

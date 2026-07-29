@@ -246,7 +246,7 @@ class SqliteEmployeeRepository implements EmployeeRepository {
         joiningDate: '29-04-2017',
         status: 'Active',
         bloodGroup: 'B+',
-        userType: 'ADMIN',
+        userType: 'SUPER_ADMIN',
         aadhaarNumber: '833750993144',
         pfNumber: '100338738050',
         city: 'Chennai',
@@ -360,6 +360,12 @@ class SqliteEmployeeRepository implements EmployeeRepository {
       'UPDATE employees SET access_permissions = ? WHERE LOWER(employee_id) = ?',
       [jsonEncode(['Leave', 'Loan', 'Pay Slip']), 'emp-9222'],
     );
+
+    // Ensure EMP-0001 is SUPER_ADMIN so they don't get locked out
+    await db.rawUpdate(
+      'UPDATE employees SET user_type = ? WHERE LOWER(employee_id) = ?',
+      ['SUPER_ADMIN', 'emp-0001'],
+    );
   }
 
   @override
@@ -469,10 +475,16 @@ class SqliteEmployeeRepository implements EmployeeRepository {
 
     String newEmpId = employeeData.employeeId;
     if (newEmpId.isEmpty) {
-      newEmpId = link.employeeId.isNotEmpty ? link.employeeId : await _generateNextCandidateId();
+      newEmpId = link.employeeId.isNotEmpty && link.employeeId.startsWith('EMP-')
+          ? link.employeeId
+          : (isSubmit ? await _generateNextEmployeeId() : await _generateNextCandidateId());
+    } else if (isSubmit && newEmpId.startsWith('CAN-')) {
+      newEmpId = await _generateNextEmployeeId();
     }
 
-    final tempPassword = _generateRandomCode(10);
+    final tempPassword = employeeData.temporaryPassword.isNotEmpty
+        ? employeeData.temporaryPassword
+        : _generateRandomCode(10);
     final nowStr = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
 
     final existing = await db.query(
@@ -484,12 +496,11 @@ class SqliteEmployeeRepository implements EmployeeRepository {
     Employee createdEmployee;
     if (existing.isNotEmpty) {
       final existingId = existing.first['id'] as int;
-      final existingTempPassword = existing.first['temporary_password'] as String? ?? '';
       final finalEmployee = employeeData.copyWith(
         id: existingId,
         employeeId: newEmpId,
-        status: isSubmit ? 'Pending' : 'Draft',
-        temporaryPassword: existingTempPassword.isNotEmpty ? existingTempPassword : tempPassword,
+        status: isSubmit ? 'Active' : 'Draft',
+        temporaryPassword: tempPassword,
       );
       await db.update(
         'employees',
@@ -501,7 +512,7 @@ class SqliteEmployeeRepository implements EmployeeRepository {
     } else {
       final finalEmployee = employeeData.copyWith(
         employeeId: newEmpId,
-        status: isSubmit ? 'Pending' : 'Draft',
+        status: isSubmit ? 'Active' : 'Draft',
         temporaryPassword: tempPassword,
       );
       final empDbId = await db.insert('employees', finalEmployee.toMap());
