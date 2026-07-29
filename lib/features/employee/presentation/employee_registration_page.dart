@@ -1146,8 +1146,6 @@ class _EmployeeRegistrationPageState
             isMobile: isMobile,
             children: [
               _buildTextField('Contact Number', _phoneController, placeholder: '8760098789'),
-              _buildDateField('Date Of Joining', _joiningDateController, placeholder: '29-04-2017'),
-              _buildDateField('Contract End Date', _contractEndDateController, placeholder: 'dd-mm-yyyy'),
             ],
           ),
           const SizedBox(height: 12),
