@@ -181,6 +181,7 @@ class _EmployeeRegistrationPageState
   Employee? _currentEmployee;
   String _registrationMode = 'manual';
   int? _selectedAcceptedEmpId;
+  String? _selectedAcceptedLinkId;
   bool _draftLoaded = false;
 
   void _populateFromEmployee(Employee emp) {
@@ -929,8 +930,9 @@ class _EmployeeRegistrationPageState
                   const SizedBox(height: 10),
                   Consumer(
                     builder: (context, ref, child) {
+                      final linksAsync = ref.watch(registrationLinksProvider);
                       final employeesAsync = ref.watch(employeesProvider);
-                      return employeesAsync.when(
+                      return linksAsync.when(
                         loading: () => const SizedBox(
                           height: 36,
                           child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
@@ -939,82 +941,120 @@ class _EmployeeRegistrationPageState
                           'Error loading responses: $err',
                           style: const TextStyle(color: Colors.red, fontSize: 12),
                         ),
-                        data: (allEmps) {
-                          final acceptedList = <Employee>[];
-                          final seenIds = <int>{};
-                          for (final emp in allEmps) {
-                            if (emp.status.toLowerCase() != 'accepted') continue;
-                            if (seenIds.add(emp.id)) {
-                              acceptedList.add(emp);
+                        data: (links) => employeesAsync.when(
+                          loading: () => const SizedBox(
+                            height: 36,
+                            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                          ),
+                          error: (err, _) => Text(
+                            'Error loading employee data: $err',
+                            style: const TextStyle(color: Colors.red, fontSize: 12),
+                          ),
+                          data: (allEmps) {
+                            final acceptedLinks = links
+                                .where((link) => link.linkStatus.trim().toLowerCase() == 'accepted')
+                                .toList();
+
+                            if (acceptedLinks.isEmpty) {
+                              return const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 4),
+                                child: Text(
+                                  'No accepted responses available yet. (Accept candidate responses in the Response UI first).',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.orange,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              );
                             }
-                          }
 
-                          if (acceptedList.isEmpty) {
-                            return const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 4),
-                              child: Text(
-                                'No accepted responses available yet. (Accept candidate responses in the Response UI first).',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.orange,
-                                  fontStyle: FontStyle.italic,
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Select Accepted Applicant / Member Name *',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textSecondary,
+                                  ),
                                 ),
-                              ),
-                            );
-                          }
-
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Select Accepted Applicant / Member Name *',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              DropdownButtonFormField<int>(
-                                value: acceptedList.any((e) => e.id == _selectedAcceptedEmpId)
-                                    ? _selectedAcceptedEmpId
-                                    : null,
-                                hint: const Text('Choose accepted member name...', style: TextStyle(fontSize: 12)),
-                                isDense: true,
-                                decoration: const InputDecoration(
+                                const SizedBox(height: 4),
+                                DropdownButtonFormField<String>(
+                                  value: acceptedLinks.any((e) => e.linkId == _selectedAcceptedLinkId)
+                                      ? _selectedAcceptedLinkId
+                                      : null,
+                                  hint: const Text('Choose accepted member name...', style: TextStyle(fontSize: 12)),
                                   isDense: true,
-                                  contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                  border: OutlineInputBorder(),
-                                ),
-                                items: acceptedList.map((emp) {
-                                  return DropdownMenuItem<int>(
-                                    value: emp.id,
-                                    child: Text(
-                                      '${emp.fullName} (${emp.emailAddress.isEmpty ? emp.department : emp.emailAddress})',
-                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                                    ),
-                                  );
-                                }).toList(),
-                                onChanged: (selectedId) {
-                                  if (selectedId != null) {
-                                    final selectedEmp = acceptedList.firstWhere((e) => e.id == selectedId);
-                                    setState(() {
-                                      _selectedAcceptedEmpId = selectedId;
-                                    });
-                                    _populateFromEmployee(selectedEmp);
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('Auto-fetched all details for ${selectedEmp.fullName}'),
-                                        behavior: SnackBarBehavior.floating,
-                                        duration: const Duration(seconds: 2),
+                                  decoration: const InputDecoration(
+                                    isDense: true,
+                                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  items: acceptedLinks.map((link) {
+                                    Employee? matchedEmployee;
+                                    for (final emp in allEmps) {
+                                      if (emp.employeeId == link.employeeId || emp.id.toString() == link.employeeId) {
+                                        matchedEmployee = emp;
+                                        break;
+                                      }
+                                    }
+
+                                    final displayName = matchedEmployee?.fullName.isNotEmpty == true
+                                        ? matchedEmployee!.fullName
+                                        : (link.employeeName.isNotEmpty ? link.employeeName : link.linkId);
+                                    final secondary = matchedEmployee?.emailAddress.isNotEmpty == true
+                                        ? matchedEmployee!.emailAddress
+                                        : (link.department.isNotEmpty ? link.department : link.organizationName);
+
+                                    return DropdownMenuItem<String>(
+                                      value: link.linkId,
+                                      child: Text(
+                                        '$displayName (${secondary.isEmpty ? '-' : secondary})',
+                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                                       ),
                                     );
-                                  }
-                                },
-                              ),
-                            ],
-                          );
-                        },
+                                  }).toList(),
+                                  onChanged: (selectedLinkId) {
+                                    if (selectedLinkId != null) {
+                                      final selectedLink = acceptedLinks.firstWhere((e) => e.linkId == selectedLinkId);
+                                      Employee? selectedEmployee;
+                                      for (final emp in allEmps) {
+                                        if (emp.employeeId == selectedLink.employeeId || emp.id.toString() == selectedLink.employeeId) {
+                                          selectedEmployee = emp;
+                                          break;
+                                        }
+                                      }
+
+                                      setState(() {
+                                        _selectedAcceptedEmpId = selectedEmployee?.id;
+                                        _selectedAcceptedLinkId = selectedLinkId;
+                                      });
+
+                                      if (selectedEmployee != null) {
+                                        _populateFromEmployee(selectedEmployee);
+                                      } else {
+                                        _firstNameController.text = selectedLink.employeeName;
+                                        _status = 'ACTIVE';
+                                      }
+
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Auto-fetched all details for ${selectedEmployee?.fullName.isNotEmpty == true ? selectedEmployee!.fullName : selectedLink.employeeName}',
+                                          ),
+                                          behavior: SnackBarBehavior.floating,
+                                          duration: const Duration(seconds: 2),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                ),
+                              ],
+                            );
+                          },
+                        ),
                       );
                     },
                   ),
@@ -1290,11 +1330,6 @@ class _EmployeeRegistrationPageState
           Text(
             fullName.isEmpty ? 'Employee Name' : fullName,
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _designation,
-            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
           ),
           const SizedBox(height: 24),
           Align(
