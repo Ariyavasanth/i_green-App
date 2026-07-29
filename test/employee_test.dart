@@ -47,7 +47,7 @@ void main() {
         linkStatus: 'Pending',
       );
 
-      expect(link.fullUrl, 'https://app.company.com/employee/register/TEST1234');
+      expect(link.fullUrl, 'https://app.igreentech.in/#/employee/register/TEST1234');
       final map = link.toMap();
       expect(map['link_id'], 'TEST1234');
     });

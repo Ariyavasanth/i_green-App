@@ -28,12 +28,16 @@ class RegistrationLink {
   final String submittedBy;
 
   String get fullUrl {
-    final origin = Uri.base.origin;
-    if (origin.startsWith('http') &&
-        !origin.contains('localhost') &&
-        !origin.contains('127.0.0.1')) {
-      return '$origin/#/employee/register/$linkId';
-    }
+    try {
+      final uri = Uri.base;
+      if (uri.scheme == 'http' || uri.scheme == 'https') {
+        final origin = uri.origin;
+        if (!origin.contains('localhost') &&
+            !origin.contains('127.0.0.1')) {
+          return '$origin/#/employee/register/$linkId';
+        }
+      }
+    } catch (_) {}
     return 'https://app.igreentech.in/#/employee/register/$linkId';
   }
 

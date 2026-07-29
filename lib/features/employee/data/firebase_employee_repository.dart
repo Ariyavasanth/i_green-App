@@ -124,7 +124,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   }
 
   @override
-  Future<void> addEmployee(Employee employee) async {
+  Future<Employee> addEmployee(Employee employee) async {
     final docId = employee.employeeId.isNotEmpty
         ? employee.employeeId
         : (employee.id != 0 ? employee.id.toString() : _employeesRef.doc().id);
@@ -133,6 +133,16 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     data['created_at'] = FieldValue.serverTimestamp();
 
     await _employeesRef.doc(docId).set(data, SetOptions(merge: true));
+
+    final parsed = int.tryParse(docId.replaceAll(RegExp(r'\D'), ''));
+    final assignedId = (parsed != null && parsed != 0)
+        ? parsed
+        : (docId.hashCode & 0x7FFFFFFF);
+
+    return employee.copyWith(
+      id: employee.id != 0 ? employee.id : assignedId,
+      employeeId: employee.employeeId.isNotEmpty ? employee.employeeId : docId,
+    );
   }
 
   @override

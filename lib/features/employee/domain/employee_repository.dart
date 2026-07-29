@@ -5,7 +5,7 @@ import '../../organization/domain/column_preference.dart';
 abstract class EmployeeRepository {
   Future<List<Employee>> getEmployees();
   Future<Employee?> getEmployeeById(int id);
-  Future<void> addEmployee(Employee employee);
+  Future<Employee> addEmployee(Employee employee);
   Future<void> updateEmployee(Employee employee);
   Future<void> deleteEmployee(int id);
 

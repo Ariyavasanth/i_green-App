@@ -378,14 +378,15 @@ class SqliteEmployeeRepository implements EmployeeRepository {
   }
 
   @override
-  Future<void> addEmployee(Employee employee) async {
+  Future<Employee> addEmployee(Employee employee) async {
     final db = await database;
     var empId = employee.employeeId;
     if (empId.isEmpty) {
       empId = await _generateNextEmployeeId();
     }
     final newEmp = employee.copyWith(employeeId: empId);
-    await db.insert('employees', newEmp.toMap());
+    final id = await db.insert('employees', newEmp.toMap());
+    return newEmp.copyWith(id: id);
   }
 
   @override
