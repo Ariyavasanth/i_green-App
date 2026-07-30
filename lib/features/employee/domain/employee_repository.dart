@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'employee.dart';
 import 'registration_link.dart';
 import '../../organization/domain/column_preference.dart';
@@ -8,6 +10,13 @@ abstract class EmployeeRepository {
   Future<Employee> addEmployee(Employee employee);
   Future<void> updateEmployee(Employee employee);
   Future<void> deleteEmployee(int id);
+  Future<EmployeePhotoAsset> uploadEmployeeProfileImage({
+    required String employeeId,
+    required String role,
+    required Uint8List imageBytes,
+    required String fileName,
+    required String mimeType,
+  });
 
   Future<RegistrationLink> createRegistrationLink({
     required String generatedBy,

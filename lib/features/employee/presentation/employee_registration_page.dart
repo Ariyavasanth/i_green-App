@@ -514,12 +514,40 @@ class _EmployeeRegistrationPageState
 
     try {
       final repo = ref.read(employeeRepositoryProvider);
+      final resolvedEmployeeId = _employeeCustomIdController.text.trim().isNotEmpty
+          ? _employeeCustomIdController.text.trim()
+          : (_currentEmployee?.employeeId.isNotEmpty == true
+              ? _currentEmployee!.employeeId
+              : (widget.employee?.employeeId.isNotEmpty == true
+                  ? widget.employee!.employeeId
+                  : 'pending_${DateTime.now().millisecondsSinceEpoch}'));
+
+      String profileImageUrl = _currentEmployee?.profileImageUrl ?? widget.employee?.profileImageUrl ?? '';
+      String profileImagePublicId = _currentEmployee?.profileImagePublicId ?? widget.employee?.profileImagePublicId ?? '';
+      String profileImageFolder = _currentEmployee?.profileImageFolder ?? widget.employee?.profileImageFolder ?? '';
+
+      if (_profileImageBytes != null) {
+        final uploaded = await repo.uploadEmployeeProfileImage(
+          employeeId: resolvedEmployeeId,
+          role: _userType,
+          imageBytes: _profileImageBytes!,
+          fileName: _selectedFileName.isNotEmpty ? _selectedFileName : 'profile.jpg',
+          mimeType: _selectedFileName.toLowerCase().endsWith('.png')
+              ? 'image/png'
+              : _selectedFileName.toLowerCase().endsWith('.webp')
+                  ? 'image/webp'
+                  : _selectedFileName.toLowerCase().endsWith('.gif')
+                      ? 'image/gif'
+                      : 'image/jpeg',
+        );
+        profileImageUrl = uploaded.url;
+        profileImagePublicId = uploaded.publicId;
+        profileImageFolder = uploaded.folder;
+      }
 
       final employeeData = Employee(
         id: _currentEmployee?.id ?? 0,
-        employeeId: _employeeCustomIdController.text.trim().isNotEmpty
-            ? _employeeCustomIdController.text.trim()
-            : (_currentEmployee?.employeeId ?? ''),
+        employeeId: resolvedEmployeeId,
         temporaryPassword: _passwordController.text.trim().isNotEmpty
             ? _passwordController.text.trim()
             : (_currentEmployee?.temporaryPassword ?? ''),
@@ -603,9 +631,9 @@ class _EmployeeRegistrationPageState
         salaryTax: double.tryParse(_taxController.text.trim().replaceAll(',', '')) ?? 0.0,
         salaryPf: double.tryParse(_pfController.text.trim().replaceAll(',', '')) ?? 0.0,
         accessPermissions: _selectedPermissions.toList(),
-        profileImageUrl: _profileImageDataUrl.isNotEmpty
-            ? _profileImageDataUrl
-            : (_currentEmployee?.profileImageUrl ?? widget.employee?.profileImageUrl ?? ''),
+        profileImageUrl: profileImageUrl,
+        profileImagePublicId: profileImagePublicId,
+        profileImageFolder: profileImageFolder,
       );
 
       Employee savedEmployee;

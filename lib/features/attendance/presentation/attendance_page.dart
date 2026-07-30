@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:camera/camera.dart';
+import 'package:local_auth/local_auth.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../domain/attendance_record.dart';
@@ -10,7 +10,6 @@ import '../../leave/domain/leave_request.dart';
 import '../../leave/providers/leave_providers.dart';
 import '../domain/attendance_repository.dart';
 import '../providers/attendance_providers.dart';
-import '../services/face_verification_service.dart';
 
 class AttendancePage extends ConsumerStatefulWidget {
   const AttendancePage({super.key});
@@ -21,8 +20,6 @@ class AttendancePage extends ConsumerStatefulWidget {
 
 class _AttendancePageState extends ConsumerState<AttendancePage> {
   DateTime _focusedMonth = DateTime.now();
-  bool _isVerifying = false;
-  final _faceVerificationService = const FaceVerificationService();
 
   String _formatKey(DateTime date) =>
       '${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}';
@@ -237,7 +234,6 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         date: date,
         isLeave: isLeave,
         isAttendance: isAttendance,
-        faceVerificationService: _faceVerificationService,
         attendanceRepository: ref.read(attendanceRepositoryProvider),
         currentEmployee: ref.read(currentEmployeeProvider)!,
         onAttendanceMarked: () {
@@ -255,7 +251,6 @@ class AttendanceVerificationDialog extends StatefulWidget {
     required this.date,
     required this.isLeave,
     required this.isAttendance,
-    required this.faceVerificationService,
     required this.attendanceRepository,
     required this.currentEmployee,
     required this.onAttendanceMarked,
@@ -264,7 +259,6 @@ class AttendanceVerificationDialog extends StatefulWidget {
   final DateTime date;
   final bool isLeave;
   final bool isAttendance;
-  final FaceVerificationService faceVerificationService;
   final AttendanceRepository attendanceRepository;
   final Employee currentEmployee;
   final VoidCallback onAttendanceMarked;
@@ -274,132 +268,88 @@ class AttendanceVerificationDialog extends StatefulWidget {
 }
 
 class _AttendanceVerificationDialogState extends State<AttendanceVerificationDialog> {
-  CameraController? _controller;
-  List<CameraDescription> _cameras = const [];
-  int _cameraIndex = 0;
-  bool _loading = true;
+  final LocalAuthentication _auth = LocalAuthentication();
   bool _verifying = false;
   String? _message;
 
   String _formatKey(DateTime date) =>
       '${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}';
 
-  @override
-  void initState() {
-    super.initState();
-    _initCamera();
-  }
-
-  Future<void> _initCamera() async {
-    final cameras = await availableCameras();
-    if (!mounted) return;
-    _cameras = cameras;
-    if (cameras.isEmpty) {
-      setState(() {
-        _loading = false;
-        _message = 'Camera not available on this device.';
-      });
-      return;
-    }
-    await _startCamera(_cameraIndex);
-  }
-
-  Future<void> _startCamera(int index) async {
-    if (_cameras.isEmpty) return;
-    final safeIndex = index % _cameras.length;
-    setState(() {
-      _loading = true;
-      _message = null;
-    });
-    final previousController = _controller;
-    _controller = null;
-    if (previousController != null) {
-      await previousController.dispose();
-    }
-
-    final nextController = CameraController(
-      _cameras[safeIndex],
-      ResolutionPreset.high,
-      enableAudio: false,
-    );
-    await nextController.initialize();
-    if (!mounted) {
-      await nextController.dispose();
-      return;
-    }
-    _controller = nextController;
-    _cameraIndex = safeIndex;
-    setState(() => _loading = false);
-  }
-
-  Future<void> _switchCamera() async {
-    if (_cameras.length < 2 || _verifying) return;
-    final nextIndex = (_cameraIndex + 1) % _cameras.length;
-    await _startCamera(nextIndex);
-  }
-
-  Future<void> _captureAndVerify() async {
-    if (_controller == null || !_controller!.value.isInitialized || _verifying) return;
+  Future<void> _authenticateAndMark() async {
+    if (_verifying) return;
     setState(() {
       _verifying = true;
       _message = null;
     });
     try {
-      final file = await _controller!.takePicture();
-      final bytes = await file.readAsBytes();
-      final result = await widget.faceVerificationService.verifyCapturedBytes(
-        capturedBytes: bytes,
-        profileImageUrl: widget.currentEmployee.profileImageUrl,
-        threshold: 0.9,
-        capturedImagePath: file.path,
+      final canCheckBiometrics = await _auth.canCheckBiometrics || await _auth.isDeviceSupported();
+      if (!canCheckBiometrics) {
+        throw Exception('Biometric authentication is not available on this device.');
+      }
+
+      final authenticated = await _auth.authenticate(
+        localizedReason: 'Verify your identity to mark attendance',
+        options: const AuthenticationOptions(
+          biometricOnly: true,
+          stickyAuth: true,
+          useErrorDialogs: true,
+        ),
       );
-      final repo = widget.attendanceRepository as dynamic;
-      await repo.logAttendanceAttempt(
-        employeeId: widget.currentEmployee.id,
-        employeeName: widget.currentEmployee.fullName,
-        date: _formatKey(widget.date),
-        time: DateFormat('HH:mm:ss').format(DateTime.now()),
-        verificationStatus: result.allowed ? 'Verified' : 'Failed',
-        similarityScore: result.similarityScore,
-        message: result.message,
-      );
-      if (result.allowed && !(await repo.hasAttendanceForDate(widget.currentEmployee.id, _formatKey(widget.date)))) {
-        await repo.markAttendance(
+
+      final now = DateTime.now();
+      final dateKey = _formatKey(widget.date);
+      final time = DateFormat('HH:mm:ss').format(now);
+
+      if (authenticated) {
+        if (!(await widget.attendanceRepository.hasAttendanceForDate(widget.currentEmployee.id, dateKey))) {
+          await widget.attendanceRepository.markAttendance(
+            employeeId: widget.currentEmployee.id,
+            employeeName: widget.currentEmployee.fullName,
+            date: dateKey,
+            time: time,
+            verificationStatus: 'Verified',
+            similarityScore: 1.0,
+          );
+        }
+        await widget.attendanceRepository.logAttendanceAttempt(
           employeeId: widget.currentEmployee.id,
           employeeName: widget.currentEmployee.fullName,
-          date: _formatKey(widget.date),
-          time: DateFormat('HH:mm:ss').format(DateTime.now()),
+          date: dateKey,
+          time: time,
           verificationStatus: 'Verified',
-          similarityScore: result.similarityScore,
+          similarityScore: 1.0,
+          message: 'Attendance marked successfully.',
         );
-      }
-      if (!mounted) return;
-      setState(() => _message = result.message);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message)));
-      if (result.allowed) {
+        if (!mounted) return;
+        setState(() => _message = 'Attendance marked successfully.');
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Attendance marked successfully.')));
         widget.onAttendanceMarked();
         Navigator.of(context).pop();
+      } else {
+        await widget.attendanceRepository.logAttendanceAttempt(
+          employeeId: widget.currentEmployee.id,
+          employeeName: widget.currentEmployee.fullName,
+          date: dateKey,
+          time: time,
+          verificationStatus: 'Failed',
+          similarityScore: 0.0,
+          message: 'Biometric verification failed. Please try again.',
+        );
+        if (!mounted) return;
+        setState(() => _message = 'Biometric verification failed. Please try again.');
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Biometric verification failed. Please try again.')));
       }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _message = e.toString().replaceFirst('Exception: ', ''));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
     } finally {
       if (mounted) setState(() => _verifying = false);
     }
   }
 
-  Future<void> _retry() async {
-    setState(() => _message = null);
-    if (_controller == null) return;
-    await _controller!.resumePreview();
-  }
-
   Future<void> _cancel() async {
-    await _controller?.dispose();
     if (mounted) Navigator.of(context).pop();
-  }
-
-  @override
-  void dispose() {
-    _controller?.dispose();
-    super.dispose();
   }
 
   @override
@@ -423,60 +373,26 @@ class _AttendanceVerificationDialogState extends State<AttendanceVerificationDia
               else if (widget.isAttendance)
                 const Text('Attendance already marked.', style: TextStyle(color: AppColors.primary))
               else ...[
-                SizedBox(
-                  height: 360,
-                  child: ClipRRect(
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF5F8FA),
                     borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      color: Colors.black,
-                      child: _loading
-                          ? const Center(child: CircularProgressIndicator())
-                          : Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                if (_controller != null)
-                                  KeyedSubtree(
-                                    key: ValueKey<int>(_cameraIndex),
-                                    child: CameraPreview(_controller!),
-                                  ),
-                                Positioned(
-                                  top: 12,
-                                  right: 12,
-                                  child: Material(
-                                    color: Colors.black87,
-                                    shape: const CircleBorder(),
-                                    elevation: 4,
-                                    child: IconButton(
-                                      tooltip: 'Switch camera',
-                                      onPressed: _cameras.length < 2 || _loading ? null : _switchCamera,
-                                      icon: const Icon(Icons.cameraswitch, color: Colors.white),
-                                    ),
-                                  ),
-                                ),
-                                Center(
-                                  child: Container(
-                                    width: 200,
-                                    height: 250,
-                                    decoration: BoxDecoration(
-                                      border: Border.all(color: const Color(0xFF9CC70A), width: 3),
-                                      borderRadius: BorderRadius.circular(18),
-                                      color: Colors.transparent,
-                                    ),
-                                  ),
-                                ),
-                                const Positioned(
-                                  left: 16,
-                                  right: 16,
-                                  bottom: 16,
-                                  child: Text(
-                                    'Please position your face within the frame for verification.',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                                  ),
-                                ),
-                              ],
-                            ),
-                    ),
+                    border: Border.all(color: Colors.black12),
+                  ),
+                  child: const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Icon(Icons.fingerprint, size: 56, color: AppColors.active),
+                      SizedBox(height: 12),
+                      Text(
+                        'Use the phone biometric prompt to mark attendance.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ],
                   ),
                 ),
                 if (_message != null) ...[
@@ -490,11 +406,10 @@ class _AttendanceVerificationDialogState extends State<AttendanceVerificationDia
       ),
       actions: [
         TextButton(onPressed: _cancel, child: const Text('Cancel')),
-        TextButton(onPressed: _retry, child: const Text('Retry')),
         ElevatedButton(
           style: ElevatedButton.styleFrom(backgroundColor: AppColors.active, foregroundColor: Colors.white),
-          onPressed: widget.isLeave || widget.isAttendance ? null : _captureAndVerify,
-          child: Text(_verifying ? 'Verifying...' : 'Capture'),
+          onPressed: widget.isLeave || widget.isAttendance ? null : _authenticateAndMark,
+          child: Text(_verifying ? 'Verifying...' : 'Mark Attendance'),
         ),
       ],
     );

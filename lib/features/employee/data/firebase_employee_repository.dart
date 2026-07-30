@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
+import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../organization/domain/column_preference.dart';
@@ -9,9 +11,14 @@ import '../domain/registration_link.dart';
 
 class FirebaseEmployeeRepository implements EmployeeRepository {
   final FirebaseFirestore _firestore;
+  final Uri cloudinarySignerBaseUri;
 
-  FirebaseEmployeeRepository({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+  FirebaseEmployeeRepository({
+    FirebaseFirestore? firestore,
+    Uri? cloudinarySignerBaseUri,
+  })  : _firestore = firestore ?? FirebaseFirestore.instance,
+        cloudinarySignerBaseUri = cloudinarySignerBaseUri ??
+            Uri.parse('http://127.0.0.1:3000');
 
   CollectionReference<Map<String, dynamic>> get _employeesRef =>
       _firestore.collection('employees');
@@ -21,6 +28,12 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
   CollectionReference<Map<String, dynamic>> get _columnPreferencesRef =>
       _firestore.collection('column_preferences');
+
+  String _folderForEmployee(String employeeId, String role) {
+    final normalizedRole = role.trim().isEmpty ? 'employees' : role.trim().toLowerCase();
+    final normalizedId = employeeId.trim().isEmpty ? 'unassigned' : employeeId.trim();
+    return 'employee_management/$normalizedRole/$normalizedId/profile';
+  }
 
   // Helper: Map Employee object to Firestore document map
   Map<String, dynamic> _employeeToFirestore(Employee emp) {
@@ -214,6 +227,43 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         return;
       }
     }
+  }
+
+  @override
+  Future<EmployeePhotoAsset> uploadEmployeeProfileImage({
+    required String employeeId,
+    required String role,
+    required Uint8List imageBytes,
+    required String fileName,
+    required String mimeType,
+  }) async {
+    final folder = _folderForEmployee(employeeId, role);
+    final request = http.MultipartRequest(
+      'POST',
+      cloudinarySignerBaseUri.resolve('/cloudinary/upload-image'),
+    );
+    request.fields['employeeId'] = employeeId;
+    request.fields['role'] = role;
+    request.fields['folder'] = folder;
+    request.fields['fileName'] = fileName;
+    request.fields['mimeType'] = mimeType;
+    request.files.add(http.MultipartFile.fromBytes(
+      'file',
+      imageBytes,
+      filename: fileName,
+    ));
+
+    final response = await request.send();
+    final body = await response.stream.bytesToString();
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Cloudinary upload failed: $body');
+    }
+    final decoded = jsonDecode(body) as Map<String, dynamic>;
+    return EmployeePhotoAsset(
+      url: decoded['secureUrl'] as String? ?? '',
+      publicId: decoded['publicId'] as String? ?? '',
+      folder: decoded['folder'] as String? ?? folder,
+    );
   }
 
   @override

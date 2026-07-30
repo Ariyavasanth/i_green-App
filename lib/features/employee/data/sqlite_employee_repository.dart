@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
@@ -59,6 +60,8 @@ class SqliteEmployeeRepository implements EmployeeRepository {
         user_type TEXT,
         contract_end_date TEXT,
         profile_image_url TEXT,
+        profile_image_public_id TEXT,
+        profile_image_folder TEXT,
         street TEXT,
         city TEXT,
         state TEXT,
@@ -177,6 +180,8 @@ class SqliteEmployeeRepository implements EmployeeRepository {
       'user_type': 'TEXT',
       'contract_end_date': 'TEXT',
       'profile_image_url': 'TEXT',
+      'profile_image_public_id': 'TEXT',
+      'profile_image_folder': 'TEXT',
       'permanent_address': 'TEXT',
       'permanent_city': 'TEXT',
       'permanent_country': 'TEXT',
@@ -410,6 +415,16 @@ class SqliteEmployeeRepository implements EmployeeRepository {
   Future<void> deleteEmployee(int id) async {
     final db = await database;
     await db.delete('employees', where: 'id = ?', whereArgs: [id]);
+  }
+
+  @override
+  Future<Employee> uploadEmployeeProfileImage({
+    required Employee employee,
+    required Uint8List imageBytes,
+    required String fileName,
+    required String mimeType,
+  }) async {
+    return employee;
   }
 
   @override

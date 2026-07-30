@@ -1,5 +1,17 @@
 import 'dart:convert';
 
+class EmployeePhotoAsset {
+  const EmployeePhotoAsset({
+    required this.url,
+    required this.publicId,
+    required this.folder,
+  });
+
+  final String url;
+  final String publicId;
+  final String folder;
+}
+
 class EducationItem {
   const EducationItem({
     required this.id,
@@ -120,6 +132,8 @@ class Employee {
     this.userType = 'EMPLOYEE',
     this.contractEndDate = '',
     this.profileImageUrl = '',
+    this.profileImagePublicId = '',
+    this.profileImageFolder = '',
     this.street = '',
     this.city = '',
     this.state = '',
@@ -363,6 +377,8 @@ class Employee {
   final String userType;
   final String contractEndDate;
   final String profileImageUrl;
+  final String profileImagePublicId;
+  final String profileImageFolder;
 
   final String street;
   final String city;
@@ -511,6 +527,8 @@ class Employee {
       'user_type': userType,
       'contract_end_date': contractEndDate,
       'profile_image_url': profileImageUrl,
+      'profile_image_public_id': profileImagePublicId,
+      'profile_image_folder': profileImageFolder,
       'street': street,
       'city': city,
       'state': state,
@@ -614,6 +632,8 @@ class Employee {
       userType: map['user_type'] as String? ?? 'EMPLOYEE',
       contractEndDate: map['contract_end_date'] as String? ?? '',
       profileImageUrl: map['profile_image_url'] as String? ?? '',
+      profileImagePublicId: map['profile_image_public_id'] as String? ?? '',
+      profileImageFolder: map['profile_image_folder'] as String? ?? '',
       street: map['street'] as String? ?? '',
       city: map['city'] as String? ?? '',
       state: map['state'] as String? ?? '',
@@ -693,17 +713,22 @@ class Employee {
       teamName: map['team_name'] as String? ?? '',
       disciplinaryRecords: map['disciplinary_records'] as String? ?? '',
       temporaryPassword: map['temporary_password'] as String? ?? '',
-      accessPermissions: map['access_permissions'] != null && (map['access_permissions'] as String).isNotEmpty
-          ? () {
-              try {
-                final decoded = jsonDecode(map['access_permissions'] as String);
-                if (decoded is List) {
-                  return decoded.map((e) => e.toString()).toList();
-                }
-              } catch (_) {}
-              return <String>[];
-            }()
-          : <String>[],
+      accessPermissions: () {
+        final raw = map['access_permissions'];
+        if (raw == null) return <String>[];
+        if (raw is List) {
+          return raw.map((e) => e.toString()).toList();
+        }
+        if (raw is String && raw.isNotEmpty) {
+          try {
+            final decoded = jsonDecode(raw);
+            if (decoded is List) {
+              return decoded.map((e) => e.toString()).toList();
+            }
+          } catch (_) {}
+        }
+        return <String>[];
+      }(),
     );
   }
 
@@ -726,6 +751,8 @@ class Employee {
     String? userType,
     String? contractEndDate,
     String? profileImageUrl,
+    String? profileImagePublicId,
+    String? profileImageFolder,
     String? street,
     String? city,
     String? state,
@@ -821,6 +848,8 @@ class Employee {
       userType: userType ?? this.userType,
       contractEndDate: contractEndDate ?? this.contractEndDate,
       profileImageUrl: profileImageUrl ?? this.profileImageUrl,
+      profileImagePublicId: profileImagePublicId ?? this.profileImagePublicId,
+      profileImageFolder: profileImageFolder ?? this.profileImageFolder,
       street: street ?? this.street,
       city: city ?? this.city,
       state: state ?? this.state,

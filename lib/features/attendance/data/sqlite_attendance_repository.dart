@@ -1,7 +1,6 @@
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
-import '../../employee/providers/employee_providers.dart';
 import '../domain/attendance_record.dart';
 import '../domain/attendance_repository.dart';
 
