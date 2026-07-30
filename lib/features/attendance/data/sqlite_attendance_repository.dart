@@ -2,10 +2,13 @@ import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../domain/attendance_record.dart';
+import '../domain/attendance_settings.dart';
 import '../domain/attendance_repository.dart';
+import '../../attendance_settings/data/sqlite_attendance_settings_repository.dart';
 
 class SqliteAttendanceRepository implements AttendanceRepository {
   static Database? _database;
+  final SqliteAttendanceSettingsRepository _settingsRepository = SqliteAttendanceSettingsRepository();
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -54,6 +57,33 @@ class SqliteAttendanceRepository implements AttendanceRepository {
   }
 
   @override
+  Future<AttendanceSettings> getAttendanceSettings() => _settingsRepository.getAttendanceSettings();
+
+  @override
+  Future<void> saveAttendanceSettings(AttendanceSettings settings) => _settingsRepository.saveAttendanceSettings(settings);
+
+  int _parseMinutes(String time) {
+    final parts = time.split(':');
+    if (parts.length < 2) return 0;
+    final hours = int.tryParse(parts[0]) ?? 0;
+    final minutes = int.tryParse(parts[1]) ?? 0;
+    return hours * 60 + minutes;
+  }
+
+  String _attendanceStatus({
+    required String scheduledCheckInTime,
+    required DateTime actualCheckIn,
+    required AttendanceSettings settings,
+  }) {
+    final scheduledMinutes = _parseMinutes(scheduledCheckInTime);
+    final actualMinutes = actualCheckIn.hour * 60 + actualCheckIn.minute;
+    final delay = actualMinutes - scheduledMinutes;
+    if (delay <= settings.gracePeriodMinutes) return 'Present';
+    if (delay > settings.absentThresholdMinutes) return 'Absent';
+    return 'Late';
+  }
+
+  @override
   Future<List<AttendanceRecord>> getAttendanceRecords(int employeeId) async {
     final db = await database;
     final maps = await db.query('attendance_records', where: 'employee_id = ?', whereArgs: [employeeId], orderBy: 'date DESC, time DESC');
@@ -73,11 +103,13 @@ class SqliteAttendanceRepository implements AttendanceRepository {
     required String date,
     required String employeeName,
     required String profileImageUrl,
+    required String scheduledCheckInTime,
   }) async {
     final now = DateTime.now();
     final time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
     final score = profileImageUrl.isNotEmpty ? 0.93 : 0.0;
     final allowed = score >= 0.9;
+    final settings = await getAttendanceSettings();
     final result = AttendanceVerificationResult(
       allowed: allowed,
       similarityScore: score,
@@ -95,6 +127,11 @@ class SqliteAttendanceRepository implements AttendanceRepository {
       message: result.message,
     );
     if (allowed && !(await hasAttendanceForDate(employeeId, date))) {
+      final status = _attendanceStatus(
+        scheduledCheckInTime: scheduledCheckInTime,
+        actualCheckIn: now,
+        settings: settings,
+      );
       await markAttendance(
         employeeId: employeeId,
         employeeName: employeeName,
@@ -102,6 +139,7 @@ class SqliteAttendanceRepository implements AttendanceRepository {
         time: time,
         verificationStatus: result.verificationStatus,
         similarityScore: score,
+        status: status,
       );
     }
     return result;
@@ -115,9 +153,10 @@ class SqliteAttendanceRepository implements AttendanceRepository {
     required String time,
     required String verificationStatus,
     required double similarityScore,
+    required String status,
   }) async {
     final db = await database;
-    await db.insert('attendance_records', AttendanceRecord(id: 0, employeeId: employeeId, employeeName: employeeName, date: date, time: time, status: 'Present', verificationStatus: verificationStatus, similarityScore: similarityScore, markedAt: DateTime.now().toIso8601String()).toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    await db.insert('attendance_records', AttendanceRecord(id: 0, employeeId: employeeId, employeeName: employeeName, date: date, time: time, status: status, verificationStatus: verificationStatus, similarityScore: similarityScore, markedAt: DateTime.now().toIso8601String()).toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   @override

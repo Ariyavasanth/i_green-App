@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../domain/attendance_record.dart';
+import '../domain/attendance_settings.dart';
 import '../domain/attendance_repository.dart';
 
 class FirebaseAttendanceRepository implements AttendanceRepository {
@@ -9,6 +10,19 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
   CollectionReference<Map<String, dynamic>> get _recordsRef => _firestore.collection('attendance_records');
   CollectionReference<Map<String, dynamic>> get _attemptsRef => _firestore.collection('attendance_attempts');
+  DocumentReference<Map<String, dynamic>> get _settingsRef => _firestore.collection('attendance_settings').doc('global');
+
+  @override
+  Future<AttendanceSettings> getAttendanceSettings() async {
+    final snap = await _settingsRef.get();
+    if (!snap.exists || snap.data() == null) return AttendanceSettings.defaults();
+    return AttendanceSettings.fromMap(snap.data()!);
+  }
+
+  @override
+  Future<void> saveAttendanceSettings(AttendanceSettings settings) async {
+    await _settingsRef.set(settings.toMap(), SetOptions(merge: true));
+  }
 
   @override
   Future<List<AttendanceRecord>> getAttendanceRecords(int employeeId) async {
@@ -28,6 +42,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     required String date,
     required String employeeName,
     required String profileImageUrl,
+    required String scheduledCheckInTime,
   }) async {
     final score = profileImageUrl.isNotEmpty ? 0.93 : 0.0;
     final allowed = score >= 0.9;
@@ -42,19 +57,24 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     );
     await logAttendanceAttempt(employeeId: employeeId, employeeName: employeeName, date: date, time: time, verificationStatus: result.verificationStatus, similarityScore: score, message: result.message);
     if (allowed && !(await hasAttendanceForDate(employeeId, date))) {
-      await markAttendance(employeeId: employeeId, employeeName: employeeName, date: date, time: time, verificationStatus: result.verificationStatus, similarityScore: score);
+      final settings = await getAttendanceSettings();
+      final scheduledMinutes = int.tryParse(scheduledCheckInTime.split(':').first) ?? 0;
+      final actualMinutes = now.hour * 60 + now.minute;
+      final delay = actualMinutes - scheduledMinutes;
+      final status = delay <= settings.gracePeriodMinutes ? 'Present' : delay > settings.absentThresholdMinutes ? 'Absent' : 'Late';
+      await markAttendance(employeeId: employeeId, employeeName: employeeName, date: date, time: time, verificationStatus: result.verificationStatus, similarityScore: score, status: status);
     }
     return result;
   }
 
   @override
-  Future<void> markAttendance({required int employeeId, required String employeeName, required String date, required String time, required String verificationStatus, required double similarityScore}) async {
+  Future<void> markAttendance({required int employeeId, required String employeeName, required String date, required String time, required String verificationStatus, required double similarityScore, required String status}) async {
     await _recordsRef.doc('${employeeId}_${date.replaceAll('-', '')}').set({
       'employee_id': employeeId,
       'employee_name': employeeName,
       'date': date,
       'time': time,
-      'status': 'Present',
+      'status': status,
       'verification_status': verificationStatus,
       'similarity_score': similarityScore,
       'marked_at': DateTime.now().toIso8601String(),

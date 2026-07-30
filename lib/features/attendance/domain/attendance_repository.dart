@@ -1,4 +1,5 @@
 import 'attendance_record.dart';
+import 'attendance_settings.dart';
 
 class AttendanceVerificationResult {
   const AttendanceVerificationResult({
@@ -19,11 +20,14 @@ class AttendanceVerificationResult {
 abstract class AttendanceRepository {
   Future<List<AttendanceRecord>> getAttendanceRecords(int employeeId);
   Future<bool> hasAttendanceForDate(int employeeId, String date);
+  Future<AttendanceSettings> getAttendanceSettings();
+  Future<void> saveAttendanceSettings(AttendanceSettings settings);
   Future<AttendanceVerificationResult> verifyAttendance({
     required int employeeId,
     required String date,
     required String employeeName,
     required String profileImageUrl,
+    required String scheduledCheckInTime,
   });
   Future<void> markAttendance({
     required int employeeId,
@@ -32,6 +36,7 @@ abstract class AttendanceRepository {
     required String time,
     required String verificationStatus,
     required double similarityScore,
+    required String status,
   });
   Future<void> unmarkAttendance({
     required int employeeId,

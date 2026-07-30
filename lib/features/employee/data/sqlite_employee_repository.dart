@@ -25,7 +25,7 @@ class SqliteEmployeeRepository implements EmployeeRepository {
 
     final db = await openDatabase(
       path,
-      version: 1,
+      version: 3,
       onCreate: (db, version) async {
         await _createTables(db);
       },

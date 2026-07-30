@@ -299,6 +299,12 @@ class _AttendanceVerificationDialogState extends State<AttendanceVerificationDia
       final now = DateTime.now();
       final dateKey = _formatKey(widget.date);
       final time = DateFormat('HH:mm:ss').format(now);
+      final settings = await widget.attendanceRepository.getAttendanceSettings();
+      final scheduledParts = widget.currentEmployee.inTime.split(':');
+      final scheduledHour = int.tryParse(scheduledParts.isNotEmpty ? scheduledParts[0] : '0') ?? 0;
+      final scheduledMinute = int.tryParse(scheduledParts.length > 1 ? scheduledParts[1] : '0') ?? 0;
+      final delay = (now.hour * 60 + now.minute) - (scheduledHour * 60 + scheduledMinute);
+      final status = delay <= settings.gracePeriodMinutes ? 'Present' : delay > settings.absentThresholdMinutes ? 'Absent' : 'Late';
 
       if (authenticated) {
         if (!(await widget.attendanceRepository.hasAttendanceForDate(widget.currentEmployee.id, dateKey))) {
@@ -309,6 +315,7 @@ class _AttendanceVerificationDialogState extends State<AttendanceVerificationDia
             time: time,
             verificationStatus: 'Verified',
             similarityScore: 1.0,
+            status: status,
           );
         }
         await widget.attendanceRepository.logAttendanceAttempt(
