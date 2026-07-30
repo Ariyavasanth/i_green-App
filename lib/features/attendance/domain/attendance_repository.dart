@@ -33,6 +33,10 @@ abstract class AttendanceRepository {
     required String verificationStatus,
     required double similarityScore,
   });
+  Future<void> unmarkAttendance({
+    required int employeeId,
+    required String date,
+  });
   Future<void> logAttendanceAttempt({
     required int employeeId,
     required String employeeName,

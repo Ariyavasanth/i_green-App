@@ -348,6 +348,44 @@ class _AttendanceVerificationDialogState extends State<AttendanceVerificationDia
     }
   }
 
+  Future<void> _unmarkAttendance() async {
+    if (_verifying) return;
+    setState(() {
+      _verifying = true;
+      _message = null;
+    });
+    try {
+      final now = DateTime.now();
+      final dateKey = _formatKey(widget.date);
+      final time = DateFormat('HH:mm:ss').format(now);
+
+      await widget.attendanceRepository.unmarkAttendance(
+        employeeId: widget.currentEmployee.id,
+        date: dateKey,
+      );
+      await widget.attendanceRepository.logAttendanceAttempt(
+        employeeId: widget.currentEmployee.id,
+        employeeName: widget.currentEmployee.fullName,
+        date: dateKey,
+        time: time,
+        verificationStatus: 'Unmarked',
+        similarityScore: 0.0,
+        message: 'Attendance unmarked successfully.',
+      );
+      if (!mounted) return;
+      setState(() => _message = 'Attendance unmarked successfully.');
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Attendance unmarked successfully.')));
+      widget.onAttendanceMarked();
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _message = e.toString().replaceFirst('Exception: ', ''));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+    } finally {
+      if (mounted) setState(() => _verifying = false);
+    }
+  }
+
   Future<void> _cancel() async {
     if (mounted) Navigator.of(context).pop();
   }
@@ -406,6 +444,12 @@ class _AttendanceVerificationDialogState extends State<AttendanceVerificationDia
       ),
       actions: [
         TextButton(onPressed: _cancel, child: const Text('Cancel')),
+        if (widget.isAttendance)
+          TextButton(
+            onPressed: _verifying ? null : _unmarkAttendance,
+            style: TextButton.styleFrom(foregroundColor: const Color(0xFFE53935)),
+            child: Text(_verifying ? 'Working...' : 'Unmark Attendance'),
+          ),
         ElevatedButton(
           style: ElevatedButton.styleFrom(backgroundColor: AppColors.active, foregroundColor: Colors.white),
           onPressed: widget.isLeave || widget.isAttendance ? null : _authenticateAndMark,

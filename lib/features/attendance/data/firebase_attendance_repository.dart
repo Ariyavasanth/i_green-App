@@ -62,6 +62,14 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
   }
 
   @override
+  Future<void> unmarkAttendance({
+    required int employeeId,
+    required String date,
+  }) async {
+    await _recordsRef.doc('${employeeId}_${date.replaceAll('-', '')}').delete();
+  }
+
+  @override
   Future<void> logAttendanceAttempt({required int employeeId, required String employeeName, required String date, required String time, required String verificationStatus, required double similarityScore, required String message}) async {
     await _attemptsRef.add({
       'employee_id': employeeId,

@@ -121,6 +121,19 @@ class SqliteAttendanceRepository implements AttendanceRepository {
   }
 
   @override
+  Future<void> unmarkAttendance({
+    required int employeeId,
+    required String date,
+  }) async {
+    final db = await database;
+    await db.delete(
+      'attendance_records',
+      where: 'employee_id = ? AND date = ?',
+      whereArgs: [employeeId, date],
+    );
+  }
+
+  @override
   Future<void> logAttendanceAttempt({
     required int employeeId,
     required String employeeName,
