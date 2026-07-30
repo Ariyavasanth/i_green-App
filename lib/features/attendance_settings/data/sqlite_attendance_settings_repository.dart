@@ -26,12 +26,39 @@ class SqliteAttendanceSettingsRepository implements AttendanceSettingsRepository
         id INTEGER PRIMARY KEY CHECK (id = 1),
         grace_period_minutes INTEGER NOT NULL,
         late_limit_minutes INTEGER NOT NULL,
-        absent_threshold_minutes INTEGER NOT NULL
+        absent_threshold_minutes INTEGER NOT NULL,
+        office_latitude REAL NOT NULL,
+        office_longitude REAL NOT NULL,
+        allowed_attendance_radius_meters INTEGER NOT NULL,
+        require_gps_verification INTEGER NOT NULL
       )
     ''');
+    final columns = await db.rawQuery('PRAGMA table_info(attendance_settings)');
+    final columnNames = columns.map((row) => row['name'] as String? ?? '').toSet();
+    if (!columnNames.contains('office_latitude')) {
+      await db.execute('ALTER TABLE attendance_settings ADD COLUMN office_latitude REAL NOT NULL DEFAULT 0');
+    }
+    if (!columnNames.contains('office_longitude')) {
+      await db.execute('ALTER TABLE attendance_settings ADD COLUMN office_longitude REAL NOT NULL DEFAULT 0');
+    }
+    if (!columnNames.contains('allowed_attendance_radius_meters')) {
+      await db.execute('ALTER TABLE attendance_settings ADD COLUMN allowed_attendance_radius_meters INTEGER NOT NULL DEFAULT 15');
+    }
+    if (!columnNames.contains('require_gps_verification')) {
+      await db.execute('ALTER TABLE attendance_settings ADD COLUMN require_gps_verification INTEGER NOT NULL DEFAULT 1');
+    }
     await db.insert(
       'attendance_settings',
-      {'id': 1, ...AttendanceSettings.defaults().toMap()},
+      {
+        'id': 1,
+        'grace_period_minutes': AttendanceSettings.defaults().gracePeriodMinutes,
+        'late_limit_minutes': AttendanceSettings.defaults().lateLimitMinutes,
+        'absent_threshold_minutes': AttendanceSettings.defaults().absentThresholdMinutes,
+        'office_latitude': AttendanceSettings.defaults().officeLatitude,
+        'office_longitude': AttendanceSettings.defaults().officeLongitude,
+        'allowed_attendance_radius_meters': AttendanceSettings.defaults().allowedAttendanceRadiusMeters,
+        'require_gps_verification': AttendanceSettings.defaults().requireGpsVerification ? 1 : 0,
+      },
       conflictAlgorithm: ConflictAlgorithm.ignore,
     );
   }
@@ -49,7 +76,16 @@ class SqliteAttendanceSettingsRepository implements AttendanceSettingsRepository
     final db = await database;
     await db.insert(
       'attendance_settings',
-      {'id': 1, ...settings.toMap()},
+      {
+        'id': 1,
+        'grace_period_minutes': settings.gracePeriodMinutes,
+        'late_limit_minutes': settings.lateLimitMinutes,
+        'absent_threshold_minutes': settings.absentThresholdMinutes,
+        'office_latitude': settings.officeLatitude,
+        'office_longitude': settings.officeLongitude,
+        'allowed_attendance_radius_meters': settings.allowedAttendanceRadiusMeters,
+        'require_gps_verification': settings.requireGpsVerification ? 1 : 0,
+      },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }

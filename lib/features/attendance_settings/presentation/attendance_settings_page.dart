@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../attendance/domain/attendance_settings.dart';
@@ -17,6 +18,10 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
   late final TextEditingController _graceController;
   late final TextEditingController _lateController;
   late final TextEditingController _absentController;
+  late final TextEditingController _latitudeController;
+  late final TextEditingController _longitudeController;
+  late final TextEditingController _radiusController;
+  bool _requireGpsVerification = true;
   bool _saving = false;
 
   @override
@@ -26,6 +31,10 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
     _graceController = TextEditingController(text: settings.gracePeriodMinutes.toString());
     _lateController = TextEditingController(text: settings.lateLimitMinutes.toString());
     _absentController = TextEditingController(text: settings.absentThresholdMinutes.toString());
+    _latitudeController = TextEditingController(text: settings.officeLatitude.toStringAsFixed(6));
+    _longitudeController = TextEditingController(text: settings.officeLongitude.toStringAsFixed(6));
+    _radiusController = TextEditingController(text: settings.allowedAttendanceRadiusMeters.toString());
+    _requireGpsVerification = settings.requireGpsVerification;
   }
 
   @override
@@ -33,6 +42,9 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
     _graceController.dispose();
     _lateController.dispose();
     _absentController.dispose();
+    _latitudeController.dispose();
+    _longitudeController.dispose();
+    _radiusController.dispose();
     super.dispose();
   }
 
@@ -43,6 +55,10 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
       gracePeriodMinutes: int.parse(_graceController.text.trim()),
       lateLimitMinutes: int.parse(_lateController.text.trim()),
       absentThresholdMinutes: int.parse(_absentController.text.trim()),
+      officeLatitude: double.parse(_latitudeController.text.trim()),
+      officeLongitude: double.parse(_longitudeController.text.trim()),
+      allowedAttendanceRadiusMeters: int.parse(_radiusController.text.trim()),
+      requireGpsVerification: _requireGpsVerification,
     );
     await ref.read(attendanceSettingsRepositoryProvider).saveAttendanceSettings(settings);
     ref.invalidate(attendanceSettingsProvider);
@@ -51,6 +67,58 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
       const SnackBar(content: Text('Attendance settings saved successfully.')),
     );
     setState(() => _saving = false);
+  }
+
+  Future<void> _useCurrentLocation() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Location services are turned off on this device.')),
+      );
+      return;
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    if (permission == LocationPermission.denied) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Location permission was denied.')),
+      );
+      return;
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Location permission is permanently denied. Enable it in system settings.')),
+      );
+      return;
+    }
+
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _latitudeController.text = position.latitude.toStringAsFixed(6);
+        _longitudeController.text = position.longitude.toStringAsFixed(6);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Current location filled successfully.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to get current location: $e')),
+      );
+    }
   }
 
   String? _validator(String? value) {
@@ -105,6 +173,52 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
                           fontSize: 13,
                           color: AppColors.textSecondary,
                         ),
+                      ),
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton.icon(
+                          onPressed: _saving ? null : _useCurrentLocation,
+                          icon: const Icon(Icons.gps_fixed, size: 18),
+                          label: const Text('Use Current Location'),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: _latitudeController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                        decoration: const InputDecoration(
+                          labelText: 'Office Latitude',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: _doubleValidator,
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: _longitudeController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                        decoration: const InputDecoration(
+                          labelText: 'Office Longitude',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: _doubleValidator,
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: _radiusController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Allowed Attendance Radius (meters)',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: _validator,
+                      ),
+                      const SizedBox(height: 12),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Require GPS Verification'),
+                        value: _requireGpsVerification,
+                        onChanged: _saving ? null : (value) => setState(() => _requireGpsVerification = value),
                       ),
                       const SizedBox(height: 18),
                       TextFormField(
@@ -169,5 +283,11 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
         ),
       ),
     );
+  }
+
+  String? _doubleValidator(String? value) {
+    if (value == null || value.trim().isEmpty) return 'Required';
+    if (double.tryParse(value.trim()) == null) return 'Enter a valid number';
+    return null;
   }
 }
