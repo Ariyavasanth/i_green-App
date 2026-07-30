@@ -28,6 +28,8 @@ abstract class AttendanceRepository {
     required String employeeName,
     required String profileImageUrl,
     required String scheduledCheckInTime,
+    required double currentLatitude,
+    required double currentLongitude,
   });
   Future<void> markAttendance({
     required int employeeId,

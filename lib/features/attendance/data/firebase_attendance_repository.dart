@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../domain/attendance_record.dart';
@@ -36,6 +38,24 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     return snap.docs.isNotEmpty;
   }
 
+  double _degreesToRadians(double degrees) => degrees * (pi / 180.0);
+
+  double _distanceInMeters({
+    required double startLatitude,
+    required double startLongitude,
+    required double endLatitude,
+    required double endLongitude,
+  }) {
+    const earthRadius = 6371000.0;
+    final dLat = _degreesToRadians(endLatitude - startLatitude);
+    final dLon = _degreesToRadians(endLongitude - startLongitude);
+    final lat1 = _degreesToRadians(startLatitude);
+    final lat2 = _degreesToRadians(endLatitude);
+    final a = sin(dLat / 2) * sin(dLat / 2) + sin(dLon / 2) * sin(dLon / 2) * cos(lat1) * cos(lat2);
+    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    return earthRadius * c;
+  }
+
   @override
   Future<AttendanceVerificationResult> verifyAttendance({
     required int employeeId,
@@ -43,21 +63,34 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     required String employeeName,
     required String profileImageUrl,
     required String scheduledCheckInTime,
+    required double currentLatitude,
+    required double currentLongitude,
   }) async {
     final score = profileImageUrl.isNotEmpty ? 0.93 : 0.0;
     final allowed = score >= 0.9;
     final now = DateTime.now();
     final time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
+    final settings = await getAttendanceSettings();
+    final distance = _distanceInMeters(
+      startLatitude: settings.officeLatitude,
+      startLongitude: settings.officeLongitude,
+      endLatitude: currentLatitude,
+      endLongitude: currentLongitude,
+    );
+    final withinRadius = !settings.requireGpsVerification || distance <= settings.allowedAttendanceRadiusMeters;
     final result = AttendanceVerificationResult(
-      allowed: allowed,
+      allowed: allowed && withinRadius,
       similarityScore: score,
-      verificationStatus: allowed ? 'Verified' : 'Failed',
-      message: allowed ? 'Attendance marked successfully.' : 'Face verification failed. Please try again.',
+      verificationStatus: !withinRadius ? 'Outside Radius' : allowed ? 'Verified' : 'Failed',
+      message: !withinRadius
+          ? 'You are not at the office. Please go to the office location to mark your attendance.'
+          : allowed
+              ? 'Attendance marked successfully.'
+              : 'Face verification failed. Please try again.',
       capturedImagePath: '',
     );
     await logAttendanceAttempt(employeeId: employeeId, employeeName: employeeName, date: date, time: time, verificationStatus: result.verificationStatus, similarityScore: score, message: result.message);
-    if (allowed && !(await hasAttendanceForDate(employeeId, date))) {
-      final settings = await getAttendanceSettings();
+    if (result.allowed && !(await hasAttendanceForDate(employeeId, date))) {
       final scheduledMinutes = int.tryParse(scheduledCheckInTime.split(':').first) ?? 0;
       final actualMinutes = now.hour * 60 + now.minute;
       final delay = actualMinutes - scheduledMinutes;

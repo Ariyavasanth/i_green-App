@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:local_auth/local_auth.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -271,9 +272,86 @@ class _AttendanceVerificationDialogState extends State<AttendanceVerificationDia
   final LocalAuthentication _auth = LocalAuthentication();
   bool _verifying = false;
   String? _message;
+  bool? _withinAllowedRadius;
+  String? _locationMessage;
+  static const double _maxAllowedGpsAccuracyMeters = 50;
 
   String _formatKey(DateTime date) =>
       '${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}';
+
+  Future<void> _refreshLocationGate() async {
+    try {
+      final settings = await widget.attendanceRepository.getAttendanceSettings();
+      if (!settings.requireGpsVerification) {
+        if (!mounted) return;
+        setState(() {
+          _withinAllowedRadius = true;
+          _locationMessage = null;
+        });
+        return;
+      }
+
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (!mounted) return;
+        setState(() {
+          _withinAllowedRadius = false;
+          _locationMessage = 'Location services are turned off on this device.';
+        });
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied) {
+        if (!mounted) return;
+        setState(() {
+          _withinAllowedRadius = false;
+          _locationMessage = 'Location permission was denied.';
+        });
+        return;
+      }
+      if (permission == LocationPermission.deniedForever) {
+        if (!mounted) return;
+        setState(() {
+          _withinAllowedRadius = false;
+          _locationMessage = 'Location permission is permanently denied. Enable it in system settings.';
+        });
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      final distance = Geolocator.distanceBetween(
+        settings.officeLatitude,
+        settings.officeLongitude,
+        position.latitude,
+        position.longitude,
+      );
+      final withinRadius = !(settings.officeLatitude == 0 && settings.officeLongitude == 0) &&
+          distance <= settings.allowedAttendanceRadiusMeters;
+      if (!mounted) return;
+      setState(() {
+        _withinAllowedRadius = withinRadius;
+        _locationMessage = withinRadius
+            ? null
+            : 'You are not at the office. Please go to the office location to mark your attendance.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _withinAllowedRadius = false;
+        _locationMessage = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshLocationGate();
+  }
 
   Future<void> _authenticateAndMark() async {
     if (_verifying) return;
@@ -299,36 +377,34 @@ class _AttendanceVerificationDialogState extends State<AttendanceVerificationDia
       final now = DateTime.now();
       final dateKey = _formatKey(widget.date);
       final time = DateFormat('HH:mm:ss').format(now);
-      final settings = await widget.attendanceRepository.getAttendanceSettings();
-      final scheduledParts = widget.currentEmployee.inTime.split(':');
-      final scheduledHour = int.tryParse(scheduledParts.isNotEmpty ? scheduledParts[0] : '0') ?? 0;
-      final scheduledMinute = int.tryParse(scheduledParts.length > 1 ? scheduledParts[1] : '0') ?? 0;
-      final delay = (now.hour * 60 + now.minute) - (scheduledHour * 60 + scheduledMinute);
-      final status = delay <= settings.gracePeriodMinutes ? 'Present' : delay > settings.absentThresholdMinutes ? 'Absent' : 'Late';
 
       if (authenticated) {
-        if (!(await widget.attendanceRepository.hasAttendanceForDate(widget.currentEmployee.id, dateKey))) {
-          await widget.attendanceRepository.markAttendance(
-            employeeId: widget.currentEmployee.id,
-            employeeName: widget.currentEmployee.fullName,
-            date: dateKey,
-            time: time,
-            verificationStatus: 'Verified',
-            similarityScore: 1.0,
-            status: status,
+        final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+        if (position.accuracy > _maxAllowedGpsAccuracyMeters) {
+          throw Exception(
+            'GPS accuracy is too low (${position.accuracy.toStringAsFixed(1)}m). Move to an open area and try again.',
           );
         }
-        await widget.attendanceRepository.logAttendanceAttempt(
+        if (position.isMocked) {
+          throw Exception('Mock location detected. Turn off fake GPS and try again.');
+        }
+        final verifyResult = await widget.attendanceRepository.verifyAttendance(
           employeeId: widget.currentEmployee.id,
           employeeName: widget.currentEmployee.fullName,
           date: dateKey,
-          time: time,
-          verificationStatus: 'Verified',
-          similarityScore: 1.0,
-          message: 'Attendance marked successfully.',
+          profileImageUrl: widget.currentEmployee.profileImageUrl,
+          scheduledCheckInTime: widget.currentEmployee.inTime,
+          currentLatitude: position.latitude,
+          currentLongitude: position.longitude,
         );
+        if (!verifyResult.allowed) {
+          if (!mounted) return;
+          setState(() => _message = verifyResult.message);
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(verifyResult.message)));
+          return;
+        }
         if (!mounted) return;
-        setState(() => _message = 'Attendance marked successfully.');
+        setState(() => _message = verifyResult.message);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Attendance marked successfully.')));
         widget.onAttendanceMarked();
         Navigator.of(context).pop();
@@ -399,6 +475,7 @@ class _AttendanceVerificationDialogState extends State<AttendanceVerificationDia
 
   @override
   Widget build(BuildContext context) {
+    final canMarkAttendance = widget.isLeave || widget.isAttendance ? false : (_withinAllowedRadius ?? false);
     return AlertDialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       title: const Text('Attendance Date'),
@@ -444,6 +521,15 @@ class _AttendanceVerificationDialogState extends State<AttendanceVerificationDia
                   const SizedBox(height: 8),
                   Text(_message!, style: TextStyle(color: _message!.contains('successfully') ? AppColors.primary : const Color(0xFFE53935))),
                 ],
+                if (_locationMessage != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _locationMessage!,
+                    style: TextStyle(
+                      color: _withinAllowedRadius == true ? AppColors.primary : const Color(0xFFE53935),
+                    ),
+                  ),
+                ],
               ],
             ],
           ),
@@ -459,7 +545,7 @@ class _AttendanceVerificationDialogState extends State<AttendanceVerificationDia
           ),
         ElevatedButton(
           style: ElevatedButton.styleFrom(backgroundColor: AppColors.active, foregroundColor: Colors.white),
-          onPressed: widget.isLeave || widget.isAttendance ? null : _authenticateAndMark,
+          onPressed: canMarkAttendance ? _authenticateAndMark : null,
           child: Text(_verifying ? 'Verifying...' : 'Mark Attendance'),
         ),
       ],
