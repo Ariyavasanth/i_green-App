@@ -51,22 +51,45 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
   Future<void> _save() async {
     if (!_formKey.currentState!.validate() || _saving) return;
     setState(() => _saving = true);
+
+    final latitude = _parseCoordinate(_latitudeController.text);
+    final longitude = _parseCoordinate(_longitudeController.text);
+    if (latitude == null || longitude == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter valid latitude and longitude values.')),
+      );
+      setState(() => _saving = false);
+      return;
+    }
+
     final settings = AttendanceSettings(
       gracePeriodMinutes: int.parse(_graceController.text.trim()),
       lateLimitMinutes: int.parse(_lateController.text.trim()),
       absentThresholdMinutes: int.parse(_absentController.text.trim()),
-      officeLatitude: double.parse(_latitudeController.text.trim()),
-      officeLongitude: double.parse(_longitudeController.text.trim()),
+      officeLatitude: latitude,
+      officeLongitude: longitude,
       allowedAttendanceRadiusMeters: int.parse(_radiusController.text.trim()),
       requireGpsVerification: _requireGpsVerification,
     );
-    await ref.read(attendanceSettingsRepositoryProvider).saveAttendanceSettings(settings);
-    ref.invalidate(attendanceSettingsProvider);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Attendance settings saved successfully.')),
-    );
-    setState(() => _saving = false);
+
+    try {
+      await ref.read(attendanceSettingsRepositoryProvider).saveAttendanceSettings(settings);
+      ref.invalidate(attendanceSettingsProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Attendance settings saved successfully.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to save attendance settings: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
   }
 
   Future<void> _useCurrentLocation() async {
@@ -126,6 +149,34 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
     final parsed = int.tryParse(value.trim());
     if (parsed == null || parsed < 0) return 'Enter a valid number';
     return null;
+  }
+
+  String? _coordinateValidator(String? value) {
+    if (value == null || value.trim().isEmpty) return 'Required';
+    if (_parseCoordinate(value) == null) return 'Enter a valid coordinate';
+    return null;
+  }
+
+  double? _parseCoordinate(String value) {
+    final trimmed = value.trim();
+    final decimal = double.tryParse(trimmed);
+    if (decimal != null) return decimal;
+
+    final normalized = trimmed.toUpperCase().replaceAll(RegExp(r'\s+'), '');
+    final match = RegExp(
+      r'^(\d+(?:\.\d+)?)[^0-9NSEW]+(\d+(?:\.\d+)?)[^0-9NSEW]+(\d+(?:\.\d+)?)(?:[^0-9NSEW]+)?([NSEW])$',
+    ).firstMatch(normalized);
+    if (match == null) return null;
+
+    final degrees = double.parse(match.group(1)!);
+    final minutes = double.parse(match.group(2)!);
+    final seconds = double.parse(match.group(3)!);
+    var result = degrees + (minutes / 60) + (seconds / 3600);
+    final direction = match.group(4)!;
+    if (direction == 'S' || direction == 'W') {
+      result = -result;
+    }
+    return result;
   }
 
   @override
@@ -191,7 +242,7 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
                           labelText: 'Office Latitude',
                           border: OutlineInputBorder(),
                         ),
-                        validator: _doubleValidator,
+                        validator: _coordinateValidator,
                       ),
                       const SizedBox(height: 14),
                       TextFormField(
@@ -201,7 +252,7 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
                           labelText: 'Office Longitude',
                           border: OutlineInputBorder(),
                         ),
-                        validator: _doubleValidator,
+                        validator: _coordinateValidator,
                       ),
                       const SizedBox(height: 14),
                       TextFormField(
@@ -283,11 +334,5 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
         ),
       ),
     );
-  }
-
-  String? _doubleValidator(String? value) {
-    if (value == null || value.trim().isEmpty) return 'Required';
-    if (double.tryParse(value.trim()) == null) return 'Enter a valid number';
-    return null;
   }
 }
