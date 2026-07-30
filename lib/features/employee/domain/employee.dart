@@ -204,6 +204,8 @@ class Employee {
     this.pfUan = '',
     this.esiNumber = '',
     this.leaveDetails = '',
+    this.inTime = '',
+    this.outTime = '',
     this.leaveType = 'As Needed',
     this.leaveAllocationFrequency = 'Monthly',
     this.allowedLeaves = 1.0,
@@ -462,6 +464,8 @@ class Employee {
   final String esiNumber;
 
   final String leaveDetails;
+  final String inTime;
+  final String outTime;
   final String leaveType;
   final String leaveAllocationFrequency;
   final double allowedLeaves;
@@ -599,6 +603,8 @@ class Employee {
       'pf_uan': pfUan,
       'esi_number': esiNumber,
       'leave_details': leaveDetails,
+      'in_time': inTime,
+      'out_time': outTime,
       'leave_type': leaveType,
       'leave_allocation_frequency': leaveAllocationFrequency,
       'allowed_leaves': allowedLeaves,
@@ -704,6 +710,8 @@ class Employee {
       pfUan: map['pf_uan'] as String? ?? '',
       esiNumber: map['esi_number'] as String? ?? '',
       leaveDetails: map['leave_details'] as String? ?? '',
+      inTime: map['in_time'] as String? ?? '',
+      outTime: map['out_time'] as String? ?? '',
       leaveType: map['leave_type'] as String? ?? 'As Needed',
       leaveAllocationFrequency: map['leave_allocation_frequency'] as String? ?? 'Monthly',
       allowedLeaves: (map['allowed_leaves'] as num?)?.toDouble() ?? 1.0,
@@ -818,6 +826,8 @@ class Employee {
     String? pfUan,
     String? esiNumber,
     String? leaveDetails,
+    String? inTime,
+    String? outTime,
     String? leaveType,
     String? leaveAllocationFrequency,
     double? allowedLeaves,
@@ -915,6 +925,8 @@ class Employee {
       pfUan: pfUan ?? this.pfUan,
       esiNumber: esiNumber ?? this.esiNumber,
       leaveDetails: leaveDetails ?? this.leaveDetails,
+      inTime: inTime ?? this.inTime,
+      outTime: outTime ?? this.outTime,
       leaveType: leaveType ?? this.leaveType,
       leaveAllocationFrequency: leaveAllocationFrequency ?? this.leaveAllocationFrequency,
       allowedLeaves: allowedLeaves ?? this.allowedLeaves,

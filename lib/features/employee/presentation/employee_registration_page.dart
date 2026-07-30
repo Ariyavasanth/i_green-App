@@ -52,6 +52,8 @@ class _EmployeeRegistrationPageState
   final _pfNumberController = TextEditingController();
   final _esiNumberController = TextEditingController();
   String _reportingTo = 'Saravanan G S';
+  final _inTimeController = TextEditingController();
+  final _outTimeController = TextEditingController();
   String _leaveType = 'As Needed';
   String _leaveAllocationFrequency = 'Monthly';
   final _allowedLeavesController = TextEditingController(text: '1.0');
@@ -207,6 +209,8 @@ class _EmployeeRegistrationPageState
       _emailController.text = emp.emailAddress;
       _pfNumberController.text = emp.pfNumber;
       _esiNumberController.text = emp.esiNumber;
+      _inTimeController.text = emp.inTime;
+      _outTimeController.text = emp.outTime;
       if (emp.reportingManager.isNotEmpty) _reportingTo = emp.reportingManager;
       if (emp.leaveType.isNotEmpty) _leaveType = emp.leaveType;
       _leaveAllocationFrequency = emp.leaveAllocationFrequency.isEmpty ? 'Monthly' : emp.leaveAllocationFrequency;
@@ -364,6 +368,8 @@ class _EmployeeRegistrationPageState
     _emailController.dispose();
     _pfNumberController.dispose();
     _esiNumberController.dispose();
+    _inTimeController.dispose();
+    _outTimeController.dispose();
     _permAddressController.dispose();
     _permCityController.dispose();
     _permCountryController.dispose();
@@ -617,6 +623,8 @@ class _EmployeeRegistrationPageState
         googleUrl: _googleController.text.trim(),
         pfNumber: _pfNumberController.text.trim(),
         esiNumber: _esiNumberController.text.trim(),
+        inTime: _inTimeController.text.trim(),
+        outTime: _outTimeController.text.trim(),
         reportingManager: _reportingTo,
         leaveType: _leaveType,
         leaveAllocationFrequency: _leaveAllocationFrequency,
@@ -1238,6 +1246,23 @@ class _EmployeeRegistrationPageState
                 ['As Needed', 'Once a Month', 'No Leave'],
                 (val) => setState(() => _leaveType = val!),
               ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildRow2or3(
+            isMobile: isMobile,
+            children: [
+              _buildTextField(
+                'In Time',
+                _inTimeController,
+                placeholder: 'e.g. 09:00 AM',
+              ),
+              _buildTextField(
+                'Out Time',
+                _outTimeController,
+                placeholder: 'e.g. 06:00 PM',
+              ),
+              const SizedBox.shrink(),
             ],
           ),
           const SizedBox(height: 12),

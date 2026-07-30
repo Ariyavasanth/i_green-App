@@ -132,6 +132,8 @@ class SqliteEmployeeRepository implements EmployeeRepository {
         pf_uan TEXT,
         esi_number TEXT,
         leave_details TEXT,
+        in_time TEXT,
+        out_time TEXT,
         company_assets TEXT,
         reporting_manager TEXT,
         team_name TEXT,
@@ -224,6 +226,8 @@ class SqliteEmployeeRepository implements EmployeeRepository {
       'leave_allocation_frequency': 'TEXT',
       'allowed_leaves': 'REAL',
       'effective_date': 'TEXT',
+      'in_time': 'TEXT',
+      'out_time': 'TEXT',
     };
 
     for (final entry in requiredColumns.entries) {

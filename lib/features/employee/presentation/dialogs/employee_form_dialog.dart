@@ -32,6 +32,8 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
   String _userType = 'EMPLOYEE';
   String _leaveType = 'As Needed';
   String _leaveAllocationFrequency = 'Monthly';
+  late final TextEditingController _inTimeController;
+  late final TextEditingController _outTimeController;
   late final TextEditingController _allowedLeavesController;
   late final TextEditingController _leaveEffectiveDateController;
   bool _isSaving = false;
@@ -61,6 +63,8 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
       text: emp?.joiningDate ?? DateTime.now().toString().split(' ')[0],
     );
     _leaveAllocationFrequency = emp?.leaveAllocationFrequency ?? 'Monthly';
+    _inTimeController = TextEditingController(text: emp?.inTime ?? '');
+    _outTimeController = TextEditingController(text: emp?.outTime ?? '');
     _allowedLeavesController = TextEditingController(text: emp?.allowedLeaves.toString() ?? '1.0');
     _leaveEffectiveDateController = TextEditingController(text: emp?.effectiveDate ?? '');
     if (emp != null) {
@@ -87,6 +91,8 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
     _deptController.dispose();
     _designationController.dispose();
     _joiningDateController.dispose();
+    _inTimeController.dispose();
+    _outTimeController.dispose();
     _allowedLeavesController.dispose();
     _leaveEffectiveDateController.dispose();
     super.dispose();
@@ -133,6 +139,8 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
         userType: _userType,
         leaveType: _leaveType,
         leaveAllocationFrequency: _leaveAllocationFrequency,
+        inTime: _inTimeController.text.trim(),
+        outTime: _outTimeController.text.trim(),
         allowedLeaves: double.tryParse(_allowedLeavesController.text.trim()) ?? 1.0,
         effectiveDate: _leaveEffectiveDateController.text.trim(),
         accessPermissions: _selectedPermissions.toList(),
@@ -415,6 +423,26 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                     onChanged: (val) {
                       if (val != null) setState(() => _leaveAllocationFrequency = val);
                     },
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildFieldPair(
+                  isMobile: isMobile,
+                  child1: TextFormField(
+                    controller: _inTimeController,
+                    decoration: const InputDecoration(
+                      labelText: 'In Time',
+                      hintText: '09:00 AM',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  child2: TextFormField(
+                    controller: _outTimeController,
+                    decoration: const InputDecoration(
+                      labelText: 'Out Time',
+                      hintText: '06:00 PM',
+                      border: OutlineInputBorder(),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
