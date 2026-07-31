@@ -47,9 +47,12 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFEFF3F6),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
+      body: SafeArea(
+        top: false,
+        bottom: true,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Page Header
@@ -69,7 +72,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
             ),
             const SizedBox(height: 16),
 
-            // Today's Status Banner Card
+            // Today's Status Banner Hero Card
             _buildTodayBannerCard(currentEmp, todayAttendanceAsync),
             const SizedBox(height: 20),
 
@@ -89,7 +92,8 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildTodayBannerCard(
@@ -104,8 +108,14 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.black12),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: const Center(child: CircularProgressIndicator()),
       ),
@@ -113,8 +123,14 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.black12),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Text('Error loading today\'s attendance: $e'),
       ),
@@ -123,146 +139,216 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         final hasCheckedOut = todayRecord != null && todayRecord.checkOutTime.isNotEmpty;
 
         return Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.black12),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+            border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Top Row: Title + Date + Status Pill
               Row(
                 children: [
                   const Icon(Icons.access_time_filled, color: AppColors.active, size: 20),
                   const SizedBox(width: 8),
-                  Text(
-                    'Today\'s Attendance Overview ($dateStr)',
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Today\'s Overview',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        Text(
+                          dateStr,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   _buildStatusChip(todayRecord),
                 ],
               ),
               const SizedBox(height: 16),
 
-              // Check-In / Check-Out / Total Hours Summary Row
+              // Primary Action Button (Full-width, large touch target)
+              if (!hasCheckedIn) ...[
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.active,
+                      foregroundColor: Colors.white,
+                      elevation: 1,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () => _openVerificationDialog(
+                      date: today,
+                      isCheckOut: false,
+                      existingRecord: todayRecord,
+                    ),
+                    icon: const Icon(Icons.fingerprint, size: 22),
+                    label: const Text(
+                      'Check In Attendance',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ] else if (!hasCheckedOut) ...[
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF414A51),
+                      foregroundColor: Colors.white,
+                      elevation: 1,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () => _openVerificationDialog(
+                      date: today,
+                      isCheckOut: true,
+                      existingRecord: todayRecord,
+                    ),
+                    icon: const Icon(Icons.logout, size: 22),
+                    label: const Text(
+                      'Check Out Attendance',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ] else ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8F5E9),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF81C784)),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.check_circle, size: 20, color: Color(0xFF2E7D32)),
+                      SizedBox(width: 8),
+                      Text(
+                        'Shift Attendance Complete',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF2E7D32),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              // Secondary Action (Less prominent / outlined)
+              if (!hasCheckedIn) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  height: 38,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.grey.shade500,
+                      side: BorderSide(color: Colors.grey.shade300),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    onPressed: null,
+                    icon: const Icon(Icons.logout, size: 16),
+                    label: const Text(
+                      'Check Out Attendance',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ),
+              ] else if (!hasCheckedOut) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  height: 38,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF2E7D32),
+                      side: const BorderSide(color: Color(0xFF81C784)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    onPressed: null,
+                    icon: const Icon(Icons.check_circle_outline, size: 16),
+                    label: Text(
+                      'Checked In at ${todayRecord.effectiveCheckInTime}',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 16),
+              const Divider(height: 1, color: Color(0xFFEEEEEE)),
+              const SizedBox(height: 16),
+
+              // Stat Chips Row (3 equal-width columns below button)
               Row(
                 children: [
                   Expanded(
-                    child: _buildMetricTile(
+                    child: _buildCompactStatChip(
                       icon: Icons.login,
                       iconColor: const Color(0xFF2E7D32),
-                      title: 'Check In Time',
+                      label: 'Check In',
                       value: hasCheckedIn ? todayRecord.effectiveCheckInTime : '--:--',
-                      subtitle: hasCheckedIn
-                          ? 'Verification: ${todayRecord.effectiveCheckInVerification}'
-                          : 'Not checked in yet',
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 8),
                   Expanded(
-                    child: _buildMetricTile(
+                    child: _buildCompactStatChip(
                       icon: Icons.logout,
                       iconColor: const Color(0xFFC62828),
-                      title: 'Check Out Time',
+                      label: 'Check Out',
                       value: hasCheckedOut ? todayRecord.checkOutTime : '--:--',
-                      subtitle: hasCheckedOut
-                          ? 'Verification: ${todayRecord.checkOutVerificationStatus}'
-                          : hasCheckedIn
-                              ? 'Pending Check Out'
-                              : 'Not checked out',
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 8),
                   Expanded(
-                    child: _buildMetricTile(
+                    child: _buildCompactStatChip(
                       icon: Icons.timelapse,
                       iconColor: AppColors.active,
-                      title: 'Total Work Hours',
+                      label: 'Work Hrs',
                       value: todayRecord != null && todayRecord.totalHours > 0
                           ? '${todayRecord.totalHours} hrs'
                           : '--',
-                      subtitle: hasCheckedOut ? 'Shift Completed' : 'In Progress',
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Action Buttons Row
-              Row(
-                children: [
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: !hasCheckedIn ? AppColors.active : Colors.grey.shade400,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    ),
-                    onPressed: !hasCheckedIn
-                        ? () => _openVerificationDialog(
-                              date: today,
-                              isCheckOut: false,
-                              existingRecord: todayRecord,
-                            )
-                        : null,
-                    icon: const Icon(Icons.fingerprint, size: 18),
-                    label: const Text(
-                      'Check In Attendance',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: hasCheckedIn && !hasCheckedOut
-                          ? const Color(0xFF414A51)
-                          : Colors.grey.shade400,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    ),
-                    onPressed: hasCheckedIn && !hasCheckedOut
-                        ? () => _openVerificationDialog(
-                              date: today,
-                              isCheckOut: true,
-                              existingRecord: todayRecord,
-                            )
-                        : null,
-                    icon: const Icon(Icons.logout, size: 18),
-                    label: const Text(
-                      'Check Out Attendance',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  if (hasCheckedOut)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE8F5E9),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFF81C784)),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.check_circle, size: 16, color: Color(0xFF2E7D32)),
-                          SizedBox(width: 6),
-                          Text(
-                            'Shift Attendance Complete',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF2E7D32),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                 ],
               ),
             ],
@@ -277,8 +363,9 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: Colors.grey.shade200,
+          color: Colors.grey.shade100,
           borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade300),
         ),
         child: const Text(
           'Not Marked',
@@ -317,51 +404,50 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     );
   }
 
-  Widget _buildMetricTile({
+  Widget _buildCompactStatChip({
     required IconData icon,
     required Color iconColor,
-    required String title,
+    required String label,
     required String value,
-    required String subtitle,
   }) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
       decoration: BoxDecoration(
         color: const Color(0xFFF8F9FA),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: const Color(0xFFE9ECEF)),
       ),
-      child: Row(
+      child: Column(
         children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: iconColor.withValues(alpha: 0.1),
-            child: Icon(icon, size: 18, color: iconColor),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                ),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                Text(
-                  subtitle,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 13, color: iconColor),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
             ),
           ),
         ],
@@ -401,37 +487,59 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       }
     }
 
+    final year = _focusedMonth.year;
+    final month = _focusedMonth.month;
+    final firstDay = DateTime(year, month, 1);
+    final daysInMonth = DateTime(year, month + 1, 0).day;
+    final startWeekday = firstDay.weekday % 7;
+    final totalGridCells = ((startWeekday + daysInMonth) / 7).ceil() * 7;
+
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.black12),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Month Header
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              IconButton(
-                icon: const Icon(Icons.chevron_left, color: AppColors.active),
-                onPressed: () => setState(
-                  () => _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1),
-                ),
-              ),
               Text(
                 DateFormat('MMMM yyyy').format(_focusedMonth),
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
-              IconButton(
-                icon: const Icon(Icons.chevron_right, color: AppColors.active),
-                onPressed: () => setState(
-                  () => _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1),
-                ),
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left, color: AppColors.active),
+                    onPressed: () => setState(
+                      () => _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right, color: AppColors.active),
+                    onPressed: () => setState(
+                      () => _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
+
+          // Day of week labels
           Row(
             children: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
                 .map(
@@ -440,7 +548,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                       child: Text(
                         d,
                         style: const TextStyle(
-                          fontSize: 12,
+                          fontSize: 11,
                           fontWeight: FontWeight.bold,
                           color: AppColors.textSecondary,
                         ),
@@ -451,73 +559,43 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                 .toList(),
           ),
           const SizedBox(height: 8),
-          ..._buildRows(attendanceMap, leaveDates),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _legend(const Color(0xFFD6ECFF), 'Today'),
-              const SizedBox(width: 16),
-              _legend(const Color(0xFFE53935), 'Leave'),
-              const SizedBox(width: 16),
-              _legend(const Color(0xFF2E7D32), 'Present / Checked Out'),
-              const SizedBox(width: 16),
-              _legend(const Color(0xFFE65100), 'Late'),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _legend(Color color, String label) => Row(children: [
-        Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3)),
-        ),
-        const SizedBox(width: 6),
-        Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-      ]);
+          // Responsive 7-Column Calendar Grid
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: totalGridCells,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              mainAxisSpacing: 4,
+              crossAxisSpacing: 4,
+              childAspectRatio: 1.0,
+            ),
+            itemBuilder: (context, index) {
+              final dayNumber = index - startWeekday + 1;
+              if (dayNumber < 1 || dayNumber > daysInMonth) {
+                return const SizedBox.shrink();
+              }
 
-  List<Widget> _buildRows(Map<String, AttendanceRecord> attendanceMap, Set<String> leaveDates) {
-    final year = _focusedMonth.year;
-    final month = _focusedMonth.month;
-    final firstDay = DateTime(year, month, 1);
-    final daysInMonth = DateTime(year, month + 1, 0).day;
-    final startWeekday = firstDay.weekday % 7;
-    final today = DateTime.now();
-    final todayKey = _formatKey(DateTime(today.year, today.month, today.day));
+              final date = DateTime(year, month, dayNumber);
+              final key = _formatKey(date);
+              final isToday = key == todayKey;
+              final isLeave = leaveDates.contains(key);
+              final record = attendanceMap[key];
+              final isAttendance = record != null;
 
-    final rows = <Widget>[];
-    var day = 1 - startWeekday;
-    while (day <= daysInMonth) {
-      final cells = <Widget>[];
-      for (var i = 0; i < 7; i++) {
-        if (day < 1 || day > daysInMonth) {
-          cells.add(const Expanded(child: SizedBox(height: 40)));
-        } else {
-          final date = DateTime(year, month, day);
-          final key = _formatKey(date);
-          final isToday = key == todayKey;
-          final isLeave = leaveDates.contains(key);
-          final record = attendanceMap[key];
-          final isAttendance = record != null;
+              Color? bg;
+              if (isLeave) {
+                bg = const Color(0xFFE53935);
+              } else if (isAttendance) {
+                bg = record.status == 'Late'
+                    ? const Color(0xFFE65100)
+                    : const Color(0xFF2E7D32);
+              } else if (isToday) {
+                bg = const Color(0xFFD6ECFF);
+              }
 
-          Color? bg;
-          if (isLeave) {
-            bg = const Color(0xFFE53935);
-          } else if (isAttendance) {
-            bg = record.status == 'Late'
-                ? const Color(0xFFE65100)
-                : const Color(0xFF2E7D32);
-          } else if (isToday) {
-            bg = const Color(0xFFD6ECFF);
-          }
-
-          cells.add(
-            Expanded(
-              child: MouseRegion(
+              return MouseRegion(
                 cursor: isToday ? SystemMouseCursors.click : SystemMouseCursors.basic,
                 child: GestureDetector(
                   onTap: isToday
@@ -528,13 +606,11 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                           )
                       : null,
                   child: Container(
-                    height: 40,
-                    margin: const EdgeInsets.all(2),
                     decoration: BoxDecoration(
                       color: bg,
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: BorderRadius.circular(8),
                       border: isToday && bg == null
-                          ? Border.all(color: const Color(0xFFD6ECFF), width: 1.5)
+                          ? Border.all(color: AppColors.active, width: 1.5)
                           : isLeave
                               ? Border.all(color: const Color(0xFF9CC70A), width: 1.2)
                               : null,
@@ -543,35 +619,65 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                       children: [
                         Center(
                           child: Text(
-                            '$day',
+                            '$dayNumber',
                             style: TextStyle(
-                              fontSize: 13,
-                              fontWeight:
-                                  isLeave || isAttendance || isToday ? FontWeight.bold : FontWeight.w500,
+                              fontSize: 12,
+                              fontWeight: isLeave || isAttendance || isToday
+                                  ? FontWeight.bold
+                                  : FontWeight.w500,
                               color: isAttendance || isLeave ? Colors.white : Colors.black,
                             ),
                           ),
                         ),
                         if (isLeave)
                           const Positioned(
-                            right: 6,
-                            top: 6,
-                            child: Icon(Icons.event_busy, size: 10, color: Colors.white),
+                            right: 3,
+                            top: 3,
+                            child: Icon(Icons.event_busy, size: 9, color: Colors.white),
                           ),
                       ],
                     ),
                   ),
                 ),
-              ),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+
+          // Legend using Wrap for zero overflow on mobile
+          Center(
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                _legend(const Color(0xFFD6ECFF), 'Today'),
+                _legend(const Color(0xFFE53935), 'Leave'),
+                _legend(const Color(0xFF2E7D32), 'Present / Checked Out'),
+                _legend(const Color(0xFFE65100), 'Late'),
+              ],
             ),
-          );
-        }
-        day++;
-      }
-      rows.add(Row(children: cells));
-    }
-    return rows;
+          ),
+        ],
+      ),
+    );
   }
+
+  Widget _legend(Color color, String label) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3)),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+          ),
+        ],
+      );
 
   void _openVerificationDialog({
     required DateTime date,
@@ -882,10 +988,11 @@ class _AttendanceVerificationDialogState extends State<AttendanceVerificationDia
     final actionText = widget.isCheckOut ? 'Check Out' : 'Check In';
 
     return AlertDialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       title: Text('$actionText Attendance'),
-      content: SizedBox(
-        width: 420,
+      content: Container(
+        constraints: const BoxConstraints(maxWidth: 420),
+        width: MediaQuery.of(context).size.width,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,

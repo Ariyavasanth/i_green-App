@@ -265,7 +265,13 @@ class AppShell extends ConsumerWidget {
                                 : () =>
                                       _toggleSidebarExpanded(ref, !expanded),
                           ),
-                          Expanded(child: child),
+                          Expanded(
+                            child: SafeArea(
+                              top: false,
+                              bottom: true,
+                              child: child,
+                            ),
+                          ),
                         ],
                       ),
                     ),
