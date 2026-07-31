@@ -28,6 +28,7 @@ import '../../features/employee/presentation/employee_registration_page.dart';
 import '../../features/leave/presentation/leave_page.dart';
 import '../../features/leave/presentation/leave_management_page.dart';
 import '../../features/attendance/presentation/attendance_page.dart';
+import '../../features/attendance_management/presentation/attendance_management_page.dart';
 import '../../features/attendance_settings/presentation/attendance_settings_page.dart';
 import '../../screens/login_screen.dart';
 import '../../screens/customers/active_customers_list.dart';
@@ -87,6 +88,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/attendance-settings',
             builder: (_, _) => const AttendanceSettingsPage(),
+          ),
+          GoRoute(
+            path: '/attendance-management',
+            builder: (_, _) => const AttendanceManagementPage(),
           ),
           GoRoute(
             path: '/leave-management',

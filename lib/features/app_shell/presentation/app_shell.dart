@@ -117,6 +117,12 @@ class AppShell extends ConsumerWidget {
       'Employee',
     ),
     SidebarDestination(
+      'Attendance Management',
+      '/attendance-management',
+      Icons.co_present_outlined,
+      'Employee',
+    ),
+    SidebarDestination(
       'Leave Management',
       '/leave-management',
       Icons.event_note,

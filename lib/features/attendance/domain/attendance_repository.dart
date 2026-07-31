@@ -19,6 +19,8 @@ class AttendanceVerificationResult {
 
 abstract class AttendanceRepository {
   Future<List<AttendanceRecord>> getAttendanceRecords(int employeeId);
+  Future<List<AttendanceRecord>> getAllAttendanceRecords();
+  Future<AttendanceRecord?> getAttendanceRecordForDate(int employeeId, String date);
   Future<bool> hasAttendanceForDate(int employeeId, String date);
   Future<AttendanceSettings> getAttendanceSettings();
   Future<void> saveAttendanceSettings(AttendanceSettings settings);
@@ -31,6 +33,14 @@ abstract class AttendanceRepository {
     required double currentLatitude,
     required double currentLongitude,
   });
+  Future<AttendanceVerificationResult> verifyCheckOut({
+    required int employeeId,
+    required String date,
+    required String employeeName,
+    required String profileImageUrl,
+    required double currentLatitude,
+    required double currentLongitude,
+  });
   Future<void> markAttendance({
     required int employeeId,
     required String employeeName,
@@ -40,6 +50,14 @@ abstract class AttendanceRepository {
     required double similarityScore,
     required String status,
   });
+  Future<void> checkOut({
+    required int employeeId,
+    required String date,
+    required String checkOutTime,
+    required String verificationStatus,
+    required double similarityScore,
+  });
+  Future<void> adminSaveAttendance(AttendanceRecord record);
   Future<void> unmarkAttendance({
     required int employeeId,
     required String date,
@@ -53,4 +71,5 @@ abstract class AttendanceRepository {
     required double similarityScore,
     required String message,
   });
+  Future<List<Map<String, dynamic>>> getAttendanceAttempts();
 }
