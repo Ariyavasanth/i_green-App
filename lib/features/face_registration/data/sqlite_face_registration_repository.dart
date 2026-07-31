@@ -179,6 +179,17 @@ class SqliteFaceRegistrationRepository implements FaceRegistrationRepository {
   }
 
   @override
+  Future<void> deleteFaceEmbeddings(int employeeId) async {
+    final db = await _db;
+    await _ensureTable(db);
+    await db.delete(
+      'employee_face_embeddings',
+      where: 'employee_id = ?',
+      whereArgs: [employeeId],
+    );
+  }
+
+  @override
   Future<List<Map<String, dynamic>>> getMismatchAttempts() async {
     final db = await _db;
     await _ensureTable(db);

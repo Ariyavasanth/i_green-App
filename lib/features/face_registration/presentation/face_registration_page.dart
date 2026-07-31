@@ -3,15 +3,12 @@ import 'dart:math';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/layout/responsive_layout.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../authentication/providers/authentication_providers.dart';
 import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
-import '../../attendance/providers/attendance_providers.dart';
-import '../domain/face_registration_repository.dart';
 import '../providers/face_registration_providers.dart';
 
 class FaceRegistrationPage extends ConsumerStatefulWidget {
@@ -21,9 +18,7 @@ class FaceRegistrationPage extends ConsumerStatefulWidget {
   ConsumerState<FaceRegistrationPage> createState() => _FaceRegistrationPageState();
 }
 
-class _FaceRegistrationPageState extends ConsumerState<FaceRegistrationPage>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _FaceRegistrationPageState extends ConsumerState<FaceRegistrationPage> {
   CameraController? _cameraController;
   bool _isCameraInitialized = false;
   bool _isProcessing = false;
@@ -33,9 +28,6 @@ class _FaceRegistrationPageState extends ConsumerState<FaceRegistrationPage>
   final List<List<double>> _capturedEmbeddings = [];
   final int _targetEmbeddingsCount = 15; // 10-20 embeddings target
   bool _isRegistrationComplete = false;
-
-  // Attendance scan result state
-  FaceVerificationResult? _lastVerificationResult;
 
   final List<String> _poseInstructions = [
     'Look Straight at Camera',
@@ -51,7 +43,6 @@ class _FaceRegistrationPageState extends ConsumerState<FaceRegistrationPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
     _initializeCamera();
   }
 
@@ -83,7 +74,6 @@ class _FaceRegistrationPageState extends ConsumerState<FaceRegistrationPage>
 
   @override
   void dispose() {
-    _tabController.dispose();
     _cameraController?.dispose();
     super.dispose();
   }
@@ -165,96 +155,45 @@ class _FaceRegistrationPageState extends ConsumerState<FaceRegistrationPage>
     }
   }
 
-  /// Step 2: Live Attendance Scan & Similarity Match (>95% Threshold)
-  Future<void> _performAttendanceScan(Employee employee, String actionType) async {
-    if (_isProcessing) return;
-
-    setState(() {
-      _isProcessing = true;
-      _lastVerificationResult = null;
-    });
-
-    try {
-      final isRegistered = await ref.read(isFaceRegisteredProvider(employee.id).future);
-
-      if (!isRegistered) {
-        setState(() {
-          _isProcessing = false;
-          _lastVerificationResult = const FaceVerificationResult(
-            isMatched: false,
-            similarityScore: 0.0,
-            verificationStatus: 'NOT_REGISTERED',
-            message: 'Please complete Face Registration first before scanning.',
-          );
-        });
-        return;
-      }
-
-      XFile? livePhoto;
-      if (_isCameraInitialized && _cameraController != null) {
-        try {
-          livePhoto = await _cameraController!.takePicture();
-        } catch (_) {}
-      }
-
-      // Generate live scanning vector
-      final repo = ref.read(faceRegistrationRepositoryProvider);
-      final storedEmbeddings = await repo.getFaceEmbeddings(employee.id);
-
-      List<double> liveVector;
-      if (storedEmbeddings.isNotEmpty) {
-        // High similarity vector simulation (~97% match for real registered face)
-        final firstStored = storedEmbeddings.first;
-        final random = Random();
-        liveVector = List.generate(firstStored.length, (i) {
-          final noise = (random.nextDouble() - 0.5) * 0.04; // slight noise
-          return firstStored[i] + noise;
-        });
-        final norm = sqrt(liveVector.fold(0.0, (s, v) => s + v * v));
-        liveVector = liveVector.map((v) => v / norm).toList();
-      } else {
-        liveVector = _generateFeatureVector(seed: DateTime.now().millisecondsSinceEpoch);
-      }
-
-      final now = DateTime.now();
-      final dateStr = DateFormat('yyyy-MM-dd').format(now);
-      final timeStr = DateFormat('HH:mm:ss').format(now);
-
-      final result = await repo.verifyLiveEmbedding(
-        employeeId: employee.id,
-        employeeName: '${employee.firstName} ${employee.lastName}',
-        date: dateStr,
-        time: timeStr,
-        actionType: actionType,
-        liveEmbedding: liveVector,
-        liveFrameImagePath: livePhoto?.path,
-      );
-
-      // Invalidate attendance list provider to refresh UI records
-      ref.invalidate(attendanceRecordsProvider);
-
-      setState(() {
-        _lastVerificationResult = result;
-        _isProcessing = false;
-      });
-    } catch (e) {
-      setState(() {
-        _isProcessing = false;
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Scan Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
   void _resetRegistration() {
     setState(() {
       _currentPoseIndex = 0;
       _capturedEmbeddings.clear();
       _isRegistrationComplete = false;
     });
+  }
+
+  Future<void> _deleteRegistration(Employee employee) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Registered Face Profile'),
+        content: Text('Are you sure you want to delete the registered face embeddings for ${employee.firstName} ${employee.lastName}?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final repo = ref.read(faceRegistrationRepositoryProvider);
+      await repo.deleteFaceEmbeddings(employee.id);
+      ref.invalidate(isFaceRegisteredProvider(employee.id));
+      _resetRegistration();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Face profile deleted from Cloud Firestore. You can now register a new face profile.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -287,25 +226,8 @@ class _FaceRegistrationPageState extends ConsumerState<FaceRegistrationPage>
             child: Column(
               children: [
                 _buildHeader(context, currentEmp, isMobile),
-                TabBar(
-                  controller: _tabController,
-                  indicatorColor: _brandAccent,
-                  labelColor: _brandHeader,
-                  unselectedLabelColor: Colors.grey[600],
-                  labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                  tabs: const [
-                    Tab(icon: Icon(Icons.face), text: 'Face Registration'),
-                    Tab(icon: Icon(Icons.qr_code_scanner), text: 'Attendance Scanner'),
-                  ],
-                ),
                 Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildRegistrationTab(currentEmp, isMobile),
-                      _buildAttendanceScanTab(currentEmp, isMobile),
-                    ],
-                  ),
+                  child: _buildRegistrationTab(currentEmp, isMobile),
                 ),
               ],
             ),
@@ -379,25 +301,113 @@ class _FaceRegistrationPageState extends ConsumerState<FaceRegistrationPage>
   Widget _buildRegistrationTab(Employee emp, bool isMobile) {
     final isRegisteredAsync = ref.watch(isFaceRegisteredProvider(emp.id));
 
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(isMobile ? 16 : 24),
-      child: Center(
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 600),
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: const [
-              BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4)),
-            ],
-          ),
-          child: Column(
-            children: [
-              isRegisteredAsync.when(
-                data: (registered) {
-                  if (registered && !_isRegistrationComplete) {
-                    return Container(
+    return isRegisteredAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator(color: _brandAccent)),
+      error: (err, stack) => Center(child: Text('Error checking face registration: $err')),
+      data: (isRegisteredInDb) {
+        final isRegistered = isRegisteredInDb || _isRegistrationComplete;
+
+        return SingleChildScrollView(
+          padding: EdgeInsets.all(isMobile ? 16 : 24),
+          child: Center(
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 600),
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4)),
+                ],
+              ),
+              child: Column(
+                children: [
+                  if (isRegistered) ...[
+                    // LOCKED STATE: Face Profile Registered in Cloud Firestore
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.green, width: 1.5),
+                      ),
+                      child: Column(
+                        children: [
+                          const Icon(Icons.verified_user, color: Colors.green, size: 64),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Face Profile Registered',
+                            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.green),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Face template vectors are securely stored in Cloud Firestore for ${emp.firstName} ${emp.lastName} (${emp.employeeId}).',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                          ),
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.black12),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.lock, size: 16, color: _brandHeader),
+                                SizedBox(width: 6),
+                                Text(
+                                  'Registration Locked (1 Face Profile Limit)',
+                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _brandHeader),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.amber.shade700),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.amber.shade900, size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'To register a new face or retake your photo, you must first delete your existing face profile.',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.amber.shade900),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Single Action: Delete Profile to unlock capture
+                    ElevatedButton.icon(
+                      onPressed: () => _deleteRegistration(emp),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red[700],
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: const Icon(Icons.delete_forever),
+                      label: const Text('Delete Face Profile to Re-Register', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ] else ...[
+                    // UNLOCKED STATE: Capture 15 Pose Embeddings
+                    Container(
                       margin: const EdgeInsets.only(bottom: 16),
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -407,356 +417,123 @@ class _FaceRegistrationPageState extends ConsumerState<FaceRegistrationPage>
                       ),
                       child: const Row(
                         children: [
-                          Icon(Icons.check_circle, color: Colors.green),
+                          Icon(Icons.camera_front, color: _brandHeader),
                           SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              'Face embeddings are already registered in Cloud Firestore. Re-registering will update your 15 template vectors.',
+                              'One-Time Setup: Align your face within the frame and capture pose embeddings.',
                               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                             ),
                           ),
                         ],
                       ),
-                    );
-                  }
-                  return const SizedBox.shrink();
-                },
-                loading: () => const SizedBox.shrink(),
-                error: (err, stack) => const SizedBox.shrink(),
-              ),
+                    ),
 
-              // Camera Feed / Frame Container
-              Container(
-                height: 280,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: _isRegistrationComplete ? Colors.green : _brandAccent,
-                    width: 3,
-                  ),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(13),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      if (_isCameraInitialized && _cameraController != null)
-                        CameraPreview(_cameraController!)
-                      else
-                        Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                    // Camera Feed Container
+                    Container(
+                      height: 280,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.black,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: _brandAccent, width: 3),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(13),
+                        child: Stack(
+                          alignment: Alignment.center,
                           children: [
-                            const Icon(Icons.person, size: 80, color: Colors.white54),
-                            const SizedBox(height: 8),
-                            Text(
-                              _isCameraInitialized ? 'Camera Active' : 'Camera Feed Ready',
-                              style: const TextStyle(color: Colors.white70),
+                            if (_isCameraInitialized && _cameraController != null)
+                              CameraPreview(_cameraController!)
+                            else
+                              Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.person, size: 80, color: Colors.white54),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    _isCameraInitialized ? 'Camera Active' : 'Camera Feed Ready',
+                                    style: const TextStyle(color: Colors.white70),
+                                  ),
+                                ],
+                              ),
+
+                            // Oval Face Frame Overlay
+                            Container(
+                              width: 180,
+                              height: 230,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.rectangle,
+                                borderRadius: BorderRadius.circular(100),
+                                border: Border.all(color: _brandAccent, width: 2),
+                              ),
                             ),
+
+                            if (_isProcessing)
+                              Container(
+                                color: Colors.black45,
+                                child: const Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    CircularProgressIndicator(color: _brandAccent),
+                                    SizedBox(height: 12),
+                                    Text(
+                                      'Extracting 128-d Feature Vector...',
+                                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                              ),
                           ],
                         ),
-
-                      // Oval Face Frame Overlay
-                      Container(
-                        width: 180,
-                        height: 230,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.rectangle,
-                          borderRadius: BorderRadius.circular(100),
-                          border: Border.all(
-                            color: _isRegistrationComplete ? Colors.green : _brandAccent,
-                            width: 2,
-                          ),
-                        ),
                       ),
-
-                      if (_isProcessing)
-                        Container(
-                          color: Colors.black45,
-                          child: const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              CircularProgressIndicator(color: _brandAccent),
-                              SizedBox(height: 12),
-                              Text(
-                                'Extracting 128-d Feature Vector...',
-                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              if (!_isRegistrationComplete) ...[
-                Text(
-                  'Pose ${_currentPoseIndex + 1} of ${_poseInstructions.length}',
-                  style: TextStyle(color: Colors.grey[700], fontSize: 13, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _poseInstructions[_currentPoseIndex],
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _brandHeader),
-                ),
-                const SizedBox(height: 12),
-                LinearProgressIndicator(
-                  value: _capturedEmbeddings.length / _targetEmbeddingsCount,
-                  backgroundColor: Colors.grey[200],
-                  color: _brandAccent,
-                  minHeight: 8,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Captured ${_capturedEmbeddings.length} of $_targetEmbeddingsCount embeddings',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton.icon(
-                  onPressed: _isProcessing ? null : () => _capturePoseSample(emp),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _brandAccent,
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  icon: const Icon(Icons.camera_alt),
-                  label: Text(
-                    _isProcessing ? 'Extracting Vector...' : 'Capture Pose Embeddings',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ] else ...[
-                const Icon(Icons.check_circle, color: Colors.green, size: 54),
-                const SizedBox(height: 8),
-                const Text(
-                  'Face Registration Complete!',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.green),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Stored 15 embedding vectors in Cloud Firestore for ${emp.firstName} ${emp.lastName}.',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.grey),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: _resetRegistration,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Re-Register'),
                     ),
-                    const SizedBox(width: 14),
+
+                    const SizedBox(height: 20),
+
+                    Text(
+                      'Pose ${_currentPoseIndex + 1} of ${_poseInstructions.length}',
+                      style: TextStyle(color: Colors.grey[700], fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _poseInstructions[_currentPoseIndex],
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _brandHeader),
+                    ),
+                    const SizedBox(height: 12),
+                    LinearProgressIndicator(
+                      value: _capturedEmbeddings.length / _targetEmbeddingsCount,
+                      backgroundColor: Colors.grey[200],
+                      color: _brandAccent,
+                      minHeight: 8,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Captured ${_capturedEmbeddings.length} of $_targetEmbeddingsCount embeddings',
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 20),
                     ElevatedButton.icon(
-                      onPressed: () => _tabController.animateTo(1),
+                      onPressed: _isProcessing ? null : () => _capturePoseSample(emp),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _brandHeader,
-                        foregroundColor: Colors.white,
+                        backgroundColor: _brandAccent,
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
-                      icon: const Icon(Icons.arrow_forward),
-                      label: const Text('Go to Attendance Scanner'),
+                      icon: const Icon(Icons.camera_alt),
+                      label: Text(
+                        _isProcessing ? 'Extracting Vector...' : 'Capture Pose Embeddings',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ],
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAttendanceScanTab(Employee emp, bool isMobile) {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(isMobile ? 16 : 24),
-      child: Center(
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 600),
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: const [
-              BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4)),
-            ],
-          ),
-          child: Column(
-            children: [
-              Text(
-                'Live Face Attendance Scanner',
-                style: AppTextStyles.heading.copyWith(color: _brandHeader, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Scans live face vector & compares against Firestore vectors (>95% match threshold)',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-
-              // Camera Scanner Frame
-              Container(
-                height: 280,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: _lastVerificationResult == null
-                        ? _brandAccent
-                        : (_lastVerificationResult!.isMatched ? Colors.green : Colors.red),
-                    width: 3,
-                  ),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(13),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      if (_isCameraInitialized && _cameraController != null)
-                        CameraPreview(_cameraController!)
-                      else
-                        const Icon(Icons.qr_code_scanner, size: 80, color: Colors.white54),
-
-                      // Scanning Frame overlay
-                      Container(
-                        width: 180,
-                        height: 230,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(100),
-                          border: Border.all(
-                            color: _lastVerificationResult == null
-                                ? _brandAccent
-                                : (_lastVerificationResult!.isMatched ? Colors.green : Colors.red),
-                            width: 2,
-                          ),
-                        ),
-                      ),
-
-                      if (_isProcessing)
-                        Container(
-                          color: Colors.black54,
-                          child: const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              CircularProgressIndicator(color: _brandAccent),
-                              SizedBox(height: 12),
-                              Text(
-                                'Matching with Firestore vectors...',
-                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // Verification Score Result Badge
-              if (_lastVerificationResult != null) ...[
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: _lastVerificationResult!.isMatched
-                        ? Colors.green.withValues(alpha: 0.1)
-                        : Colors.red.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: _lastVerificationResult!.isMatched ? Colors.green : Colors.red,
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            _lastVerificationResult!.isMatched
-                                ? Icons.verified_user
-                                : Icons.gpp_bad,
-                            color: _lastVerificationResult!.isMatched ? Colors.green : Colors.red,
-                            size: 28,
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            _lastVerificationResult!.isMatched ? 'MATCH SUCCESSFUL' : 'FACE MISMATCH',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: _lastVerificationResult!.isMatched ? Colors.green : Colors.red,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Similarity Score: ${(_lastVerificationResult!.similarityScore * 100).toStringAsFixed(1)}% (Threshold: 95.0%)',
-                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _lastVerificationResult!.message,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: _lastVerificationResult!.isMatched ? Colors.black87 : Colors.red[800],
-                        ),
-                      ),
-                      if (_lastVerificationResult!.isMatched) ...[
-                        const SizedBox(height: 6),
-                        const Text(
-                          'Note: Saved metadata only to Firestore (No image saved)',
-                          style: TextStyle(fontSize: 11, color: Colors.grey, fontStyle: FontStyle.italic),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-              ],
-
-              // Scan Action Buttons
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: _isProcessing ? null : () => _performAttendanceScan(emp, 'CHECK_IN'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green[700],
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    icon: const Icon(Icons.login),
-                    label: const Text('Scan & Check In', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                  const SizedBox(width: 16),
-                  ElevatedButton.icon(
-                    onPressed: _isProcessing ? null : () => _performAttendanceScan(emp, 'CHECK_OUT'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _brandHeader,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    icon: const Icon(Icons.logout),
-                    label: const Text('Scan & Check Out', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
                 ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

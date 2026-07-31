@@ -168,6 +168,11 @@ class FirebaseFaceRegistrationRepository implements FaceRegistrationRepository {
   }
 
   @override
+  Future<void> deleteFaceEmbeddings(int employeeId) async {
+    await _embeddingsRef.doc(employeeId.toString()).delete();
+  }
+
+  @override
   Future<List<Map<String, dynamic>>> getMismatchAttempts() async {
     final snap = await _attemptsRef
         .where('verification_status', isEqualTo: 'MISMATCH')

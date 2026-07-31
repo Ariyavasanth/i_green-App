@@ -42,6 +42,9 @@ abstract class FaceRegistrationRepository {
     String? liveFrameImagePath,
   });
 
+  /// Delete registered face embeddings for an employee
+  Future<void> deleteFaceEmbeddings(int employeeId);
+
   /// Get failed mismatch attempts for admin notification
   Future<List<Map<String, dynamic>>> getMismatchAttempts();
 }
