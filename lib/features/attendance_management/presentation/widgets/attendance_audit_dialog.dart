@@ -18,14 +18,17 @@ class AttendanceAuditDialog extends ConsumerWidget {
         children: [
           const Icon(Icons.history, color: AppColors.active),
           const SizedBox(width: 8),
-          Text(
-            employeeId != null ? 'Employee Verification Audit' : 'All Biometric & GPS Audit Logs',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          Expanded(
+            child: Text(
+              employeeId != null ? 'Employee Verification Audit' : 'All Biometric & GPS Audit Logs',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
       content: SizedBox(
-        width: 520,
+        width: double.maxFinite,
         height: 380,
         child: attemptsAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -39,7 +42,7 @@ class AttendanceAuditDialog extends ConsumerWidget {
 
             return ListView.separated(
               itemCount: attempts.length,
-              separatorBuilder: (_, __) => const Divider(),
+              separatorBuilder: (_, index) => const Divider(),
               itemBuilder: (context, index) {
                 final attempt = attempts[index];
                 final status = attempt['verification_status'] as String? ?? 'Unknown';

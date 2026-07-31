@@ -25,6 +25,8 @@ class AttendanceMatrixView extends StatelessWidget {
     final month = focusedMonth.month;
     final daysInMonth = DateTime(year, month + 1, 0).day;
 
+    final isMobile = MediaQuery.of(context).size.width < 650;
+
     // Index records by employeeId + date string "DD-MM-YYYY"
     final recordMap = <String, AttendanceRecord>{};
     for (final r in records) {
@@ -33,116 +35,221 @@ class AttendanceMatrixView extends StatelessWidget {
 
     if (employees.isEmpty) {
       return Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
         padding: const EdgeInsets.symmetric(vertical: 40),
         alignment: Alignment.center,
         child: const Text('No employee profiles found in database.'),
       );
     }
 
+    const double leftColWidth = 145.0;
+    const double dayColWidth = 36.0;
+    const double rowHeight = 44.0;
+    const double headerHeight = 40.0;
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.black12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Header with Title & Legend
           Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                const Icon(Icons.grid_on, size: 18, color: AppColors.active),
-                const SizedBox(width: 8),
-                Text(
-                  'Monthly Attendance Matrix (${DateFormat('MMMM yyyy').format(focusedMonth)})',
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const Spacer(),
-                _legendPill('Present', const Color(0xFF2E7D32)),
-                const SizedBox(width: 8),
-                _legendPill('Late', const Color(0xFFE65100)),
-                const SizedBox(width: 8),
-                _legendPill('Checked Out', const Color(0xFF414A51)),
-                const SizedBox(width: 8),
-                _legendPill('Absent', const Color(0xFFC62828)),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.vertical,
-              child: DataTable(
-                columnSpacing: 12,
-                horizontalMargin: 12,
-                headingRowHeight: 40,
-                dataRowMinHeight: 44,
-                dataRowMaxHeight: 44,
-                headingRowColor: WidgetStateProperty.all(const Color(0xFFF8F9FA)),
-                columns: [
-                  const DataColumn(
-                    label: SizedBox(
-                      width: 160,
-                      child: Text('Employee', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                  for (int day = 1; day <= daysInMonth; day++)
-                    DataColumn(
-                      label: SizedBox(
-                        width: 32,
-                        child: Center(
-                          child: Text(
-                            '$day',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+            padding: const EdgeInsets.all(14),
+            child: isMobile
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.grid_on, size: 18, color: AppColors.active),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Monthly Matrix (${DateFormat('MMM yyyy').format(focusedMonth)})',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: [
+                          _legendPill('Present', const Color(0xFF2E7D32)),
+                          _legendPill('Late', const Color(0xFFE65100)),
+                          _legendPill('Checked Out', const Color(0xFF414A51)),
+                          _legendPill('Absent', const Color(0xFFC62828)),
+                        ],
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      const Icon(Icons.grid_on, size: 18, color: AppColors.active),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Monthly Attendance Matrix (${DateFormat('MMMM yyyy').format(focusedMonth)})',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
                         ),
                       ),
+                      const Spacer(),
+                      _legendPill('Present', const Color(0xFF2E7D32)),
+                      const SizedBox(width: 8),
+                      _legendPill('Late', const Color(0xFFE65100)),
+                      const SizedBox(width: 8),
+                      _legendPill('Checked Out', const Color(0xFF414A51)),
+                      const SizedBox(width: 8),
+                      _legendPill('Absent', const Color(0xFFC62828)),
+                    ],
+                  ),
+          ),
+          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+
+          // Sticky Column Grid Layout
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── FROZEN/STICKY FIRST COLUMN (Employee Names) ──
+              Container(
+                width: leftColWidth,
+                decoration: const BoxDecoration(
+                  border: Border(right: BorderSide(color: Color(0xFFE2E8F0), width: 1.5)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Header Cell
+                    Container(
+                      height: headerHeight,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      color: const Color(0xFFF8F9FA),
+                      alignment: Alignment.centerLeft,
+                      child: const Text(
+                        'Employee',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                ],
-                rows: employees.map((emp) {
-                  return DataRow(
-                    cells: [
-                      DataCell(
-                        SizedBox(
-                          width: 160,
+                    const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                    // Rows
+                    for (final emp in employees) ...[
+                      Container(
+                        height: rowHeight,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        alignment: Alignment.centerLeft,
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 11,
+                              backgroundColor: AppColors.active.withValues(alpha: 0.2),
+                              child: Text(
+                                emp.fullName.isNotEmpty ? emp.fullName[0].toUpperCase() : 'E',
+                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.active),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                emp.fullName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                    ],
+                  ],
+                ),
+              ),
+
+              // ── SCROLLABLE RIGHT GRID (Days 1..N) ──
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  child: SizedBox(
+                    width: daysInMonth * dayColWidth,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Header row for days 1..daysInMonth
+                        Container(
+                          height: headerHeight,
+                          color: const Color(0xFFF8F9FA),
                           child: Row(
                             children: [
-                              CircleAvatar(
-                                radius: 12,
-                                backgroundColor: AppColors.active.withValues(alpha: 0.2),
-                                child: Text(
-                                  emp.fullName.isNotEmpty ? emp.fullName[0].toUpperCase() : 'E',
-                                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.active),
+                              for (int day = 1; day <= daysInMonth; day++)
+                                SizedBox(
+                                  width: dayColWidth,
+                                  child: Center(
+                                    child: Text(
+                                      '$day',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  emp.fullName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                                ),
-                              ),
                             ],
                           ),
                         ),
-                      ),
-                      for (int day = 1; day <= daysInMonth; day++) ...[
-                        _buildDayCell(emp, day, month, year, recordMap),
+                        const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                        // Data rows
+                        for (final emp in employees) ...[
+                          SizedBox(
+                            height: rowHeight,
+                            child: Row(
+                              children: [
+                                for (int day = 1; day <= daysInMonth; day++)
+                                  SizedBox(
+                                    width: dayColWidth,
+                                    child: Center(
+                                      child: _buildDayCell(emp, day, month, year, recordMap),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                        ],
                       ],
-                    ],
-                  );
-                }).toList(),
+                    ),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ],
       ),
@@ -164,7 +271,7 @@ class AttendanceMatrixView extends StatelessWidget {
     );
   }
 
-  DataCell _buildDayCell(
+  Widget _buildDayCell(
     Employee emp,
     int day,
     int month,
@@ -209,27 +316,25 @@ class AttendanceMatrixView extends StatelessWidget {
         ? '${emp.fullName}\nDate: $dateStr\nStatus: ${record.status}\nIn: ${record.effectiveCheckInTime}\nOut: ${record.checkOutTime.isNotEmpty ? record.checkOutTime : "--:--"}\nHours: ${record.totalHours} hrs'
         : '${emp.fullName}\nDate: $dateStr\nStatus: Not Marked';
 
-    return DataCell(
-      Tooltip(
-        message: tooltipMsg,
-        child: InkWell(
-          onTap: () => onCellTap(emp, dateStr, record),
-          borderRadius: BorderRadius.circular(4),
-          child: Container(
-            width: 32,
-            height: 28,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: record != null ? 0.9 : 0.4),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                color: record != null ? Colors.white : Colors.black54,
-              ),
+    return Tooltip(
+      message: tooltipMsg,
+      child: InkWell(
+        onTap: () => onCellTap(emp, dateStr, record),
+        borderRadius: BorderRadius.circular(4),
+        child: Container(
+          width: 28,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: record != null ? 0.9 : 0.4),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: record != null ? Colors.white : Colors.black54,
             ),
           ),
         ),
@@ -237,3 +342,4 @@ class AttendanceMatrixView extends StatelessWidget {
     );
   }
 }
+

@@ -31,6 +31,9 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 650;
+
     final monthYearStr = DateFormat('MM-yyyy').format(_focusedMonth);
     final todayStr = DateFormat('dd-MM-yyyy').format(DateTime.now());
 
@@ -47,82 +50,24 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     return Scaffold(
       backgroundColor: const Color(0xFFEFF3F6),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.all(isMobile ? 12 : 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Page Header
-            Row(
-              children: [
-                const Icon(Icons.co_present, size: 26, color: AppColors.active),
-                const SizedBox(width: 10),
-                const Text(
-                  'Attendance Management',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE8F5E9),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF81C784)),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.cloud_done, size: 14, color: Color(0xFF2E7D32)),
-                      SizedBox(width: 4),
-                      Text(
-                        'Firestore Sync',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32)),
-                      ),
-                    ],
-                  ),
-                ),
-                const Spacer(),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.active,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
-                  onPressed: () => _openAdminEditDialog(context, null, null, null),
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text(
-                    'Manual Entry',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF414A51),
-                    side: const BorderSide(color: Color(0xFF414A51)),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  ),
-                  onPressed: () => _openAuditLogsDialog(context),
-                  icon: const Icon(Icons.history, size: 18),
-                  label: const Text('Audit Logs'),
-                ),
-              ],
-            ),
+            _buildHeader(context, isMobile),
             const SizedBox(height: 16),
 
             // Top Dashboard KPI Banner
             statsAsync.when(
               loading: () => const SizedBox.shrink(),
-              error: (_, __) => const SizedBox.shrink(),
-              data: (stats) => _buildKpiBanner(stats),
+              error: (err, stack) => const SizedBox.shrink(),
+              data: (stats) => _buildKpiBanner(stats, isMobile),
             ),
             const SizedBox(height: 16),
 
             // Controls & Filter Toolbar
-            _buildControlToolbar(employeesAsync),
+            _buildControlToolbar(employeesAsync, isMobile),
             const SizedBox(height: 16),
 
             // Main Active View (Matrix vs Table)
@@ -167,54 +112,228 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     );
   }
 
-  Widget _buildKpiBanner(AttendanceManagementStats stats) {
+  Widget _buildHeader(BuildContext context, bool isMobile) {
+    if (isMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.co_present, size: 24, color: AppColors.active),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Attendance Management',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F5E9),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF81C784)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.cloud_done, size: 12, color: Color(0xFF2E7D32)),
+                    SizedBox(width: 4),
+                    Text(
+                      'Firestore Sync',
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.active,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () => _openAdminEditDialog(context, null, null, null),
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text(
+                    'Manual Entry',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF414A51),
+                    side: const BorderSide(color: Color(0xFF414A51)),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () => _openAuditLogsDialog(context),
+                  icon: const Icon(Icons.history, size: 16),
+                  label: const Text('Audit Logs', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
     return Row(
       children: [
-        Expanded(
-          child: _kpiCard(
-            title: 'Total Employees',
-            value: stats.totalEmployees.toString(),
-            icon: Icons.people_alt,
-            color: const Color(0xFF414A51),
+        const Icon(Icons.co_present, size: 26, color: AppColors.active),
+        const SizedBox(width: 10),
+        const Text(
+          'Attendance Management',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
           ),
         ),
         const SizedBox(width: 12),
-        Expanded(
-          child: _kpiCard(
-            title: 'Present Today',
-            value: (stats.presentToday + stats.checkedOutToday).toString(),
-            icon: Icons.check_circle_outline,
-            color: const Color(0xFF2E7D32),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE8F5E9),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF81C784)),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.cloud_done, size: 14, color: Color(0xFF2E7D32)),
+              SizedBox(width: 4),
+              Text(
+                'Firestore Sync',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32)),
+              ),
+            ],
           ),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _kpiCard(
-            title: 'Late Today',
-            value: stats.lateToday.toString(),
-            icon: Icons.running_with_errors,
-            color: const Color(0xFFE65100),
+        const Spacer(),
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.active,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          onPressed: () => _openAdminEditDialog(context, null, null, null),
+          icon: const Icon(Icons.add, size: 18),
+          label: const Text(
+            'Manual Entry',
+            style: TextStyle(fontWeight: FontWeight.bold),
           ),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _kpiCard(
-            title: 'Checked Out',
-            value: stats.checkedOutToday.toString(),
-            icon: Icons.logout,
-            color: AppColors.active,
+        const SizedBox(width: 10),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFF414A51),
+            side: const BorderSide(color: Color(0xFF414A51)),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _kpiCard(
-            title: 'Absent / Pending',
-            value: stats.absentToday.toString(),
-            icon: Icons.event_busy,
-            color: const Color(0xFFC62828),
-          ),
+          onPressed: () => _openAuditLogsDialog(context),
+          icon: const Icon(Icons.history, size: 18),
+          label: const Text('Audit Logs'),
         ),
       ],
+    );
+  }
+
+  Widget _buildKpiBanner(AttendanceManagementStats stats, bool isMobile) {
+    final items = [
+      (
+        title: 'Total Employees',
+        value: stats.totalEmployees.toString(),
+        icon: Icons.people_alt,
+        color: const Color(0xFF414A51),
+      ),
+      (
+        title: 'Present Today',
+        value: (stats.presentToday + stats.checkedOutToday).toString(),
+        icon: Icons.check_circle_outline,
+        color: const Color(0xFF2E7D32),
+      ),
+      (
+        title: 'Late Today',
+        value: stats.lateToday.toString(),
+        icon: Icons.running_with_errors,
+        color: const Color(0xFFE65100),
+      ),
+      (
+        title: 'Checked Out',
+        value: stats.checkedOutToday.toString(),
+        icon: Icons.logout,
+        color: AppColors.active,
+      ),
+      (
+        title: 'Absent / Pending',
+        value: stats.absentToday.toString(),
+        icon: Icons.event_busy,
+        color: const Color(0xFFC62828),
+      ),
+    ];
+
+    if (isMobile) {
+      return SizedBox(
+        height: 82,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: items.length,
+          separatorBuilder: (context, index) => const SizedBox(width: 10),
+          itemBuilder: (context, index) {
+            final item = items[index];
+            return SizedBox(
+              width: 165,
+              child: _kpiCard(
+                title: item.title,
+                value: item.value,
+                icon: item.icon,
+                color: item.color,
+              ),
+            );
+          },
+        ),
+      );
+    }
+
+    return Row(
+      children: items.map((item) {
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: _kpiCard(
+              title: item.title,
+              value: item.value,
+              icon: item.icon,
+              color: item.color,
+            ),
+          ),
+        );
+      }).toList()..last = Expanded(
+        child: _kpiCard(
+          title: items.last.title,
+          value: items.last.value,
+          icon: items.last.icon,
+          color: items.last.color,
+        ),
+      ),
     );
   }
 
@@ -225,25 +344,39 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     required Color color,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.black12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
           CircleAvatar(
-            radius: 20,
+            radius: 18,
             backgroundColor: color.withValues(alpha: 0.1),
-            child: Icon(icon, color: color, size: 20),
+            child: Icon(icon, color: color, size: 18),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(title, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 2),
                 Text(
                   value,
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
@@ -256,126 +389,156 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     );
   }
 
-  Widget _buildControlToolbar(AsyncValue<List<Employee>> employeesAsync) {
+  Widget _buildControlToolbar(AsyncValue<List<Employee>> employeesAsync, bool isMobile) {
+    final monthSelector = Row(
+      mainAxisAlignment: isMobile ? MainAxisAlignment.center : MainAxisAlignment.end,
+      mainAxisSize: isMobile ? MainAxisSize.max : MainAxisSize.min,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.chevron_left, color: AppColors.active),
+          onPressed: () => setState(() => _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1)),
+        ),
+        Text(
+          DateFormat('MMMM yyyy').format(_focusedMonth),
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+        ),
+        IconButton(
+          icon: const Icon(Icons.chevron_right, color: AppColors.active),
+          onPressed: () => setState(() => _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1)),
+        ),
+      ],
+    );
+
+    final segmentedButton = SegmentedButton<AttendanceViewMode>(
+      style: ButtonStyle(
+        visualDensity: isMobile ? VisualDensity.compact : VisualDensity.standard,
+      ),
+      segments: const [
+        ButtonSegment(
+          value: AttendanceViewMode.matrix,
+          icon: Icon(Icons.grid_on, size: 16),
+          label: Text('Matrix Heatmap'),
+        ),
+        ButtonSegment(
+          value: AttendanceViewMode.table,
+          icon: Icon(Icons.table_chart, size: 16),
+          label: Text('Detailed Log Table'),
+        ),
+      ],
+      selected: {_viewMode},
+      onSelectionChanged: (set) => setState(() => _viewMode = set.first),
+    );
+
+    final employeeDropdown = employeesAsync.maybeWhen(
+      data: (employees) => DropdownButtonFormField<int?>(
+        initialValue: _selectedEmployeeFilterId,
+        isDense: true,
+        decoration: InputDecoration(
+          labelText: 'Filter Employee',
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        items: [
+          const DropdownMenuItem<int?>(
+            value: null,
+            child: Text('All Employees', style: TextStyle(fontSize: 12)),
+          ),
+          ...employees.map((e) => DropdownMenuItem<int?>(
+                value: e.id,
+                child: Text(e.fullName, style: const TextStyle(fontSize: 12)),
+              )),
+        ],
+        onChanged: (val) => setState(() => _selectedEmployeeFilterId = val),
+      ),
+      orElse: () => const SizedBox.shrink(),
+    );
+
+    final statusDropdown = DropdownButtonFormField<String>(
+      initialValue: _selectedStatusFilter,
+      isDense: true,
+      decoration: InputDecoration(
+        labelText: 'Filter Status',
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      items: const [
+        DropdownMenuItem(value: 'All', child: Text('All Statuses', style: TextStyle(fontSize: 12))),
+        DropdownMenuItem(value: 'Present', child: Text('Present', style: TextStyle(fontSize: 12))),
+        DropdownMenuItem(value: 'Late', child: Text('Late', style: TextStyle(fontSize: 12))),
+        DropdownMenuItem(value: 'Checked Out', child: Text('Checked Out', style: TextStyle(fontSize: 12))),
+        DropdownMenuItem(value: 'Absent', child: Text('Absent', style: TextStyle(fontSize: 12))),
+      ],
+      onChanged: (val) {
+        if (val != null) setState(() => _selectedStatusFilter = val);
+      },
+    );
+
+    final searchField = TextField(
+      decoration: InputDecoration(
+        hintText: 'Search employee name or date...',
+        prefixIcon: const Icon(Icons.search, size: 18),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      onChanged: (val) => setState(() => _searchQuery = val.trim().toLowerCase()),
+    );
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.black12),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              // View Toggle Segmented Buttons
-              SegmentedButton<AttendanceViewMode>(
-                segments: const [
-                  ButtonSegment(
-                    value: AttendanceViewMode.matrix,
-                    icon: Icon(Icons.grid_on, size: 16),
-                    label: Text('Matrix Heatmap'),
-                  ),
-                  ButtonSegment(
-                    value: AttendanceViewMode.table,
-                    icon: Icon(Icons.table_chart, size: 16),
-                    label: Text('Detailed Log Table'),
-                  ),
-                ],
-                selected: {_viewMode},
-                onSelectionChanged: (set) => setState(() => _viewMode = set.first),
-              ),
-              const Spacer(),
-
-              // Month Selector
-              IconButton(
-                icon: const Icon(Icons.chevron_left, color: AppColors.active),
-                onPressed: () => setState(() => _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1)),
-              ),
-              Text(
-                DateFormat('MMMM yyyy').format(_focusedMonth),
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-              ),
-              IconButton(
-                icon: const Icon(Icons.chevron_right, color: AppColors.active),
-                onPressed: () => setState(() => _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          Row(
-            children: [
-              // Employee Filter Dropdown
-              employeesAsync.maybeWhen(
-                data: (employees) => SizedBox(
-                  width: 220,
-                  child: DropdownButtonFormField<int?>(
-                    initialValue: _selectedEmployeeFilterId,
-                    isDense: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Filter Employee',
-                      contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      border: OutlineInputBorder(),
-                    ),
-                    items: [
-                      const DropdownMenuItem<int?>(
-                        value: null,
-                        child: Text('All Employees', style: TextStyle(fontSize: 12)),
-                      ),
-                      ...employees.map((e) => DropdownMenuItem<int?>(
-                            value: e.id,
-                            child: Text(e.fullName, style: const TextStyle(fontSize: 12)),
-                          )),
-                    ],
-                    onChanged: (val) => setState(() => _selectedEmployeeFilterId = val),
-                  ),
-                ),
-                orElse: () => const SizedBox.shrink(),
-              ),
-              const SizedBox(width: 12),
-
-              // Status Filter Dropdown
-              SizedBox(
-                width: 160,
-                child: DropdownButtonFormField<String>(
-                  initialValue: _selectedStatusFilter,
-                  isDense: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Filter Status',
-                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    border: OutlineInputBorder(),
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 'All', child: Text('All Statuses', style: TextStyle(fontSize: 12))),
-                    DropdownMenuItem(value: 'Present', child: Text('Present', style: TextStyle(fontSize: 12))),
-                    DropdownMenuItem(value: 'Late', child: Text('Late', style: TextStyle(fontSize: 12))),
-                    DropdownMenuItem(value: 'Checked Out', child: Text('Checked Out', style: TextStyle(fontSize: 12))),
-                    DropdownMenuItem(value: 'Absent', child: Text('Absent', style: TextStyle(fontSize: 12))),
-                  ],
-                  onChanged: (val) {
-                    if (val != null) setState(() => _selectedStatusFilter = val);
-                  },
-                ),
-              ),
-              const SizedBox(width: 12),
-
-              // Search field
-              Expanded(
-                child: TextField(
-                  decoration: const InputDecoration(
-                    hintText: 'Search employee name or date...',
-                    prefixIcon: Icon(Icons.search, size: 18),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (val) => setState(() => _searchQuery = val.trim().toLowerCase()),
-                ),
-              ),
-            ],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
+      child: isMobile
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: segmentedButton,
+                ),
+                const SizedBox(height: 8),
+                monthSelector,
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8.0),
+                  child: Divider(height: 1),
+                ),
+                employeeDropdown,
+                const SizedBox(height: 10),
+                statusDropdown,
+                const SizedBox(height: 10),
+                searchField,
+              ],
+            )
+          : Column(
+              children: [
+                Row(
+                  children: [
+                    segmentedButton,
+                    const Spacer(),
+                    monthSelector,
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    SizedBox(width: 220, child: employeeDropdown),
+                    const SizedBox(width: 12),
+                    SizedBox(width: 160, child: statusDropdown),
+                    const SizedBox(width: 12),
+                    Expanded(child: searchField),
+                  ],
+                ),
+              ],
+            ),
     );
   }
 

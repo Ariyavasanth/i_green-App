@@ -116,11 +116,16 @@ class _AdminManualAttendanceDialogState extends ConsumerState<AdminManualAttenda
         children: [
           const Icon(Icons.edit_calendar, color: AppColors.active),
           const SizedBox(width: 8),
-          Text(widget.existingRecord != null ? 'Edit / Override Attendance' : 'Manual Attendance Entry'),
+          Expanded(
+            child: Text(
+              widget.existingRecord != null ? 'Edit / Override Attendance' : 'Manual Attendance Entry',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
       content: SizedBox(
-        width: 440,
+        width: double.maxFinite,
         child: SingleChildScrollView(
           child: Form(
             key: _formKey,
@@ -135,6 +140,7 @@ class _AdminManualAttendanceDialogState extends ConsumerState<AdminManualAttenda
                     }
                     return DropdownButtonFormField<int>(
                       initialValue: _selectedEmployeeId,
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Select Employee *',
                         border: OutlineInputBorder(),
@@ -142,7 +148,10 @@ class _AdminManualAttendanceDialogState extends ConsumerState<AdminManualAttenda
                       items: employees
                           .map((e) => DropdownMenuItem(
                                 value: e.id,
-                                child: Text('${e.fullName} (${e.employeeId})'),
+                                child: Text(
+                                  '${e.fullName} (${e.employeeId})',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ))
                           .toList(),
                       onChanged: (val) {
@@ -196,15 +205,16 @@ class _AdminManualAttendanceDialogState extends ConsumerState<AdminManualAttenda
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: _status,
+                  isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: 'Attendance Status *',
                     border: OutlineInputBorder(),
                   ),
                   items: const [
-                    DropdownMenuItem(value: 'Present', child: Text('Present')),
-                    DropdownMenuItem(value: 'Late', child: Text('Late')),
-                    DropdownMenuItem(value: 'Checked Out', child: Text('Checked Out')),
-                    DropdownMenuItem(value: 'Absent', child: Text('Absent')),
+                    DropdownMenuItem(value: 'Present', child: Text('Present', overflow: TextOverflow.ellipsis)),
+                    DropdownMenuItem(value: 'Late', child: Text('Late', overflow: TextOverflow.ellipsis)),
+                    DropdownMenuItem(value: 'Checked Out', child: Text('Checked Out', overflow: TextOverflow.ellipsis)),
+                    DropdownMenuItem(value: 'Absent', child: Text('Absent', overflow: TextOverflow.ellipsis)),
                   ],
                   onChanged: (val) {
                     if (val != null) setState(() => _status = val);
