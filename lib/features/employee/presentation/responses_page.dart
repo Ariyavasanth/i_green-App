@@ -39,8 +39,6 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     final employeesAsync = ref.watch(employeesProvider);
     final prefAsync = ref.watch(empColumnPreferenceProvider(_tableId));
     final searchQuery = ref.watch(responseSearchQueryProvider);
-    final orgFilter = ref.watch(responseOrgFilterProvider);
-    final deptFilter = ref.watch(responseDeptFilterProvider);
     final statusFilter = ref.watch(responseStatusFilterProvider);
 
     return ColoredBox(
@@ -146,10 +144,113 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     );
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 16, 12),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final isCompact = constraints.maxWidth < 640;
+          final isCompact = MediaQuery.of(context).size.width < 720 || constraints.maxWidth < 720;
+
+          if (isCompact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Responses',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.file_download_outlined, size: 20),
+                          tooltip: 'Export (CSV/PDF)',
+                          onPressed: _exportData,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.rate_review_outlined, size: 20),
+                          tooltip: 'Response',
+                          onPressed: () => _openRegistrationLinksDialog(context),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.view_column_outlined, size: 20),
+                          tooltip: 'Columns',
+                          onPressed: () => _openColumnSelectionDialog(context),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 40,
+                  child: TextField(
+                    controller: searchController,
+                    style: const TextStyle(fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'Search responses...',
+                      hintStyle: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                      prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
+                      suffixIcon: searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, size: 16),
+                              onPressed: () {
+                                ref.read(responseSearchQueryProvider.notifier).state = '';
+                                setState(() => _currentPage = 0);
+                              },
+                            )
+                          : null,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: AppColors.divider),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: AppColors.divider),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: AppColors.active),
+                      ),
+                    ),
+                    onChanged: (val) {
+                      ref.read(responseSearchQueryProvider.notifier).state = val;
+                      setState(() => _currentPage = 0);
+                    },
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  height: 40,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.active,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onPressed: () => _openAddLinkDialog(context),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text(
+                      'Add Employee',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }
+
           return Wrap(
             alignment: WrapAlignment.spaceBetween,
             crossAxisAlignment: WrapCrossAlignment.center,
@@ -164,11 +265,13 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                   color: AppColors.textPrimary,
                 ),
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   SizedBox(
-                    width: isCompact ? 140 : 200,
+                    width: 200,
                     height: 36,
                     child: TextField(
                       controller: searchController,
@@ -202,7 +305,6 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                       },
                     ),
                   ),
-                  const SizedBox(width: 8),
                   IconButton(
                     icon: const Icon(Icons.file_download_outlined, size: 20),
                     tooltip: 'Export (CSV/PDF)',
@@ -217,19 +319,15 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                     icon: const Icon(Icons.rate_review_outlined, size: 18),
                     label: const Text('Response', style: TextStyle(fontSize: 13)),
                   ),
-                  if (!isCompact) ...[
-                    const SizedBox(width: 4),
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        side: const BorderSide(color: AppColors.divider),
-                      ),
-                      onPressed: () => _openColumnSelectionDialog(context),
-                      icon: const Icon(Icons.view_column_outlined, size: 18),
-                      label: const Text('Columns', style: TextStyle(fontSize: 13)),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      side: const BorderSide(color: AppColors.divider),
                     ),
-                  ],
-                  const SizedBox(width: 8),
+                    onPressed: () => _openColumnSelectionDialog(context),
+                    icon: const Icon(Icons.view_column_outlined, size: 18),
+                    label: const Text('Columns', style: TextStyle(fontSize: 13)),
+                  ),
                   FilledButton.icon(
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.active,
@@ -237,7 +335,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                     ),
                     onPressed: () => _openAddLinkDialog(context),
                     icon: const Icon(Icons.add, size: 18),
-                    label: Text(isCompact ? 'Add' : 'Add Employee', style: const TextStyle(fontSize: 13)),
+                    label: const Text('Add Employee', style: TextStyle(fontSize: 13)),
                   ),
                 ],
               ),
@@ -249,43 +347,71 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
   }
 
   Widget _buildFiltersRow(List<String> orgs, List<String> depts, List<String> statuses) {
-    final currentOrg = ref.watch(responseOrgFilterProvider);
-    final currentDept = ref.watch(responseDeptFilterProvider);
     final currentStatus = ref.watch(responseStatusFilterProvider);
+    final selectedStatus = statuses.contains(currentStatus)
+        ? currentStatus
+        : (statuses.isNotEmpty ? statuses.first : 'All Statuses');
 
     return Container(
+      width: double.infinity,
       color: Colors.grey.withValues(alpha: 0.05),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Wrap(
-        spacing: 12,
-        runSpacing: 8,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          const Text(
-            'Filters:',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              const Text(
+                'Filters:',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              Container(
+                height: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.divider),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: selectedStatus,
+                    isDense: true,
+                    icon: const Icon(Icons.arrow_drop_down, color: AppColors.textSecondary, size: 20),
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
+                    items: statuses.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        ref.read(responseStatusFilterProvider.notifier).state = val;
+                        setState(() => _currentPage = 0);
+                      }
+                    },
+                  ),
+                ),
+              ),
+              if (currentStatus != 'All Statuses')
+                TextButton(
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(48, 40),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  onPressed: () {
+                    ref.read(responseStatusFilterProvider.notifier).state = 'All Statuses';
+                    setState(() => _currentPage = 0);
+                  },
+                  child: const Text('Reset Filters', style: TextStyle(fontSize: 13, color: AppColors.active)),
+                ),
+            ],
           ),
-          DropdownButton<String>(
-            value: statuses.contains(currentStatus) ? currentStatus : statuses.first,
-            isDense: true,
-            style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
-            items: statuses.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-            onChanged: (val) {
-              if (val != null) {
-                ref.read(responseStatusFilterProvider.notifier).state = val;
-                setState(() => _currentPage = 0);
-              }
-            },
-          ),
-          if (currentStatus != 'All Statuses')
-            TextButton(
-              onPressed: () {
-                ref.read(responseStatusFilterProvider.notifier).state = 'All Statuses';
-                setState(() => _currentPage = 0);
-              },
-              child: const Text('Reset Filters', style: TextStyle(fontSize: 12)),
-            ),
-        ],
+        ),
       ),
     );
   }
