@@ -318,6 +318,75 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                 ),
               ],
 
+              if (hasCheckedIn) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  height: 36,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFFC62828),
+                      side: const BorderSide(color: Color(0xFFEF9A9A)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    onPressed: () async {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Reset Attendance (Dev Tool)'),
+                          content: const Text(
+                            'Are you sure you want to remove today\'s attendance record from Cloud Firestore for development testing?',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(ctx).pop(false),
+                              child: const Text('Cancel'),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFC62828),
+                                foregroundColor: Colors.white,
+                              ),
+                              onPressed: () => Navigator.of(ctx).pop(true),
+                              child: const Text('Remove'),
+                            ),
+                          ],
+                        ),
+                      );
+
+                      if (confirm == true) {
+                        final repo = ref.read(attendanceRepositoryProvider);
+                        final dateKey = _formatKey(today);
+                        await repo.unmarkAttendance(
+                          employeeId: employee.id,
+                          date: dateKey,
+                        );
+                        ref.invalidate(attendanceRecordsProvider(employee.id));
+                        ref.invalidate(allAttendanceRecordsProvider);
+                        ref.invalidate(todayAttendanceRecordProvider(employee.id));
+                        ref.invalidate(attendanceAttemptsProvider);
+                        if (mounted) {
+                          setState(() {});
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Today\'s attendance record removed from Cloud Firestore (Dev Mode).'),
+                              backgroundColor: Colors.orange,
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.delete_sweep, size: 16),
+                    label: const Text(
+                      'Remove Today\'s Attendance (Dev Tool)',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ],
+
               const SizedBox(height: 16),
               const Divider(height: 1, color: Color(0xFFEEEEEE)),
               const SizedBox(height: 16),

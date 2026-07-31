@@ -213,6 +213,13 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     required String date,
   }) async {
     await _recordsRef.doc('${employeeId}_${date.replaceAll('-', '')}').delete();
+    final snap = await _recordsRef
+        .where('employee_id', isEqualTo: employeeId)
+        .where('date', isEqualTo: date)
+        .get();
+    for (final doc in snap.docs) {
+      await doc.reference.delete();
+    }
   }
 
   @override
