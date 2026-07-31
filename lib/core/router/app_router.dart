@@ -31,6 +31,8 @@ import '../../features/attendance/presentation/attendance_page.dart';
 import '../../features/attendance_management/presentation/attendance_management_page.dart';
 import '../../features/attendance_settings/presentation/attendance_settings_page.dart';
 import '../../features/face_registration/presentation/face_registration_page.dart';
+import '../../features/asset_settings/presentation/asset_settings_page.dart';
+import '../../features/asset_management/presentation/asset_management_page.dart';
 import '../../screens/login_screen.dart';
 import '../../screens/customers/active_customers_list.dart';
 import '../../screens/customers/new_customer_form.dart';
@@ -101,6 +103,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/leave-management',
             builder: (_, _) => const LeaveManagementPage(),
+          ),
+          GoRoute(
+            path: '/asset-settings',
+            builder: (_, _) => const AssetSettingsPage(),
+          ),
+          GoRoute(
+            path: '/asset-management',
+            builder: (_, _) => const AssetManagementPage(),
           ),
           GoRoute(
             path: '/loan',

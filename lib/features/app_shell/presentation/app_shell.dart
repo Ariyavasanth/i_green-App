@@ -135,6 +135,18 @@ class AppShell extends ConsumerWidget {
       'Employee',
     ),
     SidebarDestination(
+      'Asset Settings',
+      '/asset-settings',
+      Icons.settings_suggest_outlined,
+      'Employee',
+    ),
+    SidebarDestination(
+      'Asset Management',
+      '/asset-management',
+      Icons.devices_other_outlined,
+      'Employee',
+    ),
+    SidebarDestination(
       'Loan',
       '/loan',
       Icons.account_balance_outlined,
