@@ -6,11 +6,11 @@ import 'package:sqflite/sqflite.dart';
 import '../domain/attendance_record.dart';
 import '../domain/attendance_settings.dart';
 import '../domain/attendance_repository.dart';
-import '../../attendance_settings/data/sqlite_attendance_settings_repository.dart';
+import '../../attendance_settings/data/firebase_attendance_settings_repository.dart';
 
 class SqliteAttendanceRepository implements AttendanceRepository {
   static Database? _database;
-  final SqliteAttendanceSettingsRepository _settingsRepository = SqliteAttendanceSettingsRepository();
+  final FirebaseAttendanceSettingsRepository _settingsRepository = FirebaseAttendanceSettingsRepository();
 
   Future<Database> get database async {
     if (_database != null) return _database!;

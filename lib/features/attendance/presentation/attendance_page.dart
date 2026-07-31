@@ -353,6 +353,33 @@ class _AttendanceVerificationDialogState extends State<AttendanceVerificationDia
     _refreshLocationGate();
   }
 
+  Widget _checkItem({
+    required String label,
+    required bool done,
+    required IconData icon,
+  }) {
+    final color = done ? AppColors.primary : AppColors.textSecondary;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(done ? Icons.check_circle : icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: done ? FontWeight.w600 : FontWeight.w500,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _authenticateAndMark() async {
     if (_verifying) return;
     setState(() {
@@ -513,6 +540,43 @@ class _AttendanceVerificationDialogState extends State<AttendanceVerificationDia
                         'Use the phone biometric prompt to mark attendance.',
                         textAlign: TextAlign.center,
                         style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.black12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Verification checklist',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                      ),
+                      const SizedBox(height: 8),
+                      _checkItem(
+                        label: 'GPS location is within the office radius',
+                        done: _withinAllowedRadius == true,
+                        icon: Icons.location_on_outlined,
+                      ),
+                      _checkItem(
+                        label: widget.currentEmployee.profileImageUrl.isNotEmpty
+                            ? 'Employee photo is available for face verification'
+                            : 'Employee photo is missing for face verification',
+                        done: widget.currentEmployee.profileImageUrl.isNotEmpty,
+                        icon: Icons.badge_outlined,
+                      ),
+                      _checkItem(
+                        label: 'Biometric prompt will appear before marking',
+                        done: !_verifying,
+                        icon: Icons.fingerprint,
                       ),
                     ],
                   ),

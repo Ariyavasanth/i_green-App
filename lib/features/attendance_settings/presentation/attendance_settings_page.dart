@@ -23,11 +23,12 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
   late final TextEditingController _radiusController;
   bool _requireGpsVerification = true;
   bool _saving = false;
+  AttendanceSettings? _lastAppliedSettings;
 
   @override
   void initState() {
     super.initState();
-    final settings = ref.read(attendanceSettingsProvider).valueOrNull ?? AttendanceSettings.defaults();
+    final settings = AttendanceSettings.defaults();
     _graceController = TextEditingController(text: settings.gracePeriodMinutes.toString());
     _lateController = TextEditingController(text: settings.lateLimitMinutes.toString());
     _absentController = TextEditingController(text: settings.absentThresholdMinutes.toString());
@@ -75,6 +76,7 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
 
     try {
       await ref.read(attendanceSettingsRepositoryProvider).saveAttendanceSettings(settings);
+      _applySettingsToForm(settings);
       ref.invalidate(attendanceSettingsProvider);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -90,6 +92,20 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
         setState(() => _saving = false);
       }
     }
+  }
+
+  void _applySettingsToForm(AttendanceSettings settings) {
+    if (_lastAppliedSettings == settings) return;
+    _lastAppliedSettings = settings;
+    _graceController.text = settings.gracePeriodMinutes.toString();
+    _lateController.text = settings.lateLimitMinutes.toString();
+    _absentController.text = settings.absentThresholdMinutes.toString();
+    _latitudeController.text = settings.officeLatitude.toStringAsFixed(6);
+    _longitudeController.text = settings.officeLongitude.toStringAsFixed(6);
+    _radiusController.text = settings.allowedAttendanceRadiusMeters.toString();
+    setState(() {
+      _requireGpsVerification = settings.requireGpsVerification;
+    });
   }
 
   Future<void> _useCurrentLocation() async {
@@ -181,6 +197,14 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
 
   @override
   Widget build(BuildContext context) {
+    final settingsAsync = ref.watch(attendanceSettingsProvider);
+    settingsAsync.whenData((settings) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _applySettingsToForm(settings);
+      });
+    });
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F8FA),
       body: SingleChildScrollView(
