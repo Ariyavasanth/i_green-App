@@ -133,8 +133,10 @@ class _EmployeeRegistrationPageState
   final _hraController = TextEditingController();
   final _eduAllowanceController = TextEditingController();
   final _specialAllowanceController = TextEditingController();
+  final _travelAllowanceController = TextEditingController();
   final _taxController = TextEditingController();
   final _pfController = TextEditingController();
+  final _professionalTaxController = TextEditingController();
   void _onTotalSalaryChanged(String val) {
     final cleanVal = val.replaceAll(',', '').trim();
     final total = double.tryParse(cleanVal);
@@ -274,8 +276,10 @@ class _EmployeeRegistrationPageState
       if (emp.salaryHra > 0) _hraController.text = emp.salaryHra.toStringAsFixed(2);
       if (emp.salaryEducationAllowance > 0) _eduAllowanceController.text = emp.salaryEducationAllowance.toStringAsFixed(2);
       if (emp.salarySpecialAllowance > 0) _specialAllowanceController.text = emp.salarySpecialAllowance.toStringAsFixed(2);
+      if (emp.salaryTravelAllowance > 0) _travelAllowanceController.text = emp.salaryTravelAllowance.toStringAsFixed(2);
       if (emp.salaryTax > 0) _taxController.text = emp.salaryTax.toStringAsFixed(2);
       if (emp.salaryPf > 0) _pfController.text = emp.salaryPf.toStringAsFixed(2);
+      if (emp.salaryProfessionalTax > 0) _professionalTaxController.text = emp.salaryProfessionalTax.toStringAsFixed(2);
 
       // Credentials fields
       if (emp.employeeId.isNotEmpty) _employeeCustomIdController.text = emp.employeeId;
@@ -417,8 +421,10 @@ class _EmployeeRegistrationPageState
     _hraController.dispose();
     _eduAllowanceController.dispose();
     _specialAllowanceController.dispose();
+    _travelAllowanceController.dispose();
     _taxController.dispose();
     _pfController.dispose();
+    _professionalTaxController.dispose();
     _employeeCustomIdController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -636,8 +642,10 @@ class _EmployeeRegistrationPageState
         salaryHra: double.tryParse(_hraController.text.trim().replaceAll(',', '')) ?? 0.0,
         salaryEducationAllowance: double.tryParse(_eduAllowanceController.text.trim().replaceAll(',', '')) ?? 0.0,
         salarySpecialAllowance: double.tryParse(_specialAllowanceController.text.trim().replaceAll(',', '')) ?? 0.0,
+        salaryTravelAllowance: double.tryParse(_travelAllowanceController.text.trim().replaceAll(',', '')) ?? 0.0,
         salaryTax: double.tryParse(_taxController.text.trim().replaceAll(',', '')) ?? 0.0,
         salaryPf: double.tryParse(_pfController.text.trim().replaceAll(',', '')) ?? 0.0,
+        salaryProfessionalTax: double.tryParse(_professionalTaxController.text.trim().replaceAll(',', '')) ?? 0.0,
         accessPermissions: _selectedPermissions.toList(),
         profileImageUrl: profileImageUrl,
         profileImagePublicId: profileImagePublicId,
@@ -2575,6 +2583,7 @@ class _EmployeeRegistrationPageState
               children: [
                 _buildTextField('Special Allowance', _specialAllowanceController, placeholder: '21500.00'),
                 _buildTextField('Education Allowance', _eduAllowanceController, placeholder: 'Education Allowance'),
+                _buildTextField('Travel Allowance', _travelAllowanceController, placeholder: 'Travel Allowance'),
               ],
             ),
             const SizedBox(height: 24),
@@ -2594,6 +2603,7 @@ class _EmployeeRegistrationPageState
               children: [
                 _buildTextField('Tax', _taxController, placeholder: 'tax...'),
                 _buildTextField('Provident Fund', _pfController, placeholder: '1800'),
+                _buildTextField('Professional Tax', _professionalTaxController, placeholder: '200'),
               ],
             ),
             const SizedBox(height: 28),
@@ -2748,8 +2758,10 @@ class _EmployeeRegistrationPageState
       salaryHra: double.tryParse(_hraController.text.trim().replaceAll(',', '')) ?? 0.0,
       salaryEducationAllowance: double.tryParse(_eduAllowanceController.text.trim().replaceAll(',', '')) ?? 0.0,
       salarySpecialAllowance: double.tryParse(_specialAllowanceController.text.trim().replaceAll(',', '')) ?? 0.0,
+      salaryTravelAllowance: double.tryParse(_travelAllowanceController.text.trim().replaceAll(',', '')) ?? 0.0,
       salaryTax: double.tryParse(_taxController.text.trim().replaceAll(',', '')) ?? 0.0,
       salaryPf: double.tryParse(_pfController.text.trim().replaceAll(',', '')) ?? 0.0,
+      salaryProfessionalTax: double.tryParse(_professionalTaxController.text.trim().replaceAll(',', '')) ?? 0.0,
     );
   }
 

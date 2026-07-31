@@ -410,8 +410,10 @@ class EmployeeDetailsDialog extends StatelessWidget {
           _InfoItem('HRA', employee.salaryHra == 0 ? '' : employee.salaryHra.toStringAsFixed(2)),
           _InfoItem('Education Allowance', employee.salaryEducationAllowance == 0 ? '' : employee.salaryEducationAllowance.toStringAsFixed(2)),
           _InfoItem('Special Allowance', employee.salarySpecialAllowance == 0 ? '' : employee.salarySpecialAllowance.toStringAsFixed(2)),
+          _InfoItem('Travel Allowance', employee.salaryTravelAllowance == 0 ? '' : employee.salaryTravelAllowance.toStringAsFixed(2)),
           _InfoItem('Tax', employee.salaryTax == 0 ? '' : employee.salaryTax.toStringAsFixed(2)),
           _InfoItem('PF', employee.salaryPf == 0 ? '' : employee.salaryPf.toStringAsFixed(2)),
+          _InfoItem('Professional Tax', employee.salaryProfessionalTax == 0 ? '' : employee.salaryProfessionalTax.toStringAsFixed(2)),
         ]),
       ],
     );
