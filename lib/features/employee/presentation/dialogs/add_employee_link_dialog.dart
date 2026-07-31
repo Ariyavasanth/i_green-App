@@ -29,7 +29,13 @@ class _AddEmployeeLinkDialogState
   @override
   void initState() {
     super.initState();
-    final origin = Uri.base.origin;
+    String origin = '';
+    try {
+      final uri = Uri.base;
+      if (uri.scheme == 'http' || uri.scheme == 'https') {
+        origin = uri.origin;
+      }
+    } catch (_) {}
     final initialUrl = (origin.startsWith('http') &&
             !origin.contains('localhost') &&
             !origin.contains('127.0.0.1'))

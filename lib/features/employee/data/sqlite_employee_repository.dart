@@ -422,13 +422,20 @@ class SqliteEmployeeRepository implements EmployeeRepository {
   }
 
   @override
-  Future<Employee> uploadEmployeeProfileImage({
-    required Employee employee,
+  Future<EmployeePhotoAsset> uploadEmployeeProfileImage({
+    required String employeeId,
+    required String role,
     required Uint8List imageBytes,
     required String fileName,
     required String mimeType,
   }) async {
-    return employee;
+    final normalizedRole = role.trim().isEmpty ? 'employees' : role.trim().toLowerCase();
+    final normalizedId = employeeId.trim().isEmpty ? 'unassigned' : employeeId.trim();
+    return EmployeePhotoAsset(
+      url: '',
+      publicId: '',
+      folder: 'employee_management/$normalizedRole/$normalizedId/profile',
+    );
   }
 
   @override
