@@ -799,24 +799,42 @@ class _EmployeeRegistrationPageState
         await repo.updateEmployee(updated);
         savedEmployee = updated;
       } else if (_registrationMode == 'accepted_response' || _selectedAcceptedLinkId != null) {
-        // Import/register an accepted candidate as a confirmed Employee with an EMP- ID
-        final imported = employeeData.copyWith(status: 'Active');
-        if (_currentEmployee != null &&
-            !_currentEmployee!.employeeId.startsWith('pending_') &&
-            !_currentEmployee!.employeeId.startsWith('CAN-')) {
-          final updated = imported.copyWith(id: _currentEmployee!.id);
-          await repo.updateEmployee(updated);
-          savedEmployee = updated;
-        } else {
-          savedEmployee = await repo.addEmployee(imported);
-        }
-
-        // Update the RegistrationLink status to 'Registered' so it reflects in Responses tab
-        if (_selectedAcceptedLinkId != null && _selectedAcceptedLinkId!.isNotEmpty) {
-          await repo.updateRegistrationLinkStatus(
-            linkId: _selectedAcceptedLinkId!,
-            linkStatus: 'Registered',
+        if (!isSubmit) {
+          // Draft save: preserve candidate record, do not generate EMP- ID or update link status
+          final targetId = _currentEmployee?.id ?? widget.acceptedEmpId ?? 0;
+          final updated = employeeData.copyWith(
+            id: targetId,
+            employeeId: (_currentEmployee?.employeeId.isNotEmpty == true)
+                ? _currentEmployee!.employeeId
+                : 'CAN-draft',
+            status: 'Draft',
           );
+          if (targetId != 0) {
+            await repo.updateEmployee(updated);
+            savedEmployee = updated;
+          } else {
+            savedEmployee = await repo.addEmployee(updated);
+          }
+        } else {
+          // Final Submit Registration: convert candidate to confirmed Employee with an EMP- ID
+          final imported = employeeData.copyWith(status: 'Active');
+          if (_currentEmployee != null &&
+              !_currentEmployee!.employeeId.startsWith('pending_') &&
+              !_currentEmployee!.employeeId.startsWith('CAN-')) {
+            final updated = imported.copyWith(id: _currentEmployee!.id);
+            await repo.updateEmployee(updated);
+            savedEmployee = updated;
+          } else {
+            savedEmployee = await repo.addEmployee(imported);
+          }
+
+          // Update the RegistrationLink status to 'Completed' strictly on final submit success
+          if (_selectedAcceptedLinkId != null && _selectedAcceptedLinkId!.isNotEmpty) {
+            await repo.updateRegistrationLinkStatus(
+              linkId: _selectedAcceptedLinkId!,
+              linkStatus: 'Completed',
+            );
+          }
         }
       } else if (widget.linkId == 'new' || widget.linkId.isEmpty) {
         // Manual Add mode
@@ -867,8 +885,8 @@ class _EmployeeRegistrationPageState
           ),
         );
 
-        // Redirect if it's a final submission (not draft save) and we are in manager add/edit flow
-        if (isSubmit && (widget.linkId == 'new' || widget.linkId.isEmpty || isEditMode || (_registrationMode == 'accepted_response' && _selectedAcceptedEmpId != null))) {
+        // Redirect if it's a final submission (not draft save) and we are in manager add/edit/accepted response flow
+        if (isSubmit && (widget.linkId == 'new' || widget.linkId.isEmpty || isEditMode || _registrationMode == 'accepted_response' || _selectedAcceptedLinkId != null)) {
           if (GoRouter.of(context).canPop()) {
             GoRouter.of(context).pop();
           } else {

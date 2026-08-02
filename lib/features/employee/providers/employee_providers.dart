@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../organization/domain/column_preference.dart';
@@ -89,3 +90,4 @@ final responseSearchQueryProvider = StateProvider<String>((ref) => '');
 final responseOrgFilterProvider = StateProvider<String>((ref) => 'All Organizations');
 final responseDeptFilterProvider = StateProvider<String>((ref) => 'All Departments');
 final responseStatusFilterProvider = StateProvider<String>((ref) => 'All Statuses');
+final responseDateRangeProvider = StateProvider<DateTimeRange?>((ref) => null);

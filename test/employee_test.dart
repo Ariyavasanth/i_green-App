@@ -51,5 +51,22 @@ void main() {
       final map = link.toMap();
       expect(map['link_id'], 'TEST1234');
     });
+
+    test('RegistrationLink status transitions', () {
+      const link = RegistrationLink(
+        id: 1,
+        linkId: 'TEST1234',
+        generatedBy: 'Admin',
+        generatedDate: '2026-07-24 10:00',
+        expiryDate: '2026-07-31 10:00',
+        linkStatus: 'Pending',
+      );
+
+      final acceptedLink = link.copyWith(linkStatus: 'Accepted');
+      expect(acceptedLink.linkStatus, 'Accepted');
+
+      final completedLink = acceptedLink.copyWith(linkStatus: 'Completed');
+      expect(completedLink.linkStatus, 'Completed');
+    });
   });
 }

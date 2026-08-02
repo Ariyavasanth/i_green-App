@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../organization/presentation/widgets/column_selection_dialog.dart';
@@ -42,6 +43,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     final prefAsync = ref.watch(empColumnPreferenceProvider(_tableId));
     final searchQuery = ref.watch(responseSearchQueryProvider);
     final statusFilter = ref.watch(responseStatusFilterProvider);
+    final dateRange = ref.watch(responseDateRangeProvider);
 
     return ColoredBox(
       color: Colors.white,
@@ -62,7 +64,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                   'All Statuses',
                   'Pending',
                   'Accepted',
-                  'Registered',
+                  'Completed',
                   'Rejected',
                 ];
 
@@ -80,15 +82,18 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                   final status = link.linkStatus.trim().toLowerCase();
                   final filter = statusFilter.trim().toLowerCase();
 
-                  bool matchesStatus = filter == 'all statuses';
-                  if (!matchesStatus) {
-                    if (filter == 'registered') {
-                      matchesStatus = status == 'registered' || status == 'converted' || status == 'completed';
-                    } else {
-                      matchesStatus = status == filter;
-                    }
+                  bool matchesStatus = false;
+                  if (filter == 'all statuses') {
+                    matchesStatus = status != 'completed' && status != 'registered' && status != 'converted';
+                  } else if (filter == 'completed' || filter == 'registered') {
+                    matchesStatus = status == 'completed' || status == 'registered' || status == 'converted';
+                  } else {
+                    matchesStatus = status == filter;
                   }
-                  return matchesSearch && matchesStatus;
+
+                  final matchesDate = _matchesDateRange(link, dateRange);
+
+                  return matchesSearch && matchesStatus && matchesDate;
                 }).toList();
 
                 if (filtered.isEmpty) {
@@ -194,11 +199,41 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     );
   }
 
+  DateTime? _parseDate(String rawDate) {
+    if (rawDate.trim().isEmpty) return null;
+    try {
+      final str = rawDate.trim();
+      return DateTime.tryParse(str) ?? DateTime.tryParse(str.replaceAll(' ', 'T'));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _matchesDateRange(RegistrationLink link, DateTimeRange? range) {
+    if (range == null) return true;
+    final dateStr = link.submittedDate.isNotEmpty ? link.submittedDate : link.generatedDate;
+    final date = _parseDate(dateStr);
+    if (date == null) return false;
+
+    final start = DateTime(range.start.year, range.start.month, range.start.day, 0, 0, 0);
+    final end = DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59, 999);
+
+    return (date.isAfter(start) || date.isAtSameMomentAs(start)) &&
+           (date.isBefore(end) || date.isAtSameMomentAs(end));
+  }
+
   Widget _buildFiltersRow(List<String> orgs, List<String> depts, List<String> statuses) {
     final currentStatus = ref.watch(responseStatusFilterProvider);
+    final currentDateRange = ref.watch(responseDateRangeProvider);
     final selectedStatus = statuses.contains(currentStatus)
         ? currentStatus
         : (statuses.isNotEmpty ? statuses.first : 'All Statuses');
+
+    final String dateButtonText = currentDateRange != null
+        ? '${DateFormat('MMM d, yyyy').format(currentDateRange.start)} - ${DateFormat('MMM d, yyyy').format(currentDateRange.end)}'
+        : 'Submitted Date';
+
+    final hasActiveFilter = currentStatus != 'All Statuses' || currentDateRange != null;
 
     return Container(
       width: double.infinity,
@@ -245,7 +280,79 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                   ),
                 ),
               ),
-              if (currentStatus != 'All Statuses')
+              InkWell(
+                onTap: () async {
+                  final picked = await showDateRangePicker(
+                    context: context,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2100),
+                    initialDateRange: currentDateRange,
+                    builder: (context, child) {
+                      return Theme(
+                        data: Theme.of(context).copyWith(
+                          colorScheme: ColorScheme.light(
+                            primary: AppColors.active,
+                            onPrimary: Colors.white,
+                            onSurface: AppColors.textPrimary,
+                          ),
+                        ),
+                        child: child!,
+                      );
+                    },
+                  );
+                  if (picked != null) {
+                    ref.read(responseDateRangeProvider.notifier).state = picked;
+                    setState(() => _currentPage = 0);
+                  }
+                },
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  height: 40,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: currentDateRange != null ? AppColors.active : AppColors.divider,
+                      width: currentDateRange != null ? 1.2 : 1.0,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.calendar_today_outlined,
+                        size: 16,
+                        color: currentDateRange != null ? AppColors.active : AppColors.textSecondary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        dateButtonText,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: currentDateRange != null ? AppColors.active : AppColors.textPrimary,
+                        ),
+                      ),
+                      if (currentDateRange != null) ...[
+                        const SizedBox(width: 6),
+                        GestureDetector(
+                          onTap: () {
+                            ref.read(responseDateRangeProvider.notifier).state = null;
+                            setState(() => _currentPage = 0);
+                          },
+                          child: const Icon(
+                            Icons.close,
+                            size: 16,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              if (hasActiveFilter)
                 TextButton(
                   style: TextButton.styleFrom(
                     minimumSize: const Size(48, 40),
@@ -253,6 +360,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                   ),
                   onPressed: () {
                     ref.read(responseStatusFilterProvider.notifier).state = 'All Statuses';
+                    ref.read(responseDateRangeProvider.notifier).state = null;
                     setState(() => _currentPage = 0);
                   },
                   child: const Text('Reset Filters', style: TextStyle(fontSize: 13, color: AppColors.active)),
@@ -550,6 +658,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     final status = link.linkStatus.trim().toLowerCase();
     final isPending = status == 'pending';
     final isAccepted = status == 'accepted';
+    final isRejected = status == 'rejected';
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -564,7 +673,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
           icon: Icon(Icons.remove_red_eye_outlined, size: isMobile ? 14 : 16, color: AppColors.textPrimary),
           label: Text('View', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
         ),
-        if (isPending) ...[
+        if (isPending || isRejected) ...[
           const SizedBox(width: 6),
           TextButton.icon(
             style: TextButton.styleFrom(
@@ -576,17 +685,19 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             icon: Icon(Icons.check_circle_outline, size: isMobile ? 14 : 16, color: Colors.blue),
             label: Text('Accept', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.bold, color: Colors.blue)),
           ),
-          const SizedBox(width: 6),
-          TextButton.icon(
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          if (isPending) ...[
+            const SizedBox(width: 6),
+            TextButton.icon(
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              onPressed: () => _setResponseStatus(link, 'Rejected'),
+              icon: Icon(Icons.cancel_outlined, size: isMobile ? 14 : 16, color: Colors.redAccent),
+              label: Text('Reject', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.bold, color: Colors.redAccent)),
             ),
-            onPressed: () => _setResponseStatus(link, 'Rejected'),
-            icon: Icon(Icons.cancel_outlined, size: isMobile ? 14 : 16, color: Colors.redAccent),
-            label: Text('Reject', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.bold, color: Colors.redAccent)),
-          ),
+          ],
         ],
         if (isAccepted) ...[
           const SizedBox(width: 6),
@@ -779,14 +890,26 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
   }
 
   Future<void> _setResponseStatus(RegistrationLink link, String status) async {
-    await ref.read(employeeRepositoryProvider).updateRegistrationLinkStatus(
-          linkId: link.linkId,
-          linkStatus: status,
+    try {
+      await ref.read(employeeRepositoryProvider).updateRegistrationLinkStatus(
+            linkId: link.linkId,
+            linkStatus: status,
+          );
+      ref.invalidate(registrationLinksProvider);
+      ref.invalidate(employeesProvider);
+      ref.invalidate(allEmployeesProvider);
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update response status: $e'),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
         );
-    ref.invalidate(registrationLinksProvider);
-    ref.invalidate(employeesProvider);
-    ref.invalidate(allEmployeesProvider);
-    setState(() {});
+      }
+    }
   }
 
   String _candidateId(RegistrationLink link) => link.employeeId.isNotEmpty ? link.employeeId : link.linkId;

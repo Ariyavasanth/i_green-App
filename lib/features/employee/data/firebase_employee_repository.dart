@@ -384,7 +384,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
     final linkRef = _registrationLinksRef.doc(linkId);
     batch.set(linkRef, {
-      'link_status': isSubmit ? 'Completed' : 'Pending',
+      'link_status': 'Pending',
       'submitted_date': isSubmit ? nowIso : '',
       'submitted_by': isSubmit ? finalEmployee.fullName : '',
       'employee_name': finalEmployee.fullName,
