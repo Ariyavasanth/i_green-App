@@ -8,6 +8,7 @@ import '../domain/employee.dart';
 import '../providers/employee_providers.dart';
 import 'dialogs/employee_details_dialog.dart';
 import 'dialogs/registration_links_dialog.dart';
+import 'widgets/admin_list_toolbar.dart';
 
 class EmployeeManagementPage extends ConsumerStatefulWidget {
   const EmployeeManagementPage({super.key});
@@ -166,138 +167,43 @@ class _EmployeeManagementPageState
     BuildContext context,
     AsyncValue<dynamic> prefAsync,
   ) {
-    final searchController = TextEditingController(
-      text: ref.read(empSearchQueryProvider),
-    );
-    searchController.selection = TextSelection.fromPosition(
-      TextPosition(offset: searchController.text.length),
-    );
+    final searchQuery = ref.watch(empSearchQueryProvider);
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 16, 12),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isCompact = constraints.maxWidth < 640;
-
-          return Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Text(
-                    'Employee Management',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    width: isCompact ? 140 : 200,
-                    height: 36,
-                    child: TextField(
-                      controller: searchController,
-                      style: const TextStyle(fontSize: 13),
-                      decoration: InputDecoration(
-                        hintText: 'Search employees...',
-                        hintStyle: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                        ),
-                        prefixIcon: const Icon(Icons.search, size: 18),
-                        suffixIcon: searchController.text.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear, size: 16),
-                                onPressed: () {
-                                  ref
-                                      .read(empSearchQueryProvider.notifier)
-                                      .state = '';
-                                  setState(() => _currentPage = 0);
-                                },
-                              )
-                            : null,
-                        contentPadding: EdgeInsets.zero,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(6),
-                          borderSide:
-                              const BorderSide(color: AppColors.divider),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(6),
-                          borderSide:
-                              const BorderSide(color: AppColors.active),
-                        ),
-                      ),
-                      onChanged: (val) {
-                        ref.read(empSearchQueryProvider.notifier).state = val;
-                        setState(() => _currentPage = 0);
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.file_download_outlined, size: 20),
-                    tooltip: 'Export (CSV/PDF)',
-                    onPressed: _exportData,
-                  ),
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      side: const BorderSide(color: AppColors.divider),
-                    ),
-                    onPressed: () => _openRegistrationLinksDialog(context),
-                    icon: const Icon(Icons.rate_review_outlined, size: 18),
-                    label: const Text('Response', style: TextStyle(fontSize: 13)),
-                  ),
-                  if (!isCompact) ...[
-                    const SizedBox(width: 4),
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        side: const BorderSide(color: AppColors.divider),
-                      ),
-                      onPressed: () => _openColumnSelectionDialog(context),
-                      icon: const Icon(Icons.view_column_outlined, size: 18),
-                      label: const Text('Columns', style: TextStyle(fontSize: 13)),
-                    ),
-                  ],
-                  const SizedBox(width: 8),
-                  FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.active,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                    ),
-                    onPressed: () => GoRouter.of(context).push('/employee/register/new'),
-                    icon: const Icon(Icons.add, size: 18),
-                    label: Text(
-                      isCompact ? 'Add' : 'Add Employee',
-                      style: const TextStyle(fontSize: 13),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          );
-        },
-      ),
+    return AdminListToolbar(
+      title: 'Employee Management',
+      searchHint: 'Search employees...',
+      searchQuery: searchQuery,
+      onSearchChanged: (val) {
+        ref.read(empSearchQueryProvider.notifier).state = val;
+        setState(() => _currentPage = 0);
+      },
+      onSearchCleared: () {
+        ref.read(empSearchQueryProvider.notifier).state = '';
+        setState(() => _currentPage = 0);
+      },
+      primaryActionLabel: 'Add Employee',
+      primaryActionIcon: Icons.add,
+      onPrimaryAction: () => GoRouter.of(context).push('/employee/register/new'),
+      secondaryActions: [
+        AdminToolbarAction(
+          label: 'Export',
+          icon: Icons.file_download_outlined,
+          tooltip: 'Export (CSV/PDF)',
+          onPressed: _exportData,
+        ),
+        AdminToolbarAction(
+          label: 'Response',
+          icon: Icons.rate_review_outlined,
+          tooltip: 'Response',
+          onPressed: () => _openRegistrationLinksDialog(context),
+        ),
+        AdminToolbarAction(
+          label: 'Columns',
+          icon: Icons.view_column_outlined,
+          tooltip: 'Columns',
+          onPressed: () => _openColumnSelectionDialog(context),
+        ),
+      ],
     );
   }
 
@@ -311,6 +217,7 @@ class _EmployeeManagementPageState
     final currentStatus = ref.watch(empStatusFilterProvider);
 
     return Container(
+      width: double.infinity,
       color: Colors.grey.withValues(alpha: 0.05),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Wrap(
@@ -326,41 +233,74 @@ class _EmployeeManagementPageState
               color: AppColors.textSecondary,
             ),
           ),
-          DropdownButton<String>(
-            value: orgs.contains(currentOrg) ? currentOrg : orgs.first,
-            isDense: true,
-            style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
-            items: orgs.map((o) => DropdownMenuItem(value: o, child: Text(o))).toList(),
-            onChanged: (val) {
-              if (val != null) {
-                ref.read(empOrgFilterProvider.notifier).state = val;
-                setState(() => _currentPage = 0);
-              }
-            },
+          Container(
+            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppColors.divider),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: orgs.contains(currentOrg) ? currentOrg : orgs.first,
+                isDense: true,
+                style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
+                items: orgs.map((o) => DropdownMenuItem(value: o, child: Text(o))).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    ref.read(empOrgFilterProvider.notifier).state = val;
+                    setState(() => _currentPage = 0);
+                  }
+                },
+              ),
+            ),
           ),
-          DropdownButton<String>(
-            value: depts.contains(currentDept) ? currentDept : depts.first,
-            isDense: true,
-            style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
-            items: depts.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
-            onChanged: (val) {
-              if (val != null) {
-                ref.read(empDeptFilterProvider.notifier).state = val;
-                setState(() => _currentPage = 0);
-              }
-            },
+          Container(
+            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppColors.divider),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: depts.contains(currentDept) ? currentDept : depts.first,
+                isDense: true,
+                style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
+                items: depts.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    ref.read(empDeptFilterProvider.notifier).state = val;
+                    setState(() => _currentPage = 0);
+                  }
+                },
+              ),
+            ),
           ),
-          DropdownButton<String>(
-            value: statuses.contains(currentStatus) ? currentStatus : statuses.first,
-            isDense: true,
-            style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
-            items: statuses.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-            onChanged: (val) {
-              if (val != null) {
-                ref.read(empStatusFilterProvider.notifier).state = val;
-                setState(() => _currentPage = 0);
-              }
-            },
+          Container(
+            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppColors.divider),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: statuses.contains(currentStatus) ? currentStatus : statuses.first,
+                isDense: true,
+                style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
+                items: statuses.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    ref.read(empStatusFilterProvider.notifier).state = val;
+                    setState(() => _currentPage = 0);
+                  }
+                },
+              ),
+            ),
           ),
           if (currentOrg != 'All Organizations' ||
               currentDept != 'All Departments' ||
@@ -372,7 +312,7 @@ class _EmployeeManagementPageState
                 ref.read(empStatusFilterProvider.notifier).state = 'All Statuses';
                 setState(() => _currentPage = 0);
               },
-              child: const Text('Reset Filters', style: TextStyle(fontSize: 12)),
+              child: const Text('Reset Filters', style: TextStyle(fontSize: 12, color: AppColors.active)),
             ),
         ],
       ),

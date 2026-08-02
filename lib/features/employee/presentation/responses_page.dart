@@ -10,6 +10,7 @@ import '../domain/employee.dart';
 import '../providers/employee_providers.dart';
 import 'dialogs/add_employee_link_dialog.dart';
 import 'dialogs/registration_links_dialog.dart';
+import 'widgets/admin_list_toolbar.dart';
 
 class ResponsesPage extends ConsumerStatefulWidget {
   const ResponsesPage({super.key});
@@ -138,211 +139,43 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
   }
 
   Widget _buildToolbar(BuildContext context, AsyncValue<dynamic> prefAsync) {
-    final searchController = TextEditingController(text: ref.read(responseSearchQueryProvider));
-    searchController.selection = TextSelection.fromPosition(
-      TextPosition(offset: searchController.text.length),
-    );
+    final searchQuery = ref.watch(responseSearchQueryProvider);
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isCompact = MediaQuery.of(context).size.width < 720 || constraints.maxWidth < 720;
-
-          if (isCompact) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Responses',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.file_download_outlined, size: 20),
-                          tooltip: 'Export (CSV/PDF)',
-                          onPressed: _exportData,
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.rate_review_outlined, size: 20),
-                          tooltip: 'Response',
-                          onPressed: () => _openRegistrationLinksDialog(context),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.view_column_outlined, size: 20),
-                          tooltip: 'Columns',
-                          onPressed: () => _openColumnSelectionDialog(context),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 40,
-                  child: TextField(
-                    controller: searchController,
-                    style: const TextStyle(fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: 'Search responses...',
-                      hintStyle: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
-                      prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
-                      suffixIcon: searchController.text.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear, size: 16),
-                              onPressed: () {
-                                ref.read(responseSearchQueryProvider.notifier).state = '';
-                                setState(() => _currentPage = 0);
-                              },
-                            )
-                          : null,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: AppColors.divider),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: AppColors.divider),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: AppColors.active),
-                      ),
-                    ),
-                    onChanged: (val) {
-                      ref.read(responseSearchQueryProvider.notifier).state = val;
-                      setState(() => _currentPage = 0);
-                    },
-                  ),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  height: 40,
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.active,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    onPressed: () => _openAddLinkDialog(context),
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text(
-                      'Add Employee',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ),
-              ],
-            );
-          }
-
-          return Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              const Text(
-                'Responses',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  SizedBox(
-                    width: 200,
-                    height: 36,
-                    child: TextField(
-                      controller: searchController,
-                      style: const TextStyle(fontSize: 13),
-                      decoration: InputDecoration(
-                        hintText: 'Search responses...',
-                        hintStyle: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                        prefixIcon: const Icon(Icons.search, size: 18),
-                        suffixIcon: searchController.text.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear, size: 16),
-                                onPressed: () {
-                                  ref.read(responseSearchQueryProvider.notifier).state = '';
-                                  setState(() => _currentPage = 0);
-                                },
-                              )
-                            : null,
-                        contentPadding: EdgeInsets.zero,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(6),
-                          borderSide: const BorderSide(color: AppColors.divider),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(6),
-                          borderSide: const BorderSide(color: AppColors.active),
-                        ),
-                      ),
-                      onChanged: (val) {
-                        ref.read(responseSearchQueryProvider.notifier).state = val;
-                        setState(() => _currentPage = 0);
-                      },
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.file_download_outlined, size: 20),
-                    tooltip: 'Export (CSV/PDF)',
-                    onPressed: _exportData,
-                  ),
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      side: const BorderSide(color: AppColors.divider),
-                    ),
-                    onPressed: () => _openRegistrationLinksDialog(context),
-                    icon: const Icon(Icons.rate_review_outlined, size: 18),
-                    label: const Text('Response', style: TextStyle(fontSize: 13)),
-                  ),
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      side: const BorderSide(color: AppColors.divider),
-                    ),
-                    onPressed: () => _openColumnSelectionDialog(context),
-                    icon: const Icon(Icons.view_column_outlined, size: 18),
-                    label: const Text('Columns', style: TextStyle(fontSize: 13)),
-                  ),
-                  FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.active,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    ),
-                    onPressed: () => _openAddLinkDialog(context),
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Add Employee', style: TextStyle(fontSize: 13)),
-                  ),
-                ],
-              ),
-            ],
-          );
-        },
-      ),
+    return AdminListToolbar(
+      title: 'Responses',
+      searchHint: 'Search responses...',
+      searchQuery: searchQuery,
+      onSearchChanged: (val) {
+        ref.read(responseSearchQueryProvider.notifier).state = val;
+        setState(() => _currentPage = 0);
+      },
+      onSearchCleared: () {
+        ref.read(responseSearchQueryProvider.notifier).state = '';
+        setState(() => _currentPage = 0);
+      },
+      primaryActionLabel: 'Add Employee',
+      primaryActionIcon: Icons.add,
+      onPrimaryAction: () => _openAddLinkDialog(context),
+      secondaryActions: [
+        AdminToolbarAction(
+          label: 'Export',
+          icon: Icons.file_download_outlined,
+          tooltip: 'Export (CSV/PDF)',
+          onPressed: _exportData,
+        ),
+        AdminToolbarAction(
+          label: 'Response',
+          icon: Icons.rate_review_outlined,
+          tooltip: 'Response',
+          onPressed: () => _openRegistrationLinksDialog(context),
+        ),
+        AdminToolbarAction(
+          label: 'Columns',
+          icon: Icons.view_column_outlined,
+          tooltip: 'Columns',
+          onPressed: () => _openColumnSelectionDialog(context),
+        ),
+      ],
     );
   }
 

@@ -871,79 +871,117 @@ class _EmployeeRegistrationPageState
         ? (isEditMode ? 'Edit Employee Details' : 'Employee Registration')
         : (isEditMode ? 'Edit: $name' : name);
 
-    return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      color: Colors.white,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Flexible(
-            child: Row(
+    final submitBtn = ElevatedButton.icon(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: AppColors.active,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        minimumSize: const Size(0, 36),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+      ),
+      onPressed: _isSubmitting
+          ? null
+          : () => _submitForm(link ??
+              const RegistrationLink(
+                  id: 0,
+                  linkId: 'edit',
+                  generatedBy: '',
+                  generatedDate: '',
+                  expiryDate: '',
+                  linkStatus: 'Pending',
+                  organizationName: '',
+                  department: '')),
+      icon: _isSubmitting
+          ? const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+            )
+          : Icon(isEditMode ? Icons.save_outlined : Icons.check_circle_outline, size: 16),
+      label: Text(
+        _isSubmitting
+            ? 'Saving...'
+            : (isEditMode ? 'Save Changes' : 'Submit Registration'),
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+      ),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 600;
+
+        if (isMobile) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            color: Colors.white,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(isEditMode ? Icons.edit : Icons.person, size: 18, color: AppColors.active),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    titleText,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.active,
+                Row(
+                  children: [
+                    Icon(isEditMode ? Icons.edit : Icons.person, size: 20, color: AppColors.active),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        titleText,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.active,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
+                if (_isManagementAdd || isEditMode || (link != null && link.linkStatus != 'Completed' && _submittedEmployee == null)) ...[
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 38,
+                    child: submitBtn,
+                  ),
+                ],
               ],
             ),
-          ),
-          const SizedBox(width: 8),
-          Row(
-            mainAxisSize: MainAxisSize.min,
+          );
+        }
+
+        return Container(
+          height: 52,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          color: Colors.white,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              if (_isManagementAdd || isEditMode || (link != null && link.linkStatus != 'Completed' && _submittedEmployee == null))
-                Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.active,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      minimumSize: const Size(0, 32),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+              Expanded(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(isEditMode ? Icons.edit : Icons.person, size: 18, color: AppColors.active),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        titleText,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.active,
+                        ),
+                      ),
                     ),
-                    onPressed: _isSubmitting
-                        ? null
-                        : () => _submitForm(link ??
-                            const RegistrationLink(
-                                id: 0,
-                                linkId: 'edit',
-                                generatedBy: '',
-                                generatedDate: '',
-                                expiryDate: '',
-                                linkStatus: 'Pending',
-                                organizationName: '',
-                                department: '')),
-                    icon: _isSubmitting
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : Icon(isEditMode ? Icons.save_outlined : Icons.check_circle_outline, size: 16),
-                    label: Text(
-                      _isSubmitting
-                          ? 'Saving...'
-                          : (isEditMode ? 'Save Changes' : 'Submit Registration'),
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
-                  ),
+                  ],
                 ),
+              ),
+              const SizedBox(width: 8),
+              if (_isManagementAdd || isEditMode || (link != null && link.linkStatus != 'Completed' && _submittedEmployee == null))
+                submitBtn,
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -955,11 +993,11 @@ class _EmployeeRegistrationPageState
         controller: _tabController,
         isScrollable: true,
         indicatorColor: AppColors.active,
-        indicatorWeight: 2,
+        indicatorWeight: 3,
         labelColor: AppColors.active,
         unselectedLabelColor: Colors.black87,
-        labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-        unselectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+        labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+        unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.normal),
         tabAlignment: TabAlignment.start,
         tabs: _tabs.map((tab) => Tab(text: tab)).toList(),
       ),
@@ -993,38 +1031,93 @@ class _EmployeeRegistrationPageState
                   ),
                 ),
                 const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Radio<String>(
-                      value: 'manual',
-                      groupValue: _registrationMode,
-                      activeColor: AppColors.active,
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() {
-                            _registrationMode = val;
-                            _selectedAcceptedEmpId = null;
-                          });
-                        }
-                      },
+                if (isMobile) ...[
+                  InkWell(
+                    onTap: () => setState(() {
+                      _registrationMode = 'manual';
+                      _selectedAcceptedEmpId = null;
+                    }),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          Radio<String>(
+                            value: 'manual',
+                            groupValue: _registrationMode,
+                            activeColor: AppColors.active,
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() {
+                                  _registrationMode = val;
+                                  _selectedAcceptedEmpId = null;
+                                });
+                              }
+                            },
+                          ),
+                          const Expanded(
+                            child: Text('Manual Entry', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                          ),
+                        ],
+                      ),
                     ),
-                    const Text('Manual Entry', style: TextStyle(fontSize: 13)),
-                    const SizedBox(width: 24),
-                    Radio<String>(
-                      value: 'accepted_response',
-                      groupValue: _registrationMode,
-                      activeColor: AppColors.active,
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() {
-                            _registrationMode = val;
-                          });
-                        }
-                      },
+                  ),
+                  InkWell(
+                    onTap: () => setState(() => _registrationMode = 'accepted_response'),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          Radio<String>(
+                            value: 'accepted_response',
+                            groupValue: _registrationMode,
+                            activeColor: AppColors.active,
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() => _registrationMode = val);
+                              }
+                            },
+                          ),
+                          const Expanded(
+                            child: Text('Import Accepted Response', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                          ),
+                        ],
+                      ),
                     ),
-                    const Text('Import Accepted Response', style: TextStyle(fontSize: 13)),
-                  ],
-                ),
+                  ),
+                ] else ...[
+                  Row(
+                    children: [
+                      Radio<String>(
+                        value: 'manual',
+                        groupValue: _registrationMode,
+                        activeColor: AppColors.active,
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() {
+                              _registrationMode = val;
+                              _selectedAcceptedEmpId = null;
+                            });
+                          }
+                        },
+                      ),
+                      const Text('Manual Entry', style: TextStyle(fontSize: 13)),
+                      const SizedBox(width: 24),
+                      Radio<String>(
+                        value: 'accepted_response',
+                        groupValue: _registrationMode,
+                        activeColor: AppColors.active,
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() => _registrationMode = val);
+                          }
+                        },
+                      ),
+                      const Flexible(
+                        child: Text('Import Accepted Response', style: TextStyle(fontSize: 13)),
+                      ),
+                    ],
+                  ),
+                ],
                 if (_registrationMode == 'accepted_response') ...[
                   const SizedBox(height: 10),
                   Consumer(
@@ -2393,9 +2486,9 @@ class _EmployeeRegistrationPageState
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 5),
         TextFormField(
           controller: controller,
           maxLines: maxLines,
@@ -2405,15 +2498,18 @@ class _EmployeeRegistrationPageState
             hintText: placeholder,
             hintStyle: const TextStyle(fontSize: 12, color: Colors.black38),
             isDense: true,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-            border: const OutlineInputBorder(
-              borderSide: BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
             ),
-            enabledBorder: const OutlineInputBorder(
-              borderSide: BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
             ),
-            focusedBorder: const OutlineInputBorder(
-              borderSide: BorderSide(color: AppColors.active, width: 1.2),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppColors.active, width: 1.2),
             ),
           ),
         ),
@@ -2432,9 +2528,9 @@ class _EmployeeRegistrationPageState
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 5),
         TextFormField(
           controller: controller,
           readOnly: true,
@@ -2444,14 +2540,20 @@ class _EmployeeRegistrationPageState
             hintText: placeholder ?? 'dd-mm-yyyy',
             hintStyle: const TextStyle(fontSize: 12, color: Colors.black38),
             isDense: true,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             suffixIcon: const Icon(Icons.calendar_today_outlined, size: 14, color: Colors.black54),
             suffixIconConstraints: const BoxConstraints(minWidth: 28),
-            border: const OutlineInputBorder(
-              borderSide: BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
             ),
-            enabledBorder: const OutlineInputBorder(
-              borderSide: BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppColors.active, width: 1.2),
             ),
           ),
         ),
@@ -2471,22 +2573,28 @@ class _EmployeeRegistrationPageState
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 5),
         DropdownButtonFormField<String>(
           initialValue: items.contains(value) ? value : items.first,
           onChanged: onChanged,
           style: const TextStyle(fontSize: 12, color: Colors.black87),
           icon: const Icon(Icons.keyboard_arrow_down, size: 16),
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             isDense: true,
-            contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             border: OutlineInputBorder(
-              borderSide: BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
             ),
             enabledBorder: OutlineInputBorder(
-              borderSide: BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppColors.active, width: 1.2),
             ),
           ),
           items: items.map((item) {
@@ -2945,20 +3053,33 @@ class _EmployeeRegistrationPageState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
                 children: [
-                  const Icon(Icons.security, size: 22, color: AppColors.active),
-                  const SizedBox(width: 10),
-                  const Text(
-                    'Access Permissions',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF475467),
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.security, size: 22, color: AppColors.active),
+                      SizedBox(width: 10),
+                      Text(
+                        'Access Permissions',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF475467),
+                        ),
+                      ),
+                    ],
                   ),
-                  const Spacer(),
                   TextButton.icon(
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                     onPressed: () {
                       setState(() {
                         if (_selectedPermissions.length ==

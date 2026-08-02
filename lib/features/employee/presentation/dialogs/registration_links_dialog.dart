@@ -13,16 +13,22 @@ class RegistrationLinksDialog extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final linksAsync = ref.watch(registrationLinksProvider);
 
+    final screenWidth = MediaQuery.of(context).size.width;
+
     return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       title: Row(
         children: [
           const Icon(Icons.link_outlined, color: AppColors.active),
           const SizedBox(width: 8),
-          const Text(
-            'Employee Registration Links Status',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          const Expanded(
+            child: Text(
+              'Registration Links Status',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
           ),
-          const Spacer(),
           IconButton(
             icon: const Icon(Icons.close, size: 20),
             onPressed: () => Navigator.of(context).pop(),
@@ -30,7 +36,7 @@ class RegistrationLinksDialog extends ConsumerWidget {
         ],
       ),
       content: SizedBox(
-        width: 820,
+        width: screenWidth < 860 ? screenWidth * 0.9 : 820,
         height: 480,
         child: linksAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),

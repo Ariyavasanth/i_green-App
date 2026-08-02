@@ -225,38 +225,44 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header with Month Navigation and Employee Filter
-              Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.chevron_left, color: AppColors.active),
-                    onPressed: () {
-                      setState(() {
-                        _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1);
-                      });
-                    },
-                  ),
-                  Text(
-                    _monthYearString(_focusedMonth),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.chevron_right, color: AppColors.active),
-                    onPressed: () {
-                      setState(() {
-                        _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
-                      });
-                    },
-                  ),
-                  const Spacer(),
-                  // Filter dropdown
-                  employeesAsync.maybeWhen(
+              LayoutBuilder(
+                builder: (context, headerConstraints) {
+                  final isNarrow = headerConstraints.maxWidth < 600;
+
+                  final monthNav = Row(
+                    mainAxisSize: isNarrow ? MainAxisSize.max : MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.chevron_left, color: AppColors.active),
+                        onPressed: () {
+                          setState(() {
+                            _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1);
+                          });
+                        },
+                      ),
+                      Text(
+                        _monthYearString(_focusedMonth),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.chevron_right, color: AppColors.active),
+                        onPressed: () {
+                          setState(() {
+                            _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
+                          });
+                        },
+                      ),
+                    ],
+                  );
+
+                  final filterDropdown = employeesAsync.maybeWhen(
                     data: (employees) {
                       return SizedBox(
-                        width: 220,
+                        width: isNarrow ? double.infinity : 220,
                         child: DropdownButtonFormField<int?>(
                           initialValue: _selectedEmployeeFilterId,
                           isDense: true,
@@ -287,8 +293,27 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
                       );
                     },
                     orElse: () => const SizedBox.shrink(),
-                  ),
-                ],
+                  );
+
+                  if (isNarrow) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        monthNav,
+                        const SizedBox(height: 10),
+                        filterDropdown,
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    children: [
+                      monthNav,
+                      const Spacer(),
+                      filterDropdown,
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 12),
 

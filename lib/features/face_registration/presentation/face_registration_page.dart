@@ -358,9 +358,11 @@ class _FaceRegistrationPageState extends ConsumerState<FaceRegistrationPage> {
                               children: [
                                 Icon(Icons.lock, size: 16, color: _brandHeader),
                                 SizedBox(width: 6),
-                                Text(
-                                  'Registration Locked (1 Face Profile Limit)',
-                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _brandHeader),
+                                Flexible(
+                                  child: Text(
+                                    'Registration Locked (1 Face Profile Limit)',
+                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _brandHeader),
+                                  ),
                                 ),
                               ],
                             ),
