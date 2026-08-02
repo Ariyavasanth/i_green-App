@@ -493,7 +493,10 @@ class _LeavePermissionsViewState extends ConsumerState<LeavePermissionsView> {
     return count;
   }
 
-  Widget _buildUsedThisMonthCell(double used, double allowed) {
+  Widget _buildUsedThisMonthCell(double used, double allowed, String leaveType) {
+    if (leaveType != 'Manual Allocation' && leaveType != 'Once a Month') {
+      return const Text('-', style: TextStyle(fontSize: 12, color: Colors.grey));
+    }
     final ratio = allowed > 0 ? (used / allowed).clamp(0.0, 1.0) : 0.0;
     final color = ratio >= 1.0
         ? Colors.red.shade700
@@ -602,10 +605,9 @@ class _LeavePermissionsViewState extends ConsumerState<LeavePermissionsView> {
                       ),
                       DataCell(Text(emp.department.isNotEmpty ? emp.department : 'Unassigned', style: const TextStyle(fontSize: 13))),
                       DataCell(Text(emp.designation.isNotEmpty ? emp.designation : 'N/A', style: const TextStyle(fontSize: 13))),
-                      DataCell(Text(emp.leaveType.isNotEmpty ? emp.leaveType : 'As Needed', style: const TextStyle(fontSize: 13))),
-                      DataCell(Text('${emp.allowedLeaves} days', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
-                      DataCell(_buildUsedThisMonthCell(usedThisMonth, emp.allowedLeaves)),
-                      DataCell(Text(emp.leaveAllocationFrequency, style: const TextStyle(fontSize: 13))),
+                      DataCell(Text(emp.leaveType == 'Manual Allocation' || emp.leaveType == 'Once a Month' ? '${emp.allowedLeaves} days' : '-', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                      DataCell(_buildUsedThisMonthCell(usedThisMonth, emp.allowedLeaves, emp.leaveType)),
+                      DataCell(Text(emp.leaveType == 'Manual Allocation' || emp.leaveType == 'Once a Month' ? emp.leaveAllocationFrequency : '-', style: const TextStyle(fontSize: 13))),
                       DataCell(
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -689,7 +691,7 @@ class _LeavePermissionsViewState extends ConsumerState<LeavePermissionsView> {
                     // Interactive Cells
                     DataCell(_InlineLeaveTypeCell(employee: emp)),
                     DataCell(_InlineAllowedDaysCell(employee: emp)),
-                    DataCell(_buildUsedThisMonthCell(usedThisMonth, emp.allowedLeaves)),
+                    DataCell(_buildUsedThisMonthCell(usedThisMonth, emp.allowedLeaves, emp.leaveType)),
                     DataCell(_InlineFrequencyCell(employee: emp)),
                     DataCell(_InlineRequiresApprovalCell(employee: emp)),
                     DataCell(
@@ -985,29 +987,31 @@ class _LeavePermissionsViewState extends ConsumerState<LeavePermissionsView> {
                         },
                       ),
                       const SizedBox(height: 14),
-                      TextField(
-                        controller: allowedController,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        decoration: const InputDecoration(
-                          labelText: 'Allowed Leave Days',
-                          border: OutlineInputBorder(),
-                          suffixText: 'days',
+                      if (leaveType == 'Manual Allocation' || leaveType == 'Once a Month') ...[
+                        TextField(
+                          controller: allowedController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: const InputDecoration(
+                            labelText: 'Allowed Leave Days',
+                            border: OutlineInputBorder(),
+                            suffixText: 'days',
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 14),
-                      DropdownButtonFormField<String>(
-                        initialValue: frequency,
-                        decoration: const InputDecoration(labelText: 'Allocation Frequency', border: OutlineInputBorder()),
-                        items: const [
-                          DropdownMenuItem(value: 'Monthly', child: Text('Monthly')),
-                          DropdownMenuItem(value: 'Yearly', child: Text('Yearly')),
-                          DropdownMenuItem(value: 'As Needed', child: Text('As Needed')),
-                        ],
-                        onChanged: (val) {
-                          if (val != null) setModalState(() => frequency = val);
-                        },
-                      ),
-                      const SizedBox(height: 14),
+                        const SizedBox(height: 14),
+                        DropdownButtonFormField<String>(
+                          initialValue: frequency,
+                          decoration: const InputDecoration(labelText: 'Allocation Frequency', border: OutlineInputBorder()),
+                          items: const [
+                            DropdownMenuItem(value: 'Monthly', child: Text('Monthly')),
+                            DropdownMenuItem(value: 'Quarterly', child: Text('Quarterly')),
+                            DropdownMenuItem(value: 'Yearly', child: Text('Yearly')),
+                          ],
+                          onChanged: (val) {
+                            if (val != null) setModalState(() => frequency = val);
+                          },
+                        ),
+                        const SizedBox(height: 14),
+                      ],
                       TextField(
                         controller: effectiveController,
                         decoration: const InputDecoration(
@@ -1042,7 +1046,9 @@ class _LeavePermissionsViewState extends ConsumerState<LeavePermissionsView> {
                     foregroundColor: Colors.white,
                   ),
                   onPressed: () async {
-                    final allowedValue = double.tryParse(allowedController.text.trim()) ?? 1.0;
+                    final isManual = leaveType == 'Manual Allocation' || leaveType == 'Once a Month';
+                    final allowedValue = isManual ? (double.tryParse(allowedController.text.trim()) ?? 0.0) : 0.0;
+                    final frequencyValue = isManual ? frequency : '';
                     final empIds = selectedEmployees.map((e) => e.id).toList();
 
                     try {
@@ -1050,7 +1056,7 @@ class _LeavePermissionsViewState extends ConsumerState<LeavePermissionsView> {
                         employeeIds: empIds,
                         leaveType: leaveType,
                         allowedLeaves: allowedValue,
-                        leaveAllocationFrequency: frequency,
+                        leaveAllocationFrequency: frequencyValue,
                         requiresLeaveApproval: requiresApproval,
                         effectiveDate: effectiveController.text.trim(),
                       );
@@ -1143,6 +1149,9 @@ class _InlineAllowedDaysCellState extends ConsumerState<_InlineAllowedDaysCell> 
 
   @override
   Widget build(BuildContext context) {
+    if (widget.employee.leaveType != 'Manual Allocation' && widget.employee.leaveType != 'Once a Month') {
+      return const Text('-', style: TextStyle(fontSize: 13, color: Colors.grey));
+    }
     return SizedBox(
       width: 75,
       child: TextField(
@@ -1177,6 +1186,9 @@ class _InlineFrequencyCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (employee.leaveType != 'Manual Allocation' && employee.leaveType != 'Once a Month') {
+      return const Text('-', style: TextStyle(fontSize: 13, color: Colors.grey));
+    }
     final val = employee.leaveAllocationFrequency.isNotEmpty
         ? employee.leaveAllocationFrequency
         : 'Monthly';
@@ -1339,11 +1351,12 @@ class _EmployeePermissionCardState extends ConsumerState<_EmployeePermissionCard
 
   Future<void> _saveCardPolicy() async {
     setState(() => _isSaving = true);
-    final allowedVal = double.tryParse(_allowedDaysController.text.trim()) ?? widget.employee.allowedLeaves;
+    final isManual = _leaveType == 'Manual Allocation' || _leaveType == 'Once a Month';
+    final allowedVal = isManual ? (double.tryParse(_allowedDaysController.text.trim()) ?? 0.0) : 0.0;
     final updated = widget.employee.copyWith(
       leaveType: _leaveType,
       allowedLeaves: allowedVal,
-      leaveAllocationFrequency: _frequency,
+      leaveAllocationFrequency: isManual ? _frequency : '',
       requiresLeaveApproval: _requiresApproval,
     );
 
@@ -1460,55 +1473,59 @@ class _EmployeePermissionCardState extends ConsumerState<_EmployeePermissionCard
                     ],
                   ),
                 ),
-                const SizedBox(width: 10),
-                SizedBox(
-                  width: 80,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Allowed Days', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                      const SizedBox(height: 2),
-                      TextField(
-                        controller: _allowedDaysController,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                        decoration: InputDecoration(
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                if (currentLeaveType == 'Manual Allocation' || currentLeaveType == 'Once a Month') ...[
+                  const SizedBox(width: 10),
+                  SizedBox(
+                    width: 80,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Allowed Days', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                        const SizedBox(height: 2),
+                        TextField(
+                          controller: _allowedDaysController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
             const SizedBox(height: 10),
 
             Row(
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Allocation Frequency', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                      const SizedBox(height: 2),
-                      DropdownButtonFormField<String>(
-                        initialValue: currentFreq,
-                        isDense: true,
-                        decoration: InputDecoration(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                if (currentLeaveType == 'Manual Allocation' || currentLeaveType == 'Once a Month') ...[
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Allocation Frequency', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                        const SizedBox(height: 2),
+                        DropdownButtonFormField<String>(
+                          initialValue: currentFreq,
+                          isDense: true,
+                          decoration: InputDecoration(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                          ),
+                          items: freqOpts.map((o) => DropdownMenuItem(value: o, child: Text(o, style: const TextStyle(fontSize: 11)))).toList(),
+                          onChanged: (val) {
+                            if (val != null) setState(() => _frequency = val);
+                          },
                         ),
-                        items: freqOpts.map((o) => DropdownMenuItem(value: o, child: Text(o, style: const TextStyle(fontSize: 11)))).toList(),
-                        onChanged: (val) {
-                          if (val != null) setState(() => _frequency = val);
-                        },
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
+                  const SizedBox(width: 10),
+                ],
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

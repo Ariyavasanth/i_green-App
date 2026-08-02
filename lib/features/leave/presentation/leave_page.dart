@@ -230,8 +230,12 @@ class _LeavePageState extends ConsumerState<LeavePage> {
       textColor = const Color(0xFF2E7D32);
       borderColor = const Color(0xFFC8E6C9);
       icon = Icons.check_circle_outline;
-    } else if (type == 'Once a Month') {
-      message = 'You are allowed to take one day of leave this month.';
+    } else if (type == 'Manual Allocation' || type == 'Once a Month') {
+      final daysStr = emp.allowedLeaves == emp.allowedLeaves.truncateToDouble()
+          ? emp.allowedLeaves.toInt().toString()
+          : emp.allowedLeaves.toStringAsFixed(1);
+      final freqStr = emp.leaveAllocationFrequency.isNotEmpty ? emp.leaveAllocationFrequency.toLowerCase() : 'month';
+      message = 'You are allocated $daysStr day(s) of leave per $freqStr.';
       bgColor = const Color(0xFFE3F2FD); // Light blue
       textColor = const Color(0xFF1565C0);
       borderColor = const Color(0xFFBBDEFB);

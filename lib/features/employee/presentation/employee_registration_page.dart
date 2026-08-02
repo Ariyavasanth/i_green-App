@@ -100,7 +100,6 @@ class _EmployeeRegistrationPageState
   final _panController = TextEditingController();
   final _passportController = TextEditingController();
   final _drivingLicenseController = TextEditingController();
-  final _drivingLicenseBatchController = TextEditingController();
   final _healthIssuesController = TextEditingController();
   final _emergencyNameController = TextEditingController();
   final _emergencyMobileController = TextEditingController();
@@ -228,7 +227,9 @@ class _EmployeeRegistrationPageState
       _coordinatorNameController.text = emp.coordinatorName.isNotEmpty ? emp.coordinatorName : 'Admin Team';
       _coordinatorPhoneController.text = emp.coordinatorPhone.isNotEmpty ? emp.coordinatorPhone : '8760098789';
       if (emp.reportingManager.isNotEmpty) _reportingTo = emp.reportingManager;
-      if (emp.leaveType.isNotEmpty) _leaveType = emp.leaveType;
+      if (emp.leaveType.isNotEmpty) {
+        _leaveType = emp.leaveType == 'Once a Month' ? 'Manual Allocation' : emp.leaveType;
+      }
       _leaveAllocationFrequency = emp.leaveAllocationFrequency.isEmpty ? 'Monthly' : emp.leaveAllocationFrequency;
       _allowedLeavesController.text = emp.allowedLeaves.toString();
       _leaveEffectiveDateController.text = emp.effectiveDate;
@@ -246,7 +247,6 @@ class _EmployeeRegistrationPageState
       _panController.text = emp.panNumber;
       _passportController.text = emp.passportNumber;
       _drivingLicenseController.text = emp.drivingLicenseNumber;
-      _drivingLicenseBatchController.text = emp.drivingLicenseBatch;
       _healthIssuesController.text = emp.healthIssues;
       _emergencyNameController.text = emp.emergencyName;
       _emergencyMobileController.text = emp.emergencyMobile;
@@ -420,7 +420,6 @@ class _EmployeeRegistrationPageState
     _panController.dispose();
     _passportController.dispose();
     _drivingLicenseController.dispose();
-    _drivingLicenseBatchController.dispose();
     _healthIssuesController.dispose();
     _emergencyNameController.dispose();
     _emergencyMobileController.dispose();
@@ -627,7 +626,7 @@ class _EmployeeRegistrationPageState
         personalMobile: _personalMobileController.text.trim(),
         passportNumber: _passportController.text.trim(),
         drivingLicenseNumber: _drivingLicenseController.text.trim(),
-        drivingLicenseBatch: _drivingLicenseBatchController.text.trim(),
+        drivingLicenseBatch: '',
         healthIssues: _healthIssuesController.text.trim(),
         emergencyName: _emergencyNameController.text.trim(),
         emergencyMobile: _emergencyMobileController.text.trim(),
@@ -664,8 +663,8 @@ class _EmployeeRegistrationPageState
         coordinatorName: _coordinatorNameController.text.trim(),
         coordinatorPhone: _coordinatorPhoneController.text.trim(),
         leaveType: _leaveType,
-        leaveAllocationFrequency: _leaveAllocationFrequency,
-        allowedLeaves: double.tryParse(_allowedLeavesController.text.trim()) ?? 1.0,
+        leaveAllocationFrequency: _leaveType == 'Manual Allocation' ? _leaveAllocationFrequency : '',
+        allowedLeaves: _leaveType == 'Manual Allocation' ? (double.tryParse(_allowedLeavesController.text.trim()) ?? 0.0) : 0.0,
         effectiveDate: _leaveEffectiveDateController.text.trim(),
         salaryType: _salaryType,
         salaryTotalCtc: double.tryParse(_totalSalaryController.text.trim().replaceAll(',', '')) ?? 0.0,
@@ -1631,7 +1630,7 @@ class _EmployeeRegistrationPageState
                 _buildDropdown(
                   'Leave Type',
                   _leaveType,
-                  ['As Needed', 'Once a Month', 'No Leave'],
+                  ['As Needed', 'Manual Allocation', 'No Leave'],
                   (val) => setState(() => _leaveType = val!),
                 ),
               ],
@@ -1640,17 +1639,19 @@ class _EmployeeRegistrationPageState
             _buildRow2or3(
               isMobile: isMobile,
               children: [
-                _buildDropdown(
-                  'Leave Allocation Frequency',
-                  _leaveAllocationFrequency,
-                  ['Monthly', 'Quarterly', 'Yearly'],
-                  (val) => setState(() => _leaveAllocationFrequency = val!),
-                ),
-                _buildTextField(
-                  'Number of Allowed Leaves',
-                  _allowedLeavesController,
-                  placeholder: 'e.g. 1.0',
-                ),
+                if (_leaveType == 'Manual Allocation') ...[
+                  _buildDropdown(
+                    'Leave Allocation Frequency',
+                    _leaveAllocationFrequency,
+                    ['Monthly', 'Quarterly', 'Yearly'],
+                    (val) => setState(() => _leaveAllocationFrequency = val!),
+                  ),
+                  _buildTextField(
+                    'Number of Allowed Leaves',
+                    _allowedLeavesController,
+                    placeholder: 'e.g. 1.0',
+                  ),
+                ],
                 _buildDateField(
                   'Effective Date',
                   _leaveEffectiveDateController,
@@ -2090,7 +2091,6 @@ class _EmployeeRegistrationPageState
               children: [
                 _buildTextField('Passport No', _passportController, placeholder: 'Passport Number'),
                 _buildTextField('Driving License No.', _drivingLicenseController, placeholder: 'License Number'),
-                _buildTextField('Driving License Batch Details', _drivingLicenseBatchController, placeholder: 'License Batch'),
               ],
             ),
             const SizedBox(height: 12),
@@ -3235,7 +3235,7 @@ class _EmployeeRegistrationPageState
       personalMobile: _personalMobileController.text.trim(),
       passportNumber: _passportController.text.trim(),
       drivingLicenseNumber: _drivingLicenseController.text.trim(),
-      drivingLicenseBatch: _drivingLicenseBatchController.text.trim(),
+      drivingLicenseBatch: '',
       healthIssues: _healthIssuesController.text.trim(),
       emergencyName: _emergencyNameController.text.trim(),
       emergencyMobile: _emergencyMobileController.text.trim(),

@@ -71,7 +71,9 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
       _employmentType = emp.employmentType.isEmpty ? 'Full-Time' : emp.employmentType;
       _status = emp.status.isEmpty ? 'Active' : emp.status;
       _userType = emp.userType.isEmpty ? 'EMPLOYEE' : emp.userType;
-      _leaveType = emp.leaveType.isEmpty ? 'As Needed' : emp.leaveType;
+      _leaveType = (emp.leaveType.isEmpty || emp.leaveType == 'Once a Month')
+          ? (emp.leaveType == 'Once a Month' ? 'Manual Allocation' : 'As Needed')
+          : emp.leaveType;
       _selectedPermissions = emp.accessPermissions.isNotEmpty
           ? Set<String>.from(emp.accessPermissions)
           : Set<String>.from(Employee.allSidebarPermissions);
@@ -138,10 +140,10 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
         status: _status,
         userType: _userType,
         leaveType: _leaveType,
-        leaveAllocationFrequency: _leaveAllocationFrequency,
+        leaveAllocationFrequency: _leaveType == 'Manual Allocation' ? _leaveAllocationFrequency : '',
         inTime: _inTimeController.text.trim(),
         outTime: _outTimeController.text.trim(),
-        allowedLeaves: double.tryParse(_allowedLeavesController.text.trim()) ?? 1.0,
+        allowedLeaves: _leaveType == 'Manual Allocation' ? (double.tryParse(_allowedLeavesController.text.trim()) ?? 0.0) : 0.0,
         effectiveDate: _leaveEffectiveDateController.text.trim(),
         accessPermissions: _selectedPermissions.toList(),
       );
@@ -397,33 +399,35 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                 _buildFieldPair(
                   isMobile: isMobile,
                   child1: DropdownButtonFormField<String>(
-                    value: ['As Needed', 'Once a Month', 'No Leave'].contains(_leaveType)
+                    value: ['As Needed', 'Manual Allocation', 'No Leave'].contains(_leaveType)
                         ? _leaveType
                         : 'As Needed',
                     decoration: const InputDecoration(
                       labelText: 'Leave Type',
                       border: OutlineInputBorder(),
                     ),
-                    items: ['As Needed', 'Once a Month', 'No Leave']
+                    items: ['As Needed', 'Manual Allocation', 'No Leave']
                         .map((t) => DropdownMenuItem(value: t, child: Text(t)))
                         .toList(),
                     onChanged: (val) {
                       if (val != null) setState(() => _leaveType = val);
                     },
                   ),
-                  child2: DropdownButtonFormField<String>(
-                    value: _leaveAllocationFrequency,
-                    decoration: const InputDecoration(
-                      labelText: 'Allocation Frequency',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: ['Monthly', 'Quarterly', 'Yearly']
-                        .map((f) => DropdownMenuItem(value: f, child: Text(f)))
-                        .toList(),
-                    onChanged: (val) {
-                      if (val != null) setState(() => _leaveAllocationFrequency = val);
-                    },
-                  ),
+                  child2: _leaveType == 'Manual Allocation'
+                      ? DropdownButtonFormField<String>(
+                          value: _leaveAllocationFrequency,
+                          decoration: const InputDecoration(
+                            labelText: 'Allocation Frequency',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: ['Monthly', 'Quarterly', 'Yearly']
+                              .map((f) => DropdownMenuItem(value: f, child: Text(f)))
+                              .toList(),
+                          onChanged: (val) {
+                            if (val != null) setState(() => _leaveAllocationFrequency = val);
+                          },
+                        )
+                      : const SizedBox.shrink(),
                 ),
                 const SizedBox(height: 12),
                 _buildFieldPair(
@@ -448,37 +452,59 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                 const SizedBox(height: 12),
                 _buildFieldPair(
                   isMobile: isMobile,
-                  child1: TextFormField(
-                    controller: _allowedLeavesController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      labelText: 'Allowed Leaves',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  child2: TextFormField(
-                    controller: _leaveEffectiveDateController,
-                    readOnly: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Effective Date',
-                      border: OutlineInputBorder(),
-                      suffixIcon: Icon(Icons.calendar_today),
-                    ),
-                    onTap: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: DateTime.now(),
-                        firstDate: DateTime(2000),
-                        lastDate: DateTime(2100),
-                      );
-                      if (picked != null) {
-                        setState(() {
-                          _leaveEffectiveDateController.text =
-                              '${picked.day.toString().padLeft(2, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.year}';
-                        });
-                      }
-                    },
-                  ),
+                  child1: _leaveType == 'Manual Allocation'
+                      ? TextFormField(
+                          controller: _allowedLeavesController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: const InputDecoration(
+                            labelText: 'Allowed Leaves',
+                            border: OutlineInputBorder(),
+                          ),
+                        )
+                      : TextFormField(
+                          controller: _leaveEffectiveDateController,
+                          readOnly: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Effective Date',
+                            border: OutlineInputBorder(),
+                            suffixIcon: Icon(Icons.calendar_today),
+                          ),
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: DateTime.now(),
+                              firstDate: DateTime(2000),
+                              lastDate: DateTime(2100),
+                            );
+                            if (picked != null) {
+                              _leaveEffectiveDateController.text =
+                                  '${picked.day.toString().padLeft(2, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.year}';
+                            }
+                          },
+                        ),
+                  child2: _leaveType == 'Manual Allocation'
+                      ? TextFormField(
+                          controller: _leaveEffectiveDateController,
+                          readOnly: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Effective Date',
+                            border: OutlineInputBorder(),
+                            suffixIcon: Icon(Icons.calendar_today),
+                          ),
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: DateTime.now(),
+                              firstDate: DateTime(2000),
+                              lastDate: DateTime(2100),
+                            );
+                            if (picked != null) {
+                              _leaveEffectiveDateController.text =
+                                  '${picked.day.toString().padLeft(2, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.year}';
+                            }
+                          },
+                        )
+                      : const SizedBox.shrink(),
                 ),
                 const SizedBox(height: 20),
                 const Divider(),

@@ -292,7 +292,6 @@ class EmployeeDetailsDialog extends StatelessWidget {
           _InfoItem('PAN Card Number', employee.panNumber),
           _InfoItem('Passport Number', employee.passportNumber),
           _InfoItem('Driving License Number', employee.drivingLicenseNumber),
-          _InfoItem('Driving License Batch Details', employee.drivingLicenseBatch),
           _InfoItem('Health Issues', employee.healthIssues),
         ]),
         const SizedBox(height: 20),

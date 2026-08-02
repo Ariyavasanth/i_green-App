@@ -364,7 +364,7 @@ class Employee {
 
   static const List<String> leaveTypeOptions = [
     'As Needed',
-    'Once a Month',
+    'Manual Allocation',
     'No Leave',
   ];
 

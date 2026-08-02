@@ -726,7 +726,6 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                   _buildViewItem('PAN Card Number', employee?.panNumber ?? ''),
                   _buildViewItem('Passport Number', employee?.passportNumber ?? ''),
                   _buildViewItem('Driving License Number', employee?.drivingLicenseNumber ?? ''),
-                  _buildViewItem('Driving License Batch Details', employee?.drivingLicenseBatch ?? ''),
                   _buildViewItem('Health Issues', employee?.healthIssues ?? ''),
                   _buildViewItem('Emergency Contact', '${employee?.emergencyName ?? ''} ${employee?.emergencyMobile ?? ''}'.trim()),
                   _buildViewItem('Referred By', '${employee?.referredByName ?? ''} ${employee?.referredByMobile ?? ''}'.trim()),

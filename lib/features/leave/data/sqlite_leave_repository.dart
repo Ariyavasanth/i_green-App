@@ -107,7 +107,7 @@ class SqliteLeaveRepository implements LeaveRepository {
     );
     if (count == 0) {
       await db.insert('leave_types', {'name': 'As Needed', 'description': 'You can take leave whenever required.'});
-      await db.insert('leave_types', {'name': 'Once a Month', 'description': 'You are allowed to take one day of leave this month.'});
+      await db.insert('leave_types', {'name': 'Manual Allocation', 'description': 'Leave is allocated manually per policy.'});
       await db.insert('leave_types', {'name': 'No Leave', 'description': 'You are not eligible to take leave.'});
     }
 

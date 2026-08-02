@@ -110,7 +110,7 @@ class FirebaseLeaveRepository implements LeaveRepository {
 
     final defaults = [
       LeaveType(id: 1, name: 'As Needed', description: 'You can take leave whenever required.'),
-      LeaveType(id: 2, name: 'Once a Month', description: 'You are allowed one day of leave per month.'),
+      LeaveType(id: 2, name: 'Manual Allocation', description: 'Leave is allocated manually per policy.'),
       LeaveType(id: 3, name: 'No Leave', description: 'You are not eligible to take leave.'),
     ];
 
