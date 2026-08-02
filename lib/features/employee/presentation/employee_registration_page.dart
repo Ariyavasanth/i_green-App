@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +11,7 @@ import '../domain/employee.dart';
 import '../domain/registration_link.dart';
 import '../providers/employee_providers.dart';
 import '../services/offer_letter_generator.dart';
+import '../services/welcome_letter_generator.dart';
 
 class EmployeeRegistrationPage extends ConsumerStatefulWidget {
   const EmployeeRegistrationPage({
@@ -54,6 +56,11 @@ class _EmployeeRegistrationPageState
   String _reportingTo = 'Saravanan G S';
   final _inTimeController = TextEditingController();
   final _outTimeController = TextEditingController();
+  final _weeklyOffDayController = TextEditingController(text: 'Sunday');
+  final _reportingManagerTitleController = TextEditingController(text: 'Managing Director');
+  final _adminNameController = TextEditingController(text: 'Saravanan G S');
+  final _coordinatorNameController = TextEditingController(text: 'Admin Team');
+  final _coordinatorPhoneController = TextEditingController(text: '8760098789');
   String _leaveType = 'As Needed';
   String _leaveAllocationFrequency = 'Monthly';
   final _allowedLeavesController = TextEditingController(text: '1.0');
@@ -213,6 +220,11 @@ class _EmployeeRegistrationPageState
       _esiNumberController.text = emp.esiNumber;
       _inTimeController.text = emp.inTime;
       _outTimeController.text = emp.outTime;
+      _weeklyOffDayController.text = emp.weeklyOffDay.isNotEmpty ? emp.weeklyOffDay : 'Sunday';
+      _reportingManagerTitleController.text = emp.reportingManagerTitle.isNotEmpty ? emp.reportingManagerTitle : 'Managing Director';
+      _adminNameController.text = emp.adminName.isNotEmpty ? emp.adminName : 'Saravanan G S';
+      _coordinatorNameController.text = emp.coordinatorName.isNotEmpty ? emp.coordinatorName : 'Admin Team';
+      _coordinatorPhoneController.text = emp.coordinatorPhone.isNotEmpty ? emp.coordinatorPhone : '8760098789';
       if (emp.reportingManager.isNotEmpty) _reportingTo = emp.reportingManager;
       if (emp.leaveType.isNotEmpty) _leaveType = emp.leaveType;
       _leaveAllocationFrequency = emp.leaveAllocationFrequency.isEmpty ? 'Monthly' : emp.leaveAllocationFrequency;
@@ -325,6 +337,7 @@ class _EmployeeRegistrationPageState
     'Document',
     'Social Media',
     if (_isManagementAdd) 'Salary & Offer Letter',
+    if (_isManagementAdd) 'Welcome Letter',
     if (_isManagementAdd) 'Access Permissions',
     if (_isManagementAdd) 'Credentials',
   ];
@@ -374,6 +387,11 @@ class _EmployeeRegistrationPageState
     _esiNumberController.dispose();
     _inTimeController.dispose();
     _outTimeController.dispose();
+    _weeklyOffDayController.dispose();
+    _reportingManagerTitleController.dispose();
+    _adminNameController.dispose();
+    _coordinatorNameController.dispose();
+    _coordinatorPhoneController.dispose();
     _permAddressController.dispose();
     _permCityController.dispose();
     _permCountryController.dispose();
@@ -631,7 +649,12 @@ class _EmployeeRegistrationPageState
         esiNumber: _esiNumberController.text.trim(),
         inTime: _inTimeController.text.trim(),
         outTime: _outTimeController.text.trim(),
+        weeklyOffDay: _weeklyOffDayController.text.trim(),
         reportingManager: _reportingTo,
+        reportingManagerTitle: _reportingManagerTitleController.text.trim(),
+        adminName: _adminNameController.text.trim(),
+        coordinatorName: _coordinatorNameController.text.trim(),
+        coordinatorPhone: _coordinatorPhoneController.text.trim(),
         leaveType: _leaveType,
         leaveAllocationFrequency: _leaveAllocationFrequency,
         allowedLeaves: double.tryParse(_allowedLeavesController.text.trim()) ?? 1.0,
@@ -783,6 +806,7 @@ class _EmployeeRegistrationPageState
                           _buildDocumentTab(editLink, isMobile),
                           _buildSocialMediaTab(editLink, isMobile),
                           if (_isManagementAdd) _buildSalaryOfferLetterTab(editLink, isMobile),
+                          if (_isManagementAdd) _buildWelcomeLetterTab(editLink, isMobile),
                           if (_isManagementAdd) _buildAccessPermissionsTab(editLink, isMobile),
                           if (_isManagementAdd) _buildCredentialsTab(editLink, isMobile),
                         ],
@@ -850,6 +874,7 @@ class _EmployeeRegistrationPageState
                         _buildDocumentTab(link, isMobile),
                         _buildSocialMediaTab(link, isMobile),
                         if (_isManagementAdd) _buildSalaryOfferLetterTab(link, isMobile),
+                        if (_isManagementAdd) _buildWelcomeLetterTab(link, isMobile),
                         if (_isManagementAdd) _buildAccessPermissionsTab(link, isMobile),
                         if (_isManagementAdd) _buildCredentialsTab(link, isMobile),
                       ],
@@ -1363,6 +1388,44 @@ class _EmployeeRegistrationPageState
                 _outTimeController,
                 placeholder: 'e.g. 06:00 PM',
               ),
+              _buildTextField(
+                'Weekly Off Day',
+                _weeklyOffDayController,
+                placeholder: 'e.g. Sunday',
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildRow2or3(
+            isMobile: isMobile,
+            children: [
+              _buildTextField(
+                'Reporting Manager Title',
+                _reportingManagerTitleController,
+                placeholder: 'e.g. Managing Director',
+              ),
+              _buildTextField(
+                'Present Admin Name',
+                _adminNameController,
+                placeholder: 'e.g. Saravanan G S',
+              ),
+              _buildTextField(
+                'Coordinator Name',
+                _coordinatorNameController,
+                placeholder: 'e.g. Admin Team',
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildRow2or3(
+            isMobile: isMobile,
+            children: [
+              _buildTextField(
+                'Coordinator Contact Phone',
+                _coordinatorPhoneController,
+                placeholder: 'e.g. 8760098789',
+              ),
+              const SizedBox.shrink(),
               const SizedBox.shrink(),
             ],
           ),
@@ -2790,6 +2853,286 @@ class _EmployeeRegistrationPageState
     );
   }
 
+  // TAB: WELCOME LETTER
+  Widget _buildWelcomeLetterTab(RegistrationLink link, bool isMobile) {
+    final empName = '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}'.trim();
+    final data = WelcomeLetterData(
+      employeeName: empName.isNotEmpty ? empName : 'Employee',
+      reportingManagerName: _reportingTo.isNotEmpty && _reportingTo != 'None'
+          ? _reportingTo
+          : 'Saravanan G S',
+      reportingManagerTitle: _reportingManagerTitleController.text.trim().isNotEmpty
+          ? _reportingManagerTitleController.text.trim()
+          : 'Managing Director',
+      adminName: _adminNameController.text.trim().isNotEmpty
+          ? _adminNameController.text.trim()
+          : 'Saravanan G S',
+      coordinatorName: _coordinatorNameController.text.trim().isNotEmpty
+          ? _coordinatorNameController.text.trim()
+          : 'Admin Team',
+      coordinatorPhone: _coordinatorPhoneController.text.trim().isNotEmpty
+          ? _coordinatorPhoneController.text.trim()
+          : '8760098789',
+      officeStartTime: _inTimeController.text.trim().isNotEmpty
+          ? _inTimeController.text.trim()
+          : '09:00 AM',
+      officeEndTime: _outTimeController.text.trim().isNotEmpty
+          ? _outTimeController.text.trim()
+          : '06:00 PM',
+      weeklyOffDay: _weeklyOffDayController.text.trim().isNotEmpty
+          ? _weeklyOffDayController.text.trim()
+          : 'Sunday',
+    );
+
+    final dateStr = DateFormat('MMMM dd, yyyy').format(DateTime.now());
+
+    return SingleChildScrollView(
+      padding: EdgeInsets.all(isMobile ? 12 : 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Action Bar / Header Card
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: const Color(0xFFEAECF0)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.mark_email_read_outlined, color: AppColors.active, size: 24),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text(
+                        'Welcome Letter Preview',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Live preview generated from Personal Info tab details.',
+                        style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.active,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                  ),
+                  onPressed: () => WelcomeLetterGenerator.downloadWelcomeLetter(context, data),
+                  icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
+                  label: const Text('Generate PDF', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Printed Letter Card Preview
+          Align(
+            alignment: Alignment.topCenter,
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 800),
+              padding: EdgeInsets.all(isMobile ? 20 : 44),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Company Header
+                  Center(
+                    child: Column(
+                      children: const [
+                        Text(
+                          'IGREEN TECHNOLOGIES',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.2,
+                            color: Color(0xFF1E293B),
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'OFFICIAL WELCOME LETTER',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1.5,
+                            color: AppColors.active,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const Divider(color: Color(0xFFE2E8F0), thickness: 1),
+                  const SizedBox(height: 20),
+
+                  // Date
+                  Text(
+                    'Date: $dateStr',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Paragraph 1: Dear {EmployeeName},
+                  Text(
+                    'Dear ${data.employeeName},',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Paragraph 2: Welcome to IGreen Technologies! ...
+                  const Text(
+                    'Welcome to IGreen Technologies! We are excited to have you on board and look forward to working with you.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.6,
+                      color: Color(0xFF334155),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Paragraph 3: We would like to give you ...
+                  const Text(
+                    'We would like to give you a brief overview of your key responsibilities.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.6,
+                      color: Color(0xFF334155),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Paragraph 4: You will be reporting directly to ...
+                  Text.rich(
+                    TextSpan(
+                      style: const TextStyle(
+                        fontSize: 14,
+                        height: 1.6,
+                        color: Color(0xFF334155),
+                      ),
+                      children: [
+                        const TextSpan(text: 'You will be reporting directly to '),
+                        TextSpan(
+                          text: '${data.reportingManagerName}, ${data.reportingManagerTitle}',
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                        ),
+                        const TextSpan(text: ', who will guide you through your initial onboarding and assist you with any concerns regarding your responsibilities.'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Paragraph 5: For knowledge transfer ...
+                  Text.rich(
+                    TextSpan(
+                      style: const TextStyle(
+                        fontSize: 14,
+                        height: 1.6,
+                        color: Color(0xFF334155),
+                      ),
+                      children: [
+                        const TextSpan(text: 'For knowledge transfer — including employee contact details and role-related information — please reach out to '),
+                        TextSpan(
+                          text: '${data.adminName} (present Admin)',
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                        ),
+                        const TextSpan(text: '. You may also coordinate with '),
+                        TextSpan(
+                          text: '${data.coordinatorName} (${data.coordinatorPhone})',
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                        ),
+                        const TextSpan(text: ' for any queries.'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Paragraph 6: Office Timings ...
+                  Text.rich(
+                    TextSpan(
+                      style: const TextStyle(
+                        fontSize: 14,
+                        height: 1.6,
+                        color: Color(0xFF334155),
+                      ),
+                      children: [
+                        const TextSpan(text: 'Office Timings: '),
+                        TextSpan(
+                          text: '${data.officeStartTime} to ${data.officeEndTime} (${data.weeklyOffDay} Holiday)',
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Paragraph 7: Once again, welcome aboard!
+                  const Text(
+                    'Once again, welcome aboard!',
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.6,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                  const SizedBox(height: 36),
+
+                  // Sign-off
+                  const Text(
+                    'Sincerely,',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'IGreen Technologies Team',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Employee _buildCurrentEmployeeFromForm(RegistrationLink link) {
     return Employee(
       id: 0,
@@ -2860,6 +3203,11 @@ class _EmployeeRegistrationPageState
       pfNumber: _pfNumberController.text.trim(),
       esiNumber: _esiNumberController.text.trim(),
       reportingManager: _reportingTo,
+      reportingManagerTitle: _reportingManagerTitleController.text.trim(),
+      adminName: _adminNameController.text.trim(),
+      coordinatorName: _coordinatorNameController.text.trim(),
+      coordinatorPhone: _coordinatorPhoneController.text.trim(),
+      weeklyOffDay: _weeklyOffDayController.text.trim(),
       salaryType: _salaryType,
       salaryTotalCtc: double.tryParse(_totalSalaryController.text.trim().replaceAll(',', '')) ?? 0.0,
       salaryBasic: double.tryParse(_basicPayController.text.trim().replaceAll(',', '')) ?? 0.0,

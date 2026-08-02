@@ -138,6 +138,11 @@ class SqliteEmployeeRepository implements EmployeeRepository {
         out_time TEXT,
         company_assets TEXT,
         reporting_manager TEXT,
+        reporting_manager_title TEXT,
+        admin_name TEXT,
+        coordinator_name TEXT,
+        coordinator_phone TEXT,
+        weekly_off_day TEXT,
         team_name TEXT,
         disciplinary_records TEXT,
         temporary_password TEXT,
@@ -232,6 +237,11 @@ class SqliteEmployeeRepository implements EmployeeRepository {
       'effective_date': 'TEXT',
       'in_time': 'TEXT',
       'out_time': 'TEXT',
+      'reporting_manager_title': 'TEXT',
+      'admin_name': 'TEXT',
+      'coordinator_name': 'TEXT',
+      'coordinator_phone': 'TEXT',
+      'weekly_off_day': 'TEXT',
     };
 
     for (final entry in requiredColumns.entries) {

@@ -214,6 +214,11 @@ class Employee {
     this.effectiveDate = '',
     this.companyAssets = '',
     this.reportingManager = '',
+    this.reportingManagerTitle = 'Managing Director',
+    this.adminName = 'Saravanan G S',
+    this.coordinatorName = 'Admin Team',
+    this.coordinatorPhone = '8760098789',
+    this.weeklyOffDay = 'Sunday',
     this.teamName = '',
     this.disciplinaryRecords = '',
     this.temporaryPassword = '',
@@ -477,6 +482,11 @@ class Employee {
   final String companyAssets;
 
   final String reportingManager;
+  final String reportingManagerTitle;
+  final String adminName;
+  final String coordinatorName;
+  final String coordinatorPhone;
+  final String weeklyOffDay;
   final String teamName;
 
   final String disciplinaryRecords;
@@ -617,6 +627,11 @@ class Employee {
       'effective_date': effectiveDate,
       'company_assets': companyAssets,
       'reporting_manager': reportingManager,
+      'reporting_manager_title': reportingManagerTitle,
+      'admin_name': adminName,
+      'coordinator_name': coordinatorName,
+      'coordinator_phone': coordinatorPhone,
+      'weekly_off_day': weeklyOffDay,
       'team_name': teamName,
       'disciplinary_records': disciplinaryRecords,
       'temporary_password': temporaryPassword,
@@ -726,6 +741,11 @@ class Employee {
       effectiveDate: map['effective_date'] as String? ?? '',
       companyAssets: map['company_assets'] as String? ?? '',
       reportingManager: map['reporting_manager'] as String? ?? '',
+      reportingManagerTitle: map['reporting_manager_title'] as String? ?? 'Managing Director',
+      adminName: map['admin_name'] as String? ?? 'Saravanan G S',
+      coordinatorName: map['coordinator_name'] as String? ?? 'Admin Team',
+      coordinatorPhone: map['coordinator_phone'] as String? ?? '8760098789',
+      weeklyOffDay: map['weekly_off_day'] as String? ?? 'Sunday',
       teamName: map['team_name'] as String? ?? '',
       disciplinaryRecords: map['disciplinary_records'] as String? ?? '',
       temporaryPassword: map['temporary_password'] as String? ?? '',
@@ -848,6 +868,11 @@ class Employee {
     String? effectiveDate,
     String? companyAssets,
     String? reportingManager,
+    String? reportingManagerTitle,
+    String? adminName,
+    String? coordinatorName,
+    String? coordinatorPhone,
+    String? weeklyOffDay,
     String? teamName,
     String? disciplinaryRecords,
     String? temporaryPassword,
@@ -953,6 +978,11 @@ class Employee {
       effectiveDate: effectiveDate ?? this.effectiveDate,
       companyAssets: companyAssets ?? this.companyAssets,
       reportingManager: reportingManager ?? this.reportingManager,
+      reportingManagerTitle: reportingManagerTitle ?? this.reportingManagerTitle,
+      adminName: adminName ?? this.adminName,
+      coordinatorName: coordinatorName ?? this.coordinatorName,
+      coordinatorPhone: coordinatorPhone ?? this.coordinatorPhone,
+      weeklyOffDay: weeklyOffDay ?? this.weeklyOffDay,
       teamName: teamName ?? this.teamName,
       disciplinaryRecords: disciplinaryRecords ?? this.disciplinaryRecords,
       temporaryPassword: temporaryPassword ?? this.temporaryPassword,
