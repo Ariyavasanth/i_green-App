@@ -1,8 +1,8 @@
 import 'dart:convert';
-import 'dart:math';
 import 'package:sqflite/sqflite.dart';
 import '../../employee/data/sqlite_employee_repository.dart';
 import '../domain/face_registration_repository.dart';
+import '../../attendance/services/adaface_service.dart';
 
 class SqliteFaceRegistrationRepository implements FaceRegistrationRepository {
   SqliteFaceRegistrationRepository({SqliteEmployeeRepository? sqliteRepo})
@@ -38,22 +38,6 @@ class SqliteFaceRegistrationRepository implements FaceRegistrationRepository {
     ''');
   }
 
-  double _cosineSimilarity(List<double> v1, List<double> v2) {
-    if (v1.length != v2.length || v1.isEmpty) return 0.0;
-    double dotProduct = 0.0;
-    double normA = 0.0;
-    double normB = 0.0;
-
-    for (int i = 0; i < v1.length; i++) {
-      dotProduct += v1[i] * v2[i];
-      normA += v1[i] * v1[i];
-      normB += v2[i] * v2[i];
-    }
-
-    if (normA == 0.0 || normB == 0.0) return 0.0;
-    final similarity = dotProduct / (sqrt(normA) * sqrt(normB));
-    return similarity.clamp(0.0, 1.0);
-  }
 
   @override
   Future<void> registerFaceEmbeddings({
@@ -139,14 +123,18 @@ class SqliteFaceRegistrationRepository implements FaceRegistrationRepository {
     }
 
     double maxScore = 0.0;
+    const adaFace = AdaFaceService();
     for (final storedVec in storedEmbeddings) {
-      final score = _cosineSimilarity(liveEmbedding, storedVec);
+      final score = adaFace.calculateAdaptiveSimilarity(
+        liveVector: liveEmbedding,
+        storedVector: storedVec,
+      );
       if (score > maxScore) {
         maxScore = score;
       }
     }
 
-    final bool isMatched = maxScore >= 0.80;
+    final bool isMatched = maxScore >= 0.70;
     final String status = isMatched ? 'VERIFIED' : 'MISMATCH';
     final String message = isMatched
         ? 'Face Verified (${(maxScore * 100).toStringAsFixed(1)}% Match)'

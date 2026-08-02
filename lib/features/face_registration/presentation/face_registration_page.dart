@@ -79,10 +79,10 @@ class _FaceRegistrationPageState extends ConsumerState<FaceRegistrationPage> {
     super.dispose();
   }
 
-  /// Generate a normalized 128-d feature vector embedding
+  /// Generate a normalized 512-d feature vector embedding for AdaFace
   List<double> _generateFeatureVector({required int seed}) {
     final random = Random(seed);
-    final rawVec = List.generate(128, (_) => random.nextDouble() * 2 - 1.0);
+    final rawVec = List.generate(512, (_) => random.nextDouble() * 2 - 1.0);
     final length = sqrt(rawVec.fold(0.0, (sum, val) => sum + val * val));
     if (length == 0) return rawVec;
     return rawVec.map((v) => v / length).toList();

@@ -1,6 +1,6 @@
-import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../domain/face_registration_repository.dart';
+import '../../attendance/services/adaface_service.dart';
 
 class FirebaseFaceRegistrationRepository implements FaceRegistrationRepository {
   FirebaseFaceRegistrationRepository({FirebaseFirestore? firestore})
@@ -17,23 +17,6 @@ class FirebaseFaceRegistrationRepository implements FaceRegistrationRepository {
   CollectionReference<Map<String, dynamic>> get _recordsRef =>
       _firestore.collection('attendance_records');
 
-  /// Cosine Similarity calculation between two numerical vectors
-  double _cosineSimilarity(List<double> v1, List<double> v2) {
-    if (v1.length != v2.length || v1.isEmpty) return 0.0;
-    double dotProduct = 0.0;
-    double normA = 0.0;
-    double normB = 0.0;
-
-    for (int i = 0; i < v1.length; i++) {
-      dotProduct += v1[i] * v2[i];
-      normA += v1[i] * v1[i];
-      normB += v2[i] * v2[i];
-    }
-
-    if (normA == 0.0 || normB == 0.0) return 0.0;
-    final similarity = dotProduct / (sqrt(normA) * sqrt(normB));
-    return similarity.clamp(0.0, 1.0);
-  }
 
   @override
   Future<void> registerFaceEmbeddings({
@@ -113,15 +96,19 @@ class FirebaseFaceRegistrationRepository implements FaceRegistrationRepository {
     }
 
     double maxScore = 0.0;
+    const adaFace = AdaFaceService();
     for (final storedVec in storedEmbeddings) {
-      final score = _cosineSimilarity(liveEmbedding, storedVec);
+      final score = adaFace.calculateAdaptiveSimilarity(
+        liveVector: liveEmbedding,
+        storedVector: storedVec,
+      );
       if (score > maxScore) {
         maxScore = score;
       }
     }
 
-    // Match threshold >= 80% (0.80)
-    final bool isMatched = maxScore >= 0.80;
+    // AdaFace Match threshold >= 70% (0.70) for 512-d deep vectors
+    final bool isMatched = maxScore >= 0.70;
     final String status = isMatched ? 'VERIFIED' : 'MISMATCH';
     final String message = isMatched
         ? 'Face Verified (${(maxScore * 100).toStringAsFixed(1)}% Match)'

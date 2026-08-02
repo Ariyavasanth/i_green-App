@@ -1,9 +1,8 @@
 import 'dart:typed_data';
 import 'dart:convert';
-import 'dart:math';
-
 import 'package:image/image.dart' as img;
 import 'package:http/http.dart' as http;
+import 'adaface_service.dart';
 
 class FaceVerificationResult {
   const FaceVerificationResult({
@@ -11,16 +10,22 @@ class FaceVerificationResult {
     required this.similarityScore,
     required this.message,
     required this.capturedImagePath,
+    this.isLowLight = false,
   });
 
   final bool allowed;
   final double similarityScore;
   final String message;
   final String capturedImagePath;
+  final bool isLowLight;
 }
 
+/// Face Verification Service powered by AdaFace (Adaptive Margin Face Recognition Engine)
 class FaceVerificationService {
-  const FaceVerificationService();
+  const FaceVerificationService({AdaFaceService? adaFaceService})
+      : _adaFaceService = adaFaceService ?? const AdaFaceService();
+
+  final AdaFaceService _adaFaceService;
 
   Future<FaceVerificationResult> verifyCapturedBytes({
     required Uint8List capturedBytes,
@@ -37,13 +42,23 @@ class FaceVerificationService {
         capturedImagePath: capturedImagePath,
       );
     }
-    final similarity = _compareImages(capturedBytes, profileBytes);
+    
+    final liveAdaFace = _adaFaceService.extractAdaFaceEmbedding(capturedBytes);
+    final profileAdaFace = _adaFaceService.extractAdaFaceEmbedding(profileBytes);
+
+    final similarity = _adaFaceService.calculateAdaptiveSimilarity(
+      liveVector: liveAdaFace.vector,
+      storedVector: profileAdaFace.vector,
+      liveQualityScore: liveAdaFace.qualityScore,
+    );
+
     final allowed = similarity >= threshold;
     return FaceVerificationResult(
       allowed: allowed,
       similarityScore: similarity,
       message: allowed ? 'Attendance marked successfully.' : 'Face verification failed. Please try again.',
       capturedImagePath: capturedImagePath,
+      isLowLight: liveAdaFace.isLowLight,
     );
   }
 
@@ -71,29 +86,13 @@ class FaceVerificationService {
     return null;
   }
 
-  double _compareImages(Uint8List liveBytes, Uint8List profileBytes) {
-    final v1 = extractEmbeddingFromImageBytes(liveBytes);
-    final v2 = extractEmbeddingFromImageBytes(profileBytes);
-    if (v1.isEmpty || v2.isEmpty || v1.length != v2.length) return 0.0;
-    var dot = 0.0;
-    var normA = 0.0;
-    var normB = 0.0;
-    for (var i = 0; i < v1.length; i++) {
-      dot += v1[i] * v2[i];
-      normA += v1[i] * v1[i];
-      normB += v2[i] * v2[i];
-    }
-    if (normA == 0.0 || normB == 0.0) return 0.0;
-    return (dot / (sqrt(normA) * sqrt(normB))).clamp(0.0, 1.0);
-  }
-
-  /// Detect if camera image is valid and has face/content (not black screen or empty image)
+  /// Detect if camera image is valid and has face/content (not pitch black or completely featureless)
   bool isFaceDetected(Uint8List bytes) {
     if (bytes.isEmpty) return false;
     final decoded = img.decodeImage(bytes);
     if (decoded == null || decoded.width == 0 || decoded.height == 0) return false;
 
-    // Check average luminance to ensure camera is not covered (black frame)
+    // Check average luminance & variance to ensure camera is not completely covered
     final resized = img.copyResize(decoded, width: 16, height: 16);
     var totalLum = 0.0;
     var sqSum = 0.0;
@@ -108,65 +107,29 @@ class FaceVerificationService {
     final avgLum = totalLum / count;
     final variance = (sqSum / count) - (avgLum * avgLum);
 
-    // If camera frame is pitch black or completely featureless (low variance), no face detected
-    if (avgLum < 12.0 || variance < 10.0) {
+    // AdaFace relaxed threshold allows working under low light (avgLum >= 5.0)
+    if (avgLum < 5.0 || variance < 4.0) {
       return false;
     }
     return true;
   }
 
-  /// Extract 256-d normalized structural facial feature vector from image bytes
+  /// Extract 512-d AdaFace embedding from image bytes
   List<double> extractEmbeddingFromImageBytes(Uint8List bytes) {
-    if (bytes.isEmpty) return const [];
-    var decoded = img.decodeImage(bytes);
-    if (decoded == null) return const [];
+    return _adaFaceService.extractAdaFaceEmbedding(bytes).vector;
+  }
 
-    // 1. Fix sensor rotation / EXIF orientation
-    decoded = img.bakeOrientation(decoded);
+  /// Extract complete AdaFace embedding metadata
+  AdaFaceEmbedding extractAdaFaceEmbedding(Uint8List bytes) {
+    return _adaFaceService.extractAdaFaceEmbedding(bytes);
+  }
 
-    // 2. Crop to center face area (55% width x 65% height) matching the camera guide oval
-    final cropWidth = (decoded.width * 0.55).round();
-    final cropHeight = (decoded.height * 0.65).round();
-    final cropX = ((decoded.width - cropWidth) / 2).round();
-    final cropY = ((decoded.height - cropHeight) / 2).round();
-
-    final faceCrop = img.copyCrop(
-      decoded,
-      x: cropX.clamp(0, decoded.width - 1),
-      y: cropY.clamp(0, decoded.height - 1),
-      width: cropWidth.clamp(1, decoded.width),
-      height: cropHeight.clamp(1, decoded.height),
+  /// Calculate AdaFace quality-adaptive similarity between live & stored embeddings
+  double calculateAdaFaceSimilarity(List<double> liveVec, List<double> storedVec, {double qualityScore = 1.0}) {
+    return _adaFaceService.calculateAdaptiveSimilarity(
+      liveVector: liveVec,
+      storedVector: storedVec,
+      liveQualityScore: qualityScore,
     );
-
-    // 3. Resize to 16x16 grid (256 pixels)
-    final resized = img.copyResize(faceCrop, width: 16, height: 16);
-    final grid = List.generate(16, (_) => List.filled(16, 0.0));
-    for (var y = 0; y < 16; y++) {
-      for (var x = 0; x < 16; x++) {
-        final pixel = resized.getPixel(x, y);
-        grid[y][x] = img.getLuminance(pixel) / 255.0;
-      }
-    }
-
-    // 4. Extract spatial structural features: luminance + horizontal & vertical gradients (facial landmarks)
-    final rawVec = <double>[];
-    for (var y = 0; y < 16; y++) {
-      for (var x = 0; x < 16; x++) {
-        final val = grid[y][x] * 2.0 - 1.0;
-        final gx = (x < 15 ? grid[y][x + 1] : grid[y][x]) - (x > 0 ? grid[y][x - 1] : grid[y][x]);
-        final gy = (y < 15 ? grid[y + 1][x] : grid[y][x]) - (y > 0 ? grid[y - 1][x] : grid[y][x]);
-        rawVec.add((val * 0.6) + (gx * 0.2) + (gy * 0.2));
-      }
-    }
-
-    double sumSq = 0.0;
-    for (final v in rawVec) {
-      sumSq += v * v;
-    }
-    final length = sqrt(sumSq);
-    if (length == 0) return rawVec;
-    return rawVec.map((v) => v / length).toList();
   }
 }
-
-
