@@ -141,6 +141,12 @@ class AppShell extends ConsumerWidget {
       'Employee',
     ),
     SidebarDestination(
+      'Salary Settings',
+      '/salary-settings',
+      Icons.request_quote_outlined,
+      'Employee',
+    ),
+    SidebarDestination(
       'Asset Management',
       '/asset-management',
       Icons.devices_other_outlined,

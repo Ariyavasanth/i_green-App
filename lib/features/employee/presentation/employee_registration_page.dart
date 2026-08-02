@@ -13,6 +13,8 @@ import '../domain/registration_link.dart';
 import '../providers/employee_providers.dart';
 import '../services/offer_letter_generator.dart';
 import '../services/welcome_letter_generator.dart';
+import '../../salary_settings/domain/salary_settings.dart';
+import '../../salary_settings/providers/salary_settings_providers.dart';
 
 class EmployeeRegistrationPage extends ConsumerStatefulWidget {
   const EmployeeRegistrationPage({
@@ -146,19 +148,69 @@ class _EmployeeRegistrationPageState
   final _taxController = TextEditingController();
   final _pfController = TextEditingController();
   final _professionalTaxController = TextEditingController();
-  void _onTotalSalaryChanged(String val) {
-    final cleanVal = val.replaceAll(',', '').trim();
-    final total = double.tryParse(cleanVal);
-    if (total != null && total >= 0) {
-      final basic = total * 0.50;
-      final hra = total * 0.25;
-      final edu = total * 0.25;
-      setState(() {
-        _basicPayController.text = basic == 0 ? '' : basic.toStringAsFixed(2);
-        _hraController.text = hra == 0 ? '' : hra.toStringAsFixed(2);
-        _eduAllowanceController.text = edu == 0 ? '' : edu.toStringAsFixed(2);
-      });
+
+  final _hraPercentController = TextEditingController();
+  final _specialAllowancePercentController = TextEditingController();
+  final _eduAllowancePercentController = TextEditingController();
+  final _travelAllowancePercentController = TextEditingController();
+  final _pfPercentController = TextEditingController();
+  final _taxPercentController = TextEditingController();
+  final _professionalTaxPercentController = TextEditingController();
+
+  bool _salaryPercentagesInitialized = false;
+
+  void _initSalaryPercentagesFromDefaults(SalarySettings defaults) {
+    if (_salaryPercentagesInitialized) return;
+    _salaryPercentagesInitialized = true;
+    _hraPercentController.text = defaults.hraPercentage.toStringAsFixed(1);
+    _specialAllowancePercentController.text = defaults.specialAllowancePercentage.toStringAsFixed(1);
+    _eduAllowancePercentController.text = defaults.educationAllowancePercentage.toStringAsFixed(1);
+    _travelAllowancePercentController.text = defaults.travelAllowancePercentage.toStringAsFixed(1);
+    _pfPercentController.text = defaults.pfPercentage.toStringAsFixed(1);
+    _taxPercentController.text = defaults.taxPercentage.toStringAsFixed(1);
+    _professionalTaxPercentController.text = defaults.professionalTaxPercentage.toStringAsFixed(1);
+  }
+
+  void _recalculateSalaryAmountsFromPercentages() {
+    final totalSalary = double.tryParse(_totalSalaryController.text.replaceAll(',', '').trim()) ?? 0.0;
+    final basic = totalSalary * 0.50;
+    _basicPayController.text = basic == 0 ? '' : basic.toStringAsFixed(2);
+
+    void calcAmount(TextEditingController percentCtrl, TextEditingController amountCtrl, double basis) {
+      final pct = double.tryParse(percentCtrl.text.trim()) ?? 0.0;
+      final amount = (pct / 100) * basis;
+      amountCtrl.text = amount == 0 ? '' : amount.toStringAsFixed(2);
     }
+
+    calcAmount(_hraPercentController, _hraController, totalSalary);
+    calcAmount(_specialAllowancePercentController, _specialAllowanceController, totalSalary);
+    calcAmount(_eduAllowancePercentController, _eduAllowanceController, totalSalary);
+    calcAmount(_travelAllowancePercentController, _travelAllowanceController, totalSalary);
+    calcAmount(_pfPercentController, _pfController, basic);
+    calcAmount(_taxPercentController, _taxController, totalSalary);
+    calcAmount(_professionalTaxPercentController, _professionalTaxController, totalSalary);
+  }
+
+  void _onTotalSalaryChanged(String val) {
+    setState(() {
+      _recalculateSalaryAmountsFromPercentages();
+    });
+  }
+
+  void _onPercentFieldEdited(TextEditingController percentCtrl, TextEditingController amountCtrl, double basis) {
+    final pct = double.tryParse(percentCtrl.text.trim()) ?? 0.0;
+    final amount = (pct / 100) * basis;
+    setState(() {
+      amountCtrl.text = amount == 0 ? '' : amount.toStringAsFixed(2);
+    });
+  }
+
+  void _onAmountFieldEdited(TextEditingController amountCtrl, TextEditingController percentCtrl, double basis) {
+    final amount = double.tryParse(amountCtrl.text.replaceAll(',', '').trim()) ?? 0.0;
+    final pct = basis > 0 ? (amount / basis) * 100 : 0.0;
+    setState(() {
+      percentCtrl.text = pct == 0 ? '0.0' : pct.toStringAsFixed(1);
+    });
   }
 
   // Tab 10: Credentials
@@ -296,6 +348,21 @@ class _EmployeeRegistrationPageState
       if (emp.salaryTax > 0) _taxController.text = emp.salaryTax.toStringAsFixed(2);
       if (emp.salaryPf > 0) _pfController.text = emp.salaryPf.toStringAsFixed(2);
       if (emp.salaryProfessionalTax > 0) _professionalTaxController.text = emp.salaryProfessionalTax.toStringAsFixed(2);
+
+      final total = emp.salaryTotalCtc;
+      final basic = emp.salaryBasic > 0 ? emp.salaryBasic : total * 0.5;
+      if (total > 0) {
+        _hraPercentController.text = ((emp.salaryHra / total) * 100).toStringAsFixed(1);
+        _specialAllowancePercentController.text = ((emp.salarySpecialAllowance / total) * 100).toStringAsFixed(1);
+        _eduAllowancePercentController.text = ((emp.salaryEducationAllowance / total) * 100).toStringAsFixed(1);
+        _travelAllowancePercentController.text = ((emp.salaryTravelAllowance / total) * 100).toStringAsFixed(1);
+        _taxPercentController.text = ((emp.salaryTax / total) * 100).toStringAsFixed(1);
+        _professionalTaxPercentController.text = ((emp.salaryProfessionalTax / total) * 100).toStringAsFixed(1);
+      }
+      if (basic > 0) {
+        _pfPercentController.text = ((emp.salaryPf / basic) * 100).toStringAsFixed(1);
+      }
+      _salaryPercentagesInitialized = true;
 
       // Credentials fields
       if (emp.employeeId.isNotEmpty) _employeeCustomIdController.text = emp.employeeId;
@@ -484,6 +551,13 @@ class _EmployeeRegistrationPageState
     _taxController.dispose();
     _pfController.dispose();
     _professionalTaxController.dispose();
+    _hraPercentController.dispose();
+    _specialAllowancePercentController.dispose();
+    _eduAllowancePercentController.dispose();
+    _travelAllowancePercentController.dispose();
+    _pfPercentController.dispose();
+    _taxPercentController.dispose();
+    _professionalTaxPercentController.dispose();
     _employeeCustomIdController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -2774,8 +2848,144 @@ class _EmployeeRegistrationPageState
     );
   }
 
+  Widget _buildSalaryComponentRow({
+    required String label,
+    required String basis,
+    required TextEditingController amountController,
+    required TextEditingController percentController,
+    required String placeholder,
+    required double basisValue,
+    required bool isMobile,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF2F4F7),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                basis,
+                style: const TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 5),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: amountController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                style: const TextStyle(fontSize: 12, color: Colors.black87),
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: placeholder,
+                  hintStyle: const TextStyle(
+                      fontSize: 12, color: Color(0xFF98A2B3)),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 8),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(
+                        color: Color(0xFFD0D5DD), width: 0.8),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(
+                        color: Color(0xFFD0D5DD), width: 0.8),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide:
+                        const BorderSide(color: AppColors.active, width: 1.2),
+                  ),
+                ),
+                onChanged: (_) => _onAmountFieldEdited(
+                    amountController, percentController, basisValue),
+              ),
+            ),
+            const SizedBox(width: 6),
+            SizedBox(
+              width: isMobile ? 74 : 88,
+              child: TextField(
+                controller: percentController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.active,
+                ),
+                decoration: InputDecoration(
+                  isDense: true,
+                  suffixText: '%',
+                  suffixStyle: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textSecondary,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 6, vertical: 8),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(
+                        color: Color(0xFFD0D5DD), width: 0.8),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(
+                        color: Color(0xFFD0D5DD), width: 0.8),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide:
+                        const BorderSide(color: AppColors.active, width: 1.2),
+                  ),
+                ),
+                onChanged: (_) => _onPercentFieldEdited(
+                    percentController, amountController, basisValue),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   // TAB 9: SALARY & OFFER LETTER
   Widget _buildSalaryOfferLetterTab(RegistrationLink link, bool isMobile) {
+    final defaultSalarySettings =
+        ref.watch(salarySettingsNotifierProvider).valueOrNull ??
+            const SalarySettings();
+    _initSalaryPercentagesFromDefaults(defaultSalarySettings);
+
+    final totalSalary = double.tryParse(
+            _totalSalaryController.text.replaceAll(',', '').trim()) ??
+        0.0;
+    final basicPay = totalSalary * 0.50;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Container(
@@ -2788,9 +2998,9 @@ class _EmployeeRegistrationPageState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Section 1: Basic Salary
+            // Section 1: Basic Salary & Total CTC
             const Text(
-              'Basic Slary',
+              'Basic Salary & Total CTC',
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
@@ -2830,17 +3040,53 @@ class _EmployeeRegistrationPageState
             _buildRow2or3(
               isMobile: isMobile,
               children: [
-                _buildTextField('Basic', _basicPayController, placeholder: '42500.00'),
-                _buildTextField('House Rent Allowance', _hraController, placeholder: '21250.00'),
+                _buildTextField(
+                  'Basic (Fixed 50% of Total Salary)',
+                  _basicPayController,
+                  placeholder: '42500.00',
+                ),
+                _buildSalaryComponentRow(
+                  label: 'House Rent Allowance',
+                  basis: '% of Total',
+                  amountController: _hraController,
+                  percentController: _hraPercentController,
+                  placeholder: '21250.00',
+                  basisValue: totalSalary,
+                  isMobile: isMobile,
+                ),
               ],
             ),
             const SizedBox(height: 12),
             _buildRow2or3(
               isMobile: isMobile,
               children: [
-                _buildTextField('Special Allowance', _specialAllowanceController, placeholder: '21500.00'),
-                _buildTextField('Education Allowance', _eduAllowanceController, placeholder: 'Education Allowance'),
-                _buildTextField('Travel Allowance', _travelAllowanceController, placeholder: 'Travel Allowance'),
+                _buildSalaryComponentRow(
+                  label: 'Special Allowance',
+                  basis: '% of Total',
+                  amountController: _specialAllowanceController,
+                  percentController: _specialAllowancePercentController,
+                  placeholder: '21500.00',
+                  basisValue: totalSalary,
+                  isMobile: isMobile,
+                ),
+                _buildSalaryComponentRow(
+                  label: 'Education Allowance',
+                  basis: '% of Total',
+                  amountController: _eduAllowanceController,
+                  percentController: _eduAllowancePercentController,
+                  placeholder: '0.00',
+                  basisValue: totalSalary,
+                  isMobile: isMobile,
+                ),
+                _buildSalaryComponentRow(
+                  label: 'Travel Allowance',
+                  basis: '% of Total',
+                  amountController: _travelAllowanceController,
+                  percentController: _travelAllowancePercentController,
+                  placeholder: '0.00',
+                  basisValue: totalSalary,
+                  isMobile: isMobile,
+                ),
               ],
             ),
             const SizedBox(height: 24),
@@ -2858,9 +3104,33 @@ class _EmployeeRegistrationPageState
             _buildRow2or3(
               isMobile: isMobile,
               children: [
-                _buildTextField('Tax', _taxController, placeholder: 'tax...'),
-                _buildTextField('Provident Fund', _pfController, placeholder: '1800'),
-                _buildTextField('Professional Tax', _professionalTaxController, placeholder: '200'),
+                _buildSalaryComponentRow(
+                  label: 'Provident Fund (PF)',
+                  basis: '% of Basic',
+                  amountController: _pfController,
+                  percentController: _pfPercentController,
+                  placeholder: '1800.00',
+                  basisValue: basicPay,
+                  isMobile: isMobile,
+                ),
+                _buildSalaryComponentRow(
+                  label: 'Tax',
+                  basis: '% of Total',
+                  amountController: _taxController,
+                  percentController: _taxPercentController,
+                  placeholder: '0.00',
+                  basisValue: totalSalary,
+                  isMobile: isMobile,
+                ),
+                _buildSalaryComponentRow(
+                  label: 'Professional Tax',
+                  basis: '% of Total',
+                  amountController: _professionalTaxController,
+                  percentController: _professionalTaxPercentController,
+                  placeholder: '200.00',
+                  basisValue: totalSalary,
+                  isMobile: isMobile,
+                ),
               ],
             ),
             const SizedBox(height: 28),

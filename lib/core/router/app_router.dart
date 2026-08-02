@@ -32,6 +32,7 @@ import '../../features/attendance_management/presentation/attendance_management_
 import '../../features/attendance_settings/presentation/attendance_settings_page.dart';
 import '../../features/face_registration/presentation/face_registration_page.dart';
 import '../../features/asset_settings/presentation/asset_settings_page.dart';
+import '../../features/salary_settings/presentation/salary_settings_page.dart';
 import '../../features/asset_management/presentation/asset_management_page.dart';
 import '../../screens/login_screen.dart';
 import '../../screens/customers/active_customers_list.dart';
@@ -109,6 +110,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/asset-settings',
             builder: (_, _) => const AssetSettingsPage(),
+          ),
+          GoRoute(
+            path: '/salary-settings',
+            builder: (_, _) => const SalarySettingsPage(),
           ),
           GoRoute(
             path: '/asset-management',
