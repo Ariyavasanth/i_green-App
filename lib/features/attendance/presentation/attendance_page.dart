@@ -876,8 +876,15 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
 
   Future<void> _refreshLocationGate() async {
     try {
+      final emp = widget.currentEmployee;
       final settings = await widget.attendanceRepository.getAttendanceSettings();
-      if (!settings.requireGpsVerification) {
+      final bool isSite = emp.isSiteEmployee && (emp.siteLatitude != 0 || emp.siteLongitude != 0);
+      final double targetLat = isSite ? emp.siteLatitude : settings.officeLatitude;
+      final double targetLng = isSite ? emp.siteLongitude : settings.officeLongitude;
+      final int targetRadius = isSite ? emp.siteAllowedRadiusMeters : settings.allowedAttendanceRadiusMeters;
+      final bool requireGps = isSite ? emp.siteRequireGpsVerification : settings.requireGpsVerification;
+
+      if (!requireGps) {
         if (!mounted) return;
         setState(() {
           _withinAllowedRadius = true;
@@ -919,19 +926,21 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
 
       final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
       final distance = Geolocator.distanceBetween(
-        settings.officeLatitude,
-        settings.officeLongitude,
+        targetLat,
+        targetLng,
         position.latitude,
         position.longitude,
       );
-      final withinRadius = !(settings.officeLatitude == 0 && settings.officeLongitude == 0) &&
-          distance <= settings.allowedAttendanceRadiusMeters;
+      final withinRadius = !(targetLat == 0 && targetLng == 0) &&
+          distance <= targetRadius;
       if (!mounted) return;
       setState(() {
         _withinAllowedRadius = withinRadius;
         _locationMessage = withinRadius
             ? null
-            : 'You are not at the office. Please go to the office location.';
+            : isSite
+                ? 'You are not at your site location. Please go to your site location.'
+                : 'You are not at the office. Please go to the office location.';
       });
     } catch (e) {
       if (!mounted) return;
@@ -1147,12 +1156,15 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
         return;
       }
 
-      // GPS Position Verification (only checked if GPS verification is required in settings)
+      // GPS Position Verification (checked if GPS verification is required for global or site employee)
+      final emp = widget.currentEmployee;
       final settings = await widget.attendanceRepository.getAttendanceSettings();
+      final bool isSite = emp.isSiteEmployee && (emp.siteLatitude != 0 || emp.siteLongitude != 0);
+      final bool requireGps = isSite ? emp.siteRequireGpsVerification : settings.requireGpsVerification;
       double currentLat = 0.0;
       double currentLng = 0.0;
 
-      if (settings.requireGpsVerification) {
+      if (requireGps) {
         final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
         if (position.accuracy > _maxAllowedGpsAccuracyMeters) {
           throw Exception(

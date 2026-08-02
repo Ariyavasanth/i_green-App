@@ -15,6 +15,7 @@ import '../services/offer_letter_generator.dart';
 import '../services/welcome_letter_generator.dart';
 import '../../salary_settings/domain/salary_settings.dart';
 import '../../salary_settings/providers/salary_settings_providers.dart';
+import '../../attendance_settings/presentation/widgets/attendance_location_fields.dart';
 
 class EmployeeRegistrationPage extends ConsumerStatefulWidget {
   const EmployeeRegistrationPage({
@@ -70,6 +71,11 @@ class _EmployeeRegistrationPageState
   String _leaveAllocationFrequency = 'Monthly';
   final _allowedLeavesController = TextEditingController(text: '1.0');
   final _leaveEffectiveDateController = TextEditingController();
+  bool _isSiteEmployee = false;
+  final _siteLatitudeController = TextEditingController();
+  final _siteLongitudeController = TextEditingController();
+  final _siteRadiusController = TextEditingController(text: '15');
+  bool _siteRequireGpsVerification = true;
   String _selectedFileName = 'No file chosen';
   String _profileImageDataUrl = '';
   Uint8List? _profileImageBytes;
@@ -287,6 +293,11 @@ class _EmployeeRegistrationPageState
       _leaveAllocationFrequency = emp.leaveAllocationFrequency.isEmpty ? 'Monthly' : emp.leaveAllocationFrequency;
       _allowedLeavesController.text = emp.allowedLeaves.toString();
       _leaveEffectiveDateController.text = emp.effectiveDate;
+      _isSiteEmployee = emp.isSiteEmployee;
+      _siteLatitudeController.text = emp.siteLatitude != 0 ? emp.siteLatitude.toStringAsFixed(6) : '';
+      _siteLongitudeController.text = emp.siteLongitude != 0 ? emp.siteLongitude.toStringAsFixed(6) : '';
+      _siteRadiusController.text = emp.siteAllowedRadiusMeters.toString();
+      _siteRequireGpsVerification = emp.siteRequireGpsVerification;
 
       _permAddressController.text = emp.permanentAddress;
       _permCityController.text = emp.permanentCity;
@@ -1797,6 +1808,79 @@ class _EmployeeRegistrationPageState
                   placeholder: 'dd-mm-yyyy',
                 ),
               ],
+            ),
+            const SizedBox(height: 16),
+            Container(
+              decoration: BoxDecoration(
+                color: _isSiteEmployee ? const Color(0xFFF8FAFC) : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+                border: _isSiteEmployee ? Border.all(color: const Color(0xFFCBD5E1)) : null,
+              ),
+              padding: _isSiteEmployee ? const EdgeInsets.all(16) : EdgeInsets.zero,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: const Text(
+                      'Site Employee',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    subtitle: const Text(
+                      'Enable if employee works from a specific physical site requiring location override',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    value: _isSiteEmployee,
+                    onChanged: (val) {
+                      setState(() {
+                        _isSiteEmployee = val ?? false;
+                        if (!_isSiteEmployee) {
+                          _siteLatitudeController.clear();
+                          _siteLongitudeController.clear();
+                          _siteRadiusController.text = '15';
+                          _siteRequireGpsVerification = true;
+                        }
+                      });
+                    },
+                    controlAffinity: ListTileControlAffinity.leading,
+                  ),
+                  if (_isSiteEmployee) ...[
+                    const SizedBox(height: 12),
+                    const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Site Location Settings',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF334155),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'GPS attendance validation for this employee will be measured against these site coordinates instead of the global Attendance Settings location.',
+                      style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 14),
+                    AttendanceLocationFields(
+                      latitudeController: _siteLatitudeController,
+                      longitudeController: _siteLongitudeController,
+                      radiusController: _siteRadiusController,
+                      requireGpsVerification: _siteRequireGpsVerification,
+                      onRequireGpsChanged: (val) => setState(() => _siteRequireGpsVerification = val),
+                      isMobile: isMobile,
+                    ),
+                  ],
+                ],
+              ),
             ),
             const SizedBox(height: 24),
             _buildSaveButtonsRow(link, 'Job & Admin Details'),
@@ -3614,6 +3698,11 @@ class _EmployeeRegistrationPageState
       salaryTax: double.tryParse(_taxController.text.trim().replaceAll(',', '')) ?? 0.0,
       salaryPf: double.tryParse(_pfController.text.trim().replaceAll(',', '')) ?? 0.0,
       salaryProfessionalTax: double.tryParse(_professionalTaxController.text.trim().replaceAll(',', '')) ?? 0.0,
+      isSiteEmployee: _isSiteEmployee,
+      siteLatitude: _isSiteEmployee ? (AttendanceLocationFields.parseCoordinate(_siteLatitudeController.text) ?? 0.0) : 0.0,
+      siteLongitude: _isSiteEmployee ? (AttendanceLocationFields.parseCoordinate(_siteLongitudeController.text) ?? 0.0) : 0.0,
+      siteAllowedRadiusMeters: _isSiteEmployee ? (int.tryParse(_siteRadiusController.text.trim()) ?? 15) : 15,
+      siteRequireGpsVerification: _isSiteEmployee ? _siteRequireGpsVerification : true,
     );
   }
 

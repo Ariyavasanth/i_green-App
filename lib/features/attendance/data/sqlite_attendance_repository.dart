@@ -7,6 +7,7 @@ import '../domain/attendance_record.dart';
 import '../domain/attendance_settings.dart';
 import '../domain/attendance_repository.dart';
 import '../../attendance_settings/data/firebase_attendance_settings_repository.dart';
+import '../../employee/domain/employee.dart';
 
 class SqliteAttendanceRepository implements AttendanceRepository {
   static Database? _database;
@@ -153,20 +154,52 @@ class SqliteAttendanceRepository implements AttendanceRepository {
     return earthRadius * c;
   }
 
+  Future<Map<String, dynamic>> _resolveEffectiveLocation({
+    required int employeeId,
+    required AttendanceSettings globalSettings,
+  }) async {
+    try {
+      final db = await database;
+      final maps = await db.query('employees', where: 'id = ?', whereArgs: [employeeId], limit: 1);
+      if (maps.isNotEmpty) {
+        final emp = Employee.fromMap(maps.first);
+        if (emp.isSiteEmployee && (emp.siteLatitude != 0 || emp.siteLongitude != 0)) {
+          return {
+            'targetLat': emp.siteLatitude,
+            'targetLng': emp.siteLongitude,
+            'targetRadius': emp.siteAllowedRadiusMeters,
+            'requireGps': emp.siteRequireGpsVerification,
+            'isSite': true,
+          };
+        }
+      }
+    } catch (_) {}
+    return {
+      'targetLat': globalSettings.officeLatitude,
+      'targetLng': globalSettings.officeLongitude,
+      'targetRadius': globalSettings.allowedAttendanceRadiusMeters,
+      'requireGps': globalSettings.requireGpsVerification,
+      'isSite': false,
+    };
+  }
+
   bool _isWithinAllowedRadius({
-    required AttendanceSettings settings,
+    required double targetLatitude,
+    required double targetLongitude,
+    required int allowedRadiusMeters,
+    required bool requireGps,
     required double currentLatitude,
     required double currentLongitude,
   }) {
-    if (!settings.requireGpsVerification) return true;
-    if (settings.officeLatitude == 0 && settings.officeLongitude == 0) return false;
+    if (!requireGps) return true;
+    if (targetLatitude == 0 && targetLongitude == 0) return false;
     final distance = _distanceInMeters(
-      startLatitude: settings.officeLatitude,
-      startLongitude: settings.officeLongitude,
+      startLatitude: targetLatitude,
+      startLongitude: targetLongitude,
       endLatitude: currentLatitude,
       endLongitude: currentLongitude,
     );
-    return distance <= settings.allowedAttendanceRadiusMeters;
+    return distance <= allowedRadiusMeters;
   }
 
   @override
@@ -228,15 +261,22 @@ class SqliteAttendanceRepository implements AttendanceRepository {
     final score = similarityScore;
     final allowedFace = faceMatched && score >= 0.80;
     final settings = await getAttendanceSettings();
+    final loc = await _resolveEffectiveLocation(employeeId: employeeId, globalSettings: settings);
+    final isSite = loc['isSite'] as bool;
     final withinRadius = _isWithinAllowedRadius(
-      settings: settings,
+      targetLatitude: loc['targetLat'] as double,
+      targetLongitude: loc['targetLng'] as double,
+      allowedRadiusMeters: loc['targetRadius'] as int,
+      requireGps: loc['requireGps'] as bool,
       currentLatitude: currentLatitude,
       currentLongitude: currentLongitude,
     );
     final message = !allowedFace
         ? 'Face not recognized. Attendance not marked.'
         : !withinRadius
-            ? 'You are not at the office. Please go to the office location to check in.'
+            ? (isSite
+                ? 'You are not at your site location. Please go to your site location to check in.'
+                : 'You are not at the office. Please go to the office location to check in.')
             : 'Check in successful.';
     final result = AttendanceVerificationResult(
       allowed: allowedFace && withinRadius,
@@ -289,15 +329,22 @@ class SqliteAttendanceRepository implements AttendanceRepository {
     final score = similarityScore;
     final allowedFace = faceMatched && score >= 0.80;
     final settings = await getAttendanceSettings();
+    final loc = await _resolveEffectiveLocation(employeeId: employeeId, globalSettings: settings);
+    final isSite = loc['isSite'] as bool;
     final withinRadius = _isWithinAllowedRadius(
-      settings: settings,
+      targetLatitude: loc['targetLat'] as double,
+      targetLongitude: loc['targetLng'] as double,
+      allowedRadiusMeters: loc['targetRadius'] as int,
+      requireGps: loc['requireGps'] as bool,
       currentLatitude: currentLatitude,
       currentLongitude: currentLongitude,
     );
     final message = !allowedFace
         ? 'Face not recognized. Attendance not marked.'
         : !withinRadius
-            ? 'You are not at the office. Please go to the office location to check out.'
+            ? (isSite
+                ? 'You are not at your site location. Please go to your site location to check out.'
+                : 'You are not at the office. Please go to the office location to check out.')
             : 'Check out successful.';
     final result = AttendanceVerificationResult(
       allowed: allowedFace && withinRadius,

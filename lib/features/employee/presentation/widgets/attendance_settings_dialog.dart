@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:geolocator/geolocator.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../attendance/domain/attendance_settings.dart';
+import '../../../attendance_settings/presentation/widgets/attendance_location_fields.dart';
 import '../../../attendance_settings/providers/attendance_settings_providers.dart';
 
 class AttendanceSettingsDialog extends ConsumerStatefulWidget {
@@ -66,58 +66,6 @@ class _AttendanceSettingsDialogState extends ConsumerState<AttendanceSettingsDia
     Navigator.of(context).pop();
   }
 
-  Future<void> _useCurrentLocation() async {
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Location services are turned off on this device.')),
-      );
-      return;
-    }
-
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-
-    if (permission == LocationPermission.denied) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Location permission was denied.')),
-      );
-      return;
-    }
-
-    if (permission == LocationPermission.deniedForever) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Location permission is permanently denied. Enable it in system settings.')),
-      );
-      return;
-    }
-
-    try {
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
-      if (!mounted) return;
-      setState(() {
-        _latitudeController.text = position.latitude.toStringAsFixed(6);
-        _longitudeController.text = position.longitude.toStringAsFixed(6);
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Current location filled successfully.')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to get current location: $e')),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -132,18 +80,14 @@ class _AttendanceSettingsDialogState extends ConsumerState<AttendanceSettingsDia
               TextFormField(controller: _graceController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Grace Period (minutes)'), validator: _validator),
               TextFormField(controller: _lateController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Late Limit (minutes)'), validator: _validator),
               TextFormField(controller: _absentController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Absent Threshold (minutes)'), validator: _validator),
-              TextFormField(controller: _latitudeController, keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true), decoration: const InputDecoration(labelText: 'Office Latitude'), validator: _doubleValidator),
-              TextFormField(controller: _longitudeController, keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true), decoration: const InputDecoration(labelText: 'Office Longitude'), validator: _doubleValidator),
-              TextFormField(controller: _radiusController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Allowed Attendance Radius (meters)'), validator: _validator),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: _saving ? null : _useCurrentLocation,
-                  icon: const Icon(Icons.gps_fixed, size: 18),
-                  label: const Text('Use Current Location'),
-                ),
+              AttendanceLocationFields(
+                latitudeController: _latitudeController,
+                longitudeController: _longitudeController,
+                radiusController: _radiusController,
+                requireGpsVerification: _requireGpsVerification,
+                onRequireGpsChanged: (val) => setState(() => _requireGpsVerification = val),
+                enabled: !_saving,
               ),
-              SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Require GPS Verification'), value: _requireGpsVerification, onChanged: _saving ? null : (value) => setState(() => _requireGpsVerification = value)),
               const SizedBox(height: 8),
               const Text('Each employee still uses their own Check-In Time from the profile.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
             ],
@@ -160,12 +104,6 @@ class _AttendanceSettingsDialogState extends ConsumerState<AttendanceSettingsDia
   String? _validator(String? value) {
     if (value == null || value.trim().isEmpty) return 'Required';
     if (int.tryParse(value.trim()) == null) return 'Enter a valid number';
-    return null;
-  }
-
-  String? _doubleValidator(String? value) {
-    if (value == null || value.trim().isEmpty) return 'Required';
-    if (double.tryParse(value.trim()) == null) return 'Enter a valid number';
     return null;
   }
 }

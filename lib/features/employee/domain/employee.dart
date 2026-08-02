@@ -224,6 +224,11 @@ class Employee {
     this.disciplinaryRecords = '',
     this.temporaryPassword = '',
     this.accessPermissions = const [],
+    this.isSiteEmployee = false,
+    this.siteLatitude = 0.0,
+    this.siteLongitude = 0.0,
+    this.siteAllowedRadiusMeters = 15,
+    this.siteRequireGpsVerification = true,
   });
 
   static const List<String> allSidebarPermissions = [
@@ -499,6 +504,12 @@ class Employee {
   final String temporaryPassword;
   final List<String> accessPermissions;
 
+  final bool isSiteEmployee;
+  final double siteLatitude;
+  final double siteLongitude;
+  final int siteAllowedRadiusMeters;
+  final bool siteRequireGpsVerification;
+
   String get fullName => '$firstName $lastName'.trim();
 
   List<EducationItem> get educationItems {
@@ -643,6 +654,11 @@ class Employee {
       'disciplinary_records': disciplinaryRecords,
       'temporary_password': temporaryPassword,
       'access_permissions': jsonEncode(accessPermissions),
+      'is_site_employee': isSiteEmployee ? 1 : 0,
+      'site_latitude': siteLatitude,
+      'site_longitude': siteLongitude,
+      'site_allowed_radius_meters': siteAllowedRadiusMeters,
+      'site_require_gps_verification': siteRequireGpsVerification ? 1 : 0,
     };
   }
 
@@ -779,6 +795,23 @@ class Employee {
         }
         return <String>[];
       }(),
+      isSiteEmployee: () {
+        final val = map['is_site_employee'] ?? map['isSiteEmployee'];
+        if (val is bool) return val;
+        if (val is num) return val != 0;
+        if (val is String) return val.toLowerCase() == 'true' || val == '1';
+        return false;
+      }(),
+      siteLatitude: (map['site_latitude'] ?? map['siteLatitude'] as num?)?.toDouble() ?? 0.0,
+      siteLongitude: (map['site_longitude'] ?? map['siteLongitude'] as num?)?.toDouble() ?? 0.0,
+      siteAllowedRadiusMeters: ((map['site_allowed_radius_meters'] ?? map['siteAllowedRadiusMeters']) as num?)?.toInt() ?? 15,
+      siteRequireGpsVerification: () {
+        final val = map['site_require_gps_verification'] ?? map['siteRequireGpsVerification'];
+        if (val is bool) return val;
+        if (val is num) return val != 0;
+        if (val is String) return val.toLowerCase() == 'true' || val == '1';
+        return true;
+      }(),
     );
   }
 
@@ -892,6 +925,11 @@ class Employee {
     String? disciplinaryRecords,
     String? temporaryPassword,
     List<String>? accessPermissions,
+    bool? isSiteEmployee,
+    double? siteLatitude,
+    double? siteLongitude,
+    int? siteAllowedRadiusMeters,
+    bool? siteRequireGpsVerification,
   }) {
     return Employee(
       id: id ?? this.id,
@@ -1003,6 +1041,11 @@ class Employee {
       disciplinaryRecords: disciplinaryRecords ?? this.disciplinaryRecords,
       temporaryPassword: temporaryPassword ?? this.temporaryPassword,
       accessPermissions: accessPermissions ?? this.accessPermissions,
+      isSiteEmployee: isSiteEmployee ?? this.isSiteEmployee,
+      siteLatitude: siteLatitude ?? this.siteLatitude,
+      siteLongitude: siteLongitude ?? this.siteLongitude,
+      siteAllowedRadiusMeters: siteAllowedRadiusMeters ?? this.siteAllowedRadiusMeters,
+      siteRequireGpsVerification: siteRequireGpsVerification ?? this.siteRequireGpsVerification,
     );
   }
 }

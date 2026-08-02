@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:geolocator/geolocator.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../attendance/domain/attendance_settings.dart';
 import '../providers/attendance_settings_providers.dart';
+import 'widgets/attendance_location_fields.dart';
 
 class AttendanceSettingsPage extends ConsumerStatefulWidget {
   const AttendanceSettingsPage({super.key});
@@ -53,8 +53,8 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
     if (!_formKey.currentState!.validate() || _saving) return;
     setState(() => _saving = true);
 
-    final latitude = _parseCoordinate(_latitudeController.text);
-    final longitude = _parseCoordinate(_longitudeController.text);
+    final latitude = AttendanceLocationFields.parseCoordinate(_latitudeController.text);
+    final longitude = AttendanceLocationFields.parseCoordinate(_longitudeController.text);
     if (latitude == null || longitude == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -108,91 +108,11 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
     });
   }
 
-  Future<void> _useCurrentLocation() async {
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Location services are turned off on this device.')),
-      );
-      return;
-    }
-
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-
-    if (permission == LocationPermission.denied) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Location permission was denied.')),
-      );
-      return;
-    }
-
-    if (permission == LocationPermission.deniedForever) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Location permission is permanently denied. Enable it in system settings.')),
-      );
-      return;
-    }
-
-    try {
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
-      if (!mounted) return;
-      setState(() {
-        _latitudeController.text = position.latitude.toStringAsFixed(6);
-        _longitudeController.text = position.longitude.toStringAsFixed(6);
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Current location filled successfully.')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to get current location: $e')),
-      );
-    }
-  }
-
   String? _validator(String? value) {
     if (value == null || value.trim().isEmpty) return 'Required';
     final parsed = int.tryParse(value.trim());
     if (parsed == null || parsed < 0) return 'Enter a valid number';
     return null;
-  }
-
-  String? _coordinateValidator(String? value) {
-    if (value == null || value.trim().isEmpty) return 'Required';
-    if (_parseCoordinate(value) == null) return 'Enter a valid coordinate';
-    return null;
-  }
-
-  double? _parseCoordinate(String value) {
-    final trimmed = value.trim();
-    final decimal = double.tryParse(trimmed);
-    if (decimal != null) return decimal;
-
-    final normalized = trimmed.toUpperCase().replaceAll(RegExp(r'\s+'), '');
-    final match = RegExp(
-      r'^(\d+(?:\.\d+)?)[^0-9NSEW]+(\d+(?:\.\d+)?)[^0-9NSEW]+(\d+(?:\.\d+)?)(?:[^0-9NSEW]+)?([NSEW])$',
-    ).firstMatch(normalized);
-    if (match == null) return null;
-
-    final degrees = double.parse(match.group(1)!);
-    final minutes = double.parse(match.group(2)!);
-    final seconds = double.parse(match.group(3)!);
-    var result = degrees + (minutes / 60) + (seconds / 3600);
-    final direction = match.group(4)!;
-    if (direction == 'S' || direction == 'W') {
-      result = -result;
-    }
-    return result;
   }
 
   @override
@@ -250,50 +170,13 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
                         ),
                       ),
                       const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: OutlinedButton.icon(
-                          onPressed: _saving ? null : _useCurrentLocation,
-                          icon: const Icon(Icons.gps_fixed, size: 18),
-                          label: const Text('Use Current Location'),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      TextFormField(
-                        controller: _latitudeController,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                        decoration: const InputDecoration(
-                          labelText: 'Office Latitude',
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: _coordinateValidator,
-                      ),
-                      const SizedBox(height: 14),
-                      TextFormField(
-                        controller: _longitudeController,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                        decoration: const InputDecoration(
-                          labelText: 'Office Longitude',
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: _coordinateValidator,
-                      ),
-                      const SizedBox(height: 14),
-                      TextFormField(
-                        controller: _radiusController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Allowed Attendance Radius (meters)',
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: _validator,
-                      ),
-                      const SizedBox(height: 12),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Require GPS Verification'),
-                        value: _requireGpsVerification,
-                        onChanged: _saving ? null : (value) => setState(() => _requireGpsVerification = value),
+                      AttendanceLocationFields(
+                        latitudeController: _latitudeController,
+                        longitudeController: _longitudeController,
+                        radiusController: _radiusController,
+                        requireGpsVerification: _requireGpsVerification,
+                        onRequireGpsChanged: (val) => setState(() => _requireGpsVerification = val),
+                        enabled: !_saving,
                       ),
                       const SizedBox(height: 18),
                       TextFormField(

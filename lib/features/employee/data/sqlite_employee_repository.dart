@@ -151,7 +151,12 @@ class SqliteEmployeeRepository implements EmployeeRepository {
         leave_allocation_frequency TEXT,
         allowed_leaves REAL,
         effective_date TEXT,
-        requires_leave_approval INTEGER DEFAULT 1
+        requires_leave_approval INTEGER DEFAULT 1,
+        is_site_employee INTEGER DEFAULT 0,
+        site_latitude REAL DEFAULT 0.0,
+        site_longitude REAL DEFAULT 0.0,
+        site_allowed_radius_meters INTEGER DEFAULT 15,
+        site_require_gps_verification INTEGER DEFAULT 1
       )
     ''');
 
@@ -247,6 +252,11 @@ class SqliteEmployeeRepository implements EmployeeRepository {
       'coordinator_name': 'TEXT',
       'coordinator_phone': 'TEXT',
       'weekly_off_day': 'TEXT',
+      'is_site_employee': 'INTEGER DEFAULT 0',
+      'site_latitude': 'REAL DEFAULT 0.0',
+      'site_longitude': 'REAL DEFAULT 0.0',
+      'site_allowed_radius_meters': 'INTEGER DEFAULT 15',
+      'site_require_gps_verification': 'INTEGER DEFAULT 1',
     };
 
     for (final entry in requiredColumns.entries) {
