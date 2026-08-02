@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../organization/presentation/widgets/column_selection_dialog.dart';
@@ -57,22 +58,15 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
               data: (links) {
                 final employees = employeesAsync.valueOrNull ?? const <Employee>[];
 
-                // Filter out candidates that have already been converted into employees
-                final unconvertedLinks = links.where((link) {
-                  final status = link.linkStatus.trim().toLowerCase();
-                  final isAcceptedOrConverted = status == 'accepted' || status == 'converted';
-                  final isEmpId = link.employeeId.trim().toUpperCase().startsWith('EMP-');
-                  final employee = _employeeForLink(link, employees);
-                  final isConvertedEmp = employee != null && employee.employeeId.trim().toUpperCase().startsWith('EMP-');
-                  return !(isAcceptedOrConverted || isEmpId || isConvertedEmp);
-                }).toList();
-
-                final statusList = [
+                final statusList = const [
                   'All Statuses',
-                  ...{for (final link in unconvertedLinks) if (link.linkStatus.isNotEmpty) link.linkStatus},
+                  'Pending',
+                  'Accepted',
+                  'Registered',
+                  'Rejected',
                 ];
 
-                final filtered = unconvertedLinks.where((link) {
+                final filtered = links.where((link) {
                   final q = searchQuery.toLowerCase().trim();
                   final candidateId = _candidateId(link);
                   final employee = _employeeForLink(link, employees);
@@ -83,7 +77,17 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                       _phoneForLink(link, employee).toLowerCase().contains(q) ||
                       link.linkStatus.toLowerCase().contains(q);
 
-                  final matchesStatus = statusFilter == 'All Statuses' || link.linkStatus == statusFilter;
+                  final status = link.linkStatus.trim().toLowerCase();
+                  final filter = statusFilter.trim().toLowerCase();
+
+                  bool matchesStatus = filter == 'all statuses';
+                  if (!matchesStatus) {
+                    if (filter == 'registered') {
+                      matchesStatus = status == 'registered' || status == 'converted' || status == 'completed';
+                    } else {
+                      matchesStatus = status == filter;
+                    }
+                  }
                   return matchesSearch && matchesStatus;
                 }).toList();
 
@@ -298,10 +302,13 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
 
   Color _getStatusColor(String status) {
     switch (status.trim().toLowerCase()) {
-      case 'accepted':
+      case 'registered':
+      case 'converted':
       case 'completed':
       case 'active':
         return Colors.green;
+      case 'accepted':
+        return Colors.blue;
       case 'expired':
       case 'rejected':
         return Colors.redAccent;
@@ -378,45 +385,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                     },
                     cells: [
                       for (final colName in visibleColumns) DataCell(_buildCellContent(colName, link, employee)),
-                      DataCell(
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            TextButton.icon(
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              onPressed: () => _openViewDialog(context, link),
-                              icon: const Icon(Icons.remove_red_eye_outlined, size: 16, color: AppColors.textPrimary),
-                              label: const Text('View', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-                            ),
-                            const SizedBox(width: 8),
-                            TextButton.icon(
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              onPressed: () => _setResponseStatus(link, 'Accepted'),
-                              icon: const Icon(Icons.check_circle_outline, size: 16, color: Colors.green),
-                              label: const Text('Accept', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.green)),
-                            ),
-                            const SizedBox(width: 8),
-                            TextButton.icon(
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              onPressed: () => _setResponseStatus(link, 'Rejected'),
-                              icon: const Icon(Icons.cancel_outlined, size: 16, color: Colors.redAccent),
-                              label: const Text('Reject', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.redAccent)),
-                            ),
-                          ],
-                        ),
-                      ),
+                      DataCell(_buildRowActions(link)),
                     ],
                   );
                 }).toList(),
@@ -568,46 +537,84 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                 const SizedBox(height: 10),
                 const Divider(height: 1),
                 const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    TextButton.icon(
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      onPressed: () => _openViewDialog(context, link),
-                      icon: const Icon(Icons.remove_red_eye_outlined, size: 16, color: AppColors.active),
-                      label: const Text('View', style: TextStyle(fontSize: 12, color: AppColors.active)),
-                    ),
-                    TextButton.icon(
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                    onPressed: () => _setResponseStatus(link, 'Accepted'),
-                      icon: const Icon(Icons.check_circle_outline, size: 16, color: Colors.green),
-                      label: const Text('Accept', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green)),
-                    ),
-                    TextButton.icon(
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      onPressed: () => _setResponseStatus(link, 'Rejected'),
-                      icon: const Icon(Icons.cancel_outlined, size: 16, color: Colors.redAccent),
-                      label: const Text('Reject', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.redAccent)),
-                    ),
-                  ],
-                ),
+                _buildRowActions(link, isMobile: true),
               ],
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildRowActions(RegistrationLink link, {bool isMobile = false}) {
+    final status = link.linkStatus.trim().toLowerCase();
+    final isPending = status == 'pending';
+    final isAccepted = status == 'accepted';
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextButton.icon(
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          onPressed: () => _openViewDialog(context, link),
+          icon: Icon(Icons.remove_red_eye_outlined, size: isMobile ? 14 : 16, color: AppColors.textPrimary),
+          label: Text('View', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+        ),
+        if (isPending) ...[
+          const SizedBox(width: 6),
+          TextButton.icon(
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onPressed: () => _setResponseStatus(link, 'Accepted'),
+            icon: Icon(Icons.check_circle_outline, size: isMobile ? 14 : 16, color: Colors.blue),
+            label: Text('Accept', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.bold, color: Colors.blue)),
+          ),
+          const SizedBox(width: 6),
+          TextButton.icon(
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onPressed: () => _setResponseStatus(link, 'Rejected'),
+            icon: Icon(Icons.cancel_outlined, size: isMobile ? 14 : 16, color: Colors.redAccent),
+            label: Text('Reject', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.bold, color: Colors.redAccent)),
+          ),
+        ],
+        if (isAccepted) ...[
+          const SizedBox(width: 6),
+          TextButton.icon(
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onPressed: () {
+              GoRouter.of(context).push('/employee/register/new?acceptedLinkId=${link.linkId}');
+            },
+            icon: Icon(Icons.person_add_outlined, size: isMobile ? 14 : 16, color: Colors.green),
+            label: Text('Register', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.bold, color: Colors.green)),
+          ),
+          const SizedBox(width: 6),
+          TextButton.icon(
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onPressed: () => _setResponseStatus(link, 'Rejected'),
+            icon: Icon(Icons.cancel_outlined, size: isMobile ? 14 : 16, color: Colors.redAccent),
+            label: Text('Reject', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.bold, color: Colors.redAccent)),
+          ),
+        ],
+      ],
     );
   }
 

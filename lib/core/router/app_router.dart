@@ -48,10 +48,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, state) {
           final rawAcceptedId = state.uri.queryParameters['acceptedId'];
           final acceptedEmpId = rawAcceptedId != null ? int.tryParse(rawAcceptedId) : null;
+          final acceptedLinkId = state.uri.queryParameters['acceptedLinkId'];
           return EmployeeRegistrationPage(
             linkId: state.pathParameters['linkId'] ?? '',
             employee: state.extra is Employee ? state.extra as Employee : null,
             acceptedEmpId: acceptedEmpId,
+            acceptedLinkId: acceptedLinkId,
           );
         },
       ),

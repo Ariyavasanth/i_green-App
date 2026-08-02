@@ -274,12 +274,17 @@ class SqliteEmployeeRepository implements EmployeeRepository {
     final maps = await db.query('employees', orderBy: 'id DESC');
     return maps
         .map((map) => Employee.fromMap(map))
-        .where((emp) =>
-            emp.employeeId.trim().toUpperCase().startsWith('EMP-') ||
-            (!emp.employeeId.trim().toUpperCase().startsWith('CAN-') &&
-             !emp.employeeId.trim().toLowerCase().startsWith('pending_') &&
-             emp.status.trim().toLowerCase() != 'draft' &&
-             emp.employeeId.isNotEmpty))
+        .where((emp) {
+          final empId = emp.employeeId.trim().toUpperCase();
+          final status = emp.status.trim().toLowerCase();
+          final isEmpId = empId.startsWith('EMP-');
+          final isCandidateOrPending = empId.startsWith('CAN-') ||
+              empId.toLowerCase().startsWith('pending_') ||
+              status == 'draft' ||
+              status == 'pending' ||
+              status == 'accepted';
+          return isEmpId || (!isCandidateOrPending && empId.isNotEmpty);
+        })
         .toList();
   }
 
@@ -438,68 +443,6 @@ class SqliteEmployeeRepository implements EmployeeRepository {
       where: 'link_id = ?',
       whereArgs: [linkId],
     );
-
-    if (linkStatus == 'Accepted') {
-      final linkMaps = await db.query('registration_links', where: 'link_id = ?', whereArgs: [linkId]);
-      if (linkMaps.isNotEmpty) {
-        final linkEmpId = linkMaps.first['employee_id'] as String? ?? '';
-        final empMaps = await db.query(
-          'employees',
-          where: 'employee_id = ? OR employee_id = ?',
-          whereArgs: [linkEmpId, linkId],
-        );
-
-        String newEmpId = '';
-        if (empMaps.isNotEmpty) {
-          final currentId = empMaps.first['employee_id'] as String? ?? '';
-          if (!currentId.startsWith('EMP-')) {
-            newEmpId = await _generateNextEmployeeId();
-            final dbId = empMaps.first['id'] as int;
-            await db.update(
-              'employees',
-              {
-                'employee_id': newEmpId,
-                'status': 'Active',
-              },
-              where: 'id = ?',
-              whereArgs: [dbId],
-            );
-          }
-        } else {
-          newEmpId = await _generateNextEmployeeId();
-          final name = linkMaps.first['employee_name'] as String? ?? 'Candidate';
-          final parts = name.trim().split(' ');
-          final firstName = parts.first;
-          final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
-          final newEmp = Employee(
-            id: 0,
-            employeeId: newEmpId,
-            firstName: firstName,
-            lastName: lastName,
-            emailAddress: '',
-            phoneNumber: '',
-            gender: '',
-            dob: '',
-            organizationName: linkMaps.first['organization_name'] as String? ?? 'iGreen Tech',
-            department: linkMaps.first['department'] as String? ?? 'Management',
-            designation: 'Staff',
-            employmentType: 'Full-Time',
-            joiningDate: DateFormat('dd-MM-yyyy').format(DateTime.now()),
-            status: 'Active',
-          );
-          await db.insert('employees', newEmp.toMap());
-        }
-
-        if (newEmpId.isNotEmpty) {
-          await db.update(
-            'registration_links',
-            {'employee_id': newEmpId},
-            where: 'link_id = ?',
-            whereArgs: [linkId],
-          );
-        }
-      }
-    }
   }
 
   @override

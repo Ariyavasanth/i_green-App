@@ -19,12 +19,14 @@ class EmployeeRegistrationPage extends ConsumerStatefulWidget {
     required this.linkId,
     this.employee,
     this.acceptedEmpId,
+    this.acceptedLinkId,
     super.key,
   });
 
   final String linkId;
   final Employee? employee;
   final int? acceptedEmpId;
+  final String? acceptedLinkId;
 
   @override
   ConsumerState<EmployeeRegistrationPage> createState() =>
@@ -359,11 +361,43 @@ class _EmployeeRegistrationPageState
     });
     if (widget.employee != null) {
       _populateFromEmployee(widget.employee!);
+    } else if (widget.acceptedLinkId != null && widget.acceptedLinkId!.isNotEmpty) {
+      _registrationMode = 'accepted_response';
+      _selectedAcceptedLinkId = widget.acceptedLinkId;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final links = await ref.read(registrationLinksProvider.future);
+        final allEmps = await ref.read(allEmployeesProvider.future);
+        final matchingLinks = links.where((l) => l.linkId == widget.acceptedLinkId).toList();
+        if (matchingLinks.isNotEmpty && mounted) {
+          final link = matchingLinks.first;
+          Employee? matchedEmployee;
+          for (final emp in allEmps) {
+            if (emp.employeeId == link.employeeId || emp.id.toString() == link.employeeId) {
+              matchedEmployee = emp;
+              break;
+            }
+          }
+          if (matchedEmployee != null) {
+            _selectedAcceptedEmpId = matchedEmployee.id;
+            _populateFromEmployee(matchedEmployee);
+          } else if (link.employeeName.isNotEmpty) {
+            _firstNameController.text = link.employeeName;
+            _status = 'ACTIVE';
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Auto-fetched candidate details for ${link.employeeName.isNotEmpty ? link.employeeName : link.linkId}. Complete details to finalize registration.'),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      });
     } else if (widget.acceptedEmpId != null) {
       _registrationMode = 'accepted_response';
       _selectedAcceptedEmpId = widget.acceptedEmpId;
       WidgetsBinding.instance.addPostFrameCallback((_) async {
-        final emps = await ref.read(employeesProvider.future);
+        final emps = await ref.read(allEmployeesProvider.future);
         final matches = emps.where((e) => e.id == widget.acceptedEmpId).toList();
         if (matches.isNotEmpty && mounted) {
           final match = matches.first;
@@ -690,16 +724,25 @@ class _EmployeeRegistrationPageState
         final updated = employeeData.copyWith(id: targetId);
         await repo.updateEmployee(updated);
         savedEmployee = updated;
-      } else if (_registrationMode == 'accepted_response' && _selectedAcceptedEmpId != null) {
-        // Import an accepted candidate as a brand-new employee record.
-        // The accepted ID is only for navigation context, not the target employee row.
+      } else if (_registrationMode == 'accepted_response' || _selectedAcceptedLinkId != null) {
+        // Import/register an accepted candidate as a confirmed Employee with an EMP- ID
         final imported = employeeData.copyWith(status: 'Active');
-        if (_currentEmployee != null) {
+        if (_currentEmployee != null &&
+            !_currentEmployee!.employeeId.startsWith('pending_') &&
+            !_currentEmployee!.employeeId.startsWith('CAN-')) {
           final updated = imported.copyWith(id: _currentEmployee!.id);
           await repo.updateEmployee(updated);
           savedEmployee = updated;
         } else {
           savedEmployee = await repo.addEmployee(imported);
+        }
+
+        // Update the RegistrationLink status to 'Registered' so it reflects in Responses tab
+        if (_selectedAcceptedLinkId != null && _selectedAcceptedLinkId!.isNotEmpty) {
+          await repo.updateRegistrationLinkStatus(
+            linkId: _selectedAcceptedLinkId!,
+            linkStatus: 'Registered',
+          );
         }
       } else if (widget.linkId == 'new' || widget.linkId.isEmpty) {
         // Manual Add mode
@@ -721,8 +764,12 @@ class _EmployeeRegistrationPageState
 
       _currentEmployee = savedEmployee;
       ref.invalidate(employeesProvider);
+      ref.invalidate(allEmployeesProvider);
+      ref.invalidate(registrationLinksProvider);
+      if (_selectedAcceptedLinkId != null && _selectedAcceptedLinkId!.isNotEmpty) {
+        ref.invalidate(registrationLinkByIdProvider(_selectedAcceptedLinkId!));
+      }
       if (widget.linkId.isNotEmpty && widget.linkId != 'new' && widget.linkId != 'edit') {
-        ref.invalidate(registrationLinksProvider);
         ref.invalidate(registrationLinkByIdProvider(widget.linkId));
       }
 
@@ -1181,7 +1228,7 @@ class _EmployeeRegistrationPageState
                   Consumer(
                     builder: (context, ref, child) {
                       final linksAsync = ref.watch(registrationLinksProvider);
-                      final employeesAsync = ref.watch(employeesProvider);
+                      final employeesAsync = ref.watch(allEmployeesProvider);
                       return linksAsync.when(
                         loading: () => const SizedBox(
                           height: 36,

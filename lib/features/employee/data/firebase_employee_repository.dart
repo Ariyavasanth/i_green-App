@@ -3,7 +3,6 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
 
 import '../../organization/domain/column_preference.dart';
 import '../domain/employee.dart';
@@ -83,12 +82,17 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   Future<List<Employee>> getEmployees() async {
     final all = await getAllEmployees();
     return all
-        .where((emp) =>
-            emp.employeeId.trim().toUpperCase().startsWith('EMP-') ||
-            (!emp.employeeId.trim().toUpperCase().startsWith('CAN-') &&
-             !emp.employeeId.trim().toLowerCase().startsWith('pending_') &&
-             emp.status.trim().toLowerCase() != 'draft' &&
-             emp.employeeId.isNotEmpty))
+        .where((emp) {
+          final empId = emp.employeeId.trim().toUpperCase();
+          final status = emp.status.trim().toLowerCase();
+          final isEmpId = empId.startsWith('EMP-');
+          final isCandidateOrPending = empId.startsWith('CAN-') ||
+              empId.toLowerCase().startsWith('pending_') ||
+              status == 'draft' ||
+              status == 'pending' ||
+              status == 'accepted';
+          return isEmpId || (!isCandidateOrPending && empId.isNotEmpty);
+        })
         .toList();
   }
 
@@ -339,61 +343,6 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       },
       SetOptions(merge: true),
     );
-
-    if (linkStatus == 'Accepted') {
-      final linkDoc = await _registrationLinksRef.doc(linkId).get();
-      if (linkDoc.exists) {
-        final linkData = linkDoc.data()!;
-        final linkEmpId = linkData['employee_id'] as String? ?? '';
-        final empQuery = await _employeesRef
-            .where('employee_id', isEqualTo: linkEmpId.isNotEmpty ? linkEmpId : linkId)
-            .get();
-
-        String newEmpId = '';
-        if (empQuery.docs.isNotEmpty) {
-          final doc = empQuery.docs.first;
-          final currentId = doc.data()['employee_id'] as String? ?? '';
-          if (!currentId.startsWith('EMP-')) {
-            newEmpId = await _generateNextEmployeeId();
-            await doc.reference.update({
-              'employee_id': newEmpId,
-              'status': 'Active',
-              'updated_at': FieldValue.serverTimestamp(),
-            });
-          }
-        } else {
-          newEmpId = await _generateNextEmployeeId();
-          final name = linkData['employee_name'] as String? ?? 'Candidate';
-          final parts = name.trim().split(' ');
-          final firstName = parts.first;
-          final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
-          final newEmp = Employee(
-            id: 0,
-            employeeId: newEmpId,
-            firstName: firstName,
-            lastName: lastName,
-            emailAddress: '',
-            phoneNumber: '',
-            gender: '',
-            dob: '',
-            organizationName: linkData['organization_name'] as String? ?? 'iGreen Tech',
-            department: linkData['department'] as String? ?? 'Management',
-            designation: 'Staff',
-            employmentType: 'Full-Time',
-            joiningDate: DateFormat('dd-MM-yyyy').format(DateTime.now()),
-            status: 'Active',
-          );
-          await _employeesRef.doc(newEmpId).set(_employeeToFirestore(newEmp));
-        }
-
-        if (newEmpId.isNotEmpty) {
-          await _registrationLinksRef.doc(linkId).update({
-            'employee_id': newEmpId,
-            'updated_at': FieldValue.serverTimestamp(),
-          });
-        }
-      }
-    }
   }
 
   @override
