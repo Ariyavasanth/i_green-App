@@ -1,3 +1,4 @@
+// ignore_for_file: deprecated_member_use
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -198,6 +199,7 @@ class _EmployeeRegistrationPageState
   int? _selectedAcceptedEmpId;
   String? _selectedAcceptedLinkId;
   bool _draftLoaded = false;
+  final Set<String> _savedTabs = {};
 
   void _populateFromEmployee(Employee emp) {
     setState(() {
@@ -336,6 +338,7 @@ class _EmployeeRegistrationPageState
     'Bank Account',
     'Document',
     'Social Media',
+    if (_isManagementAdd) 'Job & Admin Details',
     if (_isManagementAdd) 'Salary & Offer Letter',
     if (_isManagementAdd) 'Welcome Letter',
     if (_isManagementAdd) 'Access Permissions',
@@ -349,6 +352,11 @@ class _EmployeeRegistrationPageState
         ? Set<String>.from(widget.employee!.accessPermissions)
         : (!_isManagementAdd ? <String>{} : Set<String>.from(Employee.allSidebarPermissions));
     _tabController = TabController(length: _tabs.length, vsync: this);
+    _tabController.addListener(() {
+      if (mounted) {
+        setState(() {});
+      }
+    });
     if (widget.employee != null) {
       _populateFromEmployee(widget.employee!);
     } else if (widget.acceptedEmpId != null) {
@@ -719,10 +727,12 @@ class _EmployeeRegistrationPageState
         ref.invalidate(registrationLinkByIdProvider(widget.linkId));
       }
 
+      final currentTab = _tabs[_tabController.index];
       setState(() {
         if (isSubmit) {
           _submittedEmployee = savedEmployee;
         }
+        _savedTabs.add(currentTab);
         _isSubmitting = false;
       });
 
@@ -805,6 +815,7 @@ class _EmployeeRegistrationPageState
                           _buildBankAccountTab(editLink, isMobile),
                           _buildDocumentTab(editLink, isMobile),
                           _buildSocialMediaTab(editLink, isMobile),
+                          if (_isManagementAdd) _buildJobAdminDetailsTab(editLink, isMobile),
                           if (_isManagementAdd) _buildSalaryOfferLetterTab(editLink, isMobile),
                           if (_isManagementAdd) _buildWelcomeLetterTab(editLink, isMobile),
                           if (_isManagementAdd) _buildAccessPermissionsTab(editLink, isMobile),
@@ -873,6 +884,7 @@ class _EmployeeRegistrationPageState
                         _buildBankAccountTab(link, isMobile),
                         _buildDocumentTab(link, isMobile),
                         _buildSocialMediaTab(link, isMobile),
+                        if (_isManagementAdd) _buildJobAdminDetailsTab(link, isMobile),
                         if (_isManagementAdd) _buildSalaryOfferLetterTab(link, isMobile),
                         if (_isManagementAdd) _buildWelcomeLetterTab(link, isMobile),
                         if (_isManagementAdd) _buildAccessPermissionsTab(link, isMobile),
@@ -997,6 +1009,28 @@ class _EmployeeRegistrationPageState
                         ),
                       ),
                     ),
+                    if (_savedTabs.contains(_tabs[_tabController.index])) ...[
+                      const SizedBox(width: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE8F5E9),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFA5D6A7)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(Icons.check_circle, size: 12, color: Color(0xFF2E7D32)),
+                            SizedBox(width: 4),
+                            Text(
+                              'Page Saved',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1199,7 +1233,7 @@ class _EmployeeRegistrationPageState
                                 ),
                                 const SizedBox(height: 4),
                                 DropdownButtonFormField<String>(
-                                  value: acceptedLinks.any((e) => e.linkId == _selectedAcceptedLinkId)
+                                  initialValue: acceptedLinks.any((e) => e.linkId == _selectedAcceptedLinkId)
                                       ? _selectedAcceptedLinkId
                                       : null,
                                   hint: const Text('Choose accepted member name...', style: TextStyle(fontSize: 12)),
@@ -1280,222 +1314,51 @@ class _EmployeeRegistrationPageState
             ),
           ),
         ],
-        if (_isManagementAdd) ...[
-          _buildRow2or3(
-            isMobile: isMobile,
-            children: [
-              _buildTextField('First Name', _firstNameController, placeholder: 'First Name'),
-              _buildTextField('Last Name', _lastNameController, placeholder: 'Last Name'),
-              _buildDropdown(
-                'Blood Group',
-                _bloodGroup,
-                ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'],
-                (val) => setState(() => _bloodGroup = val!),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildRow2or3(
-            isMobile: isMobile,
-            children: [
-              _buildDropdown(
-                'Gender',
-                _gender,
-                ['Male', 'Female', 'Other'],
-                (val) => setState(() => _gender = val!),
-              ),
-              _buildDropdown(
-                'User Type',
-                _userType,
-                ['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE', 'HR', 'MANAGER'],
-                (val) => setState(() => _userType = val!),
-              ),
-              _buildDropdown(
-                'Status',
-                _status,
-                ['ACTIVE', 'INACTIVE'],
-                (val) => setState(() => _status = val!),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildRow2or3(
-            isMobile: isMobile,
-            children: [
-              _buildDateField('Date Of Birth', _dobController, placeholder: '13-05-1982'),
-              _buildTextField('Aadhar Number', _aadhaarController, placeholder: '833750993144'),
-              _buildTextField('Contact Number', _phoneController, placeholder: '8760098789'),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildRow2or3(
-            isMobile: isMobile,
-            children: [
-              _buildDropdown(
-                'Department',
-                _department,
-                {...Employee.departmentOptions, if (_department.isNotEmpty) _department}.toList(),
-                (val) => setState(() => _department = val!),
-              ),
-              _buildDropdown(
-                'Designation',
-                _designation,
-                {...Employee.designationOptions, if (_designation.isNotEmpty) _designation}.toList(),
-                (val) => setState(() => _designation = val!),
-              ),
-              _buildDateField('Date Of Joining', _joiningDateController, placeholder: '29-04-2017'),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildRow2or3(
-            isMobile: isMobile,
-            children: [
-              _buildDateField('Contract End Date', _contractEndDateController, placeholder: 'dd-mm-yyyy'),
-              _buildTextField('Email', _emailController, placeholder: 'Saravanan@igreentec.in'),
-              _buildTextField('PF Number', _pfNumberController, placeholder: '100338738050'),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildRow2or3(
-            isMobile: isMobile,
-            children: [
-              _buildTextField('ESI Number', _esiNumberController, placeholder: 'ESI Number'),
-              _buildDropdown(
-                'Reporting To',
-                _reportingTo,
-                ['Saravanan G S', 'John Doe', 'Jane Smith', 'None'],
-                (val) => setState(() => _reportingTo = val!),
-              ),
-              _buildDropdown(
-                'Leave Type',
-                _leaveType,
-                ['As Needed', 'Once a Month', 'No Leave'],
-                (val) => setState(() => _leaveType = val!),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildRow2or3(
-            isMobile: isMobile,
-            children: [
-              _buildTextField(
-                'In Time',
-                _inTimeController,
-                placeholder: 'e.g. 09:00 AM',
-              ),
-              _buildTextField(
-                'Out Time',
-                _outTimeController,
-                placeholder: 'e.g. 06:00 PM',
-              ),
-              _buildTextField(
-                'Weekly Off Day',
-                _weeklyOffDayController,
-                placeholder: 'e.g. Sunday',
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildRow2or3(
-            isMobile: isMobile,
-            children: [
-              _buildTextField(
-                'Reporting Manager Title',
-                _reportingManagerTitleController,
-                placeholder: 'e.g. Managing Director',
-              ),
-              _buildTextField(
-                'Present Admin Name',
-                _adminNameController,
-                placeholder: 'e.g. Saravanan G S',
-              ),
-              _buildTextField(
-                'Coordinator Name',
-                _coordinatorNameController,
-                placeholder: 'e.g. Admin Team',
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildRow2or3(
-            isMobile: isMobile,
-            children: [
-              _buildTextField(
-                'Coordinator Contact Phone',
-                _coordinatorPhoneController,
-                placeholder: 'e.g. 8760098789',
-              ),
-              const SizedBox.shrink(),
-              const SizedBox.shrink(),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildRow2or3(
-            isMobile: isMobile,
-            children: [
-              _buildDropdown(
-                'Leave Allocation Frequency',
-                _leaveAllocationFrequency,
-                ['Monthly', 'Quarterly', 'Yearly'],
-                (val) => setState(() => _leaveAllocationFrequency = val!),
-              ),
-              _buildTextField(
-                'Number of Allowed Leaves',
-                _allowedLeavesController,
-                placeholder: 'e.g. 1.0',
-              ),
-              _buildDateField(
-                'Effective Date',
-                _leaveEffectiveDateController,
-                placeholder: 'dd-mm-yyyy',
-              ),
-            ],
-          ),
-        ] else ...[
-          _buildRow2or3(
-            isMobile: isMobile,
-            children: [
-              _buildTextField('First Name', _firstNameController, placeholder: 'First Name'),
-              _buildTextField('Last Name', _lastNameController, placeholder: 'Last Name'),
-              _buildDropdown(
-                'Blood Group',
-                _bloodGroup,
-                ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'],
-                (val) => setState(() => _bloodGroup = val!),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildRow2or3(
-            isMobile: isMobile,
-            children: [
-              _buildDropdown(
-                'Gender',
-                _gender,
-                ['Male', 'Female', 'Other'],
-                (val) => setState(() => _gender = val!),
-              ),
-              _buildDateField('Date Of Birth', _dobController, placeholder: '13-05-1982'),
-              _buildTextField('Aadhar Number', _aadhaarController, placeholder: '833750993144'),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildRow2or3(
-            isMobile: isMobile,
-            children: [
-              _buildTextField('Contact Number', _phoneController, placeholder: '8760098789'),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildRow2or3(
-            isMobile: isMobile,
-            children: [
-              _buildTextField('Email', _emailController, placeholder: 'Saravanan@igreentec.in'),
-              _buildTextField('PF Number', _pfNumberController, placeholder: '100338738050'),
-              _buildTextField('ESI Number', _esiNumberController, placeholder: 'ESI Number'),
-            ],
-          ),
-        ],
+        _buildRow2or3(
+          isMobile: isMobile,
+          children: [
+            _buildTextField('First Name', _firstNameController, placeholder: 'First Name'),
+            _buildTextField('Last Name', _lastNameController, placeholder: 'Last Name'),
+            _buildDropdown(
+              'Blood Group',
+              _bloodGroup,
+              ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'],
+              (val) => setState(() => _bloodGroup = val!),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _buildRow2or3(
+          isMobile: isMobile,
+          children: [
+            _buildDropdown(
+              'Gender',
+              _gender,
+              ['Male', 'Female', 'Other'],
+              (val) => setState(() => _gender = val!),
+            ),
+            _buildDateField('Date Of Birth', _dobController, placeholder: '13-05-1982'),
+            _buildTextField('Aadhar Number', _aadhaarController, placeholder: '833750993144'),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _buildRow2or3(
+          isMobile: isMobile,
+          children: [
+            _buildTextField('Contact Number', _phoneController, placeholder: '8760098789'),
+            _buildTextField('Email', _emailController, placeholder: 'Saravanan@igreentec.in'),
+            _buildTextField('PF Number', _pfNumberController, placeholder: '100338738050'),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _buildRow2or3(
+          isMobile: isMobile,
+          children: [
+            _buildTextField('ESI Number', _esiNumberController, placeholder: 'ESI Number'),
+            const SizedBox.shrink(),
+            const SizedBox.shrink(),
+          ],
+        ),
         const SizedBox(height: 20),
         // Image Picker Section
         Row(
@@ -1545,38 +1408,7 @@ class _EmployeeRegistrationPageState
         ),
         const SizedBox(height: 20),
         // Save / Cancel Buttons
-        Row(
-          children: [
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.active,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-              ),
-              onPressed: _isSubmitting ? null : () => _submitForm(link, isSubmit: false),
-              icon: _isSubmitting
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Icon(Icons.check, size: 16),
-              label: const Text('Save', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-            ),
-            const SizedBox(width: 8),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.active,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-              ),
-              onPressed: () {},
-              child: const Text('Cancel', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
+        _buildSaveButtonsRow(link, 'Personal Info'),
       ],
     );
 
@@ -1679,6 +1511,161 @@ class _EmployeeRegistrationPageState
     );
   }
 
+  // TAB: JOB & ADMIN DETAILS
+  Widget _buildJobAdminDetailsTab(RegistrationLink link, bool isMobile) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: Colors.black12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Job & Administrative Details',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildRow2or3(
+              isMobile: isMobile,
+              children: [
+                _buildDropdown(
+                  'User Type',
+                  _userType,
+                  ['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE', 'HR', 'MANAGER'],
+                  (val) => setState(() => _userType = val!),
+                ),
+                _buildDropdown(
+                  'Status',
+                  _status,
+                  ['ACTIVE', 'INACTIVE'],
+                  (val) => setState(() => _status = val!),
+                ),
+                _buildDropdown(
+                  'Department',
+                  _department,
+                  {...Employee.departmentOptions, if (_department.isNotEmpty) _department}.toList(),
+                  (val) => setState(() => _department = val!),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildRow2or3(
+              isMobile: isMobile,
+              children: [
+                _buildDropdown(
+                  'Designation',
+                  _designation,
+                  {...Employee.designationOptions, if (_designation.isNotEmpty) _designation}.toList(),
+                  (val) => setState(() => _designation = val!),
+                ),
+                _buildDateField('Date Of Joining', _joiningDateController, placeholder: '29-04-2017'),
+                _buildDateField('Contract End Date', _contractEndDateController, placeholder: 'dd-mm-yyyy'),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildRow2or3(
+              isMobile: isMobile,
+              children: [
+                _buildDropdown(
+                  'Reporting To',
+                  _reportingTo,
+                  ['Saravanan G S', 'John Doe', 'Jane Smith', 'None'],
+                  (val) => setState(() => _reportingTo = val!),
+                ),
+                _buildTextField(
+                  'Reporting Manager Title',
+                  _reportingManagerTitleController,
+                  placeholder: 'e.g. Managing Director',
+                ),
+                _buildTextField(
+                  'Present Admin Name',
+                  _adminNameController,
+                  placeholder: 'e.g. Saravanan G S',
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildRow2or3(
+              isMobile: isMobile,
+              children: [
+                _buildTextField(
+                  'Coordinator Name',
+                  _coordinatorNameController,
+                  placeholder: 'e.g. Admin Team',
+                ),
+                _buildTextField(
+                  'Coordinator Contact Phone',
+                  _coordinatorPhoneController,
+                  placeholder: 'e.g. 8760098789',
+                ),
+                _buildTextField(
+                  'Weekly Off Day',
+                  _weeklyOffDayController,
+                  placeholder: 'e.g. Sunday',
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildRow2or3(
+              isMobile: isMobile,
+              children: [
+                _buildTextField(
+                  'In Time',
+                  _inTimeController,
+                  placeholder: 'e.g. 09:00 AM',
+                ),
+                _buildTextField(
+                  'Out Time',
+                  _outTimeController,
+                  placeholder: 'e.g. 06:00 PM',
+                ),
+                _buildDropdown(
+                  'Leave Type',
+                  _leaveType,
+                  ['As Needed', 'Once a Month', 'No Leave'],
+                  (val) => setState(() => _leaveType = val!),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildRow2or3(
+              isMobile: isMobile,
+              children: [
+                _buildDropdown(
+                  'Leave Allocation Frequency',
+                  _leaveAllocationFrequency,
+                  ['Monthly', 'Quarterly', 'Yearly'],
+                  (val) => setState(() => _leaveAllocationFrequency = val!),
+                ),
+                _buildTextField(
+                  'Number of Allowed Leaves',
+                  _allowedLeavesController,
+                  placeholder: 'e.g. 1.0',
+                ),
+                _buildDateField(
+                  'Effective Date',
+                  _leaveEffectiveDateController,
+                  placeholder: 'dd-mm-yyyy',
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            _buildSaveButtonsRow(link, 'Job & Admin Details'),
+          ],
+        ),
+      ),
+    );
+  }
+
   // TAB 2: ADDRESS
   Widget _buildAddressTab(RegistrationLink link, bool isMobile) {
     return SingleChildScrollView(
@@ -1742,17 +1729,7 @@ class _EmployeeRegistrationPageState
               ],
             ),
             const SizedBox(height: 24),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.active,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-              ),
-              onPressed: _isSubmitting ? null : () => _submitForm(link, isSubmit: false),
-              icon: const Icon(Icons.check, size: 16),
-              label: const Text('Save', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-            ),
+            _buildSaveButtonsRow(link, 'Address'),
           ],
         ),
       ),
@@ -2688,6 +2665,68 @@ class _EmployeeRegistrationPageState
     );
   }
 
+  Widget _buildSaveButtonsRow(RegistrationLink link, String tabName) {
+    final isSaved = _savedTabs.contains(tabName);
+    return Row(
+      children: [
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.active,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+          ),
+          onPressed: _isSubmitting ? null : () => _submitForm(link, isSubmit: false),
+          icon: _isSubmitting
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Icon(Icons.check, size: 16),
+          label: const Text('Save', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+        ),
+        const SizedBox(width: 8),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.active,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+          ),
+          onPressed: () {},
+          child: const Text('Cancel', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+        ),
+        if (isSaved) ...[
+          const SizedBox(width: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8F5E9),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: const Color(0xFFA5D6A7)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.check_circle, size: 16, color: Color(0xFF2E7D32)),
+                SizedBox(width: 6),
+                Text(
+                  'This page is saved',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2E7D32),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   // TAB 9: SALARY & OFFER LETTER
   Widget _buildSalaryOfferLetterTab(RegistrationLink link, bool isMobile) {
     return SingleChildScrollView(
@@ -2913,13 +2952,35 @@ class _EmployeeRegistrationPageState
                       ),
                       SizedBox(height: 2),
                       Text(
-                        'Live preview generated from Personal Info tab details.',
+                        'Live preview generated from form & Job & Admin Details tab.',
                         style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 12),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.active,
+                    side: const BorderSide(color: AppColors.active),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                  ),
+                  onPressed: () {
+                    setState(() {});
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Welcome Letter preview updated with latest changes!'),
+                        backgroundColor: Colors.green,
+                        duration: Duration(seconds: 2),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Refresh Preview', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(width: 8),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.active,
