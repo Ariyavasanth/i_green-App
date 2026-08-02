@@ -55,13 +55,24 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                 child: Text('Unable to load responses: $err'),
               ),
               data: (links) {
-                final statusList = [
-                  'All Statuses',
-                  ...{for (final link in links) if (link.linkStatus.isNotEmpty) link.linkStatus},
-                ];
                 final employees = employeesAsync.valueOrNull ?? const <Employee>[];
 
-                final filtered = links.where((link) {
+                // Filter out candidates that have already been converted into employees
+                final unconvertedLinks = links.where((link) {
+                  final status = link.linkStatus.trim().toLowerCase();
+                  final isAcceptedOrConverted = status == 'accepted' || status == 'converted';
+                  final isEmpId = link.employeeId.trim().toUpperCase().startsWith('EMP-');
+                  final employee = _employeeForLink(link, employees);
+                  final isConvertedEmp = employee != null && employee.employeeId.trim().toUpperCase().startsWith('EMP-');
+                  return !(isAcceptedOrConverted || isEmpId || isConvertedEmp);
+                }).toList();
+
+                final statusList = [
+                  'All Statuses',
+                  ...{for (final link in unconvertedLinks) if (link.linkStatus.isNotEmpty) link.linkStatus},
+                ];
+
+                final filtered = unconvertedLinks.where((link) {
                   final q = searchQuery.toLowerCase().trim();
                   final candidateId = _candidateId(link);
                   final employee = _employeeForLink(link, employees);

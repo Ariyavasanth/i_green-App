@@ -257,142 +257,14 @@ class SqliteEmployeeRepository implements EmployeeRepository {
   }
 
   Future<void> _seedSampleData(Database db) async {
-    final sampleEmployees = [
-      const Employee(
-        id: 1,
-        employeeId: 'EMP-0001',
-        firstName: 'Saravanan',
-        lastName: 'G S',
-        emailAddress: 'Saravanan@igreentec.in',
-        phoneNumber: '8760098789',
-        gender: 'Male',
-        dob: '13-05-1982',
-        organizationName: 'iGreen Tech',
-        department: 'Management',
-        designation: 'Company Director',
-        employmentType: 'Full-Time',
-        joiningDate: '29-04-2017',
-        status: 'Active',
-        bloodGroup: 'B+',
-        userType: 'SUPER_ADMIN',
-        aadhaarNumber: '833750993144',
-        pfNumber: '100338738050',
-        city: 'Chennai',
-        state: 'Tamil Nadu',
-        salaryTotalCtc: 1200000.0,
-        leaveType: 'As Needed',
-        leaveAllocationFrequency: 'Monthly',
-        allowedLeaves: 1.5,
-        effectiveDate: '01-01-2026',
-      ),
-      const Employee(
-        id: 2,
-        employeeId: 'EMP-0002',
-        firstName: 'John',
-        lastName: 'Doe',
-        emailAddress: 'john.doe@igreentec.in',
-        phoneNumber: '9876543210',
-        gender: 'Male',
-        dob: '15-08-1990',
-        organizationName: 'iGreen Tech',
-        department: 'Engineering',
-        designation: 'Software Engineer',
-        employmentType: 'Full-Time',
-        joiningDate: '01-06-2022',
-        status: 'Active',
-        bloodGroup: 'O+',
-        userType: 'EMPLOYEE',
-        city: 'Bangalore',
-        state: 'Karnataka',
-        salaryTotalCtc: 600000.0,
-        leaveType: 'Once a Month',
-        leaveAllocationFrequency: 'Monthly',
-        allowedLeaves: 1.0,
-        effectiveDate: '01-01-2026',
-        accessPermissions: ['Home', 'Leave', 'Loan', 'Pay Slip'],
-      ),
-      const Employee(
-        id: 3,
-        employeeId: 'EMP-0003',
-        firstName: 'Jane',
-        lastName: 'Smith',
-        emailAddress: 'jane.smith@igreentec.in',
-        phoneNumber: '9123456780',
-        gender: 'Female',
-        dob: '22-11-1993',
-        organizationName: 'iGreen Tech',
-        department: 'HR',
-        designation: 'HR Executive',
-        employmentType: 'Full-Time',
-        joiningDate: '15-03-2021',
-        status: 'Active',
-        bloodGroup: 'A-',
-        userType: 'EMPLOYEE',
-        city: 'Hyderabad',
-        state: 'Telangana',
-        salaryTotalCtc: 450000.0,
-        leaveType: 'No Leave',
-        leaveAllocationFrequency: 'Monthly',
-        allowedLeaves: 1.0,
-        effectiveDate: '01-01-2026',
-        accessPermissions: ['Home', 'Leave', 'Loan', 'Pay Slip'],
-      ),
-      const Employee(
-        id: 4,
-        employeeId: 'EMP-9222',
-        firstName: 'Employee',
-        lastName: '9222',
-        emailAddress: 'emp9222@igreentec.in',
-        phoneNumber: '9876549222',
-        gender: 'Male',
-        dob: '10-10-1995',
-        organizationName: 'iGreen Tech',
-        department: 'Engineering',
-        designation: 'Software Engineer',
-        employmentType: 'Full-Time',
-        joiningDate: '01-01-2026',
-        status: 'Active',
-        bloodGroup: 'B+',
-        userType: 'EMPLOYEE',
-        city: 'Chennai',
-        state: 'Tamil Nadu',
-        salaryTotalCtc: 480000.0,
-        leaveType: 'Once a Month',
-        leaveAllocationFrequency: 'Monthly',
-        allowedLeaves: 1.0,
-        effectiveDate: '01-01-2026',
-        temporaryPassword: 'Admin@123',
-        accessPermissions: ['Leave', 'Loan', 'Pay Slip'],
-      ),
-    ];
-
-    for (final emp in sampleEmployees) {
-      final exists = Sqflite.firstIntValue(
-        await db.rawQuery('SELECT COUNT(*) FROM employees WHERE employee_id = ?', [emp.employeeId]),
-      ) ?? 0;
-      if (exists == 0) {
-        final idExists = Sqflite.firstIntValue(
-          await db.rawQuery('SELECT COUNT(*) FROM employees WHERE id = ?', [emp.id]),
-        ) ?? 0;
-        if (idExists > 0) {
-          final map = emp.toMap()..remove('id');
-          await db.insert('employees', map);
-        } else {
-          await db.insert('employees', emp.toMap());
-        }
-      }
-    }
-
-    // Ensure EMP-9222 has correct permissions
-    await db.rawUpdate(
-      'UPDATE employees SET access_permissions = ? WHERE LOWER(employee_id) = ?',
-      [jsonEncode(['Leave', 'Loan', 'Pay Slip']), 'emp-9222'],
+    // Remove sample/dummy employee records and registration links
+    await db.delete(
+      'employees',
+      where: "employee_id IN ('EMP-0001', 'EMP-0002', 'EMP-3006') OR first_name IN ('Saravanan', 'Ariya', 'guna')",
     );
-
-    // Ensure EMP-0001 is SUPER_ADMIN so they don't get locked out
-    await db.rawUpdate(
-      'UPDATE employees SET user_type = ? WHERE LOWER(employee_id) = ?',
-      ['SUPER_ADMIN', 'emp-0001'],
+    await db.delete(
+      'registration_links',
+      where: "employee_name IN ('Saravanan G S', 'Ariya vasanth', 'guna S')",
     );
   }
 
@@ -403,8 +275,11 @@ class SqliteEmployeeRepository implements EmployeeRepository {
     return maps
         .map((map) => Employee.fromMap(map))
         .where((emp) =>
-            emp.employeeId.startsWith('EMP-') ||
-            (!emp.employeeId.startsWith('CAN-') && !emp.employeeId.startsWith('pending_')))
+            emp.employeeId.trim().toUpperCase().startsWith('EMP-') ||
+            (!emp.employeeId.trim().toUpperCase().startsWith('CAN-') &&
+             !emp.employeeId.trim().toLowerCase().startsWith('pending_') &&
+             emp.status.trim().toLowerCase() != 'draft' &&
+             emp.employeeId.isNotEmpty))
         .toList();
   }
 

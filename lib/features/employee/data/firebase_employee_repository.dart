@@ -84,63 +84,23 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     final all = await getAllEmployees();
     return all
         .where((emp) =>
-            emp.employeeId.startsWith('EMP-') ||
-            (!emp.employeeId.startsWith('CAN-') && !emp.employeeId.startsWith('pending_')))
+            emp.employeeId.trim().toUpperCase().startsWith('EMP-') ||
+            (!emp.employeeId.trim().toUpperCase().startsWith('CAN-') &&
+             !emp.employeeId.trim().toLowerCase().startsWith('pending_') &&
+             emp.status.trim().toLowerCase() != 'draft' &&
+             emp.employeeId.isNotEmpty))
         .toList();
   }
 
   @override
   Future<List<Employee>> getAllEmployees() async {
     final snapshot = await _employeesRef.get();
-    
     if (snapshot.docs.isEmpty) {
-      const sampleEmp = Employee(
-        id: 1,
-        employeeId: 'EMP-0001',
-        firstName: 'Saravanan',
-        lastName: 'G S',
-        emailAddress: 'Saravanan@igreentec.in',
-        phoneNumber: '8760098789',
-        gender: 'Male',
-        dob: '13-05-1982',
-        organizationName: 'iGreen Tech',
-        department: 'Management',
-        designation: 'Company Director',
-        employmentType: 'Full-Time',
-        joiningDate: '29-04-2017',
-        status: 'Active',
-        bloodGroup: 'B+',
-        userType: 'SUPER_ADMIN',
-        aadhaarNumber: '833750993144',
-        pfNumber: '100338738050',
-        city: 'Chennai',
-        state: 'Tamil Nadu',
-      );
-      await addEmployee(sampleEmp);
-      final newSnapshot = await _employeesRef.get();
-      return newSnapshot.docs
-          .map((doc) => _employeeFromFirestore(doc.data(), doc.id))
-          .toList();
+      return [];
     }
-    
-    final employees = snapshot.docs.map((doc) {
+    return snapshot.docs.map((doc) {
       return _employeeFromFirestore(doc.data(), doc.id);
     }).toList();
-    
-    for (var i = 0; i < employees.length; i++) {
-      if (employees[i].emailAddress.toLowerCase() == 'saravanan@igreentec.in') {
-        if (employees[i].userType != 'SUPER_ADMIN' || employees[i].status != 'Active') {
-          final updatedAdmin = employees[i].copyWith(
-            userType: 'SUPER_ADMIN',
-            status: 'Active',
-          );
-          updateEmployee(updatedAdmin);
-          employees[i] = updatedAdmin;
-        }
-      }
-    }
-    
-    return employees;
   }
 
   @override

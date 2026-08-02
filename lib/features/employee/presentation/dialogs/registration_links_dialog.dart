@@ -42,10 +42,17 @@ class RegistrationLinksDialog extends ConsumerWidget {
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => Center(child: Text('Error loading links: $err')),
           data: (links) {
-            if (links.isEmpty) {
+            final unconvertedLinks = links.where((link) {
+              final status = link.linkStatus.trim().toLowerCase();
+              final isAcceptedOrConverted = status == 'accepted' || status == 'converted';
+              final isEmpId = link.employeeId.trim().toUpperCase().startsWith('EMP-');
+              return !(isAcceptedOrConverted || isEmpId);
+            }).toList();
+
+            if (unconvertedLinks.isEmpty) {
               return const Center(
                 child: Text(
-                  'No registration links generated yet.',
+                  'No pending candidate registration links found.',
                   style: TextStyle(color: AppColors.textSecondary),
                 ),
               );
@@ -68,7 +75,7 @@ class RegistrationLinksDialog extends ConsumerWidget {
                     DataColumn(label: Text('EMPLOYEE ID')),
                     DataColumn(label: Text('ACTIONS')),
                   ],
-                  rows: links.map((link) {
+                  rows: unconvertedLinks.map((link) {
                     final statusColor = switch (link.linkStatus) {
                       'Completed' => Colors.green,
                       'Expired' => Colors.redAccent,
