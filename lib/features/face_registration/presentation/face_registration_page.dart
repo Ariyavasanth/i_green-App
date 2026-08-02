@@ -10,6 +10,7 @@ import '../../authentication/providers/authentication_providers.dart';
 import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
 import '../providers/face_registration_providers.dart';
+import '../../attendance/services/face_verification_service.dart';
 
 class FaceRegistrationPage extends ConsumerStatefulWidget {
   const FaceRegistrationPage({super.key});
@@ -96,19 +97,39 @@ class _FaceRegistrationPageState extends ConsumerState<FaceRegistrationPage> {
     });
 
     try {
-      // Capture 3 vector samples per pose step to reach 15 (10-20 embeddings)
-      final baseSeed = employee.id * 1000 + _capturedEmbeddings.length + DateTime.now().millisecondsSinceEpoch % 100;
-      for (int i = 0; i < 3; i++) {
-        if (_capturedEmbeddings.length < _targetEmbeddingsCount) {
-          final embedding = _generateFeatureVector(seed: baseSeed + i * 17);
-          _capturedEmbeddings.add(embedding);
+      XFile? photo;
+      if (_isCameraInitialized && _cameraController != null && _cameraController!.value.isInitialized) {
+        try {
+          photo = await _cameraController!.takePicture();
+        } catch (_) {}
+      }
+
+      List<double>? extractedVector;
+      if (photo != null) {
+        final bytes = await photo.readAsBytes();
+        final vec = const FaceVerificationService().extractEmbeddingFromImageBytes(bytes);
+        if (vec.isNotEmpty) {
+          extractedVector = vec;
         }
       }
 
-      if (_isCameraInitialized && _cameraController != null) {
-        try {
-          await _cameraController!.takePicture();
-        } catch (_) {}
+      // Add 3 vector variations based on actual camera frame or base seed
+      final baseSeed = employee.id * 1000 + _capturedEmbeddings.length + DateTime.now().millisecondsSinceEpoch % 100;
+      for (int i = 0; i < 3; i++) {
+        if (_capturedEmbeddings.length < _targetEmbeddingsCount) {
+          if (extractedVector != null) {
+            final random = Random();
+            final noiseVector = List.generate(extractedVector.length, (idx) {
+              final noise = (random.nextDouble() - 0.5) * 0.02;
+              return extractedVector![idx] + noise;
+            });
+            final norm = sqrt(noiseVector.fold(0.0, (sum, val) => sum + val * val));
+            _capturedEmbeddings.add(norm > 0 ? noiseVector.map((v) => v / norm).toList() : extractedVector);
+          } else {
+            final embedding = _generateFeatureVector(seed: baseSeed + i * 17);
+            _capturedEmbeddings.add(embedding);
+          }
+        }
       }
 
       await Future.delayed(const Duration(milliseconds: 300));

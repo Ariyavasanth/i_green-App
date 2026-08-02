@@ -146,11 +146,11 @@ class SqliteFaceRegistrationRepository implements FaceRegistrationRepository {
       }
     }
 
-    final bool isMatched = maxScore >= 0.95;
+    final bool isMatched = maxScore >= 0.80;
     final String status = isMatched ? 'VERIFIED' : 'MISMATCH';
     final String message = isMatched
         ? 'Face Verified (${(maxScore * 100).toStringAsFixed(1)}% Match)'
-        : 'Face Mismatch (${(maxScore * 100).toStringAsFixed(1)}% Match). Evidence saved & Admin Notified.';
+        : 'Face not recognized. Attendance not marked (${(maxScore * 100).toStringAsFixed(1)}% Match).';
 
     final db = await _db;
     await _ensureTable(db);

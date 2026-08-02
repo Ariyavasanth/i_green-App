@@ -220,26 +220,28 @@ class SqliteAttendanceRepository implements AttendanceRepository {
     required String scheduledCheckInTime,
     required double currentLatitude,
     required double currentLongitude,
+    bool faceMatched = true,
+    double similarityScore = 1.0,
   }) async {
     final now = DateTime.now();
     final time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
-    final score = profileImageUrl.isNotEmpty ? 0.93 : 0.0;
-    final allowed = score >= 0.9;
+    final score = similarityScore;
+    final allowedFace = faceMatched && score >= 0.80;
     final settings = await getAttendanceSettings();
     final withinRadius = _isWithinAllowedRadius(
       settings: settings,
       currentLatitude: currentLatitude,
       currentLongitude: currentLongitude,
     );
-    final message = !withinRadius
-        ? 'You are not at the office. Please go to the office location to check in.'
-        : allowed
-            ? 'Check in successful.'
-            : 'Face verification failed. Please try again.';
+    final message = !allowedFace
+        ? 'Face not recognized. Attendance not marked.'
+        : !withinRadius
+            ? 'You are not at the office. Please go to the office location to check in.'
+            : 'Check in successful.';
     final result = AttendanceVerificationResult(
-      allowed: allowed && withinRadius,
+      allowed: allowedFace && withinRadius,
       similarityScore: score,
-      verificationStatus: !withinRadius ? 'Outside Radius' : allowed ? 'Verified' : 'Failed',
+      verificationStatus: !allowedFace ? 'Face Mismatch' : (!withinRadius ? 'Outside Radius' : 'Verified'),
       message: message,
       capturedImagePath: '',
     );
@@ -279,26 +281,28 @@ class SqliteAttendanceRepository implements AttendanceRepository {
     required String profileImageUrl,
     required double currentLatitude,
     required double currentLongitude,
+    bool faceMatched = true,
+    double similarityScore = 1.0,
   }) async {
     final now = DateTime.now();
     final time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
-    final score = profileImageUrl.isNotEmpty ? 0.93 : 0.0;
-    final allowed = score >= 0.9;
+    final score = similarityScore;
+    final allowedFace = faceMatched && score >= 0.80;
     final settings = await getAttendanceSettings();
     final withinRadius = _isWithinAllowedRadius(
       settings: settings,
       currentLatitude: currentLatitude,
       currentLongitude: currentLongitude,
     );
-    final message = !withinRadius
-        ? 'You are not at the office. Please go to the office location to check out.'
-        : allowed
-            ? 'Check out successful.'
-            : 'Face verification failed. Please try again.';
+    final message = !allowedFace
+        ? 'Face not recognized. Attendance not marked.'
+        : !withinRadius
+            ? 'You are not at the office. Please go to the office location to check out.'
+            : 'Check out successful.';
     final result = AttendanceVerificationResult(
-      allowed: allowed && withinRadius,
+      allowed: allowedFace && withinRadius,
       similarityScore: score,
-      verificationStatus: !withinRadius ? 'Outside Radius' : allowed ? 'Verified' : 'Failed',
+      verificationStatus: !allowedFace ? 'Face Mismatch' : (!withinRadius ? 'Outside Radius' : 'Verified'),
       message: message,
       capturedImagePath: '',
     );

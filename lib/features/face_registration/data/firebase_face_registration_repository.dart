@@ -120,12 +120,12 @@ class FirebaseFaceRegistrationRepository implements FaceRegistrationRepository {
       }
     }
 
-    // Match threshold > 95% (0.95)
-    final bool isMatched = maxScore >= 0.95;
+    // Match threshold >= 80% (0.80)
+    final bool isMatched = maxScore >= 0.80;
     final String status = isMatched ? 'VERIFIED' : 'MISMATCH';
     final String message = isMatched
         ? 'Face Verified (${(maxScore * 100).toStringAsFixed(1)}% Match)'
-        : 'Face Mismatch (${(maxScore * 100).toStringAsFixed(1)}% Match). Alert Sent to Admin.';
+        : 'Face not recognized. Attendance not marked (${(maxScore * 100).toStringAsFixed(1)}% Match).';
 
     if (isMatched) {
       // YES (>95%): Save METADATA ONLY (no photo binary stored to conserve disk/cloud storage)

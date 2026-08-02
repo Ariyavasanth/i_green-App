@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:camera/camera.dart';
+import 'package:local_auth/local_auth.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../domain/attendance_record.dart';
@@ -15,6 +16,7 @@ import '../domain/attendance_repository.dart';
 import '../providers/attendance_providers.dart';
 import '../../face_registration/domain/face_registration_repository.dart';
 import '../../face_registration/providers/face_registration_providers.dart';
+import '../services/face_verification_service.dart' hide FaceVerificationResult;
 
 class AttendancePage extends ConsumerStatefulWidget {
   const AttendancePage({super.key});
@@ -808,7 +810,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
   String? _message;
   bool? _withinAllowedRadius;
   String? _locationMessage;
-  static const double _maxAllowedGpsAccuracyMeters = 50;
+  static const double _maxAllowedGpsAccuracyMeters = 200;
 
   String _formatKey(DateTime date) =>
       '${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}';
@@ -1000,40 +1002,121 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
       final dateKey = _formatKey(widget.date);
       final timeStr = DateFormat('HH:mm:ss').format(now);
 
-      XFile? livePhoto;
-      if (_isCameraInitialized && _cameraController != null) {
-        try {
-          livePhoto = await _cameraController!.takePicture();
-        } catch (_) {}
+      // Step 1: Native Android Phone Hardware Face Unlock / Biometric Verification
+      bool isNativeVerified = false;
+      try {
+        final localAuth = LocalAuthentication();
+        final canCheck = await localAuth.canCheckBiometrics;
+        final isSupported = await localAuth.isDeviceSupported();
+        if (canCheck && isSupported) {
+          final biometrics = await localAuth.getAvailableBiometrics();
+          if (biometrics.isNotEmpty) {
+            isNativeVerified = await localAuth.authenticate(
+              localizedReason: 'Scan face biometrics to verify attendance for ${widget.currentEmployee.fullName}',
+              options: const AuthenticationOptions(
+                biometricOnly: true,
+                stickyAuth: true,
+                useErrorDialogs: true,
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('Native phone face unlock error: $e');
       }
 
-      // Live face recognition against registered embedding vectors
-      final faceRepo = ref.read(faceRegistrationRepositoryProvider);
-      final storedEmbeddings = await faceRepo.getFaceEmbeddings(widget.currentEmployee.id);
-
-      List<double> liveVector;
-      if (storedEmbeddings.isNotEmpty) {
-        final firstStored = storedEmbeddings.first;
-        final random = Random();
-        liveVector = List.generate(firstStored.length, (i) {
-          final noise = (random.nextDouble() - 0.5) * 0.04;
-          return firstStored[i] + noise;
-        });
-        final norm = sqrt(liveVector.fold(0.0, (s, v) => s + v * v));
-        liveVector = liveVector.map((v) => v / norm).toList();
+      FaceVerificationResult faceVerification;
+      if (isNativeVerified) {
+        faceVerification = const FaceVerificationResult(
+          isMatched: true,
+          similarityScore: 1.0,
+          verificationStatus: 'VERIFIED_NATIVE',
+          message: 'Face Verified via Native Android Face Unlock (100% Match)',
+        );
       } else {
-        liveVector = _generateFeatureVector(seed: DateTime.now().millisecondsSinceEpoch);
+        final faceRepo = ref.read(faceRegistrationRepositoryProvider);
+        final storedEmbeddings = await faceRepo.getFaceEmbeddings(widget.currentEmployee.id);
+
+        if (storedEmbeddings.isEmpty) {
+          if (!mounted) return;
+          setState(() {
+            _message = 'Face not recognized. Attendance not marked.';
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Face not recognized. Attendance not marked.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+
+        XFile? livePhoto;
+        if (_isCameraInitialized && _cameraController != null && _cameraController!.value.isInitialized) {
+          try {
+            livePhoto = await _cameraController!.takePicture();
+          } catch (_) {}
+        }
+
+        if (livePhoto == null) {
+          if (!mounted) return;
+          setState(() {
+            _message = 'No face detected in frame. Please position your face clearly.';
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No face detected in frame. Please position your face clearly.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+
+        final bytes = await livePhoto.readAsBytes();
+        const faceService = FaceVerificationService();
+
+        if (!faceService.isFaceDetected(bytes)) {
+          if (!mounted) return;
+          setState(() {
+            _message = 'No face detected in frame. Please position your face clearly.';
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No face detected in frame. Please position your face clearly.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+
+        final liveVector = faceService.extractEmbeddingFromImageBytes(bytes);
+        if (liveVector.isEmpty) {
+          if (!mounted) return;
+          setState(() {
+            _message = 'No face detected in frame. Please position your face clearly.';
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No face detected in frame. Please position your face clearly.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+
+        faceVerification = await faceRepo.verifyLiveEmbedding(
+          employeeId: widget.currentEmployee.id,
+          employeeName: widget.currentEmployee.fullName,
+          date: dateKey,
+          time: timeStr,
+          actionType: widget.isCheckOut ? 'CHECK_OUT' : 'CHECK_IN',
+          liveEmbedding: liveVector,
+          liveFrameImagePath: livePhoto.path,
+        );
       }
 
-      final faceVerification = await faceRepo.verifyLiveEmbedding(
-        employeeId: widget.currentEmployee.id,
-        employeeName: widget.currentEmployee.fullName,
-        date: dateKey,
-        time: timeStr,
-        actionType: widget.isCheckOut ? 'CHECK_OUT' : 'CHECK_IN',
-        liveEmbedding: liveVector,
-        liveFrameImagePath: livePhoto?.path,
-      );
+      // Temporary log for testing threshold confirmation (commented out before finishing)
+      // debugPrint('Face Verification Attempt - Employee ID: ${widget.currentEmployee.id}, Similarity Score: ${(faceVerification.similarityScore * 100).toStringAsFixed(2)}%, IsMatched: ${faceVerification.isMatched}');
 
       if (!mounted) return;
       setState(() {
@@ -1048,31 +1131,39 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
           time: timeStr,
           verificationStatus: widget.isCheckOut ? 'CheckOut Failed' : 'Failed',
           similarityScore: faceVerification.similarityScore,
-          message: faceVerification.message,
+          message: 'Face not recognized. Attendance not marked.',
         );
 
         if (!mounted) return;
         setState(() {
-          _message = 'Face Recognition Failed (${(faceVerification.similarityScore * 100).toStringAsFixed(1)}% match). Attendance rejected.';
+          _message = 'Face not recognized. Attendance not marked. (${(faceVerification.similarityScore * 100).toStringAsFixed(1)}% match)';
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Face Mismatch (${(faceVerification.similarityScore * 100).toStringAsFixed(1)}%). Attendance rejected.'),
+          const SnackBar(
+            content: Text('Face not recognized. Attendance not marked.'),
             backgroundColor: Colors.red,
           ),
         );
         return;
       }
 
-      // GPS Position Verification
-      final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-      if (position.accuracy > _maxAllowedGpsAccuracyMeters) {
-        throw Exception(
-          'GPS accuracy is too low (${position.accuracy.toStringAsFixed(1)}m). Move to an open area and try again.',
-        );
-      }
-      if (position.isMocked) {
-        throw Exception('Mock location detected. Turn off fake GPS and try again.');
+      // GPS Position Verification (only checked if GPS verification is required in settings)
+      final settings = await widget.attendanceRepository.getAttendanceSettings();
+      double currentLat = 0.0;
+      double currentLng = 0.0;
+
+      if (settings.requireGpsVerification) {
+        final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+        if (position.accuracy > _maxAllowedGpsAccuracyMeters) {
+          throw Exception(
+            'GPS accuracy is too low (${position.accuracy.toStringAsFixed(1)}m). Move to an open area and try again.',
+          );
+        }
+        if (position.isMocked) {
+          throw Exception('Mock location detected. Turn off fake GPS and try again.');
+        }
+        currentLat = position.latitude;
+        currentLng = position.longitude;
       }
 
       AttendanceVerificationResult verifyResult;
@@ -1082,8 +1173,10 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
           employeeName: widget.currentEmployee.fullName,
           date: dateKey,
           profileImageUrl: widget.currentEmployee.profileImageUrl,
-          currentLatitude: position.latitude,
-          currentLongitude: position.longitude,
+          currentLatitude: currentLat,
+          currentLongitude: currentLng,
+          faceMatched: faceVerification.isMatched,
+          similarityScore: faceVerification.similarityScore,
         );
       } else {
         verifyResult = await widget.attendanceRepository.verifyAttendance(
@@ -1092,8 +1185,10 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
           date: dateKey,
           profileImageUrl: widget.currentEmployee.profileImageUrl,
           scheduledCheckInTime: widget.currentEmployee.inTime,
-          currentLatitude: position.latitude,
-          currentLongitude: position.longitude,
+          currentLatitude: currentLat,
+          currentLongitude: currentLng,
+          faceMatched: faceVerification.isMatched,
+          similarityScore: faceVerification.similarityScore,
         );
       }
 

@@ -78,9 +78,11 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     required String scheduledCheckInTime,
     required double currentLatitude,
     required double currentLongitude,
+    bool faceMatched = true,
+    double similarityScore = 1.0,
   }) async {
-    final score = 0.99;
-    final allowed = true;
+    final score = similarityScore;
+    final allowedFace = faceMatched && score >= 0.80;
     final now = DateTime.now();
     final time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
     final settings = await getAttendanceSettings();
@@ -91,13 +93,16 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       endLongitude: currentLongitude,
     );
     final withinRadius = !settings.requireGpsVerification || distance <= settings.allowedAttendanceRadiusMeters;
+    final message = !allowedFace
+        ? 'Face not recognized. Attendance not marked.'
+        : !withinRadius
+            ? 'You are not at the office. Please go to the office location to check in.'
+            : 'Check in successful.';
     final result = AttendanceVerificationResult(
-      allowed: allowed && withinRadius,
+      allowed: allowedFace && withinRadius,
       similarityScore: score,
-      verificationStatus: !withinRadius ? 'Outside Radius' : 'Verified',
-      message: !withinRadius
-          ? 'You are not at the office. Please go to the office location to check in.'
-          : 'Check in successful.',
+      verificationStatus: !allowedFace ? 'Face Mismatch' : (!withinRadius ? 'Outside Radius' : 'Verified'),
+      message: message,
       capturedImagePath: '',
     );
     await logAttendanceAttempt(employeeId: employeeId, employeeName: employeeName, date: date, time: time, verificationStatus: result.verificationStatus, similarityScore: score, message: result.message);
@@ -119,9 +124,11 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     required String profileImageUrl,
     required double currentLatitude,
     required double currentLongitude,
+    bool faceMatched = true,
+    double similarityScore = 1.0,
   }) async {
-    final score = 0.99;
-    final allowed = true;
+    final score = similarityScore;
+    final allowedFace = faceMatched && score >= 0.80;
     final now = DateTime.now();
     final time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
     final settings = await getAttendanceSettings();
@@ -132,13 +139,16 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       endLongitude: currentLongitude,
     );
     final withinRadius = !settings.requireGpsVerification || distance <= settings.allowedAttendanceRadiusMeters;
+    final message = !allowedFace
+        ? 'Face not recognized. Attendance not marked.'
+        : !withinRadius
+            ? 'You are not at the office. Please go to the office location to check out.'
+            : 'Check out successful.';
     final result = AttendanceVerificationResult(
-      allowed: allowed && withinRadius,
+      allowed: allowedFace && withinRadius,
       similarityScore: score,
-      verificationStatus: !withinRadius ? 'Outside Radius' : 'Verified',
-      message: !withinRadius
-          ? 'You are not at the office. Please go to the office location to check out.'
-          : 'Check out successful.',
+      verificationStatus: !allowedFace ? 'Face Mismatch' : (!withinRadius ? 'Outside Radius' : 'Verified'),
+      message: message,
       capturedImagePath: '',
     );
     await logAttendanceAttempt(employeeId: employeeId, employeeName: employeeName, date: date, time: time, verificationStatus: 'CheckOut ${result.verificationStatus}', similarityScore: score, message: result.message);

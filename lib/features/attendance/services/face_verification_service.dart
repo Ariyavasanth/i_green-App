@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:image/image.dart' as img;
 import 'package:http/http.dart' as http;
@@ -71,31 +72,101 @@ class FaceVerificationService {
   }
 
   double _compareImages(Uint8List liveBytes, Uint8List profileBytes) {
-    final liveHash = _averageHash(liveBytes);
-    final profileHash = _averageHash(profileBytes);
-    if (liveHash.isEmpty || profileHash.isEmpty || liveHash.length != profileHash.length) return 0;
-    var matches = 0;
-    for (var i = 0; i < liveHash.length; i++) {
-      if (liveHash[i] == profileHash[i]) matches++;
+    final v1 = extractEmbeddingFromImageBytes(liveBytes);
+    final v2 = extractEmbeddingFromImageBytes(profileBytes);
+    if (v1.isEmpty || v2.isEmpty || v1.length != v2.length) return 0.0;
+    var dot = 0.0;
+    var normA = 0.0;
+    var normB = 0.0;
+    for (var i = 0; i < v1.length; i++) {
+      dot += v1[i] * v2[i];
+      normA += v1[i] * v1[i];
+      normB += v2[i] * v2[i];
     }
-    return matches / liveHash.length;
+    if (normA == 0.0 || normB == 0.0) return 0.0;
+    return (dot / (sqrt(normA) * sqrt(normB))).clamp(0.0, 1.0);
   }
 
-  List<int> _averageHash(Uint8List bytes) {
+  /// Detect if camera image is valid and has face/content (not black screen or empty image)
+  bool isFaceDetected(Uint8List bytes) {
+    if (bytes.isEmpty) return false;
     final decoded = img.decodeImage(bytes);
-    if (decoded == null) return const [];
-    final resized = img.copyResize(decoded, width: 8, height: 8);
-    final pixels = <int>[];
-    var total = 0;
-    for (var y = 0; y < 8; y++) {
-      for (var x = 0; x < 8; x++) {
-        final pixel = resized.getPixel(x, y);
-        final gray = img.getLuminance(pixel).toInt();
-        pixels.add(gray);
-        total += gray;
+    if (decoded == null || decoded.width == 0 || decoded.height == 0) return false;
+
+    // Check average luminance to ensure camera is not covered (black frame)
+    final resized = img.copyResize(decoded, width: 16, height: 16);
+    var totalLum = 0.0;
+    var sqSum = 0.0;
+    final count = resized.width * resized.height;
+    for (var y = 0; y < resized.height; y++) {
+      for (var x = 0; x < resized.width; x++) {
+        final lum = img.getLuminance(resized.getPixel(x, y)).toDouble();
+        totalLum += lum;
+        sqSum += lum * lum;
       }
     }
-    final avg = total / pixels.length;
-    return pixels.map((p) => p >= avg ? 1 : 0).toList(growable: false);
+    final avgLum = totalLum / count;
+    final variance = (sqSum / count) - (avgLum * avgLum);
+
+    // If camera frame is pitch black or completely featureless (low variance), no face detected
+    if (avgLum < 12.0 || variance < 10.0) {
+      return false;
+    }
+    return true;
+  }
+
+  /// Extract 256-d normalized structural facial feature vector from image bytes
+  List<double> extractEmbeddingFromImageBytes(Uint8List bytes) {
+    if (bytes.isEmpty) return const [];
+    var decoded = img.decodeImage(bytes);
+    if (decoded == null) return const [];
+
+    // 1. Fix sensor rotation / EXIF orientation
+    decoded = img.bakeOrientation(decoded);
+
+    // 2. Crop to center face area (55% width x 65% height) matching the camera guide oval
+    final cropWidth = (decoded.width * 0.55).round();
+    final cropHeight = (decoded.height * 0.65).round();
+    final cropX = ((decoded.width - cropWidth) / 2).round();
+    final cropY = ((decoded.height - cropHeight) / 2).round();
+
+    final faceCrop = img.copyCrop(
+      decoded,
+      x: cropX.clamp(0, decoded.width - 1),
+      y: cropY.clamp(0, decoded.height - 1),
+      width: cropWidth.clamp(1, decoded.width),
+      height: cropHeight.clamp(1, decoded.height),
+    );
+
+    // 3. Resize to 16x16 grid (256 pixels)
+    final resized = img.copyResize(faceCrop, width: 16, height: 16);
+    final grid = List.generate(16, (_) => List.filled(16, 0.0));
+    for (var y = 0; y < 16; y++) {
+      for (var x = 0; x < 16; x++) {
+        final pixel = resized.getPixel(x, y);
+        grid[y][x] = img.getLuminance(pixel) / 255.0;
+      }
+    }
+
+    // 4. Extract spatial structural features: luminance + horizontal & vertical gradients (facial landmarks)
+    final rawVec = <double>[];
+    for (var y = 0; y < 16; y++) {
+      for (var x = 0; x < 16; x++) {
+        final val = grid[y][x] * 2.0 - 1.0;
+        final gx = (x < 15 ? grid[y][x + 1] : grid[y][x]) - (x > 0 ? grid[y][x - 1] : grid[y][x]);
+        final gy = (y < 15 ? grid[y + 1][x] : grid[y][x]) - (y > 0 ? grid[y - 1][x] : grid[y][x]);
+        rawVec.add((val * 0.6) + (gx * 0.2) + (gy * 0.2));
+      }
+    }
+
+    double sumSq = 0.0;
+    for (final v in rawVec) {
+      sumSq += v * v;
+    }
+    final length = sqrt(sumSq);
+    if (length == 0) return rawVec;
+    return rawVec.map((v) => v / length).toList();
   }
 }
+
+

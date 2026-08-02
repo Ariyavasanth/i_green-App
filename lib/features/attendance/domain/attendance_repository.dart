@@ -32,6 +32,8 @@ abstract class AttendanceRepository {
     required String scheduledCheckInTime,
     required double currentLatitude,
     required double currentLongitude,
+    bool faceMatched = true,
+    double similarityScore = 1.0,
   });
   Future<AttendanceVerificationResult> verifyCheckOut({
     required int employeeId,
@@ -40,6 +42,8 @@ abstract class AttendanceRepository {
     required String profileImageUrl,
     required double currentLatitude,
     required double currentLongitude,
+    bool faceMatched = true,
+    double similarityScore = 1.0,
   });
   Future<void> markAttendance({
     required int employeeId,
