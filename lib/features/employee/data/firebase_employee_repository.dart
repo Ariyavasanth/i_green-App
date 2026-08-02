@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
 import '../../organization/domain/column_preference.dart';
 import '../domain/employee.dart';
@@ -80,10 +81,19 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
   @override
   Future<List<Employee>> getEmployees() async {
+    final all = await getAllEmployees();
+    return all
+        .where((emp) =>
+            emp.employeeId.startsWith('EMP-') ||
+            (!emp.employeeId.startsWith('CAN-') && !emp.employeeId.startsWith('pending_')))
+        .toList();
+  }
+
+  @override
+  Future<List<Employee>> getAllEmployees() async {
     final snapshot = await _employeesRef.get();
     
     if (snapshot.docs.isEmpty) {
-      // Seed sample employee if collection is currently empty
       const sampleEmp = Employee(
         id: 1,
         employeeId: 'EMP-0001',
@@ -117,7 +127,6 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       return _employeeFromFirestore(doc.data(), doc.id);
     }).toList();
     
-    // Auto-fix: Ensure the root admin account maintains full access
     for (var i = 0; i < employees.length; i++) {
       if (employees[i].emailAddress.toLowerCase() == 'saravanan@igreentec.in') {
         if (employees[i].userType != 'SUPER_ADMIN' || employees[i].status != 'Active') {
@@ -125,7 +134,6 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
             userType: 'SUPER_ADMIN',
             status: 'Active',
           );
-          // Silently update Firestore to permanently fix the record
           updateEmployee(updatedAdmin);
           employees[i] = updatedAdmin;
         }
@@ -192,6 +200,43 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
     final data = _employeeToFirestore(employee);
     await _employeesRef.doc(docId).set(data, SetOptions(merge: true));
+  }
+
+  @override
+  Future<void> updateBulkLeavePolicy({
+    required List<int> employeeIds,
+    required String leaveType,
+    required double allowedLeaves,
+    required String leaveAllocationFrequency,
+    required bool requiresLeaveApproval,
+    String? effectiveDate,
+  }) async {
+    final batch = _firestore.batch();
+    final snapshot = await _employeesRef.get();
+    final idSet = employeeIds.toSet();
+
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      final docId = doc.id;
+      final parsed = int.tryParse(docId.replaceAll(RegExp(r'\D'), ''));
+      final assignedId = (parsed != null && parsed != 0)
+          ? parsed
+          : (docId.hashCode & 0x7FFFFFFF);
+      final empId = (data['id'] as int?) ?? assignedId;
+
+      if (idSet.contains(empId)) {
+        final updateData = <String, dynamic>{
+          'leave_type': leaveType,
+          'allowed_leaves': allowedLeaves,
+          'leave_allocation_frequency': leaveAllocationFrequency,
+          'requires_leave_approval': requiresLeaveApproval,
+          if (effectiveDate != null) 'effective_date': effectiveDate,
+          'updated_at': FieldValue.serverTimestamp(),
+        };
+        batch.set(doc.reference, updateData, SetOptions(merge: true));
+      }
+    }
+    await batch.commit();
   }
 
   @override
@@ -334,6 +379,61 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       },
       SetOptions(merge: true),
     );
+
+    if (linkStatus == 'Accepted') {
+      final linkDoc = await _registrationLinksRef.doc(linkId).get();
+      if (linkDoc.exists) {
+        final linkData = linkDoc.data()!;
+        final linkEmpId = linkData['employee_id'] as String? ?? '';
+        final empQuery = await _employeesRef
+            .where('employee_id', isEqualTo: linkEmpId.isNotEmpty ? linkEmpId : linkId)
+            .get();
+
+        String newEmpId = '';
+        if (empQuery.docs.isNotEmpty) {
+          final doc = empQuery.docs.first;
+          final currentId = doc.data()['employee_id'] as String? ?? '';
+          if (!currentId.startsWith('EMP-')) {
+            newEmpId = await _generateNextEmployeeId();
+            await doc.reference.update({
+              'employee_id': newEmpId,
+              'status': 'Active',
+              'updated_at': FieldValue.serverTimestamp(),
+            });
+          }
+        } else {
+          newEmpId = await _generateNextEmployeeId();
+          final name = linkData['employee_name'] as String? ?? 'Candidate';
+          final parts = name.trim().split(' ');
+          final firstName = parts.first;
+          final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+          final newEmp = Employee(
+            id: 0,
+            employeeId: newEmpId,
+            firstName: firstName,
+            lastName: lastName,
+            emailAddress: '',
+            phoneNumber: '',
+            gender: '',
+            dob: '',
+            organizationName: linkData['organization_name'] as String? ?? 'iGreen Tech',
+            department: linkData['department'] as String? ?? 'Management',
+            designation: 'Staff',
+            employmentType: 'Full-Time',
+            joiningDate: DateFormat('dd-MM-yyyy').format(DateTime.now()),
+            status: 'Active',
+          );
+          await _employeesRef.doc(newEmpId).set(_employeeToFirestore(newEmp));
+        }
+
+        if (newEmpId.isNotEmpty) {
+          await _registrationLinksRef.doc(linkId).update({
+            'employee_id': newEmpId,
+            'updated_at': FieldValue.serverTimestamp(),
+          });
+        }
+      }
+    }
   }
 
   @override
@@ -357,12 +457,10 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     final existingEmpId = linkData['employee_id'] as String? ?? '';
 
     String newEmpId = employeeData.employeeId;
-    if (newEmpId.isEmpty) {
+    if (newEmpId.isEmpty || newEmpId.startsWith('pending_')) {
       newEmpId = existingEmpId.isNotEmpty && existingEmpId.startsWith('EMP-')
           ? existingEmpId
-          : (isSubmit ? await _generateNextEmployeeId() : await _generateNextCandidateId());
-    } else if (isSubmit && newEmpId.startsWith('CAN-')) {
-      newEmpId = await _generateNextEmployeeId();
+          : await _generateNextCandidateId();
     }
 
     final tempPassword = employeeData.temporaryPassword.isNotEmpty
@@ -375,7 +473,6 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       temporaryPassword: tempPassword,
     );
 
-    // Update status of `registration_links` document
     final linkRef = _registrationLinksRef.doc(linkId);
     batch.set(linkRef, {
       'link_status': isSubmit ? 'Completed' : 'Pending',
@@ -386,7 +483,6 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       'updated_at': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
 
-    // Save candidate data into `employees` collection
     final empDocId = newEmpId;
 
     final empData = _employeeToFirestore(finalEmployee);

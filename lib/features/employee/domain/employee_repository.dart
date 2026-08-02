@@ -6,9 +6,18 @@ import '../../organization/domain/column_preference.dart';
 
 abstract class EmployeeRepository {
   Future<List<Employee>> getEmployees();
+  Future<List<Employee>> getAllEmployees();
   Future<Employee?> getEmployeeById(int id);
   Future<Employee> addEmployee(Employee employee);
   Future<void> updateEmployee(Employee employee);
+  Future<void> updateBulkLeavePolicy({
+    required List<int> employeeIds,
+    required String leaveType,
+    required double allowedLeaves,
+    required String leaveAllocationFrequency,
+    required bool requiresLeaveApproval,
+    String? effectiveDate,
+  });
   Future<void> deleteEmployee(int id);
   Future<EmployeePhotoAsset> uploadEmployeeProfileImage({
     required String employeeId,

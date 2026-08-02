@@ -73,13 +73,22 @@ final currentEmployeeProvider = Provider<Employee?>((ref) {
   return employeesAsync.maybeWhen(
     data: (list) {
       if (list.isEmpty) return null;
-      if (emailOrId == null) return list.first;
-      final matches = list
-          .where((e) =>
-              e.emailAddress.trim().toLowerCase() == emailOrId.trim().toLowerCase() ||
-              e.employeeId.trim().toLowerCase() == emailOrId.trim().toLowerCase())
-          .toList();
-      return matches.isNotEmpty ? matches.first : list.first;
+      if (emailOrId != null && emailOrId.trim().isNotEmpty) {
+        final matches = list.where((e) {
+          final target = emailOrId.trim().toLowerCase();
+          return e.emailAddress.trim().toLowerCase() == target ||
+              e.employeeId.trim().toLowerCase() == target;
+        }).toList();
+        if (matches.isNotEmpty) return matches.first;
+      }
+      // Fallback: return Super Admin / Admin employee if present, else first employee
+      return list.firstWhere(
+        (e) =>
+            e.userType.toUpperCase() == 'SUPER_ADMIN' ||
+            e.userType.toUpperCase() == 'SUPER ADMIN' ||
+            e.userType.toUpperCase() == 'ADMIN',
+        orElse: () => list.first,
+      );
     },
     orElse: () => null,
   );

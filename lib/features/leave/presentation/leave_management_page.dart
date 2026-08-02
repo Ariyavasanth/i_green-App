@@ -6,6 +6,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../employee/providers/employee_providers.dart';
 import '../domain/leave_request.dart';
 import '../providers/leave_providers.dart';
+import 'widgets/leave_permissions_view.dart';
+
+enum LeaveTabMode { calendar, permissions }
 
 class LeaveManagementPage extends ConsumerStatefulWidget {
   const LeaveManagementPage({super.key});
@@ -17,6 +20,7 @@ class LeaveManagementPage extends ConsumerStatefulWidget {
 class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
   DateTime _focusedMonth = DateTime.now();
   int? _selectedEmployeeFilterId; // null means 'All Employees'
+  LeaveTabMode _tabMode = LeaveTabMode.calendar;
 
   DateTime? _parseDate(String dateStr) {
     try {
@@ -139,58 +143,121 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
 
         final String adminName = currentEmp.fullName;
 
+        final screenWidth = MediaQuery.of(context).size.width;
+        final isMobileHeader = screenWidth < 600;
+
         return Scaffold(
           backgroundColor: const Color(0xFFEFF3F6),
           body: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.all(isMobileHeader ? 12 : 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Page Header
-                const Row(
-                  children: [
-                    Icon(Icons.calendar_month, size: 24, color: AppColors.active),
-                    SizedBox(width: 8),
-                    Text(
-                      'Leave Management',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
+                // Page Header & Tab Switcher Toolbar
+                if (isMobileHeader) ...[
+                  const Row(
+                    children: [
+                      Icon(Icons.event_note, size: 24, color: AppColors.active),
+                      SizedBox(width: 8),
+                      Text(
+                        'Leave Management',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: SegmentedButton<LeaveTabMode>(
+                      style: const ButtonStyle(
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      segments: const [
+                        ButtonSegment(
+                          value: LeaveTabMode.calendar,
+                          icon: Icon(Icons.calendar_today, size: 14),
+                          label: Text('Calendar & Requests', style: TextStyle(fontSize: 12)),
+                        ),
+                        ButtonSegment(
+                          value: LeaveTabMode.permissions,
+                          icon: Icon(Icons.security, size: 14),
+                          label: Text('Leave Permissions', style: TextStyle(fontSize: 12)),
+                        ),
+                      ],
+                      selected: {_tabMode},
+                      onSelectionChanged: (set) => setState(() => _tabMode = set.first),
                     ),
-                  ],
-                ),
+                  ),
+                ] else ...[
+                  Row(
+                    children: [
+                      const Icon(Icons.event_note, size: 24, color: AppColors.active),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Leave Management',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const Spacer(),
+                      SegmentedButton<LeaveTabMode>(
+                        segments: const [
+                          ButtonSegment(
+                            value: LeaveTabMode.calendar,
+                            icon: Icon(Icons.calendar_today, size: 16),
+                            label: Text('Calendar & Requests'),
+                          ),
+                          ButtonSegment(
+                            value: LeaveTabMode.permissions,
+                            icon: Icon(Icons.security, size: 16),
+                            label: Text('Leave Permissions'),
+                          ),
+                        ],
+                        selected: {_tabMode},
+                        onSelectionChanged: (set) => setState(() => _tabMode = set.first),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 16),
 
-                // Content Grid
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final isWide = constraints.maxWidth > 900;
-                    final calendarWidget = _buildCalendarCard();
-                    final requestListWidget = _buildLeaveListCard(adminName);
+                // Main Tab Content
+                if (_tabMode == LeaveTabMode.permissions)
+                  const LeavePermissionsView()
+                else
+                  // Calendar & Requests Grid View
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isWide = constraints.maxWidth > 900;
+                      final calendarWidget = _buildCalendarCard();
+                      final requestListWidget = _buildLeaveListCard(adminName);
 
-                    if (isWide) {
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(flex: 3, child: calendarWidget),
-                          const SizedBox(width: 20),
-                          Expanded(flex: 2, child: requestListWidget),
-                        ],
-                      );
-                    } else {
-                      return Column(
-                        children: [
-                          calendarWidget,
-                          const SizedBox(height: 20),
-                          requestListWidget,
-                        ],
-                      );
-                    }
-                  },
-                ),
-
+                      if (isWide) {
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(flex: 3, child: calendarWidget),
+                            const SizedBox(width: 20),
+                            Expanded(flex: 2, child: requestListWidget),
+                          ],
+                        );
+                      } else {
+                        return Column(
+                          children: [
+                            calendarWidget,
+                            const SizedBox(height: 20),
+                            requestListWidget,
+                          ],
+                        );
+                      }
+                    },
+                  ),
               ],
             ),
           ),

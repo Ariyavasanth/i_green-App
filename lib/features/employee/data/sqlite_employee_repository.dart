@@ -150,9 +150,14 @@ class SqliteEmployeeRepository implements EmployeeRepository {
         leave_type TEXT,
         leave_allocation_frequency TEXT,
         allowed_leaves REAL,
-        effective_date TEXT
+        effective_date TEXT,
+        requires_leave_approval INTEGER DEFAULT 1
       )
     ''');
+
+    try {
+      await db.execute('ALTER TABLE employees ADD COLUMN requires_leave_approval INTEGER DEFAULT 1');
+    } catch (_) {}
 
     await db.execute('''
       CREATE TABLE IF NOT EXISTS registration_links (
@@ -395,6 +400,18 @@ class SqliteEmployeeRepository implements EmployeeRepository {
   Future<List<Employee>> getEmployees() async {
     final db = await database;
     final maps = await db.query('employees', orderBy: 'id DESC');
+    return maps
+        .map((map) => Employee.fromMap(map))
+        .where((emp) =>
+            emp.employeeId.startsWith('EMP-') ||
+            (!emp.employeeId.startsWith('CAN-') && !emp.employeeId.startsWith('pending_')))
+        .toList();
+  }
+
+  @override
+  Future<List<Employee>> getAllEmployees() async {
+    final db = await database;
+    final maps = await db.query('employees', orderBy: 'id DESC');
     return maps.map((map) => Employee.fromMap(map)).toList();
   }
 
@@ -410,10 +427,10 @@ class SqliteEmployeeRepository implements EmployeeRepository {
   Future<Employee> addEmployee(Employee employee) async {
     final db = await database;
     var empId = employee.employeeId;
-    if (empId.isEmpty) {
+    if (empId.isEmpty || empId.startsWith('CAN-') || empId.startsWith('pending_')) {
       empId = await _generateNextEmployeeId();
     }
-    final newEmp = employee.copyWith(employeeId: empId);
+    final newEmp = employee.copyWith(employeeId: empId, status: 'Active');
     final id = await db.insert('employees', newEmp.toMap());
     return newEmp.copyWith(id: id);
   }
@@ -430,9 +447,45 @@ class SqliteEmployeeRepository implements EmployeeRepository {
   }
 
   @override
+  Future<void> updateBulkLeavePolicy({
+    required List<int> employeeIds,
+    required String leaveType,
+    required double allowedLeaves,
+    required String leaveAllocationFrequency,
+    required bool requiresLeaveApproval,
+    String? effectiveDate,
+  }) async {
+    final db = await database;
+    final batch = db.batch();
+    final updateData = <String, dynamic>{
+      'leave_type': leaveType,
+      'allowed_leaves': allowedLeaves,
+      'leave_allocation_frequency': leaveAllocationFrequency,
+      'requires_leave_approval': requiresLeaveApproval ? 1 : 0,
+    };
+    if (effectiveDate != null && effectiveDate.isNotEmpty) {
+      updateData['effective_date'] = effectiveDate;
+    }
+
+    for (final id in employeeIds) {
+      batch.update(
+        'employees',
+        updateData,
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+
+  @override
   Future<void> deleteEmployee(int id) async {
     final db = await database;
-    await db.delete('employees', where: 'id = ?', whereArgs: [id]);
+    await db.delete(
+      'employees',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   @override
@@ -443,12 +496,12 @@ class SqliteEmployeeRepository implements EmployeeRepository {
     required String fileName,
     required String mimeType,
   }) async {
-    final normalizedRole = role.trim().isEmpty ? 'employees' : role.trim().toLowerCase();
-    final normalizedId = employeeId.trim().isEmpty ? 'unassigned' : employeeId.trim();
+    final base64Str = base64Encode(imageBytes);
+    final dataUri = 'data:$mimeType;base64,$base64Str';
     return EmployeePhotoAsset(
-      url: '',
-      publicId: '',
-      folder: 'employee_management/$normalizedRole/$normalizedId/profile',
+      url: dataUri,
+      publicId: 'local_${DateTime.now().millisecondsSinceEpoch}',
+      folder: 'employee_management/$role/$employeeId/profile',
     );
   }
 
@@ -459,20 +512,20 @@ class SqliteEmployeeRepository implements EmployeeRepository {
     String? department,
   }) async {
     final db = await database;
-    final linkId = _generateRandomCode(8);
     final now = DateTime.now();
-    final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
-    final expiry = now.add(const Duration(days: 7));
+    final linkId = 'link_${now.millisecondsSinceEpoch}';
+    final generatedDate = DateFormat('yyyy-MM-dd HH:mm').format(now);
+    final expiryDate = DateFormat('yyyy-MM-dd HH:mm').format(now.add(const Duration(days: 7)));
 
     final link = RegistrationLink(
       id: 0,
       linkId: linkId,
-      generatedBy: generatedBy.isEmpty ? 'HR Admin' : generatedBy,
-      generatedDate: dateFormat.format(now),
-      expiryDate: dateFormat.format(expiry),
+      generatedBy: generatedBy,
+      generatedDate: generatedDate,
+      expiryDate: expiryDate,
       linkStatus: 'Pending',
-      organizationName: organizationName ?? '',
-      department: department ?? '',
+      organizationName: organizationName ?? 'iGreen Tech',
+      department: department ?? 'Management',
     );
 
     final id = await db.insert('registration_links', link.toMap());
@@ -510,6 +563,68 @@ class SqliteEmployeeRepository implements EmployeeRepository {
       where: 'link_id = ?',
       whereArgs: [linkId],
     );
+
+    if (linkStatus == 'Accepted') {
+      final linkMaps = await db.query('registration_links', where: 'link_id = ?', whereArgs: [linkId]);
+      if (linkMaps.isNotEmpty) {
+        final linkEmpId = linkMaps.first['employee_id'] as String? ?? '';
+        final empMaps = await db.query(
+          'employees',
+          where: 'employee_id = ? OR employee_id = ?',
+          whereArgs: [linkEmpId, linkId],
+        );
+
+        String newEmpId = '';
+        if (empMaps.isNotEmpty) {
+          final currentId = empMaps.first['employee_id'] as String? ?? '';
+          if (!currentId.startsWith('EMP-')) {
+            newEmpId = await _generateNextEmployeeId();
+            final dbId = empMaps.first['id'] as int;
+            await db.update(
+              'employees',
+              {
+                'employee_id': newEmpId,
+                'status': 'Active',
+              },
+              where: 'id = ?',
+              whereArgs: [dbId],
+            );
+          }
+        } else {
+          newEmpId = await _generateNextEmployeeId();
+          final name = linkMaps.first['employee_name'] as String? ?? 'Candidate';
+          final parts = name.trim().split(' ');
+          final firstName = parts.first;
+          final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+          final newEmp = Employee(
+            id: 0,
+            employeeId: newEmpId,
+            firstName: firstName,
+            lastName: lastName,
+            emailAddress: '',
+            phoneNumber: '',
+            gender: '',
+            dob: '',
+            organizationName: linkMaps.first['organization_name'] as String? ?? 'iGreen Tech',
+            department: linkMaps.first['department'] as String? ?? 'Management',
+            designation: 'Staff',
+            employmentType: 'Full-Time',
+            joiningDate: DateFormat('dd-MM-yyyy').format(DateTime.now()),
+            status: 'Active',
+          );
+          await db.insert('employees', newEmp.toMap());
+        }
+
+        if (newEmpId.isNotEmpty) {
+          await db.update(
+            'registration_links',
+            {'employee_id': newEmpId},
+            where: 'link_id = ?',
+            whereArgs: [linkId],
+          );
+        }
+      }
+    }
   }
 
   @override
@@ -528,12 +643,10 @@ class SqliteEmployeeRepository implements EmployeeRepository {
     }
 
     String newEmpId = employeeData.employeeId;
-    if (newEmpId.isEmpty) {
+    if (newEmpId.isEmpty || newEmpId.startsWith('pending_')) {
       newEmpId = link.employeeId.isNotEmpty && link.employeeId.startsWith('EMP-')
           ? link.employeeId
-          : (isSubmit ? await _generateNextEmployeeId() : await _generateNextCandidateId());
-    } else if (isSubmit && newEmpId.startsWith('CAN-')) {
-      newEmpId = await _generateNextEmployeeId();
+          : await _generateNextCandidateId();
     }
 
     final tempPassword = employeeData.temporaryPassword.isNotEmpty

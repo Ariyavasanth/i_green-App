@@ -37,7 +37,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
   @override
   Widget build(BuildContext context) {
     final linksAsync = ref.watch(registrationLinksProvider);
-    final employeesAsync = ref.watch(employeesProvider);
+    final employeesAsync = ref.watch(allEmployeesProvider);
     final prefAsync = ref.watch(empColumnPreferenceProvider(_tableId));
     final searchQuery = ref.watch(responseSearchQueryProvider);
     final statusFilter = ref.watch(responseStatusFilterProvider);
@@ -666,7 +666,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
   }
 
   Future<void> _openViewDialogAsync(BuildContext context, RegistrationLink link) async {
-    final employees = await ref.read(employeesProvider.future);
+    final employees = await ref.read(allEmployeesProvider.future);
     final employee = _employeeForLink(link, employees);
     if (!context.mounted) return;
     showDialog<void>(
@@ -675,26 +675,20 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
         title: Text(_candidateName(link, employee).isEmpty || _candidateName(link, employee) == '-'
             ? 'Candidate Details'
             : _candidateName(link, employee)),
-        content: SizedBox(
-          width: 760,
-          child: SingleChildScrollView(
+        content: SingleChildScrollView(
+          child: SizedBox(
+            width: 500,
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                _buildViewSection('Personal Info', [
+                _buildViewSection('Basic Info', [
                   _buildViewItem('Candidate ID', _candidateId(link)),
-                  _buildViewItem('Candidate Name', _candidateName(link, employee)),
+                  _buildViewItem('Name', _candidateName(link, employee)),
                   _buildViewItem('Email', _emailForLink(link, employee)),
-                  _buildViewItem('Phone Number', _phoneForLink(link, employee)),
+                  _buildViewItem('Phone', _phoneForLink(link, employee)),
                   _buildViewItem('Gender', employee?.gender ?? ''),
-                  _buildViewItem('Date of Birth', employee?.dob ?? ''),
-                  _buildViewItem('Aadhaar Number', employee?.aadhaarNumber ?? ''),
-                  _buildViewItem('Organization', employee?.organizationName ?? ''),
-                  _buildViewItem('Department', employee?.department ?? ''),
-                  _buildViewItem('Designation', employee?.designation ?? ''),
-                  _buildViewItem('Employment Type', employee?.employmentType ?? ''),
-                  _buildViewItem('Joining Date', employee?.joiningDate ?? ''),
+                  _buildViewItem('DOB', employee?.dob ?? ''),
                   _buildViewItem('Status', link.linkStatus),
                 ]),
                 const SizedBox(height: 16),
@@ -773,6 +767,8 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
           linkStatus: status,
         );
     ref.invalidate(registrationLinksProvider);
+    ref.invalidate(employeesProvider);
+    ref.invalidate(allEmployeesProvider);
     setState(() {});
   }
 

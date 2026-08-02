@@ -212,6 +212,7 @@ class Employee {
     this.leaveAllocationFrequency = 'Monthly',
     this.allowedLeaves = 1.0,
     this.effectiveDate = '',
+    this.requiresLeaveApproval = true,
     this.companyAssets = '',
     this.reportingManager = '',
     this.reportingManagerTitle = 'Managing Director',
@@ -479,6 +480,7 @@ class Employee {
   final String leaveAllocationFrequency;
   final double allowedLeaves;
   final String effectiveDate;
+  final bool requiresLeaveApproval;
   final String companyAssets;
 
   final String reportingManager;
@@ -625,6 +627,7 @@ class Employee {
       'leave_allocation_frequency': leaveAllocationFrequency,
       'allowed_leaves': allowedLeaves,
       'effective_date': effectiveDate,
+      'requires_leave_approval': requiresLeaveApproval ? 1 : 0,
       'company_assets': companyAssets,
       'reporting_manager': reportingManager,
       'reporting_manager_title': reportingManagerTitle,
@@ -656,7 +659,7 @@ class Employee {
       joiningDate: map['joining_date'] as String? ?? '',
       status: map['status'] as String? ?? 'Active',
       bloodGroup: map['blood_group'] as String? ?? '',
-      userType: map['user_type'] as String? ?? 'EMPLOYEE',
+      userType: (map['user_type'] ?? map['userType']) as String? ?? 'EMPLOYEE',
       contractEndDate: map['contract_end_date'] as String? ?? '',
       profileImageUrl: map['profile_image_url'] as String? ?? '',
       profileImagePublicId: map['profile_image_public_id'] as String? ?? '',
@@ -739,6 +742,13 @@ class Employee {
       leaveAllocationFrequency: map['leave_allocation_frequency'] as String? ?? 'Monthly',
       allowedLeaves: (map['allowed_leaves'] as num?)?.toDouble() ?? 1.0,
       effectiveDate: map['effective_date'] as String? ?? '',
+      requiresLeaveApproval: () {
+        final val = map['requires_leave_approval'];
+        if (val is bool) return val;
+        if (val is num) return val != 0;
+        if (val is String) return val.toLowerCase() == 'true' || val == '1';
+        return true;
+      }(),
       companyAssets: map['company_assets'] as String? ?? '',
       reportingManager: map['reporting_manager'] as String? ?? '',
       reportingManagerTitle: map['reporting_manager_title'] as String? ?? 'Managing Director',
@@ -750,7 +760,7 @@ class Employee {
       disciplinaryRecords: map['disciplinary_records'] as String? ?? '',
       temporaryPassword: map['temporary_password'] as String? ?? '',
       accessPermissions: () {
-        final raw = map['access_permissions'];
+        final raw = map['access_permissions'] ?? map['accessPermissions'];
         if (raw == null) return <String>[];
         if (raw is List) {
           return raw.map((e) => e.toString()).toList();
@@ -866,6 +876,7 @@ class Employee {
     String? leaveAllocationFrequency,
     double? allowedLeaves,
     String? effectiveDate,
+    bool? requiresLeaveApproval,
     String? companyAssets,
     String? reportingManager,
     String? reportingManagerTitle,
@@ -976,6 +987,7 @@ class Employee {
       leaveAllocationFrequency: leaveAllocationFrequency ?? this.leaveAllocationFrequency,
       allowedLeaves: allowedLeaves ?? this.allowedLeaves,
       effectiveDate: effectiveDate ?? this.effectiveDate,
+      requiresLeaveApproval: requiresLeaveApproval ?? this.requiresLeaveApproval,
       companyAssets: companyAssets ?? this.companyAssets,
       reportingManager: reportingManager ?? this.reportingManager,
       reportingManagerTitle: reportingManagerTitle ?? this.reportingManagerTitle,

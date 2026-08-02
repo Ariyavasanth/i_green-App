@@ -24,6 +24,20 @@ final employeesProvider = FutureProvider<List<Employee>>(
   },
 );
 
+final allEmployeesProvider = FutureProvider<List<Employee>>(
+  (ref) async {
+    final employees = await ref.watch(employeeRepositoryProvider).getAllEmployees();
+    final uniqueEmployees = <Employee>[];
+    final seenIds = <int>{};
+    for (final emp in employees) {
+      if (seenIds.add(emp.id)) {
+        uniqueEmployees.add(emp);
+      }
+    }
+    return uniqueEmployees;
+  },
+);
+
 final registrationLinksProvider = FutureProvider<List<RegistrationLink>>(
   (ref) => ref.watch(employeeRepositoryProvider).getRegistrationLinks(),
 );
