@@ -108,6 +108,35 @@ class SqliteSiteVisitAttendanceRepository implements SiteVisitAttendanceReposito
   }
 
   @override
+  Future<void> saveDayCheckout({
+    required int employeeId,
+    required String employeeName,
+    required String visitDate,
+    required String visitTime,
+    required double latitude,
+    required double longitude,
+    String notes = '',
+  }) async {
+    await saveVisit(
+      SiteVisitRecord(
+        id: 0,
+        employeeId: employeeId,
+        employeeName: employeeName,
+        siteName: 'Day Checkout',
+        visitDate: visitDate,
+        visitTime: visitTime,
+        photoUrl: '',
+        photoPublicId: '',
+        latitude: latitude,
+        longitude: longitude,
+        address: '',
+        notes: notes.isEmpty ? 'Checked out for the day' : notes,
+        createdAt: DateTime.now().toIso8601String(),
+      ),
+    );
+  }
+
+  @override
   Future<void> deleteVisit(int id) async {
     final db = await database;
     final rows = await db.query(

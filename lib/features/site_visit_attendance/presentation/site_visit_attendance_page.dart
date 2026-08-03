@@ -90,7 +90,7 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
                 ],
               ),
               const SizedBox(height: 16),
-              _buildTodayOverviewCard(todayVisitsAsync),
+              _buildTodayOverviewCard(currentEmp, todayVisitsAsync),
               const SizedBox(height: 20),
               leaveAsync.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
@@ -118,7 +118,7 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
     );
   }
 
-  Widget _buildTodayOverviewCard(AsyncValue<List<SiteVisitRecord>> todayVisitsAsync) {
+  Widget _buildTodayOverviewCard(Employee employee, AsyncValue<List<SiteVisitRecord>> todayVisitsAsync) {
     final today = DateTime.now();
     final dateStr = DateFormat('EEEE, dd MMMM yyyy').format(today);
 
@@ -220,9 +220,7 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Day checkout flow is not connected yet.')),
-                    );
+                    _openCheckoutAndSave(employee);
                   },
                   icon: const Icon(Icons.logout, size: 20),
                   label: const Text(
@@ -816,6 +814,43 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
           _siteController.clear();
           _notesController.clear();
         });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _openCheckoutAndSave(Employee employee) async {
+    setState(() => _saving = true);
+    try {
+      final position = await _getCurrentLocationWithPermissionPrompt();
+      final now = DateTime.now();
+      final visitDate = DateFormat('dd-MM-yyyy').format(now);
+      final visitTime = DateFormat('hh:mm a').format(now);
+      final repo = ref.read(siteVisitAttendanceRepositoryProvider);
+
+      await repo.saveDayCheckout(
+        employeeId: employee.id,
+        employeeName: employee.fullName,
+        visitDate: visitDate,
+        visitTime: visitTime,
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
+
+      ref.invalidate(siteVisitRecordsProvider((employeeId: employee.id, visitDate: _formatKey(DateTime.now()))));
+      ref.invalidate(siteVisitRecordsProvider((employeeId: employee.id, visitDate: _formatKey(_selectedDate))));
+      ref.invalidate(allSiteVisitRecordsProvider(null));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Day checkout saved successfully.')),
+        );
       }
     } catch (e) {
       if (mounted) {

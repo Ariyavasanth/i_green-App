@@ -78,6 +78,19 @@ class FirebaseSiteVisitAttendanceRepository implements SiteVisitAttendanceReposi
   }
 
   @override
+  Future<void> saveDayCheckout({
+    required int employeeId,
+    required String employeeName,
+    required String visitDate,
+    required String visitTime,
+    required double latitude,
+    required double longitude,
+    String notes = '',
+  }) {
+    throw UnimplementedError('Firebase day checkout is not wired yet.');
+  }
+
+  @override
   Future<void> deleteVisit(int id) async {
     final doc = await _visitsRef.where('id', isEqualTo: id).limit(1).get();
     if (doc.docs.isNotEmpty) {

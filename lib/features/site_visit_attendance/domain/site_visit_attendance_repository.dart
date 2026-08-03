@@ -15,6 +15,16 @@ abstract class SiteVisitAttendanceRepository {
 
   Future<void> saveVisit(SiteVisitRecord record);
 
+  Future<void> saveDayCheckout({
+    required int employeeId,
+    required String employeeName,
+    required String visitDate,
+    required String visitTime,
+    required double latitude,
+    required double longitude,
+    String notes = '',
+  });
+
   Future<void> deleteVisit(int id);
 
   Future<SiteVisitPhotoAsset> createVisitPhotoUrl({
