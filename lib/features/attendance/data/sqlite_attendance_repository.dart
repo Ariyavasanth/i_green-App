@@ -259,7 +259,7 @@ class SqliteAttendanceRepository implements AttendanceRepository {
     final now = DateTime.now();
     final time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
     final score = similarityScore;
-    final allowedFace = faceMatched && score >= 0.80;
+    final allowedFace = faceMatched && score >= 0.92;
     final settings = await getAttendanceSettings();
     final loc = await _resolveEffectiveLocation(employeeId: employeeId, globalSettings: settings);
     final isSite = loc['isSite'] as bool;
@@ -327,7 +327,7 @@ class SqliteAttendanceRepository implements AttendanceRepository {
     final now = DateTime.now();
     final time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
     final score = similarityScore;
-    final allowedFace = faceMatched && score >= 0.80;
+    final allowedFace = faceMatched && score >= 0.92;
     final settings = await getAttendanceSettings();
     final loc = await _resolveEffectiveLocation(employeeId: employeeId, globalSettings: settings);
     final isSite = loc['isSite'] as bool;

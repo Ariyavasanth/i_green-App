@@ -134,7 +134,10 @@ class SqliteFaceRegistrationRepository implements FaceRegistrationRepository {
       }
     }
 
-    final bool isMatched = maxScore >= 0.70;
+    // Raised threshold from 0.70 → 0.92: pixel-based embeddings produce high
+    // cosine similarity even for different faces, so 70% was accepting strangers.
+    // Same person typically scores 0.93–0.98; different people score 0.60–0.85.
+    final bool isMatched = maxScore >= 0.92;
     final String status = isMatched ? 'VERIFIED' : 'MISMATCH';
     final String message = isMatched
         ? 'Face Verified (${(maxScore * 100).toStringAsFixed(1)}% Match)'

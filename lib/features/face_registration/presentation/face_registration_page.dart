@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,6 +13,7 @@ import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
 import '../providers/face_registration_providers.dart';
 import '../../attendance/services/face_verification_service.dart';
+import '../../../core/widgets/web_camera_preview.dart';
 
 class FaceRegistrationPage extends ConsumerStatefulWidget {
   const FaceRegistrationPage({super.key});
@@ -21,6 +24,7 @@ class FaceRegistrationPage extends ConsumerStatefulWidget {
 
 class _FaceRegistrationPageState extends ConsumerState<FaceRegistrationPage> {
   CameraController? _cameraController;
+  WebCameraController? _webCameraController;
   bool _isCameraInitialized = false;
   bool _isProcessing = false;
 
@@ -49,23 +53,33 @@ class _FaceRegistrationPageState extends ConsumerState<FaceRegistrationPage> {
 
   Future<void> _initializeCamera() async {
     try {
-      final cameras = await availableCameras();
-      if (cameras.isNotEmpty) {
-        // Prefer front camera for face registration
-        final frontCamera = cameras.firstWhere(
-          (c) => c.lensDirection == CameraLensDirection.front,
-          orElse: () => cameras.first,
-        );
-        _cameraController = CameraController(
-          frontCamera,
-          ResolutionPreset.medium,
-          enableAudio: false,
-        );
-        await _cameraController!.initialize();
+      if (kIsWeb) {
+        _webCameraController = WebCameraController();
+        await _webCameraController!.initialize();
         if (mounted) {
           setState(() {
             _isCameraInitialized = true;
           });
+        }
+      } else {
+        final cameras = await availableCameras();
+        if (cameras.isNotEmpty) {
+          // Prefer front camera for face registration
+          final frontCamera = cameras.firstWhere(
+            (c) => c.lensDirection == CameraLensDirection.front,
+            orElse: () => cameras.first,
+          );
+          _cameraController = CameraController(
+            frontCamera,
+            ResolutionPreset.medium,
+            enableAudio: false,
+          );
+          await _cameraController!.initialize();
+          if (mounted) {
+            setState(() {
+              _isCameraInitialized = true;
+            });
+          }
         }
       }
     } catch (e) {
@@ -76,6 +90,7 @@ class _FaceRegistrationPageState extends ConsumerState<FaceRegistrationPage> {
   @override
   void dispose() {
     _cameraController?.dispose();
+    _webCameraController?.dispose();
     super.dispose();
   }
 
@@ -98,14 +113,25 @@ class _FaceRegistrationPageState extends ConsumerState<FaceRegistrationPage> {
 
     try {
       XFile? photo;
-      if (_isCameraInitialized && _cameraController != null && _cameraController!.value.isInitialized) {
+      Uint8List? webPhotoBytes;
+
+      if (kIsWeb && _webCameraController != null && _webCameraController!.isInitialized) {
+        try {
+          webPhotoBytes = await _webCameraController!.takePicture();
+        } catch (_) {}
+      } else if (_isCameraInitialized && _cameraController != null && _cameraController!.value.isInitialized) {
         try {
           photo = await _cameraController!.takePicture();
         } catch (_) {}
       }
 
       List<double>? extractedVector;
-      if (photo != null) {
+      if (webPhotoBytes != null) {
+        final vec = const FaceVerificationService().extractEmbeddingFromImageBytes(webPhotoBytes);
+        if (vec.isNotEmpty) {
+          extractedVector = vec;
+        }
+      } else if (photo != null) {
         final bytes = await photo.readAsBytes();
         final vec = const FaceVerificationService().extractEmbeddingFromImageBytes(bytes);
         if (vec.isNotEmpty) {
@@ -466,7 +492,9 @@ class _FaceRegistrationPageState extends ConsumerState<FaceRegistrationPage> {
                         child: Stack(
                           alignment: Alignment.center,
                           children: [
-                            if (_isCameraInitialized && _cameraController != null)
+                            if (_isCameraInitialized && kIsWeb && _webCameraController != null)
+                              WebCameraPreview(controller: _webCameraController!)
+                            else if (_isCameraInitialized && _cameraController != null)
                               CameraPreview(_cameraController!)
                             else
                               Column(

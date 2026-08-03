@@ -1,11 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../data/sqlite_salary_settings_repository.dart';
+import '../data/firebase_salary_settings_repository.dart';
 import '../domain/salary_settings.dart';
 import '../domain/salary_settings_repository.dart';
 
 final salarySettingsRepositoryProvider = Provider<SalarySettingsRepository>((ref) {
-  return SqliteSalarySettingsRepository();
+  return FirebaseSalarySettingsRepository();
 });
 
 class SalarySettingsNotifier extends StateNotifier<AsyncValue<SalarySettings>> {

@@ -728,6 +728,8 @@ class _LeavePageState extends ConsumerState<LeavePage> {
     final toDateController = TextEditingController();
     final reasonController = TextEditingController();
     String leaveType = currentEmp.leaveType.isNotEmpty ? currentEmp.leaveType : 'As Needed';
+    String selectedRequestType = 'Casual Leave';
+    final leaveRequestTypes = ['Casual Leave', 'Sick Leave', 'Loss of Pay', 'Emergency Leave'];
 
     showDialog(
       context: context,
@@ -757,6 +759,56 @@ class _LeavePageState extends ConsumerState<LeavePage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    const Text(
+                      'Leave Type',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String>(
+                      value: selectedRequestType,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      ),
+                      items: leaveRequestTypes.map((type) {
+                        return DropdownMenuItem<String>(
+                          value: type,
+                          child: Text(type, style: const TextStyle(fontSize: 13)),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setDialogState(() {
+                            selectedRequestType = value;
+                          });
+                        }
+                      },
+                    ),
+                    if (selectedRequestType == 'Emergency Leave') ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF3E0),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.amber.shade300),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.warning_amber_rounded, color: Colors.amber.shade700, size: 18),
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text(
+                                'Emergency leave is auto-flagged for immediate admin review.',
+                                style: TextStyle(fontSize: 11, color: Color(0xFFE65100)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
                     Row(
                       children: [
                         Expanded(
@@ -894,13 +946,14 @@ class _LeavePageState extends ConsumerState<LeavePage> {
                       employeeId: currentEmp.id,
                       employeeName: currentEmp.fullName,
                       employeeCustomId: currentEmp.employeeId,
-                      leaveType: leaveType,
+                      leaveType: selectedRequestType,
                       fromDate: fromDateController.text.trim(),
                       toDate: toDateController.text.trim(),
                       numDays: days,
                       reason: reasonController.text.trim(),
                       status: 'Pending',
                       createdAt: DateTime.now().toIso8601String(),
+                      isEmergency: selectedRequestType == 'Emergency Leave',
                     );
 
                     try {

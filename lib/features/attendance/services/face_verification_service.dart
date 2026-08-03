@@ -86,14 +86,15 @@ class FaceVerificationService {
     return null;
   }
 
-  /// Detect if camera image is valid and has face/content (not pitch black or completely featureless)
+  /// Detect if camera image is valid and has face/content (not pitch black or completely featureless).
+  /// Also checks edge density in the center face oval to reject non-face objects (hands, walls, etc.).
   bool isFaceDetected(Uint8List bytes) {
     if (bytes.isEmpty) return false;
     final decoded = img.decodeImage(bytes);
     if (decoded == null || decoded.width == 0 || decoded.height == 0) return false;
 
     // Check average luminance & variance to ensure camera is not completely covered
-    final resized = img.copyResize(decoded, width: 16, height: 16);
+    final resized = img.copyResize(decoded, width: 32, height: 32);
     var totalLum = 0.0;
     var sqSum = 0.0;
     final count = resized.width * resized.height;
@@ -111,6 +112,53 @@ class FaceVerificationService {
     if (avgLum < 5.0 || variance < 4.0) {
       return false;
     }
+
+    // Additional check: verify sufficient edge/gradient density in the center face oval.
+    // A real face has eyebrows, eyes, nose, mouth — producing many edges.
+    // Flat surfaces (walls, hands, paper) have very few edges in this region.
+    final centerX = resized.width ~/ 2;
+    final centerY = resized.height ~/ 2;
+    final radiusX = (resized.width * 0.30).round(); // ~60% width oval
+    final radiusY = (resized.height * 0.35).round(); // ~70% height oval
+    int edgePixelCount = 0;
+    int totalCenterPixels = 0;
+
+    // Build luminance grid for gradient computation
+    final lumGrid = List.generate(resized.height, (y) =>
+      List.generate(resized.width, (x) =>
+        img.getLuminance(resized.getPixel(x, y)).toDouble()
+      )
+    );
+
+    for (var y = 1; y < resized.height - 1; y++) {
+      for (var x = 1; x < resized.width - 1; x++) {
+        // Check if pixel is inside center face oval
+        final dx = (x - centerX) / radiusX;
+        final dy = (y - centerY) / radiusY;
+        if (dx * dx + dy * dy > 1.0) continue;
+
+        totalCenterPixels++;
+
+        // Sobel gradient magnitude
+        final gx = lumGrid[y][x + 1] - lumGrid[y][x - 1];
+        final gy = lumGrid[y + 1][x] - lumGrid[y - 1][x];
+        final gradMag = gx * gx + gy * gy;
+
+        // Count pixels with significant edges
+        if (gradMag > 200.0) {
+          edgePixelCount++;
+        }
+      }
+    }
+
+    // Faces typically have >15% edge density; flat objects have <8%
+    if (totalCenterPixels > 0) {
+      final edgeDensity = edgePixelCount / totalCenterPixels;
+      if (edgeDensity < 0.10) {
+        return false;
+      }
+    }
+
     return true;
   }
 

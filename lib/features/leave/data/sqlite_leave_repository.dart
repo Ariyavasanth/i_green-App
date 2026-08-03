@@ -109,6 +109,7 @@ class SqliteLeaveRepository implements LeaveRepository {
       await db.insert('leave_types', {'name': 'As Needed', 'description': 'You can take leave whenever required.'});
       await db.insert('leave_types', {'name': 'Manual Allocation', 'description': 'Leave is allocated manually per policy.'});
       await db.insert('leave_types', {'name': 'No Leave', 'description': 'You are not eligible to take leave.'});
+      await db.insert('leave_types', {'name': 'Emergency Leave', 'description': 'Urgent leave requiring immediate admin review.'});
     }
 
     // Clear legacy sample leave balances and leave requests
@@ -132,6 +133,7 @@ class SqliteLeaveRepository implements LeaveRepository {
       'num_days': 'REAL',
       'approved_dates': 'TEXT',
       'lop_dates': 'TEXT',
+      'is_emergency': 'INTEGER',
     };
 
     for (final entry in requiredColumns.entries) {
@@ -200,16 +202,18 @@ class SqliteLeaveRepository implements LeaveRepository {
     var req = LeaveRequest.fromMap(reqMaps.first);
     if (req.status != 'Pending') return;
 
-    // 2. Fetch leave balance
-    final balance = await getLeaveBalance(req.employeeId, req.leaveType);
-
-    // 3. Fetch employee details for LOP deduction calculations
+    // 2. Fetch employee details for balance lookup and LOP deduction calculations
     final empMaps = await db.query('employees', where: 'id = ?', whereArgs: [req.employeeId]);
     double grossSalary = 0.0;
+    String employeeLeavePermissionType = 'As Needed';
     if (empMaps.isNotEmpty) {
       grossSalary = (empMaps.first['salary_total_ctc'] as num?)?.toDouble() ?? 0.0;
+      employeeLeavePermissionType = empMaps.first['leave_type'] as String? ?? 'As Needed';
     }
     final double perDaySalary = grossSalary / 26.0;
+
+    // 3. Fetch leave balance using the employee's leave permission type (not the request category)
+    final balance = await getLeaveBalance(req.employeeId, employeeLeavePermissionType);
 
     // 4. Determine approved vs. LOP dates
     final allDates = _getDatesBetween(req.fromDate, req.toDate);

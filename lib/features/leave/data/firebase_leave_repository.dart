@@ -193,11 +193,9 @@ class FirebaseLeaveRepository implements LeaveRepository {
     final req = _requestFromDoc(doc.data()!, doc.id);
     if (req.status != 'Pending') return;
 
-    // 2. Fetch leave balance
-    final balance = await getLeaveBalance(req.employeeId, req.leaveType);
-
-    // 3. Fetch employee salary for LOP calculation
+    // 2. Fetch employee salary and leave permission type for LOP calculation
     double grossSalary = 0.0;
+    String employeeLeavePermissionType = 'As Needed';
     final empSnap = await _employeesRef
         .where('id', isEqualTo: req.employeeId)
         .limit(1)
@@ -206,8 +204,13 @@ class FirebaseLeaveRepository implements LeaveRepository {
       grossSalary =
           (empSnap.docs.first.data()['salary_total_ctc'] as num?)?.toDouble() ??
               0.0;
+      employeeLeavePermissionType =
+          empSnap.docs.first.data()['leave_type'] as String? ?? 'As Needed';
     }
     final double perDaySalary = grossSalary / 26.0;
+
+    // 3. Fetch leave balance using the employee's leave permission type (not the request category)
+    final balance = await getLeaveBalance(req.employeeId, employeeLeavePermissionType);
 
     // 4. Split dates into approved vs LOP
     final allDates = _datesBetween(req.fromDate, req.toDate);
@@ -238,7 +241,7 @@ class FirebaseLeaveRepository implements LeaveRepository {
     });
 
     // Update leave balance
-    final balanceDocRef = await _findBalanceDocRef(req.employeeId, req.leaveType);
+    final balanceDocRef = await _findBalanceDocRef(req.employeeId, employeeLeavePermissionType);
     if (balanceDocRef != null) {
       batch.update(balanceDocRef, {
         'used_leaves': currentUsed,

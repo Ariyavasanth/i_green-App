@@ -15,6 +15,7 @@ class LeaveRequest {
     required this.createdAt,
     this.approvedDates = const [],
     this.lopDates = const [],
+    this.isEmergency = false,
   });
 
   final int id;
@@ -30,6 +31,7 @@ class LeaveRequest {
   final String createdAt;
   final List<String> approvedDates;
   final List<String> lopDates;
+  final bool isEmergency;
 
   Map<String, dynamic> toMap() {
     return {
@@ -46,6 +48,7 @@ class LeaveRequest {
       'created_at': createdAt,
       'approved_dates': jsonEncode(approvedDates),
       'lop_dates': jsonEncode(lopDates),
+      'is_emergency': isEmergency ? 1 : 0,
     };
   }
 
@@ -64,6 +67,14 @@ class LeaveRequest {
       return [];
     }
 
+    bool parseBool(dynamic raw) {
+      if (raw == null) return false;
+      if (raw is int) return raw != 0;
+      if (raw is bool) return raw;
+      if (raw is String) return raw == '1' || raw.toLowerCase() == 'true';
+      return false;
+    }
+
     return LeaveRequest(
       id: map['id'] as int? ?? 0,
       employeeId: map['employee_id'] as int? ?? 0,
@@ -78,6 +89,7 @@ class LeaveRequest {
       createdAt: map['created_at'] as String? ?? '',
       approvedDates: parseList(map['approved_dates']),
       lopDates: parseList(map['lop_dates']),
+      isEmergency: parseBool(map['is_emergency']),
     );
   }
 
@@ -95,6 +107,7 @@ class LeaveRequest {
     String? createdAt,
     List<String>? approvedDates,
     List<String>? lopDates,
+    bool? isEmergency,
   }) {
     return LeaveRequest(
       id: id ?? this.id,
@@ -110,6 +123,7 @@ class LeaveRequest {
       createdAt: createdAt ?? this.createdAt,
       approvedDates: approvedDates ?? this.approvedDates,
       lopDates: lopDates ?? this.lopDates,
+      isEmergency: isEmergency ?? this.isEmergency,
     );
   }
 }

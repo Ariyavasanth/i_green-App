@@ -1,4 +1,6 @@
 import 'dart:math';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +10,7 @@ import 'package:camera/camera.dart';
 import 'package:local_auth/local_auth.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/web_camera_preview.dart';
 import '../domain/attendance_record.dart';
 import '../../employee/domain/employee.dart';
 import '../../leave/domain/leave_request.dart';
@@ -802,6 +805,7 @@ class AttendanceVerificationDialog extends ConsumerStatefulWidget {
 
 class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerificationDialog> {
   CameraController? _cameraController;
+  WebCameraController? _webCameraController;
   bool _isCameraInitialized = false;
   bool _verifying = false;
   bool _isFaceRegistered = false;
@@ -845,22 +849,32 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
 
   Future<void> _initializeCamera() async {
     try {
-      final cameras = await availableCameras();
-      if (cameras.isNotEmpty) {
-        final frontCamera = cameras.firstWhere(
-          (c) => c.lensDirection == CameraLensDirection.front,
-          orElse: () => cameras.first,
-        );
-        _cameraController = CameraController(
-          frontCamera,
-          ResolutionPreset.medium,
-          enableAudio: false,
-        );
-        await _cameraController!.initialize();
+      if (kIsWeb) {
+        _webCameraController = WebCameraController();
+        await _webCameraController!.initialize();
         if (mounted) {
           setState(() {
             _isCameraInitialized = true;
           });
+        }
+      } else {
+        final cameras = await availableCameras();
+        if (cameras.isNotEmpty) {
+          final frontCamera = cameras.firstWhere(
+            (c) => c.lensDirection == CameraLensDirection.front,
+            orElse: () => cameras.first,
+          );
+          _cameraController = CameraController(
+            frontCamera,
+            ResolutionPreset.medium,
+            enableAudio: false,
+          );
+          await _cameraController!.initialize();
+          if (mounted) {
+            setState(() {
+              _isCameraInitialized = true;
+            });
+          }
         }
       }
     } catch (e) {
@@ -871,6 +885,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
   @override
   void dispose() {
     _cameraController?.dispose();
+    _webCameraController?.dispose();
     super.dispose();
   }
 
@@ -893,14 +908,16 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
         return;
       }
 
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        if (!mounted) return;
-        setState(() {
-          _withinAllowedRadius = false;
-          _locationMessage = 'Location services are turned off on this device.';
-        });
-        return;
+      if (!kIsWeb) {
+        final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        if (!serviceEnabled) {
+          if (!mounted) return;
+          setState(() {
+            _withinAllowedRadius = false;
+            _locationMessage = 'Location services are turned off on this device.';
+          });
+          return;
+        }
       }
 
       LocationPermission permission = await Geolocator.checkPermission();
@@ -1061,13 +1078,19 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
         }
 
         XFile? livePhoto;
-        if (_isCameraInitialized && _cameraController != null && _cameraController!.value.isInitialized) {
+        Uint8List? webPhotoBytes;
+
+        if (kIsWeb && _webCameraController != null && _webCameraController!.isInitialized) {
+          try {
+            webPhotoBytes = await _webCameraController!.takePicture();
+          } catch (_) {}
+        } else if (_isCameraInitialized && _cameraController != null && _cameraController!.value.isInitialized) {
           try {
             livePhoto = await _cameraController!.takePicture();
           } catch (_) {}
         }
 
-        if (livePhoto == null) {
+        if (livePhoto == null && webPhotoBytes == null) {
           if (!mounted) return;
           setState(() {
             _message = 'No face detected in frame. Please position your face clearly.';
@@ -1081,7 +1104,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
           return;
         }
 
-        final bytes = await livePhoto.readAsBytes();
+        final bytes = webPhotoBytes ?? await livePhoto!.readAsBytes();
         const faceService = FaceVerificationService();
 
         if (!faceService.isFaceDetected(bytes)) {
@@ -1120,7 +1143,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
           time: timeStr,
           actionType: widget.isCheckOut ? 'CHECK_OUT' : 'CHECK_IN',
           liveEmbedding: liveVector,
-          liveFrameImagePath: livePhoto.path,
+          liveFrameImagePath: livePhoto?.path ?? '',
         );
       }
 
@@ -1171,7 +1194,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
             'GPS accuracy is too low (${position.accuracy.toStringAsFixed(1)}m). Move to an open area and try again.',
           );
         }
-        if (position.isMocked) {
+        if (!kIsWeb && position.isMocked) {
           throw Exception('Mock location detected. Turn off fake GPS and try again.');
         }
         currentLat = position.latitude;
@@ -1321,7 +1344,9 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      if (_isCameraInitialized && _cameraController != null)
+                      if (_isCameraInitialized && kIsWeb && _webCameraController != null)
+                        WebCameraPreview(controller: _webCameraController!)
+                      else if (_isCameraInitialized && _cameraController != null)
                         CameraPreview(_cameraController!)
                       else
                         const Column(

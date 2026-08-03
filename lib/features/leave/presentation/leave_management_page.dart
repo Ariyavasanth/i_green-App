@@ -714,6 +714,7 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
     try {
       await ref.read(leaveRepositoryProvider).approveLeaveRequest(id, adminName);
       ref.invalidate(allLeaveRequestsProvider);
+      ref.invalidate(leaveRequestsProvider);
       ref.invalidate(leaveBalancesProvider);
       ref.invalidate(salaryCalculationProvider);
       if (mounted) {
@@ -734,6 +735,7 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
     try {
       await ref.read(leaveRepositoryProvider).denyLeaveRequest(id, adminName);
       ref.invalidate(allLeaveRequestsProvider);
+      ref.invalidate(leaveRequestsProvider);
       ref.invalidate(leaveBalancesProvider);
       ref.invalidate(salaryCalculationProvider);
       if (mounted) {
@@ -749,6 +751,7 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
       }
     }
   }
+
 
   void _showAuditHistoryDialog(int reqId) {
     showDialog(

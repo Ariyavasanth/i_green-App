@@ -111,7 +111,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     double similarityScore = 1.0,
   }) async {
     final score = similarityScore;
-    final allowedFace = faceMatched && score >= 0.80;
+    final allowedFace = faceMatched && score >= 0.92;
     final now = DateTime.now();
     final time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
     final settings = await getAttendanceSettings();
@@ -165,7 +165,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     double similarityScore = 1.0,
   }) async {
     final score = similarityScore;
-    final allowedFace = faceMatched && score >= 0.80;
+    final allowedFace = faceMatched && score >= 0.92;
     final now = DateTime.now();
     final time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
     final settings = await getAttendanceSettings();
