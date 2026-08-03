@@ -1,25 +1,16 @@
-import 'dart:math';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:camera/camera.dart';
-import 'package:local_auth/local_auth.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../../core/widgets/web_camera_preview.dart';
 import '../domain/attendance_record.dart';
 import '../../employee/domain/employee.dart';
 import '../../leave/domain/leave_request.dart';
 import '../../leave/providers/leave_providers.dart';
 import '../domain/attendance_repository.dart';
 import '../providers/attendance_providers.dart';
-import '../../face_registration/domain/face_registration_repository.dart';
-import '../../face_registration/providers/face_registration_providers.dart';
-import '../services/face_verification_service.dart' hide FaceVerificationResult;
 
 class AttendancePage extends ConsumerStatefulWidget {
   const AttendancePage({super.key});
@@ -804,13 +795,7 @@ class AttendanceVerificationDialog extends ConsumerStatefulWidget {
 }
 
 class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerificationDialog> {
-  CameraController? _cameraController;
-  WebCameraController? _webCameraController;
-  bool _isCameraInitialized = false;
   bool _verifying = false;
-  bool _isFaceRegistered = false;
-  bool _checkingRegistration = true;
-  FaceVerificationResult? _faceResult;
   String? _message;
   bool? _withinAllowedRadius;
   String? _locationMessage;
@@ -822,70 +807,11 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
   @override
   void initState() {
     super.initState();
-    _checkRegistrationStatus();
-    _initializeCamera();
     _refreshLocationGate();
-  }
-
-  Future<void> _checkRegistrationStatus() async {
-    try {
-      final repo = ref.read(faceRegistrationRepositoryProvider);
-      final registered = await repo.isFaceRegistered(widget.currentEmployee.id);
-      if (!mounted) return;
-      setState(() {
-        _isFaceRegistered = registered;
-        _checkingRegistration = false;
-        if (!registered) {
-          _message = 'Face registration required. Please register your face in the Face Registration section before marking attendance.';
-        }
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _checkingRegistration = false;
-      });
-    }
-  }
-
-  Future<void> _initializeCamera() async {
-    try {
-      if (kIsWeb) {
-        _webCameraController = WebCameraController();
-        await _webCameraController!.initialize();
-        if (mounted) {
-          setState(() {
-            _isCameraInitialized = true;
-          });
-        }
-      } else {
-        final cameras = await availableCameras();
-        if (cameras.isNotEmpty) {
-          final frontCamera = cameras.firstWhere(
-            (c) => c.lensDirection == CameraLensDirection.front,
-            orElse: () => cameras.first,
-          );
-          _cameraController = CameraController(
-            frontCamera,
-            ResolutionPreset.medium,
-            enableAudio: false,
-          );
-          await _cameraController!.initialize();
-          if (mounted) {
-            setState(() {
-              _isCameraInitialized = true;
-            });
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Attendance camera initialization error: $e');
-    }
   }
 
   @override
   void dispose() {
-    _cameraController?.dispose();
-    _webCameraController?.dispose();
     super.dispose();
   }
 
@@ -995,31 +921,12 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
     );
   }
 
-  List<double> _generateFeatureVector({required int seed}) {
-    final random = Random(seed);
-    final rawVec = List.generate(128, (_) => random.nextDouble() * 2 - 1.0);
-    final length = sqrt(rawVec.fold(0.0, (sum, val) => sum + val * val));
-    if (length == 0) return rawVec;
-    return rawVec.map((v) => v / length).toList();
-  }
-
   Future<void> _authenticateAndProceed() async {
     if (_verifying) return;
-
-    if (!_isFaceRegistered) {
-      setState(() {
-        _message = 'Face registration required. Please complete Face Registration before marking attendance.';
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please complete Face Registration before marking attendance.')),
-      );
-      return;
-    }
 
     setState(() {
       _verifying = true;
       _message = null;
-      _faceResult = null;
     });
 
     try {
@@ -1027,157 +934,6 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
       final now = DateTime.now();
       final dateKey = _formatKey(widget.date);
       final timeStr = DateFormat('HH:mm:ss').format(now);
-
-      // Step 1: Native Android Phone Hardware Face Unlock / Biometric Verification
-      bool isNativeVerified = false;
-      try {
-        final localAuth = LocalAuthentication();
-        final canCheck = await localAuth.canCheckBiometrics;
-        final isSupported = await localAuth.isDeviceSupported();
-        if (canCheck && isSupported) {
-          final biometrics = await localAuth.getAvailableBiometrics();
-          if (biometrics.isNotEmpty) {
-            isNativeVerified = await localAuth.authenticate(
-              localizedReason: 'Scan face biometrics to verify attendance for ${widget.currentEmployee.fullName}',
-              options: const AuthenticationOptions(
-                biometricOnly: true,
-                stickyAuth: true,
-                useErrorDialogs: true,
-              ),
-            );
-          }
-        }
-      } catch (e) {
-        debugPrint('Native phone face unlock error: $e');
-      }
-
-      FaceVerificationResult faceVerification;
-      if (isNativeVerified) {
-        faceVerification = const FaceVerificationResult(
-          isMatched: true,
-          similarityScore: 1.0,
-          verificationStatus: 'VERIFIED_NATIVE',
-          message: 'Face Verified via Native Android Face Unlock (100% Match)',
-        );
-      } else {
-        final faceRepo = ref.read(faceRegistrationRepositoryProvider);
-        final storedEmbeddings = await faceRepo.getFaceEmbeddings(widget.currentEmployee.id);
-
-        if (storedEmbeddings.isEmpty) {
-          if (!mounted) return;
-          setState(() {
-            _message = 'Face not recognized. Attendance not marked.';
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Face not recognized. Attendance not marked.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-          return;
-        }
-
-        XFile? livePhoto;
-        Uint8List? webPhotoBytes;
-
-        if (kIsWeb && _webCameraController != null && _webCameraController!.isInitialized) {
-          try {
-            webPhotoBytes = await _webCameraController!.takePicture();
-          } catch (_) {}
-        } else if (_isCameraInitialized && _cameraController != null && _cameraController!.value.isInitialized) {
-          try {
-            livePhoto = await _cameraController!.takePicture();
-          } catch (_) {}
-        }
-
-        if (livePhoto == null && webPhotoBytes == null) {
-          if (!mounted) return;
-          setState(() {
-            _message = 'No face detected in frame. Please position your face clearly.';
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No face detected in frame. Please position your face clearly.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-          return;
-        }
-
-        final bytes = webPhotoBytes ?? await livePhoto!.readAsBytes();
-        const faceService = FaceVerificationService();
-
-        if (!faceService.isFaceDetected(bytes)) {
-          if (!mounted) return;
-          setState(() {
-            _message = 'No face detected in frame. Please position your face clearly.';
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No face detected in frame. Please position your face clearly.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-          return;
-        }
-
-        final liveVector = faceService.extractEmbeddingFromImageBytes(bytes);
-        if (liveVector.isEmpty) {
-          if (!mounted) return;
-          setState(() {
-            _message = 'No face detected in frame. Please position your face clearly.';
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No face detected in frame. Please position your face clearly.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-          return;
-        }
-
-        faceVerification = await faceRepo.verifyLiveEmbedding(
-          employeeId: widget.currentEmployee.id,
-          employeeName: widget.currentEmployee.fullName,
-          date: dateKey,
-          time: timeStr,
-          actionType: widget.isCheckOut ? 'CHECK_OUT' : 'CHECK_IN',
-          liveEmbedding: liveVector,
-          liveFrameImagePath: livePhoto?.path ?? '',
-        );
-      }
-
-      // Temporary log for testing threshold confirmation (commented out before finishing)
-      // debugPrint('Face Verification Attempt - Employee ID: ${widget.currentEmployee.id}, Similarity Score: ${(faceVerification.similarityScore * 100).toStringAsFixed(2)}%, IsMatched: ${faceVerification.isMatched}');
-
-      if (!mounted) return;
-      setState(() {
-        _faceResult = faceVerification;
-      });
-
-      if (!faceVerification.isMatched) {
-        await widget.attendanceRepository.logAttendanceAttempt(
-          employeeId: widget.currentEmployee.id,
-          employeeName: widget.currentEmployee.fullName,
-          date: dateKey,
-          time: timeStr,
-          verificationStatus: widget.isCheckOut ? 'CheckOut Failed' : 'Failed',
-          similarityScore: faceVerification.similarityScore,
-          message: 'Face not recognized. Attendance not marked.',
-        );
-
-        if (!mounted) return;
-        setState(() {
-          _message = 'Face not recognized. Attendance not marked. (${(faceVerification.similarityScore * 100).toStringAsFixed(1)}% match)';
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Face not recognized. Attendance not marked.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
 
       // GPS Position Verification (checked if GPS verification is required for global or site employee)
       final emp = widget.currentEmployee;
@@ -1210,8 +966,6 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
           profileImageUrl: widget.currentEmployee.profileImageUrl,
           currentLatitude: currentLat,
           currentLongitude: currentLng,
-          faceMatched: faceVerification.isMatched,
-          similarityScore: faceVerification.similarityScore,
         );
       } else {
         verifyResult = await widget.attendanceRepository.verifyAttendance(
@@ -1222,8 +976,6 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
           scheduledCheckInTime: widget.currentEmployee.inTime,
           currentLatitude: currentLat,
           currentLongitude: currentLng,
-          faceMatched: faceVerification.isMatched,
-          similarityScore: faceVerification.similarityScore,
         );
       }
 
@@ -1237,7 +989,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
       if (!mounted) return;
       setState(() => _message = verifyResult.message);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$actionTitle completed successfully with Face Verification!')),
+        SnackBar(content: Text('$actionTitle completed successfully!')),
       );
       widget.onAttendanceMarked();
       Navigator.of(context).pop();
@@ -1300,7 +1052,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
 
   @override
   Widget build(BuildContext context) {
-    final canPerformAction = (_withinAllowedRadius ?? false) && _isFaceRegistered;
+    final canPerformAction = _withinAllowedRadius ?? false;
     final actionText = widget.isCheckOut ? 'Check Out' : 'Check In';
 
     return AlertDialog(
@@ -1322,76 +1074,6 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
               Text(
                 DateFormat('EEEE').format(widget.date),
                 style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 12),
-
-              // Live Camera Preview Frame for Automatic Face Verification
-              Container(
-                height: 200,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: _faceResult == null
-                        ? AppColors.active
-                        : (_faceResult!.isMatched ? const Color(0xFF2E7D32) : Colors.red),
-                    width: 2.5,
-                  ),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      if (_isCameraInitialized && kIsWeb && _webCameraController != null)
-                        WebCameraPreview(controller: _webCameraController!)
-                      else if (_isCameraInitialized && _cameraController != null)
-                        CameraPreview(_cameraController!)
-                      else
-                        const Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.face_retouching_natural, size: 48, color: Colors.white54),
-                            SizedBox(height: 6),
-                            Text('Camera Feed Ready', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                          ],
-                        ),
-
-                      // Oval Face Overlay
-                      Container(
-                        width: 130,
-                        height: 160,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.rectangle,
-                          borderRadius: BorderRadius.circular(80),
-                          border: Border.all(
-                            color: _faceResult == null
-                                ? AppColors.active
-                                : (_faceResult!.isMatched ? const Color(0xFF2E7D32) : Colors.red),
-                            width: 2,
-                          ),
-                        ),
-                      ),
-
-                      if (_verifying)
-                        Container(
-                          color: Colors.black54,
-                          child: const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              CircularProgressIndicator(color: AppColors.active),
-                              SizedBox(height: 10),
-                              Text(
-                                'Recognizing Face...',
-                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
               ),
               const SizedBox(height: 12),
 
@@ -1417,20 +1099,9 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
                       icon: Icons.location_on_outlined,
                     ),
                     _checkItem(
-                      label: _checkingRegistration
-                          ? 'Checking registered face profile...'
-                          : (_isFaceRegistered
-                              ? 'Face embeddings profile registered in Cloud Firestore'
-                              : 'Face profile NOT registered'),
-                      done: _isFaceRegistered,
-                      icon: Icons.badge_outlined,
-                    ),
-                    _checkItem(
-                      label: _faceResult != null && _faceResult!.isMatched
-                          ? 'Live Face Recognition matched (${(_faceResult!.similarityScore * 100).toStringAsFixed(1)}%)'
-                          : 'Live camera face verification on $actionText',
-                      done: _faceResult?.isMatched == true,
-                      icon: Icons.camera_front,
+                      label: 'GPS verification only',
+                      done: true,
+                      icon: Icons.verified_outlined,
                     ),
                   ],
                 ),
@@ -1458,23 +1129,6 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
                     color: _withinAllowedRadius == true
                         ? const Color(0xFF2E7D32)
                         : const Color(0xFFE53935),
-                  ),
-                ),
-              ],
-              if (!_isFaceRegistered || (_faceResult != null && !_faceResult!.isMatched)) ...[
-                const SizedBox(height: 10),
-                Center(
-                  child: TextButton.icon(
-                    style: TextButton.styleFrom(foregroundColor: const Color(0xFF414A51)),
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      GoRouter.of(context).go('/face-registration');
-                    },
-                    icon: const Icon(Icons.face_retouching_natural, size: 18),
-                    label: const Text(
-                      'Re-register or Delete Face Profile',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, decoration: TextDecoration.underline),
-                    ),
                   ),
                 ),
               ],

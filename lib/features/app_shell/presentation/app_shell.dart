@@ -117,12 +117,6 @@ class AppShell extends ConsumerWidget {
       'Employee',
     ),
     SidebarDestination(
-      'Face Registration',
-      '/face-registration',
-      Icons.face_retouching_natural_outlined,
-      'Employee',
-    ),
-    SidebarDestination(
       'Attendance Management',
       '/attendance-management',
       Icons.co_present_outlined,
