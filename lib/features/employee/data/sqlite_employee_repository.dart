@@ -391,7 +391,7 @@ class SqliteEmployeeRepository implements EmployeeRepository {
     return EmployeePhotoAsset(
       url: dataUri,
       publicId: 'local_${DateTime.now().millisecondsSinceEpoch}',
-      folder: 'employee_management/$role/$employeeId/profile',
+      folder: 'employee_management/profiles/$role/$employeeId',
     );
   }
 

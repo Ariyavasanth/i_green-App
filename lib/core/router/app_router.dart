@@ -30,6 +30,8 @@ import '../../features/leave/presentation/leave_management_page.dart';
 import '../../features/attendance/presentation/attendance_page.dart';
 import '../../features/attendance_management/presentation/attendance_management_page.dart';
 import '../../features/attendance_settings/presentation/attendance_settings_page.dart';
+import '../../features/site_visit_attendance/presentation/site_visit_attendance_page.dart';
+import '../../features/site_visit_attendance_management/presentation/site_visit_attendance_management_page.dart';
 import '../../features/asset_settings/presentation/asset_settings_page.dart';
 import '../../features/salary_settings/presentation/salary_settings_page.dart';
 import '../../features/asset_management/presentation/asset_management_page.dart';
@@ -97,6 +99,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/attendance-management',
             builder: (_, _) => const AttendanceManagementPage(),
+          ),
+          GoRoute(
+            path: '/site-visit-attendance',
+            builder: (_, _) => const SiteVisitAttendancePage(),
+          ),
+          GoRoute(
+            path: '/site-visit-attendance-management',
+            builder: (_, _) => const SiteVisitAttendanceManagementPage(),
           ),
           GoRoute(
             path: '/leave-management',

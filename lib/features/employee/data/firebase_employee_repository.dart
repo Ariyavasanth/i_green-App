@@ -18,7 +18,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     Uri? cloudinarySignerBaseUri,
   })  : _firestore = firestore ?? FirebaseFirestore.instance,
         cloudinarySignerBaseUri = cloudinarySignerBaseUri ??
-            Uri.parse('http://127.0.0.1:3000');
+            Uri.parse('https://i-green-app.onrender.com');
 
   CollectionReference<Map<String, dynamic>> get _employeesRef =>
       _firestore.collection('employees');
@@ -32,7 +32,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   String _folderForEmployee(String employeeId, String role) {
     final normalizedRole = role.trim().isEmpty ? 'employees' : role.trim().toLowerCase();
     final normalizedId = employeeId.trim().isEmpty ? 'unassigned' : employeeId.trim();
-    return 'employee_management/$normalizedRole/$normalizedId/profile';
+    return 'employee_management/profiles/$normalizedRole/$normalizedId';
   }
 
   // Helper: Map Employee object to Firestore document map
