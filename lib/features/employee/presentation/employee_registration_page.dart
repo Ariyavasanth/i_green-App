@@ -3096,9 +3096,9 @@ class _EmployeeRegistrationPageState
     final basicPay = totalSalary * 0.50;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(isMobile ? 12 : 16),
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.all(isMobile ? 14 : 20),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(4),
@@ -3246,59 +3246,115 @@ class _EmployeeRegistrationPageState
 
             // Section 4: Offer Letter Generation
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(isMobile ? 12 : 16),
               decoration: BoxDecoration(
                 color: const Color(0xFFF9FAFB),
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(color: const Color(0xFFEAECF0)),
               ),
-              child: Row(
-                children: [
-                  const Icon(Icons.description_outlined, color: AppColors.primary, size: 28),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
+              child: isMobile
+                  ? Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          'Offer Letter Generation',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.description_outlined, color: AppColors.primary, size: 28),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Offer Letter Generation',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                  SizedBox(height: 2),
+                                  Text(
+                                    'Generate and download Microsoft Word (.docx) offer letter with candidate details, salary structure, and company terms & conditions.',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF00BFA5),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                            ),
+                            onPressed: () => OfferLetterGenerator.downloadOfferLetter(
+                              context,
+                              _buildCurrentEmployeeFromForm(link),
+                            ),
+                            icon: const Icon(Icons.file_download_outlined, size: 18),
+                            label: const Text(
+                              'Generate Offer Letter',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                            ),
                           ),
                         ),
-                        SizedBox(height: 2),
-                        Text(
-                          'Generate and download Microsoft Word (.docx) offer letter with candidate details, salary structure, and company terms & conditions.',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textSecondary,
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        const Icon(Icons.description_outlined, color: AppColors.primary, size: 28),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text(
+                                'Offer Letter Generation',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Generate and download Microsoft Word (.docx) offer letter with candidate details, salary structure, and company terms & conditions.',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF00BFA5),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                          ),
+                          onPressed: () => OfferLetterGenerator.downloadOfferLetter(
+                            context,
+                            _buildCurrentEmployeeFromForm(link),
+                          ),
+                          icon: const Icon(Icons.file_download_outlined, size: 18),
+                          label: const Text(
+                            'Generate Offer Letter',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF00BFA5),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                    ),
-                    onPressed: () => OfferLetterGenerator.downloadOfferLetter(
-                      context,
-                      _buildCurrentEmployeeFromForm(link),
-                    ),
-                    icon: const Icon(Icons.file_download_outlined, size: 18),
-                    label: const Text(
-                      'Generate Offer Letter',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
-              ),
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
@@ -3356,79 +3412,147 @@ class _EmployeeRegistrationPageState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Action Bar / Header Card
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 16, vertical: 12),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(6),
               border: Border.all(color: const Color(0xFFEAECF0)),
             ),
-            child: Row(
-              children: [
-                const Icon(Icons.mark_email_read_outlined, color: AppColors.active, size: 24),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
+            child: isMobile
+                ? Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text(
-                        'Welcome Letter Preview',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.mark_email_read_outlined, color: AppColors.active, size: 24),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: const [
+                                Text(
+                                  'Welcome Letter Preview',
+                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  'Live preview generated from form & Job & Admin Details tab.',
+                                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      SizedBox(height: 2),
-                      Text(
-                        'Live preview generated from form & Job & Admin Details tab.',
-                        style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.active,
+                                side: const BorderSide(color: AppColors.active),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                              ),
+                              onPressed: () {
+                                setState(() {});
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Welcome Letter preview updated with latest changes!'),
+                                    backgroundColor: Colors.green,
+                                    duration: Duration(seconds: 2),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.refresh, size: 16),
+                              label: const Text('Refresh', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.active,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                              ),
+                              onPressed: () => WelcomeLetterGenerator.downloadWelcomeLetter(context, data),
+                              icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
+                              label: const Text('Generate PDF', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      const Icon(Icons.mark_email_read_outlined, color: AppColors.active, size: 24),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text(
+                              'Welcome Letter Preview',
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Live preview generated from form & Job & Admin Details tab.',
+                              style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.active,
+                          side: const BorderSide(color: AppColors.active),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                        ),
+                        onPressed: () {
+                          setState(() {});
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Welcome Letter preview updated with latest changes!'),
+                              backgroundColor: Colors.green,
+                              duration: Duration(seconds: 2),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.refresh, size: 16),
+                        label: const Text('Refresh Preview', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.active,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                        ),
+                        onPressed: () => WelcomeLetterGenerator.downloadWelcomeLetter(context, data),
+                        icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
+                        label: const Text('Generate PDF', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(width: 12),
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.active,
-                    side: const BorderSide(color: AppColors.active),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                  ),
-                  onPressed: () {
-                    setState(() {});
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Welcome Letter preview updated with latest changes!'),
-                        backgroundColor: Colors.green,
-                        duration: Duration(seconds: 2),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.refresh, size: 16),
-                  label: const Text('Refresh Preview', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.active,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                  ),
-                  onPressed: () => WelcomeLetterGenerator.downloadWelcomeLetter(context, data),
-                  icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
-                  label: const Text('Generate PDF', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
           ),
           const SizedBox(height: 20),
-
-          // Printed Letter Card Preview
           Align(
             alignment: Alignment.topCenter,
             child: Container(
               constraints: const BoxConstraints(maxWidth: 800),
-              padding: EdgeInsets.all(isMobile ? 20 : 44),
+              padding: EdgeInsets.all(isMobile ? 14 : 44),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(8),
@@ -3447,21 +3571,23 @@ class _EmployeeRegistrationPageState
                   // Company Header
                   Center(
                     child: Column(
-                      children: const [
+                      children: [
                         Text(
                           'IGREEN TECHNOLOGIES',
+                          textAlign: TextAlign.center,
                           style: TextStyle(
-                            fontSize: 22,
+                            fontSize: isMobile ? 18 : 22,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 1.2,
-                            color: Color(0xFF1E293B),
+                            color: const Color(0xFF1E293B),
                           ),
                         ),
-                        SizedBox(height: 4),
+                        const SizedBox(height: 4),
                         Text(
                           'OFFICIAL WELCOME LETTER',
+                          textAlign: TextAlign.center,
                           style: TextStyle(
-                            fontSize: 11,
+                            fontSize: isMobile ? 10 : 11,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 1.5,
                             color: AppColors.active,
@@ -3470,9 +3596,9 @@ class _EmployeeRegistrationPageState
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: isMobile ? 16 : 24),
                   const Divider(color: Color(0xFFE2E8F0), thickness: 1),
-                  const SizedBox(height: 20),
+                  SizedBox(height: isMobile ? 14 : 20),
 
                   // Date
                   Text(
