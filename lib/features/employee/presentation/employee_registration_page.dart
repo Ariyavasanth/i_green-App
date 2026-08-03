@@ -71,7 +71,8 @@ class _EmployeeRegistrationPageState
   String _leaveAllocationFrequency = 'Monthly';
   final _allowedLeavesController = TextEditingController(text: '1.0');
   final _leaveEffectiveDateController = TextEditingController();
-  bool _isSiteEmployee = false;
+  bool _isStaticEmployee = false;
+  bool _isDynamicEmployee = false;
   final _siteLatitudeController = TextEditingController();
   final _siteLongitudeController = TextEditingController();
   final _siteRadiusController = TextEditingController(text: '15');
@@ -293,7 +294,8 @@ class _EmployeeRegistrationPageState
       _leaveAllocationFrequency = emp.leaveAllocationFrequency.isEmpty ? 'Monthly' : emp.leaveAllocationFrequency;
       _allowedLeavesController.text = emp.allowedLeaves.toString();
       _leaveEffectiveDateController.text = emp.effectiveDate;
-      _isSiteEmployee = emp.isSiteEmployee;
+      _isStaticEmployee = emp.isStaticEmployee;
+      _isDynamicEmployee = emp.isDynamicEmployee;
       _siteLatitudeController.text = emp.siteLatitude != 0 ? emp.siteLatitude.toStringAsFixed(6) : '';
       _siteLongitudeController.text = emp.siteLongitude != 0 ? emp.siteLongitude.toStringAsFixed(6) : '';
       _siteRadiusController.text = emp.siteAllowedRadiusMeters.toString();
@@ -664,6 +666,17 @@ class _EmployeeRegistrationPageState
         );
         return;
       }
+    }
+
+    if (!(_isStaticEmployee || _isDynamicEmployee)) {
+      _tabController.animateTo(_tabs.indexOf('Job & Admin Details'));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select at least one attendance type (Static or Dynamic).'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
     }
 
     setState(() => _isSubmitting = true);
@@ -1812,11 +1825,11 @@ class _EmployeeRegistrationPageState
             const SizedBox(height: 16),
             Container(
               decoration: BoxDecoration(
-                color: _isSiteEmployee ? const Color(0xFFF8FAFC) : Colors.transparent,
+                color: (_isStaticEmployee || _isDynamicEmployee) ? const Color(0xFFF8FAFC) : Colors.transparent,
                 borderRadius: BorderRadius.circular(8),
-                border: _isSiteEmployee ? Border.all(color: const Color(0xFFCBD5E1)) : null,
+                border: (_isStaticEmployee || _isDynamicEmployee) ? Border.all(color: const Color(0xFFCBD5E1)) : null,
               ),
-              padding: _isSiteEmployee ? const EdgeInsets.all(16) : EdgeInsets.zero,
+              padding: (_isStaticEmployee || _isDynamicEmployee) ? const EdgeInsets.all(16) : EdgeInsets.zero,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1824,7 +1837,7 @@ class _EmployeeRegistrationPageState
                     contentPadding: EdgeInsets.zero,
                     dense: true,
                     title: const Text(
-                      'Site Employee',
+                      'Static Employee',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.bold,
@@ -1832,53 +1845,47 @@ class _EmployeeRegistrationPageState
                       ),
                     ),
                     subtitle: const Text(
-                      'Enable if employee works from a specific physical site requiring location override',
+                      'Employee uses normal attendance (regular login)',
                       style: TextStyle(
                         fontSize: 11,
                         color: AppColors.textSecondary,
                       ),
                     ),
-                    value: _isSiteEmployee,
+                    value: _isStaticEmployee,
                     onChanged: (val) {
                       setState(() {
-                        _isSiteEmployee = val ?? false;
-                        if (!_isSiteEmployee) {
-                          _siteLatitudeController.clear();
-                          _siteLongitudeController.clear();
-                          _siteRadiusController.text = '15';
-                          _siteRequireGpsVerification = true;
-                        }
+                        _isStaticEmployee = val ?? false;
                       });
                     },
                     controlAffinity: ListTileControlAffinity.leading,
                   ),
-                  if (_isSiteEmployee) ...[
-                    const SizedBox(height: 12),
-                    const Divider(height: 1, color: Color(0xFFE2E8F0)),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Site Location Settings',
+                  const SizedBox(height: 8),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: const Text(
+                      'Dynamic Employee',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF334155),
+                        color: Colors.black87,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'GPS attendance validation for this employee will be measured against these site coordinates instead of the global Attendance Settings location.',
-                      style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    subtitle: const Text(
+                      'Employee uses site-based attendance module (location-based login)',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
-                    const SizedBox(height: 14),
-                    AttendanceLocationFields(
-                      latitudeController: _siteLatitudeController,
-                      longitudeController: _siteLongitudeController,
-                      radiusController: _siteRadiusController,
-                      requireGpsVerification: _siteRequireGpsVerification,
-                      onRequireGpsChanged: (val) => setState(() => _siteRequireGpsVerification = val),
-                      isMobile: isMobile,
-                    ),
-                  ],
+                    value: _isDynamicEmployee,
+                    onChanged: (val) {
+                      setState(() {
+                        _isDynamicEmployee = val ?? false;
+                      });
+                    },
+                    controlAffinity: ListTileControlAffinity.leading,
+                  ),
                 ],
               ),
             ),
@@ -3698,11 +3705,12 @@ class _EmployeeRegistrationPageState
       salaryTax: double.tryParse(_taxController.text.trim().replaceAll(',', '')) ?? 0.0,
       salaryPf: double.tryParse(_pfController.text.trim().replaceAll(',', '')) ?? 0.0,
       salaryProfessionalTax: double.tryParse(_professionalTaxController.text.trim().replaceAll(',', '')) ?? 0.0,
-      isSiteEmployee: _isSiteEmployee,
-      siteLatitude: _isSiteEmployee ? (AttendanceLocationFields.parseCoordinate(_siteLatitudeController.text) ?? 0.0) : 0.0,
-      siteLongitude: _isSiteEmployee ? (AttendanceLocationFields.parseCoordinate(_siteLongitudeController.text) ?? 0.0) : 0.0,
-      siteAllowedRadiusMeters: _isSiteEmployee ? (int.tryParse(_siteRadiusController.text.trim()) ?? 15) : 15,
-      siteRequireGpsVerification: _isSiteEmployee ? _siteRequireGpsVerification : true,
+      isStaticEmployee: _isStaticEmployee,
+      isDynamicEmployee: _isDynamicEmployee,
+      siteLatitude: _isDynamicEmployee ? (AttendanceLocationFields.parseCoordinate(_siteLatitudeController.text) ?? 0.0) : 0.0,
+      siteLongitude: _isDynamicEmployee ? (AttendanceLocationFields.parseCoordinate(_siteLongitudeController.text) ?? 0.0) : 0.0,
+      siteAllowedRadiusMeters: _isDynamicEmployee ? (int.tryParse(_siteRadiusController.text.trim()) ?? 15) : 15,
+      siteRequireGpsVerification: _isDynamicEmployee ? _siteRequireGpsVerification : true,
     );
   }
 

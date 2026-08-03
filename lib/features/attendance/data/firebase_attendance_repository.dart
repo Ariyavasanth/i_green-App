@@ -78,7 +78,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       final snap = await _firestore.collection('employees').where('id', isEqualTo: employeeId).limit(1).get();
       if (snap.docs.isNotEmpty) {
         final emp = Employee.fromMap(snap.docs.first.data());
-        if (emp.isSiteEmployee && (emp.siteLatitude != 0 || emp.siteLongitude != 0)) {
+        if (emp.isDynamicEmployee && (emp.siteLatitude != 0 || emp.siteLongitude != 0)) {
           return {
             'targetLat': emp.siteLatitude,
             'targetLng': emp.siteLongitude,

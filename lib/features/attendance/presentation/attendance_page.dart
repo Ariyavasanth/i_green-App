@@ -819,7 +819,17 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
     try {
       final emp = widget.currentEmployee;
       final settings = await widget.attendanceRepository.getAttendanceSettings();
-      final bool isSite = emp.isSiteEmployee && (emp.siteLatitude != 0 || emp.siteLongitude != 0);
+      final bool canUseSite = emp.isDynamicEmployee && (emp.siteLatitude != 0 || emp.siteLongitude != 0);
+      final bool canUseOffice = emp.isStaticEmployee;
+      if (!canUseSite && !canUseOffice) {
+        if (!mounted) return;
+        setState(() {
+          _withinAllowedRadius = false;
+          _locationMessage = 'This employee is not assigned to any attendance type.';
+        });
+        return;
+      }
+      final bool isSite = canUseSite && !canUseOffice;
       final double targetLat = isSite ? emp.siteLatitude : settings.officeLatitude;
       final double targetLng = isSite ? emp.siteLongitude : settings.officeLongitude;
       final int targetRadius = isSite ? emp.siteAllowedRadiusMeters : settings.allowedAttendanceRadiusMeters;
@@ -938,7 +948,12 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
       // GPS Position Verification (checked if GPS verification is required for global or site employee)
       final emp = widget.currentEmployee;
       final settings = await widget.attendanceRepository.getAttendanceSettings();
-      final bool isSite = emp.isSiteEmployee && (emp.siteLatitude != 0 || emp.siteLongitude != 0);
+      final bool canUseSite = emp.isDynamicEmployee && (emp.siteLatitude != 0 || emp.siteLongitude != 0);
+      final bool canUseOffice = emp.isStaticEmployee;
+      if (!canUseSite && !canUseOffice) {
+        throw Exception('This employee is not assigned to any attendance type.');
+      }
+      final bool isSite = canUseSite && !canUseOffice;
       final bool requireGps = isSite ? emp.siteRequireGpsVerification : settings.requireGpsVerification;
       double currentLat = 0.0;
       double currentLng = 0.0;

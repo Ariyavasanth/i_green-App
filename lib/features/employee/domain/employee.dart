@@ -224,7 +224,8 @@ class Employee {
     this.disciplinaryRecords = '',
     this.temporaryPassword = '',
     this.accessPermissions = const [],
-    this.isSiteEmployee = false,
+    this.isStaticEmployee = false,
+    this.isDynamicEmployee = false,
     this.siteLatitude = 0.0,
     this.siteLongitude = 0.0,
     this.siteAllowedRadiusMeters = 15,
@@ -506,7 +507,8 @@ class Employee {
   final String temporaryPassword;
   final List<String> accessPermissions;
 
-  final bool isSiteEmployee;
+  final bool isStaticEmployee;
+  final bool isDynamicEmployee;
   final double siteLatitude;
   final double siteLongitude;
   final int siteAllowedRadiusMeters;
@@ -656,7 +658,8 @@ class Employee {
       'disciplinary_records': disciplinaryRecords,
       'temporary_password': temporaryPassword,
       'access_permissions': jsonEncode(accessPermissions),
-      'is_site_employee': isSiteEmployee ? 1 : 0,
+      'is_static_employee': isStaticEmployee ? 1 : 0,
+      'is_dynamic_employee': isDynamicEmployee ? 1 : 0,
       'site_latitude': siteLatitude,
       'site_longitude': siteLongitude,
       'site_allowed_radius_meters': siteAllowedRadiusMeters,
@@ -797,11 +800,26 @@ class Employee {
         }
         return <String>[];
       }(),
-      isSiteEmployee: () {
-        final val = map['is_site_employee'] ?? map['isSiteEmployee'];
+      isStaticEmployee: () {
+        final val = map['is_static_employee'] ?? map['isStaticEmployee'];
         if (val is bool) return val;
         if (val is num) return val != 0;
         if (val is String) return val.toLowerCase() == 'true' || val == '1';
+        final legacy = map['is_site_employee'] ?? map['isSiteEmployee'];
+        if (legacy is bool) return !legacy;
+        if (legacy is num) return legacy == 0;
+        if (legacy is String) return !(legacy.toLowerCase() == 'true' || legacy == '1');
+        return false;
+      }(),
+      isDynamicEmployee: () {
+        final val = map['is_dynamic_employee'] ?? map['isDynamicEmployee'];
+        if (val is bool) return val;
+        if (val is num) return val != 0;
+        if (val is String) return val.toLowerCase() == 'true' || val == '1';
+        final legacy = map['is_site_employee'] ?? map['isSiteEmployee'];
+        if (legacy is bool) return legacy;
+        if (legacy is num) return legacy != 0;
+        if (legacy is String) return legacy.toLowerCase() == 'true' || legacy == '1';
         return false;
       }(),
       siteLatitude: (map['site_latitude'] ?? map['siteLatitude'] as num?)?.toDouble() ?? 0.0,
@@ -927,7 +945,8 @@ class Employee {
     String? disciplinaryRecords,
     String? temporaryPassword,
     List<String>? accessPermissions,
-    bool? isSiteEmployee,
+    bool? isStaticEmployee,
+    bool? isDynamicEmployee,
     double? siteLatitude,
     double? siteLongitude,
     int? siteAllowedRadiusMeters,
@@ -1043,7 +1062,8 @@ class Employee {
       disciplinaryRecords: disciplinaryRecords ?? this.disciplinaryRecords,
       temporaryPassword: temporaryPassword ?? this.temporaryPassword,
       accessPermissions: accessPermissions ?? this.accessPermissions,
-      isSiteEmployee: isSiteEmployee ?? this.isSiteEmployee,
+      isStaticEmployee: isStaticEmployee ?? this.isStaticEmployee,
+      isDynamicEmployee: isDynamicEmployee ?? this.isDynamicEmployee,
       siteLatitude: siteLatitude ?? this.siteLatitude,
       siteLongitude: siteLongitude ?? this.siteLongitude,
       siteAllowedRadiusMeters: siteAllowedRadiusMeters ?? this.siteAllowedRadiusMeters,

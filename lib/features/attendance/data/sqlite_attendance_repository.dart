@@ -163,7 +163,7 @@ class SqliteAttendanceRepository implements AttendanceRepository {
       final maps = await db.query('employees', where: 'id = ?', whereArgs: [employeeId], limit: 1);
       if (maps.isNotEmpty) {
         final emp = Employee.fromMap(maps.first);
-        if (emp.isSiteEmployee && (emp.siteLatitude != 0 || emp.siteLongitude != 0)) {
+        if (emp.isDynamicEmployee && (emp.siteLatitude != 0 || emp.siteLongitude != 0)) {
           return {
             'targetLat': emp.siteLatitude,
             'targetLng': emp.siteLongitude,

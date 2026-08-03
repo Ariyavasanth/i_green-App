@@ -28,10 +28,12 @@ class SqliteEmployeeRepository implements EmployeeRepository {
       version: 3,
       onCreate: (db, version) async {
         await _createTables(db);
+        await _migrateLegacyAttendanceFlags(db);
       },
       onOpen: (db) async {
         await _createTables(db);
         await _ensureColumnsExist(db);
+        await _migrateLegacyAttendanceFlags(db);
       },
     );
 
@@ -152,7 +154,8 @@ class SqliteEmployeeRepository implements EmployeeRepository {
         allowed_leaves REAL,
         effective_date TEXT,
         requires_leave_approval INTEGER DEFAULT 1,
-        is_site_employee INTEGER DEFAULT 0,
+        is_static_employee INTEGER DEFAULT 0,
+        is_dynamic_employee INTEGER DEFAULT 0,
         site_latitude REAL DEFAULT 0.0,
         site_longitude REAL DEFAULT 0.0,
         site_allowed_radius_meters INTEGER DEFAULT 15,
@@ -252,7 +255,8 @@ class SqliteEmployeeRepository implements EmployeeRepository {
       'coordinator_name': 'TEXT',
       'coordinator_phone': 'TEXT',
       'weekly_off_day': 'TEXT',
-      'is_site_employee': 'INTEGER DEFAULT 0',
+      'is_static_employee': 'INTEGER DEFAULT 0',
+      'is_dynamic_employee': 'INTEGER DEFAULT 0',
       'site_latitude': 'REAL DEFAULT 0.0',
       'site_longitude': 'REAL DEFAULT 0.0',
       'site_allowed_radius_meters': 'INTEGER DEFAULT 15',
@@ -276,6 +280,21 @@ class SqliteEmployeeRepository implements EmployeeRepository {
       'registration_links',
       where: "employee_name IN ('Saravanan G S', 'Ariya vasanth', 'guna S')",
     );
+  }
+
+  Future<void> _migrateLegacyAttendanceFlags(Database db) async {
+    final tableInfo = await db.rawQuery('PRAGMA table_info(employees)');
+    final existingColumns = tableInfo.map((row) => row['name'] as String).toSet();
+    if (!existingColumns.contains('is_site_employee')) return;
+    if (!existingColumns.contains('is_static_employee') || !existingColumns.contains('is_dynamic_employee')) return;
+
+    await db.execute('''
+      UPDATE employees
+      SET
+        is_static_employee = CASE WHEN IFNULL(is_site_employee, 0) = 0 THEN 1 ELSE 0 END,
+        is_dynamic_employee = CASE WHEN IFNULL(is_site_employee, 0) = 1 THEN 1 ELSE 0 END
+      WHERE is_site_employee IS NOT NULL
+    ''');
   }
 
   @override
