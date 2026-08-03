@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 
 import '../domain/site_visit_attendance_repository.dart';
+import '../domain/site_visit_photo_asset.dart';
 import '../domain/site_visit_record.dart';
 
 class FirebaseSiteVisitAttendanceRepository implements SiteVisitAttendanceRepository {
@@ -80,14 +81,19 @@ class FirebaseSiteVisitAttendanceRepository implements SiteVisitAttendanceReposi
   Future<void> deleteVisit(int id) async {
     final doc = await _visitsRef.where('id', isEqualTo: id).limit(1).get();
     if (doc.docs.isNotEmpty) {
+      final data = doc.docs.first.data();
+      final photoUrl = data['photo_url'] as String? ?? '';
+      final publicId = data['photo_public_id'] as String? ?? '';
       await doc.docs.first.reference.delete();
+      await _deleteLocalPhotoIfPresent(photoUrl);
+      await _deleteCloudinaryPhotoIfPresent(publicId);
       return;
     }
     await _visitsRef.doc(id.toString()).delete();
   }
 
   @override
-  Future<String> createVisitPhotoUrl({
+  Future<SiteVisitPhotoAsset> createVisitPhotoUrl({
     required String localImagePath,
     required String employeeName,
     required String siteName,
@@ -119,18 +125,44 @@ class FirebaseSiteVisitAttendanceRepository implements SiteVisitAttendanceReposi
       }
       final decoded = jsonDecode(body) as Map<String, dynamic>;
       final remoteUrl = decoded['secureUrl'] as String? ?? decoded['secure_url'] as String? ?? '';
+      final publicId = decoded['publicId'] as String? ?? decoded['public_id'] as String? ?? '';
       if (remoteUrl.isEmpty) {
         throw Exception('Cloudinary upload returned an empty URL.');
       }
-      return remoteUrl;
+      return SiteVisitPhotoAsset(url: remoteUrl, publicId: publicId);
     } on SocketException {
-      return localImagePath;
+      return SiteVisitPhotoAsset(url: localImagePath, publicId: '');
     } on HttpException {
-      return localImagePath;
+      return SiteVisitPhotoAsset(url: localImagePath, publicId: '');
     } catch (_) {
-      return localImagePath;
+      return SiteVisitPhotoAsset(url: localImagePath, publicId: '');
     }
   }
 
   int _docIdToInt(String docId) => int.tryParse(docId.replaceAll(RegExp(r'\D'), '')) ?? (docId.hashCode & 0x7fffffff);
+
+  Future<void> _deleteLocalPhotoIfPresent(String photoUrl) async {
+    if (photoUrl.isEmpty) return;
+    final file = File(photoUrl);
+    if (!await file.exists()) return;
+    try {
+      await file.delete();
+    } catch (_) {
+      // Best effort cleanup only.
+    }
+  }
+
+  Future<void> _deleteCloudinaryPhotoIfPresent(String publicId) async {
+    if (publicId.isEmpty) return;
+    try {
+      final request = http.post(
+        cloudinarySignerBaseUri.resolve('/cloudinary/delete-image'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'publicId': publicId}),
+      );
+      await request;
+    } catch (_) {
+      // Best effort cleanup only.
+    }
+  }
 }

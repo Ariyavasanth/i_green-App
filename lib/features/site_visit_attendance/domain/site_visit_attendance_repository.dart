@@ -1,4 +1,5 @@
 import 'site_visit_record.dart';
+import 'site_visit_photo_asset.dart';
 
 abstract class SiteVisitAttendanceRepository {
   Future<List<SiteVisitRecord>> getVisitsForEmployee({
@@ -16,7 +17,7 @@ abstract class SiteVisitAttendanceRepository {
 
   Future<void> deleteVisit(int id);
 
-  Future<String> createVisitPhotoUrl({
+  Future<SiteVisitPhotoAsset> createVisitPhotoUrl({
     required String localImagePath,
     required String employeeName,
     required String siteName,

@@ -26,6 +26,8 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
   DateTime _selectedDate = DateTime.now();
   bool _showVisitForm = false;
   bool _saving = false;
+  final _scrollController = ScrollController();
+  final _captureCardKey = GlobalKey();
 
   final _siteController = TextEditingController();
   final _notesController = TextEditingController();
@@ -35,6 +37,7 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _siteController.dispose();
     _notesController.dispose();
     super.dispose();
@@ -67,6 +70,7 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
         top: false,
         bottom: true,
         child: SingleChildScrollView(
+          controller: _scrollController,
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -122,11 +126,10 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
       loading: () => _cardShell(const Center(child: CircularProgressIndicator())),
       error: (e, _) => _cardShell(Text('Error loading today\'s site visits: $e')),
       data: (visits) {
-        final firstVisit = visits.isNotEmpty ? visits.first : null;
-        final lastVisit = visits.isNotEmpty ? visits.last : null;
-        final hasCheckIn = visits.isNotEmpty;
-        final hasCheckOut = visits.length > 1;
-        final workHours = hasCheckIn && hasCheckOut ? _roughHoursBetween(firstVisit!.visitTime, lastVisit!.visitTime) : null;
+        final statusText = visits.isEmpty
+            ? 'No site visit logged yet'
+            : 'At ${visits.last.siteName} since ${visits.last.visitTime}';
+        final visitCountLabel = visits.isEmpty ? '0 sites today' : '${visits.length} sites today';
 
         return Container(
           padding: const EdgeInsets.all(16),
@@ -175,13 +178,22 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
                     ),
                   ),
                   const SizedBox(width: 8),
-                  _buildStatusChip(visits),
+                  _buildCountChip(visitCountLabel),
                 ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                statusText,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
               ),
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
-                height: 50,
+                height: 48,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.active,
@@ -189,46 +201,57 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
                     elevation: 1,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  onPressed: () => setState(() => _showVisitForm = true),
+                  onPressed: _openCaptureForm,
                   icon: const Icon(Icons.fingerprint, size: 22),
                   label: const Text(
-                    'Check In Attendance',
+                    'Capture attendance',
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
-              const Divider(height: 1, color: Color(0xFFEEEEEE)),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildCompactStatChip(
-                      icon: Icons.login,
-                      iconColor: const Color(0xFF2E7D32),
-                      label: 'Check In',
-                      value: hasCheckIn ? firstVisit!.visitTime : '--:--',
-                    ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.textPrimary,
+                    side: const BorderSide(color: Color(0xFFD8DDE3)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _buildCompactStatChip(
-                      icon: Icons.logout,
-                      iconColor: const Color(0xFFC62828),
-                      label: 'Check Out',
-                      value: hasCheckOut ? lastVisit!.visitTime : '--:--',
-                    ),
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Day checkout flow is not connected yet.')),
+                    );
+                  },
+                  icon: const Icon(Icons.logout, size: 20),
+                  label: const Text(
+                    'Check Out for the day',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _buildCompactStatChip(
-                      icon: Icons.timelapse,
-                      iconColor: AppColors.active,
-                      label: 'Work Hrs',
-                      value: workHours != null ? '${workHours.toStringAsFixed(1)} hrs' : '--',
-                    ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Tooltip: capture the image to take attendance.',
+                style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: TextButton.icon(
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFFC62828),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                ],
+                  onPressed: () => _confirmRemoveAttendance(visits),
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  label: const Text(
+                    'Remove attendance',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                ),
               ),
             ],
           ),
@@ -239,6 +262,7 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
 
   Widget _buildCaptureCard(Employee employee) {
     return Container(
+      key: _captureCardKey,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -493,15 +517,19 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
 
   Widget _buildSelectedDaySection(AsyncValue<List<SiteVisitRecord>> selectedVisitsAsync) {
     final title = DateFormat('EEEE, dd MMMM yyyy').format(_selectedDate);
+    final isToday = _formatKey(_selectedDate) == _formatKey(DateTime.now());
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Selected Day Visits',
+          'Day detail',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
         ),
         const SizedBox(height: 4),
-        Text(title, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        Text(
+          isToday ? ' Ã¢â‚¬Â¢ Today' : title,
+          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        ),
         const SizedBox(height: 12),
         selectedVisitsAsync.when(
           loading: () => _cardShell(const Center(child: CircularProgressIndicator())),
@@ -510,7 +538,7 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
             if (visits.isEmpty) {
               return _cardShell(const Center(child: Text('No visits for this day')));
             }
-            return Column(children: visits.map(_buildVisitTile).toList());
+            return Column(children: visits.map((visit) => _buildVisitTile(visit)).toList());
           },
         ),
       ],
@@ -582,72 +610,29 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
     );
   }
 
-  Widget _buildCompactStatChip({
-    required IconData icon,
-    required Color iconColor,
-    required String label,
-    required String value,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8F9FA),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE9ECEF)),
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 13, color: iconColor),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-          ),
-        ],
-      ),
-    );
+  void _openCaptureForm() {
+    setState(() => _showVisitForm = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _captureCardKey.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          alignment: 0.1,
+        );
+      } else {
+        _scrollToBottom();
+      }
+    });
   }
 
-  Widget _buildStatusChip(List<SiteVisitRecord> visits) {
-    final label = visits.isEmpty
-        ? 'Not Marked'
-        : visits.length == 1
-            ? 'Checked In'
-            : 'Checked Out';
-    final color = visits.isEmpty
-        ? Colors.grey
-        : visits.length == 1
-            ? const Color(0xFF2E7D32)
-            : const Color(0xFF414A51);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-      ),
-      child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color)),
+  void _scrollToBottom() {
+    if (!_scrollController.hasClients) return;
+    _scrollController.animateTo(
+      _scrollController.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
     );
   }
 
@@ -667,6 +652,60 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
         ],
       ),
       child: child,
+    );
+  }
+
+  Widget _buildCountChip(String label) {
+    final color = AppColors.active;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color)),
+    );
+  }
+
+  Future<void> _confirmRemoveAttendance(List<SiteVisitRecord> visits) async {
+    if (visits.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No attendance record to remove.')),
+      );
+      return;
+    }
+
+    final record = visits.last;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove attendance?'),
+        content: Text('Delete the latest entry for ${record.siteName} at ${record.visitTime}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    await ref.read(siteVisitAttendanceRepositoryProvider).deleteVisit(record.id);
+    ref.invalidate(allSiteVisitRecordsProvider(null));
+    ref.invalidate(siteVisitRecordsProvider((employeeId: record.employeeId, visitDate: record.visitDate)));
+    ref.invalidate(siteVisitRecordsProvider((employeeId: ref.read(currentEmployeeProvider)!.id, visitDate: _formatKey(DateTime.now()))));
+    ref.invalidate(siteVisitRecordsProvider((employeeId: ref.read(currentEmployeeProvider)!.id, visitDate: _formatKey(_selectedDate))));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Attendance removed.')),
     );
   }
 
@@ -736,7 +775,7 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
       final visitDate = DateFormat('dd-MM-yyyy').format(now);
       final visitTime = DateFormat('hh:mm a').format(now);
       final repo = ref.read(siteVisitAttendanceRepositoryProvider);
-      final stampedPath = await repo.createVisitPhotoUrl(
+      final stampedAsset = await repo.createVisitPhotoUrl(
         localImagePath: pickedPath,
         employeeName: employee.fullName,
         siteName: siteName,
@@ -754,7 +793,8 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
           siteName: siteName,
           visitDate: visitDate,
           visitTime: visitTime,
-          photoUrl: stampedPath,
+          photoUrl: stampedAsset.url,
+          photoPublicId: stampedAsset.publicId,
           latitude: position.latitude,
           longitude: position.longitude,
           address: '',
@@ -816,3 +856,6 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
     return Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
   }
 }
+
+
+

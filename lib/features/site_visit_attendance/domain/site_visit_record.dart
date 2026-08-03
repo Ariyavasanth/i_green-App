@@ -7,6 +7,7 @@ class SiteVisitRecord {
     required this.visitDate,
     required this.visitTime,
     required this.photoUrl,
+    this.photoPublicId = '',
     required this.latitude,
     required this.longitude,
     required this.address,
@@ -21,6 +22,7 @@ class SiteVisitRecord {
   final String visitDate;
   final String visitTime;
   final String photoUrl;
+  final String photoPublicId;
   final double latitude;
   final double longitude;
   final String address;
@@ -35,6 +37,7 @@ class SiteVisitRecord {
         'visit_date': visitDate,
         'visit_time': visitTime,
         'photo_url': photoUrl,
+        'photo_public_id': photoPublicId,
         'latitude': latitude,
         'longitude': longitude,
         'address': address,
@@ -50,6 +53,7 @@ class SiteVisitRecord {
         visitDate: map['visit_date'] as String? ?? '',
         visitTime: map['visit_time'] as String? ?? '',
         photoUrl: map['photo_url'] as String? ?? '',
+        photoPublicId: map['photo_public_id'] as String? ?? '',
         latitude: (map['latitude'] as num?)?.toDouble() ?? 0.0,
         longitude: (map['longitude'] as num?)?.toDouble() ?? 0.0,
         address: map['address'] as String? ?? '',
@@ -65,6 +69,7 @@ class SiteVisitRecord {
     String? visitDate,
     String? visitTime,
     String? photoUrl,
+    String? photoPublicId,
     double? latitude,
     double? longitude,
     String? address,
@@ -79,6 +84,7 @@ class SiteVisitRecord {
       visitDate: visitDate ?? this.visitDate,
       visitTime: visitTime ?? this.visitTime,
       photoUrl: photoUrl ?? this.photoUrl,
+      photoPublicId: photoPublicId ?? this.photoPublicId,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       address: address ?? this.address,

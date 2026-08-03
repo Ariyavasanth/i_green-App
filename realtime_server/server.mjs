@@ -82,6 +82,23 @@ app.post("/cloudinary/upload-image", upload.single("file"), async (req, res) => 
   }
 });
 
+app.post("/cloudinary/delete-image", express.json(), async (req, res) => {
+  const publicId = req.body?.publicId;
+  if (!publicId) {
+    return res.status(400).json({ error: "Missing publicId" });
+  }
+
+  try {
+    const result = await cloudinary.v2.uploader.destroy(publicId, {
+      resource_type: "image",
+    });
+    return res.json({ result });
+  } catch (error) {
+    console.error("Cloudinary delete failed", error);
+    return res.status(502).json({ error: "Unable to delete image from Cloudinary" });
+  }
+});
+
 app.listen(Number(process.env.PORT || 3000), "0.0.0.0", () => {
   console.log(`Invoice Gemini token server listening on port ${process.env.PORT || 3000}`);
 });
