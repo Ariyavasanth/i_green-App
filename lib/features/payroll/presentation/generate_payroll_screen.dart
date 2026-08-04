@@ -10,6 +10,7 @@ import '../../attendance/providers/attendance_providers.dart';
 import '../domain/payroll.dart';
 import '../providers/payroll_providers.dart';
 import '../../leave/providers/leave_providers.dart';
+import '../../loan/providers/loan_providers.dart';
 import 'widgets/access_denied_view.dart';
 
 class GeneratePayrollScreen extends ConsumerStatefulWidget {
@@ -110,7 +111,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     super.dispose();
   }
 
-  void _initializeValues(dynamic employee, PayrollSettings settings) {
+  void _initializeValues(dynamic employee, PayrollSettings settings, String selectedMonth) {
     if (_initialized) return;
     _initialized = true;
 
@@ -139,12 +140,27 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     _esiController.text = '0.00';
 
     _lopController.text = '0.00';
-    _companyLoanController.text = '20000.00';
+    _companyLoanController.text = '0.00';
+    _loanDescController.text = '';
     _salaryAdvanceController.text = '12200.00';
     _othersDeductionController.text = '3392.00';
     _staffWelfareController.text = '0.00';
 
     _recalculate();
+    _loadActiveLoan(employee.id, selectedMonth);
+  }
+
+  Future<void> _loadActiveLoan(int employeeId, String month) async {
+    try {
+      final loan = await ref.read(loanRepositoryProvider).getActiveLoanForEmployee(employeeId, month);
+      if (loan != null && mounted) {
+        setState(() {
+          _companyLoanController.text = loan.emiAmount.toStringAsFixed(2);
+          _loanDescController.text = loan.loanId;
+          _recalculate();
+        });
+      }
+    } catch (_) {}
   }
 
   void _calculateAttendanceMetrics(dynamic attendanceRecords, String month) {
@@ -325,7 +341,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
 
           return settingsAsync.when(
             data: (settings) {
-              _initializeValues(employee, settings);
+              _initializeValues(employee, settings, selectedMonth);
 
               return LayoutBuilder(
                 builder: (context, constraints) {

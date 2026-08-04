@@ -182,6 +182,12 @@ class AppShell extends ConsumerWidget {
       Icons.settings_outlined,
       'Payroll Management',
     ),
+    SidebarDestination(
+      'Loan Management',
+      '/loan-management',
+      Icons.account_balance,
+      'Loan Management',
+    ),
     SidebarDestination('Items', '/items', Icons.inventory_2_outlined, 'Stock'),
     SidebarDestination(
       'Inventory Adjustments',

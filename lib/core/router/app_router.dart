@@ -46,6 +46,11 @@ import '../../features/payroll/presentation/payroll_details_screen.dart';
 import '../../features/payroll/presentation/payslip_screen.dart';
 import '../../features/payroll/presentation/payroll_history_screen.dart';
 import '../../features/payroll/presentation/payroll_settings_screen.dart';
+import '../../features/loan/presentation/loan_page.dart';
+import '../../features/loan/presentation/loan_management_page.dart';
+import '../../features/loan/presentation/create_loan_page.dart';
+import '../../features/loan/presentation/loan_details_page.dart';
+import '../../features/loan/domain/employee_loan.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
@@ -133,7 +138,39 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/loan',
-            builder: (_, _) => const SectionPage(title: 'Loan'),
+            builder: (_, _) => const LoanPage(),
+            routes: [
+              GoRoute(
+                path: 'details/:loanId',
+                builder: (context, state) {
+                  final loanIdStr = state.pathParameters['loanId'] ?? '';
+                  final id = int.tryParse(loanIdStr) ?? 0;
+                  return LoanDetailsPage(loanId: id);
+                },
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/loan-management',
+            builder: (_, _) => const LoanManagementPage(),
+            routes: [
+              GoRoute(
+                path: 'create',
+                builder: (context, state) {
+                  final extra = state.extra;
+                  final editLoan = extra is EmployeeLoan ? extra : null;
+                  return CreateLoanPage(loan: editLoan);
+                },
+              ),
+              GoRoute(
+                path: 'details/:loanId',
+                builder: (context, state) {
+                  final loanIdStr = state.pathParameters['loanId'] ?? '';
+                  final id = int.tryParse(loanIdStr) ?? 0;
+                  return LoanDetailsPage(loanId: id);
+                },
+              ),
+            ],
           ),
           GoRoute(
             path: '/payroll',

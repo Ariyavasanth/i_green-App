@@ -248,6 +248,7 @@ class Employee {
     'Asset Management',
     'Salary Settings',
     'Loan',
+    'Loan Management',
     'Payroll',
     'Payroll History',
     'Payroll Settings',
@@ -293,6 +294,9 @@ class Employee {
       'Payroll',
       'Payroll History',
       'Payroll Settings',
+    ],
+    'LOAN MANAGEMENT': [
+      'Loan Management',
     ],
     'STOCK': [
       'Items',

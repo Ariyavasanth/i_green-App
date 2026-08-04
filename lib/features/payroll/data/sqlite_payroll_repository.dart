@@ -313,6 +313,29 @@ class SqlitePayrollRepository implements PayrollRepository {
   Future<PayrollRecord> savePayrollRecord(PayrollRecord record) async {
     final db = await database;
     final map = record.toMap();
+
+    if (record.companyLoan > 0 && record.loanDescription.isNotEmpty) {
+      final loanId = record.loanDescription.trim();
+      final loanMaps = await db.query('employee_loans', where: 'loan_id = ?', whereArgs: [loanId]);
+      if (loanMaps.isNotEmpty) {
+        final currentBal = (loanMaps.first['remaining_balance'] as num?)?.toDouble() ?? 0.0;
+        final currentStatus = loanMaps.first['status'] as String? ?? 'Active';
+
+        final newBalance = (currentBal - record.companyLoan).clamp(0.0, double.infinity);
+        final newStatus = newBalance <= 0 ? 'Closed' : currentStatus;
+
+        await db.update(
+          'employee_loans',
+          {
+            'remaining_balance': newBalance,
+            'status': newStatus,
+          },
+          where: 'loan_id = ?',
+          whereArgs: [loanId],
+        );
+      }
+    }
+
     if (record.id != 0) {
       await db.update(
         'payroll_records',
