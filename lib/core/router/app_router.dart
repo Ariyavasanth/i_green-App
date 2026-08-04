@@ -39,6 +39,13 @@ import '../../screens/login_screen.dart';
 import '../../screens/customers/active_customers_list.dart';
 import '../../screens/customers/new_customer_form.dart';
 import '../../screens/vendors/new_vendor_form.dart';
+import '../../features/payroll/presentation/payroll_dashboard_screen.dart';
+import '../../features/payroll/presentation/payroll_employee_list_screen.dart';
+import '../../features/payroll/presentation/generate_payroll_screen.dart';
+import '../../features/payroll/presentation/payroll_details_screen.dart';
+import '../../features/payroll/presentation/payslip_screen.dart';
+import '../../features/payroll/presentation/payroll_history_screen.dart';
+import '../../features/payroll/presentation/payroll_settings_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
@@ -129,8 +136,46 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (_, _) => const SectionPage(title: 'Loan'),
           ),
           GoRoute(
-            path: '/pay-slip',
-            builder: (_, _) => const SectionPage(title: 'Pay Slip'),
+            path: '/payroll',
+            builder: (_, _) => const PayrollDashboardScreen(),
+            routes: [
+              GoRoute(
+                path: 'run',
+                builder: (_, _) => const PayrollEmployeeListScreen(),
+              ),
+              GoRoute(
+                path: 'generate/:employeeId',
+                builder: (context, state) {
+                  final employeeIdStr = state.pathParameters['employeeId'] ?? '';
+                  final employeeId = int.tryParse(employeeIdStr) ?? 0;
+                  return GeneratePayrollScreen(employeeId: employeeId);
+                },
+              ),
+              GoRoute(
+                path: 'details/:payrollId',
+                builder: (context, state) {
+                  final payrollIdStr = state.pathParameters['payrollId'] ?? '';
+                  final payrollId = int.tryParse(payrollIdStr) ?? 0;
+                  return PayrollDetailsScreen(payrollId: payrollId);
+                },
+              ),
+              GoRoute(
+                path: 'payslip/:payrollId',
+                builder: (context, state) {
+                  final payrollIdStr = state.pathParameters['payrollId'] ?? '';
+                  final payrollId = int.tryParse(payrollIdStr) ?? 0;
+                  return PayslipScreen(payrollId: payrollId);
+                },
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/payroll-history',
+            builder: (_, _) => const PayrollHistoryScreen(),
+          ),
+          GoRoute(
+            path: '/payroll-settings',
+            builder: (_, _) => const PayrollSettingsScreen(),
           ),
           GoRoute(
             path: '/items',
