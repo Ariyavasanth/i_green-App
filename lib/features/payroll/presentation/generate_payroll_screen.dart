@@ -9,6 +9,8 @@ import '../../employee/providers/employee_providers.dart';
 import '../../attendance/providers/attendance_providers.dart';
 import '../domain/payroll.dart';
 import '../providers/payroll_providers.dart';
+import '../../leave/providers/leave_providers.dart';
+import 'widgets/access_denied_view.dart';
 
 class GeneratePayrollScreen extends ConsumerStatefulWidget {
   const GeneratePayrollScreen({required this.employeeId, super.key});
@@ -44,6 +46,8 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
   final _salaryAdvanceController = TextEditingController();
   final _othersDeductionController = TextEditingController();
   final _staffWelfareController = TextEditingController();
+  final _loanDescController = TextEditingController();
+  final _advanceDescController = TextEditingController();
 
   double _netSalary = 0.0;
   bool _initialized = false;
@@ -101,6 +105,8 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     _salaryAdvanceController.dispose();
     _othersDeductionController.dispose();
     _staffWelfareController.dispose();
+    _loanDescController.dispose();
+    _advanceDescController.dispose();
     super.dispose();
   }
 
@@ -247,7 +253,9 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
       
       lop: double.tryParse(_lopController.text) ?? 0.0,
       companyLoan: double.tryParse(_companyLoanController.text) ?? 0.0,
+      loanDescription: _loanDescController.text,
       salaryAdvance: double.tryParse(_salaryAdvanceController.text) ?? 0.0,
+      advanceDescription: _advanceDescController.text,
       othersDeduction: double.tryParse(_othersDeductionController.text) ?? 0.0,
       staffWelfareContribution: double.tryParse(_staffWelfareController.text) ?? 0.0,
       
@@ -283,6 +291,11 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final employee = ref.watch(currentEmployeeProvider);
+    if (employee != null && employee.userType.toUpperCase() == 'EMPLOYEE') {
+      return const AccessDeniedView();
+    }
+
     final selectedMonth = ref.watch(selectedPayrollMonthProvider);
     final employeesAsync = ref.watch(employeesProvider);
     final settingsAsync = ref.watch(payrollSettingsProvider);
@@ -632,11 +645,13 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
             const Divider(height: 24),
             const Text('Deductions - Other', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
             const SizedBox(height: 12),
-            _buildInputField('LOP (Loss of Pay)', _lopController),
-            const SizedBox(height: 12),
             _buildInputField('Company Loan Recovery', _companyLoanController),
+            const SizedBox(height: 8),
+            _buildInputField('Loan Details Note (e.g. Installment 4 of 12)', _loanDescController, isText: true),
             const SizedBox(height: 12),
             _buildInputField('Salary Advance Recovery', _salaryAdvanceController),
+            const SizedBox(height: 8),
+            _buildInputField('Salary Advance Details Note', _advanceDescController, isText: true),
             const SizedBox(height: 12),
             _buildInputField('Others Deduction', _othersDeductionController),
             const SizedBox(height: 12),

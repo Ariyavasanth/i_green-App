@@ -6,14 +6,24 @@ import '../../../core/layout/responsive_layout.dart';
 import '../../../core/theme/app_colors.dart';
 import '../domain/payroll.dart';
 import '../providers/payroll_providers.dart';
+import '../../leave/providers/leave_providers.dart';
+import 'widgets/access_denied_view.dart';
 
 class PayslipScreen extends ConsumerWidget {
   const PayslipScreen({required this.payrollId, super.key});
   final int payrollId;
 
+  String _maskBankAccount(String acctNo) {
+    final clean = acctNo.trim();
+    if (clean.length <= 4) return clean;
+    return '${"*" * (clean.length - 4)}${clean.substring(clean.length - 4)}';
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final payrollAsync = ref.watch(payrollRecordByIdProvider(payrollId));
+    final employee = ref.watch(currentEmployeeProvider);
+    final isEmployee = employee != null && employee.userType.toUpperCase() == 'EMPLOYEE';
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
@@ -32,6 +42,11 @@ class PayslipScreen extends ConsumerWidget {
             return const Center(child: Text('Payroll record not found.'));
           }
 
+          // Security check: Employee can only see their own record!
+          if (isEmployee && record.employeeId != employee.id) {
+            return const AccessDeniedView();
+          }
+
           return LayoutBuilder(
             builder: (context, constraints) {
               final isMobile = constraints.maxWidth < AppBreakpoints.tablet;
@@ -44,17 +59,54 @@ class PayslipScreen extends ConsumerWidget {
                       padding: EdgeInsets.all(gutter),
                       child: ResponsiveContent(
                         maxWidth: 960, // Wide document page view
-                        child: _buildDocumentPreview(record),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (record.isDisputed)
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                margin: const EdgeInsets.only(bottom: 20),
+                                decoration: BoxDecoration(
+                                  color: Colors.red[50],
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.red[200]!),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 24),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'DISPUTE RAISED BY EMPLOYEE',
+                                            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 13),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            record.disputeComment,
+                                            style: TextStyle(color: Colors.red[900], fontSize: 12),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            _buildDocumentPreview(record),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                  _buildActionBar(context, record, isMobile),
+                  _buildActionBar(context, ref, record, isMobile, isEmployee),
                 ],
               );
             },
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
         error: (err, _) => Center(child: Text('Error loading payslip: $err')),
       ),
     );
@@ -218,7 +270,7 @@ class PayslipScreen extends ConsumerWidget {
         // Row 2 - Month Year / PAN
         TableRow(
           children: [
-            _buildGridLabelCell('Month-Year'),
+            _buildGridLabelCell('Payroll Period (Month/Year)'),
             _buildGridValueCell(record.month),
             _buildGridLabelCell('PAN Number'),
             _buildGridValueCell(record.panNumber.isNotEmpty ? record.panNumber : '-'),
@@ -267,7 +319,7 @@ class PayslipScreen extends ConsumerWidget {
             _buildGridLabelCell('Department'),
             _buildGridValueCell(record.department),
             _buildGridLabelCell('Bank Acct no'),
-            _buildGridValueCell(record.bankAcctNo),
+            _buildGridValueCell(_maskBankAccount(record.bankAcctNo)),
           ],
         ),
         // Row 8 - Email / Branch
@@ -279,13 +331,31 @@ class PayslipScreen extends ConsumerWidget {
             _buildGridValueCell(record.branch),
           ],
         ),
-        // Row 9 - Working days / IFSC
+        // Row 9 - Working Days Present / IFSC Code
         TableRow(
           children: [
-            _buildGridLabelCell('Days Worked In Month'),
+            _buildGridLabelCell('Days Present'),
             _buildGridValueCell('${record.presentDays}'),
             _buildGridLabelCell('IFSC/Swift Code'),
             _buildGridValueCell(record.ifscCode),
+          ],
+        ),
+        // Row 10 - Total Working Days / Payment Credit Date
+        TableRow(
+          children: [
+            _buildGridLabelCell('Total Working Days'),
+            _buildGridValueCell('${record.presentDays + record.absentDays + record.leaveDays}'),
+            _buildGridLabelCell('Payment Credit Date'),
+            _buildGridValueCell(record.paymentDate.isNotEmpty ? record.paymentDate : 'Expected by 5th of next month'),
+          ],
+        ),
+        // Row 11 - Loss of Pay (LOP) Days / Payment Method
+        TableRow(
+          children: [
+            _buildGridLabelCell('LOP (Loss of Pay) Days'),
+            _buildGridValueCell('${record.absentDays}'),
+            _buildGridLabelCell('Payment Method'),
+            _buildGridValueCell(record.paymentMethod),
           ],
         ),
       ],
@@ -402,7 +472,7 @@ class PayslipScreen extends ConsumerWidget {
             _buildGridValueCell(''),
             _buildGridValueCell(''),
             _buildGridValueCell(''),
-            _buildGridLabelCell('Company loan'),
+            _buildGridLabelCell(record.loanDescription.isNotEmpty ? 'Company loan (${record.loanDescription})' : 'Company loan'),
             _buildGridValueCell(record.companyLoan.toStringAsFixed(0), alignRight: true),
           ],
         ),
@@ -413,7 +483,7 @@ class PayslipScreen extends ConsumerWidget {
             _buildGridValueCell(''),
             _buildGridValueCell(''),
             _buildGridValueCell(''),
-            _buildGridLabelCell('Salary Advance'),
+            _buildGridLabelCell(record.advanceDescription.isNotEmpty ? 'Salary Advance (${record.advanceDescription})' : 'Salary Advance'),
             _buildGridValueCell(record.salaryAdvance.toStringAsFixed(0), alignRight: true),
           ],
         ),
@@ -547,12 +617,18 @@ class PayslipScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildActionBar(BuildContext context, PayrollRecord record, bool isMobile) {
-    final actions = [
-      (Icons.download_outlined, 'Download', () => _showMockAction(context, 'Downloading PDF...')),
-      (Icons.mail_outline, 'Send Email', () => _showMockAction(context, 'Sending Email to employee...')),
-      (Icons.print_outlined, 'Print', () => _showMockAction(context, 'Opening print layout...')),
-    ];
+  Widget _buildActionBar(BuildContext context, WidgetRef ref, PayrollRecord record, bool isMobile, bool isEmployee) {
+    final actions = isEmployee
+        ? [
+            (Icons.download_outlined, 'Download', () => _showMockAction(context, 'Downloading PDF...')),
+            (Icons.print_outlined, 'Print', () => _showMockAction(context, 'Opening print layout...')),
+            (Icons.warning_amber_rounded, 'Report Issue', () => _showReportIssueDialog(context, ref, record)),
+          ]
+        : [
+            (Icons.download_outlined, 'Download', () => _showMockAction(context, 'Downloading PDF...')),
+            (Icons.mail_outline, 'Send Email', () => _showMockAction(context, 'Sending Email to employee...')),
+            (Icons.print_outlined, 'Print', () => _showMockAction(context, 'Opening print layout...')),
+          ];
 
     return Container(
       padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 24, vertical: 12),
@@ -572,10 +648,10 @@ class PayslipScreen extends ConsumerWidget {
                           child: OutlinedButton.icon(
                             onPressed: a.$3,
                             icon: Icon(a.$1, size: 16),
-                            label: Text(a.$2, style: const TextStyle(fontSize: 11)),
+                            label: Text(a.$2, style: const TextStyle(fontSize: 10)),
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.primary,
-                              side: const BorderSide(color: AppColors.primary),
+                              foregroundColor: a.$2 == 'Report Issue' ? Colors.red[700] : AppColors.primary,
+                              side: BorderSide(color: a.$2 == 'Report Issue' ? Colors.red[300]! : AppColors.primary),
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
                           ),
@@ -595,7 +671,9 @@ class PayslipScreen extends ConsumerWidget {
                           icon: Icon(a.$1, size: 16),
                           label: Text(a.$2),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: a.$2 == 'Download' ? AppColors.primary : AppColors.active,
+                            backgroundColor: a.$2 == 'Report Issue'
+                                ? Colors.red[700]
+                                : (a.$2 == 'Download' ? AppColors.primary : AppColors.active),
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -606,6 +684,91 @@ class PayslipScreen extends ConsumerWidget {
                     .toList(),
               ),
       ),
+    );
+  }
+
+  void _showReportIssueDialog(BuildContext context, WidgetRef ref, PayrollRecord record) {
+    final commentController = TextEditingController();
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Report an Issue / Query'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Please describe the query or mismatch in detail. This will flag the payslip to HR/admin for review.',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: commentController,
+                maxLines: 4,
+                decoration: InputDecoration(
+                  hintText: 'e.g. LOP days incorrect, missing bonus, bank credit issue...',
+                  hintStyle: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final comment = commentController.text.trim();
+                if (comment.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter a description of the issue.')),
+                  );
+                  return;
+                }
+                Navigator.pop(dialogContext);
+                
+                final updated = record.copyWith(
+                  isDisputed: true,
+                  disputeComment: comment,
+                );
+
+                try {
+                  await ref.read(payrollRepositoryProvider).savePayrollRecord(updated);
+                  ref.invalidate(payrollRecordByIdProvider(record.id));
+                  ref.invalidate(payrollRecordsForMonthProvider);
+                  ref.invalidate(employeePayrollRecordsProvider(record.employeeId));
+                  
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Dispute raised successfully. HR has been notified.'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to raise dispute: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red[700],
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Submit Query'),
+            ),
+          ],
+        );
+      },
     );
   }
 

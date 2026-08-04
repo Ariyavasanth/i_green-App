@@ -6,6 +6,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../domain/payroll.dart';
 import '../providers/payroll_providers.dart';
+import '../../leave/providers/leave_providers.dart';
+import 'widgets/access_denied_view.dart';
 
 class PayrollSettingsScreen extends ConsumerStatefulWidget {
   const PayrollSettingsScreen({super.key});
@@ -96,6 +98,11 @@ class _PayrollSettingsScreenState extends ConsumerState<PayrollSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final employee = ref.watch(currentEmployeeProvider);
+    if (employee != null && employee.userType.toUpperCase() == 'EMPLOYEE') {
+      return const AccessDeniedView();
+    }
+
     final settingsAsync = ref.watch(payrollSettingsProvider);
 
     return Scaffold(

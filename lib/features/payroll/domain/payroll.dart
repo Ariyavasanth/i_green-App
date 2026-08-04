@@ -56,6 +56,12 @@ class PayrollRecord {
   final String paymentDate;
   final String paymentMethod; // 'Bank Transfer', 'Cash', 'Cheque'
 
+  // Additional fields for employee self-service and loan tracing
+  final String loanDescription;
+  final String advanceDescription;
+  final bool isDisputed;
+  final String disputeComment;
+
   const PayrollRecord({
     required this.id,
     required this.employeeId,
@@ -95,6 +101,10 @@ class PayrollRecord {
     required this.status,
     this.paymentDate = '',
     this.paymentMethod = 'Bank Transfer',
+    this.loanDescription = '',
+    this.advanceDescription = '',
+    this.isDisputed = false,
+    this.disputeComment = '',
   });
 
   Map<String, dynamic> toMap() {
@@ -137,6 +147,10 @@ class PayrollRecord {
       'status': status,
       'payment_date': paymentDate,
       'payment_method': paymentMethod,
+      'loan_description': loanDescription,
+      'advance_description': advanceDescription,
+      'is_disputed': isDisputed ? 1 : 0,
+      'dispute_comment': disputeComment,
     };
   }
 
@@ -180,6 +194,10 @@ class PayrollRecord {
       status: map['status'] as String? ?? 'Pending',
       paymentDate: map['payment_date'] as String? ?? '',
       paymentMethod: map['payment_method'] as String? ?? 'Bank Transfer',
+      loanDescription: map['loan_description'] as String? ?? '',
+      advanceDescription: map['advance_description'] as String? ?? '',
+      isDisputed: (map['is_disputed'] as int? ?? 0) == 1 || (map['is_disputed'] as bool? ?? false),
+      disputeComment: map['dispute_comment'] as String? ?? '',
     );
   }
 
@@ -222,6 +240,10 @@ class PayrollRecord {
     String? status,
     String? paymentDate,
     String? paymentMethod,
+    String? loanDescription,
+    String? advanceDescription,
+    bool? isDisputed,
+    String? disputeComment,
   }) {
     return PayrollRecord(
       id: id ?? this.id,
@@ -262,6 +284,10 @@ class PayrollRecord {
       status: status ?? this.status,
       paymentDate: paymentDate ?? this.paymentDate,
       paymentMethod: paymentMethod ?? this.paymentMethod,
+      loanDescription: loanDescription ?? this.loanDescription,
+      advanceDescription: advanceDescription ?? this.advanceDescription,
+      isDisputed: isDisputed ?? this.isDisputed,
+      disputeComment: disputeComment ?? this.disputeComment,
     );
   }
 }

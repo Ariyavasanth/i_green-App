@@ -18,17 +18,39 @@ class SqlitePayrollRepository implements PayrollRepository {
 
     final db = await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: (db, version) async {
         await _createTables(db);
       },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        await _upgradeTables(db);
+      },
       onOpen: (db) async {
         await _createTables(db);
+        await _upgradeTables(db);
       },
     );
 
     await _seedDefaultSettingsAndMockData(db);
     return db;
+  }
+
+  Future<void> _upgradeTables(Database db) async {
+    final tableInfo = await db.rawQuery('PRAGMA table_info(payroll_records)');
+    final existingColumns = tableInfo.map((row) => row['name'] as String).toSet();
+
+    final requiredColumns = {
+      'loan_description': 'TEXT DEFAULT ""',
+      'advance_description': 'TEXT DEFAULT ""',
+      'is_disputed': 'INTEGER DEFAULT 0',
+      'dispute_comment': 'TEXT DEFAULT ""',
+    };
+
+    for (final entry in requiredColumns.entries) {
+      if (!existingColumns.contains(entry.key)) {
+        await db.execute('ALTER TABLE payroll_records ADD COLUMN ${entry.key} ${entry.value}');
+      }
+    }
   }
 
   Future<void> _createTables(Database db) async {
@@ -71,7 +93,11 @@ class SqlitePayrollRepository implements PayrollRepository {
         net_salary REAL,
         status TEXT,
         payment_date TEXT,
-        payment_method TEXT
+        payment_method TEXT,
+        loan_description TEXT,
+        advance_description TEXT,
+        is_disputed INTEGER,
+        dispute_comment TEXT
       )
     ''');
 
@@ -330,5 +356,17 @@ class SqlitePayrollRepository implements PayrollRepository {
       settings.toMap(),
       where: 'id = 1',
     );
+  }
+
+  @override
+  Future<List<PayrollRecord>> getPayrollRecordsForEmployee(int employeeId) async {
+    final db = await database;
+    final res = await db.query(
+      'payroll_records',
+      where: 'employee_id = ?',
+      whereArgs: [employeeId],
+      orderBy: 'id DESC',
+    );
+    return res.map((r) => PayrollRecord.fromMap(r)).toList();
   }
 }

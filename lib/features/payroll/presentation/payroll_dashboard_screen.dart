@@ -9,12 +9,19 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../employee/providers/employee_providers.dart';
 import '../domain/payroll.dart';
 import '../providers/payroll_providers.dart';
+import '../../leave/providers/leave_providers.dart';
+import 'employee_payslip_list_screen.dart';
 
 class PayrollDashboardScreen extends ConsumerWidget {
   const PayrollDashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final employee = ref.watch(currentEmployeeProvider);
+    if (employee != null && employee.userType.toUpperCase() == 'EMPLOYEE') {
+      return const EmployeePayslipListScreen();
+    }
+
     final selectedMonth = ref.watch(selectedPayrollMonthProvider);
     final employeesAsync = ref.watch(employeesProvider);
     final payrollRecordsAsync = ref.watch(payrollRecordsForMonthProvider);
@@ -310,7 +317,7 @@ class PayrollDashboardScreen extends ConsumerWidget {
                   NumberFormat.currency(locale: 'en_IN', symbol: '₹').format(record.netSalary),
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 )),
-                _buildTableCell(_buildStatusPill(record.status)),
+                _buildTableCell(_buildStatusPill(record.status, isDisputed: record.isDisputed)),
                 _buildTableCell(
                   Row(
                     mainAxisSize: MainAxisSize.min,
@@ -410,7 +417,7 @@ class PayrollDashboardScreen extends ConsumerWidget {
                 Positioned(
                   right: 0,
                   top: 0,
-                  child: _buildStatusPill(record.status),
+                  child: _buildStatusPill(record.status, isDisputed: record.isDisputed),
                 ),
               ],
             ),
@@ -485,7 +492,26 @@ class PayrollDashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildStatusPill(String status) {
+  Widget _buildStatusPill(String status, {bool isDisputed = false}) {
+    if (isDisputed) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.red[50],
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.red[200]!),
+        ),
+        child: Text(
+          'Disputed',
+          style: TextStyle(
+            color: Colors.red[700],
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      );
+    }
+
     final isPaid = status == 'Paid' || status == 'Processed';
     final color = isPaid ? Colors.green[700]! : Colors.orange[700]!;
     final bgColor = isPaid ? Colors.green[50]! : Colors.orange[50]!;

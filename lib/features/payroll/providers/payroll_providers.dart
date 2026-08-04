@@ -34,3 +34,7 @@ final payrollRecordByIdProvider = FutureProvider.family<PayrollRecord?, int>((re
 final payrollRecordForEmployeeProvider = FutureProvider.family<PayrollRecord?, ({int employeeId, String month})>((ref, arg) {
   return ref.watch(payrollRepositoryProvider).getPayrollRecordForEmployee(arg.employeeId, arg.month);
 });
+
+final employeePayrollRecordsProvider = FutureProvider.family<List<PayrollRecord>, int>((ref, employeeId) {
+  return ref.watch(payrollRepositoryProvider).getPayrollRecordsForEmployee(employeeId);
+});

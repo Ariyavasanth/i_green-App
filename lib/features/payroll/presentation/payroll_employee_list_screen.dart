@@ -10,11 +10,19 @@ import '../../attendance/providers/attendance_providers.dart';
 import '../domain/payroll.dart';
 import '../providers/payroll_providers.dart';
 
+import '../../leave/providers/leave_providers.dart';
+import 'widgets/access_denied_view.dart';
+
 class PayrollEmployeeListScreen extends ConsumerWidget {
   const PayrollEmployeeListScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final employee = ref.watch(currentEmployeeProvider);
+    if (employee != null && employee.userType.toUpperCase() == 'EMPLOYEE') {
+      return const AccessDeniedView();
+    }
+
     final selectedMonth = ref.watch(selectedPayrollMonthProvider);
     final employeesAsync = ref.watch(employeesProvider);
     final payrollRecordsAsync = ref.watch(payrollRecordsForMonthProvider);

@@ -7,6 +7,8 @@ import '../../../core/layout/responsive_layout.dart';
 import '../../../core/theme/app_colors.dart';
 import '../domain/payroll.dart';
 import '../providers/payroll_providers.dart';
+import '../../leave/providers/leave_providers.dart';
+import 'widgets/access_denied_view.dart';
 
 class PayrollDetailsScreen extends ConsumerStatefulWidget {
   const PayrollDetailsScreen({required this.payrollId, super.key});
@@ -24,6 +26,8 @@ class _GenerateStepperStep {
   _GenerateStepperStep({required this.title, this.date = '', required this.isCompleted});
 }
 
+
+
 class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
   Future<void> _updateStatus(PayrollRecord record, String newStatus) async {
     final updated = record.copyWith(
@@ -40,7 +44,7 @@ class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Payroll marked as $newStatus!'),
+            content: Text('Status updated to $newStatus'),
             backgroundColor: Colors.green[700],
           ),
         );
@@ -59,6 +63,11 @@ class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final employee = ref.watch(currentEmployeeProvider);
+    if (employee != null && employee.userType.toUpperCase() == 'EMPLOYEE') {
+      return const AccessDeniedView();
+    }
+
     final payrollAsync = ref.watch(payrollRecordByIdProvider(widget.payrollId));
 
     return Scaffold(

@@ -89,4 +89,21 @@ class FirebasePayrollRepository implements PayrollRepository {
   Future<void> savePayrollSettings(PayrollSettings settings) async {
     await _settingsRef.doc('settings_1').set(settings.toMap(), SetOptions(merge: true));
   }
+
+  @override
+  Future<List<PayrollRecord>> getPayrollRecordsForEmployee(int employeeId) async {
+    final snap = await _payrollsRef.where('employee_id', isEqualTo: employeeId).get();
+    final list = snap.docs.map((doc) => _recordFromFirestore(doc.data(), doc.id)).toList();
+    // Sort in-memory most recent first (by month-year descending)
+    list.sort((a, b) {
+      try {
+        final dateA = DateTime.parse(a.paymentDate.isNotEmpty ? a.paymentDate.split('-').reversed.join('-') : '1970-01-01');
+        final dateB = DateTime.parse(b.paymentDate.isNotEmpty ? b.paymentDate.split('-').reversed.join('-') : '1970-01-01');
+        return dateB.compareTo(dateA);
+      } catch (_) {
+        return b.id.compareTo(a.id);
+      }
+    });
+    return list;
+  }
 }
