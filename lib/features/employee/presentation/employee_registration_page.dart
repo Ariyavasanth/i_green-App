@@ -668,7 +668,7 @@ class _EmployeeRegistrationPageState
       }
     }
 
-    if (!(_isStaticEmployee || _isDynamicEmployee)) {
+    if (_isManagementAdd && !(_isStaticEmployee || _isDynamicEmployee)) {
       _tabController.animateTo(_tabs.indexOf('Job & Admin Details'));
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

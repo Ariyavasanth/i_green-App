@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/layout/responsive_layout.dart';
 import '../../../core/theme/app_colors.dart';
@@ -9,9 +10,16 @@ import '../providers/payroll_providers.dart';
 import '../../leave/providers/leave_providers.dart';
 import 'widgets/access_denied_view.dart';
 
-class PayslipScreen extends ConsumerWidget {
+class PayslipScreen extends ConsumerStatefulWidget {
   const PayslipScreen({required this.payrollId, super.key});
   final int payrollId;
+
+  @override
+  ConsumerState<PayslipScreen> createState() => _PayslipScreenState();
+}
+
+class _PayslipScreenState extends ConsumerState<PayslipScreen> {
+  bool _downloading = false;
 
   String _maskBankAccount(String acctNo) {
     final clean = acctNo.trim();
@@ -19,109 +27,241 @@ class PayslipScreen extends ConsumerWidget {
     return '${"*" * (clean.length - 4)}${clean.substring(clean.length - 4)}';
   }
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final payrollAsync = ref.watch(payrollRecordByIdProvider(payrollId));
-    final employee = ref.watch(currentEmployeeProvider);
-    final isEmployee = employee != null && employee.userType.toUpperCase() == 'EMPLOYEE';
-
-    return Scaffold(
-      backgroundColor: AppColors.canvas,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => context.pop(),
-        ),
-        title: const Text('Payslip Document View'),
-      ),
-      body: payrollAsync.when(
-        data: (record) {
-          if (record == null) {
-            return const Center(child: Text('Payroll record not found.'));
-          }
-
-          // Security check: Employee can only see their own record!
-          if (isEmployee && record.employeeId != employee.id) {
-            return const AccessDeniedView();
-          }
-
-          return LayoutBuilder(
-            builder: (context, constraints) {
-              final isMobile = constraints.maxWidth < AppBreakpoints.tablet;
-              final gutter = AppLayout.gutter(constraints.maxWidth);
-
-              return Column(
-                children: [
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: EdgeInsets.all(gutter),
-                      child: ResponsiveContent(
-                        maxWidth: 960, // Wide document page view
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (record.isDisputed)
-                              Container(
-                                padding: const EdgeInsets.all(16),
-                                margin: const EdgeInsets.only(bottom: 20),
-                                decoration: BoxDecoration(
-                                  color: Colors.red[50],
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.red[200]!),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 24),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          const Text(
-                                            'DISPUTE RAISED BY EMPLOYEE',
-                                            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 13),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            record.disputeComment,
-                                            style: TextStyle(color: Colors.red[900], fontSize: 12),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            _buildDocumentPreview(record),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  _buildActionBar(context, ref, record, isMobile, isEmployee),
-                ],
-              );
-            },
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
-        error: (err, _) => Center(child: Text('Error loading payslip: $err')),
+  void _showMockAction(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
 
-  Widget _buildDocumentPreview(PayrollRecord record) {
-    // Computations based on screenshot logic:
-    // Standard salary sum
-    final stdBasic = record.basicPay;
-    final stdHra = record.hra;
-    final stdEdu = record.educationAllowance > 0 ? record.educationAllowance : 3000.0;
-    final stdSpecial = record.specialAllowance;
-    final standardSalary = stdBasic + stdHra + stdEdu + stdSpecial;
+  void _startDownloadFlow(BuildContext context, PayrollRecord record) async {
+    setState(() {
+      _downloading = true;
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 1500));
+    if (!mounted) return;
+    setState(() {
+      _downloading = false;
+    });
+    if (context.mounted) {
+      _showMockAction(context, 'PDF Downloaded successfully!');
+    }
+  }
 
-    // Gross Salary sum: Earning Components + incentives + others + cumulative incentive
+  void _showOverflowMenu(BuildContext context, WidgetRef ref, PayrollRecord record, bool isMobile) {
+    if (isMobile) {
+      showModalBottomSheet<void>(
+        context: context,
+        backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        builder: (context) {
+          return SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.print_outlined),
+                  title: const Text('Print'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showMockAction(context, 'Opening print layout...');
+                  },
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.warning_amber_rounded, color: Colors.red),
+                  title: const Text('Report an issue', style: TextStyle(color: Colors.red)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showReportIssueDialog(context, ref, record);
+                  },
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final payrollAsync = ref.watch(payrollRecordByIdProvider(widget.payrollId));
+    final employee = ref.watch(currentEmployeeProvider);
+    final isEmployee = employee != null && employee.userType.toUpperCase() == 'EMPLOYEE';
+
+    return payrollAsync.when(
+      data: (record) {
+        if (record == null) {
+          return Scaffold(
+            backgroundColor: AppColors.canvas,
+            appBar: AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+                onPressed: () => context.pop(),
+              ),
+              title: const Text('Payslip Detail'),
+            ),
+            body: const Center(child: Text('Payroll record not found.')),
+          );
+        }
+
+        if (isEmployee && record.employeeId != employee.id) {
+          return const Scaffold(
+            backgroundColor: AppColors.canvas,
+            body: AccessDeniedView(),
+          );
+        }
+
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final isMobile = constraints.maxWidth < AppBreakpoints.tablet;
+            final gutter = AppLayout.gutter(constraints.maxWidth);
+
+            return Scaffold(
+              backgroundColor: AppColors.canvas,
+              appBar: AppBar(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+                  onPressed: () => context.pop(),
+                ),
+                title: const Text(
+                  'Payslip Detail',
+                  style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold),
+                ),
+                actions: [
+                  if (isMobile)
+                    IconButton(
+                      icon: const Icon(Icons.more_vert, color: AppColors.textPrimary),
+                      onPressed: () => _showOverflowMenu(context, ref, record, true),
+                    )
+                  else
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert, color: AppColors.textPrimary),
+                      onSelected: (val) {
+                        if (val == 'print') {
+                          _showMockAction(context, 'Opening print layout...');
+                        } else if (val == 'report') {
+                          _showReportIssueDialog(context, ref, record);
+                        }
+                      },
+                      color: Colors.white,
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'print',
+                          child: Row(
+                            children: [
+                              Icon(Icons.print_outlined, size: 18),
+                              SizedBox(width: 8),
+                              Text('Print'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'report',
+                          child: Row(
+                            children: [
+                              Icon(Icons.warning_amber_rounded, color: Colors.red, size: 18),
+                              SizedBox(width: 8),
+                              Text('Report an issue', style: TextStyle(color: Colors.red)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+              body: Center(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.all(gutter),
+                  child: ResponsiveContent(
+                    maxWidth: 720,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (record.isDisputed)
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            margin: const EdgeInsets.only(bottom: 20),
+                            decoration: BoxDecoration(
+                              color: Colors.red[50],
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.red[200]!),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 24),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'DISPUTE RAISED BY EMPLOYEE',
+                                        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 13),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        record.disputeComment,
+                                        style: TextStyle(color: Colors.red[900], fontSize: 12),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        _buildDetailCard(record, isMobile),
+                        const SizedBox(height: 24),
+                        _buildActionRow(context, record, isMobile),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+      loading: () => Scaffold(
+        backgroundColor: AppColors.canvas,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+            onPressed: () => context.pop(),
+          ),
+          title: const Text('Payslip Detail'),
+        ),
+        body: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: ResponsiveContent(
+              maxWidth: 720,
+              child: _buildSkeletonLoader(),
+            ),
+          ),
+        ),
+      ),
+      error: (err, _) => Scaffold(
+        backgroundColor: AppColors.canvas,
+        body: Center(child: Text('Error loading payslip: $err')),
+      ),
+    );
+  }
+
+  Widget _buildDetailCard(PayrollRecord record, bool isMobile) {
+    final currencyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+
     final grossSalary = record.basicPay +
         record.hra +
         record.educationAllowance +
@@ -130,7 +270,6 @@ class PayslipScreen extends ConsumerWidget {
         record.othersEarning +
         record.cumulativeIncentive;
 
-    // Deductions sum
     final deductions = record.pf +
         record.tax +
         record.esi +
@@ -142,547 +281,488 @@ class PayslipScreen extends ConsumerWidget {
 
     final netSalary = grossSalary - deductions;
 
-    return Card(
-      elevation: 4,
-      color: Colors.white,
-      shadowColor: Colors.black12,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(4),
-        side: const BorderSide(color: AppColors.divider),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider, width: 0.5),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 1. Company Header
-            _buildCompanyHeader(),
-            const SizedBox(height: 16),
-
-            // 2. Employee Details Table
-            _buildEmployeeDetailsTable(record),
-            const SizedBox(height: 16),
-
-            // 3. Salary Details Grid (6 Columns Table)
-            _buildSalaryDetailsGrid(record, standardSalary, grossSalary, deductions, netSalary),
-            const SizedBox(height: 16),
-
-            // 4. Footer System Disclaimer
-            const Center(
-              child: Text(
-                'This Is A System Generated Payslip Hence Needs No Signature',
-                style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: AppColors.textSecondary),
+      padding: EdgeInsets.all(isMobile ? 16 : 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                record.month,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              _buildStatusPill(record),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 24,
+                backgroundColor: const Color(0xFF9CC70A).withOpacity(0.1),
+                child: const Icon(Icons.person_outline, color: Color(0xFF9CC70A), size: 24),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      record.employeeName,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'ID: IGT-000${record.employeeId} • ${record.department} • ${record.designation}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(child: _buildLabelValue('PRESENT', '${record.presentDays}')),
+              Expanded(child: _buildLabelValue('LATE', '${record.lateDays}')),
+              Expanded(child: _buildLabelValue('ABSENT (LOP)', '${record.absentDays}')),
+              Expanded(child: _buildLabelValue('LEAVE', '${record.leaveDays}')),
+              Expanded(child: _buildLabelValue('TOTAL DAYS', '${record.presentDays + record.absentDays + record.leaveDays}')),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
+          const SizedBox(height: 16),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'EARNINGS',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textSecondary,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildRowItem('Basic Pay', currencyFormat.format(record.basicPay)),
+                    _buildRowItem('HRA', currencyFormat.format(record.hra)),
+                    if (record.educationAllowance > 0)
+                      _buildRowItem('Education Allowance', currencyFormat.format(record.educationAllowance)),
+                    _buildRowItem('Special Allowance', currencyFormat.format(record.specialAllowance)),
+                    if (record.incentive > 0)
+                      _buildRowItem('Incentive', currencyFormat.format(record.incentive)),
+                    if (record.othersEarning > 0)
+                      _buildRowItem('Others', currencyFormat.format(record.othersEarning)),
+                    if (record.cumulativeIncentive > 0)
+                      _buildRowItem('Cumulative Incentive', currencyFormat.format(record.cumulativeIncentive)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 24),
+              Container(
+                height: 140,
+                width: 0.5,
+                color: AppColors.divider,
+              ),
+              const SizedBox(width: 24),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'DEDUCTIONS',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textSecondary,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildRowItem('PF', currencyFormat.format(record.pf)),
+                    _buildRowItem('TDS (Tax)', currencyFormat.format(record.tax)),
+                    if (record.esi > 0)
+                      _buildRowItem('ESI', currencyFormat.format(record.esi)),
+                    if (record.lop > 0)
+                      _buildRowItem('LOP', currencyFormat.format(record.lop)),
+                    if (record.companyLoan > 0)
+                      _buildRowItem(
+                        record.loanDescription.isNotEmpty ? 'Loan (${record.loanDescription})' : 'Company Loan',
+                        currencyFormat.format(record.companyLoan),
+                      ),
+                    if (record.salaryAdvance > 0)
+                      _buildRowItem(
+                        record.advanceDescription.isNotEmpty ? 'Advance (${record.advanceDescription})' : 'Salary Advance',
+                        currencyFormat.format(record.salaryAdvance),
+                      ),
+                    if (record.staffWelfareContribution > 0)
+                      _buildRowItem('Staff Welfare', currencyFormat.format(record.staffWelfareContribution)),
+                    if (record.othersDeduction > 0)
+                      _buildRowItem('Others', currencyFormat.format(record.othersDeduction)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
+          const SizedBox(height: 16),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _buildLabelValue('GROSS SALARY', currencyFormat.format(grossSalary)),
+                  _buildLabelValue('TOTAL DEDUCTIONS', currencyFormat.format(deductions)),
+                  _buildLabelValue('NET SALARY', currencyFormat.format(netSalary), highlight: true),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'In words: ${numberToWords(netSalary)} Rupees Only',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontStyle: FontStyle.italic,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
+          const SizedBox(height: 16),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildLabelValue('BANK NAME', record.bankName),
+                    const SizedBox(height: 12),
+                    _buildLabelValue('BANK ACCOUNT', _maskBankAccount(record.bankAcctNo)),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildLabelValue('IFSC CODE', record.ifscCode),
+                    const SizedBox(height: 12),
+                    _buildLabelValue(
+                      'CREDIT DATE',
+                      record.paymentDate.isNotEmpty ? record.paymentDate : 'Expected by 5th of next month',
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
+          const SizedBox(height: 12),
+          const Center(
+            child: Text(
+              'This is a system generated payslip hence needs no signature.',
+              style: TextStyle(
+                fontSize: 10,
+                fontStyle: FontStyle.italic,
+                color: AppColors.textSecondary,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildCompanyHeader() {
-    return Row(
+  Widget _buildLabelValue(String label, String value, {bool highlight = false}) {
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // Logo & Name
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Custom drawn green logo mimic
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: const Color(0xFF9CC70A),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: const Center(
-                child: Text(
-                  'iG',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Igreen',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF9CC70A),
-                  ),
-                ),
-                Text(
-                  'Tec Engineering India Pvt Ltd',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87),
-                ),
-                Text(
-                  'Innovation In Engineering',
-                  style: TextStyle(fontSize: 9, fontStyle: FontStyle.italic, color: AppColors.textSecondary),
-                ),
-              ],
-            ),
-          ],
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textSecondary,
+            letterSpacing: 0.5,
+          ),
         ),
-        // Email & TAN Details
-        const Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              'EMAIL : SUPPORT@IGREENTEC.IN',
-              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black87),
-            ),
-            SizedBox(height: 4),
-            Text(
-              'TAN No: CHEI09733D',
-              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black87),
-            ),
-          ],
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: highlight ? 16 : 13,
+            fontWeight: FontWeight.bold,
+            color: highlight ? const Color(0xFF9CC70A) : AppColors.textPrimary,
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildEmployeeDetailsTable(PayrollRecord record) {
-    return Table(
-      border: TableBorder.all(color: Colors.grey[300]!),
-      columnWidths: const {
-        0: FlexColumnWidth(2),
-        1: FlexColumnWidth(3),
-        2: FlexColumnWidth(2),
-        3: FlexColumnWidth(3),
-      },
-      children: [
-        // Row 1 - Header Row
-        TableRow(
-          decoration: const BoxDecoration(color: Color(0xFFF9FAFB)),
-          children: [
-            _buildGridHeaderCell('PAYSLIP PERIOD'),
-            _buildGridHeaderCell(''),
-            _buildGridHeaderCell('STATUTORY DETAILS'),
-            _buildGridHeaderCell(''),
-          ],
-        ),
-        // Row 2 - Month Year / PAN
-        TableRow(
-          children: [
-            _buildGridLabelCell('Payroll Period (Month/Year)'),
-            _buildGridValueCell(record.month),
-            _buildGridLabelCell('PAN Number'),
-            _buildGridValueCell(record.panNumber.isNotEmpty ? record.panNumber : '-'),
-          ],
-        ),
-        // Row 3 - Header Employee Details / PF
-        TableRow(
-          decoration: const BoxDecoration(color: Color(0xFFF9FAFB)),
-          children: [
-            _buildGridHeaderCell('EMPLOYEE DETAILS'),
-            _buildGridHeaderCell(''),
-            _buildGridValueCell(''), // statutory empty Col 3
-            _buildGridValueCell(''), // statutory empty Col 4
-          ],
-        ),
-        // Row 4 - Employee No / PF Number
-        TableRow(
-          children: [
-            _buildGridLabelCell('Employee no'),
-            _buildGridValueCell('IGT - 000${record.employeeId}'),
-            _buildGridLabelCell('PF'),
-            _buildGridValueCell(record.pfNumber.isNotEmpty ? record.pfNumber : '-'),
-          ],
-        ),
-        // Row 5 - Employee Name / BANK DETAILS header
-        TableRow(
-          children: [
-            _buildGridLabelCell('Employee Name'),
-            _buildGridValueCell(record.employeeName, isBold: true),
-            _buildGridHeaderCell('BANK DETAILS'),
-            _buildGridHeaderCell(''),
-          ],
-        ),
-        // Row 6 - Designation / Bank Name
-        TableRow(
-          children: [
-            _buildGridLabelCell('Designation'),
-            _buildGridValueCell(record.designation),
-            _buildGridLabelCell('Bank Name'),
-            _buildGridValueCell(record.bankName),
-          ],
-        ),
-        // Row 7 - Department / Account
-        TableRow(
-          children: [
-            _buildGridLabelCell('Department'),
-            _buildGridValueCell(record.department),
-            _buildGridLabelCell('Bank Acct no'),
-            _buildGridValueCell(_maskBankAccount(record.bankAcctNo)),
-          ],
-        ),
-        // Row 8 - Email / Branch
-        TableRow(
-          children: [
-            _buildGridLabelCell('Email ID'),
-            _buildGridValueCell(record.emailId),
-            _buildGridLabelCell('Branch'),
-            _buildGridValueCell(record.branch),
-          ],
-        ),
-        // Row 9 - Working Days Present / IFSC Code
-        TableRow(
-          children: [
-            _buildGridLabelCell('Days Present'),
-            _buildGridValueCell('${record.presentDays}'),
-            _buildGridLabelCell('IFSC/Swift Code'),
-            _buildGridValueCell(record.ifscCode),
-          ],
-        ),
-        // Row 10 - Total Working Days / Payment Credit Date
-        TableRow(
-          children: [
-            _buildGridLabelCell('Total Working Days'),
-            _buildGridValueCell('${record.presentDays + record.absentDays + record.leaveDays}'),
-            _buildGridLabelCell('Payment Credit Date'),
-            _buildGridValueCell(record.paymentDate.isNotEmpty ? record.paymentDate : 'Expected by 5th of next month'),
-          ],
-        ),
-        // Row 11 - Loss of Pay (LOP) Days / Payment Method
-        TableRow(
-          children: [
-            _buildGridLabelCell('LOP (Loss of Pay) Days'),
-            _buildGridValueCell('${record.absentDays}'),
-            _buildGridLabelCell('Payment Method'),
-            _buildGridValueCell(record.paymentMethod),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSalaryDetailsGrid(
-    PayrollRecord record,
-    double standardSalary,
-    double grossSalary,
-    double totalDeductions,
-    double netSalary,
-  ) {
-    // Render standard component placeholders as shown in the screenshot
-    final stdBasic = record.basicPay;
-    final stdHra = record.hra;
-    final stdEdu = record.educationAllowance > 0 ? record.educationAllowance : 3000.0;
-    final stdSpecial = record.specialAllowance;
-
-    return Table(
-      border: TableBorder.all(color: Colors.grey[300]!),
-      columnWidths: const {
-        0: FlexColumnWidth(2.5), // Monthly Salary Component label
-        1: FlexColumnWidth(1.2), // Standard Component INR
-        2: FlexColumnWidth(2.5), // Earning label
-        3: FlexColumnWidth(1.2), // Earning INR
-        4: FlexColumnWidth(2.5), // Deductions label
-        5: FlexColumnWidth(1.2), // Deductions INR
-      },
-      children: [
-        // Main headers
-        TableRow(
-          decoration: const BoxDecoration(color: Color(0xFFF3F4F6)),
-          children: [
-            _buildGridHeaderCell('Monthly Salary'),
-            _buildGridHeaderCell('INR', alignRight: true),
-            _buildGridHeaderCell('Earning'),
-            _buildGridHeaderCell('INR', alignRight: true),
-            _buildGridHeaderCell('Deductions'),
-            _buildGridHeaderCell('INR', alignRight: true),
-          ],
-        ),
-        // Standard Components labels row
-        TableRow(
-          decoration: const BoxDecoration(color: Color(0xFFF9FAFB)),
-          children: [
-            _buildGridHeaderCell('Standard Components'),
-            _buildGridHeaderCell(''),
-            _buildGridHeaderCell('Standard Components'),
-            _buildGridHeaderCell(''),
-            _buildGridHeaderCell('Statutory'),
-            _buildGridHeaderCell(''),
-          ],
-        ),
-        // Row 1: Basic
-        TableRow(
-          children: [
-            _buildGridLabelCell('Basic'),
-            _buildGridValueCell(stdBasic.toStringAsFixed(2), alignRight: true),
-            _buildGridLabelCell('Basic'),
-            _buildGridValueCell(record.basicPay.toStringAsFixed(0), alignRight: true),
-            _buildGridLabelCell('PF'),
-            _buildGridValueCell(record.pf.toStringAsFixed(0), alignRight: true),
-          ],
-        ),
-        // Row 2: HRA
-        TableRow(
-          children: [
-            _buildGridLabelCell('HRA'),
-            _buildGridValueCell(stdHra.toStringAsFixed(2), alignRight: true),
-            _buildGridLabelCell('HRA'),
-            _buildGridValueCell(record.hra.toStringAsFixed(0), alignRight: true),
-            _buildGridLabelCell('TDS'),
-            _buildGridValueCell(record.tax.toStringAsFixed(0), alignRight: true),
-          ],
-        ),
-        // Row 3: Educational
-        TableRow(
-          children: [
-            _buildGridLabelCell('Educational Allowance'),
-            _buildGridValueCell(stdEdu.toStringAsFixed(0), alignRight: true),
-            _buildGridLabelCell('Educational Allowance'),
-            _buildGridValueCell(record.educationAllowance.toStringAsFixed(0), alignRight: true),
-            _buildGridLabelCell('ESI'),
-            _buildGridValueCell(record.esi.toStringAsFixed(0), alignRight: true),
-          ],
-        ),
-        // Row 4: Special / Deductions Other Header
-        TableRow(
-          children: [
-            _buildGridLabelCell('Special Allowance'),
-            _buildGridValueCell(stdSpecial.toStringAsFixed(0), alignRight: true),
-            _buildGridLabelCell('Special Allowance'),
-            _buildGridValueCell(record.specialAllowance.toStringAsFixed(0), alignRight: true),
-            _buildGridHeaderCell('Other'), // Deduction other header
-            _buildGridHeaderCell(''),
-          ],
-        ),
-        // Row 5: LOP
-        TableRow(
-          children: [
-            _buildGridValueCell(''),
-            _buildGridValueCell(''),
-            _buildGridValueCell(''),
-            _buildGridValueCell(''),
-            _buildGridLabelCell('LOP'),
-            _buildGridValueCell(record.lop.toStringAsFixed(0), alignRight: true),
-          ],
-        ),
-        // Row 6: Company loan
-        TableRow(
-          children: [
-            _buildGridValueCell(''),
-            _buildGridValueCell(''),
-            _buildGridValueCell(''),
-            _buildGridValueCell(''),
-            _buildGridLabelCell(record.loanDescription.isNotEmpty ? 'Company loan (${record.loanDescription})' : 'Company loan'),
-            _buildGridValueCell(record.companyLoan.toStringAsFixed(0), alignRight: true),
-          ],
-        ),
-        // Row 7: Salary Advance
-        TableRow(
-          children: [
-            _buildGridValueCell(''),
-            _buildGridValueCell(''),
-            _buildGridValueCell(''),
-            _buildGridValueCell(''),
-            _buildGridLabelCell(record.advanceDescription.isNotEmpty ? 'Salary Advance (${record.advanceDescription})' : 'Salary Advance'),
-            _buildGridValueCell(record.salaryAdvance.toStringAsFixed(0), alignRight: true),
-          ],
-        ),
-        // Row 8: Additional Components header / Others Ded
-        TableRow(
-          children: [
-            _buildGridValueCell(''),
-            _buildGridValueCell(''),
-            _buildGridHeaderCell('Additional Components'),
-            _buildGridHeaderCell(''),
-            _buildGridLabelCell('Others'),
-            _buildGridValueCell(record.othersDeduction.toStringAsFixed(0), alignRight: true),
-          ],
-        ),
-        // Row 9: Incentive / Staff welfare
-        TableRow(
-          children: [
-            _buildGridValueCell(''),
-            _buildGridValueCell(''),
-            _buildGridLabelCell('Incentive'),
-            _buildGridValueCell(record.incentive.toStringAsFixed(0), alignRight: true),
-            _buildGridLabelCell('Staff welfare contribution'),
-            _buildGridValueCell(record.staffWelfareContribution.toStringAsFixed(0), alignRight: true),
-          ],
-        ),
-        // Row 10: Carry forward
-        TableRow(
-          children: [
-            _buildGridValueCell(''),
-            _buildGridValueCell(''),
-            _buildGridLabelCell('Carry forward'),
-            _buildGridValueCell(record.carryForward, alignRight: true),
-            _buildGridValueCell(''),
-            _buildGridValueCell(''),
-          ],
-        ),
-        // Row 11: Others Earning
-        TableRow(
-          children: [
-            _buildGridValueCell(''),
-            _buildGridValueCell(''),
-            _buildGridLabelCell('Others'),
-            _buildGridValueCell(record.othersEarning.toStringAsFixed(0), alignRight: true),
-            _buildGridValueCell(''),
-            _buildGridValueCell(''),
-          ],
-        ),
-        // Row 12: Cumulative Incentive
-        TableRow(
-          children: [
-            _buildGridValueCell(''),
-            _buildGridValueCell(''),
-            _buildGridLabelCell('Cumulative Incentive'),
-            _buildGridValueCell(record.cumulativeIncentive.toStringAsFixed(0), alignRight: true),
-            _buildGridValueCell(''),
-            _buildGridValueCell(''),
-          ],
-        ),
-        // Totals Footer Row
-        TableRow(
-          decoration: const BoxDecoration(color: Color(0xFFF3F4F6)),
-          children: [
-            _buildGridHeaderCell('Standard Salary'),
-            _buildGridValueCell(standardSalary.toStringAsFixed(0), alignRight: true, isBold: true),
-            _buildGridHeaderCell('Gross Salary'),
-            _buildGridValueCell(grossSalary.toStringAsFixed(0), alignRight: true, isBold: true),
-            _buildGridHeaderCell('Deduction'),
-            _buildGridValueCell(totalDeductions.toStringAsFixed(0), alignRight: true, isBold: true),
-          ],
-        ),
-        // Net Salary Row
-        TableRow(
-          children: [
-            _buildGridValueCell(
-              'In words: ${numberToWords(netSalary)} only',
-              isBold: true,
-              isItalic: true,
-              spanAcross: true,
-            ),
-            _buildGridValueCell(''), // empty due to span
-            _buildGridValueCell(''), // empty due to span
-            _buildGridValueCell(''), // empty due to span
-            _buildGridHeaderCell('Net Salary'),
-            _buildGridValueCell(netSalary.toStringAsFixed(0), alignRight: true, isBold: true),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildGridHeaderCell(String text, {bool alignRight = false}) {
+  Widget _buildRowItem(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-      child: Text(
-        text,
-        textAlign: alignRight ? TextAlign.right : TextAlign.center,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Colors.black87),
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
+          ),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 12, color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildGridLabelCell(String text) {
-    return Padding(
-      padding: const EdgeInsets.all(6),
-      child: Text(
-        text,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Colors.black87),
-      ),
-    );
-  }
-
-  Widget _buildGridValueCell(
-    String text, {
-    bool alignRight = false,
-    bool isBold = false,
-    bool isItalic = false,
-    bool spanAcross = false,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.all(6),
-      child: Text(
-        text,
-        textAlign: alignRight ? TextAlign.right : (spanAcross ? TextAlign.left : TextAlign.left),
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-          fontStyle: isItalic ? FontStyle.italic : FontStyle.normal,
-          color: Colors.black87,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionBar(BuildContext context, WidgetRef ref, PayrollRecord record, bool isMobile, bool isEmployee) {
-    final actions = isEmployee
-        ? [
-            (Icons.download_outlined, 'Download', () => _showMockAction(context, 'Downloading PDF...')),
-            (Icons.print_outlined, 'Print', () => _showMockAction(context, 'Opening print layout...')),
-            (Icons.warning_amber_rounded, 'Report Issue', () => _showReportIssueDialog(context, ref, record)),
-          ]
-        : [
-            (Icons.download_outlined, 'Download', () => _showMockAction(context, 'Downloading PDF...')),
-            (Icons.mail_outline, 'Send Email', () => _showMockAction(context, 'Sending Email to employee...')),
-            (Icons.print_outlined, 'Print', () => _showMockAction(context, 'Opening print layout...')),
-          ];
+  Widget _buildStatusPill(PayrollRecord record) {
+    final isPaid = record.status == 'Paid';
+    final color = isPaid ? const Color(0xFF9CC70A) : Colors.amber[800]!;
+    final bgColor = isPaid ? const Color(0xFF9CC70A).withOpacity(0.1) : Colors.amber[50]!;
+    final label = isPaid ? 'Paid' : 'Processing';
 
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 24, vertical: 12),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: AppColors.divider)),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
       ),
-      child: SafeArea(
-        top: false,
-        child: isMobile
-            ? Row(
-                children: actions
-                    .map(
-                      (a) => Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: OutlinedButton.icon(
-                            onPressed: a.$3,
-                            icon: Icon(a.$1, size: 16),
-                            label: Text(a.$2, style: const TextStyle(fontSize: 10)),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: a.$2 == 'Report Issue' ? Colors.red[700] : AppColors.primary,
-                              side: BorderSide(color: a.$2 == 'Report Issue' ? Colors.red[300]! : AppColors.primary),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
+      child: Text(
+        label,
+        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  Widget _buildActionRow(BuildContext context, PayrollRecord record, bool isMobile) {
+    final isPaid = record.status == 'Paid';
+
+    final downloadBtn = ElevatedButton(
+      onPressed: (!isPaid || _downloading) ? null : () => _startDownloadFlow(context, record),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF9CC70A),
+        foregroundColor: Colors.white,
+        disabledBackgroundColor: Colors.grey[200],
+        disabledForegroundColor: Colors.grey[400],
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        elevation: 0,
+      ),
+      child: Center(
+        child: _downloading
+            ? const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Text('Preparing PDF…', style: TextStyle(fontWeight: FontWeight.bold)),
+                ],
               )
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: actions
-                    .map(
-                      (a) => Padding(
-                        padding: const EdgeInsets.only(left: 12),
-                        child: ElevatedButton.icon(
-                          onPressed: a.$3,
-                          icon: Icon(a.$1, size: 16),
-                          label: Text(a.$2),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: a.$2 == 'Report Issue'
-                                ? Colors.red[700]
-                                : (a.$2 == 'Download' ? AppColors.primary : AppColors.active),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
+            : const Text('Download PDF', style: TextStyle(fontWeight: FontWeight.bold)),
+      ),
+    );
+
+    final emailBtn = OutlinedButton(
+      onPressed: () => _showMockAction(context, 'Sending Email to employee...'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.textPrimary,
+        side: const BorderSide(color: AppColors.divider, width: 1),
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        backgroundColor: Colors.white,
+      ),
+      child: const Center(
+        child: Text('Send Email', style: TextStyle(fontWeight: FontWeight.bold)),
+      ),
+    );
+
+    if (isMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          downloadBtn,
+          const SizedBox(height: 8),
+          emailBtn,
+        ],
+      );
+    } else {
+      return Row(
+        children: [
+          Expanded(child: downloadBtn),
+          const SizedBox(width: 12),
+          Expanded(child: emailBtn),
+        ],
+      );
+    }
+  }
+
+  Widget _buildSkeletonLoader() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider, width: 0.5),
+      ),
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                width: 150,
+                height: 24,
+                decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(4)),
               ),
+              Container(
+                width: 60,
+                height: 20,
+                decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(10)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(color: Colors.grey[200], shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 180,
+                      height: 16,
+                      decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(4)),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: 240,
+                      height: 12,
+                      decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(4)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: List.generate(
+              5,
+              (index) => Container(
+                width: 50,
+                height: 36,
+                decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(4)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  children: List.generate(
+                    4,
+                    (index) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Container(
+                        height: 12,
+                        decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(4)),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 48),
+              Expanded(
+                child: Column(
+                  children: List.generate(
+                    4,
+                    (index) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Container(
+                        height: 12,
+                        decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(4)),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: List.generate(
+              3,
+              (index) => Container(
+                width: 80,
+                height: 36,
+                decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(4)),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -694,6 +774,8 @@ class PayslipScreen extends ConsumerWidget {
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Report an Issue / Query'),
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -772,39 +854,6 @@ class PayslipScreen extends ConsumerWidget {
     );
   }
 
-  void _showMockAction(BuildContext context, String message) {
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Processing Request'),
-          content: Row(
-            children: [
-              const CircularProgressIndicator(color: AppColors.primary),
-              const SizedBox(width: 16),
-              Expanded(child: Text(message)),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(dialogContext);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Action executed successfully!')),
-                );
-              },
-              child: const Text('Complete'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   static String numberToWords(double number) {
     if (number == 0) return 'Zero';
     final intNumber = number.toInt();
@@ -846,7 +895,6 @@ class PayslipScreen extends ConsumerWidget {
       result += convertLessThanOneThousand(temp);
     }
 
-    // Capitalize properly
     final words = result.trim();
     if (words.isEmpty) return 'Zero';
     return words;
