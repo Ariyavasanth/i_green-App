@@ -168,19 +168,19 @@ class AppShell extends ConsumerWidget {
       'Payroll',
       '/payroll',
       Icons.payments_outlined,
-      'Employee',
+      'Payroll Management',
     ),
     SidebarDestination(
       'Payroll History',
       '/payroll-history',
       Icons.history_outlined,
-      'Employee',
+      'Payroll Management',
     ),
     SidebarDestination(
       'Payroll Settings',
       '/payroll-settings',
       Icons.settings_outlined,
-      'Employee',
+      'Payroll Management',
     ),
     SidebarDestination('Items', '/items', Icons.inventory_2_outlined, 'Stock'),
     SidebarDestination(

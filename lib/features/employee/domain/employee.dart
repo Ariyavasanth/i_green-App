@@ -288,6 +288,8 @@ class Employee {
       'Asset Management',
       'Salary Settings',
       'Loan',
+    ],
+    'PAYROLL MANAGEMENT': [
       'Payroll',
       'Payroll History',
       'Payroll Settings',
