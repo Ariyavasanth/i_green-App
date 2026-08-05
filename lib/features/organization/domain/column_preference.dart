@@ -44,6 +44,11 @@ class ColumnPreference {
                 .toList();
           }
         } catch (_) {}
+        if (raw.contains(',')) {
+          return raw.split(',').where((e) => e.trim().isNotEmpty).map((e) => e.trim()).toList();
+        } else if (raw.trim().isNotEmpty) {
+          return [raw.trim()];
+        }
       }
       if (raw is List) {
         return raw.where((e) => e != null).map((e) => e.toString()).toList();

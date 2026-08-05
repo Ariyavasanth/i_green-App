@@ -245,10 +245,10 @@ class _OrganizationStructurePageState
     );
   }
 
-  void _openColumnSelectionDialog(BuildContext context) {
+  Future<void> _openColumnSelectionDialog(BuildContext context) async {
     final pref = ref.read(columnPreferenceProvider(_tableId)).valueOrNull;
 
-    showDialog<bool>(
+    final updated = await showDialog<bool>(
       context: context,
       builder: (context) => ColumnSelectionDialog(
         tableId: _tableId,
@@ -258,6 +258,10 @@ class _OrganizationStructurePageState
         currentColumnOrder: pref?.columnOrder ?? List.from(_defaultAllColumns),
       ),
     );
+
+    if (updated == true) {
+      ref.invalidate(columnPreferenceProvider(_tableId));
+    }
   }
 
   void _openViewDialog(BuildContext context, Department dept) {

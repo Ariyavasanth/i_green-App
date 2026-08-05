@@ -395,9 +395,9 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     );
   }
 
-  void _openColumnSelectionDialog(BuildContext context) {
+  Future<void> _openColumnSelectionDialog(BuildContext context) async {
     final pref = ref.read(empColumnPreferenceProvider(_tableId)).valueOrNull;
-    showDialog<bool>(
+    final updated = await showDialog<bool>(
       context: context,
       builder: (context) => ColumnSelectionDialog(
         tableId: _tableId,
@@ -406,6 +406,10 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
         currentColumnOrder: pref?.columnOrder ?? List.from(_defaultAllColumns),
       ),
     );
+
+    if (updated == true) {
+      ref.invalidate(empColumnPreferenceProvider(_tableId));
+    }
   }
 
   Color _getStatusColor(String status) {

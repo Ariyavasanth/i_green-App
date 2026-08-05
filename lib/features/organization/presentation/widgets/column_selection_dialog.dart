@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../employee/providers/employee_providers.dart';
 import '../../domain/column_preference.dart';
 import '../../providers/organization_providers.dart';
 
@@ -99,7 +100,9 @@ class _ColumnSelectionDialogState
     );
 
     await ref.read(organizationRepositoryProvider).saveColumnPreference(pref);
+    await ref.read(employeeRepositoryProvider).saveColumnPreference(pref);
     ref.invalidate(columnPreferenceProvider(widget.tableId));
+    ref.invalidate(empColumnPreferenceProvider(widget.tableId));
     if (mounted) Navigator.of(context).pop(true);
   }
 

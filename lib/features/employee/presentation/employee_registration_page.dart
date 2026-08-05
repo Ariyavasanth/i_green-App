@@ -59,7 +59,7 @@ class _EmployeeRegistrationPageState
   final _emailController = TextEditingController();
   final _pfNumberController = TextEditingController();
   final _esiNumberController = TextEditingController();
-  String _reportingTo = 'Saravanan G S';
+  final _reportingToController = TextEditingController(text: 'Saravanan G S');
   final _inTimeController = TextEditingController();
   final _outTimeController = TextEditingController();
   final _weeklyOffDayController = TextEditingController(text: 'Sunday');
@@ -295,7 +295,7 @@ class _EmployeeRegistrationPageState
       _adminNameController.text = emp.adminName.isNotEmpty ? emp.adminName : 'Saravanan G S';
       _coordinatorNameController.text = emp.coordinatorName.isNotEmpty ? emp.coordinatorName : 'Admin Team';
       _coordinatorPhoneController.text = emp.coordinatorPhone.isNotEmpty ? emp.coordinatorPhone : '8760098789';
-      if (emp.reportingManager.isNotEmpty) _reportingTo = emp.reportingManager;
+      if (emp.reportingManager.isNotEmpty) _reportingToController.text = emp.reportingManager;
       if (emp.leaveType.isNotEmpty) {
         _leaveType = emp.leaveType == 'Once a Month' ? 'Manual Allocation' : emp.leaveType;
       }
@@ -521,6 +521,7 @@ class _EmployeeRegistrationPageState
     _emailController.dispose();
     _pfNumberController.dispose();
     _esiNumberController.dispose();
+    _reportingToController.dispose();
     _inTimeController.dispose();
     _outTimeController.dispose();
     _weeklyOffDayController.dispose();
@@ -814,7 +815,7 @@ class _EmployeeRegistrationPageState
         inTime: _inTimeController.text.trim(),
         outTime: _outTimeController.text.trim(),
         weeklyOffDay: _weeklyOffDayController.text.trim(),
-        reportingManager: _reportingTo,
+        reportingManager: _reportingToController.text.trim(),
         reportingManagerTitle: _reportingManagerTitleController.text.trim(),
         adminName: _adminNameController.text.trim(),
         coordinatorName: _coordinatorNameController.text.trim(),
@@ -930,11 +931,18 @@ class _EmployeeRegistrationPageState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(isSubmit
-                ? (isEditMode ? 'Employee details updated successfully!' : 'Employee registered successfully!')
-                : 'Draft progress saved successfully!'),
-            backgroundColor: Colors.green,
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white, size: 18),
+                const SizedBox(width: 8),
+                Text(isSubmit
+                    ? (isEditMode ? 'Employee details updated successfully!' : 'Employee registered successfully!')
+                    : '$currentTab page saved successfully!'),
+              ],
+            ),
+            backgroundColor: const Color(0xFF2E7D32),
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
           ),
         );
 
@@ -1249,7 +1257,21 @@ class _EmployeeRegistrationPageState
         labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
         unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.normal),
         tabAlignment: TabAlignment.start,
-        tabs: _tabs.map((tab) => Tab(text: tab)).toList(),
+        tabs: _tabs.map((tab) {
+          final isSaved = _savedTabs.contains(tab);
+          return Tab(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(tab),
+                if (isSaved) ...[
+                  const SizedBox(width: 5),
+                  const Icon(Icons.check_circle, size: 14, color: Color(0xFF2E7D32)),
+                ],
+              ],
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -1782,11 +1804,10 @@ class _EmployeeRegistrationPageState
               isMobile: isMobile,
               children: [
                 _buildDateField('Contract End Date', _contractEndDateController, placeholder: 'dd-mm-yyyy'),
-                _buildDropdown(
+                _buildTextField(
                   'Reporting To',
-                  _reportingTo,
-                  ['Saravanan G S', 'John Doe', 'Jane Smith', 'None'],
-                  (val) => setState(() => _reportingTo = val!),
+                  _reportingToController,
+                  placeholder: 'e.g. Saravanan G S',
                 ),
                 _buildTextField(
                   'Reporting Manager Title',
@@ -2093,22 +2114,54 @@ class _EmployeeRegistrationPageState
               ],
             ),
             const SizedBox(height: 12),
-            _buildRow2or3(
-              isMobile: isMobile,
-              children: [
-                _buildTextField('Result', _eduResultController, placeholder: 'Result'),
-                _buildTextField('Passing Year', _eduYearController, placeholder: 'Passing Year', isNumber: true),
-              ],
+            Align(
+              alignment: Alignment.centerLeft,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.active,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                ),
+                onPressed: () {
+                  if (_eduDegreeController.text.isNotEmpty || _eduInstController.text.isNotEmpty) {
+                    setState(() {
+                      _educationList.add(EducationItem(
+                        id: (_educationList.length + 1).toString(),
+                        degreeName: _eduDegreeController.text,
+                        instituteName: _eduInstController.text,
+                        result: _eduResultController.text,
+                        passingYear: _eduYearController.text,
+                      ));
+                      _eduDegreeController.clear();
+                      _eduInstController.clear();
+                      _eduResultController.clear();
+                      _eduYearController.clear();
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Education entry added to list.'),
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Please fill degree name or institute first.'),
+                        backgroundColor: Colors.orange,
+                      ),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Add Education', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              ),
             ),
             const SizedBox(height: 20),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.active,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-              ),
-              onPressed: () {
+            _buildSaveButtonsRow(
+              link,
+              'Education',
+              onCustomSave: () {
                 if (_eduDegreeController.text.isNotEmpty || _eduInstController.text.isNotEmpty) {
                   setState(() {
                     _educationList.add(EducationItem(
@@ -2124,10 +2177,7 @@ class _EmployeeRegistrationPageState
                     _eduYearController.clear();
                   });
                 }
-                _submitForm(link, isSubmit: false);
               },
-              icon: const Icon(Icons.check, size: 16),
-              label: const Text('Save', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -2240,15 +2290,55 @@ class _EmployeeRegistrationPageState
                 _buildTextField('Working Duration', _expDurationController, placeholder: 'Working Duration'),
               ],
             ),
-            const SizedBox(height: 20),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.active,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.active,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                ),
+                onPressed: () {
+                  if (_expCompanyController.text.isNotEmpty || _expPositionController.text.isNotEmpty) {
+                    setState(() {
+                      _experienceList.add(ExperienceItem(
+                        id: (_experienceList.length + 1).toString(),
+                        companyName: _expCompanyController.text,
+                        position: _expPositionController.text,
+                        address: _expAddressController.text,
+                        workingDuration: _expDurationController.text,
+                      ));
+                      _expCompanyController.clear();
+                      _expPositionController.clear();
+                      _expAddressController.clear();
+                      _expDurationController.clear();
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Experience entry added to list.'),
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Please fill company name or position first.'),
+                        backgroundColor: Colors.orange,
+                      ),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Add Experience', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               ),
-              onPressed: () {
+            ),
+            const SizedBox(height: 20),
+            _buildSaveButtonsRow(
+              link,
+              'Experience',
+              onCustomSave: () {
                 if (_expCompanyController.text.isNotEmpty || _expPositionController.text.isNotEmpty) {
                   setState(() {
                     _experienceList.add(ExperienceItem(
@@ -2264,10 +2354,7 @@ class _EmployeeRegistrationPageState
                     _expDurationController.clear();
                   });
                 }
-                _submitForm(link, isSubmit: false);
               },
-              icon: const Icon(Icons.check, size: 16),
-              label: const Text('Save', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -2380,17 +2467,7 @@ class _EmployeeRegistrationPageState
               ],
             ),
             const SizedBox(height: 24),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.active,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-              ),
-              onPressed: _isSubmitting ? null : () => _submitForm(link, isSubmit: false),
-              icon: const Icon(Icons.check, size: 16),
-              label: const Text('Save', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-            ),
+            _buildSaveButtonsRow(link, 'History'),
           ],
         ),
       ),
@@ -2445,21 +2522,32 @@ class _EmployeeRegistrationPageState
               ],
             ),
             const SizedBox(height: 24),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.active,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-              ),
-              onPressed: _isSubmitting ? null : () => _submitForm(link, isSubmit: false),
-              icon: const Icon(Icons.check, size: 16),
-              label: const Text('Save', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-            ),
+            _buildSaveButtonsRow(link, 'Bank Account'),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _pickDocumentFile() async {
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.any,
+        allowMultiple: false,
+        withData: true,
+      );
+      final file = result?.files.isNotEmpty == true ? result!.files.first : null;
+      if (file == null) return;
+      setState(() {
+        _docFileName = file.name;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to select file: $e')),
+        );
+      }
+    }
   }
 
   // TAB 7: DOCUMENT
@@ -2573,27 +2661,64 @@ class _EmployeeRegistrationPageState
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   ),
-                  onPressed: () {
-                    setState(() {
-                      _docFileName = '${_docType.replaceAll(' ', '_').toLowerCase()}_document.pdf';
-                    });
-                  },
+                  onPressed: _pickDocumentFile,
                   icon: const Icon(Icons.upload_file, size: 16),
                   label: const Text('Choose File', style: TextStyle(fontSize: 12)),
                 ),
                 const SizedBox(width: 10),
-                Text(_docFileName, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                Expanded(
+                  child: Text(
+                    _docFileName,
+                    style: const TextStyle(fontSize: 12, color: Colors.black87),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.active,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                  ),
+                  onPressed: () {
+                    if (_docFileName != 'No file chosen' || _docNumberController.text.isNotEmpty) {
+                      setState(() {
+                        _documentList.add(DocumentItem(
+                          id: (_documentList.length + 1).toString(),
+                          documentType: _docType,
+                          documentNumber: _docNumberController.text,
+                          fileName: _docFileName,
+                          uploadedDate: DateTime.now().toString().split(' ')[0],
+                        ));
+                        _docNumberController.clear();
+                        _docFileName = 'No file chosen';
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Document added to list.'),
+                          duration: Duration(seconds: 1),
+                        ),
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Please select a file or enter document number first.'),
+                          backgroundColor: Colors.orange,
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Add Document', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
               ],
             ),
             const SizedBox(height: 20),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.active,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-              ),
-              onPressed: () {
+            _buildSaveButtonsRow(
+              link,
+              'Document',
+              onCustomSave: () {
                 if (_docFileName != 'No file chosen' || _docNumberController.text.isNotEmpty) {
                   setState(() {
                     _documentList.add(DocumentItem(
@@ -2607,10 +2732,7 @@ class _EmployeeRegistrationPageState
                     _docFileName = 'No file chosen';
                   });
                 }
-                _submitForm(link, isSubmit: false);
               },
-              icon: const Icon(Icons.check, size: 16),
-              label: const Text('Save', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -2653,17 +2775,7 @@ class _EmployeeRegistrationPageState
               ],
             ),
             const SizedBox(height: 24),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.active,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-              ),
-              onPressed: _isSubmitting ? null : () => _submitForm(link, isSubmit: false),
-              icon: const Icon(Icons.check, size: 16),
-              label: const Text('Save', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-            ),
+            _buildSaveButtonsRow(link, 'Social Media'),
           ],
         ),
       ),
@@ -2911,7 +3023,12 @@ class _EmployeeRegistrationPageState
     );
   }
 
-  Widget _buildSaveButtonsRow(RegistrationLink link, String tabName) {
+  Widget _buildSaveButtonsRow(
+    RegistrationLink link,
+    String tabName, {
+    VoidCallback? onCustomSave,
+    String saveLabel = 'Save',
+  }) {
     final isSaved = _savedTabs.contains(tabName);
     return Row(
       children: [
@@ -2922,7 +3039,14 @@ class _EmployeeRegistrationPageState
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
           ),
-          onPressed: _isSubmitting ? null : () => _submitForm(link, isSubmit: false),
+          onPressed: _isSubmitting
+              ? null
+              : () {
+                  if (onCustomSave != null) {
+                    onCustomSave();
+                  }
+                  _submitForm(link, isSubmit: false);
+                },
           icon: _isSubmitting
               ? const SizedBox(
                   width: 14,
@@ -2930,7 +3054,7 @@ class _EmployeeRegistrationPageState
                   child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                 )
               : const Icon(Icons.check, size: 16),
-          label: const Text('Save', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+          label: Text(saveLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
         ),
         const SizedBox(width: 8),
         ElevatedButton(
@@ -3426,17 +3550,7 @@ class _EmployeeRegistrationPageState
                     ),
             ),
             const SizedBox(height: 24),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.active,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-              ),
-              onPressed: _isSubmitting ? null : () => _submitForm(link, isSubmit: false),
-              icon: const Icon(Icons.check, size: 16),
-              label: const Text('Save', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-            ),
+            _buildSaveButtonsRow(link, 'Salary & Offer Letter'),
           ],
         ),
       ),
@@ -3448,8 +3562,8 @@ class _EmployeeRegistrationPageState
     final empName = '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}'.trim();
     final data = WelcomeLetterData(
       employeeName: empName.isNotEmpty ? empName : 'Employee',
-      reportingManagerName: _reportingTo.isNotEmpty && _reportingTo != 'None'
-          ? _reportingTo
+      reportingManagerName: _reportingToController.text.trim().isNotEmpty && _reportingToController.text.trim() != 'None'
+          ? _reportingToController.text.trim()
           : 'Saravanan G S',
       reportingManagerTitle: _reportingManagerTitleController.text.trim().isNotEmpty
           ? _reportingManagerTitleController.text.trim()
@@ -3810,6 +3924,8 @@ class _EmployeeRegistrationPageState
               ),
             ),
           ),
+          const SizedBox(height: 20),
+          _buildSaveButtonsRow(link, 'Welcome Letter'),
         ],
       ),
     );
@@ -3884,7 +4000,7 @@ class _EmployeeRegistrationPageState
       googleUrl: _googleController.text.trim(),
       pfNumber: _pfNumberController.text.trim(),
       esiNumber: _esiNumberController.text.trim(),
-      reportingManager: _reportingTo,
+      reportingManager: _reportingToController.text.trim(),
       reportingManagerTitle: _reportingManagerTitleController.text.trim(),
       adminName: _adminNameController.text.trim(),
       coordinatorName: _coordinatorNameController.text.trim(),
@@ -4056,17 +4172,7 @@ class _EmployeeRegistrationPageState
             ),
             if (_isManagementAdd) ...[
               const SizedBox(height: 28),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.active,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                ),
-                onPressed: _isSubmitting ? null : () => _submitForm(link, isSubmit: false),
-                icon: const Icon(Icons.check, size: 16),
-                label: const Text('Save Credentials', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-              ),
+              _buildSaveButtonsRow(link ?? const RegistrationLink(id: 0, linkId: '', generatedBy: '', generatedDate: '', expiryDate: '', linkStatus: '', organizationName: '', department: ''), 'Credentials', saveLabel: 'Save Credentials'),
             ],
           ],
         ),
@@ -4266,25 +4372,7 @@ class _EmployeeRegistrationPageState
                 ),
               ),
               const SizedBox(height: 28),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.active,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-                onPressed: _isSubmitting ? null : () => _submitForm(link, isSubmit: false),
-                icon: const Icon(Icons.check, size: 16),
-                label: const Text(
-                  'Save Permissions',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                ),
-              ),
+              _buildSaveButtonsRow(link ?? const RegistrationLink(id: 0, linkId: '', generatedBy: '', generatedDate: '', expiryDate: '', linkStatus: '', organizationName: '', department: ''), 'Access Permissions', saveLabel: 'Save Permissions'),
             ],
           ),
         ),

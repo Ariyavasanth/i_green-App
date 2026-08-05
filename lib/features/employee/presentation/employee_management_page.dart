@@ -335,10 +335,10 @@ class _EmployeeManagementPageState
     );
   }
 
-  void _openColumnSelectionDialog(BuildContext context) {
+  Future<void> _openColumnSelectionDialog(BuildContext context) async {
     final pref = ref.read(empColumnPreferenceProvider(_tableId)).valueOrNull;
 
-    showDialog<bool>(
+    final updated = await showDialog<bool>(
       context: context,
       builder: (context) => ColumnSelectionDialog(
         tableId: _tableId,
@@ -348,6 +348,10 @@ class _EmployeeManagementPageState
         currentColumnOrder: pref?.columnOrder ?? List.from(_defaultAllColumns),
       ),
     );
+
+    if (updated == true) {
+      ref.invalidate(empColumnPreferenceProvider(_tableId));
+    }
   }
 
   void _openViewDialog(BuildContext context, Employee emp) {

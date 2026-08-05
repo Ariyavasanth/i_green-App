@@ -617,15 +617,7 @@ class SqliteEmployeeRepository implements EmployeeRepository {
       whereArgs: [tableId],
     );
     if (maps.isEmpty) return null;
-    final row = maps.first;
-    final visStr = row['visible_columns'] as String? ?? '';
-    final ordStr = row['column_order'] as String? ?? '';
-
-    return ColumnPreference(
-      tableId: tableId,
-      visibleColumns: visStr.isEmpty ? [] : visStr.split(','),
-      columnOrder: ordStr.isEmpty ? [] : ordStr.split(','),
-    );
+    return ColumnPreference.fromMap(maps.first);
   }
 
   @override
@@ -633,11 +625,7 @@ class SqliteEmployeeRepository implements EmployeeRepository {
     final db = await database;
     await db.insert(
       'column_preferences',
-      {
-        'table_id': preference.tableId,
-        'visible_columns': preference.visibleColumns.join(','),
-        'column_order': preference.columnOrder.join(','),
-      },
+      preference.toMap(),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }

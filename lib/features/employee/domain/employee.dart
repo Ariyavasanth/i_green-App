@@ -293,6 +293,8 @@ class Employee {
       'Asset Management',
       'Salary Settings',
       'Loan',
+      'My Exit',
+      'Exit Management',
     ],
     'PAYROLL MANAGEMENT': [
       'Payroll',
