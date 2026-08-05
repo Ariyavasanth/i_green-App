@@ -51,6 +51,8 @@ import '../../features/loan/presentation/loan_management_page.dart';
 import '../../features/loan/presentation/create_loan_page.dart';
 import '../../features/loan/presentation/loan_details_page.dart';
 import '../../features/loan/domain/employee_loan.dart';
+import '../../features/exit_management/presentation/exit_management_page.dart';
+import '../../features/exit_management/presentation/my_exit_page.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
@@ -171,6 +173,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 },
               ),
             ],
+          ),
+          GoRoute(
+            path: '/my-exit',
+            builder: (_, _) => const MyExitPage(),
+          ),
+          GoRoute(
+            path: '/exit-management',
+            builder: (_, _) => const ExitManagementPage(),
           ),
           GoRoute(
             path: '/payroll',

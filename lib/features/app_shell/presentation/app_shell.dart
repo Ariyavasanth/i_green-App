@@ -39,17 +39,23 @@ final userDestinationsProvider = Provider<List<SidebarDestination>>((ref) {
       if (matchingEmp.isEmpty) return AppShell.destinations;
 
       final emp = matchingEmp.first;
+      final role = emp.userType.trim().toUpperCase();
 
-      // ── SUPER_ADMIN: unrestricted full access ──────────────────────────────
-      if (emp.userType.toUpperCase() == 'SUPER_ADMIN') {
+      // ── SUPER_ADMIN / ADMIN: unrestricted full access ──────────────────────────────
+      if (role == 'SUPER_ADMIN' || role == 'SUPER ADMIN' || role == 'ADMIN') {
         return AppShell.destinations;
       }
 
-      // ── ADMIN / EMPLOYEE / any other role:
-      //    Only show what Super Admin has explicitly granted via accessPermissions
+      // ── EMPLOYEE / standard roles:
+      //    Always include 'Home' and 'My Exit'. If accessPermissions is empty, show all.
       final allowed = emp.accessPermissions.toSet();
+      if (allowed.isEmpty) return AppShell.destinations;
+
       return AppShell.destinations
-          .where((d) => d.label == 'Home' || allowed.contains(d.label))
+          .where((d) =>
+              d.label == 'Home' ||
+              d.label == 'My Exit' ||
+              allowed.contains(d.label))
           .toList();
     },
     orElse: () => AppShell.destinations,
@@ -162,6 +168,18 @@ class AppShell extends ConsumerWidget {
       'Loan',
       '/loan',
       Icons.account_balance_outlined,
+      'Employee',
+    ),
+    SidebarDestination(
+      'My Exit',
+      '/my-exit',
+      Icons.exit_to_app_outlined,
+      'Employee',
+    ),
+    SidebarDestination(
+      'Exit Management',
+      '/exit-management',
+      Icons.assignment_return_outlined,
       'Employee',
     ),
     SidebarDestination(

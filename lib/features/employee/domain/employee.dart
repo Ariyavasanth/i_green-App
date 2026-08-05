@@ -251,6 +251,8 @@ class Employee {
     'Salary Settings',
     'Loan',
     'Loan Management',
+    'My Exit',
+    'Exit Management',
     'Payroll',
     'Payroll History',
     'Payroll Settings',
