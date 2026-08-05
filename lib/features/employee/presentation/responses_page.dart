@@ -63,8 +63,8 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                 final statusList = const [
                   'All Statuses',
                   'Pending',
+                  'Submitted',
                   'Accepted',
-                  'Completed',
                   'Rejected',
                 ];
 
@@ -74,6 +74,8 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                   final employee = _employeeForLink(link, employees);
                   final matchesSearch = q.isEmpty ||
                       candidateId.toLowerCase().contains(q) ||
+                      link.linkId.toLowerCase().contains(q) ||
+                      link.employeeName.toLowerCase().contains(q) ||
                       _candidateName(link, employee).toLowerCase().contains(q) ||
                       _emailForLink(link, employee).toLowerCase().contains(q) ||
                       _phoneForLink(link, employee).toLowerCase().contains(q) ||
@@ -84,9 +86,9 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
 
                   bool matchesStatus = false;
                   if (filter == 'all statuses') {
-                    matchesStatus = status != 'completed' && status != 'registered' && status != 'converted';
-                  } else if (filter == 'completed' || filter == 'registered') {
-                    matchesStatus = status == 'completed' || status == 'registered' || status == 'converted';
+                    matchesStatus = true;
+                  } else if (filter == 'submitted') {
+                    matchesStatus = status == 'submitted' || status == 'completed';
                   } else {
                     matchesStatus = status == filter;
                   }
@@ -414,13 +416,15 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
 
   Color _getStatusColor(String status) {
     switch (status.trim().toLowerCase()) {
+      case 'submitted':
+        return Colors.orange;
+      case 'accepted':
+        return Colors.blue;
       case 'registered':
       case 'converted':
       case 'completed':
       case 'active':
         return Colors.green;
-      case 'accepted':
-        return Colors.blue;
       case 'expired':
       case 'rejected':
         return Colors.redAccent;
@@ -530,7 +534,11 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
         value = _phoneForLink(link, employee);
         break;
       case 'Status':
-        final statusColor = _getStatusColor(link.linkStatus);
+        final rawStatus = link.linkStatus.trim();
+        final displayStatus = (rawStatus.toLowerCase() == 'completed' || rawStatus.toLowerCase() == 'pending')
+            ? 'Submitted'
+            : rawStatus;
+        final statusColor = _getStatusColor(displayStatus);
         customWidget = Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           decoration: BoxDecoration(
@@ -539,7 +547,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             border: Border.all(color: statusColor, width: 0.8),
           ),
           child: Text(
-            link.linkStatus,
+            displayStatus,
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.bold,
@@ -571,7 +579,11 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
       separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
         final link = links[index];
-        final statusColor = _getStatusColor(link.linkStatus);
+        final rawStatus = link.linkStatus.trim();
+        final displayStatus = (rawStatus.toLowerCase() == 'completed' || rawStatus.toLowerCase() == 'pending')
+            ? 'Submitted'
+            : rawStatus;
+        final statusColor = _getStatusColor(displayStatus);
         final employee = _employeeForLink(link, employees);
 
         return Card(
@@ -628,7 +640,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                         border: Border.all(color: statusColor, width: 0.8),
                       ),
                       child: Text(
-                        link.linkStatus,
+                        displayStatus,
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -660,7 +672,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
 
   Widget _buildRowActions(RegistrationLink link, {bool isMobile = false}) {
     final status = link.linkStatus.trim().toLowerCase();
-    final isPending = status == 'pending';
+    final isSubmittedOrPending = status == 'submitted' || status == 'pending' || status == 'completed';
     final isAccepted = status == 'accepted';
     final isRejected = status == 'rejected';
 
@@ -677,7 +689,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
           icon: Icon(Icons.remove_red_eye_outlined, size: isMobile ? 14 : 16, color: AppColors.textPrimary),
           label: Text('View', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
         ),
-        if (isPending || isRejected) ...[
+        if (isSubmittedOrPending || isRejected) ...[
           const SizedBox(width: 6),
           TextButton.icon(
             style: TextButton.styleFrom(
@@ -689,7 +701,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             icon: Icon(Icons.check_circle_outline, size: isMobile ? 14 : 16, color: Colors.blue),
             label: Text('Accept', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.bold, color: Colors.blue)),
           ),
-          if (isPending) ...[
+          if (isSubmittedOrPending) ...[
             const SizedBox(width: 6),
             TextButton.icon(
               style: TextButton.styleFrom(

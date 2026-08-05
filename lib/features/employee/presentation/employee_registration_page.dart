@@ -228,6 +228,16 @@ class _EmployeeRegistrationPageState
     });
   }
 
+  double _getAdditionsTotal() {
+    final basic = double.tryParse(_basicPayController.text.replaceAll(',', '').trim()) ?? 0.0;
+    final hra = double.tryParse(_hraController.text.replaceAll(',', '').trim()) ?? 0.0;
+    final special = double.tryParse(_specialAllowanceController.text.replaceAll(',', '').trim()) ?? 0.0;
+    final edu = double.tryParse(_eduAllowanceController.text.replaceAll(',', '').trim()) ?? 0.0;
+    final travel = double.tryParse(_travelAllowanceController.text.replaceAll(',', '').trim()) ?? 0.0;
+    final other = double.tryParse(_otherAllowanceController.text.replaceAll(',', '').trim()) ?? 0.0;
+    return basic + hra + special + edu + travel + other;
+  }
+
   // Tab 10: Credentials
   final _employeeCustomIdController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -947,11 +957,11 @@ class _EmployeeRegistrationPageState
             savedEmployee = await repo.addEmployee(imported);
           }
 
-          // Update the RegistrationLink status to 'Completed' strictly on final submit success
+          // Update the RegistrationLink status to 'Converted' strictly on final submit success
           if (_selectedAcceptedLinkId != null && _selectedAcceptedLinkId!.isNotEmpty) {
             await repo.updateRegistrationLinkStatus(
               linkId: _selectedAcceptedLinkId!,
-              linkStatus: 'Completed',
+              linkStatus: 'Converted',
             );
           }
         }
@@ -1106,15 +1116,15 @@ class _EmployeeRegistrationPageState
                     );
                   }
 
-                  if (link.linkStatus == 'Completed' || _submittedEmployee != null) {
+                  if (link.linkStatus == 'Submitted' || link.linkStatus == 'Converted' || _submittedEmployee != null) {
                     final emp = _submittedEmployee;
                     return _buildStatusCard(
                       icon: Icons.check_circle_outline,
                       color: const Color(0xFF28A745),
-                      title: 'Registration Completed Successfully!',
+                      title: 'Registration Submitted Successfully!',
                       message:
-                          'Thank you! Your employee registration has been submitted and your profile has been updated.\n\n'
-                          '${emp != null ? "Generated Employee ID: ${emp.employeeId}\nTemporary Account Password: ${emp.temporaryPassword}" : "Status: Registration Link Completed"}',
+                          'Thank you! Your employee registration has been submitted.\n\n'
+                          '${emp != null ? "Generated Candidate ID: ${emp.employeeId}" : "Status: Registration Submitted"}',
                     );
                   }
 
@@ -1261,7 +1271,7 @@ class _EmployeeRegistrationPageState
                     ),
                   ],
                 ),
-                if (_isManagementAdd || isEditMode || (link != null && link.linkStatus != 'Completed' && _submittedEmployee == null)) ...[
+                if (_isManagementAdd || isEditMode || (link != null && link.linkStatus != 'Submitted' && link.linkStatus != 'Converted' && _submittedEmployee == null)) ...[
                   const SizedBox(height: 8),
                   SizedBox(
                     width: double.infinity,
@@ -1324,7 +1334,7 @@ class _EmployeeRegistrationPageState
                 ),
               ),
               const SizedBox(width: 8),
-              if (_isManagementAdd || isEditMode || (link != null && link.linkStatus != 'Completed' && _submittedEmployee == null))
+              if (_isManagementAdd || isEditMode || (link != null && link.linkStatus != 'Submitted' && link.linkStatus != 'Converted' && _submittedEmployee == null))
                 submitBtn,
             ],
           ),
@@ -3426,6 +3436,7 @@ class _EmployeeRegistrationPageState
                   _basicPayController,
                   placeholder: '42500.00',
                   isNumber: true,
+                  allowDecimal: true,
                 ),
                 _buildSalaryComponentRow(
                   label: 'House Rent Allowance',
@@ -3480,7 +3491,83 @@ class _EmployeeRegistrationPageState
                 ),
               ],
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 12),
+            // Excess validation warning
+            Builder(
+              builder: (context) {
+                final total = double.tryParse(
+                        _totalSalaryController.text.replaceAll(',', '').trim()) ??
+                    0.0;
+                if (total <= 0) return const SizedBox(height: 12);
+                final additionsTotal = _getAdditionsTotal();
+                final excess = additionsTotal - total;
+                if (excess > 0.01) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3F2),
+                        borderRadius: BorderRadius.circular(6),
+                        border:
+                            Border.all(color: const Color(0xFFFDA29B)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.error_outline,
+                              color: Color(0xFFD92D20), size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Total additions (\u20B9${additionsTotal.toStringAsFixed(2)}) exceed Total Salary (\u20B9${total.toStringAsFixed(2)}) by \u20B9${excess.toStringAsFixed(2)}. Please adjust the values.',
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFFD92D20),
+                                  fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+                if ((additionsTotal - total).abs() < 0.01 &&
+                    additionsTotal > 0) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFECFDF3),
+                        borderRadius: BorderRadius.circular(6),
+                        border:
+                            Border.all(color: const Color(0xFF6CE9A6)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.check_circle_outline,
+                              color: Color(0xFF039855), size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Salary breakup is balanced. Total additions = \u20B9${additionsTotal.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF039855),
+                                  fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+                return const SizedBox(height: 12);
+              },
+            ),
+            const SizedBox(height: 12),
 
             // Section 3: Deduction
             const Text(
