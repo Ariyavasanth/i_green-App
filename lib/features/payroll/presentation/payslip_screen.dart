@@ -277,7 +277,8 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
         record.companyLoan +
         record.salaryAdvance +
         record.othersDeduction +
-        record.staffWelfareContribution;
+        record.staffWelfareContribution +
+        record.greeting;
 
     final netSalary = grossSalary - deductions;
 
@@ -427,6 +428,8 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
                       ),
                     if (record.staffWelfareContribution > 0)
                       _buildRowItem('Staff Welfare', currencyFormat.format(record.staffWelfareContribution)),
+                    if (record.greeting > 0)
+                      _buildRowItem('Greeting Deduction', currencyFormat.format(record.greeting)),
                     if (record.othersDeduction > 0)
                       _buildRowItem('Others', currencyFormat.format(record.othersDeduction)),
                   ],

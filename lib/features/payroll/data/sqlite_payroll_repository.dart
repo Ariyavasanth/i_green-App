@@ -44,6 +44,7 @@ class SqlitePayrollRepository implements PayrollRepository {
       'advance_description': 'TEXT DEFAULT ""',
       'is_disputed': 'INTEGER DEFAULT 0',
       'dispute_comment': 'TEXT DEFAULT ""',
+      'greeting': 'REAL DEFAULT 0.0',
     };
 
     for (final entry in requiredColumns.entries) {
@@ -90,6 +91,7 @@ class SqlitePayrollRepository implements PayrollRepository {
         salary_advance REAL,
         others_deduction REAL,
         staff_welfare_contribution REAL,
+        greeting REAL,
         net_salary REAL,
         status TEXT,
         payment_date TEXT,

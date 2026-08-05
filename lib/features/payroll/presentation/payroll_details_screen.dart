@@ -362,6 +362,7 @@ class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
       ('Salary Advance', record.salaryAdvance),
       ('Others Deduction', record.othersDeduction),
       ('Staff Welfare', record.staffWelfareContribution),
+      ('Greeting Deduction', record.greeting),
     ];
 
     final totalEarnings = record.basicPay +
@@ -379,7 +380,8 @@ class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
         record.companyLoan +
         record.salaryAdvance +
         record.othersDeduction +
-        record.staffWelfareContribution;
+        record.staffWelfareContribution +
+        record.greeting;
 
     return Card(
       elevation: 0,

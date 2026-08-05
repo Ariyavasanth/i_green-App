@@ -47,6 +47,7 @@ class PayrollRecord {
   final double salaryAdvance;
   final double othersDeduction;
   final double staffWelfareContribution;
+  final double greeting;
   
   // Net salary
   final double netSalary;
@@ -97,6 +98,7 @@ class PayrollRecord {
     this.salaryAdvance = 0.0,
     this.othersDeduction = 0.0,
     this.staffWelfareContribution = 0.0,
+    this.greeting = 0.0,
     required this.netSalary,
     required this.status,
     this.paymentDate = '',
@@ -143,6 +145,7 @@ class PayrollRecord {
       'salary_advance': salaryAdvance,
       'others_deduction': othersDeduction,
       'staff_welfare_contribution': staffWelfareContribution,
+      'greeting': greeting,
       'net_salary': netSalary,
       'status': status,
       'payment_date': paymentDate,
@@ -190,6 +193,7 @@ class PayrollRecord {
       salaryAdvance: (map['salary_advance'] as num?)?.toDouble() ?? 0.0,
       othersDeduction: (map['others_deduction'] as num?)?.toDouble() ?? 0.0,
       staffWelfareContribution: (map['staff_welfare_contribution'] as num?)?.toDouble() ?? 0.0,
+      greeting: (map['greeting'] as num?)?.toDouble() ?? 0.0,
       netSalary: (map['net_salary'] as num?)?.toDouble() ?? 0.0,
       status: map['status'] as String? ?? 'Pending',
       paymentDate: map['payment_date'] as String? ?? '',
@@ -236,6 +240,7 @@ class PayrollRecord {
     double? salaryAdvance,
     double? othersDeduction,
     double? staffWelfareContribution,
+    double? greeting,
     double? netSalary,
     String? status,
     String? paymentDate,
@@ -280,6 +285,7 @@ class PayrollRecord {
       salaryAdvance: salaryAdvance ?? this.salaryAdvance,
       othersDeduction: othersDeduction ?? this.othersDeduction,
       staffWelfareContribution: staffWelfareContribution ?? this.staffWelfareContribution,
+      greeting: greeting ?? this.greeting,
       netSalary: netSalary ?? this.netSalary,
       status: status ?? this.status,
       paymentDate: paymentDate ?? this.paymentDate,

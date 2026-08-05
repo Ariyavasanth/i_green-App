@@ -1,7 +1,7 @@
 // ignore_for_file: deprecated_member_use
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -2767,7 +2767,13 @@ class _EmployeeRegistrationPageState
     String? placeholder,
     int maxLines = 1,
     ValueChanged<String>? onChanged,
+    bool isNumber = false,
+    TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
   }) {
+    final effectiveKeyboardType = keyboardType ?? (isNumber ? const TextInputType.numberWithOptions(decimal: true) : null);
+    final effectiveFormatters = inputFormatters ?? (isNumber ? [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))] : null);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -2781,6 +2787,8 @@ class _EmployeeRegistrationPageState
           controller: controller,
           maxLines: maxLines,
           onChanged: onChanged,
+          keyboardType: effectiveKeyboardType,
+          inputFormatters: effectiveFormatters,
           style: const TextStyle(fontSize: 12, color: Colors.black87),
           decoration: InputDecoration(
             hintText: placeholder,
@@ -3025,6 +3033,9 @@ class _EmployeeRegistrationPageState
                 controller: amountController,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                ],
                 style: const TextStyle(fontSize: 12, color: Colors.black87),
                 decoration: InputDecoration(
                   isDense: true,
@@ -3060,6 +3071,9 @@ class _EmployeeRegistrationPageState
                 controller: percentController,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                ],
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
@@ -3148,6 +3162,7 @@ class _EmployeeRegistrationPageState
                   'Total Salary',
                   _totalSalaryController,
                   placeholder: '85000',
+                  isNumber: true,
                   onChanged: _onTotalSalaryChanged,
                 ),
               ],
@@ -3171,6 +3186,7 @@ class _EmployeeRegistrationPageState
                   'Basic (Fixed 50% of Total Salary)',
                   _basicPayController,
                   placeholder: '42500.00',
+                  isNumber: true,
                 ),
                 _buildSalaryComponentRow(
                   label: 'House Rent Allowance',

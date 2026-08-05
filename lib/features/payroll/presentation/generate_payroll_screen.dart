@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -47,6 +48,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
   final _salaryAdvanceController = TextEditingController();
   final _othersDeductionController = TextEditingController();
   final _staffWelfareController = TextEditingController();
+  final _greetingController = TextEditingController();
   final _loanDescController = TextEditingController();
   final _advanceDescController = TextEditingController();
 
@@ -83,6 +85,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     _salaryAdvanceController.addListener(_recalculate);
     _othersDeductionController.addListener(_recalculate);
     _staffWelfareController.addListener(_recalculate);
+    _greetingController.addListener(_recalculate);
   }
 
   @override
@@ -106,6 +109,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     _salaryAdvanceController.dispose();
     _othersDeductionController.dispose();
     _staffWelfareController.dispose();
+    _greetingController.dispose();
     _loanDescController.dispose();
     _advanceDescController.dispose();
     super.dispose();
@@ -147,6 +151,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     _salaryAdvanceController.text = '12200.00';
     _othersDeductionController.text = '3392.00';
     _staffWelfareController.text = '0.00';
+    _greetingController.text = '0.00';
 
     _recalculate();
     _loadActiveLoan(employee.id, selectedMonth);
@@ -223,9 +228,10 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     final advance = double.tryParse(_salaryAdvanceController.text) ?? 0.0;
     final otherDed = double.tryParse(_othersDeductionController.text) ?? 0.0;
     final welfare = double.tryParse(_staffWelfareController.text) ?? 0.0;
+    final greeting = double.tryParse(_greetingController.text) ?? 0.0;
 
     final gross = basic + hra + edu + special + incentive + otherEarn;
-    final deductions = pf + tax + esi + lop + loan + advance + otherDed + welfare;
+    final deductions = pf + tax + esi + lop + loan + advance + otherDed + welfare + greeting;
 
     setState(() {
       _netSalary = gross - deductions;
@@ -276,6 +282,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
       advanceDescription: _advanceDescController.text,
       othersDeduction: double.tryParse(_othersDeductionController.text) ?? 0.0,
       staffWelfareContribution: double.tryParse(_staffWelfareController.text) ?? 0.0,
+      greeting: double.tryParse(_greetingController.text) ?? 0.0,
       
       netSalary: _netSalary,
       status: 'Processed',
@@ -451,6 +458,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
             _buildSummaryRow('Salary Advance', _salaryAdvanceController.text, isDeduction: true),
             _buildSummaryRow('Others Deduction', _othersDeductionController.text, isDeduction: true),
             _buildSummaryRow('Staff Welfare', _staffWelfareController.text, isDeduction: true),
+            _buildSummaryRow('Greeting Deduction', _greetingController.text, isDeduction: true),
           ],
         );
         break;
@@ -674,6 +682,8 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
             _buildInputField('Others Deduction', _othersDeductionController),
             const SizedBox(height: 12),
             _buildInputField('Staff Welfare Contribution', _staffWelfareController),
+            const SizedBox(height: 12),
+            _buildInputField('Greeting Deduction', _greetingController),
           ],
         ),
       ),
@@ -689,6 +699,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
         TextField(
           controller: controller,
           keyboardType: isText ? TextInputType.text : const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: isText ? null : [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
           style: const TextStyle(fontSize: 14),
           decoration: InputDecoration(
             prefixText: isText ? null : '₹ ',
