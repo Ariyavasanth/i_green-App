@@ -123,6 +123,8 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
 
     final pf = employee.salaryPf > 0 ? employee.salaryPf : 1800.0;
     final tax = employee.salaryTax > 0 ? employee.salaryTax : 0.0;
+    final esi = employee.salaryEsi > 0 ? employee.salaryEsi : 0.0;
+    final otherAllowance = employee.salaryOtherAllowance > 0 ? employee.salaryOtherAllowance : 3000.0;
 
     _basicController.text = basic.toStringAsFixed(2);
     _hraController.text = hra.toStringAsFixed(2);
@@ -132,12 +134,12 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     // Initial mock values for other fields matching screenshot
     _incentiveController.text = '8880.00';
     _carryForwardController.text = '-';
-    _othersEarningController.text = '3000.00';
+    _othersEarningController.text = otherAllowance.toStringAsFixed(2);
     _cumulativeIncentiveController.text = '31067.00';
 
     _pfController.text = pf.toStringAsFixed(2);
     _taxController.text = tax.toStringAsFixed(2);
-    _esiController.text = '0.00';
+    _esiController.text = esi.toStringAsFixed(2);
 
     _lopController.text = '0.00';
     _companyLoanController.text = '0.00';

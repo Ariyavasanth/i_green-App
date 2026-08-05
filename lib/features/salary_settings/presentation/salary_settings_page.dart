@@ -18,7 +18,9 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
   final _specialAllowanceController = TextEditingController();
   final _eduAllowanceController = TextEditingController();
   final _travelAllowanceController = TextEditingController();
+  final _otherAllowanceController = TextEditingController();
   final _pfController = TextEditingController();
+  final _esiController = TextEditingController();
   final _taxController = TextEditingController();
   final _profTaxController = TextEditingController();
 
@@ -31,7 +33,9 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
     _specialAllowanceController.dispose();
     _eduAllowanceController.dispose();
     _travelAllowanceController.dispose();
+    _otherAllowanceController.dispose();
     _pfController.dispose();
+    _esiController.dispose();
     _taxController.dispose();
     _profTaxController.dispose();
     super.dispose();
@@ -47,7 +51,10 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
         settings.educationAllowancePercentage.toStringAsFixed(1);
     _travelAllowanceController.text =
         settings.travelAllowancePercentage.toStringAsFixed(1);
+    _otherAllowanceController.text =
+        settings.otherAllowancePercentage.toStringAsFixed(1);
     _pfController.text = settings.pfPercentage.toStringAsFixed(1);
+    _esiController.text = settings.esiPercentage.toStringAsFixed(1);
     _taxController.text = settings.taxPercentage.toStringAsFixed(1);
     _profTaxController.text =
         settings.professionalTaxPercentage.toStringAsFixed(1);
@@ -66,7 +73,10 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
           double.tryParse(_eduAllowanceController.text.trim()) ?? 0.0,
       travelAllowancePercentage:
           double.tryParse(_travelAllowanceController.text.trim()) ?? 0.0,
+      otherAllowancePercentage:
+          double.tryParse(_otherAllowanceController.text.trim()) ?? 0.0,
       pfPercentage: double.tryParse(_pfController.text.trim()) ?? 0.0,
+      esiPercentage: double.tryParse(_esiController.text.trim()) ?? 0.0,
       taxPercentage: double.tryParse(_taxController.text.trim()) ?? 0.0,
       professionalTaxPercentage:
           double.tryParse(_profTaxController.text.trim()) ?? 0.0,
@@ -269,6 +279,11 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
                                     basis: '% of Total Salary',
                                     controller: _travelAllowanceController,
                                   ),
+                                  _buildPercentageField(
+                                    label: 'Other Allowance',
+                                    basis: '% of Total Salary',
+                                    controller: _otherAllowanceController,
+                                  ),
                                 ],
                               ),
                               const SizedBox(height: 28),
@@ -291,6 +306,11 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
                                     label: 'Provident Fund (PF)',
                                     basis: '% of Basic',
                                     controller: _pfController,
+                                  ),
+                                  _buildPercentageField(
+                                    label: 'Employee State Insurance (ESI)',
+                                    basis: '% of Total Salary',
+                                    controller: _esiController,
                                   ),
                                   _buildPercentageField(
                                     label: 'Tax',

@@ -194,9 +194,11 @@ class Employee {
     this.salaryEducationAllowance = 0.0,
     this.salarySpecialAllowance = 0.0,
     this.salaryTravelAllowance = 0.0,
+    this.salaryOtherAllowance = 0.0,
     this.salaryAllowances = 0.0,
     this.salaryTax = 0.0,
     this.salaryPf = 0.0,
+    this.salaryEsi = 0.0,
     this.salaryProfessionalTax = 0.0,
     this.salaryTotalCtc = 0.0,
     this.insurancePolicyNo = '',
@@ -487,9 +489,11 @@ class Employee {
   final double salaryEducationAllowance;
   final double salarySpecialAllowance;
   final double salaryTravelAllowance;
+  final double salaryOtherAllowance;
   final double salaryAllowances;
   final double salaryTax;
   final double salaryPf;
+  final double salaryEsi;
   final double salaryProfessionalTax;
   final double salaryTotalCtc;
 
@@ -644,9 +648,11 @@ class Employee {
       'salary_education_allowance': salaryEducationAllowance,
       'salary_special_allowance': salarySpecialAllowance,
       'salary_travel_allowance': salaryTravelAllowance,
+      'salary_other_allowance': salaryOtherAllowance,
       'salary_allowances': salaryAllowances,
       'salary_tax': salaryTax,
       'salary_pf': salaryPf,
+      'salary_esi': salaryEsi,
       'salary_professional_tax': salaryProfessionalTax,
       'salary_total_ctc': salaryTotalCtc,
       'insurance_policy_no': insurancePolicyNo,
@@ -765,9 +771,11 @@ class Employee {
       salaryEducationAllowance: (map['salary_education_allowance'] as num?)?.toDouble() ?? 0.0,
       salarySpecialAllowance: (map['salary_special_allowance'] as num?)?.toDouble() ?? 0.0,
       salaryTravelAllowance: (map['salary_travel_allowance'] as num?)?.toDouble() ?? 0.0,
+      salaryOtherAllowance: (map['salary_other_allowance'] as num?)?.toDouble() ?? 0.0,
       salaryAllowances: (map['salary_allowances'] as num?)?.toDouble() ?? 0.0,
       salaryTax: (map['salary_tax'] as num?)?.toDouble() ?? 0.0,
       salaryPf: (map['salary_pf'] as num?)?.toDouble() ?? 0.0,
+      salaryEsi: (map['salary_esi'] as num?)?.toDouble() ?? 0.0,
       salaryProfessionalTax: (map['salary_professional_tax'] as num?)?.toDouble() ?? 0.0,
       salaryTotalCtc: (map['salary_total_ctc'] as num?)?.toDouble() ?? 0.0,
       insurancePolicyNo: map['insurance_policy_no'] as String? ?? '',
@@ -931,9 +939,11 @@ class Employee {
     double? salaryEducationAllowance,
     double? salarySpecialAllowance,
     double? salaryTravelAllowance,
+    double? salaryOtherAllowance,
     double? salaryAllowances,
     double? salaryTax,
     double? salaryPf,
+    double? salaryEsi,
     double? salaryProfessionalTax,
     double? salaryTotalCtc,
     String? insurancePolicyNo,
@@ -1048,9 +1058,11 @@ class Employee {
       salaryEducationAllowance: salaryEducationAllowance ?? this.salaryEducationAllowance,
       salarySpecialAllowance: salarySpecialAllowance ?? this.salarySpecialAllowance,
       salaryTravelAllowance: salaryTravelAllowance ?? this.salaryTravelAllowance,
+      salaryOtherAllowance: salaryOtherAllowance ?? this.salaryOtherAllowance,
       salaryAllowances: salaryAllowances ?? this.salaryAllowances,
       salaryTax: salaryTax ?? this.salaryTax,
       salaryPf: salaryPf ?? this.salaryPf,
+      salaryEsi: salaryEsi ?? this.salaryEsi,
       salaryProfessionalTax: salaryProfessionalTax ?? this.salaryProfessionalTax,
       salaryTotalCtc: salaryTotalCtc ?? this.salaryTotalCtc,
       insurancePolicyNo: insurancePolicyNo ?? this.insurancePolicyNo,

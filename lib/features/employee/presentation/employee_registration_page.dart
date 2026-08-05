@@ -152,15 +152,19 @@ class _EmployeeRegistrationPageState
   final _eduAllowanceController = TextEditingController();
   final _specialAllowanceController = TextEditingController();
   final _travelAllowanceController = TextEditingController();
+  final _otherAllowanceController = TextEditingController();
   final _taxController = TextEditingController();
   final _pfController = TextEditingController();
+  final _esiController = TextEditingController();
   final _professionalTaxController = TextEditingController();
 
   final _hraPercentController = TextEditingController();
   final _specialAllowancePercentController = TextEditingController();
   final _eduAllowancePercentController = TextEditingController();
   final _travelAllowancePercentController = TextEditingController();
+  final _otherAllowancePercentController = TextEditingController();
   final _pfPercentController = TextEditingController();
+  final _esiPercentController = TextEditingController();
   final _taxPercentController = TextEditingController();
   final _professionalTaxPercentController = TextEditingController();
 
@@ -173,7 +177,9 @@ class _EmployeeRegistrationPageState
     _specialAllowancePercentController.text = defaults.specialAllowancePercentage.toStringAsFixed(1);
     _eduAllowancePercentController.text = defaults.educationAllowancePercentage.toStringAsFixed(1);
     _travelAllowancePercentController.text = defaults.travelAllowancePercentage.toStringAsFixed(1);
+    _otherAllowancePercentController.text = defaults.otherAllowancePercentage.toStringAsFixed(1);
     _pfPercentController.text = defaults.pfPercentage.toStringAsFixed(1);
+    _esiPercentController.text = defaults.esiPercentage.toStringAsFixed(1);
     _taxPercentController.text = defaults.taxPercentage.toStringAsFixed(1);
     _professionalTaxPercentController.text = defaults.professionalTaxPercentage.toStringAsFixed(1);
   }
@@ -193,7 +199,9 @@ class _EmployeeRegistrationPageState
     calcAmount(_specialAllowancePercentController, _specialAllowanceController, totalSalary);
     calcAmount(_eduAllowancePercentController, _eduAllowanceController, totalSalary);
     calcAmount(_travelAllowancePercentController, _travelAllowanceController, totalSalary);
+    calcAmount(_otherAllowancePercentController, _otherAllowanceController, totalSalary);
     calcAmount(_pfPercentController, _pfController, basic);
+    calcAmount(_esiPercentController, _esiController, totalSalary);
     calcAmount(_taxPercentController, _taxController, totalSalary);
     calcAmount(_professionalTaxPercentController, _professionalTaxController, totalSalary);
   }
@@ -358,8 +366,10 @@ class _EmployeeRegistrationPageState
       if (emp.salaryEducationAllowance > 0) _eduAllowanceController.text = emp.salaryEducationAllowance.toStringAsFixed(2);
       if (emp.salarySpecialAllowance > 0) _specialAllowanceController.text = emp.salarySpecialAllowance.toStringAsFixed(2);
       if (emp.salaryTravelAllowance > 0) _travelAllowanceController.text = emp.salaryTravelAllowance.toStringAsFixed(2);
+      if (emp.salaryOtherAllowance > 0) _otherAllowanceController.text = emp.salaryOtherAllowance.toStringAsFixed(2);
       if (emp.salaryTax > 0) _taxController.text = emp.salaryTax.toStringAsFixed(2);
       if (emp.salaryPf > 0) _pfController.text = emp.salaryPf.toStringAsFixed(2);
+      if (emp.salaryEsi > 0) _esiController.text = emp.salaryEsi.toStringAsFixed(2);
       if (emp.salaryProfessionalTax > 0) _professionalTaxController.text = emp.salaryProfessionalTax.toStringAsFixed(2);
 
       final total = emp.salaryTotalCtc;
@@ -369,6 +379,8 @@ class _EmployeeRegistrationPageState
         _specialAllowancePercentController.text = ((emp.salarySpecialAllowance / total) * 100).toStringAsFixed(1);
         _eduAllowancePercentController.text = ((emp.salaryEducationAllowance / total) * 100).toStringAsFixed(1);
         _travelAllowancePercentController.text = ((emp.salaryTravelAllowance / total) * 100).toStringAsFixed(1);
+        _otherAllowancePercentController.text = ((emp.salaryOtherAllowance / total) * 100).toStringAsFixed(1);
+        _esiPercentController.text = ((emp.salaryEsi / total) * 100).toStringAsFixed(1);
         _taxPercentController.text = ((emp.salaryTax / total) * 100).toStringAsFixed(1);
         _professionalTaxPercentController.text = ((emp.salaryProfessionalTax / total) * 100).toStringAsFixed(1);
       }
@@ -561,14 +573,18 @@ class _EmployeeRegistrationPageState
     _eduAllowanceController.dispose();
     _specialAllowanceController.dispose();
     _travelAllowanceController.dispose();
+    _otherAllowanceController.dispose();
     _taxController.dispose();
     _pfController.dispose();
+    _esiController.dispose();
     _professionalTaxController.dispose();
     _hraPercentController.dispose();
     _specialAllowancePercentController.dispose();
     _eduAllowancePercentController.dispose();
     _travelAllowancePercentController.dispose();
+    _otherAllowancePercentController.dispose();
     _pfPercentController.dispose();
+    _esiPercentController.dispose();
     _taxPercentController.dispose();
     _professionalTaxPercentController.dispose();
     _employeeCustomIdController.dispose();
@@ -805,8 +821,10 @@ class _EmployeeRegistrationPageState
         salaryEducationAllowance: double.tryParse(_eduAllowanceController.text.trim().replaceAll(',', '')) ?? 0.0,
         salarySpecialAllowance: double.tryParse(_specialAllowanceController.text.trim().replaceAll(',', '')) ?? 0.0,
         salaryTravelAllowance: double.tryParse(_travelAllowanceController.text.trim().replaceAll(',', '')) ?? 0.0,
+        salaryOtherAllowance: double.tryParse(_otherAllowanceController.text.trim().replaceAll(',', '')) ?? 0.0,
         salaryTax: double.tryParse(_taxController.text.trim().replaceAll(',', '')) ?? 0.0,
         salaryPf: double.tryParse(_pfController.text.trim().replaceAll(',', '')) ?? 0.0,
+        salaryEsi: double.tryParse(_esiController.text.trim().replaceAll(',', '')) ?? 0.0,
         salaryProfessionalTax: double.tryParse(_professionalTaxController.text.trim().replaceAll(',', '')) ?? 0.0,
         accessPermissions: _selectedPermissions.toList(),
         profileImageUrl: profileImageUrl,
@@ -3196,6 +3214,15 @@ class _EmployeeRegistrationPageState
                   basisValue: totalSalary,
                   isMobile: isMobile,
                 ),
+                _buildSalaryComponentRow(
+                  label: 'Other Allowance',
+                  basis: '% of Total',
+                  amountController: _otherAllowanceController,
+                  percentController: _otherAllowancePercentController,
+                  placeholder: '0.00',
+                  basisValue: totalSalary,
+                  isMobile: isMobile,
+                ),
               ],
             ),
             const SizedBox(height: 24),
@@ -3220,6 +3247,15 @@ class _EmployeeRegistrationPageState
                   percentController: _pfPercentController,
                   placeholder: '1800.00',
                   basisValue: basicPay,
+                  isMobile: isMobile,
+                ),
+                _buildSalaryComponentRow(
+                  label: 'Employee State Insurance (ESI)',
+                  basis: '% of Total',
+                  amountController: _esiController,
+                  percentController: _esiPercentController,
+                  placeholder: '0.00',
+                  basisValue: totalSalary,
                   isMobile: isMobile,
                 ),
                 _buildSalaryComponentRow(

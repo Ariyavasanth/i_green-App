@@ -23,10 +23,25 @@ class SqliteSalarySettingsRepository implements SalarySettingsRepository {
       'special_allowance_percentage REAL NOT NULL, '
       'education_allowance_percentage REAL NOT NULL, '
       'travel_allowance_percentage REAL NOT NULL, '
+      'other_allowance_percentage REAL NOT NULL DEFAULT 0.0, '
       'pf_percentage REAL NOT NULL, '
+      'esi_percentage REAL NOT NULL DEFAULT 0.0, '
       'tax_percentage REAL NOT NULL, '
       'professional_tax_percentage REAL NOT NULL)',
     );
+    await _ensureColumnsExist(db);
+  }
+
+  static Future<void> _ensureColumnsExist(Database db) async {
+    final tableInfo = await db.rawQuery('PRAGMA table_info(salary_settings_structure)');
+    final existingColumns = tableInfo.map((row) => row['name'] as String).toSet();
+
+    if (!existingColumns.contains('other_allowance_percentage')) {
+      await db.execute('ALTER TABLE salary_settings_structure ADD COLUMN other_allowance_percentage REAL DEFAULT 0.0');
+    }
+    if (!existingColumns.contains('esi_percentage')) {
+      await db.execute('ALTER TABLE salary_settings_structure ADD COLUMN esi_percentage REAL DEFAULT 0.0');
+    }
   }
 
   @override
