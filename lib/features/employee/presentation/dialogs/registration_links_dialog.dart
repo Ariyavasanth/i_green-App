@@ -128,7 +128,7 @@ class RegistrationLinksDialog extends ConsumerWidget {
                                 tooltip: 'Open Registration Form',
                                 onPressed: () {
                                   Navigator.of(context).pop();
-                                  GoRouter.of(context).push('/employee/register/${link.linkId}');
+                                  GoRouter.of(context).push('/employee/register/${link.linkId}?acceptedLinkId=${link.linkId}');
                                 },
                               ),
                               IconButton(

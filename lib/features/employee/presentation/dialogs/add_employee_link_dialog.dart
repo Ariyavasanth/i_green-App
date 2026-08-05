@@ -279,7 +279,7 @@ class _AddEmployeeLinkDialogState
                       onPressed: () {
                         final linkId = _generatedLink!.linkId;
                         Navigator.of(context).pop();
-                        GoRouter.of(context).push('/employee/register/$linkId');
+                        GoRouter.of(context).push('/employee/register/$linkId?acceptedLinkId=$linkId');
                       },
                       icon: const Icon(Icons.open_in_new, size: 16),
                       label: const Text('Open Registration Form'),

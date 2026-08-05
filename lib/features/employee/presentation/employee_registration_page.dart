@@ -261,6 +261,7 @@ class _EmployeeRegistrationPageState
   bool get _isEditing => widget.employee != null || widget.linkId == 'edit';
 
   bool _isSubmitting = false;
+  bool _isDraftSaving = false;
   Employee? _submittedEmployee;
   Employee? _currentEmployee;
   String _registrationMode = 'manual';
@@ -422,7 +423,27 @@ class _EmployeeRegistrationPageState
       if (emp.accessPermissions.isNotEmpty) {
         _selectedPermissions = Set<String>.from(emp.accessPermissions);
       }
+
+      _updateSavedTabsFromData();
     });
+  }
+
+  void _updateSavedTabsFromData() {
+    // If loading an existing saved employee, mark all populated tabs as saved in draft history
+    if (_firstNameController.text.isNotEmpty || _phoneController.text.isNotEmpty || _emailController.text.isNotEmpty) _savedTabs.add('Personal Info');
+    if (_permAddressController.text.isNotEmpty || _presAddressController.text.isNotEmpty || _permCityController.text.isNotEmpty) _savedTabs.add('Address');
+    if (_educationList.isNotEmpty || _eduDegreeController.text.isNotEmpty) _savedTabs.add('Education');
+    if (_experienceList.isNotEmpty || _expCompanyController.text.isNotEmpty) _savedTabs.add('Experience');
+    if (_fatherNameController.text.isNotEmpty || _motherNameController.text.isNotEmpty || _panController.text.isNotEmpty || _personalMobileController.text.isNotEmpty) _savedTabs.add('History');
+    if (_bankAccNumController.text.isNotEmpty || _bankNameController.text.isNotEmpty || _bankIfscController.text.isNotEmpty) _savedTabs.add('Bank Account');
+    if (_documentList.isNotEmpty || _docNumberController.text.isNotEmpty) _savedTabs.add('Document');
+    if (_facebookController.text.isNotEmpty || _twitterController.text.isNotEmpty || _linkedinController.text.isNotEmpty || _googleController.text.isNotEmpty) _savedTabs.add('Social Media');
+    if (_joiningDateController.text.isNotEmpty) _savedTabs.add('Job & Admin Details');
+    if (_totalSalaryController.text.isNotEmpty || _basicPayController.text.isNotEmpty) _savedTabs.add('Salary & Offer Letter');
+  }
+
+  bool _isTabSaved(String tab) {
+    return _savedTabs.contains(tab);
   }
 
   List<String> get _tabs => [
@@ -466,7 +487,9 @@ class _EmployeeRegistrationPageState
           final link = matchingLinks.first;
           Employee? matchedEmployee;
           for (final emp in allEmps) {
-            if (emp.employeeId == link.employeeId || emp.id.toString() == link.employeeId) {
+            if ((emp.employeeId.isNotEmpty && emp.employeeId == link.employeeId) ||
+                emp.id.toString() == link.employeeId ||
+                emp.employeeId == link.linkId) {
               matchedEmployee = emp;
               break;
             }
@@ -499,6 +522,42 @@ class _EmployeeRegistrationPageState
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Auto-fetched details for ${match.fullName}. Configure credentials & permissions to complete registration.'),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      });
+    } else if (widget.linkId.isNotEmpty && widget.linkId != 'new' && widget.linkId != 'edit') {
+      _registrationMode = 'accepted_response';
+      _selectedAcceptedLinkId = widget.linkId;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final links = await ref.read(registrationLinksProvider.future);
+        final allEmps = await ref.read(allEmployeesProvider.future);
+        final matchingLinks = links.where((l) => l.linkId == widget.linkId).toList();
+        if (matchingLinks.isNotEmpty && mounted) {
+          final link = matchingLinks.first;
+          Employee? matchedEmployee;
+          for (final emp in allEmps) {
+            if ((emp.employeeId.isNotEmpty && emp.employeeId == link.employeeId) ||
+                emp.id.toString() == link.employeeId ||
+                emp.employeeId == link.linkId) {
+              matchedEmployee = emp;
+              break;
+            }
+          }
+          if (matchedEmployee != null) {
+            _selectedAcceptedEmpId = matchedEmployee.id;
+            _populateFromEmployee(matchedEmployee);
+          } else if (link.employeeName.isNotEmpty) {
+            if (_firstNameController.text.isEmpty) {
+              _firstNameController.text = link.employeeName;
+            }
+            _status = 'ACTIVE';
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Auto-fetched candidate details for ${link.employeeName.isNotEmpty ? link.employeeName : link.linkId}. Complete details to finalize registration.'),
               behavior: SnackBarBehavior.floating,
               duration: const Duration(seconds: 3),
             ),
@@ -699,7 +758,11 @@ class _EmployeeRegistrationPageState
 
 
 
-    setState(() => _isSubmitting = true);
+    if (isSubmit) {
+      setState(() => _isSubmitting = true);
+    } else {
+      setState(() => _isDraftSaving = true);
+    }
 
     try {
       final repo = ref.read(employeeRepositoryProvider);
@@ -713,7 +776,9 @@ class _EmployeeRegistrationPageState
 
       String profileImageUrl = _isProfileImageRemoved
           ? ''
-          : (_currentEmployee?.profileImageUrl ?? widget.employee?.profileImageUrl ?? '');
+          : (_profileImageDataUrl.isNotEmpty
+              ? _profileImageDataUrl
+              : (_currentEmployee?.profileImageUrl ?? widget.employee?.profileImageUrl ?? ''));
       String profileImagePublicId = _isProfileImageRemoved
           ? ''
           : (_currentEmployee?.profileImagePublicId ?? widget.employee?.profileImagePublicId ?? '');
@@ -909,6 +974,10 @@ class _EmployeeRegistrationPageState
       }
 
       _currentEmployee = savedEmployee;
+      if (savedEmployee.profileImageUrl.isNotEmpty) {
+        _profileImageDataUrl = savedEmployee.profileImageUrl;
+      }
+      _isProfileImageRemoved = false;
       ref.invalidate(employeesProvider);
       ref.invalidate(allEmployeesProvider);
       ref.invalidate(registrationLinksProvider);
@@ -926,6 +995,7 @@ class _EmployeeRegistrationPageState
         }
         _savedTabs.add(currentTab);
         _isSubmitting = false;
+        _isDraftSaving = false;
       });
 
       if (mounted) {
@@ -956,7 +1026,10 @@ class _EmployeeRegistrationPageState
         }
       }
     } catch (e) {
-      setState(() => _isSubmitting = false);
+      setState(() {
+        _isSubmitting = false;
+        _isDraftSaving = false;
+      });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Save failed: $e')),
@@ -1055,14 +1128,31 @@ class _EmployeeRegistrationPageState
                     );
                   }
 
-                  if (link.employeeId.isNotEmpty && !_draftLoaded) {
+                  if (!_draftLoaded && (link.employeeId.isNotEmpty || link.linkId.isNotEmpty)) {
                     _draftLoaded = true;
                     WidgetsBinding.instance.addPostFrameCallback((_) async {
                       try {
-                        final emps = await ref.read(employeesProvider.future);
-                        final matches = emps.where((e) => e.employeeId == link.employeeId).toList();
-                        if (matches.isNotEmpty && mounted) {
-                          _populateFromEmployee(matches.first);
+                        final emps = await ref.read(allEmployeesProvider.future);
+                        Employee? matchedEmployee;
+                        for (final emp in emps) {
+                          if (link.employeeId.isNotEmpty && emp.employeeId == link.employeeId) {
+                            matchedEmployee = emp;
+                            break;
+                          }
+                          if (emp.id.toString() == link.employeeId || emp.employeeId == link.linkId) {
+                            matchedEmployee = emp;
+                            break;
+                          }
+                        }
+                        if (matchedEmployee != null && mounted) {
+                          _selectedAcceptedEmpId = matchedEmployee.id;
+                          _populateFromEmployee(matchedEmployee);
+                        } else if (link.employeeName.isNotEmpty && mounted) {
+                          setState(() {
+                            if (_firstNameController.text.isEmpty) {
+                              _firstNameController.text = link.employeeName;
+                            }
+                          });
                         }
                       } catch (e) {
                         debugPrint('Error loading draft employee: $e');
@@ -1115,7 +1205,7 @@ class _EmployeeRegistrationPageState
         minimumSize: const Size(0, 36),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
       ),
-      onPressed: _isSubmitting
+      onPressed: (_isSubmitting || _isDraftSaving)
           ? null
           : () => _submitForm(link ??
               const RegistrationLink(
@@ -1258,7 +1348,7 @@ class _EmployeeRegistrationPageState
         unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.normal),
         tabAlignment: TabAlignment.start,
         tabs: _tabs.map((tab) {
-          final isSaved = _savedTabs.contains(tab);
+          final isSaved = _isTabSaved(tab);
           return Tab(
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -2111,6 +2201,14 @@ class _EmployeeRegistrationPageState
               children: [
                 _buildTextField('Degree Name', _eduDegreeController, placeholder: 'Degree Name'),
                 _buildTextField('Institute name', _eduInstController, placeholder: 'Institute name'),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildRow2or3(
+              isMobile: isMobile,
+              children: [
+                _buildTextField('Result', _eduResultController, placeholder: 'Result (e.g. 85% / Pass)'),
+                _buildTextField('Year', _eduYearController, placeholder: 'Year (e.g. 2024)', isNumber: true),
               ],
             ),
             const SizedBox(height: 12),
@@ -3039,7 +3137,7 @@ class _EmployeeRegistrationPageState
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
           ),
-          onPressed: _isSubmitting
+          onPressed: (_isSubmitting || _isDraftSaving)
               ? null
               : () {
                   if (onCustomSave != null) {
@@ -3047,14 +3145,14 @@ class _EmployeeRegistrationPageState
                   }
                   _submitForm(link, isSubmit: false);
                 },
-          icon: _isSubmitting
+          icon: _isDraftSaving
               ? const SizedBox(
                   width: 14,
                   height: 14,
                   child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                 )
               : const Icon(Icons.check, size: 16),
-          label: Text(saveLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+          label: Text(_isDraftSaving ? 'Saving...' : saveLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
         ),
         const SizedBox(width: 8),
         ElevatedButton(
