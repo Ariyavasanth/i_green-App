@@ -71,8 +71,7 @@ class _EmployeeRegistrationPageState
   String _leaveAllocationFrequency = 'Monthly';
   final _allowedLeavesController = TextEditingController(text: '1.0');
   final _leaveEffectiveDateController = TextEditingController();
-  bool _isStaticEmployee = false;
-  bool _isDynamicEmployee = false;
+
   final _siteLatitudeController = TextEditingController();
   final _siteLongitudeController = TextEditingController();
   final _siteRadiusController = TextEditingController(text: '15');
@@ -80,6 +79,7 @@ class _EmployeeRegistrationPageState
   String _selectedFileName = 'No file chosen';
   String _profileImageDataUrl = '';
   Uint8List? _profileImageBytes;
+  bool _isProfileImageRemoved = false;
 
   // Tab 2: Address
   final _permAddressController = TextEditingController();
@@ -302,8 +302,7 @@ class _EmployeeRegistrationPageState
       _leaveAllocationFrequency = emp.leaveAllocationFrequency.isEmpty ? 'Monthly' : emp.leaveAllocationFrequency;
       _allowedLeavesController.text = emp.allowedLeaves.toString();
       _leaveEffectiveDateController.text = emp.effectiveDate;
-      _isStaticEmployee = emp.isStaticEmployee;
-      _isDynamicEmployee = emp.isDynamicEmployee;
+
       _siteLatitudeController.text = emp.siteLatitude != 0 ? emp.siteLatitude.toStringAsFixed(6) : '';
       _siteLongitudeController.text = emp.siteLongitude != 0 ? emp.siteLongitude.toStringAsFixed(6) : '';
       _siteRadiusController.text = emp.siteAllowedRadiusMeters.toString();
@@ -348,6 +347,9 @@ class _EmployeeRegistrationPageState
       _googleController.text = emp.googleUrl;
       _profileImageDataUrl = emp.profileImageUrl;
       if (_profileImageDataUrl.isNotEmpty) {
+        _selectedFileName = emp.profileImagePublicId.isNotEmpty
+            ? '${emp.profileImagePublicId}.jpg'
+            : 'profile_image.jpg';
         final commaIndex = _profileImageDataUrl.indexOf(',');
         if (commaIndex > 0) {
           try {
@@ -610,6 +612,15 @@ class _EmployeeRegistrationPageState
     }
   }
 
+  void _removeProfileImage() {
+    setState(() {
+      _profileImageBytes = null;
+      _profileImageDataUrl = '';
+      _selectedFileName = 'No file chosen';
+      _isProfileImageRemoved = true;
+    });
+  }
+
   Future<void> _pickProfileImage() async {
     try {
       final result = await FilePicker.pickFiles(
@@ -638,6 +649,7 @@ class _EmployeeRegistrationPageState
         _selectedFileName = file.name;
         _profileImageBytes = bytes;
         _profileImageDataUrl = 'data:$mimeType;base64,${base64Encode(bytes)}';
+        _isProfileImageRemoved = false;
       });
     } catch (e) {
       if (!mounted) return;
@@ -684,16 +696,7 @@ class _EmployeeRegistrationPageState
       }
     }
 
-    if (_isManagementAdd && !(_isStaticEmployee || _isDynamicEmployee)) {
-      _tabController.animateTo(_tabs.indexOf('Job & Admin Details'));
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select at least one attendance type (Static or Dynamic).'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
+
 
     setState(() => _isSubmitting = true);
 
@@ -707,9 +710,15 @@ class _EmployeeRegistrationPageState
                   ? widget.employee!.employeeId
                   : 'pending_${DateTime.now().millisecondsSinceEpoch}'));
 
-      String profileImageUrl = _currentEmployee?.profileImageUrl ?? widget.employee?.profileImageUrl ?? '';
-      String profileImagePublicId = _currentEmployee?.profileImagePublicId ?? widget.employee?.profileImagePublicId ?? '';
-      String profileImageFolder = _currentEmployee?.profileImageFolder ?? widget.employee?.profileImageFolder ?? '';
+      String profileImageUrl = _isProfileImageRemoved
+          ? ''
+          : (_currentEmployee?.profileImageUrl ?? widget.employee?.profileImageUrl ?? '');
+      String profileImagePublicId = _isProfileImageRemoved
+          ? ''
+          : (_currentEmployee?.profileImagePublicId ?? widget.employee?.profileImagePublicId ?? '');
+      String profileImageFolder = _isProfileImageRemoved
+          ? ''
+          : (_currentEmployee?.profileImageFolder ?? widget.employee?.profileImageFolder ?? '');
 
       if (_profileImageBytes != null) {
         final uploaded = await repo.uploadEmployeeProfileImage(
@@ -827,6 +836,8 @@ class _EmployeeRegistrationPageState
         salaryEsi: double.tryParse(_esiController.text.trim().replaceAll(',', '')) ?? 0.0,
         salaryProfessionalTax: double.tryParse(_professionalTaxController.text.trim().replaceAll(',', '')) ?? 0.0,
         accessPermissions: _selectedPermissions.toList(),
+        isStaticEmployee: _selectedPermissions.contains('Attendance') || _selectedPermissions.contains('Attendance Management'),
+        isDynamicEmployee: _selectedPermissions.contains('Site Visit Attendance') || _selectedPermissions.contains('Site Visit Attendance Management'),
         profileImageUrl: profileImageUrl,
         profileImagePublicId: profileImagePublicId,
         profileImageFolder: profileImageFolder,
@@ -1245,6 +1256,24 @@ class _EmployeeRegistrationPageState
 
   // TAB 1: PERSONAL INFO
   Widget _buildPersonalInfoTab(RegistrationLink link, bool isMobile) {
+    ImageProvider? profileImageProvider;
+    if (_profileImageBytes != null) {
+      profileImageProvider = MemoryImage(_profileImageBytes!);
+    } else if (_profileImageDataUrl.isNotEmpty) {
+      if (_profileImageDataUrl.startsWith('data:image')) {
+        final commaIndex = _profileImageDataUrl.indexOf(',');
+        if (commaIndex > 0) {
+          try {
+            final decoded = base64Decode(_profileImageDataUrl.substring(commaIndex + 1));
+            profileImageProvider = MemoryImage(decoded);
+          } catch (_) {}
+        }
+      } else if (_profileImageDataUrl.startsWith('http://') || _profileImageDataUrl.startsWith('https://')) {
+        profileImageProvider = NetworkImage(_profileImageDataUrl);
+      }
+    }
+    final bool hasProfileImage = profileImageProvider != null;
+
     final formGrid = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1518,23 +1547,23 @@ class _EmployeeRegistrationPageState
               (val) => setState(() => _gender = val!),
             ),
             _buildDateField('Date Of Birth', _dobController, placeholder: '13-05-1982'),
-            _buildTextField('Aadhar Number', _aadhaarController, placeholder: '833750993144'),
+            _buildTextField('Aadhar Number', _aadhaarController, placeholder: '833750993144', isNumber: true),
           ],
         ),
         const SizedBox(height: 12),
         _buildRow2or3(
           isMobile: isMobile,
           children: [
-            _buildTextField('Contact Number', _phoneController, placeholder: '8760098789'),
+            _buildTextField('Contact Number', _phoneController, placeholder: '8760098789', isNumber: true),
             _buildTextField('Email', _emailController, placeholder: 'Saravanan@igreentec.in'),
-            _buildTextField('PF Number', _pfNumberController, placeholder: '100338738050'),
+            _buildTextField('PF Number', _pfNumberController, placeholder: '100338738050', isNumber: true),
           ],
         ),
         const SizedBox(height: 12),
         _buildRow2or3(
           isMobile: isMobile,
           children: [
-            _buildTextField('ESI Number', _esiNumberController, placeholder: 'ESI Number'),
+            _buildTextField('ESI Number', _esiNumberController, placeholder: 'ESI Number', isNumber: true),
             const SizedBox.shrink(),
             const SizedBox.shrink(),
           ],
@@ -1546,8 +1575,8 @@ class _EmployeeRegistrationPageState
             CircleAvatar(
               radius: 30,
               backgroundColor: AppColors.active,
-              backgroundImage: _profileImageBytes != null ? MemoryImage(_profileImageBytes!) : null,
-              child: _profileImageBytes == null
+              backgroundImage: profileImageProvider,
+              child: profileImageProvider == null
                   ? Text(
                       _firstNameController.text.trim().isNotEmpty
                           ? _firstNameController.text.trim()[0].toUpperCase()
@@ -1564,17 +1593,30 @@ class _EmployeeRegistrationPageState
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        side: const BorderSide(color: Colors.grey),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                    if (hasProfileImage)
+                      OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          side: const BorderSide(color: Colors.grey),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                        ),
+                        onPressed: _removeProfileImage,
+                        child: const Text('Delete file', style: TextStyle(fontSize: 12, color: Colors.black)),
+                      )
+                    else
+                      OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          side: const BorderSide(color: Colors.grey),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                        ),
+                        onPressed: _pickProfileImage,
+                        child: const Text('Choose file', style: TextStyle(fontSize: 12, color: Colors.black)),
                       ),
-                      onPressed: _pickProfileImage,
-                      child: const Text('Choose file', style: TextStyle(fontSize: 12, color: Colors.black)),
-                    ),
                     const SizedBox(width: 8),
                     Text(
                       _selectedFileName,
@@ -1606,10 +1648,13 @@ class _EmployeeRegistrationPageState
           CircleAvatar(
             radius: 45,
             backgroundColor: AppColors.active,
-            child: Text(
-              fullName.isNotEmpty ? fullName[0].toUpperCase() : 'E',
-              style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
-            ),
+            backgroundImage: profileImageProvider,
+            child: profileImageProvider == null
+                ? Text(
+                    fullName.isNotEmpty ? fullName[0].toUpperCase() : 'E',
+                    style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+                  )
+                : null,
           ),
           const SizedBox(height: 12),
           Text(
@@ -1718,29 +1763,11 @@ class _EmployeeRegistrationPageState
               isMobile: isMobile,
               children: [
                 _buildDropdown(
-                  'User Type',
-                  _userType,
-                  ['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE', 'HR', 'MANAGER'],
-                  (val) => setState(() => _userType = val!),
-                ),
-                _buildDropdown(
-                  'Status',
-                  _status,
-                  ['ACTIVE', 'INACTIVE'],
-                  (val) => setState(() => _status = val!),
-                ),
-                _buildDropdown(
                   'Department',
                   _department,
                   {...Employee.departmentOptions, if (_department.isNotEmpty) _department}.toList(),
                   (val) => setState(() => _department = val!),
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _buildRow2or3(
-              isMobile: isMobile,
-              children: [
                 _buildDropdown(
                   'Designation',
                   _designation,
@@ -1748,13 +1775,13 @@ class _EmployeeRegistrationPageState
                   (val) => setState(() => _designation = val!),
                 ),
                 _buildDateField('Date Of Joining', _joiningDateController, placeholder: '29-04-2017'),
-                _buildDateField('Contract End Date', _contractEndDateController, placeholder: 'dd-mm-yyyy'),
               ],
             ),
             const SizedBox(height: 12),
             _buildRow2or3(
               isMobile: isMobile,
               children: [
+                _buildDateField('Contract End Date', _contractEndDateController, placeholder: 'dd-mm-yyyy'),
                 _buildDropdown(
                   'Reporting To',
                   _reportingTo,
@@ -1766,17 +1793,17 @@ class _EmployeeRegistrationPageState
                   _reportingManagerTitleController,
                   placeholder: 'e.g. Managing Director',
                 ),
-                _buildTextField(
-                  'Present Admin Name',
-                  _adminNameController,
-                  placeholder: 'e.g. Saravanan G S',
-                ),
               ],
             ),
             const SizedBox(height: 12),
             _buildRow2or3(
               isMobile: isMobile,
               children: [
+                _buildTextField(
+                  'Present Admin Name',
+                  _adminNameController,
+                  placeholder: 'e.g. Saravanan G S',
+                ),
                 _buildTextField(
                   'Coordinator Name',
                   _coordinatorNameController,
@@ -1786,11 +1813,7 @@ class _EmployeeRegistrationPageState
                   'Coordinator Contact Phone',
                   _coordinatorPhoneController,
                   placeholder: 'e.g. 8760098789',
-                ),
-                _buildTextField(
-                  'Weekly Off Day',
-                  _weeklyOffDayController,
-                  placeholder: 'e.g. Sunday',
+                  isNumber: true,
                 ),
               ],
             ),
@@ -1798,6 +1821,11 @@ class _EmployeeRegistrationPageState
             _buildRow2or3(
               isMobile: isMobile,
               children: [
+                _buildTextField(
+                  'Weekly Off Day',
+                  _weeklyOffDayController,
+                  placeholder: 'e.g. Sunday',
+                ),
                 _buildTextField(
                   'In Time',
                   _inTimeController,
@@ -1808,18 +1836,18 @@ class _EmployeeRegistrationPageState
                   _outTimeController,
                   placeholder: 'e.g. 06:00 PM',
                 ),
-                _buildDropdown(
-                  'Leave Type',
-                  _leaveType,
-                  ['As Needed', 'Manual Allocation', 'No Leave'],
-                  (val) => setState(() => _leaveType = val!),
-                ),
               ],
             ),
             const SizedBox(height: 12),
             _buildRow2or3(
               isMobile: isMobile,
               children: [
+                _buildDropdown(
+                  'Leave Type',
+                  _leaveType,
+                  ['As Needed', 'Manual Allocation', 'No Leave'],
+                  (val) => setState(() => _leaveType = val!),
+                ),
                 if (_leaveType == 'Manual Allocation') ...[
                   _buildDropdown(
                     'Leave Allocation Frequency',
@@ -1831,6 +1859,8 @@ class _EmployeeRegistrationPageState
                     'Number of Allowed Leaves',
                     _allowedLeavesController,
                     placeholder: 'e.g. 1.0',
+                    isNumber: true,
+                    allowDecimal: true,
                   ),
                 ],
                 _buildDateField(
@@ -1840,73 +1870,7 @@ class _EmployeeRegistrationPageState
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            Container(
-              decoration: BoxDecoration(
-                color: (_isStaticEmployee || _isDynamicEmployee) ? const Color(0xFFF8FAFC) : Colors.transparent,
-                borderRadius: BorderRadius.circular(8),
-                border: (_isStaticEmployee || _isDynamicEmployee) ? Border.all(color: const Color(0xFFCBD5E1)) : null,
-              ),
-              padding: (_isStaticEmployee || _isDynamicEmployee) ? const EdgeInsets.all(16) : EdgeInsets.zero,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    title: const Text(
-                      'Static Employee',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    subtitle: const Text(
-                      'Employee uses normal attendance (regular login)',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    value: _isStaticEmployee,
-                    onChanged: (val) {
-                      setState(() {
-                        _isStaticEmployee = val ?? false;
-                      });
-                    },
-                    controlAffinity: ListTileControlAffinity.leading,
-                  ),
-                  const SizedBox(height: 8),
-                  CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    title: const Text(
-                      'Dynamic Employee',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    subtitle: const Text(
-                      'Employee uses site-based attendance module (location-based login)',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    value: _isDynamicEmployee,
-                    onChanged: (val) {
-                      setState(() {
-                        _isDynamicEmployee = val ?? false;
-                      });
-                    },
-                    controlAffinity: ListTileControlAffinity.leading,
-                  ),
-                ],
-              ),
-            ),
+
             const SizedBox(height: 24),
             _buildSaveButtonsRow(link, 'Job & Admin Details'),
           ],
@@ -2133,7 +2097,7 @@ class _EmployeeRegistrationPageState
               isMobile: isMobile,
               children: [
                 _buildTextField('Result', _eduResultController, placeholder: 'Result'),
-                _buildTextField('Passing Year', _eduYearController, placeholder: 'Passing Year'),
+                _buildTextField('Passing Year', _eduYearController, placeholder: 'Passing Year', isNumber: true),
               ],
             ),
             const SizedBox(height: 20),
@@ -2329,7 +2293,7 @@ class _EmployeeRegistrationPageState
               isMobile: isMobile,
               children: [
                 _buildDateField('Original DOB', _originalDobController, placeholder: 'dd-mm-yyyy'),
-                _buildTextField('Personal Mobile Number', _personalMobileController, placeholder: 'Personal Mobile Number'),
+                _buildTextField('Personal Mobile Number', _personalMobileController, placeholder: 'Personal Mobile Number', isNumber: true),
                 _buildTextField('PAN No', _panController, placeholder: 'PAN'),
               ],
             ),
@@ -2350,7 +2314,7 @@ class _EmployeeRegistrationPageState
               isMobile: isMobile,
               children: [
                 _buildTextField('Name', _emergencyNameController, placeholder: 'Emergency Name'),
-                _buildTextField('Mobile Number', _emergencyMobileController, placeholder: 'Emergency Contact'),
+                _buildTextField('Mobile Number', _emergencyMobileController, placeholder: 'Emergency Contact', isNumber: true),
               ],
             ),
             const SizedBox(height: 20),
@@ -2360,7 +2324,7 @@ class _EmployeeRegistrationPageState
               isMobile: isMobile,
               children: [
                 _buildTextField('Name', _referredByNameController, placeholder: 'Referred By'),
-                _buildTextField('Mobile Number', _referredByMobileController, placeholder: 'Referred Mobile'),
+                _buildTextField('Mobile Number', _referredByMobileController, placeholder: 'Referred Mobile', isNumber: true),
               ],
             ),
             const SizedBox(height: 20),
@@ -2463,7 +2427,7 @@ class _EmployeeRegistrationPageState
             _buildRow2or3(
               isMobile: isMobile,
               children: [
-                _buildTextField('Account Number', _bankAccNumController, placeholder: 'Account Number'),
+                _buildTextField('Account Number', _bankAccNumController, placeholder: 'Account Number', isNumber: true),
                 _buildTextField('IFSC Code', _bankIfscController, placeholder: 'IFSC Code'),
               ],
             ),
@@ -2768,11 +2732,12 @@ class _EmployeeRegistrationPageState
     int maxLines = 1,
     ValueChanged<String>? onChanged,
     bool isNumber = false,
+    bool allowDecimal = false,
     TextInputType? keyboardType,
     List<TextInputFormatter>? inputFormatters,
+    FormFieldValidator<String>? validator,
   }) {
-    final effectiveKeyboardType = keyboardType ?? (isNumber ? const TextInputType.numberWithOptions(decimal: true) : null);
-    final effectiveFormatters = inputFormatters ?? (isNumber ? [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))] : null);
+    final effectiveKeyboardType = keyboardType ?? (isNumber ? TextInputType.numberWithOptions(decimal: allowDecimal) : null);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2788,7 +2753,23 @@ class _EmployeeRegistrationPageState
           maxLines: maxLines,
           onChanged: onChanged,
           keyboardType: effectiveKeyboardType,
-          inputFormatters: effectiveFormatters,
+          inputFormatters: inputFormatters,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          validator: (value) {
+            if (isNumber && value != null && value.isNotEmpty) {
+              if (RegExp(r'[a-zA-Z]').hasMatch(value)) {
+                return 'Alphabets are not allowed. Please enter numbers only.';
+              }
+              final pattern = allowDecimal ? RegExp(r'^\d*\.?\d*$') : RegExp(r'^\d+$');
+              if (!pattern.hasMatch(value.trim())) {
+                return 'Only numeric characters are allowed.';
+              }
+            }
+            if (validator != null) {
+              return validator(value);
+            }
+            return null;
+          },
           style: const TextStyle(fontSize: 12, color: Colors.black87),
           decoration: InputDecoration(
             hintText: placeholder,
@@ -2807,6 +2788,15 @@ class _EmployeeRegistrationPageState
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(color: AppColors.active, width: 1.2),
             ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Colors.red, width: 1.0),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Colors.red, width: 1.2),
+            ),
+            errorStyle: const TextStyle(fontSize: 11, color: Colors.red),
           ),
         ),
       ],
@@ -3027,15 +3017,20 @@ class _EmployeeRegistrationPageState
         ),
         const SizedBox(height: 5),
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: TextField(
+              child: TextFormField(
                 controller: amountController,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
-                ],
+                autovalidateMode: AutovalidateMode.onUserInteraction,
+                validator: (value) {
+                  if (value != null && value.isNotEmpty && RegExp(r'[a-zA-Z]').hasMatch(value)) {
+                    return 'Alphabets are not allowed. Please enter numbers only.';
+                  }
+                  return null;
+                },
                 style: const TextStyle(fontSize: 12, color: Colors.black87),
                 decoration: InputDecoration(
                   isDense: true,
@@ -3059,6 +3054,15 @@ class _EmployeeRegistrationPageState
                     borderSide:
                         const BorderSide(color: AppColors.active, width: 1.2),
                   ),
+                  errorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: Colors.red, width: 1.0),
+                  ),
+                  focusedErrorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: Colors.red, width: 1.2),
+                  ),
+                  errorStyle: const TextStyle(fontSize: 10, color: Colors.red),
                 ),
                 onChanged: (_) => _onAmountFieldEdited(
                     amountController, percentController, basisValue),
@@ -3067,13 +3071,17 @@ class _EmployeeRegistrationPageState
             const SizedBox(width: 6),
             SizedBox(
               width: isMobile ? 74 : 88,
-              child: TextField(
+              child: TextFormField(
                 controller: percentController,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
-                ],
+                autovalidateMode: AutovalidateMode.onUserInteraction,
+                validator: (value) {
+                  if (value != null && value.isNotEmpty && RegExp(r'[a-zA-Z]').hasMatch(value)) {
+                    return 'Alphabets not allowed.';
+                  }
+                  return null;
+                },
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
@@ -3104,6 +3112,15 @@ class _EmployeeRegistrationPageState
                     borderSide:
                         const BorderSide(color: AppColors.active, width: 1.2),
                   ),
+                  errorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: Colors.red, width: 1.0),
+                  ),
+                  focusedErrorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: Colors.red, width: 1.2),
+                  ),
+                  errorStyle: const TextStyle(fontSize: 9, color: Colors.red),
                 ),
                 onChanged: (_) => _onPercentFieldEdited(
                     percentController, amountController, basisValue),
@@ -3883,12 +3900,12 @@ class _EmployeeRegistrationPageState
       salaryTax: double.tryParse(_taxController.text.trim().replaceAll(',', '')) ?? 0.0,
       salaryPf: double.tryParse(_pfController.text.trim().replaceAll(',', '')) ?? 0.0,
       salaryProfessionalTax: double.tryParse(_professionalTaxController.text.trim().replaceAll(',', '')) ?? 0.0,
-      isStaticEmployee: _isStaticEmployee,
-      isDynamicEmployee: _isDynamicEmployee,
-      siteLatitude: _isDynamicEmployee ? (AttendanceLocationFields.parseCoordinate(_siteLatitudeController.text) ?? 0.0) : 0.0,
-      siteLongitude: _isDynamicEmployee ? (AttendanceLocationFields.parseCoordinate(_siteLongitudeController.text) ?? 0.0) : 0.0,
-      siteAllowedRadiusMeters: _isDynamicEmployee ? (int.tryParse(_siteRadiusController.text.trim()) ?? 15) : 15,
-      siteRequireGpsVerification: _isDynamicEmployee ? _siteRequireGpsVerification : true,
+      isStaticEmployee: _selectedPermissions.contains('Attendance') || _selectedPermissions.contains('Attendance Management'),
+      isDynamicEmployee: _selectedPermissions.contains('Site Visit Attendance') || _selectedPermissions.contains('Site Visit Attendance Management'),
+      siteLatitude: (_selectedPermissions.contains('Site Visit Attendance') || _selectedPermissions.contains('Site Visit Attendance Management')) ? (AttendanceLocationFields.parseCoordinate(_siteLatitudeController.text) ?? 0.0) : 0.0,
+      siteLongitude: (_selectedPermissions.contains('Site Visit Attendance') || _selectedPermissions.contains('Site Visit Attendance Management')) ? (AttendanceLocationFields.parseCoordinate(_siteLongitudeController.text) ?? 0.0) : 0.0,
+      siteAllowedRadiusMeters: (_selectedPermissions.contains('Site Visit Attendance') || _selectedPermissions.contains('Site Visit Attendance Management')) ? (int.tryParse(_siteRadiusController.text.trim()) ?? 15) : 15,
+      siteRequireGpsVerification: (_selectedPermissions.contains('Site Visit Attendance') || _selectedPermissions.contains('Site Visit Attendance Management')) ? _siteRequireGpsVerification : true,
     );
   }
 

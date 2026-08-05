@@ -827,6 +827,18 @@ class Employee {
         return <String>[];
       }(),
       isStaticEmployee: () {
+        final permsRaw = map['access_permissions'] ?? map['accessPermissions'];
+        List<String> perms = [];
+        if (permsRaw is List) perms = permsRaw.map((e) => e.toString()).toList();
+        if (permsRaw is String && permsRaw.startsWith('[')) {
+          try {
+            final decoded = jsonDecode(permsRaw);
+            if (decoded is List) perms = decoded.map((e) => e.toString()).toList();
+          } catch (_) {}
+        }
+        if (perms.contains('Attendance') || perms.contains('Attendance Management')) {
+          return true;
+        }
         final val = map['is_static_employee'] ?? map['isStaticEmployee'];
         if (val is bool) return val;
         if (val is num) return val != 0;
@@ -838,6 +850,18 @@ class Employee {
         return false;
       }(),
       isDynamicEmployee: () {
+        final permsRaw = map['access_permissions'] ?? map['accessPermissions'];
+        List<String> perms = [];
+        if (permsRaw is List) perms = permsRaw.map((e) => e.toString()).toList();
+        if (permsRaw is String && permsRaw.startsWith('[')) {
+          try {
+            final decoded = jsonDecode(permsRaw);
+            if (decoded is List) perms = decoded.map((e) => e.toString()).toList();
+          } catch (_) {}
+        }
+        if (perms.contains('Site Visit Attendance') || perms.contains('Site Visit Attendance Management')) {
+          return true;
+        }
         final val = map['is_dynamic_employee'] ?? map['isDynamicEmployee'];
         if (val is bool) return val;
         if (val is num) return val != 0;

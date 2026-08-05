@@ -147,6 +147,8 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
         allowedLeaves: _leaveType == 'Manual Allocation' ? (double.tryParse(_allowedLeavesController.text.trim()) ?? 0.0) : 0.0,
         effectiveDate: _leaveEffectiveDateController.text.trim(),
         accessPermissions: _selectedPermissions.toList(),
+        isStaticEmployee: _selectedPermissions.contains('Attendance') || _selectedPermissions.contains('Attendance Management'),
+        isDynamicEmployee: _selectedPermissions.contains('Site Visit Attendance') || _selectedPermissions.contains('Site Visit Attendance Management'),
       );
 
       if (isEdit) {
@@ -271,11 +273,18 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                   ),
                   child2: TextFormField(
                     controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
                     decoration: const InputDecoration(
                       labelText: 'Phone Number *',
                       border: OutlineInputBorder(),
                     ),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                    validator: (v) {
+                      if (v != null && v.isNotEmpty && RegExp(r'[a-zA-Z]').hasMatch(v)) {
+                        return 'Alphabets are not allowed. Please enter numbers only.';
+                      }
+                      return v == null || v.trim().isEmpty ? 'Required' : null;
+                    },
                   ),
                 ),
                 const SizedBox(height: 12),
