@@ -200,7 +200,7 @@ class PayrollRecord {
       paymentMethod: map['payment_method'] as String? ?? 'Bank Transfer',
       loanDescription: map['loan_description'] as String? ?? '',
       advanceDescription: map['advance_description'] as String? ?? '',
-      isDisputed: (map['is_disputed'] as int? ?? 0) == 1 || (map['is_disputed'] as bool? ?? false),
+      isDisputed: map['is_disputed'] == 1 || map['is_disputed'] == true,
       disputeComment: map['dispute_comment'] as String? ?? '',
     );
   }
