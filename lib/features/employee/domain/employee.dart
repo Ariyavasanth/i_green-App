@@ -199,6 +199,7 @@ class Employee {
     this.salaryTax = 0.0,
     this.salaryPf = 0.0,
     this.salaryEsi = 0.0,
+    this.salaryEsiEmployer = 0.0,
     this.salaryProfessionalTax = 0.0,
     this.salaryTotalCtc = 0.0,
     this.insurancePolicyNo = '',
@@ -498,6 +499,7 @@ class Employee {
   final double salaryTax;
   final double salaryPf;
   final double salaryEsi;
+  final double salaryEsiEmployer;
   final double salaryProfessionalTax;
   final double salaryTotalCtc;
 
@@ -657,6 +659,7 @@ class Employee {
       'salary_tax': salaryTax,
       'salary_pf': salaryPf,
       'salary_esi': salaryEsi,
+      'salary_esi_employer': salaryEsiEmployer,
       'salary_professional_tax': salaryProfessionalTax,
       'salary_total_ctc': salaryTotalCtc,
       'insurance_policy_no': insurancePolicyNo,
@@ -780,6 +783,7 @@ class Employee {
       salaryTax: (map['salary_tax'] as num?)?.toDouble() ?? 0.0,
       salaryPf: (map['salary_pf'] as num?)?.toDouble() ?? 0.0,
       salaryEsi: (map['salary_esi'] as num?)?.toDouble() ?? 0.0,
+      salaryEsiEmployer: (map['salary_esi_employer'] as num?)?.toDouble() ?? 0.0,
       salaryProfessionalTax: (map['salary_professional_tax'] as num?)?.toDouble() ?? 0.0,
       salaryTotalCtc: (map['salary_total_ctc'] as num?)?.toDouble() ?? 0.0,
       insurancePolicyNo: map['insurance_policy_no'] as String? ?? '',
@@ -980,6 +984,7 @@ class Employee {
     double? salaryTax,
     double? salaryPf,
     double? salaryEsi,
+    double? salaryEsiEmployer,
     double? salaryProfessionalTax,
     double? salaryTotalCtc,
     String? insurancePolicyNo,
@@ -1099,6 +1104,7 @@ class Employee {
       salaryTax: salaryTax ?? this.salaryTax,
       salaryPf: salaryPf ?? this.salaryPf,
       salaryEsi: salaryEsi ?? this.salaryEsi,
+      salaryEsiEmployer: salaryEsiEmployer ?? this.salaryEsiEmployer,
       salaryProfessionalTax: salaryProfessionalTax ?? this.salaryProfessionalTax,
       salaryTotalCtc: salaryTotalCtc ?? this.salaryTotalCtc,
       insurancePolicyNo: insurancePolicyNo ?? this.insurancePolicyNo,

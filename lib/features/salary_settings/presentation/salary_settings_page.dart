@@ -15,6 +15,7 @@ class SalarySettingsPage extends ConsumerStatefulWidget {
 
 class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
   final _formKey = GlobalKey<FormState>();
+  final _basicController = TextEditingController();
   final _hraController = TextEditingController();
   final _specialAllowanceController = TextEditingController();
   final _eduAllowanceController = TextEditingController();
@@ -22,7 +23,7 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
   final _otherAllowanceController = TextEditingController();
   final _pfController = TextEditingController();
   final _esiController = TextEditingController();
-  final _taxController = TextEditingController();
+  final _esiEmployerController = TextEditingController();
   final _profTaxController = TextEditingController();
 
   bool _isSaving = false;
@@ -30,6 +31,7 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
 
   @override
   void dispose() {
+    _basicController.dispose();
     _hraController.dispose();
     _specialAllowanceController.dispose();
     _eduAllowanceController.dispose();
@@ -37,7 +39,7 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
     _otherAllowanceController.dispose();
     _pfController.dispose();
     _esiController.dispose();
-    _taxController.dispose();
+    _esiEmployerController.dispose();
     _profTaxController.dispose();
     super.dispose();
   }
@@ -45,6 +47,7 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
   void _populateControllers(SalarySettings settings) {
     if (_loadedSettings == settings) return;
     _loadedSettings = settings;
+    _basicController.text = settings.basicPercentage.toStringAsFixed(1);
     _hraController.text = settings.hraPercentage.toStringAsFixed(1);
     _specialAllowanceController.text =
         settings.specialAllowancePercentage.toStringAsFixed(1);
@@ -56,7 +59,8 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
         settings.otherAllowancePercentage.toStringAsFixed(1);
     _pfController.text = settings.pfPercentage.toStringAsFixed(1);
     _esiController.text = settings.esiPercentage.toStringAsFixed(1);
-    _taxController.text = settings.taxPercentage.toStringAsFixed(1);
+    _esiEmployerController.text =
+        settings.esiEmployerPercentage.toStringAsFixed(1);
     _profTaxController.text =
         settings.professionalTaxPercentage.toStringAsFixed(1);
   }
@@ -67,6 +71,7 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
     setState(() => _isSaving = true);
 
     final settings = SalarySettings(
+      basicPercentage: double.tryParse(_basicController.text.trim()) ?? 50.0,
       hraPercentage: double.tryParse(_hraController.text.trim()) ?? 0.0,
       specialAllowancePercentage:
           double.tryParse(_specialAllowanceController.text.trim()) ?? 0.0,
@@ -78,7 +83,9 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
           double.tryParse(_otherAllowanceController.text.trim()) ?? 0.0,
       pfPercentage: double.tryParse(_pfController.text.trim()) ?? 0.0,
       esiPercentage: double.tryParse(_esiController.text.trim()) ?? 0.0,
-      taxPercentage: double.tryParse(_taxController.text.trim()) ?? 0.0,
+      esiEmployerPercentage:
+          double.tryParse(_esiEmployerController.text.trim()) ?? 0.0,
+      taxPercentage: 0.0,
       professionalTaxPercentage:
           double.tryParse(_profTaxController.text.trim()) ?? 0.0,
     );
@@ -213,7 +220,7 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
                               const Divider(color: Color(0xFFEAECF0)),
                               const SizedBox(height: 16),
 
-                              // Info card regarding Basic Pay
+                              // Info card regarding Default Salary Structure
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
@@ -233,7 +240,7 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
                                     SizedBox(width: 10),
                                     Expanded(
                                       child: Text(
-                                        'Basic Pay is fixed at 50% of Total Salary across the organization and is not configurable.',
+                                        'Configure default percentages for basic pay, allowances, deductions, and ESI. ESI fields apply when employee total salary is \u2264 \u20B921,000.',
                                         style: TextStyle(
                                           fontSize: 12,
                                           fontWeight: FontWeight.w500,
@@ -248,7 +255,7 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
 
                               // Section: Allowance Percentages
                               const Text(
-                                'Allowances (% of Total Salary)',
+                                'Allowances & Basic Pay (% of Total Salary)',
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
@@ -260,6 +267,11 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
                               _buildPercentageGrid(
                                 isMobile: isMobile,
                                 children: [
+                                  _buildPercentageField(
+                                    label: 'Basic Pay',
+                                    basis: '% of Total Salary',
+                                    controller: _basicController,
+                                  ),
                                   _buildPercentageField(
                                     label: 'House Rent Allowance (HRA)',
                                     basis: '% of Total Salary',
@@ -291,7 +303,7 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
 
                               // Section: Deductions & Taxes
                               const Text(
-                                'Deductions & Taxes',
+                                'Deductions & ESI / Professional Tax',
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
@@ -309,14 +321,14 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
                                     controller: _pfController,
                                   ),
                                   _buildPercentageField(
-                                    label: 'Employee State Insurance (ESI)',
+                                    label: 'ESI Employee',
                                     basis: '% of Total Salary',
                                     controller: _esiController,
                                   ),
                                   _buildPercentageField(
-                                    label: 'Tax',
+                                    label: 'ESI Employer (Company)',
                                     basis: '% of Total Salary',
-                                    controller: _taxController,
+                                    controller: _esiEmployerController,
                                   ),
                                   _buildPercentageField(
                                     label: 'Professional Tax',

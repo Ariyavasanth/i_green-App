@@ -246,6 +246,7 @@ class SqliteEmployeeRepository implements EmployeeRepository {
       'salary_tax': 'REAL',
       'salary_pf': 'REAL',
       'salary_esi': 'REAL',
+      'salary_esi_employer': 'REAL',
       'salary_professional_tax': 'REAL',
       'access_permissions': 'TEXT',
       'leave_type': 'TEXT',
