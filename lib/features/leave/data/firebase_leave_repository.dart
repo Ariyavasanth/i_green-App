@@ -409,6 +409,45 @@ class FirebaseLeaveRepository implements LeaveRepository {
     }, SetOptions(merge: true));
   }
 
+  @override
+  Future<void> updateLeaveType(LeaveType leaveType) async {
+    final docId = leaveType.name.replaceAll(' ', '_').toLowerCase();
+    await _typesRef.doc(docId).set(leaveType.toMap(), SetOptions(merge: true));
+  }
+
+  @override
+  Future<void> deleteLeaveType(int id) async {
+    final snap = await _typesRef.where('id', isEqualTo: id).get();
+    for (final doc in snap.docs) {
+      await doc.reference.delete();
+    }
+  }
+
+  CollectionReference<Map<String, dynamic>> get _overridesRef =>
+      _firestore.collection('leave_employee_overrides');
+
+  @override
+  Future<List<Map<String, dynamic>>> getEmployeeOverrides() async {
+    final snap = await _overridesRef.get();
+    return snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+  }
+
+  @override
+  Future<void> addEmployeeOverride(Map<String, dynamic> override) async {
+    await _overridesRef.add({
+      ...override,
+      'created_at': FieldValue.serverTimestamp(),
+    });
+  }
+
+  @override
+  Future<void> deleteEmployeeOverride(int id) async {
+    final snap = await _overridesRef.where('id', isEqualTo: id).get();
+    for (final doc in snap.docs) {
+      await doc.reference.delete();
+    }
+  }
+
   // ── Salary / LOP Calculation ───────────────────────────────────────────────
 
   @override

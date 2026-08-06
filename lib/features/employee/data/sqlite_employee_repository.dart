@@ -305,20 +305,25 @@ class SqliteEmployeeRepository implements EmployeeRepository {
   Future<List<Employee>> getEmployees() async {
     final db = await database;
     final maps = await db.query('employees', orderBy: 'id DESC');
-    return maps
-        .map((map) => Employee.fromMap(map))
-        .where((emp) {
-          final empId = emp.employeeId.trim().toUpperCase();
-          final status = emp.status.trim().toLowerCase();
-          final isEmpId = empId.startsWith('EMP-');
-          final isCandidateOrPending = empId.startsWith('CAN-') ||
-              empId.toLowerCase().startsWith('pending_') ||
-              status == 'draft' ||
-              status == 'pending' ||
-              status == 'accepted';
-          return isEmpId || (!isCandidateOrPending && empId.isNotEmpty);
-        })
-        .toList();
+    final allEmps = maps.map((map) => Employee.fromMap(map)).toList();
+    final result = <Employee>[];
+    for (final emp in allEmps) {
+      final s = emp.status.trim().toLowerCase();
+      if (s == 'active' || s == 'converted' || s == 'submitted') {
+        var updatedEmp = emp;
+        final empIdUpper = emp.employeeId.trim().toUpperCase();
+        if (empIdUpper.isEmpty || !empIdUpper.startsWith('EMP-')) {
+          final newEmpId = await _generateNextEmployeeId();
+          updatedEmp = emp.copyWith(employeeId: newEmpId, status: 'Active');
+          await db.update('employees', updatedEmp.toMap(), where: 'id = ?', whereArgs: [emp.id]);
+        } else if (emp.status != 'Active') {
+          updatedEmp = emp.copyWith(status: 'Active');
+          await db.update('employees', updatedEmp.toMap(), where: 'id = ?', whereArgs: [emp.id]);
+        }
+        result.add(updatedEmp);
+      }
+    }
+    return result;
   }
 
   @override
@@ -340,7 +345,12 @@ class SqliteEmployeeRepository implements EmployeeRepository {
   Future<Employee> addEmployee(Employee employee) async {
     final db = await database;
     var empId = employee.employeeId;
-    if (empId.isEmpty || empId.startsWith('CAN-') || empId.startsWith('pending_')) {
+    final empIdUpper = empId.trim().toUpperCase();
+    if (empIdUpper.isEmpty ||
+        empIdUpper.startsWith('CAN-') ||
+        empIdUpper.startsWith('PENDING_') ||
+        empIdUpper.startsWith('REG-') ||
+        !empIdUpper.startsWith('EMP-')) {
       empId = await _generateNextEmployeeId();
     }
     final newEmp = employee.copyWith(employeeId: empId, status: 'Active');
@@ -351,11 +361,22 @@ class SqliteEmployeeRepository implements EmployeeRepository {
   @override
   Future<void> updateEmployee(Employee employee) async {
     final db = await database;
+    var emp = employee;
+    final empIdUpper = emp.employeeId.trim().toUpperCase();
+    if (emp.status.toLowerCase() == 'active' &&
+        (empIdUpper.isEmpty ||
+         empIdUpper.startsWith('CAN-') ||
+         empIdUpper.startsWith('PENDING_') ||
+         empIdUpper.startsWith('REG-') ||
+         !empIdUpper.startsWith('EMP-'))) {
+      final newEmpId = await _generateNextEmployeeId();
+      emp = emp.copyWith(employeeId: newEmpId);
+    }
     await db.update(
       'employees',
-      employee.toMap(),
+      emp.toMap(),
       where: 'id = ?',
-      whereArgs: [employee.id],
+      whereArgs: [emp.id],
     );
   }
 

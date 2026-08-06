@@ -81,19 +81,24 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   @override
   Future<List<Employee>> getEmployees() async {
     final all = await getAllEmployees();
-    return all
-        .where((emp) {
-          final empId = emp.employeeId.trim().toUpperCase();
-          final status = emp.status.trim().toLowerCase();
-          final isEmpId = empId.startsWith('EMP-');
-          final isCandidateOrPending = empId.startsWith('CAN-') ||
-              empId.toLowerCase().startsWith('pending_') ||
-              status == 'draft' ||
-              status == 'pending' ||
-              status == 'accepted';
-          return isEmpId || (!isCandidateOrPending && empId.isNotEmpty);
-        })
-        .toList();
+    final result = <Employee>[];
+    for (final emp in all) {
+      final s = emp.status.trim().toLowerCase();
+      if (s == 'active' || s == 'converted' || s == 'submitted') {
+        var updatedEmp = emp;
+        final empIdUpper = emp.employeeId.trim().toUpperCase();
+        if (empIdUpper.isEmpty || !empIdUpper.startsWith('EMP-')) {
+          final newEmpId = await _generateNextEmployeeId();
+          updatedEmp = emp.copyWith(employeeId: newEmpId, status: 'Active');
+          await updateEmployee(updatedEmp);
+        } else if (emp.status != 'Active') {
+          updatedEmp = emp.copyWith(status: 'Active');
+          await updateEmployee(updatedEmp);
+        }
+        result.add(updatedEmp);
+      }
+    }
+    return result;
   }
 
   @override
@@ -126,11 +131,20 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
   @override
   Future<Employee> addEmployee(Employee employee) async {
-    final docId = employee.employeeId.isNotEmpty
-        ? employee.employeeId
-        : (employee.id != 0 ? employee.id.toString() : _employeesRef.doc().id);
+    var emp = employee;
+    final empIdUpper = emp.employeeId.trim().toUpperCase();
+    if (empIdUpper.isEmpty ||
+        empIdUpper.startsWith('CAN-') ||
+        empIdUpper.startsWith('PENDING_') ||
+        empIdUpper.startsWith('REG-') ||
+        !empIdUpper.startsWith('EMP-')) {
+      final newEmpId = await _generateNextEmployeeId();
+      emp = emp.copyWith(employeeId: newEmpId);
+    }
+    emp = emp.copyWith(status: 'Active');
 
-    final data = _employeeToFirestore(employee);
+    final docId = emp.employeeId;
+    final data = _employeeToFirestore(emp);
     data['created_at'] = FieldValue.serverTimestamp();
 
     await _employeesRef.doc(docId).set(data, SetOptions(merge: true));
@@ -140,21 +154,32 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         ? parsed
         : (docId.hashCode & 0x7FFFFFFF);
 
-    return employee.copyWith(
-      id: employee.id != 0 ? employee.id : assignedId,
-      employeeId: employee.employeeId.isNotEmpty ? employee.employeeId : docId,
+    return emp.copyWith(
+      id: emp.id != 0 ? emp.id : assignedId,
     );
   }
 
   @override
   Future<void> updateEmployee(Employee employee) async {
-    String docId = employee.employeeId.isNotEmpty
-        ? employee.employeeId
-        : (employee.id != 0 ? employee.id.toString() : '');
+    var emp = employee;
+    final empIdUpper = emp.employeeId.trim().toUpperCase();
+    if (emp.status.toLowerCase() == 'active' &&
+        (empIdUpper.isEmpty ||
+         empIdUpper.startsWith('CAN-') ||
+         empIdUpper.startsWith('PENDING_') ||
+         empIdUpper.startsWith('REG-') ||
+         !empIdUpper.startsWith('EMP-'))) {
+      final newEmpId = await _generateNextEmployeeId();
+      emp = emp.copyWith(employeeId: newEmpId);
+    }
+
+    String docId = emp.employeeId.isNotEmpty
+        ? emp.employeeId
+        : (emp.id != 0 ? emp.id.toString() : '');
 
     if (docId.isEmpty) {
       final snapshot =
-          await _employeesRef.where('id', isEqualTo: employee.id).limit(1).get();
+          await _employeesRef.where('id', isEqualTo: emp.id).limit(1).get();
       if (snapshot.docs.isNotEmpty) {
         docId = snapshot.docs.first.id;
       } else {
@@ -162,7 +187,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       }
     }
 
-    final data = _employeeToFirestore(employee);
+    final data = _employeeToFirestore(emp);
     await _employeesRef.doc(docId).set(data, SetOptions(merge: true));
   }
 
@@ -430,14 +455,13 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     return 'CAN-${nextNum.toString().padLeft(4, '0')}';
   }
 
-  /// Generates the next EMP-XXXX employee ID for manually created employees.
-  /// Used only by the Employee Management module — do NOT call from registration flow.
-  // ignore: unused_element
+  /// Generates the next EMP-XXXX employee ID for active employees.
   Future<String> _generateNextEmployeeId() async {
     final snapshot = await _employeesRef.get();
     int maxNum = 0;
     for (final doc in snapshot.docs) {
       final code = (doc.data()['employee_id'] as String?) ?? doc.id;
+      if (!code.toUpperCase().startsWith('EMP-')) continue;
       final numPart = code.replaceAll(RegExp(r'[^0-9]'), '');
       if (numPart.isNotEmpty) {
         final val = int.tryParse(numPart) ?? 0;

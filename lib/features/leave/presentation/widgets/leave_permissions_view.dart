@@ -88,8 +88,16 @@ class _LeavePermissionsViewState extends ConsumerState<LeavePermissionsView> {
         final approvalReqCount = allEmployees.where((e) => e.requiresLeaveApproval).length;
 
         // Derive options
-        final deptSet = {'All Departments', ...allEmployees.map((e) => e.department).where((d) => d.isNotEmpty)};
-        final desigSet = {'All Designations', ...allEmployees.map((e) => e.designation).where((d) => d.isNotEmpty)};
+        final deptSet = {
+          'All Departments',
+          ...Employee.departmentOptions,
+          ...allEmployees.map((e) => e.department).where((d) => d.isNotEmpty),
+        };
+        final desigSet = {
+          'All Designations',
+          ...Employee.designationOptions,
+          ...allEmployees.map((e) => e.designation).where((d) => d.isNotEmpty),
+        };
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,

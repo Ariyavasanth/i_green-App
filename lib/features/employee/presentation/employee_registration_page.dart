@@ -62,7 +62,7 @@ class _EmployeeRegistrationPageState
   final _reportingToController = TextEditingController(text: 'Saravanan G S');
   final _inTimeController = TextEditingController();
   final _outTimeController = TextEditingController();
-  final _weeklyOffDayController = TextEditingController(text: 'Sunday');
+  final _weeklyOffDayController = TextEditingController();
   final _reportingManagerTitleController = TextEditingController(text: 'Managing Director');
   final _adminNameController = TextEditingController(text: 'Saravanan G S');
   final _coordinatorNameController = TextEditingController(text: 'Admin Team');
@@ -266,7 +266,26 @@ class _EmployeeRegistrationPageState
       widget.linkId == 'new' ||
       widget.linkId == 'edit' ||
       widget.linkId.isEmpty ||
-      widget.employee != null;
+      widget.employee != null ||
+      widget.acceptedLinkId != null ||
+      widget.acceptedEmpId != null ||
+      _registrationMode == 'accepted_response';
+
+  void _updateTabControllerIfNeeded() {
+    if (_tabController.length != _tabs.length) {
+      final oldIndex = _tabController.index;
+      final newIndex = oldIndex.clamp(0, _tabs.length - 1);
+      _tabController.dispose();
+      _tabController = TabController(
+        length: _tabs.length,
+        initialIndex: newIndex,
+        vsync: this,
+      );
+      _tabController.addListener(() {
+        if (mounted) setState(() {});
+      });
+    }
+  }
 
   bool get _isEditing => widget.employee != null || widget.linkId == 'edit';
 
@@ -301,7 +320,7 @@ class _EmployeeRegistrationPageState
       _esiNumberController.text = emp.esiNumber;
       _inTimeController.text = emp.inTime;
       _outTimeController.text = emp.outTime;
-      _weeklyOffDayController.text = emp.weeklyOffDay.isNotEmpty ? emp.weeklyOffDay : 'Sunday';
+      _weeklyOffDayController.text = emp.weeklyOffDay;
       _reportingManagerTitleController.text = emp.reportingManagerTitle.isNotEmpty ? emp.reportingManagerTitle : 'Managing Director';
       _adminNameController.text = emp.adminName.isNotEmpty ? emp.adminName : 'Saravanan G S';
       _coordinatorNameController.text = emp.coordinatorName.isNotEmpty ? emp.coordinatorName : 'Admin Team';
@@ -778,11 +797,11 @@ class _EmployeeRegistrationPageState
       final repo = ref.read(employeeRepositoryProvider);
       final resolvedEmployeeId = _employeeCustomIdController.text.trim().isNotEmpty
           ? _employeeCustomIdController.text.trim()
-          : (_currentEmployee?.employeeId.isNotEmpty == true
+          : ((isSubmit && (_currentEmployee?.employeeId.startsWith('EMP-') == true))
               ? _currentEmployee!.employeeId
-              : (widget.employee?.employeeId.isNotEmpty == true
+              : ((isSubmit && (widget.employee?.employeeId.startsWith('EMP-') == true))
                   ? widget.employee!.employeeId
-                  : 'pending_${DateTime.now().millisecondsSinceEpoch}'));
+                  : (isSubmit ? '' : 'pending_${DateTime.now().millisecondsSinceEpoch}')));
 
       String profileImageUrl = _isProfileImageRemoved
           ? ''
@@ -947,9 +966,7 @@ class _EmployeeRegistrationPageState
         } else {
           // Final Submit Registration: convert candidate to confirmed Employee with an EMP- ID
           final imported = employeeData.copyWith(status: 'Active');
-          if (_currentEmployee != null &&
-              !_currentEmployee!.employeeId.startsWith('pending_') &&
-              !_currentEmployee!.employeeId.startsWith('CAN-')) {
+          if (_currentEmployee != null && _currentEmployee!.id != 0) {
             final updated = imported.copyWith(id: _currentEmployee!.id);
             await repo.updateEmployee(updated);
             savedEmployee = updated;
@@ -1050,6 +1067,7 @@ class _EmployeeRegistrationPageState
 
   @override
   Widget build(BuildContext context) {
+    _updateTabControllerIfNeeded();
     final linkAsync = ref.watch(registrationLinkByIdProvider(widget.linkId));
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 768;
@@ -3768,9 +3786,7 @@ class _EmployeeRegistrationPageState
       officeEndTime: _outTimeController.text.trim().isNotEmpty
           ? _outTimeController.text.trim()
           : '06:00 PM',
-      weeklyOffDay: _weeklyOffDayController.text.trim().isNotEmpty
-          ? _weeklyOffDayController.text.trim()
-          : 'Sunday',
+      weeklyOffDay: _weeklyOffDayController.text.trim(),
     );
 
     final dateStr = DateFormat('MMMM dd, yyyy').format(DateTime.now());
@@ -4068,7 +4084,9 @@ class _EmployeeRegistrationPageState
                       children: [
                         const TextSpan(text: 'Office Timings: '),
                         TextSpan(
-                          text: '${data.officeStartTime} to ${data.officeEndTime} (${data.weeklyOffDay} Holiday)',
+                          text: data.weeklyOffDay.trim().isNotEmpty
+                              ? '${data.officeStartTime} to ${data.officeEndTime} (${data.weeklyOffDay.trim()} Holiday)'
+                              : '${data.officeStartTime} to ${data.officeEndTime}',
                           style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
                         ),
                       ],

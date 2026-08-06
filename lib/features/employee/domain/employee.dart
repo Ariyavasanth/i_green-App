@@ -221,7 +221,7 @@ class Employee {
     this.adminName = 'Saravanan G S',
     this.coordinatorName = 'Admin Team',
     this.coordinatorPhone = '8760098789',
-    this.weeklyOffDay = 'Sunday',
+    this.weeklyOffDay = '',
     this.teamName = '',
     this.disciplinaryRecords = '',
     this.temporaryPassword = '',
@@ -804,11 +804,19 @@ class Employee {
       }(),
       companyAssets: map['company_assets'] as String? ?? '',
       reportingManager: map['reporting_manager'] as String? ?? '',
-      reportingManagerTitle: map['reporting_manager_title'] as String? ?? 'Managing Director',
-      adminName: map['admin_name'] as String? ?? 'Saravanan G S',
-      coordinatorName: map['coordinator_name'] as String? ?? 'Admin Team',
-      coordinatorPhone: map['coordinator_phone'] as String? ?? '8760098789',
-      weeklyOffDay: map['weekly_off_day'] as String? ?? 'Sunday',
+      reportingManagerTitle: (map['reporting_manager_title'] as String?)?.isNotEmpty == true
+          ? map['reporting_manager_title'] as String
+          : 'Managing Director',
+      adminName: (map['admin_name'] as String?)?.isNotEmpty == true
+          ? map['admin_name'] as String
+          : 'Saravanan G S',
+      coordinatorName: (map['coordinator_name'] as String?)?.isNotEmpty == true
+          ? map['coordinator_name'] as String
+          : 'Admin Team',
+      coordinatorPhone: (map['coordinator_phone'] as String?)?.isNotEmpty == true
+          ? map['coordinator_phone'] as String
+          : '8760098789',
+      weeklyOffDay: map['weekly_off_day'] as String? ?? '',
       teamName: map['team_name'] as String? ?? '',
       disciplinaryRecords: map['disciplinary_records'] as String? ?? '',
       temporaryPassword: map['temporary_password'] as String? ?? '',

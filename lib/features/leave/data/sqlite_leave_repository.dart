@@ -75,7 +75,23 @@ class SqliteLeaveRepository implements LeaveRepository {
       CREATE TABLE IF NOT EXISTS leave_types (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT UNIQUE,
-        description TEXT
+        description TEXT,
+        annual_allocation REAL DEFAULT 12.0,
+        carry_forward TEXT DEFAULT 'Not allowed',
+        color_hex TEXT DEFAULT '#6366F1',
+        is_active INTEGER DEFAULT 1
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS leave_employee_overrides (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        employee_id INTEGER,
+        employee_name TEXT,
+        employee_custom_id TEXT,
+        leave_type TEXT,
+        override_days REAL,
+        reason TEXT
       )
     ''');
 
@@ -106,10 +122,38 @@ class SqliteLeaveRepository implements LeaveRepository {
       await db.rawQuery('SELECT COUNT(*) FROM leave_types'),
     );
     if (count == 0) {
-      await db.insert('leave_types', {'name': 'As Needed', 'description': 'You can take leave whenever required.'});
-      await db.insert('leave_types', {'name': 'Manual Allocation', 'description': 'Leave is allocated manually per policy.'});
-      await db.insert('leave_types', {'name': 'No Leave', 'description': 'You are not eligible to take leave.'});
-      await db.insert('leave_types', {'name': 'Emergency Leave', 'description': 'Urgent leave requiring immediate admin review.'});
+      await db.insert('leave_types', {
+        'name': 'Casual Leave',
+        'description': 'Standard casual leave allowance.',
+        'annual_allocation': 12.0,
+        'carry_forward': 'Up to 3 days',
+        'color_hex': '#6366F1',
+        'is_active': 1,
+      });
+      await db.insert('leave_types', {
+        'name': 'Sick Leave',
+        'description': 'Medical leave allowance.',
+        'annual_allocation': 10.0,
+        'carry_forward': 'Not allowed',
+        'color_hex': '#14B8A6',
+        'is_active': 1,
+      });
+      await db.insert('leave_types', {
+        'name': 'Earned Leave',
+        'description': 'Paid annual leave accumulated through service.',
+        'annual_allocation': 15.0,
+        'carry_forward': 'Up to 10 days',
+        'color_hex': '#22C55E',
+        'is_active': 1,
+      });
+      await db.insert('leave_types', {
+        'name': 'As Needed',
+        'description': 'Flexible leave allowed on special request.',
+        'annual_allocation': 8.0,
+        'carry_forward': 'Not allowed',
+        'color_hex': '#F59E0B',
+        'is_active': 1,
+      });
     }
 
     // Clear legacy sample leave balances and leave requests
@@ -139,6 +183,21 @@ class SqliteLeaveRepository implements LeaveRepository {
     for (final entry in requiredColumns.entries) {
       if (!existingColumns.contains(entry.key)) {
         await db.execute('ALTER TABLE leave_requests ADD COLUMN ${entry.key} ${entry.value}');
+      }
+    }
+
+    final typeTableInfo = await db.rawQuery('PRAGMA table_info(leave_types)');
+    final existingTypeCols = typeTableInfo.map((row) => row['name'] as String).toSet();
+    final requiredTypeCols = {
+      'annual_allocation': 'REAL DEFAULT 12.0',
+      'carry_forward': "TEXT DEFAULT 'Not allowed'",
+      'color_hex': "TEXT DEFAULT '#6366F1'",
+      'is_active': 'INTEGER DEFAULT 1',
+    };
+
+    for (final entry in requiredTypeCols.entries) {
+      if (!existingTypeCols.contains(entry.key)) {
+        await db.execute('ALTER TABLE leave_types ADD COLUMN ${entry.key} ${entry.value}');
       }
     }
   }
@@ -372,6 +431,41 @@ class SqliteLeaveRepository implements LeaveRepository {
   Future<void> addLeaveType(LeaveType leaveType) async {
     final db = await database;
     await db.insert('leave_types', leaveType.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  @override
+  Future<void> updateLeaveType(LeaveType leaveType) async {
+    final db = await database;
+    await db.update(
+      'leave_types',
+      leaveType.toMap(),
+      where: 'id = ?',
+      whereArgs: [leaveType.id],
+    );
+  }
+
+  @override
+  Future<void> deleteLeaveType(int id) async {
+    final db = await database;
+    await db.delete('leave_types', where: 'id = ?', whereArgs: [id]);
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getEmployeeOverrides() async {
+    final db = await database;
+    return await db.query('leave_employee_overrides', orderBy: 'id DESC');
+  }
+
+  @override
+  Future<void> addEmployeeOverride(Map<String, dynamic> override) async {
+    final db = await database;
+    await db.insert('leave_employee_overrides', override, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  @override
+  Future<void> deleteEmployeeOverride(int id) async {
+    final db = await database;
+    await db.delete('leave_employee_overrides', where: 'id = ?', whereArgs: [id]);
   }
 
   @override

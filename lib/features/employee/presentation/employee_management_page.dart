@@ -65,7 +65,7 @@ class _EmployeeManagementPageState
                 // Only active employees (imported and configured) come into Employee Management module table
                 final employees = allEmployees.where((emp) {
                   final s = emp.status.trim().toLowerCase();
-                  return s == 'active';
+                  return s == 'active' || s == 'converted' || s == 'submitted';
                 }).toList();
 
                 // Populate unique dropdown filter choices

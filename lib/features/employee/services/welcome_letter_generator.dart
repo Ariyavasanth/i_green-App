@@ -45,13 +45,14 @@ class WelcomeLetterData {
       coordinatorPhone: emp.coordinatorPhone.trim().isNotEmpty ? emp.coordinatorPhone.trim() : '8760098789',
       officeStartTime: emp.inTime.trim().isNotEmpty ? emp.inTime.trim() : '09:00 AM',
       officeEndTime: emp.outTime.trim().isNotEmpty ? emp.outTime.trim() : '06:00 PM',
-      weeklyOffDay: emp.weeklyOffDay.trim().isNotEmpty ? emp.weeklyOffDay.trim() : 'Sunday',
+      weeklyOffDay: emp.weeklyOffDay.trim(),
     );
   }
 }
 
 class WelcomeLetterGenerator {
   static String generateLetterText(WelcomeLetterData data) {
+    final offDayText = data.weeklyOffDay.trim().isNotEmpty ? ' (${data.weeklyOffDay.trim()} Holiday)' : '';
     return '''Dear ${data.employeeName},
 
 Welcome to IGreen Technologies! We are excited to have you on board and look forward to working with you.
@@ -62,7 +63,7 @@ You will be reporting directly to ${data.reportingManagerName}, ${data.reporting
 
 For knowledge transfer — including employee contact details and role-related information — please reach out to ${data.adminName} (present Admin). You may also coordinate with ${data.coordinatorName} (${data.coordinatorPhone}) for any queries.
 
-Office Timings: ${data.officeStartTime} to ${data.officeEndTime} (${data.weeklyOffDay} Holiday)
+Office Timings: ${data.officeStartTime} to ${data.officeEndTime}$offDayText
 
 Once again, welcome aboard!''';
   }
@@ -78,6 +79,8 @@ Once again, welcome aboard!''';
     final startTime = _xmlEscape(data.officeStartTime);
     final endTime = _xmlEscape(data.officeEndTime);
     final weeklyOff = _xmlEscape(data.weeklyOffDay);
+
+    final offDayText = weeklyOff.trim().isNotEmpty ? ' ($weeklyOff Holiday)' : '';
 
     final docXmlContent = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -96,7 +99,7 @@ Once again, welcome aboard!''';
     <w:p><w:pPr><w:spacing w:after="200"/></w:pPr><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>We would like to give you a brief overview of your key responsibilities.</w:t></w:r></w:p>
     <w:p><w:pPr><w:spacing w:after="200"/></w:pPr><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>You will be reporting directly to $managerName, $managerTitle, who will guide you through your initial onboarding and assist you with any concerns regarding your responsibilities.</w:t></w:r></w:p>
     <w:p><w:pPr><w:spacing w:after="200"/></w:pPr><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>For knowledge transfer — including employee contact details and role-related information — please reach out to $adminName (present Admin). You may also coordinate with $coordName ($coordPhone) for any queries.</w:t></w:r></w:p>
-    <w:p><w:pPr><w:spacing w:after="200"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="22"/></w:rPr><w:t>Office Timings: $startTime to $endTime ($weeklyOff Holiday)</w:t></w:r></w:p>
+    <w:p><w:pPr><w:spacing w:after="200"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="22"/></w:rPr><w:t>Office Timings: $startTime to $endTime$offDayText</w:t></w:r></w:p>
     <w:p><w:pPr><w:spacing w:after="400"/></w:pPr><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>Once again, welcome aboard!</w:t></w:r></w:p>
     <w:p><w:pPr><w:spacing w:after="100"/></w:pPr><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>Sincerely,</w:t></w:r></w:p>
     <w:p><w:r><w:rPr><w:b/><w:sz w:val="24"/><w:color w:val="1F2937"/></w:rPr><w:t>IGreen Technologies Team</w:t></w:r></w:p>

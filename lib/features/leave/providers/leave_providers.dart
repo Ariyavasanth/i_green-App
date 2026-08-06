@@ -27,6 +27,10 @@ final leaveTypesProvider = FutureProvider<List<LeaveType>>(
   (ref) => ref.watch(leaveRepositoryProvider).getLeaveTypes(),
 );
 
+final employeeOverridesProvider = FutureProvider<List<Map<String, dynamic>>>(
+  (ref) => ref.watch(leaveRepositoryProvider).getEmployeeOverrides(),
+);
+
 final leaveBalancesProvider = FutureProvider.family<List<LeaveBalance>, int>(
   (ref, employeeId) => ref.watch(leaveRepositoryProvider).getLeaveBalances(employeeId),
 );

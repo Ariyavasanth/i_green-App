@@ -14,6 +14,11 @@ abstract class LeaveRepository {
   Future<LeaveBalance> getLeaveBalance(int employeeId, String leaveType);
   Future<List<LeaveType>> getLeaveTypes();
   Future<void> addLeaveType(LeaveType leaveType);
+  Future<void> updateLeaveType(LeaveType leaveType);
+  Future<void> deleteLeaveType(int id);
+  Future<List<Map<String, dynamic>>> getEmployeeOverrides();
+  Future<void> addEmployeeOverride(Map<String, dynamic> override);
+  Future<void> deleteEmployeeOverride(int id);
   Future<SalaryCalculation> calculateSalaryAndLop(int employeeId, int year, int month, {int workingDays = 26});
   Future<List<Map<String, dynamic>>> getAuditLogs(int leaveRequestId);
 }
