@@ -348,16 +348,20 @@ class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
       ('HRA', record.hra),
       ('Special Allowance', record.specialAllowance),
       ('Education Allowance', record.educationAllowance),
+      ('Travel Allowance', record.travelAllowance),
+      ('Other Allowance', record.otherAllowance),
       ('Incentive', record.incentive),
       ('Others Earning', record.othersEarning),
       ('Cumulative Incentive', record.cumulativeIncentive),
+      ('Bonus', record.bonus),
+      ('OT (Overtime)', record.ot),
     ];
 
     final deductions = [
       ('PF Contribution', record.pf),
       ('Income Tax (TDS)', record.tax),
       ('ESI Contribution', record.esi),
-      ('LOP Deduction', record.lop),
+      ('Leave Days Deduction (LOP)', record.lop),
       ('Company Loan', record.companyLoan),
       ('Salary Advance', record.salaryAdvance),
       ('Others Deduction', record.othersDeduction),
@@ -369,9 +373,13 @@ class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
         record.hra +
         record.specialAllowance +
         record.educationAllowance +
+        record.travelAllowance +
+        record.otherAllowance +
         record.incentive +
         record.othersEarning +
-        record.cumulativeIncentive;
+        record.cumulativeIncentive +
+        record.bonus +
+        record.ot;
 
     final totalDeductions = record.pf +
         record.tax +

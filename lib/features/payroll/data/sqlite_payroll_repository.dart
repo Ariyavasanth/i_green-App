@@ -45,6 +45,10 @@ class SqlitePayrollRepository implements PayrollRepository {
       'is_disputed': 'INTEGER DEFAULT 0',
       'dispute_comment': 'TEXT DEFAULT ""',
       'greeting': 'REAL DEFAULT 0.0',
+      'travel_allowance': 'REAL DEFAULT 0.0',
+      'other_allowance': 'REAL DEFAULT 0.0',
+      'bonus': 'REAL DEFAULT 0.0',
+      'ot': 'REAL DEFAULT 0.0',
     };
 
     for (final entry in requiredColumns.entries) {
@@ -79,10 +83,14 @@ class SqlitePayrollRepository implements PayrollRepository {
         hra REAL,
         education_allowance REAL,
         special_allowance REAL,
+        travel_allowance REAL,
+        other_allowance REAL,
         incentive REAL,
         carry_forward TEXT,
         others_earning REAL,
         cumulative_incentive REAL,
+        bonus REAL,
+        ot REAL,
         pf REAL,
         tax REAL,
         esi REAL,

@@ -16,6 +16,10 @@ class LeaveRequest {
     this.approvedDates = const [],
     this.lopDates = const [],
     this.isEmergency = false,
+    this.attachmentUrl,
+    this.rejectionReason,
+    this.isHalfDay = false,
+    this.halfDayPeriod,
   });
 
   final int id;
@@ -27,11 +31,15 @@ class LeaveRequest {
   final String toDate;
   final double numDays;
   final String reason;
-  final String status; // Pending, Approved, Denied
+  final String status; // Pending, Approved, Denied, Cancelled
   final String createdAt;
   final List<String> approvedDates;
   final List<String> lopDates;
   final bool isEmergency;
+  final String? attachmentUrl;
+  final String? rejectionReason;
+  final bool isHalfDay;
+  final String? halfDayPeriod;
 
   Map<String, dynamic> toMap() {
     return {
@@ -49,6 +57,10 @@ class LeaveRequest {
       'approved_dates': jsonEncode(approvedDates),
       'lop_dates': jsonEncode(lopDates),
       'is_emergency': isEmergency ? 1 : 0,
+      'attachment_url': attachmentUrl,
+      'rejection_reason': rejectionReason,
+      'is_half_day': isHalfDay ? 1 : 0,
+      'half_day_period': halfDayPeriod,
     };
   }
 
@@ -90,6 +102,10 @@ class LeaveRequest {
       approvedDates: parseList(map['approved_dates']),
       lopDates: parseList(map['lop_dates']),
       isEmergency: parseBool(map['is_emergency']),
+      attachmentUrl: map['attachment_url'] as String?,
+      rejectionReason: map['rejection_reason'] as String?,
+      isHalfDay: parseBool(map['is_half_day']),
+      halfDayPeriod: map['half_day_period'] as String?,
     );
   }
 
@@ -108,6 +124,10 @@ class LeaveRequest {
     List<String>? approvedDates,
     List<String>? lopDates,
     bool? isEmergency,
+    String? attachmentUrl,
+    String? rejectionReason,
+    bool? isHalfDay,
+    String? halfDayPeriod,
   }) {
     return LeaveRequest(
       id: id ?? this.id,
@@ -124,6 +144,10 @@ class LeaveRequest {
       approvedDates: approvedDates ?? this.approvedDates,
       lopDates: lopDates ?? this.lopDates,
       isEmergency: isEmergency ?? this.isEmergency,
+      attachmentUrl: attachmentUrl ?? this.attachmentUrl,
+      rejectionReason: rejectionReason ?? this.rejectionReason,
+      isHalfDay: isHalfDay ?? this.isHalfDay,
+      halfDayPeriod: halfDayPeriod ?? this.halfDayPeriod,
     );
   }
 }

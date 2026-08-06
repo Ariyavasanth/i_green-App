@@ -266,9 +266,13 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
         record.hra +
         record.educationAllowance +
         record.specialAllowance +
+        record.travelAllowance +
+        record.otherAllowance +
         record.incentive +
         record.othersEarning +
-        record.cumulativeIncentive;
+        record.cumulativeIncentive +
+        record.bonus +
+        record.ot;
 
     final deductions = record.pf +
         record.tax +
@@ -380,12 +384,20 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
                     if (record.educationAllowance > 0)
                       _buildRowItem('Education Allowance', currencyFormat.format(record.educationAllowance)),
                     _buildRowItem('Special Allowance', currencyFormat.format(record.specialAllowance)),
+                    if (record.travelAllowance > 0)
+                      _buildRowItem('Travel Allowance', currencyFormat.format(record.travelAllowance)),
+                    if (record.otherAllowance > 0)
+                      _buildRowItem('Other Allowance', currencyFormat.format(record.otherAllowance)),
                     if (record.incentive > 0)
                       _buildRowItem('Incentive', currencyFormat.format(record.incentive)),
                     if (record.othersEarning > 0)
                       _buildRowItem('Others', currencyFormat.format(record.othersEarning)),
                     if (record.cumulativeIncentive > 0)
                       _buildRowItem('Cumulative Incentive', currencyFormat.format(record.cumulativeIncentive)),
+                    if (record.bonus > 0)
+                      _buildRowItem('Bonus', currencyFormat.format(record.bonus)),
+                    if (record.ot > 0)
+                      _buildRowItem('OT', currencyFormat.format(record.ot)),
                   ],
                 ),
               ),

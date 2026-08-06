@@ -9,6 +9,7 @@ abstract class LeaveRepository {
   Future<void> submitLeaveRequest(LeaveRequest request);
   Future<void> approveLeaveRequest(int id, String adminName);
   Future<void> denyLeaveRequest(int id, String adminName);
+  Future<void> cancelLeaveRequest(int id, String employeeName);
   Future<List<LeaveRequest>> getLeaveRequestsForCalendar();
   Future<List<LeaveBalance>> getLeaveBalances(int employeeId);
   Future<LeaveBalance> getLeaveBalance(int employeeId, String leaveType);

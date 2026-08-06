@@ -30,12 +30,16 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
   final _hraController = TextEditingController();
   final _educationController = TextEditingController();
   final _specialController = TextEditingController();
+  final _travelAllowanceController = TextEditingController();
+  final _otherAllowanceController = TextEditingController();
   
-  // Earnings additional
+  // Monthly Inputs (formerly Additional Components)
   final _incentiveController = TextEditingController();
   final _carryForwardController = TextEditingController();
   final _othersEarningController = TextEditingController();
   final _cumulativeIncentiveController = TextEditingController();
+  final _bonusController = TextEditingController();
+  final _otController = TextEditingController();
 
   // Deductions statutory
   final _pfController = TextEditingController();
@@ -70,11 +74,15 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     _hraController.addListener(_recalculate);
     _educationController.addListener(_recalculate);
     _specialController.addListener(_recalculate);
+    _travelAllowanceController.addListener(_recalculate);
+    _otherAllowanceController.addListener(_recalculate);
     
     _incentiveController.addListener(_recalculate);
     _carryForwardController.addListener(_recalculate);
     _othersEarningController.addListener(_recalculate);
     _cumulativeIncentiveController.addListener(_recalculate);
+    _bonusController.addListener(_recalculate);
+    _otController.addListener(_recalculate);
 
     _pfController.addListener(_recalculate);
     _taxController.addListener(_recalculate);
@@ -94,11 +102,15 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     _hraController.dispose();
     _educationController.dispose();
     _specialController.dispose();
+    _travelAllowanceController.dispose();
+    _otherAllowanceController.dispose();
     
     _incentiveController.dispose();
     _carryForwardController.dispose();
     _othersEarningController.dispose();
     _cumulativeIncentiveController.dispose();
+    _bonusController.dispose();
+    _otController.dispose();
 
     _pfController.dispose();
     _taxController.dispose();
@@ -124,22 +136,27 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     final hra = employee.salaryHra > 0 ? employee.salaryHra : 16750.0;
     final special = employee.salarySpecialAllowance > 0 ? employee.salarySpecialAllowance : 16750.0;
     final edu = employee.salaryEducationAllowance > 0 ? employee.salaryEducationAllowance : 3000.0;
+    final travel = employee.salaryTravelAllowance > 0 ? employee.salaryTravelAllowance : 0.0;
+    final otherAllowance = employee.salaryOtherAllowance > 0 ? employee.salaryOtherAllowance : 3000.0;
 
     final pf = employee.salaryPf > 0 ? employee.salaryPf : 1800.0;
     final tax = employee.salaryTax > 0 ? employee.salaryTax : 0.0;
     final esi = employee.salaryEsi > 0 ? employee.salaryEsi : 0.0;
-    final otherAllowance = employee.salaryOtherAllowance > 0 ? employee.salaryOtherAllowance : 3000.0;
 
     _basicController.text = basic.toStringAsFixed(2);
     _hraController.text = hra.toStringAsFixed(2);
     _educationController.text = edu.toStringAsFixed(2);
     _specialController.text = special.toStringAsFixed(2);
+    _travelAllowanceController.text = travel.toStringAsFixed(2);
+    _otherAllowanceController.text = otherAllowance.toStringAsFixed(2);
 
-    // Initial mock values for other fields matching screenshot
+    // Initial mock values for monthly inputs matching screenshot
     _incentiveController.text = '8880.00';
     _carryForwardController.text = '-';
-    _othersEarningController.text = otherAllowance.toStringAsFixed(2);
+    _othersEarningController.text = '0.00';
     _cumulativeIncentiveController.text = '31067.00';
+    _bonusController.text = '0.00';
+    _otController.text = '0.00';
 
     _pfController.text = pf.toStringAsFixed(2);
     _taxController.text = tax.toStringAsFixed(2);
@@ -215,9 +232,13 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     final hra = double.tryParse(_hraController.text) ?? 0.0;
     final edu = double.tryParse(_educationController.text) ?? 0.0;
     final special = double.tryParse(_specialController.text) ?? 0.0;
+    final travel = double.tryParse(_travelAllowanceController.text) ?? 0.0;
+    final otherAllow = double.tryParse(_otherAllowanceController.text) ?? 0.0;
     
     final incentive = double.tryParse(_incentiveController.text) ?? 0.0;
     final otherEarn = double.tryParse(_othersEarningController.text) ?? 0.0;
+    final bonus = double.tryParse(_bonusController.text) ?? 0.0;
+    final ot = double.tryParse(_otController.text) ?? 0.0;
 
     final pf = double.tryParse(_pfController.text) ?? 0.0;
     final tax = double.tryParse(_taxController.text) ?? 0.0;
@@ -230,7 +251,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     final welfare = double.tryParse(_staffWelfareController.text) ?? 0.0;
     final greeting = double.tryParse(_greetingController.text) ?? 0.0;
 
-    final gross = basic + hra + edu + special + incentive + otherEarn;
+    final gross = basic + hra + edu + special + travel + otherAllow + incentive + otherEarn + bonus + ot;
     final deductions = pf + tax + esi + lop + loan + advance + otherDed + welfare + greeting;
 
     setState(() {
@@ -265,11 +286,15 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
       hra: double.tryParse(_hraController.text) ?? 0.0,
       educationAllowance: double.tryParse(_educationController.text) ?? 0.0,
       specialAllowance: double.tryParse(_specialController.text) ?? 0.0,
+      travelAllowance: double.tryParse(_travelAllowanceController.text) ?? 0.0,
+      otherAllowance: double.tryParse(_otherAllowanceController.text) ?? 0.0,
       
       incentive: double.tryParse(_incentiveController.text) ?? 0.0,
       carryForward: _carryForwardController.text.isNotEmpty ? _carryForwardController.text : '-',
       othersEarning: double.tryParse(_othersEarningController.text) ?? 0.0,
       cumulativeIncentive: double.tryParse(_cumulativeIncentiveController.text) ?? 0.0,
+      bonus: double.tryParse(_bonusController.text) ?? 0.0,
+      ot: double.tryParse(_otController.text) ?? 0.0,
       
       pf: double.tryParse(_pfController.text) ?? 0.0,
       tax: double.tryParse(_taxController.text) ?? 0.0,
@@ -447,13 +472,17 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
             _buildSummaryRow('HRA', _hraController.text),
             _buildSummaryRow('Educational Allowance', _educationController.text),
             _buildSummaryRow('Special Allowance', _specialController.text),
+            _buildSummaryRow('Travel Allowance', _travelAllowanceController.text),
+            _buildSummaryRow('Other Allowance', _otherAllowanceController.text),
             _buildSummaryRow('Incentive', _incentiveController.text),
             _buildSummaryRow('Others Earning', _othersEarningController.text),
+            _buildSummaryRow('Bonus', _bonusController.text),
+            _buildSummaryRow('OT', _otController.text),
             const Divider(height: 16),
             _buildSummaryRow('PF Contribution', _pfController.text, isDeduction: true),
             _buildSummaryRow('Income Tax (TDS)', _taxController.text, isDeduction: true),
             _buildSummaryRow('ESI Contribution', _esiController.text, isDeduction: true),
-            _buildSummaryRow('LOP Deduction', _lopController.text, isDeduction: true),
+            _buildSummaryRow('Leave Days Deduction (LOP)', _lopController.text, isDeduction: true),
             _buildSummaryRow('Company Loan', _companyLoanController.text, isDeduction: true),
             _buildSummaryRow('Salary Advance', _salaryAdvanceController.text, isDeduction: true),
             _buildSummaryRow('Others Deduction', _othersDeductionController.text, isDeduction: true),
@@ -632,8 +661,12 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
             _buildInputField('Educational Allowance', _educationController),
             const SizedBox(height: 12),
             _buildInputField('Special Allowance', _specialController),
+            const SizedBox(height: 12),
+            _buildInputField('Travel Allowance', _travelAllowanceController),
+            const SizedBox(height: 12),
+            _buildInputField('Other Allowance', _otherAllowanceController),
             const Divider(height: 24),
-            const Text('Additional Components', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+            const Text('Monthly Inputs', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
             const SizedBox(height: 12),
             _buildInputField('Incentive', _incentiveController),
             const SizedBox(height: 12),
@@ -642,6 +675,10 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
             _buildInputField('Others Earning', _othersEarningController),
             const SizedBox(height: 12),
             _buildInputField('Cumulative Incentive', _cumulativeIncentiveController),
+            const SizedBox(height: 12),
+            _buildInputField('Bonus', _bonusController),
+            const SizedBox(height: 12),
+            _buildInputField('OT (Overtime)', _otController),
           ],
         ),
       ),
@@ -670,6 +707,8 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
             _buildInputField('ESI Contribution', _esiController),
             const Divider(height: 24),
             const Text('Deductions - Other', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+            const SizedBox(height: 12),
+            _buildInputField('Leave Days Deduction (LOP)', _lopController),
             const SizedBox(height: 12),
             _buildInputField('Company Loan Recovery', _companyLoanController),
             const SizedBox(height: 8),

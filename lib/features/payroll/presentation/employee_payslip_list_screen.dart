@@ -5,7 +5,6 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/layout/responsive_layout.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_text_styles.dart';
 import '../../employee/providers/employee_providers.dart';
 import '../../leave/providers/leave_providers.dart';
 import '../domain/payroll.dart';
@@ -43,7 +42,6 @@ class _EmployeePayslipListScreenState extends ConsumerState<EmployeePayslipListS
 
           return LayoutBuilder(
             builder: (context, constraints) {
-              final isMobile = constraints.maxWidth < AppBreakpoints.tablet;
               final gutter = AppLayout.gutter(constraints.maxWidth);
 
               return RefreshIndicator(

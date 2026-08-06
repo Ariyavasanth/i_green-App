@@ -361,6 +361,29 @@ class SqliteLeaveRepository implements LeaveRepository {
   }
 
   @override
+  Future<void> cancelLeaveRequest(int id, String employeeName) async {
+    final db = await database;
+
+    final batch = db.batch();
+    batch.update(
+      'leave_requests',
+      {'status': 'Cancelled'},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+
+    batch.insert('leave_audit_logs', {
+      'leave_request_id': id,
+      'action': 'Cancelled',
+      'performed_by': employeeName,
+      'timestamp': DateTime.now().toIso8601String(),
+      'details': 'Leave request cancelled by employee.',
+    });
+
+    await batch.commit(noResult: true);
+  }
+
+  @override
   Future<List<LeaveRequest>> getLeaveRequestsForCalendar() async {
     final db = await database;
     final maps = await db.query('leave_requests');

@@ -311,6 +311,41 @@ class FirebaseLeaveRepository implements LeaveRepository {
     await batch.commit();
   }
 
+  @override
+  Future<void> cancelLeaveRequest(int id, String employeeName) async {
+    QuerySnapshot<Map<String, dynamic>> snap;
+    if (id != 0) {
+      snap = await _requestsRef.where('id', isEqualTo: id).limit(1).get();
+    } else {
+      snap = await _requestsRef.limit(0).get();
+    }
+
+    DocumentReference<Map<String, dynamic>> docRef;
+    if (snap.docs.isNotEmpty) {
+      docRef = snap.docs.first.reference;
+    } else {
+      docRef = _requestsRef.doc(id.toString());
+    }
+
+    final batch = _firestore.batch();
+
+    batch.update(docRef, {
+      'status': 'Cancelled',
+      'updated_at': FieldValue.serverTimestamp(),
+    });
+
+    final auditRef = _auditRef.doc();
+    batch.set(auditRef, {
+      'leave_request_id': id,
+      'action': 'Cancelled',
+      'performed_by': employeeName,
+      'timestamp': DateTime.now().toIso8601String(),
+      'details': 'Leave request cancelled by employee.',
+    });
+
+    await batch.commit();
+  }
+
   // ── Leave Balances ─────────────────────────────────────────────────────────
 
   @override

@@ -29,12 +29,16 @@ class PayrollRecord {
   final double hra;
   final double educationAllowance;
   final double specialAllowance;
+  final double travelAllowance;
+  final double otherAllowance;
   
-  // Additional Earnings
+  // Additional Earnings / Monthly Inputs
   final double incentive;
   final String carryForward; // e.g. "-"
   final double othersEarning;
   final double cumulativeIncentive;
+  final double bonus;
+  final double ot;
   
   // Statutory Deductions
   final double pf;
@@ -86,10 +90,14 @@ class PayrollRecord {
     required this.hra,
     required this.educationAllowance,
     required this.specialAllowance,
+    this.travelAllowance = 0.0,
+    this.otherAllowance = 0.0,
     this.incentive = 0.0,
     this.carryForward = '-',
     this.othersEarning = 0.0,
     this.cumulativeIncentive = 0.0,
+    this.bonus = 0.0,
+    this.ot = 0.0,
     required this.pf,
     required this.tax,
     this.esi = 0.0,
@@ -133,10 +141,14 @@ class PayrollRecord {
       'hra': hra,
       'education_allowance': educationAllowance,
       'special_allowance': specialAllowance,
+      'travel_allowance': travelAllowance,
+      'other_allowance': otherAllowance,
       'incentive': incentive,
       'carry_forward': carryForward,
       'others_earning': othersEarning,
       'cumulative_incentive': cumulativeIncentive,
+      'bonus': bonus,
+      'ot': ot,
       'pf': pf,
       'tax': tax,
       'esi': esi,
@@ -181,10 +193,14 @@ class PayrollRecord {
       hra: (map['hra'] as num?)?.toDouble() ?? 0.0,
       educationAllowance: (map['education_allowance'] as num?)?.toDouble() ?? 0.0,
       specialAllowance: (map['special_allowance'] as num?)?.toDouble() ?? 0.0,
+      travelAllowance: (map['travel_allowance'] as num?)?.toDouble() ?? 0.0,
+      otherAllowance: (map['other_allowance'] as num?)?.toDouble() ?? 0.0,
       incentive: (map['incentive'] as num?)?.toDouble() ?? 0.0,
       carryForward: map['carry_forward'] as String? ?? '-',
       othersEarning: (map['others_earning'] as num?)?.toDouble() ?? 0.0,
       cumulativeIncentive: (map['cumulative_incentive'] as num?)?.toDouble() ?? 0.0,
+      bonus: (map['bonus'] as num?)?.toDouble() ?? 0.0,
+      ot: (map['ot'] as num?)?.toDouble() ?? 0.0,
       pf: (map['pf'] as num?)?.toDouble() ?? 0.0,
       tax: (map['tax'] as num?)?.toDouble() ?? 0.0,
       esi: (map['esi'] as num?)?.toDouble() ?? 0.0,
@@ -228,10 +244,14 @@ class PayrollRecord {
     double? hra,
     double? educationAllowance,
     double? specialAllowance,
+    double? travelAllowance,
+    double? otherAllowance,
     double? incentive,
     String? carryForward,
     double? othersEarning,
     double? cumulativeIncentive,
+    double? bonus,
+    double? ot,
     double? pf,
     double? tax,
     double? esi,
@@ -273,10 +293,14 @@ class PayrollRecord {
       hra: hra ?? this.hra,
       educationAllowance: educationAllowance ?? this.educationAllowance,
       specialAllowance: specialAllowance ?? this.specialAllowance,
+      travelAllowance: travelAllowance ?? this.travelAllowance,
+      otherAllowance: otherAllowance ?? this.otherAllowance,
       incentive: incentive ?? this.incentive,
       carryForward: carryForward ?? this.carryForward,
       othersEarning: othersEarning ?? this.othersEarning,
       cumulativeIncentive: cumulativeIncentive ?? this.cumulativeIncentive,
+      bonus: bonus ?? this.bonus,
+      ot: ot ?? this.ot,
       pf: pf ?? this.pf,
       tax: tax ?? this.tax,
       esi: esi ?? this.esi,
