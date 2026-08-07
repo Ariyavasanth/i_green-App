@@ -1,9 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:http/http.dart' as http;
+import 'package:firebase_storage/firebase_storage.dart';
 
 import '../domain/site_visit_attendance_repository.dart';
 import '../domain/site_visit_photo_asset.dart';
@@ -12,13 +11,12 @@ import '../domain/site_visit_record.dart';
 class FirebaseSiteVisitAttendanceRepository implements SiteVisitAttendanceRepository {
   FirebaseSiteVisitAttendanceRepository({
     FirebaseFirestore? firestore,
-    Uri? cloudinarySignerBaseUri,
+    FirebaseStorage? storage,
   })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        cloudinarySignerBaseUri = cloudinarySignerBaseUri ??
-            Uri.parse('https://i-green-app.onrender.com');
+        _storage = storage ?? FirebaseStorage.instance;
 
   final FirebaseFirestore _firestore;
-  final Uri cloudinarySignerBaseUri;
+  final FirebaseStorage _storage;
 
   CollectionReference<Map<String, dynamic>> get _visitsRef => _firestore.collection('site_visit_records');
 
@@ -99,7 +97,7 @@ class FirebaseSiteVisitAttendanceRepository implements SiteVisitAttendanceReposi
       final publicId = data['photo_public_id'] as String? ?? '';
       await doc.docs.first.reference.delete();
       await _deleteLocalPhotoIfPresent(photoUrl);
-      await _deleteCloudinaryPhotoIfPresent(publicId);
+      await _deleteStoragePhotoIfPresent(publicId, photoUrl);
       return;
     }
     await _visitsRef.doc(id.toString()).delete();
@@ -116,37 +114,18 @@ class FirebaseSiteVisitAttendanceRepository implements SiteVisitAttendanceReposi
     required double longitude,
   }) async {
     try {
-      final request = http.MultipartRequest(
-        'POST',
-        cloudinarySignerBaseUri.resolve('/cloudinary/upload-image'),
-      );
-      request.fields['folder'] = 'attendance/site_visit';
-      request.fields['fileName'] = 'site_visit_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      request.fields['mimeType'] = 'image/jpeg';
-      request.fields['employeeName'] = employeeName;
-      request.fields['siteName'] = siteName;
-      request.fields['visitDate'] = visitDate;
-      request.fields['visitTime'] = visitTime;
-      request.fields['latitude'] = latitude.toStringAsFixed(6);
-      request.fields['longitude'] = longitude.toStringAsFixed(6);
-      request.files.add(await http.MultipartFile.fromPath('file', localImagePath));
+      final file = File(localImagePath);
+      if (!await file.exists()) {
+        return SiteVisitPhotoAsset(url: localImagePath, publicId: '');
+      }
 
-      final response = await request.send();
-      final body = await response.stream.bytesToString();
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw Exception('Cloudinary upload failed: $body');
-      }
-      final decoded = jsonDecode(body) as Map<String, dynamic>;
-      final remoteUrl = decoded['secureUrl'] as String? ?? decoded['secure_url'] as String? ?? '';
-      final publicId = decoded['publicId'] as String? ?? decoded['public_id'] as String? ?? '';
-      if (remoteUrl.isEmpty) {
-        throw Exception('Cloudinary upload returned an empty URL.');
-      }
-      return SiteVisitPhotoAsset(url: remoteUrl, publicId: publicId);
-    } on SocketException {
-      return SiteVisitPhotoAsset(url: localImagePath, publicId: '');
-    } on HttpException {
-      return SiteVisitPhotoAsset(url: localImagePath, publicId: '');
+      final fileName = 'site_visit_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final storagePath = 'Site Attendence/$fileName';
+      final ref = _storage.ref().child(storagePath);
+      final uploadTask = await ref.putFile(file, SettableMetadata(contentType: 'image/jpeg'));
+      final remoteUrl = await uploadTask.ref.getDownloadURL();
+
+      return SiteVisitPhotoAsset(url: remoteUrl, publicId: storagePath);
     } catch (_) {
       return SiteVisitPhotoAsset(url: localImagePath, publicId: '');
     }
@@ -165,17 +144,16 @@ class FirebaseSiteVisitAttendanceRepository implements SiteVisitAttendanceReposi
     }
   }
 
-  Future<void> _deleteCloudinaryPhotoIfPresent(String publicId) async {
-    if (publicId.isEmpty) return;
+  Future<void> _deleteStoragePhotoIfPresent(String publicId, String photoUrl) async {
     try {
-      final request = http.post(
-        cloudinarySignerBaseUri.resolve('/cloudinary/delete-image'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'publicId': publicId}),
-      );
-      await request;
+      if (publicId.isNotEmpty) {
+        await _storage.ref().child(publicId).delete();
+      } else if (photoUrl.startsWith('http')) {
+        await _storage.refFromURL(photoUrl).delete();
+      }
     } catch (_) {
       // Best effort cleanup only.
     }
   }
 }
+

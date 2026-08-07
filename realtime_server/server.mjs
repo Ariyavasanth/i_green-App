@@ -1,17 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
-import cloudinary from "cloudinary";
 import express from "express";
-import multer from "multer";
 
 const app = express();
-const upload = multer({ storage: multer.memoryStorage() });
-
-cloudinary.v2.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-  secure: true,
-});
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 app.post("/token", async (_req, res) => {
@@ -36,69 +26,7 @@ app.post("/token", async (_req, res) => {
   }
 });
 
-app.post("/cloudinary/upload-image", upload.single("file"), async (req, res) => {
-  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-  const apiKey = process.env.CLOUDINARY_API_KEY;
-  const apiSecret = process.env.CLOUDINARY_API_SECRET;
-
-  if (!cloudName || !apiKey || !apiSecret) {
-    return res.status(500).json({ error: "Cloudinary environment variables are not configured" });
-  }
-
-  if (!req.file) {
-    return res.status(400).json({ error: "Missing image file" });
-  }
-
-  const folder = req.body.folder || "employee_management/employees/profile";
-  const publicIdBase = `${req.body.employeeId || "employee"}_${Date.now()}`;
-
-  try {
-    const result = await new Promise((resolve, reject) => {
-      const stream = cloudinary.v2.uploader.upload_stream(
-        {
-          folder,
-          public_id: publicIdBase,
-          resource_type: "image",
-          overwrite: true,
-          use_filename: false,
-          unique_filename: false,
-        },
-        (error, uploaded) => {
-          if (error) reject(error);
-          else resolve(uploaded);
-        },
-      );
-      stream.end(req.file.buffer);
-    });
-
-    return res.json({
-      secureUrl: result.secure_url,
-      publicId: result.public_id,
-      folder: result.folder,
-    });
-  } catch (error) {
-    console.error("Cloudinary upload failed", error);
-    return res.status(502).json({ error: "Unable to upload image to Cloudinary" });
-  }
-});
-
-app.post("/cloudinary/delete-image", express.json(), async (req, res) => {
-  const publicId = req.body?.publicId;
-  if (!publicId) {
-    return res.status(400).json({ error: "Missing publicId" });
-  }
-
-  try {
-    const result = await cloudinary.v2.uploader.destroy(publicId, {
-      resource_type: "image",
-    });
-    return res.json({ result });
-  } catch (error) {
-    console.error("Cloudinary delete failed", error);
-    return res.status(502).json({ error: "Unable to delete image from Cloudinary" });
-  }
-});
-
 app.listen(Number(process.env.PORT || 3000), "0.0.0.0", () => {
   console.log(`Invoice Gemini token server listening on port ${process.env.PORT || 3000}`);
 });
+

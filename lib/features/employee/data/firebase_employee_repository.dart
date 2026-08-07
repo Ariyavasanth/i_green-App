@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 import '../../organization/domain/column_preference.dart';
 import '../domain/employee.dart';
@@ -11,14 +12,13 @@ import '../domain/registration_link.dart';
 
 class FirebaseEmployeeRepository implements EmployeeRepository {
   final FirebaseFirestore _firestore;
-  final Uri cloudinarySignerBaseUri;
+  final FirebaseStorage _storage;
 
   FirebaseEmployeeRepository({
     FirebaseFirestore? firestore,
-    Uri? cloudinarySignerBaseUri,
+    FirebaseStorage? storage,
   })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        cloudinarySignerBaseUri = cloudinarySignerBaseUri ??
-            Uri.parse('https://i-green-app.onrender.com');
+        _storage = storage ?? FirebaseStorage.instance;
 
   CollectionReference<Map<String, dynamic>> get _employeesRef =>
       _firestore.collection('employees');
@@ -272,32 +272,19 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     required String mimeType,
   }) async {
     final folder = _folderForEmployee(employeeId, role);
+    final storagePath = 'Employee Photo/$folder/$fileName';
     try {
-      final request = http.MultipartRequest(
-        'POST',
-        cloudinarySignerBaseUri.resolve('/cloudinary/upload-image'),
-      );
-      request.fields['employeeId'] = employeeId;
-      request.fields['role'] = role;
-      request.fields['folder'] = folder;
-      request.fields['fileName'] = fileName;
-      request.fields['mimeType'] = mimeType;
-      request.files.add(http.MultipartFile.fromBytes(
-        'file',
+      final ref = _storage.ref().child(storagePath);
+      final uploadTask = await ref.putData(
         imageBytes,
-        filename: fileName,
-      ));
-
-      final response = await request.send();
-      final body = await response.stream.bytesToString();
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final decoded = jsonDecode(body) as Map<String, dynamic>;
-        return EmployeePhotoAsset(
-          url: decoded['secureUrl'] as String? ?? '',
-          publicId: decoded['publicId'] as String? ?? '',
-          folder: decoded['folder'] as String? ?? folder,
-        );
-      }
+        SettableMetadata(contentType: mimeType),
+      );
+      final downloadUrl = await uploadTask.ref.getDownloadURL();
+      return EmployeePhotoAsset(
+        url: downloadUrl,
+        publicId: storagePath,
+        folder: folder,
+      );
     } catch (_) {}
 
     // Fallback to local base64 Data URI if network or backend upload service is unreachable

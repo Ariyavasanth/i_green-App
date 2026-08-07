@@ -183,6 +183,18 @@ class AppShell extends ConsumerWidget {
       'Employee',
     ),
     SidebarDestination(
+      'Incentive Request',
+      '/incentive',
+      Icons.request_quote_outlined,
+      'Employee',
+    ),
+    SidebarDestination(
+      'Incentive Management',
+      '/incentive-management',
+      Icons.price_check_outlined,
+      'Employee',
+    ),
+    SidebarDestination(
       'Payroll',
       '/payroll',
       Icons.payments_outlined,

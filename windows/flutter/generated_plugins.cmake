@@ -7,6 +7,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   desktop_drop
   file_selector_windows
   firebase_core
+  firebase_storage
   flutter_sound
   geolocator_windows
   permission_handler_windows
