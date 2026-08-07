@@ -10,13 +10,10 @@ import '../providers/leave_providers.dart';
 
 enum EmployeeLeaveTab {
   dashboard,
-  balance,
-  apply,
   requests,
   calendar,
   history,
   salary,
-  policy,
 }
 
 class EmployeeLeavePage extends ConsumerStatefulWidget {
@@ -36,16 +33,11 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
   String _historyLeaveType = 'All';
   String _historyStatus = 'All';
 
-  // Apply Form State (Multi-step)
-  int _applyStep = 1;
-  String _selectedLeaveType = 'Casual Leave';
+  // Apply Form State
+  String _selectedLeaveType = 'Sick Leave';
   DateTime? _fromDate = DateTime.now();
   DateTime? _toDate = DateTime.now();
-  bool _isHalfDay = false;
-  String _halfDayPeriod = 'First Half';
   final TextEditingController _reasonController = TextEditingController();
-  bool _isEmergency = false;
-  String? _attachedFileName;
 
   // Quick Search
   final TextEditingController _globalSearchController = TextEditingController();
@@ -53,7 +45,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
     {
       'id': 1,
       'title': 'Leave Approved',
-      'message': 'Your Casual Leave for 12-Aug-2026 has been approved by HR.',
+      'message': 'Your Sick Leave for 12-Aug-2026 has been approved.',
       'time': '10 mins ago',
       'icon': Icons.check_circle_outline,
       'color': const Color(0xFF2E7D32),
@@ -68,15 +60,6 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
       'color': const Color(0xFF414A51),
       'isRead': false,
     },
-    {
-      'id': 3,
-      'title': 'Leave Balance Updated',
-      'message': 'Monthly allocation of 1.0 day added to Casual Leave.',
-      'time': '1 day ago',
-      'icon': Icons.account_balance_wallet_outlined,
-      'color': const Color(0xFF9CC70A),
-      'isRead': true,
-    },
   ];
 
   @override
@@ -89,14 +72,14 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'approved':
-        return const Color(0xFF2E7D32); // 🟢 Approved Green
+        return const Color(0xFF2E7D32);
       case 'pending':
-        return const Color(0xFFE65100); // 🟡 Pending Amber/Orange
+        return const Color(0xFFE65100);
       case 'denied':
       case 'rejected':
-        return const Color(0xFFC62828); // 🔴 Rejected Red
+        return const Color(0xFFC62828);
       case 'cancelled':
-        return const Color(0xFF414A51); // 🔵 Cancelled Charcoal/Blue
+        return const Color(0xFF414A51);
       default:
         return const Color(0xFF414A51);
     }
@@ -115,78 +98,6 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
       }
     } catch (_) {}
     return dateStr;
-  }
-
-  double _calculateNumDays() {
-    if (_fromDate == null || _toDate == null) return 0;
-    if (_isHalfDay) return 0.5;
-    final diff = _toDate!.difference(_fromDate!).inDays + 1;
-    return math.max(1.0, diff.toDouble());
-  }
-
-  // Submit leave request to Firestore via Provider
-  Future<void> _submitRequest(Employee currentEmp, double currentAvailableBalance) async {
-    if (_reasonController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a valid reason for leave'),
-          backgroundColor: Color(0xFFC62828),
-        ),
-      );
-      return;
-    }
-
-    final days = _calculateNumDays();
-    final fromStr = DateFormat('dd-MM-yyyy').format(_fromDate!);
-    final toStr = DateFormat('dd-MM-yyyy').format(_toDate!);
-
-    final newReq = LeaveRequest(
-      id: 0,
-      employeeId: currentEmp.id,
-      employeeName: currentEmp.fullName,
-      employeeCustomId: currentEmp.employeeId,
-      leaveType: _selectedLeaveType,
-      fromDate: fromStr,
-      toDate: toStr,
-      numDays: days,
-      reason: _reasonController.text.trim(),
-      status: 'Pending',
-      createdAt: DateTime.now().toIso8601String(),
-      isEmergency: _isEmergency,
-      attachmentUrl: _attachedFileName,
-      isHalfDay: _isHalfDay,
-      halfDayPeriod: _isHalfDay ? _halfDayPeriod : null,
-    );
-
-    try {
-      await ref.read(leaveRepositoryProvider).submitLeaveRequest(newReq);
-      ref.invalidate(leaveRequestsProvider(currentEmp.id));
-      ref.invalidate(allLeaveRequestsProvider);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Leave request submitted successfully!'),
-            backgroundColor: Color(0xFF2E7D32),
-          ),
-        );
-        setState(() {
-          _applyStep = 1;
-          _reasonController.clear();
-          _attachedFileName = null;
-          _activeTab = EmployeeLeaveTab.requests;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to submit: $e'),
-            backgroundColor: const Color(0xFFC62828),
-          ),
-        );
-      }
-    }
   }
 
   Future<void> _cancelRequest(LeaveRequest req, Employee currentEmp) async {
@@ -213,7 +124,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
       ),
     );
 
-    if (confirmed == true) {
+    if (confirmed == true && mounted) {
       try {
         await ref.read(leaveRepositoryProvider).cancelLeaveRequest(req.id, currentEmp.fullName);
         ref.invalidate(leaveRequestsProvider(currentEmp.id));
@@ -237,6 +148,269 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
         }
       }
     }
+  }
+
+  void _showApplyLeaveDialog(Employee currentEmp) {
+    _selectedLeaveType = 'Sick Leave';
+    _fromDate = DateTime.now();
+    _toDate = DateTime.now();
+    _reasonController.clear();
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            double days = 1.0;
+            if (_fromDate != null && _toDate != null) {
+              final diff = _toDate!.difference(_fromDate!).inDays + 1;
+              days = math.max(1.0, diff.toDouble());
+            }
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Apply For Leave', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF414A51))),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Color(0xFF64748B)),
+                    onPressed: () => Navigator.pop(dialogCtx),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: SizedBox(
+                  width: 450,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Leave Type Dropdown
+                      const Text('Leave Type', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
+                      const SizedBox(height: 6),
+                      DropdownButtonFormField<String>(
+                        initialValue: _selectedLeaveType,
+                        decoration: InputDecoration(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Color(0xFF9CC70A), width: 2),
+                          ),
+                        ),
+                        items: [
+                          'Sick Leave',
+                          'Casual Leave',
+                          'Annual Leave',
+                          'Optional Leave',
+                          'Work From Home',
+                          'Comp Off',
+                        ].map((type) => DropdownMenuItem(value: type, child: Text(type))).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setDialogState(() => _selectedLeaveType = val);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      // From Date and To Date
+                      Row(
+                        children: [
+                          // From Date Box
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('From Date', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                                const SizedBox(height: 6),
+                                InkWell(
+                                  onTap: () async {
+                                    final picked = await showDatePicker(
+                                      context: context,
+                                      initialDate: _fromDate ?? DateTime.now(),
+                                      firstDate: DateTime(2025),
+                                      lastDate: DateTime(2030),
+                                    );
+                                    if (picked != null) {
+                                      setDialogState(() {
+                                        _fromDate = picked;
+                                        // Default same day in both boxes for 1 day leave
+                                        _toDate = picked;
+                                      });
+                                    }
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          _fromDate != null ? DateFormat('dd MMM yyyy').format(_fromDate!) : 'Select',
+                                          style: const TextStyle(fontSize: 13, color: Color(0xFF414A51)),
+                                        ),
+                                        const Icon(Icons.calendar_today, size: 16, color: Color(0xFF64748B)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+
+                          // To Date Box
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('To Date', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                                const SizedBox(height: 6),
+                                InkWell(
+                                  onTap: () async {
+                                    final picked = await showDatePicker(
+                                      context: context,
+                                      initialDate: _toDate ?? _fromDate ?? DateTime.now(),
+                                      firstDate: _fromDate ?? DateTime(2025),
+                                      lastDate: DateTime(2030),
+                                    );
+                                    if (picked != null) {
+                                      setDialogState(() {
+                                        _toDate = picked;
+                                      });
+                                    }
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          _toDate != null ? DateFormat('dd MMM yyyy').format(_toDate!) : 'Select',
+                                          style: const TextStyle(fontSize: 13, color: Color(0xFF414A51)),
+                                        ),
+                                        const Icon(Icons.calendar_today, size: 16, color: Color(0xFF64748B)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          'Total Duration: ${days.toStringAsFixed(1)} Day(s)',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF9CC70A)),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Description
+                      const Text('Description', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: _reasonController,
+                        maxLines: 3,
+                        decoration: InputDecoration(
+                          hintText: 'Enter reason / description...',
+                          hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Color(0xFF9CC70A), width: 2),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogCtx),
+                  child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF9CC70A),
+                    foregroundColor: const Color(0xFF414A51),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  onPressed: () async {
+                    if (_reasonController.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Please enter a description / reason'),
+                          backgroundColor: Color(0xFFC62828),
+                        ),
+                      );
+                      return;
+                    }
+
+                    final fromStr = DateFormat('dd-MM-yyyy').format(_fromDate!);
+                    final toStr = DateFormat('dd-MM-yyyy').format(_toDate!);
+
+                    final newReq = LeaveRequest(
+                      id: 0,
+                      employeeId: currentEmp.id,
+                      employeeName: currentEmp.fullName,
+                      employeeCustomId: currentEmp.employeeId,
+                      leaveType: _selectedLeaveType,
+                      fromDate: fromStr,
+                      toDate: toStr,
+                      numDays: days,
+                      reason: _reasonController.text.trim(),
+                      status: 'Pending',
+                      createdAt: DateTime.now().toIso8601String(),
+                    );
+
+                    final messenger = ScaffoldMessenger.of(context);
+                    final nav = Navigator.of(dialogCtx);
+
+                    try {
+                      await ref.read(leaveRepositoryProvider).submitLeaveRequest(newReq);
+                      ref.invalidate(leaveRequestsProvider(currentEmp.id));
+                      ref.invalidate(allLeaveRequestsProvider);
+
+                      nav.pop();
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text('Leave request submitted successfully!'),
+                          backgroundColor: Color(0xFF2E7D32),
+                        ),
+                      );
+                    } catch (e) {
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text('Failed to submit: $e'),
+                          backgroundColor: const Color(0xFFC62828),
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.check_circle, size: 18),
+                  label: const Text('Submit Request', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -300,6 +474,13 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
             ],
           );
         },
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: const Color(0xFF9CC70A),
+        foregroundColor: const Color(0xFF414A51),
+        onPressed: () => _showApplyLeaveDialog(currentEmp),
+        icon: const Icon(Icons.add),
+        label: const Text('Apply Leave', style: TextStyle(fontWeight: FontWeight.bold)),
       ),
       bottomNavigationBar: MediaQuery.of(context).size.width < 768
           ? _buildMobileBottomNav()
@@ -435,13 +616,21 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
 
   // --- DESKTOP TABS ---
   Widget _buildDesktopTabs() {
+    final desktopTabs = [
+      EmployeeLeaveTab.dashboard,
+      EmployeeLeaveTab.requests,
+      EmployeeLeaveTab.calendar,
+      EmployeeLeaveTab.history,
+      EmployeeLeaveTab.salary,
+    ];
+
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
-          children: EmployeeLeaveTab.values.map((tab) {
+          children: desktopTabs.map((tab) {
             final isActive = _activeTab == tab;
             return InkWell(
               onTap: () => setState(() => _activeTab = tab),
@@ -485,10 +674,8 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
   Widget _buildMobileBottomNav() {
     final mobileTabs = [
       EmployeeLeaveTab.dashboard,
-      EmployeeLeaveTab.apply,
       EmployeeLeaveTab.requests,
       EmployeeLeaveTab.calendar,
-      EmployeeLeaveTab.policy,
     ];
 
     return BottomNavigationBar(
@@ -516,10 +703,6 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
     switch (tab) {
       case EmployeeLeaveTab.dashboard:
         return Icons.dashboard_outlined;
-      case EmployeeLeaveTab.balance:
-        return Icons.account_balance_wallet_outlined;
-      case EmployeeLeaveTab.apply:
-        return Icons.add_circle_outline;
       case EmployeeLeaveTab.requests:
         return Icons.format_list_bulleted_outlined;
       case EmployeeLeaveTab.calendar:
@@ -528,8 +711,6 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
         return Icons.history_outlined;
       case EmployeeLeaveTab.salary:
         return Icons.payments_outlined;
-      case EmployeeLeaveTab.policy:
-        return Icons.article_outlined;
     }
   }
 
@@ -537,10 +718,6 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
     switch (tab) {
       case EmployeeLeaveTab.dashboard:
         return 'Dashboard';
-      case EmployeeLeaveTab.balance:
-        return 'My Balance';
-      case EmployeeLeaveTab.apply:
-        return 'Apply Leave';
       case EmployeeLeaveTab.requests:
         return 'My Requests';
       case EmployeeLeaveTab.calendar:
@@ -549,8 +726,6 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
         return 'Leave History';
       case EmployeeLeaveTab.salary:
         return 'Salary & LOP';
-      case EmployeeLeaveTab.policy:
-        return 'Policy';
     }
   }
 
@@ -564,10 +739,6 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
     switch (_activeTab) {
       case EmployeeLeaveTab.dashboard:
         return _buildDashboardSection(currentEmp, requests, balances, isMobile);
-      case EmployeeLeaveTab.balance:
-        return _buildBalanceSection(balances, isMobile);
-      case EmployeeLeaveTab.apply:
-        return _buildApplyLeaveSection(currentEmp, balances, isMobile);
       case EmployeeLeaveTab.requests:
         return _buildMyRequestsSection(currentEmp, requests, isMobile);
       case EmployeeLeaveTab.calendar:
@@ -576,8 +747,6 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
         return _buildHistorySection(requests, isMobile);
       case EmployeeLeaveTab.salary:
         return _buildSalaryLopSection(currentEmp, isMobile);
-      case EmployeeLeaveTab.policy:
-        return _buildPolicySection(isMobile);
     }
   }
 
@@ -590,14 +759,9 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
     List<LeaveBalance> balances,
     bool isMobile,
   ) {
-    double totalAvailable = 0;
-    for (final b in balances) {
-      totalAvailable += b.availableLeaves;
-    }
-    if (balances.isEmpty) totalAvailable = 12.0;
-
     final pendingCount = requests.where((r) => r.status == 'Pending').length;
     final approvedCount = requests.where((r) => r.status == 'Approved').length;
+    final totalRequests = requests.length;
 
     return SingleChildScrollView(
       padding: EdgeInsets.all(isMobile ? 16 : 24),
@@ -606,19 +770,19 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
         children: [
           // Quick Summary Cards Grid
           LayoutBuilder(builder: (context, box) {
-            final cols = isMobile ? 2 : 4;
+            final cols = isMobile ? 2 : 3;
             return GridView.count(
               crossAxisCount: cols,
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
               shrinkWrap: true,
-              childAspectRatio: isMobile ? 1.4 : 1.6,
+              childAspectRatio: isMobile ? 1.4 : 1.8,
               physics: const NeverScrollableScrollPhysics(),
               children: [
                 _buildSummaryCard(
-                  'Leave Balance',
-                  '${totalAvailable.toStringAsFixed(1)} Days',
-                  Icons.account_balance_wallet_outlined,
+                  'Total Requests',
+                  '$totalRequests',
+                  Icons.folder_outlined,
                   const Color(0xFF0288D1),
                   const Color(0xFFE1F5FE),
                 ),
@@ -635,13 +799,6 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                   Icons.check_circle_outline,
                   const Color(0xFF2E7D32),
                   const Color(0xFFE8F5E9),
-                ),
-                _buildSummaryCard(
-                  'Remaining Leave',
-                  '${totalAvailable.toStringAsFixed(1)} Days',
-                  Icons.event_available_outlined,
-                  const Color(0xFF9CC70A),
-                  const Color(0xFFF7FCE8),
                 ),
               ],
             );
@@ -662,9 +819,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                   borderRadius: BorderRadius.circular(16),
                 ),
               ),
-              onPressed: () {
-                setState(() => _activeTab = EmployeeLeaveTab.apply);
-              },
+              onPressed: () => _showApplyLeaveDialog(currentEmp),
               icon: const Icon(Icons.add_circle, size: 22),
               label: const Text(
                 '+ Apply Leave',
@@ -673,74 +828,9 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
             ),
           ),
 
-          const SizedBox(height: 16),
-
-          // Quick Action Secondary Buttons
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    side: const BorderSide(color: Color(0xFFCBD5E1)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () => setState(() => _activeTab = EmployeeLeaveTab.policy),
-                  icon: const Icon(Icons.policy_outlined, size: 16, color: Color(0xFF414A51)),
-                  label: const Text('Leave Policy', style: TextStyle(color: Color(0xFF414A51), fontSize: 13)),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    side: const BorderSide(color: Color(0xFFCBD5E1)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () => setState(() => _activeTab = EmployeeLeaveTab.policy),
-                  icon: const Icon(Icons.celebration_outlined, size: 16, color: Color(0xFF414A51)),
-                  label: const Text('Holidays', style: TextStyle(color: Color(0xFF414A51), fontSize: 13)),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    side: const BorderSide(color: Color(0xFFCBD5E1)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () => _showContactHrDialog(),
-                  icon: const Icon(Icons.support_agent_outlined, size: 16, color: Color(0xFF414A51)),
-                  label: const Text('Contact HR', style: TextStyle(color: Color(0xFF414A51), fontSize: 13)),
-                ),
-              ),
-            ],
-          ),
-
           const SizedBox(height: 24),
 
-          // Leave Balance Cards Section
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Leave Balances',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
-              ),
-              TextButton(
-                onPressed: () => setState(() => _activeTab = EmployeeLeaveTab.balance),
-                child: const Text('View All', style: TextStyle(color: Color(0xFF9CC70A), fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildDashboardBalanceGrid(balances, isMobile),
-
-          const SizedBox(height: 24),
-
-          // Recent Activity / Upcoming Leaves
+          // Recent Activity / Requests List
           const Text(
             'Recent Leave Activity',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
@@ -761,7 +851,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
             )
           else
             Column(
-              children: requests.take(3).map((req) => _buildRequestCard(req, currentEmp, isMobile)).toList(),
+              children: requests.take(5).map((req) => _buildRequestCard(req, currentEmp, isMobile)).toList(),
             ),
         ],
       ),
@@ -810,676 +900,8 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
     );
   }
 
-  Widget _buildDashboardBalanceGrid(List<LeaveBalance> balances, bool isMobile) {
-    final displayTypes = [
-      {'name': 'Casual Leave', 'allocated': 12.0, 'icon': Icons.beach_access},
-      {'name': 'Sick Leave', 'allocated': 10.0, 'icon': Icons.medical_services_outlined},
-      {'name': 'Optional Leave', 'allocated': 3.0, 'icon': Icons.star_border},
-      {'name': 'Work From Home', 'allocated': 24.0, 'icon': Icons.home_work_outlined},
-    ];
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: isMobile ? 2 : 4,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 1.3,
-      ),
-      itemCount: displayTypes.length,
-      itemBuilder: (context, index) {
-        final dt = displayTypes[index];
-        final match = balances.firstWhere(
-          (b) => b.leaveType.toLowerCase() == dt['name'].toString().toLowerCase(),
-          orElse: () => LeaveBalance(
-            id: 0,
-            employeeId: 0,
-            leaveType: dt['name'].toString(),
-            allowedLeaves: (dt['allocated'] as num).toDouble(),
-            usedLeaves: 2.0,
-            availableLeaves: (dt['allocated'] as num).toDouble() - 2.0,
-            effectiveDate: '',
-            allocationFrequency: 'Monthly',
-          ),
-        );
-
-        final percent = (match.usedLeaves / math.max(1.0, match.allowedLeaves)).clamp(0.0, 1.0);
-
-        return Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      match.leaveType,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF414A51)),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Icon(dt['icon'] as IconData, size: 18, color: const Color(0xFF9CC70A)),
-                ],
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('${match.availableLeaves.toStringAsFixed(1)} Left', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
-                      Text('${match.allowedLeaves.toStringAsFixed(0)} Allocated', style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
-                    ],
-                  ),
-                  SizedBox(
-                    width: 36,
-                    height: 36,
-                    child: CircularProgressIndicator(
-                      value: percent,
-                      backgroundColor: const Color(0xFFF1F5F9),
-                      color: const Color(0xFF9CC70A),
-                      strokeWidth: 4,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   // ==========================================
-  // 2. MY LEAVE BALANCE SECTION
-  // ==========================================
-  Widget _buildBalanceSection(List<LeaveBalance> balances, bool isMobile) {
-    final defaultTypes = [
-      {'type': 'Casual Leave', 'alloc': 12.0, 'used': 4.0, 'cf': 'Up to 5 days', 'expiry': '31 Dec 2026'},
-      {'type': 'Sick Leave', 'alloc': 10.0, 'used': 2.0, 'cf': 'Not Allowed', 'expiry': '31 Dec 2026'},
-      {'type': 'Annual Leave', 'alloc': 15.0, 'used': 5.0, 'cf': 'Up to 10 days', 'expiry': 'No Expiry'},
-      {'type': 'Optional Leave', 'alloc': 3.0, 'used': 1.0, 'cf': 'Not Allowed', 'expiry': '31 Dec 2026'},
-      {'type': 'Work From Home', 'alloc': 24.0, 'used': 8.0, 'cf': 'Not Allowed', 'expiry': 'Monthly Reset'},
-      {'type': 'Comp Off', 'alloc': 2.0, 'used': 0.0, 'cf': 'Not Allowed', 'expiry': '60 Days'},
-    ];
-
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(isMobile ? 16 : 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'My Leave Balance Details',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Annual allocation, usage, carry forward rules and expiration terms.',
-            style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
-          ),
-          const SizedBox(height: 20),
-
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: isMobile ? 1 : 2,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-              childAspectRatio: isMobile ? 1.8 : 2.2,
-            ),
-            itemCount: defaultTypes.length,
-            itemBuilder: (context, idx) {
-              final item = defaultTypes[idx];
-              final typeName = item['type'].toString();
-
-              final match = balances.firstWhere(
-                (b) => b.leaveType.toLowerCase() == typeName.toLowerCase(),
-                orElse: () => LeaveBalance(
-                  id: 0,
-                  employeeId: 0,
-                  leaveType: typeName,
-                  allowedLeaves: (item['alloc'] as num).toDouble(),
-                  usedLeaves: (item['used'] as num).toDouble(),
-                  availableLeaves: (item['alloc'] as num).toDouble() - (item['used'] as num).toDouble(),
-                  effectiveDate: '',
-                  allocationFrequency: 'Annual',
-                ),
-              );
-
-              final allowed = match.allowedLeaves;
-              final used = match.usedLeaves;
-              final remaining = match.availableLeaves;
-
-              return Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.02),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          typeName,
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Text(
-                            'Active',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Divider(height: 16, color: Color(0xFFF1F5F9)),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildStatColumn('Allocated', '${allowed.toStringAsFixed(0)} Days'),
-                        _buildStatColumn('Used', '${used.toStringAsFixed(0)} Days'),
-                        _buildStatColumn('Remaining', '${remaining.toStringAsFixed(0)} Days', isHighlight: true),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Carry Forward: ${item['cf']}', style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
-                        Text('Expiry: ${item['expiry']}', style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatColumn(String label, String val, {bool isHighlight = false}) {
-    return Column(
-      children: [
-        Text(
-          val,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: isHighlight ? const Color(0xFF9CC70A) : const Color(0xFF414A51),
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-        ),
-      ],
-    );
-  }
-
-  // ==========================================
-  // 3. APPLY LEAVE SECTION (5-STEP FORM)
-  // ==========================================
-  Widget _buildApplyLeaveSection(Employee currentEmp, List<LeaveBalance> balances, bool isMobile) {
-    double availableForSelected = 12.0;
-    final match = balances.where((b) => b.leaveType.toLowerCase() == _selectedLeaveType.toLowerCase()).toList();
-    if (match.isNotEmpty) {
-      availableForSelected = match.first.availableLeaves;
-    }
-
-    final requestedDays = _calculateNumDays();
-    final isInsufficient = requestedDays > availableForSelected;
-
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(isMobile ? 16 : 24),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 800),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Apply For Leave',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Complete the multi-step request form below.',
-                style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
-              ),
-              const SizedBox(height: 20),
-
-              // Stepper Progress Header
-              Row(
-                children: [1, 2, 3, 4, 5].map((stepNum) {
-                  final isActive = _applyStep >= stepNum;
-                  return Expanded(
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 4),
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: isActive ? const Color(0xFF9CC70A) : const Color(0xFFE2E8F0),
-                        borderRadius: BorderRadius.circular(3),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 24),
-
-              // Step Content Card
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.03),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: _buildApplyStepContent(currentEmp, availableForSelected, isInsufficient, requestedDays),
-              ),
-
-              const SizedBox(height: 20),
-
-              // Navigation Buttons (Back / Next / Submit)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  if (_applyStep > 1)
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                        side: const BorderSide(color: Color(0xFFCBD5E1)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: () => setState(() => _applyStep--),
-                      icon: const Icon(Icons.arrow_back, size: 18, color: Color(0xFF414A51)),
-                      label: const Text('Back', style: TextStyle(color: Color(0xFF414A51))),
-                    )
-                  else
-                    const SizedBox.shrink(),
-
-                  if (_applyStep < 5)
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF9CC70A),
-                        foregroundColor: const Color(0xFF414A51),
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: () => setState(() => _applyStep++),
-                      label: const Text('Next Step', style: TextStyle(fontWeight: FontWeight.bold)),
-                      icon: const Icon(Icons.arrow_forward, size: 18),
-                    )
-                  else
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF9CC70A),
-                        foregroundColor: const Color(0xFF414A51),
-                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: () => _submitRequest(currentEmp, availableForSelected),
-                      icon: const Icon(Icons.check_circle, size: 20),
-                      label: const Text('Submit Request', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildApplyStepContent(
-    Employee currentEmp,
-    double availableBalance,
-    bool isInsufficient,
-    double requestedDays,
-  ) {
-    switch (_applyStep) {
-      case 1:
-        final options = [
-          {'name': 'Casual Leave', 'desc': 'For planned personal events & leaves'},
-          {'name': 'Sick Leave', 'desc': 'For medical emergencies & illness'},
-          {'name': 'Annual Leave', 'desc': 'Long vacation and annual holidays'},
-          {'name': 'Optional Leave', 'desc': 'Restricted festival holidays'},
-          {'name': 'Work From Home', 'desc': 'Remote work day request'},
-          {'name': 'Comp Off', 'desc': 'Compensation against extra work days'},
-        ];
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Step 1: Choose Leave Type', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
-            const SizedBox(height: 12),
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: options.length,
-              itemBuilder: (ctx, idx) {
-                final opt = options[idx];
-                final isSel = _selectedLeaveType == opt['name'];
-                return InkWell(
-                  onTap: () => setState(() => _selectedLeaveType = opt['name']!),
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: isSel ? const Color(0xFF9CC70A).withValues(alpha: 0.15) : const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isSel ? const Color(0xFF9CC70A) : const Color(0xFFE2E8F0),
-                        width: isSel ? 2 : 1,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          isSel ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-                          color: const Color(0xFF414A51),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(opt['name']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF414A51))),
-                              Text(opt['desc']!, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ],
-        );
-
-      case 2:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Step 2: Select Dates & Duration', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('From Date', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
-                      const SizedBox(height: 6),
-                      InkWell(
-                        onTap: () async {
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: _fromDate ?? DateTime.now(),
-                            firstDate: DateTime(2025),
-                            lastDate: DateTime(2030),
-                          );
-                          if (picked != null) {
-                            setState(() {
-                              _fromDate = picked;
-                              if (_toDate != null && _toDate!.isBefore(picked)) {
-                                _toDate = picked;
-                              }
-                            });
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: const Color(0xFFCBD5E1)),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(_fromDate != null ? DateFormat('dd-MM-yyyy').format(_fromDate!) : 'Select Date'),
-                              const Icon(Icons.calendar_today, size: 16, color: Color(0xFF64748B)),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('To Date', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
-                      const SizedBox(height: 6),
-                      InkWell(
-                        onTap: () async {
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: _toDate ?? DateTime.now(),
-                            firstDate: _fromDate ?? DateTime(2025),
-                            lastDate: DateTime(2030),
-                          );
-                          if (picked != null) {
-                            setState(() => _toDate = picked);
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: const Color(0xFFCBD5E1)),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(_toDate != null ? DateFormat('dd-MM-yyyy').format(_toDate!) : 'Select Date'),
-                              const Icon(Icons.calendar_today, size: 16, color: Color(0xFF64748B)),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Half Day Leave', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-              subtitle: const Text('Check if you require only half a working day'),
-              value: _isHalfDay,
-              activeThumbColor: const Color(0xFF9CC70A),
-              onChanged: (val) => setState(() => _isHalfDay = val),
-            ),
-            if (_isHalfDay) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: ['First Half', 'Second Half'].map((period) {
-                  final isSel = _halfDayPeriod == period;
-                  return Expanded(
-                    child: ChoiceChip(
-                      label: Text(period),
-                      selected: isSel,
-                      selectedColor: const Color(0xFF9CC70A),
-                      onSelected: (selected) {
-                        if (selected) setState(() => _halfDayPeriod = period);
-                      },
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
-          ],
-        );
-
-      case 3:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Step 3: Leave Reason', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _reasonController,
-              maxLines: 4,
-              maxLength: 250,
-              decoration: InputDecoration(
-                hintText: 'Describe the reason for your leave application...',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF9CC70A), width: 2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Emergency Leave Request', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-              subtitle: const Text('Mark if this requires immediate manager approval'),
-              value: _isEmergency,
-              activeColor: const Color(0xFF9CC70A),
-              onChanged: (val) => setState(() => _isEmergency = val ?? false),
-            ),
-          ],
-        );
-
-      case 4:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Step 4: Supporting Attachment (Optional)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
-            const SizedBox(height: 6),
-            const Text('Upload Medical Certificate or supporting documents if applicable.', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-            const SizedBox(height: 16),
-            InkWell(
-              onTap: () {
-                setState(() => _attachedFileName = 'Medical_Certificate_Aug2026.pdf');
-              },
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFCBD5E1), style: BorderStyle.solid),
-                ),
-                child: Column(
-                  children: [
-                    const Icon(Icons.cloud_upload_outlined, size: 36, color: Color(0xFF9CC70A)),
-                    const SizedBox(height: 8),
-                    Text(
-                      _attachedFileName ?? 'Click to attach PDF / Image document',
-                      style: TextStyle(
-                        fontWeight: _attachedFileName != null ? FontWeight.bold : FontWeight.normal,
-                        color: const Color(0xFF414A51),
-                      ),
-                    ),
-                    if (_attachedFileName != null)
-                      TextButton(
-                        onPressed: () => setState(() => _attachedFileName = null),
-                        child: const Text('Remove Attachment', style: TextStyle(color: Color(0xFFC62828), fontSize: 12)),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        );
-
-      case 5:
-      default:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Step 5: Review Summary', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
-            const SizedBox(height: 16),
-            if (isInsufficient)
-              Container(
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFEBEE),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFEF5350)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.warning_amber_rounded, color: Color(0xFFC62828)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Warning: Requested ($requestedDays days) exceeds available balance (${availableBalance.toStringAsFixed(1)} days). Extra days will be marked as Loss of Pay (LOP).',
-                        style: const TextStyle(color: Color(0xFFC62828), fontSize: 12, fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            _buildReviewRow('Leave Type', _selectedLeaveType),
-            _buildReviewRow('Dates', '${DateFormat('dd MMM').format(_fromDate!)} → ${DateFormat('dd MMM yyyy').format(_toDate!)}'),
-            _buildReviewRow('Total Days', '$requestedDays Day(s) ${_isHalfDay ? "($_halfDayPeriod)" : ""}'),
-            _buildReviewRow('Current Balance', '${availableBalance.toStringAsFixed(1)} Days'),
-            _buildReviewRow('Emergency', _isEmergency ? 'Yes' : 'No'),
-            _buildReviewRow('Attachment', _attachedFileName ?? 'None'),
-            _buildReviewRow('Reason', _reasonController.text.isEmpty ? 'N/A' : _reasonController.text),
-          ],
-        );
-    }
-  }
-
-  Widget _buildReviewRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(color: Color(0xFF64748B), fontSize: 13)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF414A51), fontSize: 13)),
-        ],
-      ),
-    );
-  }
-
-  // ==========================================
-  // 4. MY REQUESTS SECTION
+  // 2. MY REQUESTS SECTION
   // ==========================================
   Widget _buildMyRequestsSection(Employee currentEmp, List<LeaveRequest> requests, bool isMobile) {
     return SingleChildScrollView(
@@ -1499,7 +921,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                   backgroundColor: const Color(0xFF9CC70A),
                   foregroundColor: const Color(0xFF414A51),
                 ),
-                onPressed: () => setState(() => _activeTab = EmployeeLeaveTab.apply),
+                onPressed: () => _showApplyLeaveDialog(currentEmp),
                 icon: const Icon(Icons.add, size: 16),
                 label: const Text('Apply New'),
               ),
@@ -1622,11 +1044,6 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
               ),
             ),
           ],
-          const SizedBox(height: 12),
-
-          // Approval Timeline Stepper
-          _buildApprovalTimeline(req.status),
-
           const Divider(height: 16, color: Color(0xFFF1F5F9)),
 
           Row(
@@ -1654,7 +1071,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
   }
 
   // ==========================================
-  // 5. CALENDAR SECTION
+  // 3. CALENDAR SECTION
   // ==========================================
   Widget _buildCalendarSection(List<LeaveRequest> requests, bool isMobile) {
     final firstDayOfMonth = DateTime(_focusedMonth.year, _focusedMonth.month, 1);
@@ -1781,7 +1198,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                           ),
                         ),
                         child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisAlignment: Color(0xFF414A51) == Colors.transparent ? MainAxisAlignment.center : MainAxisAlignment.center,
                           children: [
                             Text(
                               '$dayNum',
@@ -1829,7 +1246,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
   }
 
   // ==========================================
-  // 6. LEAVE HISTORY SECTION
+  // 4. LEAVE HISTORY SECTION
   // ==========================================
   Widget _buildHistorySection(List<LeaveRequest> requests, bool isMobile) {
     final filtered = requests.where((r) {
@@ -1903,7 +1320,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
   }
 
   // ==========================================
-  // 7. SALARY & LOSS OF PAY (LOP) SECTION
+  // 5. SALARY & LOSS OF PAY (LOP) SECTION
   // ==========================================
   Widget _buildSalaryLopSection(Employee currentEmp, bool isMobile) {
     final now = DateTime.now();
@@ -2014,145 +1431,6 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
     );
   }
 
-  // ==========================================
-  // 8. APPROVAL TIMELINE STEPPER
-  // ==========================================
-  Widget _buildApprovalTimeline(String status) {
-    int currentStep = 1;
-    bool isRejected = false;
-    if (status == 'Approved') {
-      currentStep = 4;
-    } else if (status == 'Denied' || status == 'Rejected') {
-      currentStep = 2;
-      isRejected = true;
-    } else if (status == 'Pending') {
-      currentStep = 2;
-    }
-
-    return Row(
-      children: [
-        _buildTimelineStep('Applied', 1, currentStep, false),
-        _buildTimelineLine(1 < currentStep),
-        _buildTimelineStep('Manager Review', 2, currentStep, isRejected && currentStep == 2),
-        _buildTimelineLine(2 < currentStep),
-        _buildTimelineStep('HR Review', 3, currentStep, false),
-        _buildTimelineLine(3 < currentStep),
-        _buildTimelineStep(isRejected ? 'Rejected' : 'Approved', 4, currentStep, isRejected),
-      ],
-    );
-  }
-
-  Widget _buildTimelineStep(String label, int step, int currentStep, bool isRejected) {
-    final isDone = step <= currentStep;
-    Color color = const Color(0xFFCBD5E1);
-    if (isDone) {
-      color = isRejected ? const Color(0xFFC62828) : const Color(0xFF9CC70A);
-    }
-
-    return Column(
-      children: [
-        Container(
-          width: 20,
-          height: 20,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          child: Center(
-            child: isDone
-                ? Icon(isRejected ? Icons.close : Icons.check, size: 12, color: Colors.white)
-                : Text('$step', style: const TextStyle(fontSize: 10, color: Colors.white)),
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(label, style: const TextStyle(fontSize: 9, color: Color(0xFF64748B))),
-      ],
-    );
-  }
-
-  Widget _buildTimelineLine(bool active) {
-    return Expanded(
-      child: Container(
-        height: 2,
-        color: active ? const Color(0xFF9CC70A) : const Color(0xFFCBD5E1),
-      ),
-    );
-  }
-
-  // ==========================================
-  // 10. PROFILE & LEAVE POLICY SECTION
-  // ==========================================
-  Widget _buildPolicySection(bool isMobile) {
-    final holidays = [
-      {'date': '01 Jan 2026', 'day': 'Thursday', 'name': 'New Year Day'},
-      {'date': '26 Jan 2026', 'day': 'Monday', 'name': 'Republic Day'},
-      {'date': '15 Aug 2026', 'day': 'Saturday', 'name': 'Independence Day'},
-      {'date': '02 Oct 2026', 'day': 'Friday', 'name': 'Gandhi Jayanti'},
-      {'date': '25 Dec 2026', 'day': 'Friday', 'name': 'Christmas'},
-    ];
-
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(isMobile ? 16 : 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Company Leave Policy & Holidays', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
-          const SizedBox(height: 16),
-
-          // Policy Summary Card
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE2E8F0))),
-            child: const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Leave Rules Overview', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                SizedBox(height: 8),
-                Text('• Casual Leaves must be applied at least 24 hours prior.', style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
-                Text('• Sick leaves exceeding 2 consecutive days require a medical certificate.', style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
-                Text('• Carry forward of up to 5 unused Casual Leaves is allowed at year end.', style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 20),
-          const Text('Upcoming Company Holidays', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
-          const SizedBox(height: 12),
-
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: holidays.length,
-            itemBuilder: (ctx, idx) {
-              final h = holidays[idx];
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.celebration, color: Color(0xFF9CC70A), size: 20),
-                        const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(h['name']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                            Text(h['day']!, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
-                          ],
-                        ),
-                      ],
-                    ),
-                    Text(h['date']!, style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF414A51))),
-                  ],
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
   // --- MODALS & DIALOGS ---
   void _showNotificationBottomSheet(BuildContext context) {
     showModalBottomSheet(
@@ -2174,29 +1452,6 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                 )),
           ],
         ),
-      ),
-    );
-  }
-
-  void _showContactHrDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Contact HR Support'),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Email: hr@company.com'),
-            SizedBox(height: 4),
-            Text('Phone: +91 98765 43210'),
-            SizedBox(height: 4),
-            Text('Office Hours: 9:00 AM - 6:00 PM (Mon-Fri)'),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
-        ],
       ),
     );
   }
