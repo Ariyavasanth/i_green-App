@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -84,8 +83,24 @@ class FirebaseSiteVisitAttendanceRepository implements SiteVisitAttendanceReposi
     required double latitude,
     required double longitude,
     String notes = '',
-  }) {
-    throw UnimplementedError('Firebase day checkout is not wired yet.');
+  }) async {
+    await saveVisit(
+      SiteVisitRecord(
+        id: 0,
+        employeeId: employeeId,
+        employeeName: employeeName,
+        siteName: 'Day Checkout',
+        visitDate: visitDate,
+        visitTime: visitTime,
+        photoUrl: '',
+        photoPublicId: '',
+        latitude: latitude,
+        longitude: longitude,
+        address: '',
+        notes: notes.isEmpty ? 'Checked out for the day' : notes,
+        createdAt: DateTime.now().toIso8601String(),
+      ),
+    );
   }
 
   @override
