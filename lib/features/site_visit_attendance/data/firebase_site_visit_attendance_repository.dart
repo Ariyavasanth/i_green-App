@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import '../domain/site_visit_attendance_repository.dart';
 import '../domain/site_visit_photo_asset.dart';
@@ -129,17 +132,35 @@ class FirebaseSiteVisitAttendanceRepository implements SiteVisitAttendanceReposi
     required double longitude,
   }) async {
     try {
-      final file = File(localImagePath);
-      if (!await file.exists()) {
+      Uint8List? bytes;
+      if (localImagePath.startsWith('data:image')) {
+        final base64Str = localImagePath.split(',').last;
+        bytes = base64Decode(base64Str);
+      } else if (localImagePath.startsWith('http://') || localImagePath.startsWith('https://')) {
         return SiteVisitPhotoAsset(url: localImagePath, publicId: '');
+      } else if (kIsWeb || localImagePath.startsWith('blob:')) {
+        final response = await http.get(Uri.parse(localImagePath));
+        bytes = response.bodyBytes;
+      } else {
+        final file = File(localImagePath);
+        if (await file.exists()) {
+          bytes = await file.readAsBytes();
+        }
       }
 
       final fileName = 'site_visit_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final storagePath = 'Site Attendence/$fileName';
       final ref = _storage.ref().child(storagePath);
-      final uploadTask = await ref.putFile(file, SettableMetadata(contentType: 'image/jpeg'));
-      final remoteUrl = await uploadTask.ref.getDownloadURL();
 
+      TaskSnapshot uploadTask;
+      if (bytes != null && bytes.isNotEmpty) {
+        uploadTask = await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
+      } else {
+        final file = File(localImagePath);
+        uploadTask = await ref.putFile(file, SettableMetadata(contentType: 'image/jpeg'));
+      }
+
+      final remoteUrl = await uploadTask.ref.getDownloadURL();
       return SiteVisitPhotoAsset(url: remoteUrl, publicId: storagePath);
     } catch (_) {
       return SiteVisitPhotoAsset(url: localImagePath, publicId: '');

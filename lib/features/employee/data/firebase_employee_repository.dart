@@ -1,9 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import '../../organization/domain/column_preference.dart';
 import '../domain/employee.dart';
@@ -144,6 +146,11 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     emp = emp.copyWith(status: 'Active');
 
     final docId = emp.employeeId;
+    if (emp.profileImageUrl.isNotEmpty) {
+      final storageUrl = await _uploadEmployeePhotoToStorage(docId, emp.profileImageUrl);
+      emp = emp.copyWith(profileImageUrl: storageUrl);
+    }
+
     final data = _employeeToFirestore(emp);
     data['created_at'] = FieldValue.serverTimestamp();
 
@@ -187,6 +194,11 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       }
     }
 
+    if (emp.profileImageUrl.isNotEmpty) {
+      final storageUrl = await _uploadEmployeePhotoToStorage(docId, emp.profileImageUrl);
+      emp = emp.copyWith(profileImageUrl: storageUrl);
+    }
+
     final data = _employeeToFirestore(emp);
     await _employeesRef.doc(docId).set(data, SetOptions(merge: true));
   }
@@ -219,7 +231,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
           'allowed_leaves': allowedLeaves,
           'leave_allocation_frequency': leaveAllocationFrequency,
           'requires_leave_approval': requiresLeaveApproval,
-          if (effectiveDate != null) 'effective_date': effectiveDate,
+          'effective_date':? effectiveDate,
           'updated_at': FieldValue.serverTimestamp(),
         };
         batch.set(doc.reference, updateData, SetOptions(merge: true));
@@ -398,11 +410,16 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         ? employeeData.temporaryPassword
         : _generateRandomCode(10);
 
-    final finalEmployee = employeeData.copyWith(
+    var finalEmployee = employeeData.copyWith(
       employeeId: newEmpId,
       status: isSubmit ? 'Active' : 'Draft',
       temporaryPassword: tempPassword,
     );
+
+    if (finalEmployee.profileImageUrl.isNotEmpty) {
+      final storageUrl = await _uploadEmployeePhotoToStorage(newEmpId, finalEmployee.profileImageUrl);
+      finalEmployee = finalEmployee.copyWith(profileImageUrl: storageUrl);
+    }
 
     final linkRef = _registrationLinksRef.doc(linkId);
     batch.set(linkRef, {
@@ -479,5 +496,43 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     await _columnPreferencesRef
         .doc(preference.tableId)
         .set(preference.toMap(), SetOptions(merge: true));
+  }
+
+  Future<String> _uploadEmployeePhotoToStorage(String docId, String imagePathOrData) async {
+    if (imagePathOrData.isEmpty || imagePathOrData.startsWith('http://') || imagePathOrData.startsWith('https://')) {
+      return imagePathOrData;
+    }
+    try {
+      Uint8List? bytes;
+      String ext = 'jpg';
+
+      if (imagePathOrData.startsWith('data:image')) {
+        final parts = imagePathOrData.split(',');
+        if (parts.length > 1) {
+          if (parts[0].contains('png')) {
+            ext = 'png';
+          } else if (parts[0].contains('webp')) {
+            ext = 'webp';
+          }
+          bytes = base64Decode(parts[1]);
+        }
+      } else if (kIsWeb || imagePathOrData.startsWith('blob:')) {
+        final response = await http.get(Uri.parse(imagePathOrData));
+        bytes = response.bodyBytes;
+      } else {
+        final file = File(imagePathOrData);
+        if (await file.exists()) {
+          bytes = await file.readAsBytes();
+        }
+      }
+
+      if (bytes != null && bytes.isNotEmpty) {
+        final storagePath = 'Employee Photo/${docId}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+        final ref = _storage.ref().child(storagePath);
+        final uploadTask = await ref.putData(bytes, SettableMetadata(contentType: 'image/$ext'));
+        return await uploadTask.ref.getDownloadURL();
+      }
+    } catch (_) {}
+    return imagePathOrData;
   }
 }
