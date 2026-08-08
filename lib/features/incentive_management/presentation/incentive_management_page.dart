@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
 import '../../../core/theme/app_colors.dart';
 import '../../incentive/domain/incentive_request.dart';
 import '../../incentive/domain/incentive_settings.dart';
 import '../../incentive/providers/incentive_providers.dart';
 import '../providers/incentive_management_providers.dart';
+import 'widgets/incentive_column_selection_dialog.dart';
 
 class IncentiveManagementPage extends ConsumerStatefulWidget {
   const IncentiveManagementPage({super.key});
@@ -15,11 +18,16 @@ class IncentiveManagementPage extends ConsumerStatefulWidget {
 
 class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPage> {
   IncentiveRequest? _selectedRequest;
+  final Set<int> _selectedBulkIds = {};
+  final TextEditingController _searchController = TextEditingController();
   final TextEditingController _verifiedMetersController = TextEditingController();
   final TextEditingController _approvedAmountController = TextEditingController();
+  String _searchQuery = '';
+  bool _showSearchBar = false;
 
   @override
   void dispose() {
+    _searchController.dispose();
     _verifiedMetersController.dispose();
     _approvedAmountController.dispose();
     super.dispose();
@@ -31,12 +39,12 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
 
     bool isLockActive = currentSettings.isLockActive;
     final fromDateController = TextEditingController(
-      text: currentSettings.lockFromDate.isNotEmpty
+      text: (currentSettings.lockFromDate != null && currentSettings.lockFromDate.isNotEmpty)
           ? currentSettings.lockFromDate
           : DateTime.now().toIso8601String().substring(0, 10),
     );
     final toDateController = TextEditingController(
-      text: currentSettings.lockToDate.isNotEmpty
+      text: (currentSettings.lockToDate != null && currentSettings.lockToDate.isNotEmpty)
           ? currentSettings.lockToDate
           : DateTime.now().add(const Duration(days: 7)).toIso8601String().substring(0, 10),
     );
@@ -184,13 +192,6 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
     });
   }
 
-  void _onVerifiedMetersChanged(String val) {
-    if (_selectedRequest == null) return;
-    final meters = double.tryParse(val.trim()) ?? 0.0;
-    final calcAmount = meters * _selectedRequest!.rate;
-    _approvedAmountController.text = calcAmount.toInt().toString();
-  }
-
   Future<void> _handleApprove([IncentiveRequest? requestToApprove]) async {
     final target = requestToApprove ?? _selectedRequest;
     if (target == null || target.id == null) return;
@@ -248,47 +249,623 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
     }
   }
 
+  Future<void> _handleBulkApprove() async {
+    if (_selectedBulkIds.isEmpty) return;
+    try {
+      final repo = ref.read(incentiveManagementRepositoryProvider);
+      final allRequests = await repo.getAllRequests();
+      for (final id in _selectedBulkIds) {
+        final req = allRequests.firstWhere((r) => r.id == id, orElse: () => allRequests.first);
+        await repo.approveRequest(id, req.verifiedMeters ?? req.meters, req.approvedAmount ?? req.amount);
+      }
+      ref.invalidate(allManagementRequestsProvider);
+      final count = _selectedBulkIds.length;
+      setState(() {
+        _selectedBulkIds.clear();
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$count requests approved!'),
+            backgroundColor: const Color(0xFF2E7D32),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error in bulk approval: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleBulkReject() async {
+    if (_selectedBulkIds.isEmpty) return;
+    try {
+      final repo = ref.read(incentiveManagementRepositoryProvider);
+      for (final id in _selectedBulkIds) {
+        await repo.rejectRequest(id);
+      }
+      ref.invalidate(allManagementRequestsProvider);
+      final count = _selectedBulkIds.length;
+      setState(() {
+        _selectedBulkIds.clear();
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$count requests rejected.'),
+            backgroundColor: const Color(0xFFC62828),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error in bulk rejection: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  String _getInitials(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return '?';
+    final parts = trimmed.split(RegExp(r'\s+'));
+    if (parts.length == 1) return parts[0][0].toUpperCase();
+    return '${parts[0][0]}${parts[parts.length - 1][0]}'.toUpperCase();
+  }
+
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth <= 700) {
+          return _buildMobileView(context);
+        } else {
+          return _buildDesktopView(context);
+        }
+      },
+    );
+  }
+
+  // Mobile View
+  Widget _buildMobileView(BuildContext context) {
     final requestsAsync = ref.watch(allManagementRequestsProvider);
     final activeTab = ref.watch(incentiveManagementTabProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Top App Header
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              color: Colors.white,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.assignment_turned_in_outlined, size: 24, color: AppColors.active),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Incentives',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: Icon(_showSearchBar ? Icons.search_off : Icons.search, color: AppColors.active),
+                        tooltip: 'Search incentives',
+                        onPressed: () {
+                          setState(() {
+                            _showSearchBar = !_showSearchBar;
+                          });
+                        },
+                      ),
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert, color: AppColors.active),
+                        onSelected: (val) {
+                          if (val == 'columns') {
+                            showDialog<void>(
+                              context: context,
+                              builder: (_) => const IncentiveColumnSelectionDialog(),
+                            );
+                          } else if (val == 'lock') {
+                            _showSubmissionLockSettingsDialog();
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'columns',
+                            child: Row(
+                              children: [
+                                Icon(Icons.view_column_outlined, size: 18),
+                                SizedBox(width: 8),
+                                Text('Columns'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'lock',
+                            child: Row(
+                              children: [
+                                Icon(Icons.lock_clock_outlined, size: 18),
+                                SizedBox(width: 8),
+                                Text('Submission restriction'),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  // Collapsible Search Field
+                  if (_showSearchBar) ...[
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _searchController,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        hintText: 'Search by employee, ID, site...',
+                        prefixIcon: const Icon(Icons.search, size: 20),
+                        suffixIcon: (_searchQuery != null && _searchQuery.isNotEmpty)
+                            ? IconButton(
+                                icon: const Icon(Icons.clear, size: 18),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() {
+                                    _searchQuery = '';
+                                  });
+                                },
+                              )
+                            : null,
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      onChanged: (val) {
+                        setState(() {
+                          _searchQuery = val;
+                        });
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+
+            // Content Area
+            Expanded(
+              child: requestsAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (err, _) => Center(child: Text('Error: $err', style: const TextStyle(color: Colors.red))),
+                data: (allRequests) {
+                  final pendingList = allRequests.where((r) => r.status == 'Pending').toList();
+                  final approvedList = allRequests.where((r) => r.status == 'Approved').toList();
+                  final rejectedList = allRequests.where((r) => r.status == 'Rejected').toList();
+
+                  List<IncentiveRequest> currentTabRequests = [];
+                  if (activeTab == 'Pending') {
+                    currentTabRequests = pendingList;
+                  } else if (activeTab == 'Approved') {
+                    currentTabRequests = approvedList;
+                  } else {
+                    currentTabRequests = rejectedList;
+                  }
+
+                  final filteredTabRequests = currentTabRequests.where((req) {
+                    if (_searchQuery == null || _searchQuery.trim().isEmpty) return true;
+                    final q = _searchQuery.toLowerCase().trim();
+                    final empIdCode = req.employeeId != null
+                        ? 'emp${req.employeeId.toString().padLeft(3, '0')}'
+                        : '';
+                    return req.employeeName.toLowerCase().contains(q) ||
+                        empIdCode.contains(q) ||
+                        req.designation.toLowerCase().contains(q) ||
+                        req.site.toLowerCase().contains(q) ||
+                        req.productName.toLowerCase().contains(q) ||
+                        req.requestId.toLowerCase().contains(q);
+                  }).toList();
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Horizontal Scrollable Filter Chips
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        child: Row(
+                          children: [
+                            _buildMobileFilterChip('Pending', pendingList.length),
+                            const SizedBox(width: 8),
+                            _buildMobileFilterChip('Approved', approvedList.length),
+                            const SizedBox(width: 8),
+                            _buildMobileFilterChip('Rejected', rejectedList.length),
+                          ],
+                        ),
+                      ),
+
+                      // Subtitle count
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        child: Text(
+                          '${filteredTabRequests.length} ${activeTab.toLowerCase()} requests',
+                          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Request Cards List
+                      Expanded(
+                        child: filteredTabRequests.isEmpty
+                            ? Center(
+                                child: Text(
+                                  'No $activeTab incentive requests found.',
+                                  style: const TextStyle(color: Colors.grey),
+                                ),
+                              )
+                            : ListView.builder(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                                itemCount: filteredTabRequests.length,
+                                itemBuilder: (context, index) {
+                                  final req = filteredTabRequests[index];
+                                  final empIdStr = req.employeeId != null
+                                      ? 'EMP${req.employeeId.toString().padLeft(3, '0')}'
+                                      : 'EMP001';
+                                  final formattedAmount = req.amount >= 1000
+                                      ? '${(req.amount / 1000).toStringAsFixed(1).replaceAll('.0', '')},${(req.amount % 1000).toInt().toString().padLeft(3, '0')}'
+                                      : req.amount.toInt().toString();
+
+                                  return Card(
+                                    elevation: 0,
+                                    margin: const EdgeInsets.only(bottom: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                      side: BorderSide(color: Colors.grey.shade300),
+                                    ),
+                                    color: Colors.white,
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(14),
+                                      onTap: () => context.push('/incentive-management/detail/${req.id}'),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(14.0),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            // Top Row: Avatar + Name + Subtext & Status Pill
+                                            Row(
+                                              children: [
+                                                CircleAvatar(
+                                                  radius: 18,
+                                                  backgroundColor: const Color(0xFF0D47A1),
+                                                  child: Text(
+                                                    _getInitials(req.employeeName),
+                                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 12),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(
+                                                        req.employeeName,
+                                                        style: const TextStyle(
+                                                          fontWeight: FontWeight.bold,
+                                                          fontSize: 15,
+                                                          color: AppColors.textPrimary,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(height: 2),
+                                                      Text(
+                                                        '$empIdStr · ${req.designation}',
+                                                        style: TextStyle(
+                                                          fontSize: 12,
+                                                          color: Colors.grey.shade600,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                _buildStatusBadge(req.status),
+                                              ],
+                                            ),
+                                            const Divider(height: 20),
+
+                                            // Bottom Row: Site + Amount & View Button
+                                            Row(
+                                              crossAxisAlignment: CrossAxisAlignment.end,
+                                              children: [
+                                                Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      req.site,
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        color: Colors.grey.shade600,
+                                                        fontWeight: FontWeight.w500,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 2),
+                                                    Text(
+                                                      'Rs $formattedAmount',
+                                                      style: const TextStyle(
+                                                        fontSize: 18,
+                                                        fontWeight: FontWeight.bold,
+                                                        color: AppColors.textPrimary,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const Spacer(),
+                                                ElevatedButton(
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: Colors.white,
+                                                    foregroundColor: Colors.black87,
+                                                    elevation: 0,
+                                                    side: BorderSide(color: Colors.grey.shade300),
+                                                    shape: RoundedRectangleBorder(
+                                                      borderRadius: BorderRadius.circular(20),
+                                                    ),
+                                                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                                                    minimumSize: Size.zero,
+                                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                  ),
+                                                  onPressed: () => context.push('/incentive-management/detail/${req.id}'),
+                                                  child: const Text('View', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileFilterChip(String tabName, int count) {
+    final activeTab = ref.watch(incentiveManagementTabProvider);
+    final isSelected = activeTab == tabName;
+
+    return ChoiceChip(
+      label: Text(
+        '$tabName ($count)',
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          color: isSelected ? Colors.white : AppColors.textPrimary,
+        ),
+      ),
+      selected: isSelected,
+      selectedColor: const Color(0xFF1E293B),
+      backgroundColor: Colors.white,
+      side: BorderSide(
+        color: isSelected ? const Color(0xFF1E293B) : Colors.grey.shade300,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      onSelected: (_) {
+        ref.read(incentiveManagementTabProvider.notifier).state = tabName;
+        setState(() {
+          _selectedRequest = null;
+          _selectedBulkIds.clear();
+        });
+      },
+    );
+  }
+
+  // Desktop View (100% Width Table + Consolidated Actions + Bulk Action Bar)
+  Widget _buildDesktopView(BuildContext context) {
+    final requestsAsync = ref.watch(allManagementRequestsProvider);
+    final activeTab = ref.watch(incentiveManagementTabProvider);
+    final visibleColumns = ref.watch(incentiveVisibleColumnsProvider);
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA),
+      bottomNavigationBar: _selectedBulkIds.isNotEmpty
+          ? Container(
+              margin: const EdgeInsets.all(20),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_box_outlined, color: Colors.white, size: 20),
+                  const SizedBox(width: 10),
+                  Text(
+                    '${_selectedBulkIds.length} requests selected',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  const Spacer(),
+                  ElevatedButton.icon(
+                    onPressed: _handleBulkApprove,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF16A34A),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    ),
+                    icon: const Icon(Icons.check, size: 16),
+                    label: const Text('Approve all', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton.icon(
+                    onPressed: _handleBulkReject,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFE53935),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    ),
+                    icon: const Icon(Icons.close, size: 16),
+                    label: const Text('Reject all', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                  const SizedBox(width: 12),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white70, size: 20),
+                    tooltip: 'Clear selection',
+                    onPressed: () {
+                      setState(() {
+                        _selectedBulkIds.clear();
+                      });
+                    },
+                  ),
+                ],
+              ),
+            )
+          : null,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Page Header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.price_check_outlined, color: AppColors.active, size: 28),
-                    const SizedBox(width: 10),
-                    Text(
-                      'Incentive Management',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isCompact = constraints.maxWidth < 750;
+                return isCompact
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.assignment_turned_in_outlined, color: AppColors.active, size: 28),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Incentive management',
+                                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                ),
+                              ),
+                            ],
                           ),
-                    ),
-                  ],
-                ),
-                ElevatedButton.icon(
-                  onPressed: _showSubmissionLockSettingsDialog,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.active,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  icon: const Icon(Icons.lock_clock_outlined, size: 18),
-                  label: const Text('Submission Restriction Settings', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                ),
-              ],
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Review, verify and approve incentive requests submitted by employees.',
+                            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                          ),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: [
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF414A51),
+                                  side: const BorderSide(color: Color(0xFF414A51)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                icon: const Icon(Icons.view_column_outlined, size: 18),
+                                label: const Text('Columns', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                onPressed: () => showDialog<void>(
+                                  context: context,
+                                  builder: (_) => const IncentiveColumnSelectionDialog(),
+                                ),
+                              ),
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF414A51),
+                                  side: const BorderSide(color: Color(0xFF414A51)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                icon: const Icon(Icons.lock_clock_outlined, size: 18),
+                                label: const Text('Submission restriction', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                onPressed: _showSubmissionLockSettingsDialog,
+                              ),
+                            ],
+                          ),
+                        ],
+                      )
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.assignment_turned_in_outlined, color: AppColors.active, size: 28),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Incentive management',
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  'Review, verify and approve incentive requests submitted by employees.',
+                                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                                ),
+                              ],
+                            ),
+                          ),
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF414A51),
+                              side: const BorderSide(color: Color(0xFF414A51)),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: const Icon(Icons.view_column_outlined, size: 18),
+                            label: const Text('Columns', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            onPressed: () => showDialog<void>(
+                              context: context,
+                              builder: (_) => const IncentiveColumnSelectionDialog(),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF414A51),
+                              side: const BorderSide(color: Color(0xFF414A51)),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: const Icon(Icons.lock_clock_outlined, size: 18),
+                            label: const Text('Submission restriction', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            onPressed: _showSubmissionLockSettingsDialog,
+                          ),
+                        ],
+                      );
+              },
             ),
             const SizedBox(height: 20),
 
@@ -307,31 +884,86 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
                   currentTabRequests = rejectedList;
                 }
 
-                // Default selection to first request if none selected or not in current list
-                if (currentTabRequests.isNotEmpty) {
-                  if (_selectedRequest == null || !currentTabRequests.any((r) => r.id == _selectedRequest?.id)) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      _selectRequest(currentTabRequests.first);
-                    });
-                  }
-                }
+                final filteredTabRequests = currentTabRequests.where((req) {
+                  if (_searchQuery == null || _searchQuery.trim().isEmpty) return true;
+                  final q = _searchQuery.toLowerCase().trim();
+                  final empIdCode = req.employeeId != null
+                      ? 'emp${req.employeeId.toString().padLeft(3, '0')}'
+                      : '';
+                  return req.employeeName.toLowerCase().contains(q) ||
+                      empIdCode.contains(q) ||
+                      req.designation.toLowerCase().contains(q) ||
+                      req.site.toLowerCase().contains(q) ||
+                      req.productName.toLowerCase().contains(q) ||
+                      req.requestId.toLowerCase().contains(q);
+                }).toList();
+
+                final allCurrentSelected = filteredTabRequests.isNotEmpty &&
+                    filteredTabRequests.every((r) => r.id != null && _selectedBulkIds.contains(r.id));
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Top Filter Tabs (matching Image 1)
-                    Row(
+                    // Top Filter Tabs & Search Bar
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        _buildFilterTab('Pending', pendingList.length),
-                        const SizedBox(width: 12),
-                        _buildFilterTab('Approved', approvedList.length),
-                        const SizedBox(width: 12),
-                        _buildFilterTab('Rejected', rejectedList.length),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildFilterTab('Pending', pendingList.length),
+                            const SizedBox(width: 10),
+                            _buildFilterTab('Approved', approvedList.length),
+                            const SizedBox(width: 10),
+                            _buildFilterTab('Rejected', rejectedList.length),
+                          ],
+                        ),
+                        SizedBox(
+                          width: 280,
+                          child: TextField(
+                            controller: _searchController,
+                            decoration: InputDecoration(
+                              hintText: 'Search by employee, ID, site...',
+                              prefixIcon: const Icon(Icons.search, size: 20),
+                              suffixIcon: (_searchQuery != null && _searchQuery.isNotEmpty)
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear, size: 18),
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        setState(() {
+                                          _searchQuery = '';
+                                        });
+                                      },
+                                    )
+                                  : null,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(color: Colors.grey.shade300),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(color: Colors.grey.shade300),
+                              ),
+                              filled: true,
+                              fillColor: Colors.white,
+                              isDense: true,
+                            ),
+                            onChanged: (val) {
+                              setState(() {
+                                _searchQuery = val;
+                              });
+                            },
+                          ),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
 
-                    // Table Card (matching Image 1)
+                    // Table Card (Stretches 100% Width)
                     Card(
                       elevation: 0,
                       shape: RoundedRectangleBorder(
@@ -342,87 +974,152 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
+                          SizedBox(
+                            width: double.infinity,
                             child: DataTable(
+                              dataRowMinHeight: 56,
+                              dataRowMaxHeight: 64,
                               headingRowColor: WidgetStateProperty.all(Colors.grey.shade50),
                               horizontalMargin: 20,
-                              columnSpacing: 30,
-                              columns: const [
-                                DataColumn(label: Text('Employee', style: TextStyle(fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('Site', style: TextStyle(fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('Meters', style: TextStyle(fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('Rate (₹/m)', style: TextStyle(fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('Amount (₹)', style: TextStyle(fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('Status', style: TextStyle(fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('Action', style: TextStyle(fontWeight: FontWeight.bold))),
-                              ],
-                              rows: currentTabRequests.map((req) {
-                                final isSelected = _selectedRequest?.id == req.id;
+                              columnSpacing: 24,
+                              onSelectAll: (checked) {
+                                setState(() {
+                                  if (checked == true) {
+                                    _selectedBulkIds.addAll(
+                                      filteredTabRequests.map((r) => r.id!).whereType<int>(),
+                                    );
+                                  } else {
+                                    _selectedBulkIds.clear();
+                                  }
+                                });
+                              },
+                              columns: visibleColumns.map((col) {
+                                return DataColumn(
+                                  numeric: col == 'Amount',
+                                  label: Text(
+                                    col,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                                  ),
+                                );
+                              }).toList(),
+                              rows: filteredTabRequests.map((req) {
+                                final isBulkSelected = req.id != null && _selectedBulkIds.contains(req.id);
+                                final empIdStr = req.employeeId != null
+                                    ? 'EMP${req.employeeId.toString().padLeft(3, '0')}'
+                                    : 'EMP001';
+
                                 return DataRow(
-                                  selected: isSelected,
-                                  onSelectChanged: (_) => _selectRequest(req),
-                                  cells: [
-                                    DataCell(Text(req.employeeName, style: const TextStyle(fontWeight: FontWeight.w600))),
-                                    DataCell(Text(req.site)),
-                                    DataCell(Text(req.meters.toInt().toString())),
-                                    DataCell(Text(req.rate.toInt().toString())),
-                                    DataCell(Text(
-                                      req.amount >= 1000
-                                          ? '${(req.amount / 1000).toStringAsFixed(1).replaceAll('.0', '')},${(req.amount % 1000).toInt().toString().padLeft(3, '0')}'
-                                          : req.amount.toInt().toString(),
-                                      style: const TextStyle(fontWeight: FontWeight.bold),
-                                    )),
-                                    DataCell(_buildStatusBadge(req.status)),
-                                    DataCell(
-                                      req.status == 'Pending'
-                                          ? Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                ElevatedButton(
+                                  selected: isBulkSelected,
+                                  color: WidgetStateProperty.resolveWith<Color?>((states) {
+                                    if (isBulkSelected) {
+                                      return const Color(0xFFEFF6FF); // Light blue selection tint
+                                    }
+                                    return null;
+                                  }),
+                                  onSelectChanged: (val) {
+                                    setState(() {
+                                      if (val == true && req.id != null) {
+                                        _selectedBulkIds.add(req.id!);
+                                        _selectRequest(req);
+                                      } else if (req.id != null) {
+                                        _selectedBulkIds.remove(req.id!);
+                                      }
+                                    });
+                                  },
+                                  cells: visibleColumns.map((col) {
+                                    switch (col) {
+                                      case 'Emp ID':
+                                        return DataCell(
+                                          Text(
+                                            empIdStr,
+                                            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13, color: AppColors.textPrimary),
+                                          ),
+                                        );
+                                      case 'Employee':
+                                        return DataCell(
+                                          Text(
+                                            req.employeeName,
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
+                                          ),
+                                        );
+                                      case 'Designation':
+                                        return DataCell(
+                                          Text(
+                                            req.designation.isNotEmpty ? req.designation : '-',
+                                            style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+                                          ),
+                                        );
+                                      case 'Site':
+                                        return DataCell(Text(req.site, style: const TextStyle(fontSize: 13)));
+                                      case 'Amount':
+                                        final formattedAmount = req.amount >= 1000
+                                            ? 'Rs ${(req.amount / 1000).toStringAsFixed(1).replaceAll('.0', '')},${(req.amount % 1000).toInt().toString().padLeft(3, '0')}'
+                                            : 'Rs ${req.amount.toInt()}';
+                                        return DataCell(
+                                          Text(
+                                            formattedAmount,
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                          ),
+                                        );
+                                      case 'Status':
+                                        return DataCell(_buildStatusBadge(req.status));
+                                      case 'Action':
+                                        return DataCell(
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              OutlinedButton.icon(
+                                                onPressed: () {
+                                                  _selectRequest(req);
+                                                  context.push('/incentive-management/detail/${req.id}');
+                                                },
+                                                style: OutlinedButton.styleFrom(
+                                                  foregroundColor: const Color(0xFF1967D2),
+                                                  side: const BorderSide(color: Color(0xFF1967D2)),
+                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                  minimumSize: Size.zero,
+                                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                                ),
+                                                icon: const Icon(Icons.visibility_outlined, size: 14),
+                                                label: const Text('View', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                              ),
+                                              if (req.status == 'Pending') ...[
+                                                const SizedBox(width: 8),
+                                                IconButton(
+                                                  icon: const Icon(Icons.check, color: Color(0xFF16A34A), size: 20),
+                                                  tooltip: 'Approve',
+                                                  padding: EdgeInsets.zero,
+                                                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                                                   onPressed: () {
                                                     _selectRequest(req);
                                                     _handleApprove(req);
                                                   },
-                                                  style: ElevatedButton.styleFrom(
-                                                    backgroundColor: const Color(0xFF2E7D32),
-                                                    foregroundColor: Colors.white,
-                                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                                    minimumSize: Size.zero,
-                                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                                  ),
-                                                  child: const Text('Approve', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                                                 ),
-                                                const SizedBox(width: 8),
-                                                ElevatedButton(
+                                                const SizedBox(width: 4),
+                                                IconButton(
+                                                  icon: const Icon(Icons.close, color: Color(0xFFE53935), size: 20),
+                                                  tooltip: 'Reject',
+                                                  padding: EdgeInsets.zero,
+                                                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                                                   onPressed: () {
                                                     _selectRequest(req);
                                                     _handleReject(req);
                                                   },
-                                                  style: ElevatedButton.styleFrom(
-                                                    backgroundColor: const Color(0xFFC62828),
-                                                    foregroundColor: Colors.white,
-                                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                                    minimumSize: Size.zero,
-                                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                                  ),
-                                                  child: const Text('Reject', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                                                 ),
                                               ],
-                                            )
-                                          : Text(
-                                              req.status == 'Approved' ? 'Verified' : 'Processed',
-                                              style: const TextStyle(fontSize: 12, color: Colors.grey),
-                                            ),
-                                    ),
-                                  ],
+                                            ],
+                                          ),
+                                        );
+                                      default:
+                                        return const DataCell(Text('-'));
+                                    }
+                                  }).toList(),
                                 );
                               }).toList(),
                             ),
                           ),
-                          if (currentTabRequests.isEmpty)
+                          if (filteredTabRequests.isEmpty)
                             Padding(
                               padding: const EdgeInsets.all(36.0),
                               child: Center(
@@ -435,31 +1132,23 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
                         ],
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 8),
 
-                    // Bottom Dual Card Layout (matching Image 1)
-                    if (_selectedRequest != null)
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final isWide = constraints.maxWidth > 900;
-                          return isWide
-                              ? Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(child: _buildRequestDetailsCard(_selectedRequest!)),
-                                    const SizedBox(width: 24),
-                                    Expanded(child: _buildVerifyApproveCard(_selectedRequest!)),
-                                  ],
-                                )
-                              : Column(
-                                  children: [
-                                    _buildRequestDetailsCard(_selectedRequest!),
-                                    const SizedBox(height: 24),
-                                    _buildVerifyApproveCard(_selectedRequest!),
-                                  ],
-                                );
-                        },
-                      ),
+                    // Small note under the table reminding user about bulk select
+                    Row(
+                      children: [
+                        Icon(Icons.info_outline, size: 15, color: Colors.grey.shade600),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Tick checkboxes to bulk approve or reject multiple requests at once',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 );
               },
@@ -487,25 +1176,26 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
         ref.read(incentiveManagementTabProvider.notifier).state = tabName;
         setState(() {
           _selectedRequest = null;
+          _selectedBulkIds.clear();
         });
       },
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFE8F0FE) : Colors.white,
+          color: isSelected ? const Color(0xFF1E293B) : Colors.white,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected ? const Color(0xFF1967D2) : Colors.grey.shade300,
-            width: isSelected ? 1.5 : 1.0,
+            color: isSelected ? const Color(0xFF1E293B) : Colors.grey.shade300,
+            width: 1.0,
           ),
         ),
         child: Text(
           '$tabName ($count)',
           style: TextStyle(
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-            color: isSelected ? const Color(0xFF1967D2) : Colors.grey.shade700,
+            color: isSelected ? Colors.white : Colors.grey.shade700,
           ),
         ),
       ),
@@ -533,188 +1223,6 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
       child: Text(
         status,
         style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: fg),
-      ),
-    );
-  }
-
-  Widget _buildRequestDetailsCard(IncentiveRequest req) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade300),
-      ),
-      color: Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Request Details',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A1F36)),
-            ),
-            const SizedBox(height: 20),
-            _buildDetailRow('Employee', ': ${req.employeeName}'),
-            _buildDetailRow('Site', ': ${req.site}'),
-            _buildDetailRow('Work Type', ': ${req.productName}'),
-            _buildDetailRow('Total Meters', ': ${req.meters.toInt()} m'),
-            _buildDetailRow('Incentive Rate', ': ₹${req.rate.toInt()} per meter'),
-            _buildDetailRow('Requested Amount', ': ₹${req.amount.toInt()}'),
-            _buildDetailRow('Remarks', ': ${req.remarks ?? '-'}'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12.0),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 140,
-            child: Text(
-              label,
-              style: TextStyle(fontSize: 14, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildVerifyApproveCard(IncentiveRequest req) {
-    final isPending = req.status == 'Pending';
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade300),
-      ),
-      color: Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Verify & Approve',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A1F36)),
-            ),
-            const SizedBox(height: 20),
-
-            // Verified Meters (in meters)
-            const Text(
-              'Verified Meters (in meters)',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87),
-            ),
-            const SizedBox(height: 8),
-            TextFormField(
-              controller: _verifiedMetersController,
-              enabled: isPending,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
-                filled: true,
-                fillColor: isPending ? Colors.white : Colors.grey.shade100,
-              ),
-              onChanged: _onVerifiedMetersChanged,
-            ),
-            const SizedBox(height: 16),
-
-            // Approved Amount (₹)
-            const Text(
-              'Approved Amount (₹)',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87),
-            ),
-            const SizedBox(height: 8),
-            TextFormField(
-              controller: _approvedAmountController,
-              enabled: isPending,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
-                filled: true,
-                fillColor: isPending ? Colors.grey.shade100 : Colors.grey.shade100,
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Approve / Reject buttons (matching Image 1)
-            if (isPending)
-              Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 44,
-                      child: ElevatedButton.icon(
-                        onPressed: () => _handleApprove(),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2E7D32),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        icon: const Icon(Icons.check, size: 18),
-                        label: const Text('Approve', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: SizedBox(
-                      height: 44,
-                      child: ElevatedButton.icon(
-                        onPressed: () => _handleReject(),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFC62828),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        icon: const Icon(Icons.close, size: 18),
-                        label: const Text('Reject', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                  ),
-                ],
-              )
-            else
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      req.status == 'Approved' ? Icons.check_circle : Icons.cancel,
-                      color: req.status == 'Approved' ? const Color(0xFF2E7D32) : const Color(0xFFC62828),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Request status: ${req.status}',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        ),
       ),
     );
   }

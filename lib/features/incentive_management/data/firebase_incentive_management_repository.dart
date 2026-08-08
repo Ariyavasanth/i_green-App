@@ -15,6 +15,11 @@ class FirebaseIncentiveManagementRepository implements IncentiveManagementReposi
   }
 
   @override
+  Future<IncentiveRequest?> getRequestById(int id) async {
+    return null;
+  }
+
+  @override
   Future<void> approveRequest(int id, double verifiedMeters, double approvedAmount) async {}
 
   @override

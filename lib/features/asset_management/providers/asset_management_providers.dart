@@ -52,6 +52,8 @@ final myAssetAssignmentsProvider = FutureProvider<List<AssetAssignment>>((ref) a
 });
 
 final assetAllColumnsProvider = Provider<List<String>>((ref) => const [
+  'S.No',
+  'Emp ID',
   'Assigned To',
   'Asset Name',
   'Asset Type',
@@ -63,6 +65,8 @@ final assetAllColumnsProvider = Provider<List<String>>((ref) => const [
 ]);
 
 final assetVisibleColumnsProvider = StateProvider<List<String>>((ref) => const [
+  'S.No',
+  'Emp ID',
   'Assigned To',
   'Asset Name',
   'Asset Type',
@@ -74,6 +78,8 @@ final assetVisibleColumnsProvider = StateProvider<List<String>>((ref) => const [
 ]);
 
 final assetColumnOrderProvider = StateProvider<List<String>>((ref) => const [
+  'S.No',
+  'Emp ID',
   'Assigned To',
   'Asset Name',
   'Asset Type',

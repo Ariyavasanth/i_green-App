@@ -18,6 +18,11 @@ class SqliteIncentiveManagementRepository implements IncentiveManagementReposito
   }
 
   @override
+  Future<IncentiveRequest?> getRequestById(int id) async {
+    return await _baseRepo.getRequestById(id);
+  }
+
+  @override
   Future<void> approveRequest(int id, double verifiedMeters, double approvedAmount) async {
     await _baseRepo.updateRequestStatus(
       id,

@@ -56,6 +56,7 @@ import '../../features/exit_management/presentation/exit_management_page.dart';
 import '../../features/exit_management/presentation/my_exit_page.dart';
 import '../../features/incentive/presentation/incentive_page.dart';
 import '../../features/incentive_management/presentation/incentive_management_page.dart';
+import '../../features/incentive_management/presentation/incentive_detail_page.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
@@ -196,6 +197,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/incentive-management',
             builder: (_, _) => const IncentiveManagementPage(),
+            routes: [
+              GoRoute(
+                path: 'detail/:id',
+                builder: (context, state) {
+                  final idStr = state.pathParameters['id'] ?? '';
+                  final id = int.tryParse(idStr) ?? 0;
+                  return IncentiveDetailPage(requestId: id);
+                },
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/incentive-management/detail/:id',
+            builder: (context, state) {
+              final idStr = state.pathParameters['id'] ?? '';
+              final id = int.tryParse(idStr) ?? 0;
+              return IncentiveDetailPage(requestId: id);
+            },
           ),
           GoRoute(
             path: '/payroll',

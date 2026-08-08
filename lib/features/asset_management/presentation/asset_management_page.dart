@@ -1593,7 +1593,9 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
                                     ),
                                   );
                                 }).toList(),
-                                rows: filtered.map((record) {
+                                rows: filtered.asMap().entries.map((entry) {
+                                  final index = entry.key;
+                                  final record = entry.value;
                                   final isAssigned = record.status == 'Assigned';
                                   final isReturned = record.status == 'Returned';
                                   final isMaintenance = record.status == 'Maintenance';
@@ -1601,6 +1603,23 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
                                   return DataRow(
                                     cells: visibleColumns.map((col) {
                                       switch (col) {
+                                        case 'S.No':
+                                          return DataCell(
+                                            Text(
+                                              '${index + 1}',
+                                              style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                                            ),
+                                          );
+                                        case 'Emp ID':
+                                          final empCode = record.employeeCode.isNotEmpty
+                                              ? record.employeeCode
+                                              : (record.employeeId > 0 ? 'EMP${record.employeeId.toString().padLeft(3, '0')}' : '-');
+                                          return DataCell(
+                                            Text(
+                                              empCode,
+                                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: AppColors.textPrimary),
+                                            ),
+                                          );
                                         case 'Assigned To':
                                           final hasTransfer = record.transferredFrom != null && record.transferredFrom!.isNotEmpty;
                                           return DataCell(
