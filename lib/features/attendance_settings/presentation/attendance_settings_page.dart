@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../attendance/domain/attendance_settings.dart';
@@ -132,11 +133,20 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Row(
+            Row(
               children: [
-                Icon(Icons.schedule_outlined, size: 24, color: AppColors.active),
-                SizedBox(width: 8),
-                Text(
+                if (context.canPop())
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8.0),
+                    child: IconButton(
+                      icon: const Icon(Icons.arrow_back),
+                      tooltip: 'Back to Attendance Management',
+                      onPressed: () => context.pop(),
+                    ),
+                  ),
+                const Icon(Icons.schedule_outlined, size: 24, color: AppColors.active),
+                const SizedBox(width: 8),
+                const Text(
                   'Attendance Settings',
                   style: TextStyle(
                     fontSize: 20,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -155,37 +156,45 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
             ],
           ),
           const SizedBox(height: 12),
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.active,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  onPressed: () => _openAdminEditDialog(context, null, null, null),
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text(
-                    'Manual Entry',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                  ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.active,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () => _openAdminEditDialog(context, null, null, null),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text(
+                  'Manual Entry',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF414A51),
-                    side: const BorderSide(color: Color(0xFF414A51)),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  onPressed: () => _openAuditLogsDialog(context),
-                  icon: const Icon(Icons.history, size: 16),
-                  label: const Text('Audit Logs', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF414A51),
+                  side: const BorderSide(color: Color(0xFF414A51)),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
+                onPressed: () => _openAuditLogsDialog(context),
+                icon: const Icon(Icons.history, size: 16),
+                label: const Text('Audit Logs', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              ),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF414A51),
+                  side: const BorderSide(color: Color(0xFF414A51)),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () => context.push('/attendance-settings'),
+                icon: const Icon(Icons.tune, size: 16),
+                label: const Text('Attendance Settings', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -251,6 +260,18 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
           onPressed: () => _openAuditLogsDialog(context),
           icon: const Icon(Icons.history, size: 18),
           label: const Text('Audit Logs'),
+        ),
+        const SizedBox(width: 10),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFF414A51),
+            side: const BorderSide(color: Color(0xFF414A51)),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          onPressed: () => context.push('/attendance-settings'),
+          icon: const Icon(Icons.tune, size: 18),
+          label: const Text('Attendance Settings'),
         ),
       ],
     );
