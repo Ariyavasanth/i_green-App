@@ -1,4 +1,5 @@
 import '../../incentive/domain/incentive_request.dart';
+import '../../incentive/domain/incentive_settings.dart';
 import '../domain/incentive_management_repository.dart';
 
 class FirebaseIncentiveManagementRepository implements IncentiveManagementRepository {
@@ -18,4 +19,12 @@ class FirebaseIncentiveManagementRepository implements IncentiveManagementReposi
 
   @override
   Future<void> rejectRequest(int id) async {}
+
+  @override
+  Future<IncentiveSettings> getIncentiveSettings() async {
+    return const IncentiveSettings();
+  }
+
+  @override
+  Future<void> updateIncentiveSettings(IncentiveSettings settings) async {}
 }

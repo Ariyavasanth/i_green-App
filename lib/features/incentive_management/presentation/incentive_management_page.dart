@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../incentive/domain/incentive_request.dart';
+import '../../incentive/domain/incentive_settings.dart';
+import '../../incentive/providers/incentive_providers.dart';
 import '../providers/incentive_management_providers.dart';
 
 class IncentiveManagementPage extends ConsumerStatefulWidget {
@@ -21,6 +23,157 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
     _verifiedMetersController.dispose();
     _approvedAmountController.dispose();
     super.dispose();
+  }
+
+  Future<void> _showSubmissionLockSettingsDialog() async {
+    final currentSettings = await ref.read(incentiveManagementRepositoryProvider).getIncentiveSettings();
+    if (!mounted) return;
+
+    bool isLockActive = currentSettings.isLockActive;
+    final fromDateController = TextEditingController(
+      text: currentSettings.lockFromDate.isNotEmpty
+          ? currentSettings.lockFromDate
+          : DateTime.now().toIso8601String().substring(0, 10),
+    );
+    final toDateController = TextEditingController(
+      text: currentSettings.lockToDate.isNotEmpty
+          ? currentSettings.lockToDate
+          : DateTime.now().add(const Duration(days: 7)).toIso8601String().substring(0, 10),
+    );
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              title: const Row(
+                children: [
+                  Icon(Icons.lock_clock_outlined, color: AppColors.active),
+                  SizedBox(width: 8),
+                  Text('Submission Restriction Settings', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Lock user incentive submissions during a specific date window.',
+                      style: TextStyle(fontSize: 13, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 16),
+
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Enable Submission Lockout', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                      subtitle: const Text('Block users from submitting incentive requests during the date range', style: TextStyle(fontSize: 12)),
+                      value: isLockActive,
+                      activeColor: AppColors.active,
+                      onChanged: (val) {
+                        setDialogState(() => isLockActive = val);
+                      },
+                    ),
+                    const Divider(height: 24),
+
+                    const Text('From Date', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: fromDateController,
+                      readOnly: true,
+                      decoration: InputDecoration(
+                        hintText: 'YYYY-MM-DD',
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.calendar_today, size: 18),
+                          onPressed: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: DateTime.tryParse(fromDateController.text) ?? DateTime.now(),
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2035),
+                            );
+                            if (picked != null) {
+                              setDialogState(() {
+                                fromDateController.text = picked.toIso8601String().substring(0, 10);
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    const Text('To Date', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: toDateController,
+                      readOnly: true,
+                      decoration: InputDecoration(
+                        hintText: 'YYYY-MM-DD',
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.calendar_today, size: 18),
+                          onPressed: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: DateTime.tryParse(toDateController.text) ?? DateTime.now(),
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2035),
+                            );
+                            if (picked != null) {
+                              setDialogState(() {
+                                toDateController.text = picked.toIso8601String().substring(0, 10);
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final newSettings = IncentiveSettings(
+                      isLockActive: isLockActive,
+                      lockFromDate: fromDateController.text.trim(),
+                      lockToDate: toDateController.text.trim(),
+                    );
+                    await ref.read(incentiveManagementRepositoryProvider).updateIncentiveSettings(newSettings);
+                    ref.invalidate(incentiveSettingsProvider);
+
+                    if (mounted) {
+                      Navigator.pop(dialogContext);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Submission restriction settings saved!'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.active,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Save Settings'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   void _selectRequest(IncentiveRequest req) {
@@ -109,15 +262,31 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
           children: [
             // Page Header
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Icon(Icons.price_check_outlined, color: AppColors.active, size: 28),
-                const SizedBox(width: 10),
-                Text(
-                  'Incentive Management',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
+                Row(
+                  children: [
+                    const Icon(Icons.price_check_outlined, color: AppColors.active, size: 28),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Incentive Management',
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                    ),
+                  ],
+                ),
+                ElevatedButton.icon(
+                  onPressed: _showSubmissionLockSettingsDialog,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.active,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.lock_clock_outlined, size: 18),
+                  label: const Text('Submission Restriction Settings', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
                 ),
               ],
             ),

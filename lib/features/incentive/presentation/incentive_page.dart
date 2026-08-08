@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../authentication/providers/authentication_providers.dart';
+import '../../employee/domain/employee.dart';
+import '../../employee/providers/employee_providers.dart';
 
 import '../domain/incentive_request.dart';
+import '../domain/incentive_settings.dart';
 import '../domain/product_rate.dart';
 import '../providers/incentive_providers.dart';
 
@@ -17,51 +20,65 @@ class IncentivePage extends ConsumerStatefulWidget {
 class _IncentivePageState extends ConsumerState<IncentivePage> {
   final _formKey = GlobalKey<FormState>();
 
-  final TextEditingController _siteController = TextEditingController(text: 'Site A');
+  String _selectedProject = 'Site A';
   String _selectedProduct = 'Duct';
-  String _selectedDesignation = 'Operator';
   final TextEditingController _metersController = TextEditingController(text: '50');
   final TextEditingController _remarksController = TextEditingController();
 
-  final List<String> _designations = ['Operator', 'Tracker', 'Supervisor'];
+  final List<String> _projects = ['Site A', 'Site B', 'Project Alpha', 'Project Beta'];
+
+  final Map<String, List<String>> _projectProductsMap = {
+    'Site A': ['Duct', 'EB Cable 11kv 120sqmm', 'EB Cable 11kv 300sqmm', 'MSPIPE EB /TWAD', 'HDPE 110'],
+    'Site B': ['EB Cable 33kv 3 cable', 'EB Cable 33kv single cable', 'HDPE 160 to 250 dia', 'HDPE above 500mm'],
+    'Project Alpha': ['Duct', 'HDPE 250 dia above 500mm', 'EB Cable 11kv double'],
+    'Project Beta': ['Eb LT cable 240 sqmm', 'EB Cable 11kv 120sqmm', 'MSPIPE EB /TWAD'],
+  };
+
+  List<String> get _availableProducts {
+    return _projectProductsMap[_selectedProject] ?? defaultProductRates.map((p) => p.productName).toList();
+  }
 
   @override
   void dispose() {
-    _siteController.dispose();
     _metersController.dispose();
     _remarksController.dispose();
     super.dispose();
   }
 
-  double get _currentRate {
-    return calculateIncentiveRate(_selectedProduct, _selectedDesignation);
+  double _getRate(String designation) {
+    return calculateIncentiveRate(_selectedProduct, designation);
   }
 
-  double get _expectedIncentive {
+  double _getExpectedIncentive(String designation) {
     final meters = double.tryParse(_metersController.text.trim()) ?? 0.0;
-    return meters * _currentRate;
+    return meters * _getRate(designation);
   }
 
-  Future<void> _submitRequest() async {
+  Future<void> _submitRequest(String activeDesignation) async {
     if (!_formKey.currentState!.validate()) return;
 
     final meters = double.tryParse(_metersController.text.trim()) ?? 0.0;
-    final rate = _currentRate;
+    final rate = _getRate(activeDesignation);
     final amount = meters * rate;
 
-    final userEmail = ref.read(currentUserEmailProvider) ?? 'Employee';
-    final empName = userEmail.contains('@')
-        ? userEmail.split('@').first.replaceFirst(
-              userEmail[0],
-              userEmail[0].toUpperCase(),
-            )
-        : userEmail.isEmpty ? 'Ramesh' : userEmail;
+    final userEmail = ref.read(currentUserEmailProvider) ?? '';
+    String empName = 'Ramesh';
+    if (userEmail.trim().isNotEmpty) {
+      if (userEmail.contains('@')) {
+        final prefix = userEmail.split('@').first;
+        if (prefix.isNotEmpty) {
+          empName = prefix[0].toUpperCase() + (prefix.length > 1 ? prefix.substring(1) : '');
+        }
+      } else {
+        empName = userEmail;
+      }
+    }
 
     final newRequest = IncentiveRequest(
       requestId: 'INC-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
       employeeName: empName,
-      designation: _selectedDesignation,
-      site: _siteController.text.trim().isEmpty ? 'Site A' : _siteController.text.trim(),
+      designation: activeDesignation,
+      site: _selectedProject,
       productName: _selectedProduct,
       meters: meters,
       rate: rate,
@@ -83,6 +100,8 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
           ),
         );
         _remarksController.clear();
+        _metersController.text = '50';
+        setState(() {});
       }
     } catch (e) {
       if (mounted) {
@@ -94,6 +113,205 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
         );
       }
     }
+  }
+
+  void _showEditDialog(IncentiveRequest req) {
+    String editProject = req.site;
+    String editProduct = req.productName;
+    final editMetersController = TextEditingController(text: req.meters.toInt().toString());
+    final editRemarksController = TextEditingController(text: (req.remarks == '-' || req.remarks == null) ? '' : req.remarks!);
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final availableProds = _projectProductsMap[editProject] ?? defaultProductRates.map((p) => p.productName).toList();
+            if (!availableProds.contains(editProduct)) {
+              editProduct = availableProds.first;
+            }
+
+            final currentRate = calculateIncentiveRate(editProduct, req.designation);
+            final meters = double.tryParse(editMetersController.text.trim()) ?? 0.0;
+            final expected = meters * currentRate;
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              title: Text('Edit Incentive Request (${req.requestId})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Employee Designation', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 4),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Text(req.designation, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                    ),
+                    const SizedBox(height: 14),
+
+                    const Text('Project / Site', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 4),
+                    DropdownButtonFormField<String>(
+                      value: _projects.contains(editProject) ? editProject : _projects.first,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      items: _projects.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setDialogState(() {
+                            editProject = val;
+                            final newProds = _projectProductsMap[val] ?? defaultProductRates.map((pr) => pr.productName).toList();
+                            if (!newProds.contains(editProduct)) {
+                              editProduct = newProds.first;
+                            }
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 14),
+
+                    const Text('Product', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 4),
+                    DropdownButtonFormField<String>(
+                      value: availableProds.contains(editProduct) ? editProduct : availableProds.first,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      items: availableProds.map((p) => DropdownMenuItem(value: p, child: Text(p, overflow: TextOverflow.ellipsis))).toList(),
+                      onChanged: (val) {
+                        if (val != null) setDialogState(() => editProduct = val);
+                      },
+                    ),
+                    const SizedBox(height: 14),
+
+                    const Text('Total Meters Completed (in meters)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 4),
+                    TextField(
+                      controller: editMetersController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        suffixIcon: const Padding(
+                          padding: EdgeInsets.only(right: 12, top: 12),
+                          child: Text('m', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                      onChanged: (_) => setDialogState(() {}),
+                    ),
+                    const SizedBox(height: 14),
+
+                    const Text('Incentive Rate (per meter)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 4),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Text('₹${currentRate.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    ),
+                    const SizedBox(height: 14),
+
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEDF7ED),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFC8E6C9)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Expected Incentive', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF2E7D32))),
+                          const SizedBox(height: 2),
+                          Text('₹${expected.toStringAsFixed(0)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32))),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    const Text('Remarks (Optional)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 4),
+                    TextField(
+                      controller: editRemarksController,
+                      decoration: InputDecoration(
+                        hintText: 'Enter remarks',
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final updatedMeters = double.tryParse(editMetersController.text.trim()) ?? req.meters;
+                    final updatedRate = currentRate;
+                    final updatedAmount = updatedMeters * updatedRate;
+
+                    final updatedReq = req.copyWith(
+                      site: editProject,
+                      productName: editProduct,
+                      meters: updatedMeters,
+                      rate: updatedRate,
+                      amount: updatedAmount,
+                      remarks: editRemarksController.text.trim().isEmpty ? '-' : editRemarksController.text.trim(),
+                    );
+
+                    try {
+                      await ref.read(incentiveRepositoryProvider).updateRequest(updatedReq);
+                      ref.invalidate(allIncentiveRequestsProvider);
+                      if (mounted) {
+                        Navigator.pop(dialogContext);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Incentive request updated successfully!'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Failed to update request: $e'), backgroundColor: Colors.red),
+                        );
+                      }
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.active,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Save Changes'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _cancelRequest(int id) async {
@@ -173,8 +391,68 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
   }
 
   Widget _buildFormCard() {
-    final rate = _currentRate;
-    final expected = _expectedIncentive;
+    final employees = ref.watch(allEmployeesProvider).asData?.value ?? [];
+    final userEmail = ref.watch(currentUserEmailProvider) ?? '';
+    final settingsAsync = ref.watch(incentiveSettingsProvider);
+    final settings = settingsAsync.asData?.value;
+
+    bool isSubmissionLocked = false;
+    String lockMessage = '';
+
+    if (settings != null && settings.isLockActive) {
+      final now = DateTime.now();
+      final todayDate = DateTime(now.year, now.month, now.day);
+
+      DateTime? fromDate;
+      DateTime? toDate;
+      try {
+        if (settings.lockFromDate.isNotEmpty) {
+          fromDate = DateTime.parse(settings.lockFromDate);
+        }
+        if (settings.lockToDate.isNotEmpty) {
+          toDate = DateTime.parse(settings.lockToDate);
+        }
+      } catch (_) {}
+
+      if (fromDate != null && toDate != null) {
+        final fromMidnight = DateTime(fromDate.year, fromDate.month, fromDate.day);
+        final toMidnight = DateTime(toDate.year, toDate.month, toDate.day, 23, 59, 59);
+
+        if ((todayDate.isAfter(fromMidnight) || todayDate.isAtSameMomentAs(fromMidnight)) &&
+            (todayDate.isBefore(toMidnight) || todayDate.isAtSameMomentAs(toMidnight))) {
+          isSubmissionLocked = true;
+          lockMessage = 'Incentive requests are locked from ${settings.lockFromDate} to ${settings.lockToDate} by Admin.';
+        }
+      }
+    }
+
+    String activeDesignation = 'Operator';
+    try {
+      if (employees.isNotEmpty) {
+        final lowerUserEmail = userEmail.trim().toLowerCase();
+        final firstPart = lowerUserEmail.contains('@') ? lowerUserEmail.split('@').first : lowerUserEmail;
+
+        for (final e in employees) {
+          final empEmail = (e.emailAddress ?? '').toLowerCase();
+          final empFirstName = (e.firstName ?? '').toLowerCase();
+          if ((lowerUserEmail.isNotEmpty && empEmail == lowerUserEmail) ||
+              (firstPart.isNotEmpty && empFirstName.contains(firstPart))) {
+            if (e.designation.trim().isNotEmpty) {
+              activeDesignation = e.designation.trim();
+              break;
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    final availableProducts = _availableProducts;
+    if (!availableProducts.contains(_selectedProduct)) {
+      _selectedProduct = availableProducts.first;
+    }
+
+    final rate = _getRate(activeDesignation);
+    final expected = _getExpectedIncentive(activeDesignation);
 
     return Card(
       elevation: 0,
@@ -190,6 +468,30 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (isSubmissionLocked) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFEBEE),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFFFCDD2)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.lock_clock_outlined, color: Color(0xFFC62828), size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          lockMessage,
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFFC62828)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
               Text(
                 'New Incentive Request',
                 style: TextStyle(
@@ -200,63 +502,47 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
               ),
               const SizedBox(height: 20),
 
-              // Designation Selector (Operator / Tracker / Supervisor)
+              // Employee Designation (read-only container matching employee management)
               const Text(
                 'Employee Designation',
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
               ),
               const SizedBox(height: 6),
               Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: Colors.grey.shade300),
-                  color: Colors.grey.shade50,
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                 child: Row(
-                  children: _designations.map((des) {
-                    final selected = _selectedDesignation == des;
-                    return Expanded(
-                      child: InkWell(
-                        onTap: () {
-                          setState(() {
-                            _selectedDesignation = des;
-                          });
-                        },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 150),
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          decoration: BoxDecoration(
-                            color: selected ? AppColors.active : Colors.transparent,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            des,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: selected ? FontWeight.bold : FontWeight.w500,
-                              color: selected ? Colors.white : Colors.grey.shade700,
-                            ),
-                          ),
-                        ),
+                  children: [
+                    const Icon(Icons.badge_outlined, size: 18, color: Colors.grey),
+                    const SizedBox(width: 8),
+                    Text(
+                      activeDesignation,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
                       ),
-                    );
-                  }).toList(),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 16),
 
-              // Project / Site Input Box
+              // Project / Site Dropdown
               const Text(
                 'Project / Site',
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
               ),
               const SizedBox(height: 6),
-              TextFormField(
-                controller: _siteController,
+              DropdownButtonFormField<String>(
+                value: _projects.contains(_selectedProject) ? _selectedProject : _projects.first,
+                isExpanded: true,
                 decoration: InputDecoration(
-                  hintText: 'Enter project / site',
                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -273,23 +559,38 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
                   filled: true,
                   fillColor: Colors.white,
                 ),
-                validator: (val) {
-                  if (val == null || val.trim().isEmpty) {
-                    return 'Please enter project / site';
+                items: _projects.map((project) {
+                  return DropdownMenuItem(
+                    value: project,
+                    child: Text(
+                      project,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _selectedProject = val;
+                      final updatedAvailable = _availableProducts;
+                      if (!updatedAvailable.contains(_selectedProduct)) {
+                        _selectedProduct = updatedAvailable.first;
+                      }
+                    });
                   }
-                  return null;
                 },
               ),
               const SizedBox(height: 16),
 
-              // Product Dropdown (replaces Work Type from Image 2)
+              // Dynamic Product Dropdown
               const Text(
                 'Product',
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
               ),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
-                initialValue: _selectedProduct,
+                value: availableProducts.contains(_selectedProduct) ? _selectedProduct : availableProducts.first,
                 isExpanded: true,
                 decoration: InputDecoration(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -301,14 +602,18 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
                     borderRadius: BorderRadius.circular(8),
                     borderSide: BorderSide(color: Colors.grey.shade300),
                   ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: AppColors.active),
+                  ),
                   filled: true,
                   fillColor: Colors.white,
                 ),
-                items: defaultProductRates.map((p) {
+                items: availableProducts.map((p) {
                   return DropdownMenuItem(
-                    value: p.productName,
+                    value: p,
                     child: Text(
-                      p.productName,
+                      p,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 14),
                     ),
@@ -359,7 +664,7 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
               ),
               const SizedBox(height: 16),
 
-              // Incentive Rate (per meter)
+              // Incentive Rate (per meter) - Non-editable read-only container
               const Text(
                 'Incentive Rate (per meter)',
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
@@ -444,24 +749,24 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
               ),
               const SizedBox(height: 24),
 
-              // Send Request Button (matching Image 2 style)
+              // Send Request Button
               SizedBox(
                 width: double.infinity,
                 height: 48,
                 child: ElevatedButton.icon(
-                  onPressed: _submitRequest,
+                  onPressed: isSubmissionLocked ? null : () => _submitRequest(activeDesignation),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.active,
+                    backgroundColor: isSubmissionLocked ? Colors.grey : AppColors.active,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
                     elevation: 0,
                   ),
-                  icon: const Icon(Icons.send_rounded, size: 18),
-                  label: const Text(
-                    'Send Request',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                  icon: Icon(isSubmissionLocked ? Icons.lock_outline : Icons.send_rounded, size: 18),
+                  label: Text(
+                    isSubmissionLocked ? 'Submissions Restricted' : 'Send Request',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -675,18 +980,31 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
 
           if (isPending && req.id != null) ...[
             const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerRight,
-              child: OutlinedButton.icon(
-                onPressed: () => _cancelRequest(req.id!),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.red,
-                  side: const BorderSide(color: Colors.red),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => _showEditDialog(req),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.active,
+                    side: const BorderSide(color: AppColors.active),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  ),
+                  icon: const Icon(Icons.edit_outlined, size: 14),
+                  label: const Text('Edit Request', style: TextStyle(fontSize: 12)),
                 ),
-                icon: const Icon(Icons.cancel_outlined, size: 14),
-                label: const Text('Cancel Request', style: TextStyle(fontSize: 12)),
-              ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: () => _cancelRequest(req.id!),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red,
+                    side: const BorderSide(color: Colors.red),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  ),
+                  icon: const Icon(Icons.cancel_outlined, size: 14),
+                  label: const Text('Cancel Request', style: TextStyle(fontSize: 12)),
+                ),
+              ],
             ),
           ],
         ],

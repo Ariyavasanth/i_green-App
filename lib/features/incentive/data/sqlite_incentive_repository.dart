@@ -2,6 +2,7 @@ import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import '../domain/incentive_repository.dart';
 import '../domain/incentive_request.dart';
+import '../domain/incentive_settings.dart';
 
 class SqliteIncentiveRepository implements IncentiveRepository {
   static Database? _database;
@@ -50,6 +51,15 @@ class SqliteIncentiveRepository implements IncentiveRepository {
         status TEXT,
         remarks TEXT,
         created_at TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS incentive_settings (
+        id INTEGER PRIMARY KEY DEFAULT 1,
+        is_lock_active INTEGER DEFAULT 0,
+        lock_from_date TEXT DEFAULT '',
+        lock_to_date TEXT DEFAULT ''
       )
     ''');
   }
@@ -268,6 +278,18 @@ class SqliteIncentiveRepository implements IncentiveRepository {
   }
 
   @override
+  Future<void> updateRequest(IncentiveRequest request) async {
+    if (request.id == null) return;
+    final db = await database;
+    await db.update(
+      'incentive_requests',
+      request.toMap(),
+      where: 'id = ? AND status = ?',
+      whereArgs: [request.id, 'Pending'],
+    );
+  }
+
+  @override
   Future<void> updateRequestStatus(
     int id,
     String status, {
@@ -286,6 +308,28 @@ class SqliteIncentiveRepository implements IncentiveRepository {
       updates,
       where: 'id = ?',
       whereArgs: [id],
+    );
+  }
+
+  @override
+  Future<IncentiveSettings> getIncentiveSettings() async {
+    final db = await database;
+    final maps = await db.query('incentive_settings', where: 'id = 1');
+    if (maps.isNotEmpty) {
+      return IncentiveSettings.fromMap(maps.first);
+    }
+    return const IncentiveSettings();
+  }
+
+  @override
+  Future<void> updateIncentiveSettings(IncentiveSettings settings) async {
+    final db = await database;
+    final map = settings.toMap();
+    map['id'] = 1;
+    await db.insert(
+      'incentive_settings',
+      map,
+      conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
 }

@@ -1,5 +1,6 @@
 import '../../incentive/data/sqlite_incentive_repository.dart';
 import '../../incentive/domain/incentive_request.dart';
+import '../../incentive/domain/incentive_settings.dart';
 import '../domain/incentive_management_repository.dart';
 
 class SqliteIncentiveManagementRepository implements IncentiveManagementRepository {
@@ -29,5 +30,15 @@ class SqliteIncentiveManagementRepository implements IncentiveManagementReposito
   @override
   Future<void> rejectRequest(int id) async {
     await _baseRepo.updateRequestStatus(id, 'Rejected');
+  }
+
+  @override
+  Future<IncentiveSettings> getIncentiveSettings() async {
+    return await _baseRepo.getIncentiveSettings();
+  }
+
+  @override
+  Future<void> updateIncentiveSettings(IncentiveSettings settings) async {
+    await _baseRepo.updateIncentiveSettings(settings);
   }
 }
