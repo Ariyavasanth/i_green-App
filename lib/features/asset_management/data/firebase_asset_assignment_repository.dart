@@ -47,6 +47,33 @@ class FirebaseAssetAssignmentRepository implements AssetAssignmentRepository {
   }
 
   @override
+  Future<void> addAssignments(List<AssetAssignment> assignments) async {
+    if (assignments.isEmpty) return;
+    final batch = _firestore.batch();
+    final nowStr = DateTime.now().toIso8601String();
+    for (final assignment in assignments) {
+      final docRef = _ref.doc();
+      final parsedId = int.tryParse(docRef.id.replaceAll(RegExp(r'\D'), ''));
+      final assignedId = assignment.id != 0
+          ? assignment.id
+          : ((parsedId != null && parsedId != 0)
+              ? parsedId
+              : (docRef.id.hashCode & 0x7FFFFFFF));
+
+      final newAssignment = assignment.copyWith(
+        id: assignedId,
+        createdAt: assignment.createdAt ?? nowStr,
+      );
+
+      final data = newAssignment.toMap();
+      data['created_at'] = nowStr;
+      data['updated_at'] = FieldValue.serverTimestamp();
+      batch.set(docRef, data, SetOptions(merge: true));
+    }
+    await batch.commit();
+  }
+
+  @override
   Future<void> updateAssignment(AssetAssignment assignment) async {
     final snapshot =
         await _ref.where('id', isEqualTo: assignment.id).limit(1).get();
