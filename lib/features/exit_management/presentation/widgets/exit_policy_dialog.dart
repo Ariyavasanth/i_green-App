@@ -46,7 +46,7 @@ class _ExitPolicyDialogState extends State<ExitPolicyDialog> {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF9CC70A).withOpacity(0.15),
+                        color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Icon(

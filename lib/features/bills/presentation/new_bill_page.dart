@@ -52,9 +52,12 @@ class _NewBillPageState extends ConsumerState<NewBillPage> {
 
   @override
   void dispose() {
-    for (final c in [_number, _reference, _notes, _discount, _roundOff])
+    for (final c in [_number, _reference, _notes, _discount, _roundOff]) {
       c.dispose();
-    for (final i in _items) i.dispose();
+    }
+    for (final i in _items) {
+      i.dispose();
+    }
     super.dispose();
   }
 
@@ -83,7 +86,7 @@ class _NewBillPageState extends ConsumerState<NewBillPage> {
                     _label(
                       'Vendor Name*',
                       DropdownButtonFormField<Vendor>(
-                        value: _vendor,
+                        initialValue: _vendor,
                         isExpanded: true,
                         hint: const Text('Select a Vendor'),
                         items: vendors
@@ -146,7 +149,7 @@ class _NewBillPageState extends ConsumerState<NewBillPage> {
                     _label(
                       'Payment Terms',
                       DropdownButtonFormField<String>(
-                        value: _paymentTerms,
+                        initialValue: _paymentTerms,
                         items:
                             const [
                                   'Due on Receipt',
@@ -279,7 +282,7 @@ class _NewBillPageState extends ConsumerState<NewBillPage> {
               ),
               const SizedBox(height: 9),
               DropdownButtonFormField<String>(
-                value: e.value.account,
+                initialValue: e.value.account,
                 hint: const Text('Select an account'),
                 items: const ['Cost of Goods Sold', 'Purchase']
                     .map((v) => DropdownMenuItem(value: v, child: Text(v)))
@@ -314,7 +317,7 @@ class _NewBillPageState extends ConsumerState<NewBillPage> {
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      value: e.value.tax,
+                      initialValue: e.value.tax,
                       hint: const Text('Select a Tax'),
                       items: const ['GST 5%', 'GST 12%', 'GST 18%']
                           .map(
@@ -394,7 +397,7 @@ class _NewBillPageState extends ConsumerState<NewBillPage> {
             SizedBox(
               width: 120,
               child: DropdownButtonFormField<String>(
-                value: _adjustmentTax,
+                initialValue: _adjustmentTax,
                 isExpanded: true,
                 hint: const Text('Select a Tax'),
                 items: const ['1%', '2%', '5%']
@@ -592,10 +595,11 @@ class _NewBillPageState extends ConsumerState<NewBillPage> {
       v == null || v.trim().isEmpty ? 'Required' : null;
   Future<void> _pickFiles() async {
     final result = await FilePicker.pickFiles(allowMultiple: true);
-    if (result != null)
+    if (result != null) {
       setState(
         () => _attachments.addAll(result.files.take(5 - _attachments.length)),
       );
+    }
   }
 
   Future<void> _save() async {

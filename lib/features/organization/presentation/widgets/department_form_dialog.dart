@@ -173,7 +173,7 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
                           ),
                           const SizedBox(height: 4),
                           DropdownButtonFormField<String>(
-                            value: _reportingHierarchy,
+                            initialValue: _reportingHierarchy,
                             isDense: true,
                             decoration: InputDecoration(
                               contentPadding: const EdgeInsets.symmetric(
@@ -224,7 +224,7 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
                           ),
                           const SizedBox(height: 4),
                           DropdownButtonFormField<String>(
-                            value: _workLocation,
+                            initialValue: _workLocation,
                             isDense: true,
                             decoration: InputDecoration(
                               contentPadding: const EdgeInsets.symmetric(
@@ -364,7 +364,7 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
             }
 
             return DropdownButtonFormField<String>(
-              value: _selectedOrganization,
+              initialValue: _selectedOrganization,
               isDense: true,
               hint: const Text(
                 'Select Organization',

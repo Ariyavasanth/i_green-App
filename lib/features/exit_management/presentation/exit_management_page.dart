@@ -236,7 +236,7 @@ class _DashboardTab extends StatelessWidget {
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: DataTable(
-                  headingRowColor: MaterialStateProperty.all(Colors.grey.shade50),
+                  headingRowColor: WidgetStateProperty.all(Colors.grey.shade50),
                   columns: const [
                     DataColumn(label: Text('Employee', style: TextStyle(fontWeight: FontWeight.bold))),
                     DataColumn(label: Text('Department', style: TextStyle(fontWeight: FontWeight.bold))),
@@ -449,7 +449,7 @@ class _NoticePeriodTab extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF9CC70A).withOpacity(0.15),
+                        color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
@@ -715,7 +715,7 @@ class _SettlementTab extends ConsumerWidget {
                         const SizedBox(height: 16),
                         Container(
                           padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(color: const Color(0xFF9CC70A).withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+                          decoration: BoxDecoration(color: const Color(0xFF9CC70A).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -876,7 +876,7 @@ class _StatCard extends StatelessWidget {
         children: [
           Container(
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
             child: Icon(icon, color: color, size: 24),
           ),
           const SizedBox(width: 12),
@@ -907,7 +907,7 @@ class _StatusBadge extends StatelessWidget {
     Color fg = Colors.amber.shade900;
 
     if (status == 'Approved' || status == 'Completed') {
-      bg = const Color(0xFF9CC70A).withOpacity(0.2);
+      bg = const Color(0xFF9CC70A).withValues(alpha: 0.2);
       fg = const Color(0xFF9CC70A);
     } else if (status == 'Rejected') {
       bg = Colors.red.shade100;

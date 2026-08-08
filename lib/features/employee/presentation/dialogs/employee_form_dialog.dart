@@ -352,7 +352,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                 _buildFieldPair(
                   isMobile: isMobile,
                   child1: DropdownButtonFormField<String>(
-                    value: {
+                    initialValue: {
                       'SUPER_ADMIN', 'ADMIN', 'EMPLOYEE', 'HR', 'MANAGER',
                       if (_userType.isNotEmpty) _userType,
                     }.contains(_userType)
@@ -409,7 +409,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                 _buildFieldPair(
                   isMobile: isMobile,
                   child1: DropdownButtonFormField<String>(
-                    value: ['As Needed', 'Manual Allocation', 'No Leave'].contains(_leaveType)
+                    initialValue: ['As Needed', 'Manual Allocation', 'No Leave'].contains(_leaveType)
                         ? _leaveType
                         : 'As Needed',
                     decoration: const InputDecoration(
@@ -425,7 +425,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                   ),
                   child2: _leaveType == 'Manual Allocation'
                       ? DropdownButtonFormField<String>(
-                          value: _leaveAllocationFrequency,
+                          initialValue: _leaveAllocationFrequency,
                           decoration: const InputDecoration(
                             labelText: 'Allocation Frequency',
                             border: OutlineInputBorder(),

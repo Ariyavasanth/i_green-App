@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../authentication/providers/authentication_providers.dart';
 import '../../organization/domain/column_preference.dart';
 import '../data/firebase_employee_repository.dart';
 import '../domain/employee.dart';

@@ -60,6 +60,9 @@ dependencies:
   image: ^4.2.0
   crypto: ^3.0.3
   geolocator: ^13.0.1
+  speech_to_text: ^7.4.0
+  flutter_tts: ^4.2.5
+  flutter_webrtc: ^1.6.0
 
 dev_dependencies:
   flutter_test:

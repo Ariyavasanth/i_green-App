@@ -79,8 +79,8 @@ class _NewCustomerFormState extends ConsumerState<NewCustomerForm> with SingleTi
   Widget _otherDetails() => _pad(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
     ResponsiveFieldGrid(children: [
       // Expanded dropdown content keeps long GST/state labels inside narrow grid cells.
-      DropdownButtonFormField<String>(value: gstTreatment.isEmpty ? null : gstTreatment, isExpanded: true, decoration: _fieldDecoration('GST Treatment *'), items: gstOptions.map(_item).toList(), validator: (v) => v == null ? 'GST Treatment is required' : null, onChanged: (v) => setState(() => gstTreatment = v!)),
-      DropdownButtonFormField<String>(value: supply.isEmpty ? null : supply, isExpanded: true, decoration: _fieldDecoration('Place of Supply *'), items: states.map(_item).toList(), validator: (v) => v == null ? 'Place of Supply is required' : null, onChanged: (v) => setState(() => supply = v!)),
+      DropdownButtonFormField<String>(initialValue: gstTreatment.isEmpty ? null : gstTreatment, isExpanded: true, decoration: _fieldDecoration('GST Treatment *'), items: gstOptions.map(_item).toList(), validator: (v) => v == null ? 'GST Treatment is required' : null, onChanged: (v) => setState(() => gstTreatment = v!)),
+      DropdownButtonFormField<String>(initialValue: supply.isEmpty ? null : supply, isExpanded: true, decoration: _fieldDecoration('Place of Supply *'), items: states.map(_item).toList(), validator: (v) => v == null ? 'Place of Supply is required' : null, onChanged: (v) => setState(() => supply = v!)),
       CustomerTextField(controller: gstin, label: 'GSTIN'), CustomerTextField(controller: pan, label: 'PAN'),
       DropdownButtonFormField<String>(initialValue: currency, isExpanded: true, decoration: _fieldDecoration('Currency'), items: const [DropdownMenuItem(value: 'INR', child: Text('INR - Indian Rupee'))], onChanged: (v) => currency = v!),
       CustomerTextField(controller: opening, label: 'Opening Balance', keyboardType: TextInputType.number),

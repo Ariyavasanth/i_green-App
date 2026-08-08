@@ -132,7 +132,7 @@ class _EmployeePayslipListScreenState extends ConsumerState<EmployeePayslipListS
                                     shrinkWrap: true,
                                     physics: const NeverScrollableScrollPhysics(),
                                     itemCount: filteredRecords.length,
-                                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                                    separatorBuilder: (_, _) => const SizedBox(height: 12),
                                     itemBuilder: (context, index) {
                                       final record = filteredRecords[index];
                                       return _buildCompactPayslipCard(context, record);
@@ -246,7 +246,7 @@ class _EmployeePayslipListScreenState extends ConsumerState<EmployeePayslipListS
   Widget _buildStatusPill(PayrollRecord record) {
     final isPaid = record.status == 'Paid';
     final color = isPaid ? const Color(0xFF9CC70A) : Colors.amber[800]!;
-    final bgColor = isPaid ? const Color(0xFF9CC70A).withOpacity(0.1) : Colors.amber[50]!;
+    final bgColor = isPaid ? const Color(0xFF9CC70A).withValues(alpha: 0.1) : Colors.amber[50]!;
     final label = isPaid ? 'Paid' : 'Processing';
 
     return Container(

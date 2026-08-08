@@ -216,12 +216,12 @@ class _NewTransactionState extends ConsumerState<NewTransactionPage> {
   bool saving = false;
   _InvoiceVoiceStatus voiceStatus = _InvoiceVoiceStatus.ready;
   String voiceMessage = 'Start with “Hey Nova”';
-  bool _wakePhraseDetected = false;
-  bool _voiceFinishing = false;
+  final bool _wakePhraseDetected = false;
+  final bool _voiceFinishing = false;
   bool _voiceSessionActive = false;
-  bool _voiceRestarting = false;
+  final bool _voiceRestarting = false;
   String _voiceTranscript = '';
-  int _liveVoiceParseGeneration = 0;
+  final int _liveVoiceParseGeneration = 0;
   String get label => switch (widget.type) {
     TransactionType.quote => 'Quote',
     TransactionType.salesOrder => 'Sales Order',
@@ -619,7 +619,9 @@ class _NewTransactionState extends ConsumerState<NewTransactionPage> {
       if (values.termsAndConditions != null) terms.text = values.termsAndConditions!;
       // Explicit "another/new item" commands append instead of overwriting row zero.
       final itemOffset = values.appendItems ? invoiceItems.length : 0;
-      while (invoiceItems.length < itemOffset + values.items.length) invoiceItems.add(_InvoiceItemInput());
+      while (invoiceItems.length < itemOffset + values.items.length) {
+        invoiceItems.add(_InvoiceItemInput());
+      }
       for (var i = 0; i < values.items.length; i++) {
         final source = values.items[i];
         final target = invoiceItems[itemOffset + i];

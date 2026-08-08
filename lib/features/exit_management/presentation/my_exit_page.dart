@@ -117,7 +117,7 @@ class _MyExitPageState extends ConsumerState<MyExitPage> {
             border: Border.all(color: Colors.grey.shade200),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.04),
+                color: Colors.black.withValues(alpha: 0.04),
                 blurRadius: 16,
                 offset: const Offset(0, 6),
               ),
@@ -129,7 +129,7 @@ class _MyExitPageState extends ConsumerState<MyExitPage> {
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF9CC70A).withOpacity(0.12),
+                  color: const Color(0xFF9CC70A).withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -285,7 +285,7 @@ class _EmployeeHeaderCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -404,7 +404,7 @@ class _SummaryCardsGrid extends ConsumerWidget {
                 );
               },
               loading: () => const _TileCard(title: 'Clearance Status', value: '...', icon: Icons.hourglass_top, color: Colors.blue),
-              error: (_, __) => const _TileCard(title: 'Clearance Status', value: 'Err', icon: Icons.error_outline, color: Colors.red),
+              error: (_, _) => const _TileCard(title: 'Clearance Status', value: 'Err', icon: Icons.error_outline, color: Colors.red),
             ),
             settlementAsync.when(
               data: (s) => _TileCard(
@@ -415,7 +415,7 @@ class _SummaryCardsGrid extends ConsumerWidget {
                 color: Colors.teal.shade700,
               ),
               loading: () => const _TileCard(title: 'Net Settlement', value: '...', icon: Icons.hourglass_top, color: Colors.teal),
-              error: (_, __) => const _TileCard(title: 'Net Settlement', value: 'Err', icon: Icons.error_outline, color: Colors.red),
+              error: (_, _) => const _TileCard(title: 'Net Settlement', value: 'Err', icon: Icons.error_outline, color: Colors.red),
             ),
           ],
         );
@@ -449,7 +449,7 @@ class _TileCard extends StatelessWidget {
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -460,7 +460,7 @@ class _TileCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: color, size: 24),
@@ -531,7 +531,7 @@ class _NoticeProgressBarCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF9CC70A).withOpacity(0.15),
+                  color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -781,7 +781,7 @@ class _ClearanceItemTile extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: isApproved ? const Color(0xFF9CC70A).withOpacity(0.15) : Colors.amber.shade100,
+                  color: isApproved ? const Color(0xFF9CC70A).withValues(alpha: 0.15) : Colors.amber.shade100,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -878,7 +878,7 @@ class _SettlementSummaryCard extends ConsumerWidget {
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF9CC70A).withOpacity(0.12),
+                      color: const Color(0xFF9CC70A).withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Row(
@@ -1068,7 +1068,7 @@ class _StatusChip extends StatelessWidget {
     Color fg = Colors.amber.shade900;
 
     if (status == 'Approved' || status == 'Completed') {
-      bg = const Color(0xFF9CC70A).withOpacity(0.2);
+      bg = const Color(0xFF9CC70A).withValues(alpha: 0.2);
       fg = const Color(0xFF9CC70A);
     } else if (status == 'Rejected') {
       bg = Colors.red.shade100;

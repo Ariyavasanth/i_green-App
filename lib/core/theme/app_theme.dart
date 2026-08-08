@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
@@ -41,12 +42,28 @@ abstract final class AppTheme {
       ),
       titleLarge: AppTextStyles.pageTitle,
       titleMedium: AppTextStyles.heading,
-      titleSmall: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, height: 1.3),
-      bodyLarge: TextStyle(fontSize: 15, fontWeight: FontWeight.w400, height: 1.45),
+      titleSmall: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        height: 1.3,
+      ),
+      bodyLarge: TextStyle(
+        fontSize: 15,
+        fontWeight: FontWeight.w400,
+        height: 1.45,
+      ),
       bodyMedium: AppTextStyles.body,
       bodySmall: AppTextStyles.caption,
-      labelLarge: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, height: 1.2),
-      labelMedium: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, height: 1.2),
+      labelLarge: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        height: 1.2,
+      ),
+      labelMedium: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w500,
+        height: 1.2,
+      ),
     ),
     appBarTheme: const AppBarTheme(
       elevation: 0,
@@ -104,7 +121,9 @@ abstract final class AppTheme {
       fillColor: AppColors.surface,
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       hintStyle: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
-      labelStyle: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+      labelStyle: AppTextStyles.caption.copyWith(
+        color: AppColors.textSecondary,
+      ),
       floatingLabelStyle: AppTextStyles.caption.copyWith(
         color: AppColors.active,
         fontWeight: FontWeight.w500,
@@ -175,7 +194,9 @@ abstract final class AppTheme {
       iconColor: AppColors.active,
       textColor: AppColors.textPrimary,
       minTileHeight: 48,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(10)),
+      ),
     ),
     pageTransitionsTheme: const PageTransitionsTheme(
       builders: {

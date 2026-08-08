@@ -67,8 +67,9 @@ class GeminiLiveInvoiceVoiceClient implements InvoiceRealtimeVoiceClient {
       }
       final token =
           (jsonDecode(response.body) as Map<String, dynamic>)['token'];
-      if (token is! String)
+      if (token is! String) {
         throw const FormatException('Invalid token response');
+      }
       final socket = WebSocketChannel.connect(
         Uri.parse(_liveUrl).replace(queryParameters: {'access_token': token}),
       );
@@ -80,8 +81,9 @@ class GeminiLiveInvoiceVoiceClient implements InvoiceRealtimeVoiceClient {
           if (!_closing) _onError?.call('Nova connection error: $error');
         },
         onDone: () {
-          if (!_closing)
+          if (!_closing) {
             _onError?.call('Nova disconnected. Tap microphone to reconnect.');
+          }
         },
       );
       _send(_setupMessage);
@@ -267,7 +269,7 @@ class GeminiLiveInvoiceVoiceClient implements InvoiceRealtimeVoiceClient {
     _send({
       'toolResponse': {
         'functionResponses': [
-          {'name': name, if (id != null) 'id': id, 'response': result},
+          {'name': name, 'id': ?id, 'response': result},
         ],
       },
     });

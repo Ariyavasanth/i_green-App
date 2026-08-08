@@ -317,7 +317,7 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
             children: [
               CircleAvatar(
                 radius: 24,
-                backgroundColor: const Color(0xFF9CC70A).withOpacity(0.1),
+                backgroundColor: const Color(0xFF9CC70A).withValues(alpha: 0.1),
                 child: const Icon(Icons.person_outline, color: Color(0xFF9CC70A), size: 24),
               ),
               const SizedBox(width: 16),
@@ -571,7 +571,7 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
   Widget _buildStatusPill(PayrollRecord record) {
     final isPaid = record.status == 'Paid';
     final color = isPaid ? const Color(0xFF9CC70A) : Colors.amber[800]!;
-    final bgColor = isPaid ? const Color(0xFF9CC70A).withOpacity(0.1) : Colors.amber[50]!;
+    final bgColor = isPaid ? const Color(0xFF9CC70A).withValues(alpha: 0.1) : Colors.amber[50]!;
     final label = isPaid ? 'Paid' : 'Processing';
 
     return Container(

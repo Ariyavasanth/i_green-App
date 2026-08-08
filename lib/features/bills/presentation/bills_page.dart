@@ -142,8 +142,9 @@ class _BillsPageState extends ConsumerState<BillsPage> {
                                       b.dueDate.isBefore(now)),
                         )
                         .toList();
-                    if (rows.isEmpty)
+                    if (rows.isEmpty) {
                       return const Center(child: Text('No bills found'));
+                    }
                     return RefreshIndicator(
                       onRefresh: () => ref.refresh(billsProvider.future),
                       child: ListView.separated(

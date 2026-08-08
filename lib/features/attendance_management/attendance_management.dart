@@ -1,4 +1,4 @@
-library attendance_management;
+library;
 
 export 'domain/attendance_management_repository.dart';
 export 'domain/attendance_management_stats.dart';

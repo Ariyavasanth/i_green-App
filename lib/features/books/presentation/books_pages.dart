@@ -718,17 +718,19 @@ class _InvoiceMobileViewState extends ConsumerState<_InvoiceMobileView> {
   Future<void> _handleAction(SalesTransaction row, String action) async {
     if (action == 'paid') return widget.onAction(row, action);
     // These commands need repository APIs that do not exist yet; never fake mutations.
-    if (mounted)
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('$action is not available in the current API.')),
       );
+    }
   }
 }
 
 String _effectiveStatus(SalesTransaction row) {
   if (row.status.toLowerCase() != 'paid' &&
-      row.dueDate?.isBefore(DateTime.now()) == true)
+      row.dueDate?.isBefore(DateTime.now()) == true) {
     return 'Overdue';
+  }
   final value = row.status.toLowerCase();
   return value.isEmpty
       ? 'Draft'
@@ -1090,7 +1092,7 @@ class PageFrame extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    if (headerAction != null) headerAction!,
+                    ?headerAction,
                     if (headerAction == null && onAdd != null)
                       ElevatedButton.icon(
                         onPressed: onAdd,

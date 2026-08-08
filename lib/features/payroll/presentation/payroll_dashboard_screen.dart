@@ -59,10 +59,10 @@ class PayrollDashboardScreen extends ConsumerWidget {
                           isMobile,
                         ),
                         loading: () => const Center(child: CircularProgressIndicator()),
-                        error: (_, __) => const SizedBox.shrink(),
+                        error: (_, _) => const SizedBox.shrink(),
                       ),
                       loading: () => const Center(child: CircularProgressIndicator()),
-                      error: (_, __) => const SizedBox.shrink(),
+                      error: (_, _) => const SizedBox.shrink(),
                     ),
                     const SizedBox(height: 24),
 
@@ -84,7 +84,7 @@ class PayrollDashboardScreen extends ConsumerWidget {
                             : _buildDesktopTable(context, records);
                       },
                       loading: () => const Center(child: CircularProgressIndicator()),
-                      error: (err, __) => Card(
+                      error: (err, _) => Card(
                         child: Padding(
                           padding: const EdgeInsets.all(16),
                           child: Text('Error loading payroll: $err'),
@@ -567,7 +567,7 @@ class _StatCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: (valueColor ?? AppColors.active).withOpacity(0.08),
+                color: (valueColor ?? AppColors.active).withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(

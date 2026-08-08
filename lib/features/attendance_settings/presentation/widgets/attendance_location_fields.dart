@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
-import '../../../../core/theme/app_colors.dart';
 
 class AttendanceLocationFields extends StatefulWidget {
   const AttendanceLocationFields({

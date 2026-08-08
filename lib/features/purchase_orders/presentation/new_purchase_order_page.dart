@@ -53,7 +53,9 @@ class _NewPurchaseOrderPageState extends ConsumerState<NewPurchaseOrderPage> {
     for (final controller in [_number, _reference, _deliveryDate, _discount, _roundOff, _notes, _terms]) {
       controller.dispose();
     }
-    for (final item in _items) item.dispose();
+    for (final item in _items) {
+      item.dispose();
+    }
     super.dispose();
   }
 
@@ -211,7 +213,7 @@ class _NewPurchaseOrderPageState extends ConsumerState<NewPurchaseOrderPage> {
       width: formWidth,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         _labeled('Vendor Name*', DropdownButtonFormField<Vendor>(
-          value: _vendor,
+          initialValue: _vendor,
           isExpanded: true,
           hint: const Text('Select a Vendor'),
           items: vendors.map((v) => DropdownMenuItem(value: v, child: Text(v.companyName.isEmpty ? v.name : v.companyName, overflow: TextOverflow.ellipsis))).toList(),
@@ -256,7 +258,7 @@ class _NewPurchaseOrderPageState extends ConsumerState<NewPurchaseOrderPage> {
             const SizedBox(height: 10),
             _labeled('Delivery Date', TextFormField(controller: _deliveryDate, readOnly: true, onTap: () => _pickDate(delivery: true), decoration: _input(hint: 'dd/MM/yyyy', suffixIcon: const Icon(Icons.calendar_today_outlined, size: 15)))),
             const SizedBox(height: 10),
-            _labeled('Shipment Preference', DropdownButtonFormField<String>(value: _shipmentPreference, isExpanded: true, hint: const Text('Choose the shipment preference or type to add'), items: const ['Road', 'Rail', 'Air', 'Courier'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(), onChanged: (v) => setState(() => _shipmentPreference = v), decoration: _input())),
+            _labeled('Shipment Preference', DropdownButtonFormField<String>(initialValue: _shipmentPreference, isExpanded: true, hint: const Text('Choose the shipment preference or type to add'), items: const ['Road', 'Rail', 'Air', 'Courier'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(), onChanged: (v) => setState(() => _shipmentPreference = v), decoration: _input())),
           ])),
           SizedBox(
             width: wide ? 300 : formWidth,
@@ -266,7 +268,7 @@ class _NewPurchaseOrderPageState extends ConsumerState<NewPurchaseOrderPage> {
                 _labeled(
                   'Payment Terms',
                   DropdownButtonFormField<String>(
-                    value: _paymentTerms,
+                    initialValue: _paymentTerms,
                     isExpanded: true,
                     items: const ['Due on Receipt', 'Net 15', 'Net 30', 'Net 45']
                         .map((v) => DropdownMenuItem(value: v, child: Text(v)))
@@ -323,7 +325,7 @@ class _NewPurchaseOrderPageState extends ConsumerState<NewPurchaseOrderPage> {
       ]),
       TextFormField(controller: item.name, decoration: _input(hint: 'Type or click to select an item', prefixIcon: const Icon(Icons.inventory_2_outlined, size: 18))),
       const SizedBox(height: 10),
-      DropdownButtonFormField<String>(value: item.account, isExpanded: true, hint: const Text('Select an account'), items: const ['Cost of Goods Sold', 'Purchase'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(), onChanged: (v) => setState(() => item.account = v), decoration: _input()),
+      DropdownButtonFormField<String>(initialValue: item.account, isExpanded: true, hint: const Text('Select an account'), items: const ['Cost of Goods Sold', 'Purchase'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(), onChanged: (v) => setState(() => item.account = v), decoration: _input()),
       const SizedBox(height: 10),
       Row(children: [
         Expanded(child: TextFormField(controller: item.quantity, keyboardType: TextInputType.number, onChanged: (_) => setState(() {}), decoration: _input(hint: 'Quantity'))),
@@ -332,7 +334,7 @@ class _NewPurchaseOrderPageState extends ConsumerState<NewPurchaseOrderPage> {
       ]),
       const SizedBox(height: 10),
       Row(children: [
-        Expanded(child: DropdownButtonFormField<String>(value: item.tax, isExpanded: true, hint: const Text('Select a Tax'), items: const ['GST 5%', 'GST 12%', 'GST 18%'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(), onChanged: (v) => setState(() => item.tax = v), decoration: _input())),
+        Expanded(child: DropdownButtonFormField<String>(initialValue: item.tax, isExpanded: true, hint: const Text('Select a Tax'), items: const ['GST 5%', 'GST 12%', 'GST 18%'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(), onChanged: (v) => setState(() => item.tax = v), decoration: _input())),
         const SizedBox(width: 12),
         Text('₹${item.amount.toStringAsFixed(2)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
       ]),
@@ -344,10 +346,10 @@ class _NewPurchaseOrderPageState extends ConsumerState<NewPurchaseOrderPage> {
     padding: const EdgeInsets.symmetric(vertical: 8),
     child: Row(children: [
       SizedBox(width: 310, child: TextFormField(controller: item.name, decoration: _input(hint: 'Type or click to select an item', prefixIcon: const Icon(Icons.inventory_2_outlined, size: 18)))),
-      SizedBox(width: 190, child: DropdownButtonFormField<String>(value: item.account, hint: const Text('Select an account'), items: const ['Cost of Goods Sold', 'Purchase'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(), onChanged: (v) => setState(() => item.account = v), decoration: _input())),
+      SizedBox(width: 190, child: DropdownButtonFormField<String>(initialValue: item.account, hint: const Text('Select an account'), items: const ['Cost of Goods Sold', 'Purchase'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(), onChanged: (v) => setState(() => item.account = v), decoration: _input())),
       SizedBox(width: 90, child: TextFormField(controller: item.quantity, textAlign: TextAlign.right, keyboardType: TextInputType.number, onChanged: (_) => setState(() {}), decoration: _input())),
       SizedBox(width: 110, child: TextFormField(controller: item.rate, textAlign: TextAlign.right, keyboardType: TextInputType.number, onChanged: (_) => setState(() {}), decoration: _input())),
-      SizedBox(width: 110, child: DropdownButtonFormField<String>(value: item.tax, hint: const Text('Select a Tax'), items: const ['GST 5%', 'GST 12%', 'GST 18%'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(), onChanged: (v) => setState(() => item.tax = v), decoration: _input())),
+      SizedBox(width: 110, child: DropdownButtonFormField<String>(initialValue: item.tax, hint: const Text('Select a Tax'), items: const ['GST 5%', 'GST 12%', 'GST 18%'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(), onChanged: (v) => setState(() => item.tax = v), decoration: _input())),
       SizedBox(width: 70, child: Text(item.amount.toStringAsFixed(2), textAlign: TextAlign.right, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
       SizedBox(width: 30, child: IconButton(padding: EdgeInsets.zero, onPressed: _items.length == 1 ? null : () => setState(() => _items.removeAt(index).dispose()), icon: const Icon(Icons.close, size: 16))),
     ]),
@@ -367,7 +369,7 @@ class _NewPurchaseOrderPageState extends ConsumerState<NewPurchaseOrderPage> {
       ],
       const SizedBox(height: 10),
       Row(children: [const Expanded(child: Text('Discount', style: TextStyle(fontSize: 12))), SizedBox(width: 105, child: TextField(controller: _discount, textAlign: TextAlign.right, keyboardType: const TextInputType.numberWithOptions(decimal: true), onChanged: (_) => setState(() {}), decoration: _input(suffixText: _discountPercent ? '%' : '₹'))), IconButton(tooltip: _discountPercent ? 'Use amount' : 'Use percentage', onPressed: () => setState(() => _discountPercent = !_discountPercent), icon: const Icon(Icons.swap_horiz, size: 16)), SizedBox(width: 70, child: Text('-${_discountValue.toStringAsFixed(2)}', textAlign: TextAlign.right, style: const TextStyle(fontSize: 12)))]),
-      Row(children: [Radio<bool>(value: true, groupValue: _tds, onChanged: (v) => setState(() => _tds = v!), visualDensity: VisualDensity.compact), const Text('TDS', style: TextStyle(fontSize: 11)), Radio<bool>(value: false, groupValue: _tds, onChanged: (v) => setState(() => _tds = v!), visualDensity: VisualDensity.compact), const Text('TCS', style: TextStyle(fontSize: 11)), const Spacer(), SizedBox(width: 125, child: DropdownButtonFormField<String>(value: _tax, isExpanded: true, hint: const Text('Select a Tax'), items: const ['1%', '2%', '5%'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(), onChanged: (v) => setState(() => _tax = v), decoration: _input()))]),
+      Row(children: [Radio<bool>(value: true, groupValue: _tds, onChanged: (v) => setState(() => _tds = v!), visualDensity: VisualDensity.compact), const Text('TDS', style: TextStyle(fontSize: 11)), Radio<bool>(value: false, groupValue: _tds, onChanged: (v) => setState(() => _tds = v!), visualDensity: VisualDensity.compact), const Text('TCS', style: TextStyle(fontSize: 11)), const Spacer(), SizedBox(width: 125, child: DropdownButtonFormField<String>(initialValue: _tax, isExpanded: true, hint: const Text('Select a Tax'), items: const ['1%', '2%', '5%'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(), onChanged: (v) => setState(() => _tax = v), decoration: _input()))]),
       if (_tax != null) ...[
         const SizedBox(height: 6),
         Align(
