@@ -866,8 +866,365 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
     );
   }
 
+  bool _showSearchBar = false;
+
+  String _getInitials(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return '?';
+    final parts = trimmed.split(RegExp(r'\s+'));
+    if (parts.length == 1) {
+      return parts[0][0].toUpperCase();
+    }
+    return '${parts[0][0]}${parts[parts.length - 1][0]}'.toUpperCase();
+  }
+
+  IconData _getAssetIcon(String typeName, String assetName) {
+    final combined = '$typeName $assetName'.toLowerCase();
+    if (combined.contains('keyboard')) return Icons.keyboard_outlined;
+    if (combined.contains('phone') || combined.contains('mobile') || combined.contains('iphone')) {
+      return Icons.smartphone_outlined;
+    }
+    if (combined.contains('monitor') || combined.contains('screen') || combined.contains('display')) {
+      return Icons.desktop_windows_outlined;
+    }
+    if (combined.contains('laptop') || combined.contains('macbook') || combined.contains('thinkpad')) {
+      return Icons.laptop_outlined;
+    }
+    if (combined.contains('mouse')) return Icons.mouse_outlined;
+    if (combined.contains('headset') || combined.contains('headphone')) return Icons.headphones_outlined;
+    return Icons.devices_outlined;
+  }
+
+  Widget _buildStatusPill(String status, String? returnDate) {
+    Color bg;
+    Color fg;
+    switch (status) {
+      case 'Assigned':
+        bg = const Color(0xFF003B73).withValues(alpha: 0.12);
+        fg = const Color(0xFF0052CC);
+        break;
+      case 'Maintenance':
+        bg = const Color(0xFF9E6200).withValues(alpha: 0.14);
+        fg = const Color(0xFFB45309);
+        break;
+      case 'Returned':
+      default:
+        bg = AppColors.active.withValues(alpha: 0.1);
+        fg = AppColors.textSecondary;
+        break;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            status,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: fg,
+            ),
+          ),
+        ),
+        if (status == 'Maintenance' && returnDate != null && returnDate.trim().isNotEmpty) ...[
+          const SizedBox(height: 3),
+          Text(
+            'R: $returnDate',
+            style: const TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ],
+    );
+  }
+
+  void _showAssetActionBottomSheet(
+    AssetAssignment record,
+    List<Employee> employees,
+    List<AssetType> assetTypes,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: const EdgeInsets.all(20),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.divider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: AppColors.active.withValues(alpha: 0.1),
+                      child: Icon(
+                        _getAssetIcon(record.assetTypeName, record.assetName),
+                        color: AppColors.active,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            record.assetName.isNotEmpty ? record.assetName : record.assetTypeName,
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          Text(
+                            'Assigned to ${record.employeeName}',
+                            style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                    _buildStatusPill(record.status, record.maintenanceReturnDate),
+                  ],
+                ),
+                const Divider(height: 28),
+                ListTile(
+                  leading: const Icon(Icons.visibility_outlined, color: AppColors.active),
+                  title: const Text('View Full Details', style: TextStyle(fontWeight: FontWeight.w600)),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _showViewAssignmentDialog(record);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.edit_outlined, color: AppColors.active),
+                  title: const Text('Edit Assignment', style: TextStyle(fontWeight: FontWeight.w600)),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _showAssignAssetDialog(
+                      assignmentToEdit: record,
+                      employees: employees,
+                      assetTypes: assetTypes,
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.delete_outline, color: Colors.red),
+                  title: const Text('Remove Assignment', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.red)),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _confirmDeleteAssignment(record);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showFilterSheet(List<Employee> employees, List<AssetType> assetTypes) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return Consumer(
+          builder: (context, ref, _) {
+            final empFilter = ref.watch(assignmentEmployeeFilterProvider);
+            final assetTypeFilter = ref.watch(assignmentAssetTypeFilterProvider);
+            final dateRangeFilter = ref.watch(assignmentDateRangeFilterProvider);
+
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              padding: const EdgeInsets.all(20),
+              child: SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: AppColors.divider,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Filter Assets',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            ref.read(assignmentEmployeeFilterProvider.notifier).state = null;
+                            ref.read(assignmentAssetTypeFilterProvider.notifier).state = null;
+                            ref.read(assignmentDateRangeFilterProvider.notifier).state = null;
+                          },
+                          child: const Text('Reset All'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Filter by Employee
+                    DropdownButtonFormField<int?>(
+                      initialValue: empFilter,
+                      isDense: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Filter by Employee',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: [
+                        const DropdownMenuItem<int?>(
+                          value: null,
+                          child: Text('All Employees'),
+                        ),
+                        ...employees.map((e) {
+                          return DropdownMenuItem<int?>(
+                            value: e.id,
+                            child: Text(e.fullName),
+                          );
+                        }),
+                      ],
+                      onChanged: (val) {
+                        ref.read(assignmentEmployeeFilterProvider.notifier).state = val;
+                      },
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Filter by Asset Type
+                    DropdownButtonFormField<int?>(
+                      initialValue: assetTypeFilter,
+                      isDense: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Filter by Asset Type',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: [
+                        const DropdownMenuItem<int?>(
+                          value: null,
+                          child: Text('All Asset Types'),
+                        ),
+                        ...assetTypes.map((t) {
+                          return DropdownMenuItem<int?>(
+                            value: t.id,
+                            child: Text(t.name),
+                          );
+                        }),
+                      ],
+                      onChanged: (val) {
+                        ref.read(assignmentAssetTypeFilterProvider.notifier).state = val;
+                      },
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Date Range Picker
+                    TextFormField(
+                      readOnly: true,
+                      controller: TextEditingController(
+                        text: dateRangeFilter != null
+                            ? '${DateFormat('dd/MM/yyyy').format(dateRangeFilter.start)} - ${DateFormat('dd/MM/yyyy').format(dateRangeFilter.end)}'
+                            : '',
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Assigned Date Range',
+                        hintText: 'Select Date Range',
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                        prefixIcon: const Icon(Icons.date_range, size: 18),
+                        suffixIcon: dateRangeFilter != null
+                            ? IconButton(
+                                icon: const Icon(Icons.clear, size: 18),
+                                onPressed: () {
+                                  ref.read(assignmentDateRangeFilterProvider.notifier).state = null;
+                                },
+                              )
+                            : null,
+                      ),
+                      onTap: () async {
+                        final pickedRange = await showDialog<DateTimeRange>(
+                          context: context,
+                          builder: (context) => CustomDateRangePickerDialog(
+                            initialDateRange: dateRangeFilter,
+                          ),
+                        );
+                        if (pickedRange != null) {
+                          ref.read(assignmentDateRangeFilterProvider.notifier).state = pickedRange;
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 20),
+
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        onPressed: () => Navigator.pop(sheetContext),
+                        child: const Text('Apply Filters', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth <= 700) {
+          return _buildMobileView(context);
+        } else {
+          return _buildDesktopView(context);
+        }
+      },
+    );
+  }
+
+  Widget _buildDesktopView(BuildContext context) {
     final assignmentsAsync = ref.watch(assetAssignmentsProvider);
     final employeesAsync = ref.watch(employeesProvider);
     final assetTypesAsync = ref.watch(assetTypesProvider);
@@ -889,7 +1246,7 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Page Header
+            // Desktop Page Header
             Row(
               children: [
                 const Icon(Icons.devices_other_outlined, size: 28, color: AppColors.active),
@@ -955,7 +1312,7 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
             ),
             const SizedBox(height: 20),
 
-            // Main Card Box
+            // Desktop Main Table Box
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
@@ -967,7 +1324,7 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Filter Controls Row
+                  // Desktop Filter Controls Row
                   Wrap(
                     spacing: 12,
                     runSpacing: 12,
@@ -1085,6 +1442,7 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
                           },
                         ),
                       ),
+
                       // Filter by Status
                       SizedBox(
                         width: 180,
@@ -1384,4 +1742,423 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
       ),
     );
   }
+
+  Widget _buildMobileView(BuildContext context) {
+    final assignmentsAsync = ref.watch(assetAssignmentsProvider);
+    final employeesAsync = ref.watch(employeesProvider);
+    final assetTypesAsync = ref.watch(assetTypesProvider);
+
+    final searchQuery = ref.watch(assignmentSearchQueryProvider);
+    final empFilter = ref.watch(assignmentEmployeeFilterProvider);
+    final assetTypeFilter = ref.watch(assignmentAssetTypeFilterProvider);
+    final dateRangeFilter = ref.watch(assignmentDateRangeFilterProvider);
+    final statusFilter = ref.watch(assignmentStatusFilterProvider);
+
+    final employees = employeesAsync.asData?.value ?? [];
+    final assetTypes = assetTypesAsync.asData?.value ?? [];
+
+    return Scaffold(
+      backgroundColor: AppColors.canvas,
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 3,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        onPressed: () => _showAssignAssetDialog(
+          employees: employees,
+          assetTypes: assetTypes,
+        ),
+        child: const Icon(Icons.add, size: 28),
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Header Bar
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              color: Colors.white,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.devices_other_outlined, size: 24, color: AppColors.active),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Assets',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: Icon(
+                          _showSearchBar ? Icons.search_off : Icons.search,
+                          color: AppColors.active,
+                        ),
+                        tooltip: 'Search assets',
+                        onPressed: () {
+                          setState(() {
+                            _showSearchBar = !_showSearchBar;
+                          });
+                        },
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          Icons.tune_outlined,
+                          color: (empFilter != null || assetTypeFilter != null || dateRangeFilter != null)
+                              ? AppColors.primary
+                              : AppColors.active,
+                        ),
+                        tooltip: 'Filter assets',
+                        onPressed: () => _showFilterSheet(employees, assetTypes),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.settings_outlined, color: AppColors.active),
+                        tooltip: 'Asset Settings',
+                        onPressed: () => context.push('/asset-settings'),
+                      ),
+                    ],
+                  ),
+
+                  // Collapsible Search Field
+                  if (_showSearchBar) ...[
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _searchController,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        hintText: 'Search by employee, asset, serial or reason...',
+                        prefixIcon: const Icon(Icons.search, size: 20),
+                        suffixIcon: searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear, size: 18),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  ref.read(assignmentSearchQueryProvider.notifier).state = '';
+                                },
+                              )
+                            : null,
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      onChanged: (val) {
+                        ref.read(assignmentSearchQueryProvider.notifier).state = val;
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+
+            // Content Area
+            Expanded(
+              child: assignmentsAsync.when(
+                loading: () => const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(40),
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
+                error: (err, _) => Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(40),
+                    child: Text('Error loading asset assignments: $err',
+                        style: const TextStyle(color: Colors.red)),
+                  ),
+                ),
+                data: (allRecords) {
+                  final filtered = allRecords.where((r) {
+                    if (empFilter != null && r.employeeId != empFilter) return false;
+                    if (assetTypeFilter != null && r.assetTypeId != assetTypeFilter) return false;
+                    if (statusFilter != null && r.status != statusFilter) return false;
+                    if (dateRangeFilter != null) {
+                      final rDate = DateTime.tryParse(r.assignedDate) ?? DateFormat('yyyy-MM-dd').tryParse(r.assignedDate);
+                      if (rDate != null) {
+                        final startDay = DateTime(dateRangeFilter.start.year, dateRangeFilter.start.month, dateRangeFilter.start.day, 0, 0, 0);
+                        final endDay = DateTime(dateRangeFilter.end.year, dateRangeFilter.end.month, dateRangeFilter.end.day, 23, 59, 59, 999);
+                        if (rDate.isBefore(startDay) || rDate.isAfter(endDay)) return false;
+                      }
+                    }
+                    if (searchQuery.trim().isNotEmpty) {
+                      final q = searchQuery.toLowerCase();
+                      final matchEmp = r.employeeName.toLowerCase().contains(q) ||
+                          r.employeeCode.toLowerCase().contains(q);
+                      final matchAssetType = r.assetTypeName.toLowerCase().contains(q);
+                      final matchAssetName = r.assetName.toLowerCase().contains(q);
+                      final matchSerial = r.serialNumber.toLowerCase().contains(q);
+                      final matchDesc = r.description.toLowerCase().contains(q);
+                      final matchMaint = (r.maintenanceAddress?.toLowerCase().contains(q) ?? false) ||
+                          (r.maintenanceContact?.toLowerCase().contains(q) ?? false);
+                      if (!matchEmp && !matchAssetType && !matchAssetName && !matchSerial && !matchDesc && !matchMaint) return false;
+                    }
+                    return true;
+                  }).toList();
+
+                  // Counts for status filter chips
+                  final totalCount = allRecords.length;
+                  final assignedCount = allRecords.where((r) => r.status == 'Assigned').length;
+                  final maintCount = allRecords.where((r) => r.status == 'Maintenance').length;
+                  final returnedCount = allRecords.where((r) => r.status == 'Returned').length;
+
+                  // Group filtered records by employee
+                  final Map<String, List<AssetAssignment>> groupedMap = {};
+                  for (final rec in filtered) {
+                    final key = '${rec.employeeId}_${rec.employeeName}';
+                    groupedMap.putIfAbsent(key, () => []).add(rec);
+                  }
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Filter Chips Row
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        child: Row(
+                          children: [
+                            _buildFilterChip(
+                              label: 'All ($totalCount)',
+                              isSelected: statusFilter == null,
+                              onSelected: () => ref.read(assignmentStatusFilterProvider.notifier).state = null,
+                            ),
+                            const SizedBox(width: 8),
+                            _buildFilterChip(
+                              label: 'Assigned${assignedCount > 0 ? " ($assignedCount)" : ""}',
+                              isSelected: statusFilter == 'Assigned',
+                              onSelected: () => ref.read(assignmentStatusFilterProvider.notifier).state = 'Assigned',
+                            ),
+                            const SizedBox(width: 8),
+                            _buildFilterChip(
+                              label: 'Maintenance${maintCount > 0 ? " ($maintCount)" : ""}',
+                              isSelected: statusFilter == 'Maintenance',
+                              onSelected: () => ref.read(assignmentStatusFilterProvider.notifier).state = 'Maintenance',
+                            ),
+                            const SizedBox(width: 8),
+                            _buildFilterChip(
+                              label: 'Returned${returnedCount > 0 ? " ($returnedCount)" : ""}',
+                              isSelected: statusFilter == 'Returned',
+                              onSelected: () => ref.read(assignmentStatusFilterProvider.notifier).state = 'Returned',
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Asset summary subtitle
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        child: Text(
+                          '${filtered.length} assets · grouped by employee',
+                          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Grouped Cards List
+                      Expanded(
+                        child: filtered.isEmpty
+                            ? Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(40),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.assignment_outlined, size: 48, color: AppColors.textSecondary),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        searchQuery.isNotEmpty || statusFilter != null || empFilter != null
+                                            ? 'No matching asset assignments found.'
+                                            : 'No asset assignments added yet.',
+                                        style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              )
+                            : ListView.builder(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                itemCount: groupedMap.length,
+                                itemBuilder: (context, index) {
+                                  final groupEntry = groupedMap.entries.elementAt(index);
+                                  final items = groupEntry.value;
+                                  final first = items.first;
+                                  final initials = _getInitials(first.employeeName);
+
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 16),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(color: AppColors.divider),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.03),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        // Employee Header Row
+                                        Padding(
+                                          padding: const EdgeInsets.all(14),
+                                          child: Row(
+                                            children: [
+                                              CircleAvatar(
+                                                radius: 20,
+                                                backgroundColor: AppColors.active,
+                                                child: Text(
+                                                  initials,
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 13,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      first.employeeName,
+                                                      style: const TextStyle(
+                                                        fontWeight: FontWeight.bold,
+                                                        fontSize: 15,
+                                                        color: AppColors.textPrimary,
+                                                      ),
+                                                    ),
+                                                    if (first.employeeCode.isNotEmpty)
+                                                      Text(
+                                                        first.employeeCode,
+                                                        style: const TextStyle(
+                                                          fontSize: 12,
+                                                          color: AppColors.textSecondary,
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
+                                              ),
+                                              const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+                                            ],
+                                          ),
+                                        ),
+                                        const Divider(height: 1),
+
+                                        // Nested Assets List
+                                        ListView.separated(
+                                          shrinkWrap: true,
+                                          physics: const NeverScrollableScrollPhysics(),
+                                          itemCount: items.length,
+                                          separatorBuilder: (_, __) => const Divider(height: 1, indent: 14, endIndent: 14),
+                                          itemBuilder: (context, itemIdx) {
+                                            final item = items[itemIdx];
+                                            final displayName = item.assetName.isNotEmpty
+                                                ? item.assetName
+                                                : item.assetTypeName;
+                                            final serialStr = item.serialNumber.isNotEmpty
+                                                ? item.serialNumber
+                                                : 'No serial number';
+
+                                            return InkWell(
+                                              borderRadius: itemIdx == items.length - 1
+                                                  ? const BorderRadius.vertical(bottom: Radius.circular(16))
+                                                  : BorderRadius.zero,
+                                              onTap: () => _showAssetActionBottomSheet(
+                                                item,
+                                                employees,
+                                                assetTypes,
+                                              ),
+                                              child: Padding(
+                                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                                child: Row(
+                                                  children: [
+                                                    Icon(
+                                                      _getAssetIcon(item.assetTypeName, item.assetName),
+                                                      size: 22,
+                                                      color: AppColors.active,
+                                                    ),
+                                                    const SizedBox(width: 12),
+                                                    Expanded(
+                                                      child: Column(
+                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                                        children: [
+                                                          Text(
+                                                            displayName,
+                                                            style: const TextStyle(
+                                                              fontWeight: FontWeight.bold,
+                                                              fontSize: 14,
+                                                              color: AppColors.textPrimary,
+                                                            ),
+                                                          ),
+                                                          const SizedBox(height: 2),
+                                                          Text(
+                                                            serialStr,
+                                                            style: const TextStyle(
+                                                              fontSize: 12,
+                                                              color: AppColors.textSecondary,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    _buildStatusPill(
+                                                      item.status,
+                                                      item.maintenanceReturnDate,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onSelected,
+  }) {
+    return ChoiceChip(
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          color: isSelected ? Colors.white : AppColors.textPrimary,
+        ),
+      ),
+      selected: isSelected,
+      selectedColor: AppColors.active,
+      backgroundColor: Colors.white,
+      side: BorderSide(
+        color: isSelected ? AppColors.active : AppColors.divider,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      onSelected: (_) => onSelected(),
+    );
+  }
 }
+
