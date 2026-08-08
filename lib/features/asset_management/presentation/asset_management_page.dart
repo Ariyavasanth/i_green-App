@@ -783,6 +783,40 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
                   _buildDetailRow('Status:', record.status),
                   const SizedBox(height: 10),
                   _buildDetailRow('Reason / Description:', record.description),
+                  if (record.transferredFrom != null && record.transferredFrom!.isNotEmpty) ...[
+                    const Divider(height: 24),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF9CC70A).withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF9CC70A).withOpacity(0.4)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.swap_horiz, size: 18, color: Color(0xFF414A51)),
+                              SizedBox(width: 6),
+                              Text(
+                                'Asset Transfer Audit Trail',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF414A51)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          _buildDetailRow('Transferred From:', record.transferredFrom!),
+                          const SizedBox(height: 8),
+                          _buildDetailRow('Transferred To:', record.employeeName + (record.employeeCode.isNotEmpty ? ' (${record.employeeCode})' : '')),
+                          const SizedBox(height: 8),
+                          _buildDetailRow('Transfer Date:', record.transferDate ?? record.assignedDate),
+                          const SizedBox(height: 8),
+                          _buildDetailRow('Transfer Reason:', record.description),
+                        ],
+                      ),
+                    ),
+                  ],
                   if (isMaint || (record.maintenanceAddress?.isNotEmpty ?? false)) ...[
                     const Divider(height: 24),
                     const Text(
@@ -1518,7 +1552,8 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
                           final matchDesc = r.description.toLowerCase().contains(q);
                           final matchMaint = (r.maintenanceAddress?.toLowerCase().contains(q) ?? false) ||
                               (r.maintenanceContact?.toLowerCase().contains(q) ?? false);
-                          if (!matchEmp && !matchAssetType && !matchAssetName && !matchSerial && !matchDesc && !matchMaint) return false;
+                          final matchTransfer = (r.transferredFrom?.toLowerCase().contains(q) ?? false);
+                          if (!matchEmp && !matchAssetType && !matchAssetName && !matchSerial && !matchDesc && !matchMaint && !matchTransfer) return false;
                         }
                         return true;
                       }).toList();
@@ -1545,6 +1580,8 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
                             child: ConstrainedBox(
                               constraints: BoxConstraints(minWidth: constraints.maxWidth),
                               child: DataTable(
+                                dataRowMinHeight: 64,
+                                dataRowMaxHeight: 88,
                                 headingRowColor: WidgetStateProperty.all(
                                   const Color(0xFFF8F9FA),
                                 ),
@@ -1565,10 +1602,12 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
                                     cells: visibleColumns.map((col) {
                                       switch (col) {
                                         case 'Assigned To':
+                                          final hasTransfer = record.transferredFrom != null && record.transferredFrom!.isNotEmpty;
                                           return DataCell(
                                             Column(
                                               mainAxisAlignment: MainAxisAlignment.center,
                                               crossAxisAlignment: CrossAxisAlignment.start,
+                                              mainAxisSize: MainAxisSize.min,
                                               children: [
                                                 Text(
                                                   record.employeeName,
@@ -1579,6 +1618,35 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
                                                     record.employeeCode,
                                                     style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
                                                   ),
+                                                if (hasTransfer) ...[
+                                                  const SizedBox(height: 2),
+                                                  Tooltip(
+                                                    message: 'Transferred from: ${record.transferredFrom} on ${record.transferDate ?? record.assignedDate}',
+                                                    child: Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                                      decoration: BoxDecoration(
+                                                        color: const Color(0xFF9CC70A).withOpacity(0.12),
+                                                        borderRadius: BorderRadius.circular(4),
+                                                        border: Border.all(color: const Color(0xFF9CC70A).withOpacity(0.3)),
+                                                      ),
+                                                      child: Row(
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          const Icon(Icons.swap_horiz, size: 11, color: Color(0xFF414A51)),
+                                                          const SizedBox(width: 2),
+                                                          ConstrainedBox(
+                                                            constraints: const BoxConstraints(maxWidth: 150),
+                                                            child: Text(
+                                                              'From: ${record.transferredFrom}',
+                                                              style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w600, color: Color(0xFF414A51)),
+                                                              overflow: TextOverflow.ellipsis,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
                                               ],
                                             ),
                                           );

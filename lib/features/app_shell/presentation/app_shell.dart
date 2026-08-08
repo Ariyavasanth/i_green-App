@@ -55,6 +55,7 @@ final userDestinationsProvider = Provider<List<SidebarDestination>>((ref) {
           .where((d) =>
               d.label == 'Home' ||
               d.label == 'My Exit' ||
+              d.label == 'My Asset' ||
               allowed.contains(d.label))
           .toList();
     },
@@ -150,6 +151,12 @@ class AppShell extends ConsumerWidget {
       'Asset Management',
       '/asset-management',
       Icons.devices_other_outlined,
+      'Employee',
+    ),
+    SidebarDestination(
+      'My Asset',
+      '/my-asset',
+      Icons.devices_outlined,
       'Employee',
     ),
     SidebarDestination(

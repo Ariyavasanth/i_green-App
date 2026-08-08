@@ -35,6 +35,7 @@ import '../../features/site_visit_attendance_management/presentation/site_visit_
 import '../../features/asset_settings/presentation/asset_settings_page.dart';
 import '../../features/salary_settings/presentation/salary_settings_page.dart';
 import '../../features/asset_management/presentation/asset_management_page.dart';
+import '../../features/asset_management/presentation/my_asset_page.dart';
 import '../../screens/login_screen.dart';
 import '../../screens/customers/active_customers_list.dart';
 import '../../screens/customers/new_customer_form.dart';
@@ -139,6 +140,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/asset-management',
             builder: (_, _) => const AssetManagementPage(),
+          ),
+          GoRoute(
+            path: '/my-asset',
+            builder: (_, _) => const MyAssetPage(),
           ),
           GoRoute(
             path: '/loan',

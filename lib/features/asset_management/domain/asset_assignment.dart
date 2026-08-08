@@ -15,6 +15,8 @@ class AssetAssignment {
     this.maintenanceContact,
     this.maintenanceGivenDate,
     this.maintenanceReturnDate,
+    this.transferredFrom,
+    this.transferDate,
     this.createdAt,
   });
 
@@ -33,6 +35,8 @@ class AssetAssignment {
   final String? maintenanceContact;
   final String? maintenanceGivenDate;
   final String? maintenanceReturnDate;
+  final String? transferredFrom;
+  final String? transferDate;
   final String? createdAt;
 
   AssetAssignment copyWith({
@@ -51,6 +55,8 @@ class AssetAssignment {
     String? maintenanceContact,
     String? maintenanceGivenDate,
     String? maintenanceReturnDate,
+    String? transferredFrom,
+    String? transferDate,
     String? createdAt,
   }) {
     return AssetAssignment(
@@ -69,6 +75,8 @@ class AssetAssignment {
       maintenanceContact: maintenanceContact ?? this.maintenanceContact,
       maintenanceGivenDate: maintenanceGivenDate ?? this.maintenanceGivenDate,
       maintenanceReturnDate: maintenanceReturnDate ?? this.maintenanceReturnDate,
+      transferredFrom: transferredFrom ?? this.transferredFrom,
+      transferDate: transferDate ?? this.transferDate,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -89,6 +97,8 @@ class AssetAssignment {
         'maintenance_contact': maintenanceContact,
         'maintenance_given_date': maintenanceGivenDate,
         'maintenance_return_date': maintenanceReturnDate,
+        'transferred_from': transferredFrom,
+        'transfer_date': transferDate,
         'created_at': createdAt,
       };
 
@@ -135,6 +145,8 @@ class AssetAssignment {
       maintenanceContact: map['maintenance_contact'] as String?,
       maintenanceGivenDate: map['maintenance_given_date'] as String?,
       maintenanceReturnDate: map['maintenance_return_date'] as String?,
+      transferredFrom: map['transferred_from'] as String?,
+      transferDate: map['transfer_date'] as String?,
       createdAt: map['created_at'] as String?,
     );
   }

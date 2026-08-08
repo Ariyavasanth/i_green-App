@@ -9,7 +9,7 @@ class SqliteAssetAssignmentRepository implements AssetAssignmentRepository {
 
   Future<Database> get _db async => _database ??= await openDatabase(
         p.join(await getDatabasesPath(), 'igreen_assets.db'),
-        version: 4,
+        version: 5,
         onCreate: (db, _) async {
           await db.execute(
             'CREATE TABLE IF NOT EXISTS asset_assignments('
@@ -28,6 +28,8 @@ class SqliteAssetAssignmentRepository implements AssetAssignmentRepository {
             'maintenance_contact TEXT, '
             'maintenance_given_date TEXT, '
             'maintenance_return_date TEXT, '
+            'transferred_from TEXT, '
+            'transfer_date TEXT, '
             'created_at TEXT)',
           );
         },
@@ -44,13 +46,102 @@ class SqliteAssetAssignmentRepository implements AssetAssignmentRepository {
           if (oldVersion < 4) {
             await db.execute('ALTER TABLE asset_assignments ADD COLUMN asset_name TEXT');
           }
+          if (oldVersion < 5) {
+            await db.execute('ALTER TABLE asset_assignments ADD COLUMN transferred_from TEXT');
+            await db.execute('ALTER TABLE asset_assignments ADD COLUMN transfer_date TEXT');
+          }
         },
       );
+
+  Future<void> _seedDefaultAssignments(Database db) async {
+    final nowStr = DateTime.now().toIso8601String();
+    final defaultItems = [
+      {
+        'employee_id': 1,
+        'employee_name': 'Developer / Employee',
+        'employee_code': 'EMP001',
+        'asset_type_id': 1,
+        'asset_type_name': 'Laptop',
+        'asset_name': 'MacBook Pro M2 Max 16"',
+        'serial_number': 'C02G1234MD6R',
+        'assigned_date': '2026-01-15',
+        'description': 'Assigned for primary development & engineering work',
+        'status': 'Assigned',
+        'created_at': nowStr,
+      },
+      {
+        'employee_id': 1,
+        'employee_name': 'Developer / Employee',
+        'employee_code': 'EMP001',
+        'asset_type_id': 2,
+        'asset_type_name': 'Mobile',
+        'asset_name': 'iPhone 14 Pro 256GB',
+        'serial_number': 'DX3K8892PL01',
+        'assigned_date': '2026-02-01',
+        'description': 'Assigned for mobile app testing and client communications',
+        'status': 'Assigned',
+        'created_at': nowStr,
+      },
+      {
+        'employee_id': 1,
+        'employee_name': 'Developer / Employee',
+        'employee_code': 'EMP001',
+        'asset_type_id': 3,
+        'asset_type_name': 'Monitor',
+        'asset_name': 'Dell UltraSharp 27" 4K Monitor',
+        'serial_number': 'CN088321459',
+        'assigned_date': '2026-01-15',
+        'description': 'Dual screen workstation setup',
+        'status': 'Assigned',
+        'created_at': nowStr,
+      },
+      {
+        'employee_id': 1,
+        'employee_name': 'Developer / Employee',
+        'employee_code': 'EMP001',
+        'asset_type_id': 4,
+        'asset_type_name': 'Headset',
+        'asset_name': 'Bose QuietComfort 45 Noise Cancelling',
+        'serial_number': 'SN-982314-QC',
+        'assigned_date': '2026-03-10',
+        'description': 'Audio headset for meetings - sent for battery checkup',
+        'status': 'Maintenance',
+        'maintenance_address': 'Bose Tech Service Center, MG Road',
+        'maintenance_contact': '+91 98765 43210 (Tech Support)',
+        'maintenance_given_date': '2026-08-01',
+        'maintenance_return_date': '2026-08-12',
+        'created_at': nowStr,
+      },
+      {
+        'employee_id': 1,
+        'employee_name': 'Developer / Employee',
+        'employee_code': 'EMP001',
+        'asset_type_id': 5,
+        'asset_type_name': 'Security Badge',
+        'asset_name': 'Smart Access Card & Server Key Fob',
+        'serial_number': 'ACC-2026-0089',
+        'assigned_date': '2026-01-10',
+        'description': 'Building & Server Room security pass',
+        'status': 'Assigned',
+        'created_at': nowStr,
+      },
+    ];
+
+    final batch = db.batch();
+    for (final item in defaultItems) {
+      batch.insert('asset_assignments', item);
+    }
+    await batch.commit(noResult: true);
+  }
 
   @override
   Future<List<AssetAssignment>> getAssignments() async {
     final db = await _db;
-    final rows = await db.query('asset_assignments', orderBy: 'id DESC');
+    var rows = await db.query('asset_assignments', orderBy: 'id DESC');
+    if (rows.isEmpty) {
+      await _seedDefaultAssignments(db);
+      rows = await db.query('asset_assignments', orderBy: 'id DESC');
+    }
     return rows.map((row) => AssetAssignment.fromMap(row)).toList();
   }
 
@@ -73,6 +164,8 @@ class SqliteAssetAssignmentRepository implements AssetAssignmentRepository {
       'maintenance_contact': assignment.maintenanceContact,
       'maintenance_given_date': assignment.maintenanceGivenDate,
       'maintenance_return_date': assignment.maintenanceReturnDate,
+      'transferred_from': assignment.transferredFrom,
+      'transfer_date': assignment.transferDate,
       'created_at': createdAt,
     });
     return assignment.copyWith(id: id, createdAt: createdAt);
@@ -100,6 +193,8 @@ class SqliteAssetAssignmentRepository implements AssetAssignmentRepository {
         'maintenance_contact': assignment.maintenanceContact,
         'maintenance_given_date': assignment.maintenanceGivenDate,
         'maintenance_return_date': assignment.maintenanceReturnDate,
+        'transferred_from': assignment.transferredFrom,
+        'transfer_date': assignment.transferDate,
         'created_at': assignment.createdAt ?? nowStr,
       });
     }
@@ -126,6 +221,8 @@ class SqliteAssetAssignmentRepository implements AssetAssignmentRepository {
         'maintenance_contact': assignment.maintenanceContact,
         'maintenance_given_date': assignment.maintenanceGivenDate,
         'maintenance_return_date': assignment.maintenanceReturnDate,
+        'transferred_from': assignment.transferredFrom,
+        'transfer_date': assignment.transferDate,
       },
       where: 'id = ?',
       whereArgs: [assignment.id],
