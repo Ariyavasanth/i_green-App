@@ -105,13 +105,32 @@ class FirebaseLeaveRepository implements LeaveRepository {
   // ── Seed helpers ───────────────────────────────────────────────────────────
 
   Future<void> _seedLeaveTypesIfEmpty() async {
+    // Purge legacy non-leave-type documents if present
+    final legacyNames = ['As Needed', 'Manual Allocation', 'No Leave', 'Monthly Leave'];
+    for (final legacy in legacyNames) {
+      final docId = legacy.replaceAll(' ', '_').toLowerCase();
+      final docRef = _typesRef.doc(docId);
+      final docSnap = await docRef.get();
+      if (docSnap.exists) {
+        await docRef.delete();
+      }
+      final querySnap = await _typesRef.where('name', isEqualTo: legacy).get();
+      for (final doc in querySnap.docs) {
+        await doc.reference.delete();
+      }
+    }
+
     final snap = await _typesRef.limit(1).get();
     if (snap.docs.isNotEmpty) return;
 
     final defaults = [
-      LeaveType(id: 1, name: 'As Needed', description: 'You can take leave whenever required.'),
-      LeaveType(id: 2, name: 'Manual Allocation', description: 'Leave is allocated manually per policy.'),
-      LeaveType(id: 3, name: 'No Leave', description: 'You are not eligible to take leave.'),
+      const LeaveType(id: 1, name: 'Sick Leave', description: 'Medical leave allowance.', annualAllocation: 10.0, carryForward: 'Not allowed', colorHex: '#14B8A6', isActive: true),
+      const LeaveType(id: 2, name: 'Casual Leave', description: 'Standard casual leave allowance.', annualAllocation: 12.0, carryForward: 'Up to 3 days', colorHex: '#6366F1', isActive: true),
+      const LeaveType(id: 3, name: 'Annual Leave', description: 'Paid annual leave allowance.', annualAllocation: 15.0, carryForward: 'Up to 10 days', colorHex: '#22C55E', isActive: true),
+      const LeaveType(id: 4, name: 'Optional Leave', description: 'Optional / Floating holiday leave.', annualAllocation: 3.0, carryForward: 'Not allowed', colorHex: '#F59E0B', isActive: true),
+      const LeaveType(id: 5, name: 'Emergency Leave', description: 'Urgent emergency leave allowance.', annualAllocation: 5.0, carryForward: 'Not allowed', colorHex: '#F43F5E', isActive: true),
+      const LeaveType(id: 6, name: 'Work From Home', description: 'Remote work allocation.', annualAllocation: 12.0, carryForward: 'Not allowed', colorHex: '#3B82F6', isActive: true),
+      const LeaveType(id: 7, name: 'Comp Off', description: 'Compensatory off for extra work.', annualAllocation: 5.0, carryForward: 'Not allowed', colorHex: '#8B5CF6', isActive: true),
     ];
 
     final batch = _firestore.batch();

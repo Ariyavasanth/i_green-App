@@ -117,19 +117,17 @@ class SqliteLeaveRepository implements LeaveRepository {
       )
     ''');
 
+    // Delete legacy non-leave-type items from leave_types table
+    await db.delete(
+      'leave_types',
+      where: "name IN ('As Needed', 'Manual Allocation', 'No Leave', 'Monthly Leave')",
+    );
+
     // Seed default leave types if empty
     final count = Sqflite.firstIntValue(
       await db.rawQuery('SELECT COUNT(*) FROM leave_types'),
     );
     if (count == 0) {
-      await db.insert('leave_types', {
-        'name': 'Casual Leave',
-        'description': 'Standard casual leave allowance.',
-        'annual_allocation': 12.0,
-        'carry_forward': 'Up to 3 days',
-        'color_hex': '#6366F1',
-        'is_active': 1,
-      });
       await db.insert('leave_types', {
         'name': 'Sick Leave',
         'description': 'Medical leave allowance.',
@@ -139,19 +137,51 @@ class SqliteLeaveRepository implements LeaveRepository {
         'is_active': 1,
       });
       await db.insert('leave_types', {
-        'name': 'Earned Leave',
-        'description': 'Paid annual leave accumulated through service.',
+        'name': 'Casual Leave',
+        'description': 'Standard casual leave allowance.',
+        'annual_allocation': 12.0,
+        'carry_forward': 'Up to 3 days',
+        'color_hex': '#6366F1',
+        'is_active': 1,
+      });
+      await db.insert('leave_types', {
+        'name': 'Annual Leave',
+        'description': 'Paid annual leave allowance.',
         'annual_allocation': 15.0,
         'carry_forward': 'Up to 10 days',
         'color_hex': '#22C55E',
         'is_active': 1,
       });
       await db.insert('leave_types', {
-        'name': 'As Needed',
-        'description': 'Flexible leave allowed on special request.',
-        'annual_allocation': 8.0,
+        'name': 'Optional Leave',
+        'description': 'Optional / Floating holiday leave.',
+        'annual_allocation': 3.0,
         'carry_forward': 'Not allowed',
         'color_hex': '#F59E0B',
+        'is_active': 1,
+      });
+      await db.insert('leave_types', {
+        'name': 'Emergency Leave',
+        'description': 'Urgent emergency leave allowance.',
+        'annual_allocation': 5.0,
+        'carry_forward': 'Not allowed',
+        'color_hex': '#F43F5E',
+        'is_active': 1,
+      });
+      await db.insert('leave_types', {
+        'name': 'Work From Home',
+        'description': 'Remote work allocation.',
+        'annual_allocation': 12.0,
+        'carry_forward': 'Not allowed',
+        'color_hex': '#3B82F6',
+        'is_active': 1,
+      });
+      await db.insert('leave_types', {
+        'name': 'Comp Off',
+        'description': 'Compensatory off for extra work.',
+        'annual_allocation': 5.0,
+        'carry_forward': 'Not allowed',
+        'color_hex': '#8B5CF6',
         'is_active': 1,
       });
     }

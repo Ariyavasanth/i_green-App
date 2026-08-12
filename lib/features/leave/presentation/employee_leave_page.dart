@@ -151,10 +151,46 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
   }
 
   void _showApplyLeaveDialog(Employee currentEmp) {
-    _selectedLeaveType = 'Sick Leave';
+    final allLeaveTypes = ref.read(leaveTypesProvider).value ?? [];
+    final activeLeaveTypes = allLeaveTypes.where((t) => t.isActive).toList();
+
+    if (activeLeaveTypes.isNotEmpty && !activeLeaveTypes.any((t) => t.name == _selectedLeaveType)) {
+      _selectedLeaveType = activeLeaveTypes.first.name;
+    }
     _fromDate = DateTime.now();
     _toDate = DateTime.now();
     _reasonController.clear();
+
+    String requestType = 'Leave';
+    TimeOfDay fromTime = const TimeOfDay(hour: 9, minute: 0);
+    TimeOfDay toTime = const TimeOfDay(hour: 11, minute: 0);
+
+    String formatTimeOfDay(TimeOfDay time) {
+      final now = DateTime.now();
+      final dt = DateTime(now.year, now.month, now.day, time.hour, time.minute);
+      return DateFormat('hh:mm a').format(dt);
+    }
+
+    double calculatePermissionHours(TimeOfDay from, TimeOfDay to) {
+      final fromMinutes = from.hour * 60 + from.minute;
+      final toMinutes = to.hour * 60 + to.minute;
+      final diffMinutes = toMinutes - fromMinutes;
+      if (diffMinutes <= 0) return 0.0;
+      return diffMinutes / 60.0;
+    }
+
+    String formatPermissionDuration(double hours) {
+      if (hours <= 0) return '0 Hours';
+      final h = hours.floor();
+      final m = ((hours - h) * 60).round();
+      if (h > 0 && m > 0) {
+        return '$h Hour${h > 1 ? 's' : ''} $m Mins';
+      } else if (h > 0) {
+        return '$h Hour${h > 1 ? 's' : ''}';
+      } else {
+        return '$m Mins';
+      }
+    }
 
     showDialog(
       context: context,
@@ -166,6 +202,8 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
               final diff = _toDate!.difference(_fromDate!).inDays + 1;
               days = math.max(1.0, diff.toDouble());
             }
+
+            final permHours = calculatePermissionHours(fromTime, toTime);
 
             return AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -186,11 +224,11 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Leave Type Dropdown
-                      const Text('Leave Type', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
+                      // Request Type Dropdown
+                      const Text('Request Type', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
                       const SizedBox(height: 6),
                       DropdownButtonFormField<String>(
-                        initialValue: _selectedLeaveType,
+                        initialValue: requestType,
                         decoration: InputDecoration(
                           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -199,124 +237,270 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                             borderSide: const BorderSide(color: Color(0xFF9CC70A), width: 2),
                           ),
                         ),
-                        items: [
-                          'Sick Leave',
-                          'Casual Leave',
-                          'Annual Leave',
-                          'Optional Leave',
-                          'Work From Home',
-                          'Comp Off',
-                        ].map((type) => DropdownMenuItem(value: type, child: Text(type))).toList(),
+                        items: ['Leave', 'Permission']
+                            .map((type) => DropdownMenuItem(value: type, child: Text(type)))
+                            .toList(),
                         onChanged: (val) {
                           if (val != null) {
-                            setDialogState(() => _selectedLeaveType = val);
+                            setDialogState(() => requestType = val);
                           }
                         },
                       ),
                       const SizedBox(height: 16),
 
-                      // From Date and To Date
-                      Row(
-                        children: [
-                          // From Date Box
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('From Date', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
-                                const SizedBox(height: 6),
-                                InkWell(
-                                  onTap: () async {
-                                    final picked = await showDatePicker(
-                                      context: context,
-                                      initialDate: _fromDate ?? DateTime.now(),
-                                      firstDate: DateTime(2025),
-                                      lastDate: DateTime(2030),
-                                    );
-                                    if (picked != null) {
-                                      setDialogState(() {
-                                        _fromDate = picked;
-                                        // Default same day in both boxes for 1 day leave
-                                        _toDate = picked;
-                                      });
-                                    }
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                    decoration: BoxDecoration(
-                                      border: Border.all(color: const Color(0xFFCBD5E1)),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          _fromDate != null ? DateFormat('dd MMM yyyy').format(_fromDate!) : 'Select',
-                                          style: const TextStyle(fontSize: 13, color: Color(0xFF414A51)),
-                                        ),
-                                        const Icon(Icons.calendar_today, size: 16, color: Color(0xFF64748B)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
+                      if (requestType == 'Leave') ...[
+                        // Leave Type Dropdown
+                        const Text('Leave Type', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
+                        const SizedBox(height: 6),
+                        DropdownButtonFormField<String>(
+                          initialValue: (activeLeaveTypes.isNotEmpty && activeLeaveTypes.any((t) => t.name == _selectedLeaveType))
+                              ? _selectedLeaveType
+                              : (activeLeaveTypes.isNotEmpty ? activeLeaveTypes.first.name : _selectedLeaveType),
+                          decoration: InputDecoration(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: Color(0xFF9CC70A), width: 2),
                             ),
                           ),
-                          const SizedBox(width: 12),
-
-                          // To Date Box
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('To Date', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
-                                const SizedBox(height: 6),
-                                InkWell(
-                                  onTap: () async {
-                                    final picked = await showDatePicker(
-                                      context: context,
-                                      initialDate: _toDate ?? _fromDate ?? DateTime.now(),
-                                      firstDate: _fromDate ?? DateTime(2025),
-                                      lastDate: DateTime(2030),
-                                    );
-                                    if (picked != null) {
-                                      setDialogState(() {
-                                        _toDate = picked;
-                                      });
-                                    }
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                    decoration: BoxDecoration(
-                                      border: Border.all(color: const Color(0xFFCBD5E1)),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          _toDate != null ? DateFormat('dd MMM yyyy').format(_toDate!) : 'Select',
-                                          style: const TextStyle(fontSize: 13, color: Color(0xFF414A51)),
-                                        ),
-                                        const Icon(Icons.calendar_today, size: 16, color: Color(0xFF64748B)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: Text(
-                          'Total Duration: ${days.toStringAsFixed(1)} Day(s)',
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF9CC70A)),
+                          items: (activeLeaveTypes.isNotEmpty
+                                  ? activeLeaveTypes.map((type) => type.name).toList()
+                                  : [
+                                      'Sick Leave',
+                                      'Casual Leave',
+                                      'Annual Leave',
+                                      'Optional Leave',
+                                      'Emergency Leave',
+                                      'Work From Home',
+                                      'Comp Off',
+                                    ])
+                              .map((type) => DropdownMenuItem(value: type, child: Text(type)))
+                              .toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setDialogState(() => _selectedLeaveType = val);
+                            }
+                          },
                         ),
-                      ),
-                      const SizedBox(height: 16),
+                        const SizedBox(height: 16),
+
+                        // From Date and To Date
+                        Row(
+                          children: [
+                            // From Date Box
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('From Date', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                                  const SizedBox(height: 6),
+                                  InkWell(
+                                    onTap: () async {
+                                      final picked = await showDatePicker(
+                                        context: context,
+                                        initialDate: _fromDate ?? DateTime.now(),
+                                        firstDate: DateTime(2025),
+                                        lastDate: DateTime(2030),
+                                      );
+                                      if (picked != null) {
+                                        setDialogState(() {
+                                          _fromDate = picked;
+                                          _toDate = picked;
+                                        });
+                                      }
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                      clipBehavior: Clip.antiAlias,
+                                      decoration: BoxDecoration(
+                                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              _fromDate != null ? DateFormat('dd MMM yyyy').format(_fromDate!) : 'Select',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(fontSize: 13, color: Color(0xFF414A51)),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          const Icon(Icons.calendar_today, size: 16, color: Color(0xFF64748B)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+
+                            // To Date Box
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('To Date', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                                  const SizedBox(height: 6),
+                                  InkWell(
+                                    onTap: () async {
+                                      final picked = await showDatePicker(
+                                        context: context,
+                                        initialDate: _toDate ?? _fromDate ?? DateTime.now(),
+                                        firstDate: _fromDate ?? DateTime(2025),
+                                        lastDate: DateTime(2030),
+                                      );
+                                      if (picked != null) {
+                                        setDialogState(() {
+                                          _toDate = picked;
+                                        });
+                                      }
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                      clipBehavior: Clip.antiAlias,
+                                      decoration: BoxDecoration(
+                                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              _toDate != null ? DateFormat('dd MMM yyyy').format(_toDate!) : 'Select',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(fontSize: 13, color: Color(0xFF414A51)),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          const Icon(Icons.calendar_today, size: 16, color: Color(0xFF64748B)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            'Total Duration: ${days.toStringAsFixed(1)} Day(s)',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF9CC70A)),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ] else ...[
+                        // Permission Time Fields
+                        Row(
+                          children: [
+                            // From Time Box
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('From Time', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                                  const SizedBox(height: 6),
+                                  InkWell(
+                                    onTap: () async {
+                                      final picked = await showTimePicker(
+                                        context: context,
+                                        initialTime: fromTime,
+                                      );
+                                      if (picked != null) {
+                                        setDialogState(() {
+                                          fromTime = picked;
+                                          final fromMin = picked.hour * 60 + picked.minute;
+                                          final toMin = toTime.hour * 60 + toTime.minute;
+                                          if (toMin <= fromMin) {
+                                            toTime = TimeOfDay(hour: (picked.hour + 2) % 24, minute: picked.minute);
+                                          }
+                                        });
+                                      }
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            formatTimeOfDay(fromTime),
+                                            style: const TextStyle(fontSize: 13, color: Color(0xFF414A51)),
+                                          ),
+                                          const Icon(Icons.access_time, size: 16, color: Color(0xFF64748B)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+
+                            // To Time Box
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('To Time', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                                  const SizedBox(height: 6),
+                                  InkWell(
+                                    onTap: () async {
+                                      final picked = await showTimePicker(
+                                        context: context,
+                                        initialTime: toTime,
+                                      );
+                                      if (picked != null) {
+                                        setDialogState(() {
+                                          toTime = picked;
+                                        });
+                                      }
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            formatTimeOfDay(toTime),
+                                            style: const TextStyle(fontSize: 13, color: Color(0xFF414A51)),
+                                          ),
+                                          const Icon(Icons.access_time, size: 16, color: Color(0xFF64748B)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            'Duration: ${formatPermissionDuration(permHours)}',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF9CC70A)),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
 
                       // Description
                       const Text('Description', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
@@ -361,25 +545,46 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                       return;
                     }
 
-                    final fromStr = DateFormat('dd-MM-yyyy').format(_fromDate!);
-                    final toStr = DateFormat('dd-MM-yyyy').format(_toDate!);
-
-                    final newReq = LeaveRequest(
-                      id: 0,
-                      employeeId: currentEmp.id,
-                      employeeName: currentEmp.fullName,
-                      employeeCustomId: currentEmp.employeeId,
-                      leaveType: _selectedLeaveType,
-                      fromDate: fromStr,
-                      toDate: toStr,
-                      numDays: days,
-                      reason: _reasonController.text.trim(),
-                      status: 'Pending',
-                      createdAt: DateTime.now().toIso8601String(),
-                    );
-
                     final messenger = ScaffoldMessenger.of(context);
                     final nav = Navigator.of(dialogCtx);
+
+                    LeaveRequest newReq;
+                    if (requestType == 'Leave') {
+                      final fromStr = DateFormat('dd-MM-yyyy').format(_fromDate!);
+                      final toStr = DateFormat('dd-MM-yyyy').format(_toDate!);
+
+                      newReq = LeaveRequest(
+                        id: 0,
+                        employeeId: currentEmp.id,
+                        employeeName: currentEmp.fullName,
+                        employeeCustomId: currentEmp.employeeId,
+                        leaveType: _selectedLeaveType,
+                        fromDate: fromStr,
+                        toDate: toStr,
+                        numDays: days,
+                        reason: _reasonController.text.trim(),
+                        status: 'Pending',
+                        createdAt: DateTime.now().toIso8601String(),
+                      );
+                    } else {
+                      final todayStr = DateFormat('dd-MM-yyyy').format(DateTime.now());
+                      final fromTimeStr = formatTimeOfDay(fromTime);
+                      final toTimeStr = formatTimeOfDay(toTime);
+
+                      newReq = LeaveRequest(
+                        id: 0,
+                        employeeId: currentEmp.id,
+                        employeeName: currentEmp.fullName,
+                        employeeCustomId: currentEmp.employeeId,
+                        leaveType: 'Permission ($fromTimeStr - $toTimeStr)',
+                        fromDate: todayStr,
+                        toDate: todayStr,
+                        numDays: permHours / 8.0,
+                        reason: _reasonController.text.trim(),
+                        status: 'Pending',
+                        createdAt: DateTime.now().toIso8601String(),
+                      );
+                    }
 
                     try {
                       await ref.read(leaveRepositoryProvider).submitLeaveRequest(newReq);
@@ -388,9 +593,9 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
 
                       nav.pop();
                       messenger.showSnackBar(
-                        const SnackBar(
-                          content: Text('Leave request submitted successfully!'),
-                          backgroundColor: Color(0xFF2E7D32),
+                        SnackBar(
+                          content: Text('${requestType == 'Permission' ? 'Permission' : 'Leave'} request submitted successfully!'),
+                          backgroundColor: const Color(0xFF2E7D32),
                         ),
                       );
                     } catch (e) {
@@ -478,10 +683,15 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: const Color(0xFF9CC70A),
         foregroundColor: const Color(0xFF414A51),
+        elevation: 4,
         onPressed: () => _showApplyLeaveDialog(currentEmp),
-        icon: const Icon(Icons.add),
-        label: const Text('Apply Leave', style: TextStyle(fontWeight: FontWeight.bold)),
+        icon: const Icon(Icons.add, size: 20),
+        label: const Text(
+          'Apply Leave',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       bottomNavigationBar: MediaQuery.of(context).size.width < 768
           ? _buildMobileBottomNav()
           : null,
@@ -764,7 +974,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
     final totalRequests = requests.length;
 
     return SingleChildScrollView(
-      padding: EdgeInsets.all(isMobile ? 16 : 24),
+      padding: EdgeInsets.fromLTRB(isMobile ? 16 : 24, isMobile ? 16 : 24, isMobile ? 16 : 24, isMobile ? 96 : 40),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -806,30 +1016,6 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
 
           const SizedBox(height: 20),
 
-          // Primary Quick Action Button: + Apply Leave
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF9CC70A),
-                foregroundColor: const Color(0xFF414A51),
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              onPressed: () => _showApplyLeaveDialog(currentEmp),
-              icon: const Icon(Icons.add_circle, size: 22),
-              label: const Text(
-                '+ Apply Leave',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
           // Recent Activity / Requests List
           const Text(
             'Recent Leave Activity',
@@ -853,6 +1039,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
             Column(
               children: requests.take(5).map((req) => _buildRequestCard(req, currentEmp, isMobile)).toList(),
             ),
+          const SizedBox(height: 80),
         ],
       ),
     );
@@ -861,6 +1048,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
   Widget _buildSummaryCard(String title, String value, IconData icon, Color iconColor, Color bg) {
     return Container(
       padding: const EdgeInsets.all(14),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -880,10 +1068,15 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                title,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                ),
               ),
+              const SizedBox(width: 4),
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
@@ -905,27 +1098,13 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
   // ==========================================
   Widget _buildMyRequestsSection(Employee currentEmp, List<LeaveRequest> requests, bool isMobile) {
     return SingleChildScrollView(
-      padding: EdgeInsets.all(isMobile ? 16 : 24),
+      padding: EdgeInsets.fromLTRB(isMobile ? 16 : 24, isMobile ? 16 : 24, isMobile ? 16 : 24, isMobile ? 96 : 40),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'My Leave Requests',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
-              ),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF9CC70A),
-                  foregroundColor: const Color(0xFF414A51),
-                ),
-                onPressed: () => _showApplyLeaveDialog(currentEmp),
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('Apply New'),
-              ),
-            ],
+          const Text(
+            'My Leave Requests',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
           ),
           const SizedBox(height: 16),
 
@@ -948,13 +1127,36 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
               itemCount: requests.length,
               itemBuilder: (ctx, idx) => _buildRequestCard(requests[idx], currentEmp, isMobile),
             ),
+          const SizedBox(height: 80),
         ],
       ),
     );
   }
 
+  String _formatDurationDisplay(LeaveRequest req) {
+    if (req.leaveType.toLowerCase().startsWith('permission')) {
+      if (req.leaveType.contains('(') && req.leaveType.contains(')')) {
+        final timePart = req.leaveType.substring(req.leaveType.indexOf('(') + 1, req.leaveType.indexOf(')'));
+        return 'Permission ($timePart)';
+      }
+      final hours = req.numDays * 8.0;
+      if (hours > 0) {
+        final h = hours.floor();
+        final m = ((hours - h) * 60).round();
+        if (h > 0 && m > 0) return '$h Hr $m Mins';
+        if (h > 0) return '$h Hour${h > 1 ? 's' : ''}';
+        return '$m Mins';
+      }
+      return 'Permission';
+    }
+    final isWhole = (req.numDays == req.numDays.roundToDouble());
+    final daysStr = isWhole ? req.numDays.toInt().toString() : req.numDays.toStringAsFixed(1);
+    return '$daysStr Day${req.numDays == 1.0 ? '' : 's'}';
+  }
+
   Widget _buildRequestCard(LeaveRequest req, Employee currentEmp, bool isMobile) {
     final statusColor = _getStatusColor(req.status);
+    final isPermission = req.leaveType.toLowerCase().startsWith('permission');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -977,26 +1179,47 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: isPermission
+                            ? const Color(0xFF3B82F6).withValues(alpha: 0.15)
+                            : const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        isPermission ? Icons.access_time : Icons.event_note,
+                        size: 18,
+                        color: isPermission ? const Color(0xFF2563EB) : const Color(0xFF414A51),
+                      ),
                     ),
-                    child: const Icon(Icons.event_note, size: 18, color: Color(0xFF414A51)),
-                  ),
-                  const SizedBox(width: 10),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(req.leaveType, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF414A51))),
-                      Text('Submitted: ${_formatDateStr(req.createdAt)}', style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
-                    ],
-                  ),
-                ],
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            req.leaveType,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF414A51)),
+                          ),
+                          Text(
+                            'Submitted: ${_formatDateStr(req.createdAt)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
@@ -1019,8 +1242,12 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                 style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF414A51)),
               ),
               Text(
-                '${req.numDays.toStringAsFixed(1)} Day(s)',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF9CC70A)),
+                _formatDurationDisplay(req),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                  color: isPermission ? const Color(0xFF2563EB) : const Color(0xFF9CC70A),
+                ),
               ),
             ],
           ),
@@ -1169,7 +1396,10 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                       final from = _parseDateStr(r.fromDate);
                       final to = _parseDateStr(r.toDate);
                       if (from != null && to != null) {
-                        if (!cellDate.isBefore(from) && !cellDate.isAfter(to)) {
+                        final cellJustDate = DateTime(cellDate.year, cellDate.month, cellDate.day);
+                        final fromJustDate = DateTime(from.year, from.month, from.day);
+                        final toJustDate = DateTime(to.year, to.month, to.day);
+                        if (!cellJustDate.isBefore(fromJustDate) && !cellJustDate.isAfter(toJustDate)) {
                           matchingReq = r;
                           break;
                         }
@@ -1177,8 +1407,10 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                     }
 
                     Color? indicatorColor;
+                    bool isPermission = false;
                     if (matchingReq != null) {
                       indicatorColor = _getStatusColor(matchingReq.status);
+                      isPermission = matchingReq.leaveType.toLowerCase().startsWith('permission');
                     }
 
                     return InkWell(
@@ -1198,7 +1430,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                           ),
                         ),
                         child: Column(
-                          mainAxisAlignment: Color(0xFF414A51) == Colors.transparent ? MainAxisAlignment.center : MainAxisAlignment.center,
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
                               '$dayNum',
@@ -1208,10 +1440,20 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                               ),
                             ),
                             if (indicatorColor != null)
-                              Container(
-                                width: 5,
-                                height: 5,
-                                decoration: BoxDecoration(color: indicatorColor, shape: BoxShape.circle),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 5,
+                                    height: 5,
+                                    decoration: BoxDecoration(color: indicatorColor, shape: BoxShape.circle),
+                                  ),
+                                  if (isPermission) ...[
+                                    const SizedBox(width: 2),
+                                    Icon(Icons.access_time, size: 9, color: indicatorColor),
+                                  ],
+                                ],
                               ),
                           ],
                         ),
@@ -1239,8 +1481,21 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
 
   DateTime? _parseDateStr(String s) {
     try {
-      final p = s.split('-');
-      if (p.length == 3) return DateTime(int.parse(p[2]), int.parse(p[1]), int.parse(p[0]));
+      if (s.isEmpty) return null;
+      if (s.contains('T')) s = s.split('T').first;
+      final parts = s.split('-');
+      if (parts.length == 3) {
+        final a = int.parse(parts[0]);
+        final b = int.parse(parts[1]);
+        final c = int.parse(parts[2]);
+        if (a > 1000) {
+          // yyyy-MM-dd
+          return DateTime(a, b, c);
+        } else {
+          // dd-MM-yyyy
+          return DateTime(c, b, a);
+        }
+      }
     } catch (_) {}
     return null;
   }
@@ -1249,11 +1504,20 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
   // 4. LEAVE HISTORY SECTION
   // ==========================================
   Widget _buildHistorySection(List<LeaveRequest> requests, bool isMobile) {
+    final leaveTypes = ref.watch(leaveTypesProvider).value ?? [];
+    final historyTypeOptions = [
+      'All',
+      ...(leaveTypes.isNotEmpty
+          ? leaveTypes.map((t) => t.name)
+          : ['Casual Leave', 'Sick Leave', 'Annual Leave', 'Optional Leave', 'Emergency Leave', 'Work From Home', 'Comp Off'])
+    ];
+    final selectedHistoryType = historyTypeOptions.contains(_historyLeaveType) ? _historyLeaveType : 'All';
+
     final filtered = requests.where((r) {
       if (_historyStatus != 'All' && r.status.toLowerCase() != _historyStatus.toLowerCase()) {
         return false;
       }
-      if (_historyLeaveType != 'All' && r.leaveType.toLowerCase() != _historyLeaveType.toLowerCase()) {
+      if (selectedHistoryType != 'All' && r.leaveType.toLowerCase() != selectedHistoryType.toLowerCase()) {
         return false;
       }
       return true;
@@ -1281,8 +1545,8 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                   onChanged: (v) => setState(() => _historyStatus = v!),
                 ),
                 DropdownButton<String>(
-                  value: _historyLeaveType,
-                  items: ['All', 'Casual Leave', 'Sick Leave', 'Annual Leave', 'Optional Leave'].map((s) => DropdownMenuItem(value: s, child: Text('Type: $s'))).toList(),
+                  value: selectedHistoryType,
+                  items: historyTypeOptions.map((s) => DropdownMenuItem(value: s, child: Text('Type: $s'))).toList(),
                   onChanged: (v) => setState(() => _historyLeaveType = v!),
                 ),
               ],
@@ -1468,7 +1732,9 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
           children: [
             Text('Leave Details - ${req.leaveType}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const Divider(height: 20),
-            Text('Dates: ${req.fromDate} to ${req.toDate} (${req.numDays} days)'),
+            Text('Dates: ${_formatDateStr(req.fromDate)} to ${_formatDateStr(req.toDate)}'),
+            const SizedBox(height: 6),
+            Text('Duration: ${_formatDurationDisplay(req)}'),
             const SizedBox(height: 6),
             Text('Status: ${req.status}'),
             const SizedBox(height: 6),
@@ -1498,11 +1764,11 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
           children: [
             Text('Leave Info: ${DateFormat('dd MMM yyyy').format(date)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const Divider(height: 20),
-            Text('Leave Type: ${req.leaveType}'),
+            Text('Type: ${req.leaveType}'),
             const SizedBox(height: 6),
             Text('Status: ${req.status}'),
             const SizedBox(height: 6),
-            Text('Duration: ${req.numDays} Day(s)'),
+            Text('Duration: ${_formatDurationDisplay(req)}'),
             const SizedBox(height: 6),
             Text('Reason: ${req.reason}'),
           ],
