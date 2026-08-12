@@ -110,22 +110,79 @@ class _AdminManualAttendanceDialogState extends ConsumerState<AdminManualAttenda
   @override
   Widget build(BuildContext context) {
     final employeesAsync = ref.watch(employeesProvider);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobileModal = screenWidth < 500;
+
+    final timeFields = isMobileModal
+        ? Column(
+            children: [
+              TextFormField(
+                controller: _checkInController,
+                decoration: const InputDecoration(
+                  labelText: 'Check In Time (HH:mm:ss) *',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                ),
+                validator: (v) => v == null || v.trim().isEmpty ? 'Check in time required' : null,
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _checkOutController,
+                decoration: const InputDecoration(
+                  labelText: 'Check Out Time (HH:mm:ss)',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                ),
+              ),
+            ],
+          )
+        : Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _checkInController,
+                  decoration: const InputDecoration(
+                    labelText: 'Check In Time (HH:mm:ss) *',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  ),
+                  validator: (v) => v == null || v.trim().isEmpty ? 'Check in time required' : null,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  controller: _checkOutController,
+                  decoration: const InputDecoration(
+                    labelText: 'Check Out Time (HH:mm:ss)',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  ),
+                ),
+              ),
+            ],
+          );
 
     return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+      contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+      actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
       title: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Icon(Icons.edit_calendar, color: AppColors.active),
-          const SizedBox(width: 8),
+          const Icon(Icons.edit_calendar, color: AppColors.active, size: 22),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               widget.existingRecord != null ? 'Edit / Override Attendance' : 'Manual Attendance Entry',
-              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
             ),
           ),
         ],
       ),
       content: SizedBox(
-        width: double.maxFinite,
+        width: isMobileModal ? (screenWidth * 0.88) : 480,
         child: SingleChildScrollView(
           child: Form(
             key: _formKey,
@@ -144,6 +201,7 @@ class _AdminManualAttendanceDialogState extends ConsumerState<AdminManualAttenda
                       decoration: const InputDecoration(
                         labelText: 'Select Employee *',
                         border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                       ),
                       items: employees
                           .map((e) => DropdownMenuItem(
@@ -168,47 +226,26 @@ class _AdminManualAttendanceDialogState extends ConsumerState<AdminManualAttenda
                   },
                   orElse: () => const CircularProgressIndicator(),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 TextFormField(
                   controller: _dateController,
                   decoration: const InputDecoration(
                     labelText: 'Date (DD-MM-YYYY) *',
                     border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                   ),
                   validator: (v) => v == null || v.trim().isEmpty ? 'Date is required' : null,
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _checkInController,
-                        decoration: const InputDecoration(
-                          labelText: 'Check In Time (HH:mm:ss) *',
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (v) => v == null || v.trim().isEmpty ? 'Check in time required' : null,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _checkOutController,
-                        decoration: const InputDecoration(
-                          labelText: 'Check Out Time (HH:mm:ss)',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
+                timeFields,
+                const SizedBox(height: 14),
                 DropdownButtonFormField<String>(
                   initialValue: _status,
                   isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: 'Attendance Status *',
                     border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                   ),
                   items: const [
                     DropdownMenuItem(value: 'Present', child: Text('Present', overflow: TextOverflow.ellipsis)),
@@ -220,13 +257,14 @@ class _AdminManualAttendanceDialogState extends ConsumerState<AdminManualAttenda
                     if (val != null) setState(() => _status = val);
                   },
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 TextFormField(
                   controller: _notesController,
                   decoration: const InputDecoration(
                     labelText: 'Admin Override Notes',
                     hintText: 'e.g. Regularized by Admin, Approved travel day...',
                     border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                   ),
                   maxLines: 2,
                 ),
@@ -236,14 +274,19 @@ class _AdminManualAttendanceDialogState extends ConsumerState<AdminManualAttenda
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+        ),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.active,
             foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
           onPressed: _saving ? null : _save,
-          child: Text(_saving ? 'Saving...' : 'Save to Firestore'),
+          child: Text(_saving ? 'Saving...' : 'Save to Firestore', style: const TextStyle(fontWeight: FontWeight.bold)),
         ),
       ],
     );

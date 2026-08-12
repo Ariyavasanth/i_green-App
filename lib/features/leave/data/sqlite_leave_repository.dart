@@ -10,12 +10,12 @@ import '../domain/salary_calculation.dart';
 
 class SqliteLeaveRepository implements LeaveRepository {
   static Database? _database;
+  static Future<Database>? _initDbFuture;
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-    _database = await _initDatabase();
-    await _createTables(_database!);
-    await _ensureColumnsExist(_database!);
+    _initDbFuture ??= _initDatabase();
+    _database = await _initDbFuture!;
     return _database!;
   }
 
@@ -53,7 +53,12 @@ class SqliteLeaveRepository implements LeaveRepository {
         status TEXT,
         created_at TEXT,
         approved_dates TEXT,
-        lop_dates TEXT
+        lop_dates TEXT,
+        is_emergency INTEGER DEFAULT 0,
+        attachment_url TEXT,
+        rejection_reason TEXT,
+        is_half_day INTEGER DEFAULT 0,
+        half_day_period TEXT
       )
     ''');
 
@@ -135,7 +140,7 @@ class SqliteLeaveRepository implements LeaveRepository {
         'carry_forward': 'Not allowed',
         'color_hex': '#14B8A6',
         'is_active': 1,
-      });
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
       await db.insert('leave_types', {
         'name': 'Casual Leave',
         'description': 'Standard casual leave allowance.',
@@ -143,7 +148,7 @@ class SqliteLeaveRepository implements LeaveRepository {
         'carry_forward': 'Up to 3 days',
         'color_hex': '#6366F1',
         'is_active': 1,
-      });
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
       await db.insert('leave_types', {
         'name': 'Annual Leave',
         'description': 'Paid annual leave allowance.',
@@ -151,7 +156,7 @@ class SqliteLeaveRepository implements LeaveRepository {
         'carry_forward': 'Up to 10 days',
         'color_hex': '#22C55E',
         'is_active': 1,
-      });
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
       await db.insert('leave_types', {
         'name': 'Optional Leave',
         'description': 'Optional / Floating holiday leave.',
@@ -159,7 +164,7 @@ class SqliteLeaveRepository implements LeaveRepository {
         'carry_forward': 'Not allowed',
         'color_hex': '#F59E0B',
         'is_active': 1,
-      });
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
       await db.insert('leave_types', {
         'name': 'Emergency Leave',
         'description': 'Urgent emergency leave allowance.',
@@ -167,7 +172,7 @@ class SqliteLeaveRepository implements LeaveRepository {
         'carry_forward': 'Not allowed',
         'color_hex': '#F43F5E',
         'is_active': 1,
-      });
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
       await db.insert('leave_types', {
         'name': 'Work From Home',
         'description': 'Remote work allocation.',
@@ -175,7 +180,7 @@ class SqliteLeaveRepository implements LeaveRepository {
         'carry_forward': 'Not allowed',
         'color_hex': '#3B82F6',
         'is_active': 1,
-      });
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
       await db.insert('leave_types', {
         'name': 'Comp Off',
         'description': 'Compensatory off for extra work.',
@@ -183,7 +188,7 @@ class SqliteLeaveRepository implements LeaveRepository {
         'carry_forward': 'Not allowed',
         'color_hex': '#8B5CF6',
         'is_active': 1,
-      });
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
     }
 
     // Clear legacy sample leave balances and leave requests
@@ -207,7 +212,11 @@ class SqliteLeaveRepository implements LeaveRepository {
       'num_days': 'REAL',
       'approved_dates': 'TEXT',
       'lop_dates': 'TEXT',
-      'is_emergency': 'INTEGER',
+      'is_emergency': 'INTEGER DEFAULT 0',
+      'attachment_url': 'TEXT',
+      'rejection_reason': 'TEXT',
+      'is_half_day': 'INTEGER DEFAULT 0',
+      'half_day_period': 'TEXT',
     };
 
     for (final entry in requiredColumns.entries) {
@@ -301,8 +310,9 @@ class SqliteLeaveRepository implements LeaveRepository {
     }
     final double perDaySalary = grossSalary / 26.0;
 
-    // 3. Fetch leave balance using the employee's leave permission type (not the request category)
-    final balance = await getLeaveBalance(req.employeeId, employeeLeavePermissionType);
+    // 3. Fetch leave balance using the requested leave type
+    final requestLeaveType = req.leaveType.startsWith('Permission') ? 'Permission' : req.leaveType;
+    final balance = await getLeaveBalance(req.employeeId, requestLeaveType);
 
     // 4. Determine approved vs. LOP dates
     final allDates = _getDatesBetween(req.fromDate, req.toDate);
@@ -445,17 +455,37 @@ class SqliteLeaveRepository implements LeaveRepository {
       return LeaveBalance.fromMap(maps.first);
     }
 
-    // Initialize from employee settings
-    final empMaps = await db.query('employees', where: 'id = ?', whereArgs: [employeeId]);
-    double allowed = 1.0;
+    // 1. Check for employee override first
+    final overrideMaps = await db.query(
+      'leave_employee_overrides',
+      where: 'employee_id = ? AND leave_type = ?',
+      whereArgs: [employeeId, leaveType],
+    );
+
+    double allowed = 12.0;
     String freq = 'Monthly';
     String effDate = '';
 
-    if (empMaps.isNotEmpty) {
-      final empMap = empMaps.first;
-      allowed = (empMap['allowed_leaves'] as num?)?.toDouble() ?? 1.0;
-      freq = empMap['leave_allocation_frequency'] as String? ?? 'Monthly';
-      effDate = empMap['effective_date'] as String? ?? '';
+    if (overrideMaps.isNotEmpty) {
+      allowed = (overrideMaps.first['override_days'] as num?)?.toDouble() ?? 12.0;
+    } else {
+      // 2. Check leave_types table allocation
+      final typeMaps = await db.query(
+        'leave_types',
+        where: 'name = ?',
+        whereArgs: [leaveType],
+      );
+      if (typeMaps.isNotEmpty) {
+        allowed = (typeMaps.first['annual_allocation'] as num?)?.toDouble() ?? 12.0;
+      } else {
+        final empMaps = await db.query('employees', where: 'id = ?', whereArgs: [employeeId]);
+        if (empMaps.isNotEmpty) {
+          final empMap = empMaps.first;
+          allowed = (empMap['allowed_leaves'] as num?)?.toDouble() ?? 12.0;
+          freq = empMap['leave_allocation_frequency'] as String? ?? 'Monthly';
+          effDate = empMap['effective_date'] as String? ?? '';
+        }
+      }
     }
 
     final balance = LeaveBalance(
@@ -469,7 +499,11 @@ class SqliteLeaveRepository implements LeaveRepository {
       allocationFrequency: freq,
     );
 
-    final id = await db.insert('leave_balances', balance.toMap());
+    final id = await db.insert(
+      'leave_balances',
+      balance.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
     return balance.copyWith(id: id);
   }
 

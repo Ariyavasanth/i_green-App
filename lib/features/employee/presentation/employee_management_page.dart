@@ -47,6 +47,7 @@ class _EmployeeManagementPageState
     final searchQuery = ref.watch(empSearchQueryProvider);
     final orgFilter = ref.watch(empOrgFilterProvider);
     final deptFilter = ref.watch(empDeptFilterProvider);
+    final desigFilter = ref.watch(empDesigFilterProvider);
     final statusFilter = ref.watch(empStatusFilterProvider);
 
     return ColoredBox(
@@ -70,7 +71,8 @@ class _EmployeeManagementPageState
 
                 // Populate unique dropdown filter choices
                 final orgList = ['All Organizations', ...{for (final e in employees) if (e.organizationName.isNotEmpty) e.organizationName}];
-                final deptList = ['All Departments', ...{for (final e in employees) if (e.department.isNotEmpty) e.department}];
+                final deptList = ['All Departments', ...{...Employee.departmentOptions, for (final e in employees) if (e.department.isNotEmpty) e.department}];
+                final desigList = ['All Designations', ...{...Employee.designationOptions, for (final e in employees) if (e.designation.isNotEmpty) e.designation}];
                 final statusList = ['All Statuses', ...{for (final e in employees) if (e.status.isNotEmpty) e.status}];
 
                 final filtered = employees.where((emp) {
@@ -86,15 +88,16 @@ class _EmployeeManagementPageState
 
                   final matchesOrg = orgFilter == 'All Organizations' || emp.organizationName == orgFilter;
                   final matchesDept = deptFilter == 'All Departments' || emp.department == deptFilter;
+                  final matchesDesig = desigFilter == 'All Designations' || emp.designation == desigFilter;
                   final matchesStatus = statusFilter == 'All Statuses' || emp.status == statusFilter;
 
-                  return matchesSearch && matchesOrg && matchesDept && matchesStatus;
+                  return matchesSearch && matchesOrg && matchesDept && matchesDesig && matchesStatus;
                 }).toList();
 
                 if (filtered.isEmpty) {
                   return Column(
                     children: [
-                      _buildFiltersRow(orgList, deptList, statusList),
+                      _buildFiltersRow(orgList, deptList, desigList, statusList),
                       const Expanded(
                         child: Center(
                           child: Padding(
@@ -132,7 +135,7 @@ class _EmployeeManagementPageState
 
                 return Column(
                   children: [
-                    _buildFiltersRow(orgList, deptList, statusList),
+                    _buildFiltersRow(orgList, deptList, desigList, statusList),
                     const Divider(height: 1),
                     Expanded(
                       child: LayoutBuilder(
@@ -210,10 +213,12 @@ class _EmployeeManagementPageState
   Widget _buildFiltersRow(
     List<String> orgs,
     List<String> depts,
+    List<String> desigs,
     List<String> statuses,
   ) {
     final currentOrg = ref.watch(empOrgFilterProvider);
     final currentDept = ref.watch(empDeptFilterProvider);
+    final currentDesig = ref.watch(empDesigFilterProvider);
     final currentStatus = ref.watch(empStatusFilterProvider);
 
     return Container(
@@ -289,6 +294,29 @@ class _EmployeeManagementPageState
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
+                value: desigs.contains(currentDesig) ? currentDesig : desigs.first,
+                isDense: true,
+                style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
+                items: desigs.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    ref.read(empDesigFilterProvider.notifier).state = val;
+                    setState(() => _currentPage = 0);
+                  }
+                },
+              ),
+            ),
+          ),
+          Container(
+            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppColors.divider),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
                 value: statuses.contains(currentStatus) ? currentStatus : statuses.first,
                 isDense: true,
                 style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
@@ -304,11 +332,13 @@ class _EmployeeManagementPageState
           ),
           if (currentOrg != 'All Organizations' ||
               currentDept != 'All Departments' ||
+              currentDesig != 'All Designations' ||
               currentStatus != 'All Statuses')
             TextButton(
               onPressed: () {
                 ref.read(empOrgFilterProvider.notifier).state = 'All Organizations';
                 ref.read(empDeptFilterProvider.notifier).state = 'All Departments';
+                ref.read(empDesigFilterProvider.notifier).state = 'All Designations';
                 ref.read(empStatusFilterProvider.notifier).state = 'All Statuses';
                 setState(() => _currentPage = 0);
               },

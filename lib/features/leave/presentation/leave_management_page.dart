@@ -1669,7 +1669,11 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Leave balance: 6 of 12 ${req.leaveType.toLowerCase()} days remaining',
+                emp.leaveType == 'No Leave'
+                    ? 'Leave Policy: No Leave allocated'
+                    : (emp.leaveType == 'Once a Month' || emp.leaveType == 'Manual Allocation')
+                        ? 'Allowed quota: ${emp.allowedLeaves == emp.allowedLeaves.toInt() ? emp.allowedLeaves.toInt() : emp.allowedLeaves} days (${emp.leaveType})'
+                        : 'Leave Policy: ${emp.leaveType.isNotEmpty ? emp.leaveType : "As Needed"}',
                 style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8)),
               ),
               InkWell(
@@ -2906,18 +2910,56 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
   }
 
   Future<void> _handleApproveRequest(LeaveRequest req) async {
-    final currentEmp = ref.read(currentEmployeeProvider);
-    final adminName = currentEmp?.fullName ?? 'Admin';
-    await ref.read(leaveRepositoryProvider).approveLeaveRequest(req.id, adminName);
-    ref.invalidate(allLeaveRequestsProvider);
-    ref.invalidate(leaveRequestsProvider);
+    try {
+      final currentEmp = ref.read(currentEmployeeProvider);
+      final adminName = currentEmp?.fullName ?? 'Admin';
+      await ref.read(leaveRepositoryProvider).approveLeaveRequest(req.id, adminName);
+      ref.invalidate(allLeaveRequestsProvider);
+      ref.invalidate(leaveRequestsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Leave request for ${req.employeeName} approved successfully.'),
+            backgroundColor: const Color(0xFF0D8A4E),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error approving request: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _handleDenyRequest(LeaveRequest req) async {
-    final currentEmp = ref.read(currentEmployeeProvider);
-    final adminName = currentEmp?.fullName ?? 'Admin';
-    await ref.read(leaveRepositoryProvider).denyLeaveRequest(req.id, adminName);
-    ref.invalidate(allLeaveRequestsProvider);
-    ref.invalidate(leaveRequestsProvider);
+    try {
+      final currentEmp = ref.read(currentEmployeeProvider);
+      final adminName = currentEmp?.fullName ?? 'Admin';
+      await ref.read(leaveRepositoryProvider).denyLeaveRequest(req.id, adminName);
+      ref.invalidate(allLeaveRequestsProvider);
+      ref.invalidate(leaveRequestsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Leave request for ${req.employeeName} denied.'),
+            backgroundColor: const Color(0xFFDC2626),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error denying request: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }

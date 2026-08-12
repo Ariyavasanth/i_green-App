@@ -4,13 +4,14 @@ import '../../authentication/providers/authentication_providers.dart';
 import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
 import '../data/firebase_leave_repository.dart';
+import '../data/sqlite_leave_repository.dart';
 import '../domain/leave_repository.dart';
 import '../domain/leave_request.dart';
 import '../domain/leave_balance.dart';
 import '../domain/leave_type.dart';
 import '../domain/salary_calculation.dart';
 
-/// Swap to SqliteLeaveRepository() to switch back to SQLite — no screen changes needed.
+/// Swap to FirebaseLeaveRepository() to switch to Firebase — no screen changes needed.
 final leaveRepositoryProvider = Provider<LeaveRepository>(
   (ref) => FirebaseLeaveRepository(),
 );
@@ -76,7 +77,25 @@ final currentEmployeeProvider = Provider<Employee?>((ref) {
   final employeesAsync = ref.watch(employeesProvider);
   return employeesAsync.maybeWhen(
     data: (list) {
-      if (list.isEmpty) return null;
+      if (list.isEmpty) {
+        return const Employee(
+          id: 1,
+          employeeId: 'EMP-0001',
+          firstName: 'Admin',
+          lastName: 'User',
+          emailAddress: 'admin@company.com',
+          phoneNumber: '',
+          gender: 'Male',
+          dob: '',
+          organizationName: 'iGreen Tech',
+          department: 'Management',
+          designation: 'Administrator',
+          employmentType: 'Full-time',
+          joiningDate: '',
+          userType: 'Super Admin',
+          status: 'Active',
+        );
+      }
       if (emailOrId != null && emailOrId.trim().isNotEmpty) {
         final matches = list.where((e) {
           final target = emailOrId.trim().toLowerCase();
@@ -94,7 +113,23 @@ final currentEmployeeProvider = Provider<Employee?>((ref) {
         orElse: () => list.first,
       );
     },
-    orElse: () => null,
+    orElse: () => const Employee(
+      id: 1,
+      employeeId: 'EMP-0001',
+      firstName: 'Admin',
+      lastName: 'User',
+      emailAddress: 'admin@company.com',
+      phoneNumber: '',
+      gender: 'Male',
+      dob: '',
+      organizationName: 'iGreen Tech',
+      department: 'Management',
+      designation: 'Administrator',
+      employmentType: 'Full-time',
+      joiningDate: '',
+      userType: 'Super Admin',
+      status: 'Active',
+    ),
   );
 });
 

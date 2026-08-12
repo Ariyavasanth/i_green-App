@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../organization/domain/column_preference.dart';
 import '../data/firebase_employee_repository.dart';
+import '../data/sqlite_employee_repository.dart';
 import '../domain/employee.dart';
 import '../domain/employee_repository.dart';
 import '../domain/registration_link.dart';
@@ -84,6 +85,7 @@ final empColumnPreferenceProvider =
 final empSearchQueryProvider = StateProvider<String>((ref) => '');
 final empOrgFilterProvider = StateProvider<String>((ref) => 'All Organizations');
 final empDeptFilterProvider = StateProvider<String>((ref) => 'All Departments');
+final empDesigFilterProvider = StateProvider<String>((ref) => 'All Designations');
 final empStatusFilterProvider = StateProvider<String>((ref) => 'All Statuses');
 
 final responseSearchQueryProvider = StateProvider<String>((ref) => '');

@@ -40,38 +40,35 @@ class FirebaseLeaveRepository implements LeaveRepository {
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   /// Converts a Firestore document + its ID into a [LeaveRequest].
+  int _deriveId(Map<String, dynamic> data, String docId) {
+    final rawId = data['id'];
+    if (rawId is int && rawId != 0) return rawId;
+    if (rawId is num && rawId.toInt() != 0) return rawId.toInt();
+
+    final digitsOnly = docId.replaceAll(RegExp(r'\D'), '');
+    if (digitsOnly.isNotEmpty) {
+      final parsed = int.tryParse(digitsOnly);
+      if (parsed != null && parsed != 0) return parsed;
+    }
+    return (docId.hashCode & 0x7FFFFFFF);
+  }
+
+  /// Converts a Firestore document + its ID into a [LeaveRequest].
   LeaveRequest _requestFromDoc(Map<String, dynamic> data, String docId) {
     final mutable = Map<String, dynamic>.from(data);
-
-    // Firestore auto-ID docs may not have an integer `id` — derive from docId
-    if (!mutable.containsKey('id') || mutable['id'] == null || mutable['id'] == 0) {
-      final parsed = int.tryParse(docId.replaceAll(RegExp(r'\D'), ''));
-      mutable['id'] = (parsed != null && parsed != 0)
-          ? parsed
-          : (docId.hashCode & 0x7FFFFFFF);
-    }
+    mutable['id'] = _deriveId(data, docId);
     return LeaveRequest.fromMap(mutable);
   }
 
   LeaveBalance _balanceFromDoc(Map<String, dynamic> data, String docId) {
     final mutable = Map<String, dynamic>.from(data);
-    if (!mutable.containsKey('id') || mutable['id'] == null || mutable['id'] == 0) {
-      final parsed = int.tryParse(docId.replaceAll(RegExp(r'\D'), ''));
-      mutable['id'] = (parsed != null && parsed != 0)
-          ? parsed
-          : (docId.hashCode & 0x7FFFFFFF);
-    }
+    mutable['id'] = _deriveId(data, docId);
     return LeaveBalance.fromMap(mutable);
   }
 
   LeaveType _typeFromDoc(Map<String, dynamic> data, String docId) {
     final mutable = Map<String, dynamic>.from(data);
-    if (!mutable.containsKey('id') || mutable['id'] == null || mutable['id'] == 0) {
-      final parsed = int.tryParse(docId.replaceAll(RegExp(r'\D'), ''));
-      mutable['id'] = (parsed != null && parsed != 0)
-          ? parsed
-          : (docId.hashCode & 0x7FFFFFFF);
-    }
+    mutable['id'] = _deriveId(data, docId);
     return LeaveType.fromMap(mutable);
   }
 
@@ -172,10 +169,35 @@ class FirebaseLeaveRepository implements LeaveRepository {
     return snap.docs.map((d) => _requestFromDoc(d.data(), d.id)).toList();
   }
 
+  Future<DocumentSnapshot<Map<String, dynamic>>?> _findRequestDoc(int id) async {
+    if (id != 0) {
+      final snap = await _requestsRef.where('id', isEqualTo: id).limit(1).get();
+      if (snap.docs.isNotEmpty) return snap.docs.first;
+    }
+
+    // Direct doc ID fallback
+    final docDirect = await _requestsRef.doc(id.toString()).get();
+    if (docDirect.exists) return docDirect;
+
+    // Fallback searching all docs using exact same derivation formula
+    final allSnap = await _requestsRef.get();
+    for (final doc in allSnap.docs) {
+      if (_deriveId(doc.data(), doc.id) == id) {
+        return doc;
+      }
+    }
+    return null;
+  }
+
   @override
   Future<void> submitLeaveRequest(LeaveRequest request) async {
     final docRef = _requestsRef.doc();
     final data = Map<String, dynamic>.from(request.toMap());
+
+    final generatedId = request.id != 0
+        ? request.id
+        : (DateTime.now().microsecondsSinceEpoch & 0x7FFFFFFF);
+    data['id'] = generatedId;
 
     // Store lists as native Firestore arrays instead of JSON strings
     data['approved_dates'] = request.approvedDates;
@@ -193,20 +215,9 @@ class FirebaseLeaveRepository implements LeaveRepository {
   @override
   Future<void> approveLeaveRequest(int id, String adminName) async {
     // 1. Find the document
-    QuerySnapshot<Map<String, dynamic>> snap;
-    if (id != 0) {
-      snap = await _requestsRef.where('id', isEqualTo: id).limit(1).get();
-    } else {
-      snap = await _requestsRef.limit(0).get(); // empty
-    }
-
-    DocumentSnapshot<Map<String, dynamic>> doc;
-    if (snap.docs.isNotEmpty) {
-      doc = snap.docs.first;
-    } else {
-      // Fallback: try docId == id.toString()
-      doc = await _requestsRef.doc(id.toString()).get();
-      if (!doc.exists) return;
+    final doc = await _findRequestDoc(id);
+    if (doc == null || !doc.exists || doc.data() == null) {
+      throw Exception('Leave request document not found for ID: $id');
     }
 
     final req = _requestFromDoc(doc.data()!, doc.id);
@@ -228,8 +239,9 @@ class FirebaseLeaveRepository implements LeaveRepository {
     }
     final double perDaySalary = grossSalary / 26.0;
 
-    // 3. Fetch leave balance using the employee's leave permission type (not the request category)
-    final balance = await getLeaveBalance(req.employeeId, employeeLeavePermissionType);
+    // 3. Fetch leave balance using the requested leave type
+    final requestLeaveType = req.leaveType.startsWith('Permission') ? 'Permission' : req.leaveType;
+    final balance = await getLeaveBalance(req.employeeId, requestLeaveType);
 
     // 4. Split dates into approved vs LOP
     final allDates = _datesBetween(req.fromDate, req.toDate);
@@ -253,6 +265,7 @@ class FirebaseLeaveRepository implements LeaveRepository {
 
     // Update leave request
     batch.update(doc.reference, {
+      'id': req.id,
       'status': 'Approved',
       'approved_dates': approvedDates,
       'lop_dates': lopDates,
@@ -260,7 +273,7 @@ class FirebaseLeaveRepository implements LeaveRepository {
     });
 
     // Update leave balance
-    final balanceDocRef = await _findBalanceDocRef(req.employeeId, employeeLeavePermissionType);
+    final balanceDocRef = await _findBalanceDocRef(req.employeeId, requestLeaveType);
     if (balanceDocRef != null) {
       batch.update(balanceDocRef, {
         'used_leaves': currentUsed,
@@ -297,23 +310,16 @@ class FirebaseLeaveRepository implements LeaveRepository {
 
   @override
   Future<void> denyLeaveRequest(int id, String adminName) async {
-    QuerySnapshot<Map<String, dynamic>> snap;
-    if (id != 0) {
-      snap = await _requestsRef.where('id', isEqualTo: id).limit(1).get();
-    } else {
-      snap = await _requestsRef.limit(0).get();
+    final doc = await _findRequestDoc(id);
+    if (doc == null || !doc.exists || doc.data() == null) {
+      throw Exception('Leave request document not found for ID: $id');
     }
-
-    DocumentReference<Map<String, dynamic>> docRef;
-    if (snap.docs.isNotEmpty) {
-      docRef = snap.docs.first.reference;
-    } else {
-      docRef = _requestsRef.doc(id.toString());
-    }
+    final docRef = doc.reference;
 
     final batch = _firestore.batch();
 
     batch.update(docRef, {
+      'id': id,
       'status': 'Denied',
       'updated_at': FieldValue.serverTimestamp(),
     });
@@ -332,23 +338,16 @@ class FirebaseLeaveRepository implements LeaveRepository {
 
   @override
   Future<void> cancelLeaveRequest(int id, String employeeName) async {
-    QuerySnapshot<Map<String, dynamic>> snap;
-    if (id != 0) {
-      snap = await _requestsRef.where('id', isEqualTo: id).limit(1).get();
-    } else {
-      snap = await _requestsRef.limit(0).get();
+    final doc = await _findRequestDoc(id);
+    if (doc == null || !doc.exists || doc.data() == null) {
+      throw Exception('Leave request document not found for ID: $id');
     }
-
-    DocumentReference<Map<String, dynamic>> docRef;
-    if (snap.docs.isNotEmpty) {
-      docRef = snap.docs.first.reference;
-    } else {
-      docRef = _requestsRef.doc(id.toString());
-    }
+    final docRef = doc.reference;
 
     final batch = _firestore.batch();
 
     batch.update(docRef, {
+      'id': id,
       'status': 'Cancelled',
       'updated_at': FieldValue.serverTimestamp(),
     });
@@ -387,20 +386,37 @@ class FirebaseLeaveRepository implements LeaveRepository {
       return _balanceFromDoc(snap.docs.first.data(), snap.docs.first.id);
     }
 
-    // Auto-create balance from employee settings
-    double allowed = 1.0;
+    // 1. Check for employee override first
+    final overrideSnap = await _overridesRef
+        .where('employee_id', isEqualTo: employeeId)
+        .where('leave_type', isEqualTo: leaveType)
+        .limit(1)
+        .get();
+
+    double allowed = 12.0;
     String freq = 'Monthly';
     String effDate = '';
 
-    final empSnap = await _employeesRef
-        .where('id', isEqualTo: employeeId)
-        .limit(1)
-        .get();
-    if (empSnap.docs.isNotEmpty) {
-      final empData = empSnap.docs.first.data();
-      allowed = (empData['allowed_leaves'] as num?)?.toDouble() ?? 1.0;
-      freq = empData['leave_allocation_frequency'] as String? ?? 'Monthly';
-      effDate = empData['effective_date'] as String? ?? '';
+    if (overrideSnap.docs.isNotEmpty) {
+      allowed = (overrideSnap.docs.first.data()['override_days'] as num?)?.toDouble() ?? 12.0;
+    } else {
+      // 2. Check leave_types policy allocation
+      final typeDocId = leaveType.replaceAll(' ', '_').toLowerCase();
+      final typeSnap = await _typesRef.doc(typeDocId).get();
+      if (typeSnap.exists) {
+        allowed = (typeSnap.data()?['annual_allocation'] as num?)?.toDouble() ?? 12.0;
+      } else {
+        final empSnap = await _employeesRef
+            .where('id', isEqualTo: employeeId)
+            .limit(1)
+            .get();
+        if (empSnap.docs.isNotEmpty) {
+          final empData = empSnap.docs.first.data();
+          allowed = (empData['allowed_leaves'] as num?)?.toDouble() ?? 12.0;
+          freq = empData['leave_allocation_frequency'] as String? ?? 'Monthly';
+          effDate = empData['effective_date'] as String? ?? '';
+        }
+      }
     }
 
     final newBalance = LeaveBalance(

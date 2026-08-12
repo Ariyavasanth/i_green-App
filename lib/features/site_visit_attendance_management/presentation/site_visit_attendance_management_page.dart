@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../employee/domain/employee.dart';
+import '../../employee/providers/employee_providers.dart';
 import '../../site_visit_attendance/domain/site_visit_record.dart';
 import '../providers/site_visit_attendance_management_providers.dart';
 
@@ -21,6 +23,8 @@ class _SiteVisitAttendanceManagementPageState
     extends ConsumerState<SiteVisitAttendanceManagementPage> {
   DateTime _focusedMonth = DateTime.now();
   int? _selectedEmployeeId;
+  String _selectedDepartment = 'All Departments';
+  String _selectedDesignation = 'All Designations';
   String _selectedStatus = 'All';
   String _selectedSite = 'All';
   String _search = '';
@@ -32,6 +36,7 @@ class _SiteVisitAttendanceManagementPageState
     final visitsAsync = ref.watch(
       allSiteVisitsProvider((visitDate: null, employeeId: null, siteName: null)),
     );
+    final allEmployeesList = ref.watch(employeesProvider).valueOrNull ?? [];
 
     return Scaffold(
       backgroundColor: const Color(0xFFEFF3F6),
@@ -45,20 +50,20 @@ class _SiteVisitAttendanceManagementPageState
             visitsAsync.when(
               loading: () => const SizedBox.shrink(),
               error: (e, _) => const SizedBox.shrink(),
-              data: (visits) => _buildKpiBanner(_filterVisits(visits), isMobile),
+              data: (visits) => _buildKpiBanner(_filterVisits(visits, allEmployeesList), isMobile),
             ),
             const SizedBox(height: 16),
             visitsAsync.when(
               loading: () => const SizedBox.shrink(),
               error: (e, _) => const SizedBox.shrink(),
-              data: (visits) => _buildControlToolbar(visits, isMobile),
+              data: (visits) => _buildControlToolbar(visits, allEmployeesList, isMobile),
             ),
             const SizedBox(height: 16),
             visitsAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Text('Error loading site visits: $e'),
               data: (visits) {
-                final filtered = _filterVisits(visits);
+                final filtered = _filterVisits(visits, allEmployeesList);
                 if (_viewMode == SiteVisitViewMode.matrix) {
                   return _SiteVisitMatrixView(
                     focusedMonth: _focusedMonth,
@@ -308,9 +313,76 @@ class _SiteVisitAttendanceManagementPageState
     );
   }
 
-  Widget _buildControlToolbar(List<SiteVisitRecord> visits, bool isMobile) {
+  Widget _buildControlToolbar(List<SiteVisitRecord> visits, List<Employee> allEmployees, bool isMobile) {
+    final empMap = {for (final e in allEmployees) e.id: e};
+
+    final departmentList = [
+      'All Departments',
+      ...{
+        ...Employee.departmentOptions,
+        ...allEmployees.map((e) => e.department).where((d) => d.trim().isNotEmpty),
+      }
+    ];
+
+    final designationList = [
+      'All Designations',
+      ...{
+        ...Employee.designationOptions,
+        ...allEmployees.map((e) => e.designation).where((d) => d.trim().isNotEmpty),
+      }
+    ];
+
+    final departmentDropdown = DropdownButtonFormField<String>(
+      initialValue: departmentList.contains(_selectedDepartment) ? _selectedDepartment : 'All Departments',
+      isDense: true,
+      decoration: InputDecoration(
+        labelText: 'Filter Department',
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      items: departmentList
+          .map((d) => DropdownMenuItem<String>(
+                value: d,
+                child: Text(d, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+              ))
+          .toList(),
+      onChanged: (val) {
+        if (val != null) setState(() => _selectedDepartment = val);
+      },
+    );
+
+    final designationDropdown = DropdownButtonFormField<String>(
+      initialValue: designationList.contains(_selectedDesignation) ? _selectedDesignation : 'All Designations',
+      isDense: true,
+      decoration: InputDecoration(
+        labelText: 'Filter Designation',
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      items: designationList
+          .map((d) => DropdownMenuItem<String>(
+                value: d,
+                child: Text(d, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+              ))
+          .toList(),
+      onChanged: (val) {
+        if (val != null) setState(() => _selectedDesignation = val);
+      },
+    );
+
     final employees = visits.map((v) => MapEntry(v.employeeId, v.employeeName)).toSet().toList()
       ..sort((a, b) => a.value.compareTo(b.value));
+    final availableEmployees = employees.where((entry) {
+      final emp = empMap[entry.key];
+      if (_selectedDepartment != 'All Departments' && (emp == null || emp.department != _selectedDepartment)) {
+        return false;
+      }
+      if (_selectedDesignation != 'All Designations' && (emp == null || emp.designation != _selectedDesignation)) {
+        return false;
+      }
+      return true;
+    }).toList();
+
     final sites = visits.map((v) => v.siteName.trim()).where((e) => e.isNotEmpty).toSet().toList()..sort();
 
     final monthSelector = Row(
@@ -351,7 +423,7 @@ class _SiteVisitAttendanceManagementPageState
     );
 
     final employeeDropdown = DropdownButtonFormField<int?>(
-      initialValue: _selectedEmployeeId,
+      initialValue: availableEmployees.any((e) => e.key == _selectedEmployeeId) ? _selectedEmployeeId : null,
       isDense: true,
       decoration: InputDecoration(
         labelText: 'Filter Employee',
@@ -363,10 +435,10 @@ class _SiteVisitAttendanceManagementPageState
           value: null,
           child: Text('All Employees', style: TextStyle(fontSize: 12)),
         ),
-        ...employees.map(
+        ...availableEmployees.map(
           (e) => DropdownMenuItem<int?>(
             value: e.key,
-            child: Text(e.value, style: const TextStyle(fontSize: 12)),
+            child: Text(e.value, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
           ),
         ),
       ],
@@ -444,6 +516,10 @@ class _SiteVisitAttendanceManagementPageState
                   padding: EdgeInsets.symmetric(vertical: 8.0),
                   child: Divider(height: 1),
                 ),
+                departmentDropdown,
+                const SizedBox(height: 10),
+                designationDropdown,
+                const SizedBox(height: 10),
                 employeeDropdown,
                 const SizedBox(height: 10),
                 statusDropdown,
@@ -454,6 +530,7 @@ class _SiteVisitAttendanceManagementPageState
               ],
             )
           : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
@@ -463,15 +540,17 @@ class _SiteVisitAttendanceManagementPageState
                   ],
                 ),
                 const SizedBox(height: 12),
-                Row(
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    SizedBox(width: 220, child: employeeDropdown),
-                    const SizedBox(width: 12),
-                    SizedBox(width: 160, child: statusDropdown),
-                    const SizedBox(width: 12),
-                    SizedBox(width: 180, child: siteDropdown),
-                    const SizedBox(width: 12),
-                    Expanded(child: searchField),
+                    SizedBox(width: 170, child: departmentDropdown),
+                    SizedBox(width: 170, child: designationDropdown),
+                    SizedBox(width: 170, child: employeeDropdown),
+                    SizedBox(width: 140, child: statusDropdown),
+                    SizedBox(width: 160, child: siteDropdown),
+                    SizedBox(width: 220, child: searchField),
                   ],
                 ),
               ],
@@ -479,10 +558,18 @@ class _SiteVisitAttendanceManagementPageState
     );
   }
 
-  List<SiteVisitRecord> _filterVisits(List<SiteVisitRecord> visits) {
+  List<SiteVisitRecord> _filterVisits(List<SiteVisitRecord> visits, List<Employee> allEmployees) {
+    final empMap = {for (final e in allEmployees) e.id: e};
     final focusedMonth = DateFormat('MM-yyyy').format(_focusedMonth);
     return visits.where((visit) {
       if (visit.visitDate.isNotEmpty && !visit.visitDate.endsWith(focusedMonth)) {
+        return false;
+      }
+      final emp = empMap[visit.employeeId];
+      if (_selectedDepartment != 'All Departments' && (emp == null || emp.department != _selectedDepartment)) {
+        return false;
+      }
+      if (_selectedDesignation != 'All Designations' && (emp == null || emp.designation != _selectedDesignation)) {
         return false;
       }
       if (_selectedEmployeeId != null && visit.employeeId != _selectedEmployeeId) {
@@ -499,7 +586,9 @@ class _SiteVisitAttendanceManagementPageState
         final matchEmployee = visit.employeeName.toLowerCase().contains(q);
         final matchSite = visit.siteName.toLowerCase().contains(q);
         final matchDate = visit.visitDate.toLowerCase().contains(q) || visit.visitTime.toLowerCase().contains(q);
-        if (!matchEmployee && !matchSite && !matchDate) return false;
+        final matchDept = emp != null && emp.department.toLowerCase().contains(q);
+        final matchDesig = emp != null && emp.designation.toLowerCase().contains(q);
+        if (!matchEmployee && !matchSite && !matchDate && !matchDept && !matchDesig) return false;
       }
       return true;
     }).toList();
