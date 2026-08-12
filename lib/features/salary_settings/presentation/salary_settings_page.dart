@@ -322,12 +322,12 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
                                   ),
                                   _buildPercentageField(
                                     label: 'ESI Employee',
-                                    basis: '% of Total Salary',
+                                    basis: '% of Basic',
                                     controller: _esiController,
                                   ),
                                   _buildPercentageField(
                                     label: 'ESI Employer (Company)',
-                                    basis: '% of Total Salary',
+                                    basis: 'From Company',
                                     controller: _esiEmployerController,
                                   ),
                                   _buildPercentageField(

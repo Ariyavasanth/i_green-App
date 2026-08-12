@@ -206,7 +206,7 @@ class _EmployeeRegistrationPageState
     calcAmount(_pfPercentController, _pfController, basic);
 
     if (totalSalary <= 21000 && totalSalary > 0) {
-      calcAmount(_esiPercentController, _esiController, totalSalary);
+      calcAmount(_esiPercentController, _esiController, basic);
       calcAmount(_esiEmployerPercentController, _esiEmployerController, totalSalary);
     } else {
       _esiController.text = '';
@@ -424,7 +424,7 @@ class _EmployeeRegistrationPageState
         _travelAllowancePercentController.text = ((emp.salaryTravelAllowance / total) * 100).toStringAsFixed(1);
         _otherAllowancePercentController.text = ((emp.salaryOtherAllowance / total) * 100).toStringAsFixed(1);
         if (total <= 21000) {
-          _esiPercentController.text = ((emp.salaryEsi / total) * 100).toStringAsFixed(1);
+          _esiPercentController.text = basic > 0 ? ((emp.salaryEsi / basic) * 100).toStringAsFixed(1) : '0.0';
           _esiEmployerPercentController.text = ((emp.salaryEsiEmployer / total) * 100).toStringAsFixed(1);
         } else {
           _esiController.text = '';
@@ -3634,16 +3634,16 @@ class _EmployeeRegistrationPageState
                 if (totalSalary > 0 && totalSalary <= 21000) ...[
                   _buildSalaryComponentRow(
                     label: 'Employee State Insurance (ESI)',
-                    basis: '% of Total',
+                    basis: '% of Basic',
                     amountController: _esiController,
                     percentController: _esiPercentController,
                     placeholder: '0.00',
-                    basisValue: totalSalary,
+                    basisValue: basicPay,
                     isMobile: isMobile,
                   ),
                   _buildSalaryComponentRow(
                     label: 'ESI Employer (Company)',
-                    basis: '% of Total',
+                    basis: 'From Company',
                     amountController: _esiEmployerController,
                     percentController: _esiEmployerPercentController,
                     placeholder: '0.00',
