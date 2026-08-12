@@ -58,7 +58,7 @@ class SqliteAssetAssignmentRepository implements AssetAssignmentRepository {
     final defaultItems = [
       {
         'employee_id': 1,
-        'employee_name': 'Developer / Employee',
+        'employee_name': 'Alex Morgan',
         'employee_code': 'EMP001',
         'asset_type_id': 1,
         'asset_type_name': 'Laptop',
@@ -71,7 +71,7 @@ class SqliteAssetAssignmentRepository implements AssetAssignmentRepository {
       },
       {
         'employee_id': 1,
-        'employee_name': 'Developer / Employee',
+        'employee_name': 'Alex Morgan',
         'employee_code': 'EMP001',
         'asset_type_id': 2,
         'asset_type_name': 'Mobile',
@@ -84,7 +84,7 @@ class SqliteAssetAssignmentRepository implements AssetAssignmentRepository {
       },
       {
         'employee_id': 1,
-        'employee_name': 'Developer / Employee',
+        'employee_name': 'Alex Morgan',
         'employee_code': 'EMP001',
         'asset_type_id': 3,
         'asset_type_name': 'Monitor',
@@ -97,7 +97,7 @@ class SqliteAssetAssignmentRepository implements AssetAssignmentRepository {
       },
       {
         'employee_id': 1,
-        'employee_name': 'Developer / Employee',
+        'employee_name': 'Alex Morgan',
         'employee_code': 'EMP001',
         'asset_type_id': 4,
         'asset_type_name': 'Headset',
@@ -114,7 +114,7 @@ class SqliteAssetAssignmentRepository implements AssetAssignmentRepository {
       },
       {
         'employee_id': 1,
-        'employee_name': 'Developer / Employee',
+        'employee_name': 'Alex Morgan',
         'employee_code': 'EMP001',
         'asset_type_id': 5,
         'asset_type_name': 'Security Badge',
@@ -137,6 +137,7 @@ class SqliteAssetAssignmentRepository implements AssetAssignmentRepository {
   @override
   Future<List<AssetAssignment>> getAssignments() async {
     final db = await _db;
+    await db.execute("UPDATE asset_assignments SET employee_name = 'Alex Morgan' WHERE employee_name = 'Developer / Employee' OR employee_name IS NULL OR TRIM(employee_name) = ''");
     var rows = await db.query('asset_assignments', orderBy: 'id DESC');
     if (rows.isEmpty) {
       await _seedDefaultAssignments(db);

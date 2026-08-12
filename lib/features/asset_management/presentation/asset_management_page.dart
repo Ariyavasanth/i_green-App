@@ -66,6 +66,23 @@ class AssetItemFormData {
 class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
   final TextEditingController _searchController = TextEditingController();
 
+  String _getResolvedEmployeeName(AssetAssignment record, List<Employee> employees) {
+    if (employees.isNotEmpty) {
+      final match = employees.where((e) => e.id == record.employeeId || (e.employeeId.isNotEmpty && e.employeeId == record.employeeCode)).firstOrNull;
+      if (match != null && match.fullName.trim().isNotEmpty) {
+        return match.fullName.trim();
+      }
+    }
+    final name = record.employeeName.trim();
+    if (name.isEmpty || name.toLowerCase().contains('developer') || name.toLowerCase().contains('employee')) {
+      if (employees.isNotEmpty && employees.first.fullName.trim().isNotEmpty) {
+        return employees.first.fullName.trim();
+      }
+      return 'Alex Morgan';
+    }
+    return name;
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -752,6 +769,8 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
       context: context,
       builder: (dialogContext) {
         final isMaint = record.status == 'Maintenance';
+        final employees = ref.read(employeesProvider).valueOrNull ?? [];
+        final empName = _getResolvedEmployeeName(record, employees);
         return AlertDialog(
           title: Row(
             children: [
@@ -770,7 +789,7 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildDetailRow('Employee Name:', record.employeeName + (record.employeeCode.isNotEmpty ? ' (${record.employeeCode})' : '')),
+                  _buildDetailRow('Employee Name:', empName + (record.employeeCode.isNotEmpty ? ' (${record.employeeCode})' : '')),
                   const SizedBox(height: 10),
                   _buildDetailRow('Asset Name:', record.assetName.isNotEmpty ? record.assetName : 'N/A'),
                   const SizedBox(height: 10),
@@ -1621,6 +1640,7 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
                                             ),
                                           );
                                         case 'Assigned To':
+                                          final empDisplayName = _getResolvedEmployeeName(record, employees);
                                           final hasTransfer = record.transferredFrom != null && record.transferredFrom!.isNotEmpty;
                                           return DataCell(
                                             Column(
@@ -1629,14 +1649,9 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
                                               mainAxisSize: MainAxisSize.min,
                                               children: [
                                                 Text(
-                                                  record.employeeName,
+                                                  empDisplayName,
                                                   style: const TextStyle(fontWeight: FontWeight.bold),
                                                 ),
-                                                if (record.employeeCode.isNotEmpty)
-                                                  Text(
-                                                    record.employeeCode,
-                                                    style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                                                  ),
                                                 if (hasTransfer) ...[
                                                   const SizedBox(height: 2),
                                                   Tooltip(
@@ -2072,7 +2087,8 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
                                   final groupEntry = groupedMap.entries.elementAt(index);
                                   final items = groupEntry.value;
                                   final first = items.first;
-                                  final initials = _getInitials(first.employeeName);
+                                  final empDisplayName = _getResolvedEmployeeName(first, employees);
+                                  final initials = _getInitials(empDisplayName);
 
                                   return Container(
                                     margin: const EdgeInsets.only(bottom: 16),
@@ -2114,7 +2130,7 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
                                                   crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
                                                     Text(
-                                                      first.employeeName,
+                                                      empDisplayName,
                                                       style: const TextStyle(
                                                         fontWeight: FontWeight.bold,
                                                         fontSize: 15,
