@@ -24,6 +24,11 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
   String _selectedProduct = 'Duct';
   final TextEditingController _metersController = TextEditingController(text: '50');
   final TextEditingController _remarksController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
+
+  DateTime? _fromDate;
+  DateTime? _toDate;
+  String _searchQuery = '';
 
   final List<String> _projects = ['Site A', 'Site B', 'Project Alpha', 'Project Beta'];
 
@@ -42,6 +47,7 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
   void dispose() {
     _metersController.dispose();
     _remarksController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -335,56 +341,119 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
     }
   }
 
+  List<IncentiveRequest> _filterRequests(List<IncentiveRequest> allRequests) {
+    var filtered = allRequests;
+
+    if (_searchQuery.isNotEmpty) {
+      filtered = filtered.where((req) {
+        final prod = req.productName.toLowerCase();
+        final site = req.site.toLowerCase();
+        final status = req.status.toLowerCase();
+        final remarks = (req.remarks ?? '').toLowerCase();
+        final emp = req.employeeName.toLowerCase();
+        return prod.contains(_searchQuery) ||
+            site.contains(_searchQuery) ||
+            status.contains(_searchQuery) ||
+            remarks.contains(_searchQuery) ||
+            emp.contains(_searchQuery);
+      }).toList();
+    }
+
+    if (_fromDate != null || _toDate != null) {
+      final fromMidnight = _fromDate != null
+          ? DateTime(_fromDate!.year, _fromDate!.month, _fromDate!.day)
+          : null;
+      final toMidnight = _toDate != null
+          ? DateTime(_toDate!.year, _toDate!.month, _toDate!.day, 23, 59, 59)
+          : null;
+
+      filtered = filtered.where((req) {
+        final reqDate = DateTime.tryParse(req.createdAt);
+        if (reqDate == null) return true;
+
+        if (fromMidnight != null && reqDate.isBefore(fromMidnight)) {
+          return false;
+        }
+        if (toMidnight != null && reqDate.isAfter(toMidnight)) {
+          return false;
+        }
+        return true;
+      }).toList();
+    }
+
+    return filtered;
+  }
+
   @override
   Widget build(BuildContext context) {
     final requestsAsync = ref.watch(allIncentiveRequestsProvider);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Page Header
-            Row(
-              children: [
-                const Icon(Icons.request_quote_outlined, color: AppColors.active, size: 28),
-                const SizedBox(width: 10),
-                Text(
-                  'Incentive Request',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8F9FA),
+        body: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Page Header
+              Row(
+                children: [
+                  const Icon(Icons.request_quote_outlined, color: AppColors.active, size: 28),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Incentive Request',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
 
-            // Form & Request Tracking Section
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final isWide = constraints.maxWidth > 900;
-                return isWide
-                    ? Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(flex: 5, child: _buildFormCard()),
-                          const SizedBox(width: 24),
-                          Expanded(flex: 7, child: _buildRequestsSummaryCard(requestsAsync)),
-                        ],
-                      )
-                    : Column(
-                        children: [
-                          _buildFormCard(),
-                          const SizedBox(height: 24),
-                          _buildRequestsSummaryCard(requestsAsync),
-                        ],
-                      );
-              },
-            ),
-          ],
+              // Navigation Tabs
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: TabBar(
+                  labelColor: AppColors.active,
+                  unselectedLabelColor: Colors.grey.shade600,
+                  indicatorColor: AppColors.active,
+                  indicatorWeight: 3,
+                  tabs: const [
+                    Tab(
+                      icon: Icon(Icons.add_task_outlined, size: 20),
+                      text: 'New Request',
+                    ),
+                    Tab(
+                      icon: Icon(Icons.list_alt_outlined, size: 20),
+                      text: 'My Requests',
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Tab Views
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    // Tab 1: New Incentive Request Form
+                    SingleChildScrollView(
+                      child: _buildFormCard(),
+                    ),
+                    // Tab 2: My Incentive Requests List & Date Filter
+                    _buildRequestsTabContent(requestsAsync),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -580,6 +649,10 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
                     });
                   }
                 },
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) return 'Select project / site';
+                  return null;
+                },
               ),
               const SizedBox(height: 16),
 
@@ -622,6 +695,10 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
                 onChanged: (val) {
                   if (val != null) setState(() => _selectedProduct = val);
                 },
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) return 'Select product';
+                  return null;
+                },
               ),
               const SizedBox(height: 16),
 
@@ -658,7 +735,8 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
                 onChanged: (_) => setState(() {}),
                 validator: (val) {
                   if (val == null || val.trim().isEmpty) return 'Enter completed meters';
-                  if (double.tryParse(val.trim()) == null) return 'Enter a valid number';
+                  final meters = double.tryParse(val.trim());
+                  if (meters == null || meters <= 0) return 'Enter valid meters (> 0)';
                   return null;
                 },
               ),
@@ -777,94 +855,270 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
     );
   }
 
-  Widget _buildRequestsSummaryCard(AsyncValue<List<IncentiveRequest>> requestsAsync) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade300),
-      ),
-      color: Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'My Incentive Requests',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey.shade900,
+  Widget _buildRequestsTabContent(AsyncValue<List<IncentiveRequest>> requestsAsync) {
+    return SizedBox.expand(
+      child: Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Colors.grey.shade300),
+        ),
+        color: Colors.white,
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'My Incentive Requests',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade900,
+                    ),
                   ),
-                ),
-                IconButton(
-                  onPressed: () => ref.invalidate(allIncentiveRequestsProvider),
-                  icon: const Icon(Icons.refresh, size: 20),
-                  tooltip: 'Refresh',
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
+                  IconButton(
+                    onPressed: () => ref.invalidate(allIncentiveRequestsProvider),
+                    icon: const Icon(Icons.refresh, size: 20),
+                    tooltip: 'Refresh',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
 
-            requestsAsync.when(
-              data: (allRequests) {
-                final pendingCount = allRequests.where((r) => r.status == 'Pending').length;
-                final approvedCount = allRequests.where((r) => r.status == 'Approved').length;
-                final rejectedCount = allRequests.where((r) => r.status == 'Rejected').length;
+              requestsAsync.when(
+                data: (allRequests) {
+                  final filteredRequests = _filterRequests(allRequests);
 
-                return Column(
-                  children: [
-                    // Stat summary pills
-                    Row(
+                  final pendingCount = filteredRequests.where((r) => r.status == 'Pending').length;
+                  final approvedCount = filteredRequests.where((r) => r.status == 'Approved').length;
+                  final rejectedCount = filteredRequests.where((r) => r.status == 'Rejected').length;
+
+                  return Expanded(
+                    child: Column(
                       children: [
-                        _buildStatBadge('Pending', '$pendingCount', const Color(0xFFFFF3E0), const Color(0xFFE65100)),
-                        const SizedBox(width: 8),
-                        _buildStatBadge('Approved', '$approvedCount', const Color(0xFFE8F5E9), const Color(0xFF2E7D32)),
-                        const SizedBox(width: 8),
-                        _buildStatBadge('Rejected', '$rejectedCount', const Color(0xFFFFEBEE), const Color(0xFFC62828)),
+                        // Stat summary pills
+                        Row(
+                          children: [
+                            _buildStatBadge('Pending', '$pendingCount', const Color(0xFFFFF3E0), const Color(0xFFE65100)),
+                            const SizedBox(width: 8),
+                            _buildStatBadge('Approved', '$approvedCount', const Color(0xFFE8F5E9), const Color(0xFF2E7D32)),
+                            const SizedBox(width: 8),
+                            _buildStatBadge('Rejected', '$rejectedCount', const Color(0xFFFFEBEE), const Color(0xFFC62828)),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Search Bar
+                        _buildSearchBar(),
+                        const SizedBox(height: 12),
+
+                        // Date Filter Bar
+                        _buildDateFilterBar(),
+                        const SizedBox(height: 16),
+
+                        // Filtered Requests List
+                        Expanded(
+                          child: filteredRequests.isEmpty
+                              ? const Center(
+                                  child: Padding(
+                                    padding: EdgeInsets.all(32.0),
+                                    child: Text(
+                                      'No incentive requests match your search or filter.',
+                                      style: TextStyle(color: Colors.grey),
+                                    ),
+                                  ),
+                                )
+                              : ListView.separated(
+                                  itemCount: filteredRequests.length,
+                                  separatorBuilder: (context, index) => const SizedBox(height: 12),
+                                  itemBuilder: (context, index) {
+                                    final req = filteredRequests[index];
+                                    return _buildRequestRowItem(req);
+                                  },
+                                ),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 16),
-
-                    if (allRequests.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.all(32.0),
-                        child: Center(
-                          child: Text(
-                            'No incentive requests submitted yet.',
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                        ),
-                      )
-                    else
-                      ListView.separated(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: allRequests.length,
-                        separatorBuilder: (context, index) => const Divider(height: 20),
-                        itemBuilder: (context, index) {
-                          final req = allRequests[index];
-                          return _buildRequestRowItem(req);
-                        },
-                      ),
-                  ],
-                );
-              },
-              loading: () => const Padding(
-                padding: EdgeInsets.all(40),
-                child: Center(child: CircularProgressIndicator()),
+                  );
+                },
+                loading: () => const Expanded(
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                error: (err, stack) => Expanded(
+                  child: Center(child: Text('Error loading requests: $err')),
+                ),
               ),
-              error: (err, stack) => Padding(
-                padding: const EdgeInsets.all(20),
-                child: Center(child: Text('Error loading requests: $err')),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return TextField(
+      controller: _searchController,
+      decoration: InputDecoration(
+        hintText: 'Search requests by product, site, status...',
+        hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+        prefixIcon: const Icon(Icons.search, size: 20, color: Colors.grey),
+        suffixIcon: _searchController.text.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.clear, size: 18, color: Colors.grey),
+                onPressed: () {
+                  _searchController.clear();
+                  setState(() => _searchQuery = '');
+                },
+              )
+            : null,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        filled: true,
+        fillColor: Colors.grey.shade50,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.active),
+        ),
+      ),
+      onChanged: (val) {
+        setState(() => _searchQuery = val.trim().toLowerCase());
+      },
+    );
+  }
+
+  Widget _buildDateFilterBar() {
+    final hasFilter = _fromDate != null || _toDate != null;
+
+    String formatDate(DateTime dt) {
+      return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.filter_list_rounded, size: 18, color: AppColors.active),
+          const SizedBox(width: 6),
+          const Text(
+            'Date Range:',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: InkWell(
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: _fromDate ?? DateTime.now(),
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime(2035),
+                );
+                if (picked != null) {
+                  setState(() => _fromDate = picked);
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _fromDate != null ? formatDate(_fromDate!) : 'From Date',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _fromDate != null ? Colors.black87 : Colors.grey.shade600,
+                          fontWeight: _fromDate != null ? FontWeight.bold : FontWeight.normal,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
+                  ],
+                ),
               ),
             ),
+          ),
+          const SizedBox(width: 6),
+          const Text('-', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          const SizedBox(width: 6),
+          Expanded(
+            child: InkWell(
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: _toDate ?? DateTime.now(),
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime(2035),
+                );
+                if (picked != null) {
+                  setState(() => _toDate = picked);
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _toDate != null ? formatDate(_toDate!) : 'To Date',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _toDate != null ? Colors.black87 : Colors.grey.shade600,
+                          fontWeight: _toDate != null ? FontWeight.bold : FontWeight.normal,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (hasFilter) ...[
+            const SizedBox(width: 6),
+            IconButton(
+              onPressed: () {
+                setState(() {
+                  _fromDate = null;
+                  _toDate = null;
+                });
+              },
+              icon: const Icon(Icons.clear, size: 18, color: Colors.red),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              tooltip: 'Clear Filter',
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -913,6 +1167,7 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
     }
 
     return Container(
+      clipBehavior: Clip.hardEdge,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
@@ -923,12 +1178,17 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '${req.productName} • ${req.site}',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              Expanded(
+                child: Text(
+                  '${req.productName} • ${req.site}',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 2,
+                ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
@@ -944,12 +1204,16 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
           ),
           const SizedBox(height: 6),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text(
-                'Meters: ${req.meters.toInt()}m  |  Rate: ₹${req.rate.toInt()}/m',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+              Expanded(
+                child: Text(
+                  'Meters: ${req.meters.toInt()}m  |  Rate: ₹${req.rate.toInt()}/m',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
+              const SizedBox(width: 8),
               Text(
                 'Expected: ₹${req.amount.toInt()}',
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
@@ -969,9 +1233,12 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
                 children: [
                   const Icon(Icons.check_circle, size: 16, color: Color(0xFF2E7D32)),
                   const SizedBox(width: 6),
-                  Text(
-                    'Approved Amount: ₹${req.approvedAmount?.toInt()}  (Verified Meters: ${req.verifiedMeters?.toInt()}m)',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32)),
+                  Expanded(
+                    child: Text(
+                      'Approved Amount: ₹${req.approvedAmount?.toInt()}  (Verified Meters: ${req.verifiedMeters?.toInt()}m)',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32)),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ],
               ),

@@ -160,7 +160,7 @@ class _LoanPageState extends ConsumerState<LoanPage> {
           crossAxisCount: 2,
           mainAxisSpacing: 12,
           crossAxisSpacing: 12,
-          childAspectRatio: 1.5,
+          childAspectRatio: 1.4,
         ),
         itemCount: metrics.length,
         itemBuilder: (context, index) => _buildMetricCard(metrics[index]),
@@ -177,7 +177,7 @@ class _LoanPageState extends ConsumerState<LoanPage> {
 
   Widget _buildMetricCard(_MetricItem item) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
@@ -197,17 +197,29 @@ class _LoanPageState extends ConsumerState<LoanPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(item.title, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              Expanded(
+                child: Text(
+                  item.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+              ),
+              const SizedBox(width: 4),
               Icon(item.icon, color: item.color, size: 20),
             ],
           ),
           const SizedBox(height: 8),
-          Text(
-            item.value,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              item.value,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
             ),
           ),
         ],
@@ -599,24 +611,6 @@ class _RequestLoanDialogState extends ConsumerState<_RequestLoanDialog> {
                   if (parsed == null || parsed <= 0) return 'Enter a valid positive number';
                   return null;
                 },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _installmentsController,
-                decoration: _inputDecoration('Installments (Months)'),
-                keyboardType: TextInputType.number,
-                validator: (val) {
-                  if (val == null || val.isEmpty) return 'Required';
-                  final parsed = int.tryParse(val);
-                  if (parsed == null || parsed <= 0) return 'Enter a valid positive integer';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _emiController,
-                decoration: _inputDecoration('Estimated Monthly EMI (₹)'),
-                readOnly: true,
               ),
               const SizedBox(height: 16),
               TextFormField(

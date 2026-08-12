@@ -203,7 +203,7 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
           crossAxisCount: 2,
           mainAxisSpacing: 12,
           crossAxisSpacing: 12,
-          childAspectRatio: 1.5,
+          childAspectRatio: 1.4,
         ),
         itemCount: metrics.length,
         itemBuilder: (context, index) => _buildMetricCard(metrics[index]),
@@ -220,7 +220,7 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
 
   Widget _buildMetricCard(_MetricItem item) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
@@ -240,17 +240,29 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(item.title, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              Expanded(
+                child: Text(
+                  item.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+              ),
+              const SizedBox(width: 4),
               Icon(item.icon, color: item.color, size: 20),
             ],
           ),
           const SizedBox(height: 8),
-          Text(
-            item.value,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              item.value,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
             ),
           ),
         ],
