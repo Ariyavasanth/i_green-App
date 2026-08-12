@@ -571,17 +571,64 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
                       const SizedBox(height: 14),
                     ],
 
-                    const Text('Reason / Description', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF334155))),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: reasonController,
-                      maxLines: 2,
-                      decoration: InputDecoration(
-                        hintText: 'Enter reason / description...',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                    ),
                     if (requestType == 'Leave') ...[
+                      // Employee Policy Warning Banner
+                      if (selectedEmployee != null && selectedEmployee!.leavePolicy == 'No Leave') ...[
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF2F2),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFFECACA)),
+                          ),
+                          child: Row(
+                            children: const [
+                              Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 20),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '⚠️ You are currently configured with "No Leave". This request may be treated as LOP. The final decision will be made by the Super Admin.',
+                                  style: TextStyle(fontSize: 11, color: Color(0xFF991B1B), fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                      ] else if (selectedEmployee != null && selectedEmployee!.leavePolicy == 'Manual Allocation') ...[
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFFBEB),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFFDE68A)),
+                          ),
+                          child: Row(
+                            children: const [
+                              Icon(Icons.info_outline, color: Color(0xFFD97706), size: 20),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '⚠️ Your leave quota for this month has been exhausted. The requested leave may be treated as LOP unless the Super Admin approves it as Paid Leave.',
+                                  style: TextStyle(fontSize: 11, color: Color(0xFF92400E), fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+
+                      const Text('Reason / Description', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF334155))),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: reasonController,
+                        maxLines: 2,
+                        decoration: InputDecoration(
+                          hintText: 'Enter reason / description...',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
                       const SizedBox(height: 10),
                       CheckboxListTile(
                         contentPadding: EdgeInsets.zero,
@@ -589,6 +636,17 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
                         value: isEmergency,
                         activeColor: const Color(0xFF0D8A4E),
                         onChanged: (v) => setDialogState(() => isEmergency = v ?? false),
+                      ),
+                    ] else ...[
+                      const Text('Reason / Description', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF334155))),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: reasonController,
+                        maxLines: 2,
+                        decoration: InputDecoration(
+                          hintText: 'Enter reason / description...',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
                       ),
                     ],
                   ],
@@ -1078,10 +1136,25 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
                       elevation: 0,
                     ),
                     onPressed: () => _handleApproveRequest(req),
-                    child: const Text('Approve', style: TextStyle(fontSize: 12, color: Colors.white)),
+                    child: const Text('Approve', style: TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
+            ),
+          ] else ...[
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: () => _showSuperAdminApprovalDialog(req),
+                icon: const Icon(Icons.edit_note, size: 14, color: Color(0xFF475569)),
+                label: const Text('Change Decision', style: TextStyle(fontSize: 11, color: Color(0xFF475569), fontWeight: FontWeight.w600)),
+              ),
             ),
           ],
         ],
@@ -1686,7 +1759,7 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
             ],
           ),
 
-          // Full-width Bottom Action Buttons for Pending Request
+          // Full-width Bottom Action Buttons for Requests
           if (isPending) ...[
             const SizedBox(height: 12),
             Row(
@@ -1717,6 +1790,21 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
                   ),
                 ),
               ],
+            ),
+          ] else ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  side: const BorderSide(color: Color(0xFFCBD5E1)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () => _showSuperAdminApprovalDialog(req),
+                icon: const Icon(Icons.edit_note_rounded, size: 16, color: Color(0xFF0D8A4E)),
+                label: const Text('Change Decision', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0D8A4E))),
+              ),
             ),
           ],
         ],
@@ -2910,30 +2998,272 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
   }
 
   Future<void> _handleApproveRequest(LeaveRequest req) async {
-    try {
-      final currentEmp = ref.read(currentEmployeeProvider);
-      final adminName = currentEmp?.fullName ?? 'Admin';
-      await ref.read(leaveRepositoryProvider).approveLeaveRequest(req.id, adminName);
-      ref.invalidate(allLeaveRequestsProvider);
-      ref.invalidate(leaveRequestsProvider);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Leave request for ${req.employeeName} approved successfully.'),
-            backgroundColor: const Color(0xFF0D8A4E),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error approving request: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+    await _showSuperAdminApprovalDialog(req);
+  }
+
+  Future<void> _showSuperAdminApprovalDialog(LeaveRequest req) async {
+    final currentEmp = ref.read(currentEmployeeProvider);
+    final adminName = currentEmp?.fullName ?? 'Admin';
+    final employees = ref.read(employeesProvider).value ?? [];
+    final empMatch = employees.firstWhere(
+      (e) => e.id == req.employeeId,
+      orElse: () => Employee(
+        id: req.employeeId,
+        employeeId: req.employeeCustomId,
+        firstName: req.employeeName,
+        lastName: '',
+        emailAddress: '',
+        phoneNumber: '',
+        gender: '',
+        dob: '',
+        organizationName: '',
+        department: '',
+        designation: '',
+        employmentType: '',
+        joiningDate: '',
+        status: '',
+        leaveType: 'As Needed',
+      ),
+    );
+
+    final employeePolicy = empMatch.leavePolicy;
+
+    double availableQuota = 0.0;
+    if (employeePolicy == 'Manual Allocation') {
+      final requestLeaveType = req.leaveType.startsWith('Permission') ? 'Permission' : req.leaveType;
+      final balance = await ref.read(leaveRepositoryProvider).getLeaveBalance(req.employeeId, requestLeaveType);
+      availableQuota = balance.availableLeaves;
     }
+
+    double paidDaysRec = req.numDays;
+    double lopDaysRec = 0.0;
+    String defaultMode = 'as_calculated';
+
+    if (employeePolicy == 'As Needed') {
+      paidDaysRec = req.numDays;
+      lopDaysRec = 0.0;
+      defaultMode = 'as_calculated';
+    } else if (employeePolicy == 'No Leave') {
+      paidDaysRec = 0.0;
+      lopDaysRec = req.numDays;
+      defaultMode = 'all_lop';
+    } else {
+      paidDaysRec = req.numDays <= availableQuota ? req.numDays : availableQuota;
+      lopDaysRec = req.numDays > availableQuota ? req.numDays - availableQuota : 0.0;
+      defaultMode = 'as_calculated';
+    }
+
+    String selectedMode = defaultMode;
+    final reasonController = TextEditingController();
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text('Approve Leave Request', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF0F172A))),
+            content: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                    const SizedBox(height: 12),
+                    _buildApprovalDetailRow('Employee', req.employeeName),
+                    _buildApprovalDetailRow('Leave Type', req.leaveType),
+                    _buildApprovalDetailRow('Requested', '${req.numDays % 1 == 0 ? req.numDays.toInt() : req.numDays} Days (${req.fromDate} to ${req.toDate})'),
+                    _buildApprovalDetailRow('Employee Policy', employeePolicy),
+                    if (employeePolicy == 'Manual Allocation')
+                      _buildApprovalDetailRow('Available Quota', '${availableQuota % 1 == 0 ? availableQuota.toInt() : availableQuota} Days'),
+
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('System Calculation / Recommendation:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF475569))),
+                          const SizedBox(height: 4),
+                          if (employeePolicy == 'As Needed')
+                            Text('• ${req.numDays % 1 == 0 ? req.numDays.toInt() : req.numDays} Days → Paid Leave (As Needed Policy)', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF0D8A4E)))
+                          else if (employeePolicy == 'No Leave')
+                            Text('• ${req.numDays % 1 == 0 ? req.numDays.toInt() : req.numDays} Days → Potential LOP (No Leave Policy)', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFFD97706)))
+                          else
+                            Text(
+                              '• ${paidDaysRec % 1 == 0 ? paidDaysRec.toInt() : paidDaysRec} Days → Paid Leave\n'
+                              '${lopDaysRec > 0 ? "• ${lopDaysRec % 1 == 0 ? lopDaysRec.toInt() : lopDaysRec} Days → Potential LOP" : ""}',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: lopDaysRec > 0 ? const Color(0xFFD97706) : const Color(0xFF0D8A4E)),
+                            ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+                    const Text('Super Admin Decision:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B))),
+                    const SizedBox(height: 6),
+
+                    if (employeePolicy == 'As Needed') ...[
+                      RadioListTile<String>(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Approve all as Paid Leave', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                        value: 'as_calculated',
+                        groupValue: selectedMode,
+                        activeColor: const Color(0xFF0D8A4E),
+                        onChanged: (v) => setDialogState(() => selectedMode = v!),
+                      ),
+                    ] else if (employeePolicy == 'No Leave') ...[
+                      RadioListTile<String>(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Approve as LOP (Potential LOP)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                        value: 'all_lop',
+                        groupValue: selectedMode,
+                        activeColor: const Color(0xFF0D8A4E),
+                        onChanged: (v) => setDialogState(() => selectedMode = v!),
+                      ),
+                      RadioListTile<String>(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Approve all as Paid Leave (Super Admin Override)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                        value: 'all_paid',
+                        groupValue: selectedMode,
+                        activeColor: const Color(0xFF0D8A4E),
+                        onChanged: (v) => setDialogState(() => selectedMode = v!),
+                      ),
+                    ] else ...[
+                      RadioListTile<String>(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text('Approve as calculated (${paidDaysRec % 1 == 0 ? paidDaysRec.toInt() : paidDaysRec} Paid, ${lopDaysRec % 1 == 0 ? lopDaysRec.toInt() : lopDaysRec} LOP)', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                        value: 'as_calculated',
+                        groupValue: selectedMode,
+                        activeColor: const Color(0xFF0D8A4E),
+                        onChanged: (v) => setDialogState(() => selectedMode = v!),
+                      ),
+                      RadioListTile<String>(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Approve all as Paid Leave (Super Admin Override)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                        value: 'all_paid',
+                        groupValue: selectedMode,
+                        activeColor: const Color(0xFF0D8A4E),
+                        onChanged: (v) => setDialogState(() => selectedMode = v!),
+                      ),
+                      RadioListTile<String>(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Approve all as LOP', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                        value: 'all_lop',
+                        groupValue: selectedMode,
+                        activeColor: const Color(0xFF0D8A4E),
+                        onChanged: (v) => setDialogState(() => selectedMode = v!),
+                      ),
+                    ],
+
+                    const SizedBox(height: 10),
+                    const Text('Reason / Note:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF334155))),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: reasonController,
+                      maxLines: 2,
+                      decoration: InputDecoration(
+                        hintText: 'Enter reason (e.g. Emergency situation...)',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFDC2626),
+                  side: const BorderSide(color: Color(0xFFFECACA)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _handleDenyRequest(req);
+                },
+                child: const Text('Reject'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0D8A4E),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  elevation: 0,
+                ),
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  try {
+                    await ref.read(leaveRepositoryProvider).approveLeaveRequest(
+                      req.id,
+                      adminName,
+                      approvalMode: selectedMode,
+                      overrideReason: reasonController.text.trim().isNotEmpty ? reasonController.text.trim() : null,
+                    );
+                    ref.invalidate(allLeaveRequestsProvider);
+                    ref.invalidate(leaveRequestsProvider);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Leave request for ${req.employeeName} approved successfully.'),
+                          backgroundColor: const Color(0xFF0D8A4E),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Error approving request: $e'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
+                },
+                child: const Text('Approve', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildApprovalDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 130,
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+            ),
+          ),
+          const Text(': ', style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 13, color: Color(0xFF0F172A), fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _handleDenyRequest(LeaveRequest req) async {

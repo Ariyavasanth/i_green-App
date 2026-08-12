@@ -168,6 +168,46 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
 
     _recalculate();
     _loadActiveLoan(employee.id, selectedMonth);
+    _loadLopDetails(employee.id, selectedMonth);
+  }
+
+  Future<void> _loadLopDetails(int employeeId, String month) async {
+    try {
+      final now = DateTime.now();
+      int year = now.year;
+      int monthNum = now.month;
+
+      final parts = month.trim().split(' ');
+      if (parts.length >= 2) {
+        final yearParsed = int.tryParse(parts[1]);
+        if (yearParsed != null) year = yearParsed;
+        final monthMap = {
+          'january': 1, 'jan': 1, 'february': 2, 'feb': 2, 'march': 3, 'mar': 3,
+          'april': 4, 'apr': 4, 'may': 5, 'june': 6, 'jun': 6, 'july': 7, 'jul': 7,
+          'august': 8, 'aug': 8, 'september': 9, 'sep': 9, 'october': 10, 'oct': 10,
+          'november': 11, 'nov': 11, 'december': 12, 'dec': 12
+        };
+        final m = monthMap[parts[0].toLowerCase()];
+        if (m != null) monthNum = m;
+      }
+
+      final salaryCalc = await ref.read(leaveRepositoryProvider).calculateSalaryAndLop(
+        employeeId,
+        year,
+        monthNum,
+        workingDays: 26,
+      );
+
+      if (mounted) {
+        setState(() {
+          _lopController.text = salaryCalc.lopDeductionAmount.toStringAsFixed(2);
+          if (salaryCalc.totalApprovedLeaveDays > 0) {
+            _leaveDays = salaryCalc.totalApprovedLeaveDays.toInt();
+          }
+          _recalculate();
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadActiveLoan(int employeeId, String month) async {

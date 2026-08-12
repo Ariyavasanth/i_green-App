@@ -212,8 +212,42 @@ class FirebaseLeaveRepository implements LeaveRepository {
 
   // ── Approve / Deny ─────────────────────────────────────────────────────────
 
+  Future<void> _revertPreviousApprovalEffects(LeaveRequest req) async {
+    if (req.status != 'Approved') return;
+
+    // 1. Delete previous LOP records for this request
+    final lopSnap = await _lopRef.where('leave_request_id', isEqualTo: req.id).get();
+    for (final doc in lopSnap.docs) {
+      await doc.reference.delete();
+    }
+
+    // 2. Restore leave balance if paid leave days were previously approved
+    if (req.approvedDates.isNotEmpty) {
+      final requestLeaveType = req.leaveType.startsWith('Permission') ? 'Permission' : req.leaveType;
+      final balance = await getLeaveBalance(req.employeeId, requestLeaveType);
+      final balanceDocRef = await _findBalanceDocRef(req.employeeId, requestLeaveType);
+
+      if (balanceDocRef != null) {
+        final double restoredCount = req.approvedDates.length.toDouble();
+        final double newUsed = (balance.usedLeaves - restoredCount).clamp(0.0, double.infinity);
+        final double newAvailable = (balance.availableLeaves + restoredCount).clamp(0.0, balance.allowedLeaves);
+
+        await balanceDocRef.update({
+          'used_leaves': newUsed,
+          'available_leaves': newAvailable,
+          'updated_at': FieldValue.serverTimestamp(),
+        });
+      }
+    }
+  }
+
   @override
-  Future<void> approveLeaveRequest(int id, String adminName) async {
+  Future<void> approveLeaveRequest(
+    int id,
+    String adminName, {
+    String approvalMode = 'as_calculated',
+    String? overrideReason,
+  }) async {
     // 1. Find the document
     final doc = await _findRequestDoc(id);
     if (doc == null || !doc.exists || doc.data() == null) {
@@ -221,11 +255,11 @@ class FirebaseLeaveRepository implements LeaveRepository {
     }
 
     final req = _requestFromDoc(doc.data()!, doc.id);
-    if (req.status != 'Pending') return;
+    await _revertPreviousApprovalEffects(req);
 
-    // 2. Fetch employee salary and leave permission type for LOP calculation
+    // 2. Fetch employee details for leave policy and salary
     double grossSalary = 0.0;
-    String employeeLeavePermissionType = 'As Needed';
+    String employeePolicy = 'As Needed';
     final empSnap = await _employeesRef
         .where('id', isEqualTo: req.employeeId)
         .limit(1)
@@ -234,34 +268,98 @@ class FirebaseLeaveRepository implements LeaveRepository {
       grossSalary =
           (empSnap.docs.first.data()['salary_total_ctc'] as num?)?.toDouble() ??
               0.0;
-      employeeLeavePermissionType =
-          empSnap.docs.first.data()['leave_type'] as String? ?? 'As Needed';
+      final rawPolicy = empSnap.docs.first.data()['leave_type'] as String?;
+      if (rawPolicy != null && rawPolicy.isNotEmpty) {
+        employeePolicy = rawPolicy;
+      }
     }
     final double perDaySalary = grossSalary / 26.0;
 
-    // 3. Fetch leave balance using the requested leave type
-    final requestLeaveType = req.leaveType.startsWith('Permission') ? 'Permission' : req.leaveType;
-    final balance = await getLeaveBalance(req.employeeId, requestLeaveType);
-
-    // 4. Split dates into approved vs LOP
     final allDates = _datesBetween(req.fromDate, req.toDate);
     final approvedDates = <String>[];
     final lopDates = <String>[];
-    double currentAvailable = balance.availableLeaves;
-    double currentUsed = balance.usedLeaves;
+    bool isOverride = (approvalMode == 'all_paid' && (employeePolicy == 'Manual Allocation' || employeePolicy == 'No Leave'));
 
-    for (final d in allDates) {
-      if (currentAvailable >= 1.0) {
-        currentAvailable -= 1.0;
-        currentUsed += 1.0;
-        approvedDates.add(d);
+    final batch = _firestore.batch();
+
+    if (employeePolicy == 'As Needed') {
+      approvedDates.addAll(allDates);
+    } else if (employeePolicy == 'No Leave') {
+      if (approvalMode == 'all_paid') {
+        approvedDates.addAll(allDates);
+        isOverride = true;
       } else {
-        lopDates.add(d);
+        lopDates.addAll(allDates);
+        for (final d in lopDates) {
+          final lopRef = _lopRef.doc();
+          batch.set(lopRef, {
+            'employee_id': req.employeeId,
+            'leave_request_id': id,
+            'date': d,
+            'amount': perDaySalary,
+            'created_at': DateTime.now().toIso8601String(),
+          });
+        }
+      }
+    } else {
+      // Manual Allocation
+      final requestLeaveType = req.leaveType.startsWith('Permission') ? 'Permission' : req.leaveType;
+      final balance = await getLeaveBalance(req.employeeId, requestLeaveType);
+      final balanceDocRef = await _findBalanceDocRef(req.employeeId, requestLeaveType);
+
+      if (approvalMode == 'all_paid') {
+        approvedDates.addAll(allDates);
+        isOverride = true;
+        if (balanceDocRef != null) {
+          batch.update(balanceDocRef, {
+            'used_leaves': balance.usedLeaves + allDates.length,
+            'available_leaves': (balance.availableLeaves - allDates.length).clamp(0.0, balance.allowedLeaves),
+            'updated_at': FieldValue.serverTimestamp(),
+          });
+        }
+      } else if (approvalMode == 'all_lop') {
+        lopDates.addAll(allDates);
+        for (final d in lopDates) {
+          final lopRef = _lopRef.doc();
+          batch.set(lopRef, {
+            'employee_id': req.employeeId,
+            'leave_request_id': id,
+            'date': d,
+            'amount': perDaySalary,
+            'created_at': DateTime.now().toIso8601String(),
+          });
+        }
+      } else {
+        double currentAvailable = balance.availableLeaves;
+        double currentUsed = balance.usedLeaves;
+
+        for (final d in allDates) {
+          if (currentAvailable >= 1.0) {
+            currentAvailable -= 1.0;
+            currentUsed += 1.0;
+            approvedDates.add(d);
+          } else {
+            lopDates.add(d);
+            final lopRef = _lopRef.doc();
+            batch.set(lopRef, {
+              'employee_id': req.employeeId,
+              'leave_request_id': id,
+              'date': d,
+              'amount': perDaySalary,
+              'created_at': DateTime.now().toIso8601String(),
+            });
+          }
+        }
+
+        if (balanceDocRef != null) {
+          batch.update(balanceDocRef, {
+            'used_leaves': currentUsed,
+            'available_leaves': currentAvailable,
+            'updated_at': FieldValue.serverTimestamp(),
+          });
+        }
       }
     }
-
-    // 5. Batch write everything atomically
-    final batch = _firestore.batch();
 
     // Update leave request
     batch.update(doc.reference, {
@@ -269,40 +367,23 @@ class FirebaseLeaveRepository implements LeaveRepository {
       'status': 'Approved',
       'approved_dates': approvedDates,
       'lop_dates': lopDates,
+      'is_override': isOverride,
+      'override_reason': overrideReason,
+      'approved_by': adminName,
       'updated_at': FieldValue.serverTimestamp(),
     });
 
-    // Update leave balance
-    final balanceDocRef = await _findBalanceDocRef(req.employeeId, requestLeaveType);
-    if (balanceDocRef != null) {
-      batch.update(balanceDocRef, {
-        'used_leaves': currentUsed,
-        'available_leaves': currentAvailable,
-        'updated_at': FieldValue.serverTimestamp(),
-      });
-    }
+    final detailText = isOverride
+        ? 'Approved all ${allDates.length} day(s) as Paid Leave via Super Admin Override. Reason: ${overrideReason ?? "N/A"}'
+        : 'Approved ${allDates.length} day(s): ${approvedDates.length} Paid, ${lopDates.length} LOP';
 
-    // Insert LOP records
-    for (final d in lopDates) {
-      final lopRef = _lopRef.doc();
-      batch.set(lopRef, {
-        'employee_id': req.employeeId,
-        'leave_request_id': id,
-        'date': d,
-        'amount': perDaySalary,
-        'created_at': DateTime.now().toIso8601String(),
-      });
-    }
-
-    // Insert audit log
     final auditRef = _auditRef.doc();
     batch.set(auditRef, {
       'leave_request_id': id,
       'action': 'Approved',
       'performed_by': adminName,
       'timestamp': DateTime.now().toIso8601String(),
-      'details':
-          'Approved ${allDates.length} day(s): ${approvedDates.length} Paid, ${lopDates.length} LOP',
+      'details': detailText,
     });
 
     await batch.commit();
@@ -314,13 +395,17 @@ class FirebaseLeaveRepository implements LeaveRepository {
     if (doc == null || !doc.exists || doc.data() == null) {
       throw Exception('Leave request document not found for ID: $id');
     }
-    final docRef = doc.reference;
+    final req = _requestFromDoc(doc.data()!, doc.id);
+    await _revertPreviousApprovalEffects(req);
 
+    final docRef = doc.reference;
     final batch = _firestore.batch();
 
     batch.update(docRef, {
       'id': id,
       'status': 'Denied',
+      'approved_dates': [],
+      'lop_dates': [],
       'updated_at': FieldValue.serverTimestamp(),
     });
 

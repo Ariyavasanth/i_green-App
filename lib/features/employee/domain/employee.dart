@@ -544,6 +544,8 @@ class Employee {
 
   String get fullName => '$firstName $lastName'.trim();
 
+  String get leavePolicy => leaveType.isNotEmpty ? leaveType : 'As Needed';
+
   List<EducationItem> get educationItems {
     if (educationListJson.isEmpty) return [];
     try {

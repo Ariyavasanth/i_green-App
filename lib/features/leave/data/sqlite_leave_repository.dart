@@ -217,6 +217,9 @@ class SqliteLeaveRepository implements LeaveRepository {
       'rejection_reason': 'TEXT',
       'is_half_day': 'INTEGER DEFAULT 0',
       'half_day_period': 'TEXT',
+      'is_override': 'INTEGER DEFAULT 0',
+      'override_reason': 'TEXT',
+      'approved_by': 'TEXT',
     };
 
     for (final entry in requiredColumns.entries) {
@@ -291,87 +294,187 @@ class SqliteLeaveRepository implements LeaveRepository {
   }
 
   @override
-  Future<void> approveLeaveRequest(int id, String adminName) async {
+  Future<void> _revertPreviousApprovalEffects(Database db, LeaveRequest req) async {
+    if (req.status != 'Approved') return;
+
+    // 1. Delete previous LOP records for this request
+    await db.delete(
+      'loss_of_pay_records',
+      where: 'leave_request_id = ?',
+      whereArgs: [req.id],
+    );
+
+    // 2. Restore leave balance if paid leave days were previously approved
+    if (req.approvedDates.isNotEmpty) {
+      final requestLeaveType = req.leaveType.startsWith('Permission') ? 'Permission' : req.leaveType;
+      final balance = await getLeaveBalance(req.employeeId, requestLeaveType);
+      final double restoredCount = req.approvedDates.length.toDouble();
+      final double newUsed = (balance.usedLeaves - restoredCount).clamp(0.0, double.infinity);
+      final double newAvailable = (balance.availableLeaves + restoredCount).clamp(0.0, balance.allowedLeaves);
+
+      await db.update(
+        'leave_balances',
+        {
+          'used_leaves': newUsed,
+          'available_leaves': newAvailable,
+        },
+        where: 'id = ?',
+        whereArgs: [balance.id],
+      );
+    }
+  }
+
+  @override
+  Future<void> approveLeaveRequest(
+    int id,
+    String adminName, {
+    String approvalMode = 'as_calculated',
+    String? overrideReason,
+  }) async {
     final db = await database;
 
     // 1. Fetch leave request
     final reqMaps = await db.query('leave_requests', where: 'id = ?', whereArgs: [id]);
     if (reqMaps.isEmpty) return;
     var req = LeaveRequest.fromMap(reqMaps.first);
-    if (req.status != 'Pending') return;
 
-    // 2. Fetch employee details for balance lookup and LOP deduction calculations
+    // Revert previous approval effects if re-evaluating an already approved request
+    await _revertPreviousApprovalEffects(db, req);
+
+    // 2. Fetch employee details for leave policy and salary
     final empMaps = await db.query('employees', where: 'id = ?', whereArgs: [req.employeeId]);
     double grossSalary = 0.0;
-    String employeeLeavePermissionType = 'As Needed';
+    String employeePolicy = 'As Needed';
     if (empMaps.isNotEmpty) {
       grossSalary = (empMaps.first['salary_total_ctc'] as num?)?.toDouble() ?? 0.0;
-      employeeLeavePermissionType = empMaps.first['leave_type'] as String? ?? 'As Needed';
+      final rawPolicy = empMaps.first['leave_type'] as String?;
+      if (rawPolicy != null && rawPolicy.isNotEmpty) {
+        employeePolicy = rawPolicy;
+      }
     }
     final double perDaySalary = grossSalary / 26.0;
 
-    // 3. Fetch leave balance using the requested leave type
-    final requestLeaveType = req.leaveType.startsWith('Permission') ? 'Permission' : req.leaveType;
-    final balance = await getLeaveBalance(req.employeeId, requestLeaveType);
-
-    // 4. Determine approved vs. LOP dates
     final allDates = _getDatesBetween(req.fromDate, req.toDate);
     final List<String> approvedDates = [];
     final List<String> lopDates = [];
 
-    double currentAvailable = balance.availableLeaves;
-    double currentUsed = balance.usedLeaves;
+    bool isOverride = (approvalMode == 'all_paid' && (employeePolicy == 'Manual Allocation' || employeePolicy == 'No Leave'));
 
     final batch = db.batch();
 
-    for (final d in allDates) {
-      if (currentAvailable >= 1.0) {
-        currentAvailable -= 1.0;
-        currentUsed += 1.0;
-        approvedDates.add(d);
+    if (employeePolicy == 'As Needed') {
+      // 1. As Needed: No quota restriction. All approved days are Paid Leave.
+      approvedDates.addAll(allDates);
+    } else if (employeePolicy == 'No Leave') {
+      // 2. No Leave: Super Admin decides whether it is LOP or Paid Leave Override
+      if (approvalMode == 'all_paid') {
+        approvedDates.addAll(allDates);
+        isOverride = true;
       } else {
-        lopDates.add(d);
-        // Insert Loss of Pay record
-        batch.insert('loss_of_pay_records', {
-          'employee_id': req.employeeId,
-          'leave_request_id': req.id,
-          'date': d,
-          'amount': perDaySalary,
-          'created_at': DateTime.now().toIso8601String(),
-        });
+        lopDates.addAll(allDates);
+        for (final d in lopDates) {
+          batch.insert('loss_of_pay_records', {
+            'employee_id': req.employeeId,
+            'leave_request_id': req.id,
+            'date': d,
+            'amount': perDaySalary,
+            'created_at': DateTime.now().toIso8601String(),
+          });
+        }
+      }
+    } else {
+      // 3. Manual Allocation: Quota-based tracking
+      final requestLeaveType = req.leaveType.startsWith('Permission') ? 'Permission' : req.leaveType;
+      final balance = await getLeaveBalance(req.employeeId, requestLeaveType);
+
+      if (approvalMode == 'all_paid') {
+        // Super Admin Override: Approve all requested days as Paid Leave
+        approvedDates.addAll(allDates);
+        isOverride = true;
+        
+        final double newUsed = balance.usedLeaves + allDates.length;
+        final double newAvailable = (balance.availableLeaves - allDates.length).clamp(0.0, balance.allowedLeaves);
+        batch.update(
+          'leave_balances',
+          {
+            'used_leaves': newUsed,
+            'available_leaves': newAvailable,
+          },
+          where: 'id = ?',
+          whereArgs: [balance.id],
+        );
+      } else if (approvalMode == 'all_lop') {
+        // Super Admin decision: Approve all requested days as LOP
+        lopDates.addAll(allDates);
+        for (final d in lopDates) {
+          batch.insert('loss_of_pay_records', {
+            'employee_id': req.employeeId,
+            'leave_request_id': req.id,
+            'date': d,
+            'amount': perDaySalary,
+            'created_at': DateTime.now().toIso8601String(),
+          });
+        }
+      } else {
+        // Default / 'as_calculated': Days within quota are Paid, excess days are LOP
+        double currentAvailable = balance.availableLeaves;
+        double currentUsed = balance.usedLeaves;
+
+        for (final d in allDates) {
+          if (currentAvailable >= 1.0) {
+            currentAvailable -= 1.0;
+            currentUsed += 1.0;
+            approvedDates.add(d);
+          } else {
+            lopDates.add(d);
+            batch.insert('loss_of_pay_records', {
+              'employee_id': req.employeeId,
+              'leave_request_id': req.id,
+              'date': d,
+              'amount': perDaySalary,
+              'created_at': DateTime.now().toIso8601String(),
+            });
+          }
+        }
+
+        batch.update(
+          'leave_balances',
+          {
+            'used_leaves': currentUsed,
+            'available_leaves': currentAvailable,
+          },
+          where: 'id = ?',
+          whereArgs: [balance.id],
+        );
       }
     }
 
-    // 5. Update Leave Balance
-    batch.update(
-      'leave_balances',
-      {
-        'used_leaves': currentUsed,
-        'available_leaves': currentAvailable,
-      },
-      where: 'id = ?',
-      whereArgs: [balance.id],
-    );
-
-    // 6. Update Leave Request Status
+    // Update Leave Request Status
     batch.update(
       'leave_requests',
       {
         'status': 'Approved',
         'approved_dates': jsonEncode(approvedDates),
         'lop_dates': jsonEncode(lopDates),
+        'is_override': isOverride ? 1 : 0,
+        'override_reason': overrideReason,
+        'approved_by': adminName,
       },
       where: 'id = ?',
       whereArgs: [id],
     );
 
-    // 7. Insert Audit Log
+    // Insert Audit Log
+    final detailText = isOverride
+        ? 'Approved all ${allDates.length} day(s) as Paid Leave via Super Admin Override. Reason: ${overrideReason ?? "N/A"}'
+        : 'Approved ${allDates.length} day(s): ${approvedDates.length} Paid Leave, ${lopDates.length} LOP.';
+
     batch.insert('leave_audit_logs', {
       'leave_request_id': id,
       'action': 'Approved',
       'performed_by': adminName,
       'timestamp': DateTime.now().toIso8601String(),
-      'details': 'Approved ${allDates.length} days: ${approvedDates.length} Paid Leave, ${lopDates.length} Loss of Pay (LOP)',
+      'details': detailText,
     });
 
     await batch.commit(noResult: true);
@@ -381,10 +484,20 @@ class SqliteLeaveRepository implements LeaveRepository {
   Future<void> denyLeaveRequest(int id, String adminName) async {
     final db = await database;
 
+    final reqMaps = await db.query('leave_requests', where: 'id = ?', whereArgs: [id]);
+    if (reqMaps.isNotEmpty) {
+      var req = LeaveRequest.fromMap(reqMaps.first);
+      await _revertPreviousApprovalEffects(db, req);
+    }
+
     final batch = db.batch();
     batch.update(
       'leave_requests',
-      {'status': 'Denied'},
+      {
+        'status': 'Denied',
+        'approved_dates': jsonEncode([]),
+        'lop_dates': jsonEncode([]),
+      },
       where: 'id = ?',
       whereArgs: [id],
     );

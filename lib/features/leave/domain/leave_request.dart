@@ -20,6 +20,9 @@ class LeaveRequest {
     this.rejectionReason,
     this.isHalfDay = false,
     this.halfDayPeriod,
+    this.isOverride = false,
+    this.overrideReason,
+    this.approvedBy,
   });
 
   final int id;
@@ -40,6 +43,9 @@ class LeaveRequest {
   final String? rejectionReason;
   final bool isHalfDay;
   final String? halfDayPeriod;
+  final bool isOverride;
+  final String? overrideReason;
+  final String? approvedBy;
 
   Map<String, dynamic> toMap() {
     return {
@@ -61,6 +67,9 @@ class LeaveRequest {
       'rejection_reason': rejectionReason,
       'is_half_day': isHalfDay ? 1 : 0,
       'half_day_period': halfDayPeriod,
+      'is_override': isOverride ? 1 : 0,
+      'override_reason': overrideReason,
+      'approved_by': approvedBy,
     };
   }
 
@@ -106,6 +115,9 @@ class LeaveRequest {
       rejectionReason: map['rejection_reason'] as String?,
       isHalfDay: parseBool(map['is_half_day']),
       halfDayPeriod: map['half_day_period'] as String?,
+      isOverride: parseBool(map['is_override']),
+      overrideReason: map['override_reason'] as String?,
+      approvedBy: map['approved_by'] as String?,
     );
   }
 
@@ -128,6 +140,9 @@ class LeaveRequest {
     String? rejectionReason,
     bool? isHalfDay,
     String? halfDayPeriod,
+    bool? isOverride,
+    String? overrideReason,
+    String? approvedBy,
   }) {
     return LeaveRequest(
       id: id ?? this.id,
@@ -148,6 +163,9 @@ class LeaveRequest {
       rejectionReason: rejectionReason ?? this.rejectionReason,
       isHalfDay: isHalfDay ?? this.isHalfDay,
       halfDayPeriod: halfDayPeriod ?? this.halfDayPeriod,
+      isOverride: isOverride ?? this.isOverride,
+      overrideReason: overrideReason ?? this.overrideReason,
+      approvedBy: approvedBy ?? this.approvedBy,
     );
   }
 }
