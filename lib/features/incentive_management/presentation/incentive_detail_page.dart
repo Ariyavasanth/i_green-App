@@ -6,6 +6,21 @@ import '../../../core/theme/app_colors.dart';
 import '../../incentive/domain/incentive_request.dart';
 import '../providers/incentive_management_providers.dart';
 
+String formatIndianCurrency(num amount, {String symbol = 'Rs '}) {
+  final intVal = amount.round();
+  final str = intVal.abs().toString();
+  if (str.length <= 3) {
+    return '$symbol${intVal < 0 ? '-' : ''}$str';
+  }
+  final last3 = str.substring(str.length - 3);
+  final otherNumbers = str.substring(0, str.length - 3);
+  final formattedOther = otherNumbers.replaceAllMapped(
+    RegExp(r'(\d+?)(?=(\d{2})+$)'),
+    (Match m) => '${m[1]},',
+  );
+  return '$symbol${intVal < 0 ? '-' : ''}$formattedOther,$last3';
+}
+
 class IncentiveDetailPage extends ConsumerStatefulWidget {
   final int requestId;
 
@@ -43,10 +58,11 @@ class _IncentiveDetailPageState extends ConsumerState<IncentiveDetailPage> {
     final meters = double.tryParse(val.trim()) ?? 0.0;
     final calcAmount = meters * rate;
     _approvedAmountController.text = calcAmount.toInt().toString();
+    setState(() {});
   }
 
   Future<void> _handleApprove(IncentiveRequest req) async {
-    final verifiedMeters = double.tryParse(_verifiedMetersController.text.trim()) ?? req.meters;
+    final verifiedMeters = double.tryParse(_verifiedMetersController.text.trim()) ?? (req.verifiedMeters ?? req.meters);
     final approvedAmount = double.tryParse(_approvedAmountController.text.trim()) ?? (verifiedMeters * req.rate);
 
     try {
@@ -133,6 +149,10 @@ class _IncentiveDetailPageState extends ConsumerState<IncentiveDetailPage> {
           final empIdCode = req.employeeId != null
               ? 'EMP${req.employeeId.toString().padLeft(3, '0')}'
               : 'EMP001';
+
+          // Live / saved verified values
+          final liveMeters = double.tryParse(_verifiedMetersController.text.trim()) ?? req.verifiedMeters ?? req.meters;
+          final liveAmount = double.tryParse(_approvedAmountController.text.trim()) ?? req.approvedAmount ?? req.amount;
 
           return Column(
             children: [
@@ -231,7 +251,7 @@ class _IncentiveDetailPageState extends ConsumerState<IncentiveDetailPage> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Request Details Card
+                      // Request Details Card (Displays live / approved verified values)
                       Card(
                         elevation: 0,
                         shape: RoundedRectangleBorder(
@@ -255,14 +275,25 @@ class _IncentiveDetailPageState extends ConsumerState<IncentiveDetailPage> {
                               const SizedBox(height: 16),
                               _buildDetailItem(Icons.location_on_outlined, 'Site', req.site),
                               _buildDetailItem(Icons.layers_outlined, 'Work type', req.productName),
-                              _buildDetailItem(Icons.straighten_outlined, 'Total meters', '${req.meters.toInt()} m'),
-                              _buildDetailItem(Icons.monetization_on_outlined, 'Incentive rate', 'Rs ${req.rate.toInt()} per meter'),
+                              _buildDetailItem(
+                                Icons.straighten_outlined,
+                                (req.status == 'Approved' || req.verifiedMeters != null) ? 'Verified meters' : 'Total meters',
+                                '${liveMeters.toInt()} m',
+                              ),
+                              _buildDetailItem(Icons.monetization_on_outlined, 'Incentive rate', '${formatIndianCurrency(req.rate)} per meter'),
                               _buildDetailItem(
                                 Icons.payments_outlined,
-                                'Requested amount',
-                                'Rs ${req.amount >= 1000 ? "${(req.amount / 1000).toStringAsFixed(1).replaceAll('.0', '')},${(req.amount % 1000).toInt().toString().padLeft(3, '0')}" : req.amount.toInt().toString()}',
+                                (req.status == 'Approved' || req.approvedAmount != null) ? 'Approved amount' : 'Requested amount',
+                                formatIndianCurrency(liveAmount),
                                 isHighlighted: true,
                               ),
+                              if (req.approvedAmount != null && req.approvedAmount != req.amount) ...[
+                                _buildDetailItem(
+                                  Icons.history_outlined,
+                                  'Original requested',
+                                  formatIndianCurrency(req.amount),
+                                ),
+                              ],
                               _buildDetailItem(Icons.chat_bubble_outline, 'Remarks', (req.remarks?.isNotEmpty == true && req.remarks != '-') ? req.remarks! : 'None', isLast: true),
                             ],
                           ),
@@ -333,6 +364,7 @@ class _IncentiveDetailPageState extends ConsumerState<IncentiveDetailPage> {
                                   fillColor: Colors.white,
                                   isDense: true,
                                 ),
+                                onChanged: (_) => setState(() {}),
                               ),
                               const SizedBox(height: 16),
 

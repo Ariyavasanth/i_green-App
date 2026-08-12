@@ -2,12 +2,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../authentication/providers/authentication_providers.dart';
 import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
-import '../data/sqlite_exit_repository.dart';
+import '../data/firebase_exit_repository.dart';
 import '../domain/exit_model.dart';
 import '../domain/exit_repository.dart';
 
+// Firestore implementation active.
 final exitRepositoryProvider = Provider<ExitRepository>(
-  (ref) => SqliteExitRepository(),
+  (ref) => FirebaseExitRepository(),
 );
 
 final allExitRequestsProvider = FutureProvider<List<ExitRequest>>((ref) async {

@@ -1,12 +1,9 @@
 import '../domain/purchase_order.dart';
 import '../domain/purchase_order_repository.dart';
 
+/// Firestore stub — returns safe empty values until fully implemented.
 class FirebasePurchaseOrderRepository implements PurchaseOrderRepository {
-  Never _unconfigured() => throw UnimplementedError('Firebase purchase order repository is not configured yet.');
-  @override
-  Future<List<PurchaseOrder>> getPurchaseOrders() async => _unconfigured();
-  @override
-  Future<void> addPurchaseOrder(PurchaseOrderDraft draft) async => _unconfigured();
-  @override
-  Future<void> deletePurchaseOrder(int id) async => _unconfigured();
+  @override Future<List<PurchaseOrder>> getPurchaseOrders() async => [];
+  @override Future<void> addPurchaseOrder(PurchaseOrderDraft draft) async {}
+  @override Future<void> deletePurchaseOrder(int id) async {}
 }

@@ -15,6 +15,11 @@ class FirebaseIncentiveManagementRepository implements IncentiveManagementReposi
   }
 
   @override
+  Future<List<IncentiveRequest>> getRequestsByEmployee(int? employeeId, String employeeName) async {
+    return [];
+  }
+
+  @override
   Future<IncentiveRequest?> getRequestById(int id) async {
     return null;
   }

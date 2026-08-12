@@ -18,6 +18,18 @@ class SqliteIncentiveManagementRepository implements IncentiveManagementReposito
   }
 
   @override
+  Future<List<IncentiveRequest>> getRequestsByEmployee(int? employeeId, String employeeName) async {
+    final all = await _baseRepo.getAllRequests();
+    final cleanName = employeeName.trim().toLowerCase();
+    return all.where((r) {
+      if (employeeId != null && employeeId > 0 && r.employeeId != null && r.employeeId! > 0) {
+        return r.employeeId == employeeId;
+      }
+      return r.employeeName.trim().toLowerCase() == cleanName;
+    }).toList();
+  }
+
+  @override
   Future<IncentiveRequest?> getRequestById(int id) async {
     return await _baseRepo.getRequestById(id);
   }

@@ -1,12 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../data/sqlite_loan_repository.dart';
+import '../data/firebase_loan_repository.dart';
 import '../domain/employee_loan.dart';
 import '../domain/loan_repository.dart';
 
-// Default to SqliteLoanRepository for local SQLite database execution.
-// Swap to FirebaseLoanRepository() once the Firebase repository implementation is complete.
+// Firestore implementation active.
 final loanRepositoryProvider = Provider<LoanRepository>(
-  (ref) => SqliteLoanRepository(),
+  (ref) => FirebaseLoanRepository(),
 );
 
 final allLoansProvider = FutureProvider<List<EmployeeLoan>>((ref) {

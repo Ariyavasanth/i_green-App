@@ -1,12 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../data/sqlite_incentive_repository.dart';
+import '../data/firebase_incentive_repository.dart';
 import '../domain/incentive_repository.dart';
 import '../domain/incentive_request.dart';
 import '../domain/incentive_settings.dart';
 
-// Swap SqliteIncentiveRepository() to FirebaseIncentiveRepository() to switch data source
+// Firestore implementation active.
 final incentiveRepositoryProvider = Provider<IncentiveRepository>(
-  (ref) => SqliteIncentiveRepository(),
+  (ref) => FirebaseIncentiveRepository(),
 );
 
 final allIncentiveRequestsProvider = FutureProvider<List<IncentiveRequest>>((ref) {

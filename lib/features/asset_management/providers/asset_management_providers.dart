@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../data/sqlite_asset_assignment_repository.dart';
 import '../data/firebase_asset_assignment_repository.dart';
 import '../domain/asset_assignment.dart';
 import '../domain/asset_assignment_repository.dart';
 import '../../leave/providers/leave_providers.dart';
 import '../../employee/domain/employee.dart';
 
+// Firestore implementation active.
 final assetAssignmentRepositoryProvider = Provider<AssetAssignmentRepository>(
-  (ref) => SqliteAssetAssignmentRepository(),
+  (ref) => FirebaseAssetAssignmentRepository(),
 );
 
 final assetAssignmentsProvider = FutureProvider<List<AssetAssignment>>((ref) async {

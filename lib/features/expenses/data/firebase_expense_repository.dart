@@ -1,11 +1,10 @@
 import '../domain/expense.dart';
 import '../domain/expense_repository.dart';
 
+/// Firestore stub — returns safe empty values until fully implemented.
 class FirebaseExpenseRepository implements ExpenseRepository {
   @override
-  Future<List<Expense>> getExpenses() => throw UnimplementedError(
-    'Firebase expense repository is not configured yet.',
-  );
+  Future<List<Expense>> getExpenses() async => [];
 
   @override
   Future<void> addExpense({
@@ -17,8 +16,5 @@ class FirebaseExpenseRepository implements ExpenseRepository {
     required String customer,
     required String status,
     required double amount,
-  }) => throw UnimplementedError(
-    'Firebase expense repository is not configured yet.',
-  );
+  }) async {}
 }
-

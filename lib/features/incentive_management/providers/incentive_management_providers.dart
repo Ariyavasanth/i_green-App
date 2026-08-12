@@ -1,11 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../incentive/domain/incentive_request.dart';
-import '../data/sqlite_incentive_management_repository.dart';
+import '../data/firebase_incentive_management_repository.dart';
 import '../domain/incentive_management_repository.dart';
 
-// Swap SqliteIncentiveManagementRepository() to FirebaseIncentiveManagementRepository() to switch data source
+// Firestore implementation active.
 final incentiveManagementRepositoryProvider = Provider<IncentiveManagementRepository>(
-  (ref) => SqliteIncentiveManagementRepository(),
+  (ref) => FirebaseIncentiveManagementRepository(),
 );
 
 final allManagementRequestsProvider = FutureProvider<List<IncentiveRequest>>((ref) {
@@ -19,6 +19,13 @@ final selectedManagementRequestIdProvider = StateProvider<int?>((ref) => null);
 final incentiveRequestByIdProvider = FutureProvider.family<IncentiveRequest?, int>((ref, id) async {
   final repo = ref.watch(incentiveManagementRepositoryProvider);
   return repo.getRequestById(id);
+});
+
+final employeeRequestsProvider = FutureProvider.family<List<IncentiveRequest>, ({int? employeeId, String employeeName})>((ref, args) async {
+  // Watch allManagementRequestsProvider so updates automatically invalidate/refresh
+  ref.watch(allManagementRequestsProvider);
+  final repo = ref.watch(incentiveManagementRepositoryProvider);
+  return repo.getRequestsByEmployee(args.employeeId, args.employeeName);
 });
 
 final incentiveAllColumnsProvider = Provider<List<String>>((ref) => const [

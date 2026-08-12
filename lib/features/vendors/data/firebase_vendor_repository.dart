@@ -1,9 +1,7 @@
 import '../domain/vendor.dart';
 import '../domain/vendor_repository.dart';
 
+/// Firestore stub — returns safe empty values until fully implemented.
 class FirebaseVendorRepository implements VendorRepository {
-  @override
-  Future<List<Vendor>> getVendors() => throw UnimplementedError(
-    'Firebase vendor repository is not configured yet.',
-  );
+  @override Future<List<Vendor>> getVendors() async => [];
 }

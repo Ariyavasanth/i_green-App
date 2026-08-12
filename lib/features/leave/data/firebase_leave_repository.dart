@@ -13,9 +13,11 @@ import '../domain/salary_calculation.dart';
 /// To switch back to SQLite: change one line in leave_providers.dart only.
 class FirebaseLeaveRepository implements LeaveRepository {
   final FirebaseFirestore _firestore;
+  bool _seeded = false; // guard so seeding only runs once per instance
 
   FirebaseLeaveRepository({FirebaseFirestore? firestore})
       : _firestore = firestore ?? FirebaseFirestore.instance;
+
 
   // ── Collection references ──────────────────────────────────────────────────
 
@@ -102,6 +104,9 @@ class FirebaseLeaveRepository implements LeaveRepository {
   // ── Seed helpers ───────────────────────────────────────────────────────────
 
   Future<void> _seedLeaveTypesIfEmpty() async {
+    if (_seeded) return; // already ran this session
+    _seeded = true;
+
     // Purge legacy non-leave-type documents if present
     final legacyNames = ['As Needed', 'Manual Allocation', 'No Leave', 'Monthly Leave'];
     for (final legacy in legacyNames) {
@@ -145,22 +150,28 @@ class FirebaseLeaveRepository implements LeaveRepository {
 
   @override
   Future<List<LeaveRequest>> getLeaveRequests(int employeeId) async {
-    final snap = await _requestsRef
-        .where('employee_id', isEqualTo: employeeId)
-        .get();
-    final list = snap.docs.map((d) => _requestFromDoc(d.data(), d.id)).toList();
-    // Sort client-side — avoids requiring a Firestore composite index
-    list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    return list;
+    try {
+      final snap = await _requestsRef
+          .where('employee_id', isEqualTo: employeeId)
+          .get();
+      final list = snap.docs.map((d) => _requestFromDoc(d.data(), d.id)).toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    } catch (_) {
+      return [];
+    }
   }
 
   @override
   Future<List<LeaveRequest>> getAllLeaveRequests() async {
-    final snap = await _requestsRef.get();
-    final list = snap.docs.map((d) => _requestFromDoc(d.data(), d.id)).toList();
-    // Sort client-side — avoids requiring a Firestore composite index
-    list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    return list;
+    try {
+      final snap = await _requestsRef.get();
+      final list = snap.docs.map((d) => _requestFromDoc(d.data(), d.id)).toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    } catch (_) {
+      return [];
+    }
   }
 
   @override
@@ -550,9 +561,13 @@ class FirebaseLeaveRepository implements LeaveRepository {
 
   @override
   Future<List<LeaveType>> getLeaveTypes() async {
-    await _seedLeaveTypesIfEmpty();
-    final snap = await _typesRef.get();
-    return snap.docs.map((d) => _typeFromDoc(d.data(), d.id)).toList();
+    try {
+      await _seedLeaveTypesIfEmpty();
+      final snap = await _typesRef.get();
+      return snap.docs.map((d) => _typeFromDoc(d.data(), d.id)).toList();
+    } catch (_) {
+      return [];
+    }
   }
 
   @override

@@ -10,6 +10,21 @@ import '../domain/incentive_settings.dart';
 import '../domain/product_rate.dart';
 import '../providers/incentive_providers.dart';
 
+String formatIndianCurrency(num amount, {String symbol = 'Rs '}) {
+  final intVal = amount.round();
+  final str = intVal.abs().toString();
+  if (str.length <= 3) {
+    return '$symbol${intVal < 0 ? '-' : ''}$str';
+  }
+  final last3 = str.substring(str.length - 3);
+  final otherNumbers = str.substring(0, str.length - 3);
+  final formattedOther = otherNumbers.replaceAllMapped(
+    RegExp(r'(\d+?)(?=(\d{2})+$)'),
+    (Match m) => '${m[1]},',
+  );
+  return '$symbol${intVal < 0 ? '-' : ''}$formattedOther,$last3';
+}
+
 class IncentivePage extends ConsumerStatefulWidget {
   const IncentivePage({super.key});
 
@@ -106,7 +121,8 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
           ),
         );
         _remarksController.clear();
-        _metersController.text = '50';
+        _metersController.clear();
+        _formKey.currentState?.reset();
         setState(() {});
       }
     } catch (e) {
@@ -230,7 +246,7 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: Colors.grey.shade300),
                       ),
-                      child: Text('₹${currentRate.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      child: Text(formatIndianCurrency(currentRate), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                     ),
                     const SizedBox(height: 14),
 
@@ -247,7 +263,7 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
                         children: [
                           const Text('Expected Incentive', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF2E7D32))),
                           const SizedBox(height: 2),
-                          Text('₹${expected.toStringAsFixed(0)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32))),
+                          Text(formatIndianCurrency(expected), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32))),
                         ],
                       ),
                     ),
@@ -757,7 +773,7 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
                   border: Border.all(color: Colors.grey.shade300),
                 ),
                 child: Text(
-                  '₹${rate.toStringAsFixed(0)}',
+                  formatIndianCurrency(rate),
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
@@ -789,7 +805,7 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '₹${expected.toStringAsFixed(0)}',
+                      formatIndianCurrency(expected),
                       style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
@@ -1208,14 +1224,14 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
             children: [
               Expanded(
                 child: Text(
-                  'Meters: ${req.meters.toInt()}m  |  Rate: ₹${req.rate.toInt()}/m',
+                  'Meters: ${req.meters.toInt()}m  |  Rate: ${formatIndianCurrency(req.rate)}/m',
                   style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
               const SizedBox(width: 8),
               Text(
-                'Expected: ₹${req.amount.toInt()}',
+                'Expected: ${formatIndianCurrency(req.amount)}',
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
               ),
             ],
@@ -1235,7 +1251,7 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'Approved Amount: ₹${req.approvedAmount?.toInt()}  (Verified Meters: ${req.verifiedMeters?.toInt()}m)',
+                      'Approved Amount: ${formatIndianCurrency(req.approvedAmount!)}  (Verified Meters: ${req.verifiedMeters?.toInt()}m)',
                       style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32)),
                       overflow: TextOverflow.ellipsis,
                     ),

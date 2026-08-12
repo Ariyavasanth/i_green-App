@@ -9,6 +9,39 @@ import '../../incentive/providers/incentive_providers.dart';
 import '../providers/incentive_management_providers.dart';
 import 'widgets/incentive_column_selection_dialog.dart';
 
+String formatIndianCurrency(num amount, {String symbol = 'Rs '}) {
+  final intVal = amount.round();
+  final str = intVal.abs().toString();
+  if (str.length <= 3) {
+    return '$symbol${intVal < 0 ? '-' : ''}$str';
+  }
+  final last3 = str.substring(str.length - 3);
+  final otherNumbers = str.substring(0, str.length - 3);
+  final formattedOther = otherNumbers.replaceAllMapped(
+    RegExp(r'(\d+?)(?=(\d{2})+$)'),
+    (Match m) => '${m[1]},',
+  );
+  return '$symbol${intVal < 0 ? '-' : ''}$formattedOther,$last3';
+}
+
+class EmployeeIncentiveGroup {
+  final String key;
+  final String employeeName;
+  final int? employeeId;
+  final String designation;
+  final List<IncentiveRequest> requests;
+
+  EmployeeIncentiveGroup({
+    required this.key,
+    required this.employeeName,
+    this.employeeId,
+    required this.designation,
+    required this.requests,
+  });
+
+  double get totalAmount => requests.fold(0.0, (sum, r) => sum + (r.approvedAmount ?? r.amount));
+}
+
 class IncentiveManagementPage extends ConsumerStatefulWidget {
   const IncentiveManagementPage({super.key});
 
@@ -31,6 +64,33 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
     _verifiedMetersController.dispose();
     _approvedAmountController.dispose();
     super.dispose();
+  }
+
+  List<EmployeeIncentiveGroup> _groupRequestsByEmployee(List<IncentiveRequest> requests) {
+    final Map<String, List<IncentiveRequest>> map = {};
+    final Map<String, IncentiveRequest> firstMap = {};
+
+    for (final req in requests) {
+      final key = (req.employeeId != null && req.employeeId! > 0)
+          ? 'EMP_${req.employeeId}'
+          : req.employeeName.trim().toLowerCase();
+      if (!map.containsKey(key)) {
+        map[key] = [];
+        firstMap[key] = req;
+      }
+      map[key]!.add(req);
+    }
+
+    return map.entries.map((e) {
+      final first = firstMap[e.key]!;
+      return EmployeeIncentiveGroup(
+        key: e.key,
+        employeeName: first.employeeName,
+        employeeId: first.employeeId,
+        designation: first.designation,
+        requests: e.value,
+      );
+    }).toList();
   }
 
   Future<void> _showSubmissionLockSettingsDialog() async {
@@ -196,7 +256,7 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
     final target = requestToApprove ?? _selectedRequest;
     if (target == null || target.id == null) return;
 
-    final verifiedMeters = double.tryParse(_verifiedMetersController.text.trim()) ?? target.meters;
+    final verifiedMeters = double.tryParse(_verifiedMetersController.text.trim()) ?? (target.verifiedMeters ?? target.meters);
     final approvedAmount = double.tryParse(_approvedAmountController.text.trim()) ?? (verifiedMeters * target.rate);
 
     try {
@@ -210,10 +270,13 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Request for ${target.employeeName} approved!'),
+            content: Text('Incentive request for ${target.employeeName} approved!'),
             backgroundColor: const Color(0xFF2E7D32),
           ),
         );
+        setState(() {
+          _selectedRequest = null;
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -235,10 +298,13 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Request for ${target.employeeName} rejected.'),
+            content: Text('Incentive request for ${target.employeeName} rejected.'),
             backgroundColor: const Color(0xFFC62828),
           ),
         );
+        setState(() {
+          _selectedRequest = null;
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -251,22 +317,24 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
 
   Future<void> _handleBulkApprove() async {
     if (_selectedBulkIds.isEmpty) return;
+    final repo = ref.read(incentiveManagementRepositoryProvider);
+
     try {
-      final repo = ref.read(incentiveManagementRepositoryProvider);
-      final allRequests = await repo.getAllRequests();
+      final allReqs = await repo.getAllRequests();
       for (final id in _selectedBulkIds) {
-        final req = allRequests.firstWhere((r) => r.id == id, orElse: () => allRequests.first);
+        final req = allReqs.firstWhere((r) => r.id == id, orElse: () => allReqs.first);
         await repo.approveRequest(id, req.verifiedMeters ?? req.meters, req.approvedAmount ?? req.amount);
       }
       ref.invalidate(allManagementRequestsProvider);
-      final count = _selectedBulkIds.length;
-      setState(() {
-        _selectedBulkIds.clear();
-      });
+
       if (mounted) {
+        final count = _selectedBulkIds.length;
+        setState(() {
+          _selectedBulkIds.clear();
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('$count requests approved!'),
+            content: Text('$count incentive requests approved successfully!'),
             backgroundColor: const Color(0xFF2E7D32),
           ),
         );
@@ -282,20 +350,22 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
 
   Future<void> _handleBulkReject() async {
     if (_selectedBulkIds.isEmpty) return;
+    final repo = ref.read(incentiveManagementRepositoryProvider);
+
     try {
-      final repo = ref.read(incentiveManagementRepositoryProvider);
       for (final id in _selectedBulkIds) {
         await repo.rejectRequest(id);
       }
       ref.invalidate(allManagementRequestsProvider);
-      final count = _selectedBulkIds.length;
-      setState(() {
-        _selectedBulkIds.clear();
-      });
+
       if (mounted) {
+        final count = _selectedBulkIds.length;
+        setState(() {
+          _selectedBulkIds.clear();
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('$count requests rejected.'),
+            content: Text('$count incentive requests rejected.'),
             backgroundColor: const Color(0xFFC62828),
           ),
         );
@@ -330,7 +400,7 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
     );
   }
 
-  // Mobile View
+  // Mobile View with Grouped Employee Cards
   Widget _buildMobileView(BuildContext context) {
     final requestsAsync = ref.watch(allManagementRequestsProvider);
     final activeTab = ref.watch(incentiveManagementTabProvider);
@@ -416,7 +486,7 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
                       decoration: InputDecoration(
                         hintText: 'Search by employee, ID, site...',
                         prefixIcon: const Icon(Icons.search, size: 20),
-                        suffixIcon: (_searchQuery != null && _searchQuery.isNotEmpty)
+                        suffixIcon: (_searchQuery.isNotEmpty)
                             ? IconButton(
                                 icon: const Icon(Icons.clear, size: 18),
                                 onPressed: () {
@@ -462,7 +532,7 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
                   }
 
                   final filteredTabRequests = currentTabRequests.where((req) {
-                    if (_searchQuery == null || _searchQuery.trim().isEmpty) return true;
+                    if (_searchQuery.trim().isEmpty) return true;
                     final q = _searchQuery.toLowerCase().trim();
                     final empIdCode = req.employeeId != null
                         ? 'emp${req.employeeId.toString().padLeft(3, '0')}'
@@ -474,6 +544,8 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
                         req.productName.toLowerCase().contains(q) ||
                         req.requestId.toLowerCase().contains(q);
                   }).toList();
+
+                  final groupedList = _groupRequestsByEmployee(filteredTabRequests);
 
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -497,15 +569,15 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                         child: Text(
-                          '${filteredTabRequests.length} ${activeTab.toLowerCase()} requests',
+                          '${groupedList.length} ${groupedList.length == 1 ? 'employee' : 'employees'} (${filteredTabRequests.length} ${activeTab.toLowerCase()} requests)',
                           style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
                         ),
                       ),
                       const SizedBox(height: 8),
 
-                      // Request Cards List
+                      // Grouped Employee Cards List
                       Expanded(
-                        child: filteredTabRequests.isEmpty
+                        child: groupedList.isEmpty
                             ? Center(
                                 child: Text(
                                   'No $activeTab incentive requests found.',
@@ -514,122 +586,10 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
                               )
                             : ListView.builder(
                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                                itemCount: filteredTabRequests.length,
+                                itemCount: groupedList.length,
                                 itemBuilder: (context, index) {
-                                  final req = filteredTabRequests[index];
-                                  final empIdStr = req.employeeId != null
-                                      ? 'EMP${req.employeeId.toString().padLeft(3, '0')}'
-                                      : 'EMP001';
-                                  final formattedAmount = req.amount >= 1000
-                                      ? '${(req.amount / 1000).toStringAsFixed(1).replaceAll('.0', '')},${(req.amount % 1000).toInt().toString().padLeft(3, '0')}'
-                                      : req.amount.toInt().toString();
-
-                                  return Card(
-                                    elevation: 0,
-                                    margin: const EdgeInsets.only(bottom: 12),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(14),
-                                      side: BorderSide(color: Colors.grey.shade300),
-                                    ),
-                                    color: Colors.white,
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(14),
-                                      onTap: () => context.push('/incentive-management/detail/${req.id}'),
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(14.0),
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            // Top Row: Avatar + Name + Subtext & Status Pill
-                                            Row(
-                                              children: [
-                                                CircleAvatar(
-                                                  radius: 18,
-                                                  backgroundColor: const Color(0xFF0D47A1),
-                                                  child: Text(
-                                                    _getInitials(req.employeeName),
-                                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 12),
-                                                Expanded(
-                                                  child: Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    children: [
-                                                      Text(
-                                                        req.employeeName,
-                                                        style: const TextStyle(
-                                                          fontWeight: FontWeight.bold,
-                                                          fontSize: 15,
-                                                          color: AppColors.textPrimary,
-                                                        ),
-                                                      ),
-                                                      const SizedBox(height: 2),
-                                                      Text(
-                                                        '$empIdStr · ${req.designation}',
-                                                        style: TextStyle(
-                                                          fontSize: 12,
-                                                          color: Colors.grey.shade600,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                                _buildStatusBadge(req.status),
-                                              ],
-                                            ),
-                                            const Divider(height: 20),
-
-                                            // Bottom Row: Site + Amount & View Button
-                                            Row(
-                                              crossAxisAlignment: CrossAxisAlignment.end,
-                                              children: [
-                                                Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(
-                                                      req.site,
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        color: Colors.grey.shade600,
-                                                        fontWeight: FontWeight.w500,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 2),
-                                                    Text(
-                                                      'Rs $formattedAmount',
-                                                      style: const TextStyle(
-                                                        fontSize: 18,
-                                                        fontWeight: FontWeight.bold,
-                                                        color: AppColors.textPrimary,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                                const Spacer(),
-                                                ElevatedButton(
-                                                  style: ElevatedButton.styleFrom(
-                                                    backgroundColor: Colors.white,
-                                                    foregroundColor: Colors.black87,
-                                                    elevation: 0,
-                                                    side: BorderSide(color: Colors.grey.shade300),
-                                                    shape: RoundedRectangleBorder(
-                                                      borderRadius: BorderRadius.circular(20),
-                                                    ),
-                                                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                                                    minimumSize: Size.zero,
-                                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                                  ),
-                                                  onPressed: () => context.push('/incentive-management/detail/${req.id}'),
-                                                  child: const Text('View', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  );
+                                  final group = groupedList[index];
+                                  return _buildGroupedEmployeeCard(group);
                                 },
                               ),
                       ),
@@ -639,6 +599,147 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGroupedEmployeeCard(EmployeeIncentiveGroup group) {
+    final empIdStr = group.employeeId != null
+        ? 'EMP${group.employeeId.toString().padLeft(3, '0')}'
+        : 'EMP001';
+    final reqCountText = '${group.requests.length} ${group.requests.length == 1 ? 'Request' : 'Requests'}';
+
+    void openEmployeeRequests() {
+      final activeTab = ref.read(incentiveManagementTabProvider);
+      final empIdParam = group.employeeId != null ? group.employeeId.toString() : '';
+      context.push(
+        '/incentive-management/employee-requests?employeeId=$empIdParam&employeeName=${Uri.encodeComponent(group.employeeName)}&designation=${Uri.encodeComponent(group.designation)}&status=$activeTab',
+      );
+    }
+
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 12),
+      clipBehavior: Clip.hardEdge,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: Colors.grey.shade300),
+      ),
+      color: Colors.white,
+      child: InkWell(
+        onTap: openEmployeeRequests,
+        child: Padding(
+          padding: const EdgeInsets.all(14.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header: Avatar + Employee Name + Requests Badge + Subtitle
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: const Color(0xFF0D47A1),
+                    child: Text(
+                      _getInitials(group.employeeName),
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                group.employeeName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                  color: AppColors.textPrimary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEFF6FF),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                reqCountText,
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1D4ED8)),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '$empIdStr · ${group.designation}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(height: 20),
+
+              // Bottom row: Total Combined Amount + "View Requests" Button
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Total Combined Amount',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        formatIndianCurrency(group.totalAmount),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: AppColors.active,
+                      elevation: 0,
+                      side: const BorderSide(color: AppColors.active),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: openEmployeeRequests,
+                    icon: const Icon(Icons.arrow_forward_ios, size: 12),
+                    label: const Text('View Requests', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -674,7 +775,7 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
     );
   }
 
-  // Desktop View (100% Width Table + Consolidated Actions + Bulk Action Bar)
+  // Desktop View (100% Width Table)
   Widget _buildDesktopView(BuildContext context) {
     final requestsAsync = ref.watch(allManagementRequestsProvider);
     final activeTab = ref.watch(incentiveManagementTabProvider);
@@ -885,7 +986,7 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
                 }
 
                 final filteredTabRequests = currentTabRequests.where((req) {
-                  if (_searchQuery == null || _searchQuery.trim().isEmpty) return true;
+                  if (_searchQuery.trim().isEmpty) return true;
                   final q = _searchQuery.toLowerCase().trim();
                   final empIdCode = req.employeeId != null
                       ? 'emp${req.employeeId.toString().padLeft(3, '0')}'
@@ -897,9 +998,6 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
                       req.productName.toLowerCase().contains(q) ||
                       req.requestId.toLowerCase().contains(q);
                 }).toList();
-
-                final allCurrentSelected = filteredTabRequests.isNotEmpty &&
-                    filteredTabRequests.every((r) => r.id != null && _selectedBulkIds.contains(r.id));
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -928,7 +1026,7 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
                             decoration: InputDecoration(
                               hintText: 'Search by employee, ID, site...',
                               prefixIcon: const Icon(Icons.search, size: 20),
-                              suffixIcon: (_searchQuery != null && _searchQuery.isNotEmpty)
+                              suffixIcon: (_searchQuery.isNotEmpty)
                                   ? IconButton(
                                       icon: const Icon(Icons.clear, size: 18),
                                       onPressed: () {
@@ -963,7 +1061,7 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
                     ),
                     const SizedBox(height: 16),
 
-                    // Table Card (Stretches 100% Width)
+                    // Table Card
                     Card(
                       elevation: 0,
                       shape: RoundedRectangleBorder(
@@ -1012,7 +1110,7 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
                                   selected: isBulkSelected,
                                   color: WidgetStateProperty.resolveWith<Color?>((states) {
                                     if (isBulkSelected) {
-                                      return const Color(0xFFEFF6FF); // Light blue selection tint
+                                      return const Color(0xFFEFF6FF);
                                     }
                                     return null;
                                   }),
@@ -1052,12 +1150,9 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
                                       case 'Site':
                                         return DataCell(Text(req.site, style: const TextStyle(fontSize: 13)));
                                       case 'Amount':
-                                        final formattedAmount = req.amount >= 1000
-                                            ? 'Rs ${(req.amount / 1000).toStringAsFixed(1).replaceAll('.0', '')},${(req.amount % 1000).toInt().toString().padLeft(3, '0')}'
-                                            : 'Rs ${req.amount.toInt()}';
                                         return DataCell(
                                           Text(
-                                            formattedAmount,
+                                            formatIndianCurrency(req.approvedAmount ?? req.amount),
                                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                                           ),
                                         );
@@ -1134,7 +1229,6 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
                     ),
                     const SizedBox(height: 8),
 
-                    // Small note under the table reminding user about bulk select
                     Row(
                       children: [
                         Icon(Icons.info_outline, size: 15, color: Colors.grey.shade600),

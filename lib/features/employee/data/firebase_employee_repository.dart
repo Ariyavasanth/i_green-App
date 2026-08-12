@@ -84,23 +84,41 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   Future<List<Employee>> getEmployees() async {
     final all = await getAllEmployees();
     final result = <Employee>[];
+    final toFix = <Employee>[]; // employees needing an EMP- ID assigned
+
     for (final emp in all) {
       final s = emp.status.trim().toLowerCase();
       if (s == 'active' || s == 'converted' || s == 'submitted') {
-        var updatedEmp = emp;
         final empIdUpper = emp.employeeId.trim().toUpperCase();
         if (empIdUpper.isEmpty || !empIdUpper.startsWith('EMP-')) {
-          final newEmpId = await _generateNextEmployeeId();
-          updatedEmp = emp.copyWith(employeeId: newEmpId, status: 'Active');
-          await updateEmployee(updatedEmp);
-        } else if (emp.status != 'Active') {
-          updatedEmp = emp.copyWith(status: 'Active');
-          await updateEmployee(updatedEmp);
+          toFix.add(emp);
+        } else {
+          result.add(emp);
         }
-        result.add(updatedEmp);
       }
     }
+
+    // Fix employees without EMP- IDs in the background (non-blocking)
+    if (toFix.isNotEmpty) {
+      _fixEmployeeIds(toFix);
+      // Add them to result immediately with their current IDs so UI isn't blocked
+      result.addAll(toFix);
+    }
+
     return result;
+  }
+
+  /// Assigns proper EMP- IDs to employees in the background without blocking the UI.
+  Future<void> _fixEmployeeIds(List<Employee> employees) async {
+    try {
+      for (final emp in employees) {
+        final newEmpId = await _generateNextEmployeeId();
+        final updated = emp.copyWith(employeeId: newEmpId, status: 'Active');
+        await updateEmployee(updated);
+      }
+    } catch (_) {
+      // Non-critical — ignore errors, will retry on next load
+    }
   }
 
   @override
@@ -231,7 +249,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
           'allowed_leaves': allowedLeaves,
           'leave_allocation_frequency': leaveAllocationFrequency,
           'requires_leave_approval': requiresLeaveApproval,
-          'effective_date':? effectiveDate,
+          'effective_date': effectiveDate ?? '',
           'updated_at': FieldValue.serverTimestamp(),
         };
         batch.set(doc.reference, updateData, SetOptions(merge: true));

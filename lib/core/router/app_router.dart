@@ -57,6 +57,7 @@ import '../../features/exit_management/presentation/my_exit_page.dart';
 import '../../features/incentive/presentation/incentive_page.dart';
 import '../../features/incentive_management/presentation/incentive_management_page.dart';
 import '../../features/incentive_management/presentation/incentive_detail_page.dart';
+import '../../features/incentive_management/presentation/employee_incentive_requests_page.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
@@ -214,6 +215,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               final idStr = state.pathParameters['id'] ?? '';
               final id = int.tryParse(idStr) ?? 0;
               return IncentiveDetailPage(requestId: id);
+            },
+          ),
+          GoRoute(
+            path: '/incentive-management/employee-requests',
+            builder: (context, state) {
+              final employeeIdStr = state.uri.queryParameters['employeeId'];
+              final employeeId = (employeeIdStr != null && employeeIdStr.isNotEmpty)
+                  ? int.tryParse(employeeIdStr)
+                  : null;
+              final employeeName = state.uri.queryParameters['employeeName'] ?? '';
+              final designation = state.uri.queryParameters['designation'] ?? '';
+              final initialStatus = state.uri.queryParameters['status'] ?? 'All';
+              return EmployeeIncentiveRequestsPage(
+                employeeId: employeeId,
+                employeeName: employeeName,
+                designation: designation,
+                initialStatus: initialStatus,
+              );
             },
           ),
           GoRoute(

@@ -1,14 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../data/sqlite_organization_repository.dart';
+import '../data/firebase_organization_repository.dart';
 import '../domain/column_preference.dart';
 import '../domain/department.dart';
 import '../domain/organization.dart';
 import '../domain/organization_repository.dart';
 
-// Change only this line when the Firebase implementation is ready.
+// Firestore implementation active.
 final organizationRepositoryProvider = Provider<OrganizationRepository>(
-  (ref) => SqliteOrganizationRepository(),
+  (ref) => FirebaseOrganizationRepository(),
 );
 
 final organizationsProvider = FutureProvider<List<Organization>>(
