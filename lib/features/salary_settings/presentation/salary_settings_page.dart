@@ -25,6 +25,7 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
   final _esiController = TextEditingController();
   final _esiEmployerController = TextEditingController();
   final _profTaxController = TextEditingController();
+  final _tdsController = TextEditingController();
 
   bool _isSaving = false;
   SalarySettings? _loadedSettings;
@@ -41,6 +42,7 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
     _esiController.dispose();
     _esiEmployerController.dispose();
     _profTaxController.dispose();
+    _tdsController.dispose();
     super.dispose();
   }
 
@@ -63,6 +65,7 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
         settings.esiEmployerPercentage.toStringAsFixed(1);
     _profTaxController.text =
         settings.professionalTaxPercentage.toStringAsFixed(1);
+    _tdsController.text = settings.taxPercentage.toStringAsFixed(1);
   }
 
   Future<void> _handleSave() async {
@@ -85,7 +88,7 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
       esiPercentage: double.tryParse(_esiController.text.trim()) ?? 0.0,
       esiEmployerPercentage:
           double.tryParse(_esiEmployerController.text.trim()) ?? 0.0,
-      taxPercentage: 0.0,
+      taxPercentage: double.tryParse(_tdsController.text.trim()) ?? 0.0,
       professionalTaxPercentage:
           double.tryParse(_profTaxController.text.trim()) ?? 0.0,
     );
@@ -334,6 +337,11 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
                                     label: 'Professional Tax',
                                     basis: '% of Total Salary',
                                     controller: _profTaxController,
+                                  ),
+                                  _buildPercentageField(
+                                    label: 'TDS',
+                                    basis: '% of Total Salary',
+                                    controller: _tdsController,
                                   ),
                                 ],
                               ),

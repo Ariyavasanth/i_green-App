@@ -162,6 +162,7 @@ class _EmployeeRegistrationPageState
   final _esiController = TextEditingController();
   final _esiEmployerController = TextEditingController();
   final _professionalTaxController = TextEditingController();
+  final _tdsController = TextEditingController();
 
   final _basicPercentController = TextEditingController();
   final _hraPercentController = TextEditingController();
@@ -173,6 +174,7 @@ class _EmployeeRegistrationPageState
   final _esiPercentController = TextEditingController();
   final _esiEmployerPercentController = TextEditingController();
   final _professionalTaxPercentController = TextEditingController();
+  final _tdsPercentController = TextEditingController();
 
   bool _salaryPercentagesInitialized = false;
 
@@ -189,6 +191,7 @@ class _EmployeeRegistrationPageState
     _esiPercentController.text = defaults.esiPercentage.toStringAsFixed(1);
     _esiEmployerPercentController.text = defaults.esiEmployerPercentage.toStringAsFixed(1);
     _professionalTaxPercentController.text = defaults.professionalTaxPercentage.toStringAsFixed(1);
+    _tdsPercentController.text = defaults.taxPercentage.toStringAsFixed(1);
   }
 
   void _recalculateSalaryAmountsFromPercentages() {
@@ -219,6 +222,7 @@ class _EmployeeRegistrationPageState
     }
 
     calcAmount(_professionalTaxPercentController, _professionalTaxController, totalSalary);
+    calcAmount(_tdsPercentController, _tdsController, totalSalary);
   }
 
   void _onTotalSalaryChanged(String val) {
@@ -457,6 +461,7 @@ class _EmployeeRegistrationPageState
       if (emp.salaryEsi > 0) _esiController.text = emp.salaryEsi.toStringAsFixed(2);
       if (emp.salaryEsiEmployer > 0) _esiEmployerController.text = emp.salaryEsiEmployer.toStringAsFixed(2);
       if (emp.salaryProfessionalTax > 0) _professionalTaxController.text = emp.salaryProfessionalTax.toStringAsFixed(2);
+      if (emp.salaryTax > 0) _tdsController.text = emp.salaryTax.toStringAsFixed(2);
 
       final total = emp.salaryTotalCtc;
       final basic = emp.salaryBasic > 0 ? emp.salaryBasic : total * 0.5;
@@ -475,6 +480,7 @@ class _EmployeeRegistrationPageState
           _esiEmployerController.text = '';
         }
         _professionalTaxPercentController.text = ((emp.salaryProfessionalTax / total) * 100).toStringAsFixed(1);
+        _tdsPercentController.text = ((emp.salaryTax / total) * 100).toStringAsFixed(1);
       }
       if (basic > 0) {
         _pfPercentController.text = ((emp.salaryPf / basic) * 100).toStringAsFixed(1);
@@ -729,6 +735,7 @@ class _EmployeeRegistrationPageState
     _esiController.dispose();
     _esiEmployerController.dispose();
     _professionalTaxController.dispose();
+    _tdsController.dispose();
     _basicPercentController.dispose();
     _hraPercentController.dispose();
     _specialAllowancePercentController.dispose();
@@ -739,6 +746,7 @@ class _EmployeeRegistrationPageState
     _esiPercentController.dispose();
     _esiEmployerPercentController.dispose();
     _professionalTaxPercentController.dispose();
+    _tdsPercentController.dispose();
     _employeeCustomIdController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -987,7 +995,7 @@ class _EmployeeRegistrationPageState
         salarySpecialAllowance: double.tryParse(_specialAllowanceController.text.trim().replaceAll(',', '')) ?? 0.0,
         salaryTravelAllowance: double.tryParse(_travelAllowanceController.text.trim().replaceAll(',', '')) ?? 0.0,
         salaryOtherAllowance: double.tryParse(_otherAllowanceController.text.trim().replaceAll(',', '')) ?? 0.0,
-        salaryTax: 0.0,
+        salaryTax: double.tryParse(_tdsController.text.trim().replaceAll(',', '')) ?? 0.0,
         salaryPf: double.tryParse(_pfController.text.trim().replaceAll(',', '')) ?? 0.0,
         salaryEsi: double.tryParse(_esiController.text.trim().replaceAll(',', '')) ?? 0.0,
         salaryEsiEmployer: double.tryParse(_esiEmployerController.text.trim().replaceAll(',', '')) ?? 0.0,
@@ -3619,6 +3627,7 @@ class _EmployeeRegistrationPageState
     required String placeholder,
     required double basisValue,
     required bool isMobile,
+    bool showPercentageField = true,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -3706,10 +3715,11 @@ class _EmployeeRegistrationPageState
                     amountController, percentController, basisValue),
               ),
             ),
-            const SizedBox(width: 6),
-            SizedBox(
-              width: isMobile ? 74 : 88,
-              child: TextFormField(
+            if (showPercentageField) ...[
+              const SizedBox(width: 6),
+              SizedBox(
+                width: isMobile ? 74 : 88,
+                child: TextFormField(
                 controller: percentController,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
@@ -3762,8 +3772,9 @@ class _EmployeeRegistrationPageState
                 ),
                 onChanged: (_) => _onPercentFieldEdited(
                     percentController, amountController, basisValue),
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ],
@@ -3880,6 +3891,7 @@ class _EmployeeRegistrationPageState
                   placeholder: '0.00',
                   basisValue: totalSalary,
                   isMobile: isMobile,
+                  showPercentageField: false,
                 ),
                 _buildSalaryComponentRow(
                   label: 'Travel Allowance',
@@ -3889,6 +3901,7 @@ class _EmployeeRegistrationPageState
                   placeholder: '0.00',
                   basisValue: totalSalary,
                   isMobile: isMobile,
+                  showPercentageField: false,
                 ),
                 _buildSalaryComponentRow(
                   label: 'Other Allowance',
@@ -3898,6 +3911,7 @@ class _EmployeeRegistrationPageState
                   placeholder: '0.00',
                   basisValue: totalSalary,
                   isMobile: isMobile,
+                  showPercentageField: false,
                 ),
               ],
             ),
@@ -4000,6 +4014,7 @@ class _EmployeeRegistrationPageState
                   placeholder: '1800.00',
                   basisValue: basicPay,
                   isMobile: isMobile,
+                  showPercentageField: false,
                 ),
                 if (totalSalary > 0 && totalSalary <= 21000) ...[
                   _buildSalaryComponentRow(
@@ -4029,6 +4044,16 @@ class _EmployeeRegistrationPageState
                   placeholder: '200.00',
                   basisValue: totalSalary,
                   isMobile: isMobile,
+                ),
+                _buildSalaryComponentRow(
+                  label: 'TDS',
+                  basis: '% of Total',
+                  amountController: _tdsController,
+                  percentController: _tdsPercentController,
+                  placeholder: '0.00',
+                  basisValue: totalSalary,
+                  isMobile: isMobile,
+                  showPercentageField: false,
                 ),
               ],
             ),
@@ -4610,7 +4635,7 @@ class _EmployeeRegistrationPageState
       salaryEducationAllowance: double.tryParse(_eduAllowanceController.text.trim().replaceAll(',', '')) ?? 0.0,
       salarySpecialAllowance: double.tryParse(_specialAllowanceController.text.trim().replaceAll(',', '')) ?? 0.0,
       salaryTravelAllowance: double.tryParse(_travelAllowanceController.text.trim().replaceAll(',', '')) ?? 0.0,
-      salaryTax: 0.0,
+      salaryTax: double.tryParse(_tdsController.text.trim().replaceAll(',', '')) ?? 0.0,
       salaryPf: double.tryParse(_pfController.text.trim().replaceAll(',', '')) ?? 0.0,
       salaryEsi: double.tryParse(_esiController.text.trim().replaceAll(',', '')) ?? 0.0,
       salaryEsiEmployer: double.tryParse(_esiEmployerController.text.trim().replaceAll(',', '')) ?? 0.0,
