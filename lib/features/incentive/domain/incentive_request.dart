@@ -13,6 +13,7 @@ class IncentiveRequest {
   final double? approvedAmount;
   final String status; // 'Pending', 'Approved', 'Rejected', 'Cancelled'
   final String? remarks;
+  final String? evidenceImage;
   final String createdAt;
 
   IncentiveRequest({
@@ -30,6 +31,7 @@ class IncentiveRequest {
     this.approvedAmount,
     this.status = 'Pending',
     this.remarks,
+    this.evidenceImage,
     required this.createdAt,
   });
 
@@ -49,6 +51,7 @@ class IncentiveRequest {
       'approved_amount': approvedAmount,
       'status': status,
       'remarks': remarks,
+      'evidence_image': evidenceImage,
       'created_at': createdAt,
     };
   }
@@ -69,6 +72,7 @@ class IncentiveRequest {
       approvedAmount: (map['approved_amount'] as num?)?.toDouble(),
       status: map['status'] as String? ?? 'Pending',
       remarks: map['remarks'] as String?,
+      evidenceImage: map['evidence_image'] as String?,
       createdAt: map['created_at'] as String? ?? DateTime.now().toIso8601String(),
     );
   }
@@ -88,6 +92,7 @@ class IncentiveRequest {
     double? approvedAmount,
     String? status,
     String? remarks,
+    String? evidenceImage,
     String? createdAt,
   }) {
     return IncentiveRequest(
@@ -105,6 +110,7 @@ class IncentiveRequest {
       approvedAmount: approvedAmount ?? this.approvedAmount,
       status: status ?? this.status,
       remarks: remarks ?? this.remarks,
+      evidenceImage: evidenceImage ?? this.evidenceImage,
       createdAt: createdAt ?? this.createdAt,
     );
   }

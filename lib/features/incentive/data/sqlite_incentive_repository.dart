@@ -50,9 +50,15 @@ class SqliteIncentiveRepository implements IncentiveRepository {
         approved_amount REAL,
         status TEXT,
         remarks TEXT,
+        evidence_image TEXT,
         created_at TEXT
       )
     ''');
+
+    final columns = await db.rawQuery('PRAGMA table_info(incentive_requests)');
+    if (!columns.any((column) => column['name'] == 'evidence_image')) {
+      await db.execute('ALTER TABLE incentive_requests ADD COLUMN evidence_image TEXT');
+    }
 
     await db.execute('''
       CREATE TABLE IF NOT EXISTS incentive_settings (

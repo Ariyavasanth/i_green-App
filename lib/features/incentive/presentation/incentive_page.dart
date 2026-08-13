@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../authentication/providers/authentication_providers.dart';
 import '../../employee/domain/employee.dart';
@@ -40,6 +43,8 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
   final TextEditingController _metersController = TextEditingController(text: '50');
   final TextEditingController _remarksController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
+  String? _evidenceImage;
+  bool _isCapturingImage = false;
 
   DateTime? _fromDate;
   DateTime? _toDate;
@@ -75,8 +80,47 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
     return meters * _getRate(designation);
   }
 
+  String _formatRequestDate(String value) {
+    final date = DateTime.tryParse(value)?.toLocal();
+    if (date == null) return value;
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${two(date.day)}/${two(date.month)}/${date.year} ${two(date.hour)}:${two(date.minute)}';
+  }
+
+  Future<void> _captureEvidenceImage() async {
+    setState(() => _isCapturingImage = true);
+    try {
+      final image = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        imageQuality: 35,
+        maxWidth: 720,
+        maxHeight: 720,
+      );
+      if (image == null) return;
+      final bytes = await image.readAsBytes();
+      final extension = image.name.toLowerCase().endsWith('.png') ? 'png' : 'jpeg';
+      if (mounted) {
+        setState(() => _evidenceImage = 'data:image/$extension;base64,${base64Encode(bytes)}');
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not capture image: $error'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isCapturingImage = false);
+    }
+  }
+
   Future<void> _submitRequest(String activeDesignation) async {
     if (!_formKey.currentState!.validate()) return;
+    if (activeDesignation.toLowerCase().contains('tracker') && _evidenceImage == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Capture a work image before sending the request.'), backgroundColor: Colors.red),
+      );
+      return;
+    }
 
     final meters = double.tryParse(_metersController.text.trim()) ?? 0.0;
     final rate = _getRate(activeDesignation);
@@ -106,6 +150,7 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
       amount: amount,
       status: 'Pending',
       remarks: _remarksController.text.trim().isEmpty ? '-' : _remarksController.text.trim(),
+      evidenceImage: _evidenceImage,
       createdAt: DateTime.now().toIso8601String(),
     );
 
@@ -124,6 +169,7 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
         );
         _remarksController.clear();
         _metersController.clear();
+        _evidenceImage = null;
         _formKey.currentState?.reset();
         setState(() {});
       }
@@ -760,6 +806,55 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
               ),
               const SizedBox(height: 16),
 
+              if (activeDesignation.toLowerCase().contains('tracker')) ...[
+                const Text(
+                  'Work Image',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                ),
+                const SizedBox(height: 6),
+                InkWell(
+                  onTap: _isCapturingImage ? null : _captureEvidenceImage,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    width: double.infinity,
+                    height: _evidenceImage == null ? 96 : 190,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: _evidenceImage == null
+                        ? Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _isCapturingImage
+                                  ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
+                                  : const Icon(Icons.camera_alt_outlined, color: AppColors.active),
+                              const SizedBox(height: 6),
+                              Text(_isCapturingImage ? 'Opening camera...' : 'Capture work image', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                            ],
+                          )
+                        : Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Image.memory(base64Decode(_evidenceImage!.split(',').last), fit: BoxFit.cover),
+                              Positioned(
+                                right: 8,
+                                bottom: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(6)),
+                                  child: const Text('Retake', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+
               // Incentive Rate (per meter) - Non-editable read-only container
               const Text(
                 'Incentive Rate (per meter)',
@@ -1216,6 +1311,17 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
                   req.status,
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: statusText),
                 ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Icon(Icons.calendar_today_outlined, size: 14, color: Colors.grey.shade600),
+              const SizedBox(width: 5),
+              Text(
+                'Request date: ${_formatRequestDate(req.createdAt)}',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
               ),
             ],
           ),

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -38,6 +40,13 @@ class _IncentiveDetailPageState extends ConsumerState<IncentiveDetailPage> {
   final TextEditingController _approvedAmountController = TextEditingController();
   final TextEditingController _reasonController = TextEditingController();
   bool _initialized = false;
+
+  String _formatRequestDate(String value) {
+    final date = DateTime.tryParse(value)?.toLocal();
+    if (date == null) return value;
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${two(date.day)}/${two(date.month)}/${date.year} ${two(date.hour)}:${two(date.minute)}';
+  }
 
   @override
   void dispose() {
@@ -274,6 +283,7 @@ class _IncentiveDetailPageState extends ConsumerState<IncentiveDetailPage> {
                               ),
                               const SizedBox(height: 16),
                               _buildDetailItem(Icons.location_on_outlined, 'Site', req.site),
+                              _buildDetailItem(Icons.calendar_today_outlined, 'Request date', _formatRequestDate(req.createdAt)),
                               _buildDetailItem(Icons.layers_outlined, 'Work type', req.productName),
                               _buildDetailItem(
                                 Icons.straighten_outlined,
@@ -299,6 +309,37 @@ class _IncentiveDetailPageState extends ConsumerState<IncentiveDetailPage> {
                           ),
                         ),
                       ),
+                      if (req.evidenceImage?.isNotEmpty == true) ...[
+                        const SizedBox(height: 16),
+                        Card(
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          color: Colors.white,
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Work image', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A1F36))),
+                                const SizedBox(height: 12),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.memory(
+                                    base64Decode(req.evidenceImage!.split(',').last),
+                                    width: double.infinity,
+                                    height: 260,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, _, _) => const SizedBox(height: 100, child: Center(child: Text('Image could not be displayed.'))),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 16),
 
                       // Verify and Approve Card

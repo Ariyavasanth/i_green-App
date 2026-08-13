@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -41,6 +43,24 @@ class EmployeeIncentiveRequestsPage extends ConsumerStatefulWidget {
 
 class _EmployeeIncentiveRequestsPageState extends ConsumerState<EmployeeIncentiveRequestsPage> {
   late String _selectedStatusFilter;
+
+  String _formatRequestDate(String value) {
+    final date = DateTime.tryParse(value)?.toLocal();
+    if (date == null) return value;
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${two(date.day)}/${two(date.month)}/${date.year} ${two(date.hour)}:${two(date.minute)}';
+  }
+
+  Widget _buildEvidenceThumbnail(String image) {
+    if (image.startsWith('http://') || image.startsWith('https://')) {
+      return Image.network(image, fit: BoxFit.cover, errorBuilder: (_, _, _) => const Icon(Icons.broken_image_outlined));
+    }
+    try {
+      return Image.memory(base64Decode(image.split(',').last), fit: BoxFit.cover, errorBuilder: (_, _, _) => const Icon(Icons.broken_image_outlined));
+    } catch (_) {
+      return const Icon(Icons.broken_image_outlined);
+    }
+  }
 
   @override
   void initState() {
@@ -323,6 +343,18 @@ class _EmployeeIncentiveRequestsPageState extends ConsumerState<EmployeeIncentiv
                                     ),
                                     const SizedBox(height: 10),
 
+                                    Row(
+                                      children: [
+                                        Icon(Icons.calendar_today_outlined, size: 16, color: Colors.grey.shade600),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          'Request date: ${_formatRequestDate(req.createdAt)}',
+                                          style: TextStyle(fontSize: 13, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 10),
+
                                     // Row 2: Meters & Rate
                                     Row(
                                       children: [
@@ -338,6 +370,19 @@ class _EmployeeIncentiveRequestsPageState extends ConsumerState<EmployeeIncentiv
                                         ),
                                       ],
                                     ),
+                                    if (req.evidenceImage?.isNotEmpty == true) ...[
+                                      const SizedBox(height: 12),
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: SizedBox(
+                                          width: double.infinity,
+                                          height: 150,
+                                          child: _buildEvidenceThumbnail(req.evidenceImage!),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text('Tracker work image', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                                    ],
                                     const SizedBox(height: 12),
 
                                     // Row 3: Amount + Action button
