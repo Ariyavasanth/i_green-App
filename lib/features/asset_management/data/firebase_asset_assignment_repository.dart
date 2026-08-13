@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../domain/asset_assignment.dart';
 import '../domain/asset_assignment_repository.dart';
+import '../domain/asset_transfer_request.dart';
 
 class FirebaseAssetAssignmentRepository implements AssetAssignmentRepository {
   final FirebaseFirestore _firestore;
@@ -11,6 +12,8 @@ class FirebaseAssetAssignmentRepository implements AssetAssignmentRepository {
 
   CollectionReference<Map<String, dynamic>> get _ref =>
       _firestore.collection('asset_assignments');
+  CollectionReference<Map<String, dynamic>> get _transferRef =>
+      _firestore.collection('asset_transfer_requests');
 
   @override
   Future<List<AssetAssignment>> getAssignments() async {
@@ -106,5 +109,56 @@ class FirebaseAssetAssignmentRepository implements AssetAssignmentRepository {
       }
       await _ref.doc(id.toString()).delete();
     } catch (_) {}
+  }
+
+  @override
+  Future<List<AssetTransferRequest>> getTransferRequests() async {
+    final snapshot = await _transferRef.get();
+    final requests = snapshot.docs.map((d) => AssetTransferRequest.fromMap(d.data(), d.id)).toList();
+    requests.sort((a, b) => (b.createdAt ?? '').compareTo(a.createdAt ?? ''));
+    return requests;
+  }
+
+  @override
+  Future<AssetTransferRequest> createTransferRequest(AssetTransferRequest request) async {
+    final doc = _transferRef.doc();
+    final created = request.copyWith(
+      id: request.id == 0 ? doc.id.hashCode & 0x7fffffff : request.id,
+      createdAt: DateTime.now().toIso8601String(),
+    );
+    await doc.set(created.toMap());
+    return created;
+  }
+
+  @override
+  Future<void> respondToTransferRequest(AssetTransferRequest request, {required bool approve}) async {
+    final requestQuery = await _transferRef.where('id', isEqualTo: request.id).limit(1).get();
+    if (requestQuery.docs.isEmpty) throw StateError('Transfer request was not found.');
+    final requestDoc = requestQuery.docs.first.reference;
+    final assignmentQuery = await _ref.where('id', isEqualTo: request.assetAssignmentId).limit(1).get();
+    if (approve && assignmentQuery.docs.isEmpty) throw StateError('Asset assignment was not found.');
+    await _firestore.runTransaction((transaction) async {
+      if (approve) {
+        transaction.update(assignmentQuery.docs.first.reference, {
+          'employee_id': request.toEmployeeId,
+          'employee_name': request.toEmployeeName,
+          'employee_code': request.toEmployeeCode,
+          'assigned_date': request.transferDate,
+          'description': request.reason,
+          'status': 'Assigned',
+          'transferred_from': '${request.fromEmployeeName}${request.fromEmployeeCode.isEmpty ? '' : ' (${request.fromEmployeeCode})'}',
+          'transfer_date': request.transferDate,
+          'maintenance_address': null,
+          'maintenance_contact': null,
+          'maintenance_given_date': null,
+          'maintenance_return_date': null,
+          'updated_at': FieldValue.serverTimestamp(),
+        });
+      }
+      transaction.update(requestDoc, {
+        'status': approve ? 'Approved' : 'Rejected',
+        'responded_at': DateTime.now().toIso8601String(),
+      });
+    });
   }
 }

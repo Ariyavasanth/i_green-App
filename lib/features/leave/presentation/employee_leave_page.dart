@@ -150,7 +150,11 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
     }
   }
 
-  void _showApplyLeaveDialog(Employee currentEmp) {
+  Future<void> _showApplyLeaveDialog(Employee currentEmp) async {
+    final permissionAllowance = await ref
+        .read(leaveRepositoryProvider)
+        .getPermissionAllowance(currentEmp.id, DateTime.now());
+    if (!mounted) return;
     final allLeaveTypes = ref.read(leaveTypesProvider).value ?? [];
     final activeLeaveTypes = allLeaveTypes.where((t) => t.isActive).toList();
 
@@ -163,7 +167,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
 
     String requestType = 'Leave';
     TimeOfDay fromTime = const TimeOfDay(hour: 9, minute: 0);
-    TimeOfDay toTime = const TimeOfDay(hour: 11, minute: 0);
+    TimeOfDay toTime = const TimeOfDay(hour: 10, minute: 0);
 
     String formatTimeOfDay(TimeOfDay time) {
       final now = DateTime.now();
@@ -446,6 +450,24 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                           const SizedBox(height: 12),
                         ],
                       ] else ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF9CC70A).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFF9CC70A)),
+                          ),
+                          child: Text(
+                            'You can take ${formatPermissionDuration(permissionAllowance.remainingHours)} more permission this month. Maximum 1 hour per day (3 hours per month).',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF414A51),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
                         // Permission Time Fields
                         Row(
                           children: [
@@ -468,7 +490,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                                           final fromMin = picked.hour * 60 + picked.minute;
                                           final toMin = toTime.hour * 60 + toTime.minute;
                                           if (toMin <= fromMin) {
-                                            toTime = TimeOfDay(hour: (picked.hour + 2) % 24, minute: picked.minute);
+                                            toTime = TimeOfDay(hour: (picked.hour + 1) % 24, minute: picked.minute);
                                           }
                                         });
                                       }
@@ -592,6 +614,28 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                       return;
                     }
 
+                    if (requestType == 'Permission') {
+                      final permissionHours = calculatePermissionHours(fromTime, toTime);
+                      if (permissionHours <= 0 || permissionHours > 1.0001) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Permission must be between 1 minute and 1 hour per day.'),
+                            backgroundColor: Color(0xFFC62828),
+                          ),
+                        );
+                        return;
+                      }
+                      if (permissionHours > permissionAllowance.remainingHours + 0.0001) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('You have only ${formatPermissionDuration(permissionAllowance.remainingHours)} of permission remaining this month.'),
+                            backgroundColor: const Color(0xFFC62828),
+                          ),
+                        );
+                        return;
+                      }
+                    }
+
                     final messenger = ScaffoldMessenger.of(context);
                     final nav = Navigator.of(dialogCtx);
 
@@ -637,6 +681,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                       await ref.read(leaveRepositoryProvider).submitLeaveRequest(newReq);
                       ref.invalidate(leaveRequestsProvider(currentEmp.id));
                       ref.invalidate(allLeaveRequestsProvider);
+                      ref.invalidate(permissionAllowanceProvider(currentEmp.id));
 
                       nav.pop();
                       messenger.showSnackBar(

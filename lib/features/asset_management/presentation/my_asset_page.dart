@@ -7,6 +7,7 @@ import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
 import '../../leave/providers/leave_providers.dart';
 import '../domain/asset_assignment.dart';
+import '../domain/asset_transfer_request.dart';
 import '../providers/asset_management_providers.dart';
 
 class MyAssetPage extends ConsumerStatefulWidget {
@@ -613,24 +614,24 @@ class _MyAssetPageState extends ConsumerState<MyAssetPage> {
 
                           try {
                             final target = selectedTargetEmployee!;
-                            final fromEmpString = '${asset.employeeName}${asset.employeeCode.isNotEmpty ? " (${asset.employeeCode})" : ""}';
-                            final updated = asset.copyWith(
-                              employeeId: target.id,
-                              employeeName: target.fullName,
-                              employeeCode: target.employeeId,
-                              assignedDate: transferDateController.text.trim(),
-                              description: reasonController.text.trim(),
-                              status: 'Assigned',
-                              transferredFrom: fromEmpString,
-                              transferDate: transferDateController.text.trim(),
-                              maintenanceAddress: null,
-                              maintenanceContact: null,
-                              maintenanceGivenDate: null,
-                              maintenanceReturnDate: null,
+                            await ref.read(assetAssignmentRepositoryProvider).createTransferRequest(
+                              AssetTransferRequest(
+                                id: 0,
+                                assetAssignmentId: asset.id,
+                                assetName: asset.assetName,
+                                assetTypeName: asset.assetTypeName,
+                                serialNumber: asset.serialNumber,
+                                fromEmployeeId: asset.employeeId,
+                                fromEmployeeName: asset.employeeName,
+                                fromEmployeeCode: asset.employeeCode,
+                                toEmployeeId: target.id,
+                                toEmployeeName: target.fullName,
+                                toEmployeeCode: target.employeeId,
+                                transferDate: transferDateController.text.trim(),
+                                reason: reasonController.text.trim(),
+                              ),
                             );
-
-                            await ref.read(assetAssignmentRepositoryProvider).updateAssignment(updated);
-                            ref.refresh(assetAssignmentsProvider);
+                            ref.invalidate(assetTransferRequestsProvider);
 
                             if (ctx.mounted) {
                               Navigator.pop(ctx);
@@ -641,7 +642,7 @@ class _MyAssetPageState extends ConsumerState<MyAssetPage> {
                                       const Icon(Icons.check_circle, color: Colors.white),
                                       const SizedBox(width: 10),
                                       Expanded(
-                                        child: Text('Asset transferred to ${target.fullName} successfully.'),
+                                        child: Text('Transfer request sent to ${target.fullName}.'),
                                       ),
                                     ],
                                   ),
@@ -663,7 +664,7 @@ class _MyAssetPageState extends ConsumerState<MyAssetPage> {
                   icon: isSubmitting
                       ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                       : const Icon(Icons.swap_horiz_outlined, size: 18),
-                  label: const Text('Confirm Transfer'),
+                  label: const Text('Send Request'),
                 ),
               ],
             );
@@ -819,7 +820,9 @@ class _MyAssetPageState extends ConsumerState<MyAssetPage> {
 
     final activeEmp = overrideEmp ?? currentEmp;
 
-    return Scaffold(
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
         title: Row(
@@ -839,8 +842,18 @@ class _MyAssetPageState extends ConsumerState<MyAssetPage> {
             onPressed: () => ref.refresh(assetAssignmentsProvider),
           ),
         ],
+        bottom: const TabBar(
+          labelColor: Color(0xFF9CC70A),
+          unselectedLabelColor: Color(0xFF414A51),
+          indicatorColor: Color(0xFF9CC70A),
+          tabs: [
+            Tab(icon: Icon(Icons.inventory_2_outlined, size: 18), text: 'My Assets'),
+            Tab(icon: Icon(Icons.move_to_inbox_outlined, size: 18), text: 'Transfer Requests'),
+          ],
+        ),
       ),
-      body: myAssetsAsync.when(
+      body: TabBarView(children: [
+      myAssetsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF9CC70A))),
         error: (err, stack) => Center(child: Text('Error loading assets: $err')),
         data: (assignments) {
@@ -1128,7 +1141,111 @@ class _MyAssetPageState extends ConsumerState<MyAssetPage> {
           );
         },
       ),
+      _buildIncomingRequests(),
+      ]),
+      ),
     );
+  }
+
+  Widget _buildIncomingRequests() {
+    final requestsAsync = ref.watch(myIncomingAssetTransferRequestsProvider);
+    return requestsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF9CC70A))),
+      error: (error, _) => Center(child: Text('Error loading transfer requests: $error')),
+      data: (requests) {
+        if (requests.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.move_to_inbox_outlined, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 12),
+                const Text('No transfer requests', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
+                const SizedBox(height: 6),
+                Text('Incoming asset transfer requests will appear here.', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+              ],
+            ),
+          );
+        }
+        return ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: requests.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (_, index) => _buildTransferRequestCard(requests[index]),
+        );
+      },
+    );
+  }
+
+  Widget _buildTransferRequestCard(AssetTransferRequest request) {
+    final pending = request.status == 'Pending';
+    final statusColor = request.status == 'Approved'
+        ? const Color(0xFF9CC70A)
+        : request.status == 'Rejected' ? Colors.red : const Color(0xFFFF9800);
+    return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: Colors.grey[200]!)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: const Color(0xFF9CC70A).withOpacity(.12), borderRadius: BorderRadius.circular(10)),
+              child: Icon(_getAssetIcon(request.assetTypeName), color: const Color(0xFF414A51)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(request.assetName.isEmpty ? request.assetTypeName : request.assetName, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+              Text('${request.assetTypeName} • ${request.serialNumber.isEmpty ? "N/A" : request.serialNumber}', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+            ])),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+              decoration: BoxDecoration(color: statusColor.withOpacity(.12), borderRadius: BorderRadius.circular(12)),
+              child: Text(request.status, style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold)),
+            ),
+          ]),
+          const SizedBox(height: 14),
+          Text('From: ${request.fromEmployeeName}${request.fromEmployeeCode.isEmpty ? "" : " (${request.fromEmployeeCode})"}', style: const TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 5),
+          Text('Transfer date: ${request.transferDate}', style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+          const SizedBox(height: 8),
+          Text(request.reason, style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+          if (pending) ...[
+            const SizedBox(height: 14),
+            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              OutlinedButton.icon(
+                onPressed: () => _respondToTransfer(request, false),
+                icon: const Icon(Icons.close, size: 17),
+                label: const Text('Reject'),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF9CC70A), foregroundColor: Colors.white),
+                onPressed: () => _respondToTransfer(request, true),
+                icon: const Icon(Icons.check, size: 17),
+                label: const Text('Accept'),
+              ),
+            ]),
+          ],
+        ]),
+      ),
+    );
+  }
+
+  Future<void> _respondToTransfer(AssetTransferRequest request, bool approve) async {
+    try {
+      await ref.read(assetAssignmentRepositoryProvider).respondToTransferRequest(request, approve: approve);
+      ref.invalidate(assetTransferRequestsProvider);
+      ref.invalidate(assetAssignmentsProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(approve ? 'Asset transfer accepted.' : 'Asset transfer rejected.'),
+        backgroundColor: approve ? const Color(0xFF9CC70A) : const Color(0xFF414A51),
+      ));
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not update request: $error')));
+    }
   }
 
   Widget _buildMetricCard({

@@ -2,6 +2,7 @@ import 'leave_request.dart';
 import 'leave_balance.dart';
 import 'leave_type.dart';
 import 'salary_calculation.dart';
+import 'permission_allowance.dart';
 
 abstract class LeaveRepository {
   Future<List<LeaveRequest>> getLeaveRequests(int employeeId);
@@ -27,4 +28,5 @@ abstract class LeaveRepository {
   Future<void> deleteEmployeeOverride(int id);
   Future<SalaryCalculation> calculateSalaryAndLop(int employeeId, int year, int month, {int workingDays = 26});
   Future<List<Map<String, dynamic>>> getAuditLogs(int leaveRequestId);
+  Future<PermissionAllowance> getPermissionAllowance(int employeeId, DateTime month);
 }

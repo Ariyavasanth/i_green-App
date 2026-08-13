@@ -3,13 +3,14 @@ import 'package:sqflite/sqflite.dart';
 
 import '../domain/asset_assignment.dart';
 import '../domain/asset_assignment_repository.dart';
+import '../domain/asset_transfer_request.dart';
 
 class SqliteAssetAssignmentRepository implements AssetAssignmentRepository {
   Database? _database;
 
   Future<Database> get _db async => _database ??= await openDatabase(
         p.join(await getDatabasesPath(), 'igreen_assets.db'),
-        version: 5,
+        version: 6,
         onCreate: (db, _) async {
           await db.execute(
             'CREATE TABLE IF NOT EXISTS asset_assignments('
@@ -32,6 +33,7 @@ class SqliteAssetAssignmentRepository implements AssetAssignmentRepository {
             'transfer_date TEXT, '
             'created_at TEXT)',
           );
+          await _createTransferRequestsTable(db);
         },
         onUpgrade: (db, oldVersion, newVersion) async {
           if (oldVersion < 2) {
@@ -50,7 +52,18 @@ class SqliteAssetAssignmentRepository implements AssetAssignmentRepository {
             await db.execute('ALTER TABLE asset_assignments ADD COLUMN transferred_from TEXT');
             await db.execute('ALTER TABLE asset_assignments ADD COLUMN transfer_date TEXT');
           }
+          if (oldVersion < 6) await _createTransferRequestsTable(db);
         },
+      );
+
+  static Future<void> _createTransferRequestsTable(Database db) => db.execute(
+        'CREATE TABLE IF NOT EXISTS asset_transfer_requests('
+        'id INTEGER PRIMARY KEY AUTOINCREMENT, asset_assignment_id INTEGER NOT NULL, '
+        'asset_name TEXT NOT NULL, asset_type_name TEXT NOT NULL, serial_number TEXT, '
+        'from_employee_id INTEGER NOT NULL, from_employee_name TEXT NOT NULL, from_employee_code TEXT, '
+        'to_employee_id INTEGER NOT NULL, to_employee_name TEXT NOT NULL, to_employee_code TEXT, '
+        'transfer_date TEXT NOT NULL, reason TEXT NOT NULL, status TEXT NOT NULL, '
+        'created_at TEXT, responded_at TEXT)',
       );
 
   Future<void> _seedDefaultAssignments(Database db) async {
@@ -234,5 +247,49 @@ class SqliteAssetAssignmentRepository implements AssetAssignmentRepository {
   Future<void> deleteAssignment(int id) async {
     final db = await _db;
     await db.delete('asset_assignments', where: 'id = ?', whereArgs: [id]);
+  }
+
+  @override
+  Future<List<AssetTransferRequest>> getTransferRequests() async {
+    final db = await _db;
+    final rows = await db.query('asset_transfer_requests', orderBy: 'id DESC');
+    return rows.map(AssetTransferRequest.fromMap).toList();
+  }
+
+  @override
+  Future<AssetTransferRequest> createTransferRequest(AssetTransferRequest request) async {
+    final db = await _db;
+    final data = request.toMap()..remove('id');
+    data['created_at'] ??= DateTime.now().toIso8601String();
+    final id = await db.insert('asset_transfer_requests', data);
+    return request.copyWith(id: id, createdAt: data['created_at'] as String?);
+  }
+
+  @override
+  Future<void> respondToTransferRequest(AssetTransferRequest request, {required bool approve}) async {
+    final db = await _db;
+    await db.transaction((txn) async {
+      final now = DateTime.now().toIso8601String();
+      if (approve) {
+        await txn.update('asset_assignments', {
+          'employee_id': request.toEmployeeId,
+          'employee_name': request.toEmployeeName,
+          'employee_code': request.toEmployeeCode,
+          'assigned_date': request.transferDate,
+          'description': request.reason,
+          'status': 'Assigned',
+          'transferred_from': '${request.fromEmployeeName}${request.fromEmployeeCode.isEmpty ? '' : ' (${request.fromEmployeeCode})'}',
+          'transfer_date': request.transferDate,
+          'maintenance_address': null,
+          'maintenance_contact': null,
+          'maintenance_given_date': null,
+          'maintenance_return_date': null,
+        }, where: 'id = ?', whereArgs: [request.assetAssignmentId]);
+      }
+      await txn.update('asset_transfer_requests', {
+        'status': approve ? 'Approved' : 'Rejected',
+        'responded_at': now,
+      }, where: 'id = ? AND status = ?', whereArgs: [request.id, 'Pending']);
+    });
   }
 }

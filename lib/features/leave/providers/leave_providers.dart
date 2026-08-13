@@ -10,6 +10,7 @@ import '../domain/leave_request.dart';
 import '../domain/leave_balance.dart';
 import '../domain/leave_type.dart';
 import '../domain/salary_calculation.dart';
+import '../domain/permission_allowance.dart';
 
 /// Swap to FirebaseLeaveRepository() to switch to Firebase — no screen changes needed.
 final leaveRepositoryProvider = Provider<LeaveRepository>(
@@ -35,6 +36,13 @@ final employeeOverridesProvider = FutureProvider<List<Map<String, dynamic>>>(
 final leaveBalancesProvider = FutureProvider.family<List<LeaveBalance>, int>(
   (ref, employeeId) => ref.watch(leaveRepositoryProvider).getLeaveBalances(employeeId),
 );
+
+final permissionAllowanceProvider =
+    FutureProvider.family<PermissionAllowance, int>((ref, employeeId) {
+  return ref
+      .watch(leaveRepositoryProvider)
+      .getPermissionAllowance(employeeId, DateTime.now());
+});
 
 class SalaryCalcParam {
   final int employeeId;

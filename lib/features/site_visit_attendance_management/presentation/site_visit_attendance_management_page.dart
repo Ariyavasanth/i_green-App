@@ -1,9 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../attendance/domain/attendance_record.dart';
+import '../../attendance_management/domain/attendance_management_stats.dart';
+import '../../attendance_management/presentation/widgets/admin_manual_attendance_dialog.dart';
+import '../../attendance_management/presentation/widgets/attendance_audit_dialog.dart';
+import '../../attendance_management/presentation/widgets/attendance_matrix_view.dart';
+import '../../attendance_management/presentation/widgets/attendance_table_view.dart';
+import '../../attendance_management/providers/attendance_management_providers.dart';
 import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
 import '../../site_visit_attendance/domain/site_visit_record.dart';
@@ -18,6 +26,7 @@ class SiteVisitAttendanceManagementPage extends ConsumerStatefulWidget {
 }
 
 enum SiteVisitViewMode { matrix, table }
+enum AttendanceCategory { siteVisit, staticVisit }
 
 class _SiteVisitAttendanceManagementPageState
     extends ConsumerState<SiteVisitAttendanceManagementPage> {
@@ -28,15 +37,123 @@ class _SiteVisitAttendanceManagementPageState
   String _selectedStatus = 'All';
   String _selectedSite = 'All';
   String _search = '';
+  final TextEditingController _searchController = TextEditingController();
   SiteVisitViewMode _viewMode = SiteVisitViewMode.matrix;
+  AttendanceCategory _category = AttendanceCategory.siteVisit;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 650;
-    final visitsAsync = ref.watch(
-      allSiteVisitsProvider((visitDate: null, employeeId: null, siteName: null)),
-    );
+    final isSite = _category == AttendanceCategory.siteVisit;
+
+    // Site Visits Async
+    final visitsAsync = isSite
+        ? ref.watch(allSiteVisitsProvider((visitDate: null, employeeId: null, siteName: null)))
+        : const AsyncValue<List<SiteVisitRecord>>.data([]);
+
+    // Static Visits Async
+    final monthYearStr = DateFormat('MM-yyyy').format(_focusedMonth);
+    final todayStr = DateFormat('dd-MM-yyyy').format(DateTime.now());
+
+    final staticRecordsAsync = !isSite
+        ? ref.watch(attendanceManagementRecordsProvider((
+            employeeId: _selectedEmployeeId,
+            monthYear: monthYearStr,
+            statusFilter: _selectedStatus,
+          )))
+        : const AsyncValue<List<AttendanceRecord>>.data([]);
+
+    final staticStatsAsync = !isSite
+        ? ref.watch(attendanceManagementStatsProvider(todayStr))
+        : const AsyncValue<AttendanceManagementStats>.loading();
+
     final allEmployeesList = ref.watch(employeesProvider).valueOrNull ?? [];
+
+    Widget kpiWidget;
+    Widget toolbarWidget;
+    Widget mainViewWidget;
+
+    if (isSite) {
+      kpiWidget = visitsAsync.when(
+        loading: () => const SizedBox.shrink(),
+        error: (e, _) => const SizedBox.shrink(),
+        data: (visits) => _buildKpiBanner(_filterVisits(visits, allEmployeesList), isMobile),
+      );
+
+      toolbarWidget = visitsAsync.when(
+        loading: () => const SizedBox.shrink(),
+        error: (e, _) => const SizedBox.shrink(),
+        data: (visits) => _buildControlToolbar(visits, allEmployeesList, isMobile),
+      );
+
+      mainViewWidget = visitsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Text('Error loading site visits: $e'),
+        data: (visits) {
+          final filtered = _filterVisits(visits, allEmployeesList);
+          if (_viewMode == SiteVisitViewMode.matrix) {
+            return _SiteVisitMatrixView(
+              focusedMonth: _focusedMonth,
+              visits: filtered,
+              onCellTap: (employeeName, dateStr, dayVisits) {
+                _openDayTimelineDialog(context, employeeName, dateStr, dayVisits);
+              },
+            );
+          }
+          return _DetailedSiteVisitLogTable(
+            groupedVisits: _groupVisits(filtered),
+            onDelete: _handleDeleteRecord,
+            onLocationTap: _openMap,
+            onPhotoTap: _openPhotoPreview,
+          );
+        },
+      );
+    } else {
+      kpiWidget = staticStatsAsync.when(
+        loading: () => const SizedBox.shrink(),
+        error: (e, _) => const SizedBox.shrink(),
+        data: (stats) => _buildKpiBannerForStatic(stats, isMobile),
+      );
+
+      toolbarWidget = _buildControlToolbarForStatic(allEmployeesList, isMobile);
+
+      mainViewWidget = staticRecordsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Text('Error loading attendance records: $e'),
+        data: (records) {
+          final filteredRecords = _filterStaticRecords(records, allEmployeesList);
+          final filteredEmployees = _filterEmployeesForStatic(allEmployeesList);
+
+          if (_viewMode == SiteVisitViewMode.matrix) {
+            return AttendanceMatrixView(
+              focusedMonth: _focusedMonth,
+              employees: filteredEmployees,
+              records: filteredRecords,
+              onCellTap: (emp, dateStr, record) {
+                _openAdminEditDialog(
+                  context,
+                  record,
+                  emp.id,
+                  dateStr,
+                );
+              },
+            );
+          } else {
+            return AttendanceTableView(
+              records: filteredRecords,
+              onEdit: (record) => _openAdminEditDialog(context, record, record.employeeId, record.date),
+              onDelete: (record) => _handleDeleteRecordForStatic(record),
+            );
+          }
+        },
+      );
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFEFF3F6),
@@ -47,40 +164,11 @@ class _SiteVisitAttendanceManagementPageState
           children: [
             _buildHeader(isMobile),
             const SizedBox(height: 16),
-            visitsAsync.when(
-              loading: () => const SizedBox.shrink(),
-              error: (e, _) => const SizedBox.shrink(),
-              data: (visits) => _buildKpiBanner(_filterVisits(visits, allEmployeesList), isMobile),
-            ),
+            kpiWidget,
             const SizedBox(height: 16),
-            visitsAsync.when(
-              loading: () => const SizedBox.shrink(),
-              error: (e, _) => const SizedBox.shrink(),
-              data: (visits) => _buildControlToolbar(visits, allEmployeesList, isMobile),
-            ),
+            toolbarWidget,
             const SizedBox(height: 16),
-            visitsAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Text('Error loading site visits: $e'),
-              data: (visits) {
-                final filtered = _filterVisits(visits, allEmployeesList);
-                if (_viewMode == SiteVisitViewMode.matrix) {
-                  return _SiteVisitMatrixView(
-                    focusedMonth: _focusedMonth,
-                    visits: filtered,
-                    onCellTap: (employeeName, dateStr, dayVisits) {
-                      _openDayTimelineDialog(context, employeeName, dateStr, dayVisits);
-                    },
-                  );
-                }
-                return _DetailedSiteVisitLogTable(
-                  groupedVisits: _groupVisits(filtered),
-                  onDelete: _handleDeleteRecord,
-                  onLocationTap: _openMap,
-                  onPhotoTap: _openPhotoPreview,
-                );
-              },
-            ),
+            mainViewWidget,
           ],
         ),
       ),
@@ -102,6 +190,59 @@ class _SiteVisitAttendanceManagementPageState
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     );
 
+    final titleRow = Row(
+      children: [
+        const Icon(Icons.location_on_outlined, size: 26, color: Color(0xFF9CC70A)),
+        const SizedBox(width: 10),
+        const Text(
+          'Site visit management',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        if (!isMobile) ...[
+          const Spacer(),
+          ..._buildActionButtons(buttonStyle, outlinedStyle),
+        ],
+      ],
+    );
+
+    final toggleRow = Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Center(
+        child: SegmentedButton<AttendanceCategory>(
+          segments: const [
+            ButtonSegment(
+              value: AttendanceCategory.siteVisit,
+              icon: Icon(Icons.explore_outlined, size: 16),
+              label: Text('Site Visits', style: TextStyle(fontSize: 12)),
+            ),
+            ButtonSegment(
+              value: AttendanceCategory.staticVisit,
+              icon: Icon(Icons.home_work_outlined, size: 16),
+              label: Text('Static Visits', style: TextStyle(fontSize: 12)),
+            ),
+          ],
+          selected: {_category},
+          onSelectionChanged: (set) {
+            setState(() {
+              _category = set.first;
+              // Reset filters when switching categories
+              _selectedStatus = 'All';
+              _selectedEmployeeId = null;
+              _selectedDepartment = 'All Departments';
+              _selectedDesignation = 'All Designations';
+              _selectedSite = 'All';
+              _search = '';
+              _searchController.clear();
+            });
+          },
+        ),
+      ),
+    );
+
     if (isMobile) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -109,7 +250,7 @@ class _SiteVisitAttendanceManagementPageState
           Row(
             children: [
               const Icon(Icons.location_on_outlined, size: 24, color: Color(0xFF9CC70A)),
-              SizedBox(width: 8),
+              const SizedBox(width: 8),
               const Expanded(
                 child: Text(
                   'Site visit management',
@@ -123,51 +264,31 @@ class _SiteVisitAttendanceManagementPageState
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  style: buttonStyle,
-                  onPressed: _openManualSiteVisitDialog,
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text(
-                    '+ Add Site Visit',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: outlinedStyle,
-                  onPressed: _openAuditLogsDialog,
-                  icon: const Icon(Icons.history, size: 16),
-                  label: const Text(
-                    'Audit Logs',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-            ],
+          const SizedBox(height: 8),
+          toggleRow,
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _buildActionButtons(buttonStyle, outlinedStyle).toList(),
           ),
         ],
       );
     }
 
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Icon(Icons.location_on_outlined, size: 26, color: Color(0xFF9CC70A)),
-        const SizedBox(width: 10),
-        const Text(
-          'Site visit management',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        const Spacer(),
+        titleRow,
+        const SizedBox(height: 8),
+        toggleRow,
+      ],
+    );
+  }
+
+  List<Widget> _buildActionButtons(ButtonStyle buttonStyle, ButtonStyle outlinedStyle) {
+    if (_category == AttendanceCategory.siteVisit) {
+      return [
         ElevatedButton.icon(
           style: buttonStyle,
           onPressed: _openManualSiteVisitDialog,
@@ -184,8 +305,486 @@ class _SiteVisitAttendanceManagementPageState
           icon: const Icon(Icons.history, size: 18),
           label: const Text('Audit Logs'),
         ),
+      ];
+    } else {
+      return [
+        ElevatedButton.icon(
+          style: buttonStyle,
+          onPressed: () => _openAdminEditDialog(context, null, null, null),
+          icon: const Icon(Icons.add, size: 18),
+          label: const Text(
+            'Manual Entry',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+        const SizedBox(width: 10),
+        OutlinedButton.icon(
+          style: outlinedStyle,
+          onPressed: () => _openAuditLogsDialogForStatic(context),
+          icon: const Icon(Icons.history, size: 18),
+          label: const Text('Audit Logs'),
+        ),
+        const SizedBox(width: 10),
+        OutlinedButton.icon(
+          style: outlinedStyle,
+          onPressed: () => context.push('/attendance-settings'),
+          icon: const Icon(Icons.tune, size: 18),
+          label: const Text('Attendance Settings'),
+        ),
+      ];
+    }
+  }
+
+  Widget _buildKpiBannerForStatic(AttendanceManagementStats stats, bool isMobile) {
+    final items = [
+      (
+        title: 'Total Employees',
+        value: stats.totalEmployees.toString(),
+        icon: Icons.people_alt,
+        color: const Color(0xFF414A51),
+      ),
+      (
+        title: 'Present Today',
+        value: (stats.presentToday + stats.checkedOutToday).toString(),
+        icon: Icons.check_circle_outline,
+        color: const Color(0xFF2E7D32),
+      ),
+      (
+        title: 'Late Today',
+        value: stats.lateToday.toString(),
+        icon: Icons.running_with_errors,
+        color: const Color(0xFFE65100),
+      ),
+      (
+        title: 'Checked Out',
+        value: stats.checkedOutToday.toString(),
+        icon: Icons.logout,
+        color: const Color(0xFF9CC70A),
+      ),
+      (
+        title: 'Absent / Pending',
+        value: stats.absentToday.toString(),
+        icon: Icons.event_busy,
+        color: const Color(0xFFC62828),
+      ),
+    ];
+
+    if (isMobile) {
+      final cardWidth = (MediaQuery.of(context).size.width - 32 - 10) / 2;
+      return Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: items.map((item) {
+          return SizedBox(
+            width: cardWidth,
+            child: _kpiCard(
+              title: item.title,
+              value: item.value,
+              icon: item.icon,
+              color: item.color,
+            ),
+          );
+        }).toList(),
+      );
+    }
+
+    return Row(
+      children: items.map((item) {
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: _kpiCard(
+              title: item.title,
+              value: item.value,
+              icon: item.icon,
+              color: item.color,
+            ),
+          ),
+        );
+      }).toList()..last = Expanded(
+        child: _kpiCard(
+          title: items.last.title,
+          value: items.last.value,
+          icon: items.last.icon,
+          color: items.last.color,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildControlToolbarForStatic(List<Employee> allEmployees, bool isMobile) {
+    final departmentList = [
+      'All Departments',
+      ...{
+        ...Employee.departmentOptions,
+        ...allEmployees.map((e) => e.department).where((d) => d.trim().isNotEmpty),
+      }
+    ];
+
+    final designationList = [
+      'All Designations',
+      ...{
+        ...Employee.designationOptions,
+        ...allEmployees.map((e) => e.designation).where((d) => d.trim().isNotEmpty),
+      }
+    ];
+
+    final departmentDropdown = DropdownButtonFormField<String>(
+      initialValue: departmentList.contains(_selectedDepartment) ? _selectedDepartment : 'All Departments',
+      isDense: true,
+      decoration: InputDecoration(
+        labelText: 'Filter Department',
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      items: departmentList
+          .map((d) => DropdownMenuItem<String>(
+                value: d,
+                child: Text(d, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+              ))
+          .toList(),
+      onChanged: (val) {
+        if (val != null) {
+          setState(() {
+            _selectedDepartment = val;
+            if (_selectedEmployeeId != null) {
+              final selectedEmp = allEmployees.where((e) => e.id == _selectedEmployeeId).firstOrNull;
+              if (selectedEmp != null && _selectedDepartment != 'All Departments' && selectedEmp.department != _selectedDepartment) {
+                _selectedEmployeeId = null;
+              }
+            }
+          });
+        }
+      },
+    );
+
+    final designationDropdown = DropdownButtonFormField<String>(
+      initialValue: designationList.contains(_selectedDesignation) ? _selectedDesignation : 'All Designations',
+      isDense: true,
+      decoration: InputDecoration(
+        labelText: 'Filter Designation',
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      items: designationList
+          .map((d) => DropdownMenuItem<String>(
+                value: d,
+                child: Text(d, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+              ))
+          .toList(),
+      onChanged: (val) {
+        if (val != null) {
+          setState(() {
+            _selectedDesignation = val;
+            if (_selectedEmployeeId != null) {
+              final selectedEmp = allEmployees.where((e) => e.id == _selectedEmployeeId).firstOrNull;
+              if (selectedEmp != null && _selectedDesignation != 'All Designations' && selectedEmp.designation != _selectedDesignation) {
+                _selectedEmployeeId = null;
+              }
+            }
+          });
+        }
+      },
+    );
+
+    final availableEmployees = allEmployees.where((emp) {
+      if (_selectedDepartment != 'All Departments' && emp.department != _selectedDepartment) {
+        return false;
+      }
+      if (_selectedDesignation != 'All Designations' && emp.designation != _selectedDesignation) {
+        return false;
+      }
+      return true;
+    }).toList()..sort((a, b) => a.fullName.compareTo(b.fullName));
+
+    final monthSelector = Row(
+      mainAxisAlignment: isMobile ? MainAxisAlignment.center : MainAxisAlignment.end,
+      mainAxisSize: isMobile ? MainAxisSize.max : MainAxisSize.min,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.chevron_left, color: Color(0xFF9CC70A)),
+          onPressed: () => setState(() => _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1)),
+        ),
+        Text(
+          DateFormat('MMMM yyyy').format(_focusedMonth),
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+        ),
+        IconButton(
+          icon: const Icon(Icons.chevron_right, color: Color(0xFF9CC70A)),
+          onPressed: () => setState(() => _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1)),
+        ),
       ],
     );
+
+    final segmentedButton = SegmentedButton<SiteVisitViewMode>(
+      style: const ButtonStyle(visualDensity: VisualDensity.standard),
+      segments: const [
+        ButtonSegment(
+          value: SiteVisitViewMode.matrix,
+          icon: Icon(Icons.grid_on, size: 16),
+          label: Text('Matrix Heatmap'),
+        ),
+        ButtonSegment(
+          value: SiteVisitViewMode.table,
+          icon: Icon(Icons.table_chart, size: 16),
+          label: Text('Detailed Log Table'),
+        ),
+      ],
+      selected: {_viewMode},
+      onSelectionChanged: (set) => setState(() => _viewMode = set.first),
+    );
+
+    final employeeDropdown = DropdownButtonFormField<int?>(
+      initialValue: availableEmployees.any((e) => e.id == _selectedEmployeeId) ? _selectedEmployeeId : null,
+      isDense: true,
+      decoration: InputDecoration(
+        labelText: 'Filter Employee',
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      items: [
+        const DropdownMenuItem<int?>(
+          value: null,
+          child: Text('All Employees', style: TextStyle(fontSize: 12)),
+        ),
+        ...availableEmployees.map(
+          (e) => DropdownMenuItem<int?>(
+            value: e.id,
+            child: Text(e.fullName, style: TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+          ),
+        ),
+      ],
+      onChanged: (val) => setState(() => _selectedEmployeeId = val),
+    );
+
+    final statusDropdown = DropdownButtonFormField<String>(
+      initialValue: _selectedStatus,
+      isDense: true,
+      decoration: InputDecoration(
+        labelText: 'Filter Status',
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      items: const [
+        DropdownMenuItem(value: 'All', child: Text('All Statuses', style: TextStyle(fontSize: 12))),
+        DropdownMenuItem(value: 'Present', child: Text('Present', style: TextStyle(fontSize: 12))),
+        DropdownMenuItem(value: 'Late', child: Text('Late', style: TextStyle(fontSize: 12))),
+        DropdownMenuItem(value: 'Checked Out', child: Text('Checked Out', style: TextStyle(fontSize: 12))),
+        DropdownMenuItem(value: 'Absent', child: Text('Absent', style: TextStyle(fontSize: 12))),
+      ],
+      onChanged: (val) {
+        if (val != null) setState(() => _selectedStatus = val);
+      },
+    );
+
+    final searchField = TextField(
+      controller: _searchController,
+      decoration: InputDecoration(
+        hintText: 'Search employee or date',
+        prefixIcon: const Icon(Icons.search, size: 18),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      onChanged: (val) => setState(() => _search = val.trim().toLowerCase()),
+    );
+
+    final clearFiltersButton = OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: const Color(0xFFC62828),
+        side: const BorderSide(color: Color(0xFFC62828)),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      icon: const Icon(Icons.filter_alt_off, size: 16),
+      label: const Text('Clear Filters', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+      onPressed: () {
+        setState(() {
+          _selectedDepartment = 'All Departments';
+          _selectedDesignation = 'All Designations';
+          _selectedEmployeeId = null;
+          _selectedStatus = 'All';
+          _search = '';
+          _searchController.clear();
+        });
+      },
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: isMobile
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FittedBox(fit: BoxFit.scaleDown, child: segmentedButton),
+                const SizedBox(height: 8),
+                monthSelector,
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8.0),
+                  child: Divider(height: 1),
+                ),
+                departmentDropdown,
+                const SizedBox(height: 10),
+                designationDropdown,
+                const SizedBox(height: 10),
+                employeeDropdown,
+                const SizedBox(height: 10),
+                statusDropdown,
+                const SizedBox(height: 10),
+                searchField,
+                const SizedBox(height: 10),
+                clearFiltersButton,
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    segmentedButton,
+                    const Spacer(),
+                    monthSelector,
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    SizedBox(width: 170, child: departmentDropdown),
+                    SizedBox(width: 170, child: designationDropdown),
+                    SizedBox(width: 170, child: employeeDropdown),
+                    SizedBox(width: 140, child: statusDropdown),
+                    SizedBox(width: 220, child: searchField),
+                    clearFiltersButton,
+                  ],
+                ),
+              ],
+            ),
+    );
+  }
+
+  List<Employee> _filterEmployeesForStatic(List<Employee> employees) {
+    return employees.where((e) {
+      if (_selectedDepartment != 'All Departments' && e.department != _selectedDepartment) {
+        return false;
+      }
+      if (_selectedDesignation != 'All Designations' && e.designation != _selectedDesignation) {
+        return false;
+      }
+      if (_selectedEmployeeId != null && e.id != _selectedEmployeeId) {
+        return false;
+      }
+      if (_search.isNotEmpty) {
+        final q = _search.toLowerCase();
+        final matchName = e.fullName.toLowerCase().contains(q);
+        final matchDept = e.department.toLowerCase().contains(q);
+        final matchDesig = e.designation.toLowerCase().contains(q);
+        if (!matchName && !matchDept && !matchDesig) return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  List<AttendanceRecord> _filterStaticRecords(List<AttendanceRecord> records, List<Employee> employees) {
+    final filteredEmployeeIds = _filterEmployeesForStatic(employees).map((e) => e.id).toSet();
+
+    return records.where((rec) {
+      if (!filteredEmployeeIds.contains(rec.employeeId)) {
+        return false;
+      }
+      if (_selectedStatus != 'All' && rec.status != _selectedStatus) {
+        return false;
+      }
+      if (_search.isNotEmpty) {
+        final matchName = rec.employeeName.toLowerCase().contains(_search);
+        final matchDate = rec.date.toLowerCase().contains(_search);
+        if (!matchName && !matchDate) return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  void _openAdminEditDialog(
+    BuildContext context,
+    AttendanceRecord? record,
+    int? employeeId,
+    String? dateStr,
+  ) {
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AdminManualAttendanceDialog(
+        existingRecord: record,
+        initialEmployeeId: employeeId,
+        initialDate: dateStr,
+        onSaved: () => _refreshAll(),
+      ),
+    );
+  }
+
+  void _openAuditLogsDialogForStatic(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AttendanceAuditDialog(employeeId: _selectedEmployeeId),
+    );
+  }
+
+  Future<void> _handleDeleteRecordForStatic(AttendanceRecord record) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Attendance Record'),
+        content: Text('Are you sure you want to delete attendance for ${record.employeeName} on ${record.date}?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFC62828), foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await ref.read(attendanceManagementRepositoryProvider).deleteAttendanceRecord(
+            record.employeeId,
+            record.date,
+          );
+      _refreshAll();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Attendance record deleted.')),
+        );
+      }
+    }
+  }
+
+  void _refreshAll() {
+    if (_category == AttendanceCategory.siteVisit) {
+      ref.invalidate(allSiteVisitsProvider((visitDate: null, employeeId: null, siteName: null)));
+    } else {
+      final monthYearStr = DateFormat('MM-yyyy').format(_focusedMonth);
+      final todayStr = DateFormat('dd-MM-yyyy').format(DateTime.now());
+      ref.invalidate(attendanceManagementStatsProvider(todayStr));
+      ref.invalidate(attendanceManagementRecordsProvider((
+        employeeId: _selectedEmployeeId,
+        monthYear: monthYearStr,
+        statusFilter: _selectedStatus,
+      )));
+    }
   }
 
   Widget _buildKpiBanner(List<SiteVisitRecord> visits, bool isMobile) {
@@ -482,6 +1081,7 @@ class _SiteVisitAttendanceManagementPageState
     );
 
     final searchField = TextField(
+      controller: _searchController,
       decoration: InputDecoration(
         hintText: 'Search site, employee or date',
         prefixIcon: const Icon(Icons.search, size: 18),

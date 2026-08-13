@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/firebase_asset_assignment_repository.dart';
 import '../domain/asset_assignment.dart';
 import '../domain/asset_assignment_repository.dart';
+import '../domain/asset_transfer_request.dart';
 import '../../leave/providers/leave_providers.dart';
 import '../../employee/domain/employee.dart';
 
@@ -49,6 +50,23 @@ final myAssetAssignmentsProvider = FutureProvider<List<AssetAssignment>>((ref) a
   }).toList();
 
   return filtered.isNotEmpty ? filtered : assignments;
+});
+
+final assetTransferRequestsProvider = FutureProvider<List<AssetTransferRequest>>((ref) async {
+  return ref.watch(assetAssignmentRepositoryProvider).getTransferRequests();
+});
+
+final myIncomingAssetTransferRequestsProvider = FutureProvider<List<AssetTransferRequest>>((ref) async {
+  final requests = await ref.watch(assetTransferRequestsProvider.future);
+  final employee = ref.watch(myAssetSelectedEmployeeProvider) ?? ref.watch(currentEmployeeProvider);
+  if (employee == null) return const [];
+  final code = employee.employeeId.trim().toLowerCase();
+  final name = employee.fullName.trim().toLowerCase();
+  return requests.where((request) {
+    return (employee.id > 0 && request.toEmployeeId == employee.id) ||
+        (code.isNotEmpty && request.toEmployeeCode.trim().toLowerCase() == code) ||
+        (name.isNotEmpty && request.toEmployeeName.trim().toLowerCase() == name);
+  }).toList();
 });
 
 final assetAllColumnsProvider = Provider<List<String>>((ref) => const [

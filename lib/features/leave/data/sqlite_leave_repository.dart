@@ -3,6 +3,7 @@ import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../domain/leave_request.dart';
+import '../domain/permission_allowance.dart';
 import '../domain/leave_repository.dart';
 import '../domain/leave_balance.dart';
 import '../domain/leave_type.dart';
@@ -268,8 +269,59 @@ class SqliteLeaveRepository implements LeaveRepository {
 
   @override
   Future<void> submitLeaveRequest(LeaveRequest request) async {
+    if (request.leaveType.toLowerCase().startsWith('permission')) {
+      await _validatePermissionRequest(request);
+    }
     final db = await database;
     await db.insert('leave_requests', request.toMap());
+  }
+
+  Future<void> _validatePermissionRequest(LeaveRequest request) async {
+    final requestedHours = request.numDays * 8;
+    if (requestedHours <= 0 || requestedHours > 1.0001) {
+      throw Exception('Only up to 1 hour of permission can be taken per day.');
+    }
+    final requestDate = _parsePermissionDate(request.fromDate);
+    final requests = await getLeaveRequests(request.employeeId);
+    final active = requests.where((item) =>
+        item.leaveType.toLowerCase().startsWith('permission') &&
+        (item.status == 'Pending' || item.status == 'Approved'));
+    final usedToday = active
+        .where((item) => item.fromDate == request.fromDate)
+        .fold<double>(0, (sum, item) => sum + item.numDays * 8);
+    if (usedToday + requestedHours > 1.0001) {
+      throw Exception('The 1-hour permission limit for this day has already been used.');
+    }
+    final allowance = await getPermissionAllowance(request.employeeId, requestDate);
+    if (allowance.usedHours + requestedHours > allowance.monthlyLimitHours + 0.0001) {
+      throw Exception('Only 3 hours of permission are available per month.');
+    }
+  }
+
+  DateTime _parsePermissionDate(String value) {
+    final parts = value.split('-');
+    if (parts.length == 3) {
+      return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+    }
+    return DateTime.now();
+  }
+
+  @override
+  Future<PermissionAllowance> getPermissionAllowance(int employeeId, DateTime month) async {
+    final requests = await getLeaveRequests(employeeId);
+    final used = requests.where((item) {
+      if (!item.leaveType.toLowerCase().startsWith('permission') ||
+          (item.status != 'Pending' && item.status != 'Approved')) {
+        return false;
+      }
+      final date = _parsePermissionDate(item.fromDate);
+      return date.year == month.year && date.month == month.month;
+    }).fold<double>(0, (sum, item) => sum + item.numDays * 8);
+    return PermissionAllowance(
+      monthlyLimitHours: 3,
+      dailyLimitHours: 1,
+      usedHours: used,
+    );
   }
 
   List<String> _getDatesBetween(String fromStr, String toStr) {
