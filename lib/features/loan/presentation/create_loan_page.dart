@@ -47,7 +47,7 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
   final _approvedByController = TextEditingController();
   DateTime? _approvalDate;
   final _remarksController = TextEditingController();
-  String _status = 'Pending';
+  String _status = 'Pending Supervisor';
 
   final List<String> _loanTypes = [
     'Personal Loan',
@@ -58,7 +58,7 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
     'Other'
   ];
 
-  final List<String> _statuses = ['Pending', 'Approved', 'Rejected', 'Active', 'Closed'];
+  final List<String> _statuses = ['Pending Supervisor', 'Pending HR', 'Pending MD', 'Approved', 'Rejected', 'Active', 'Closed'];
   final List<String> _monthsList = [];
 
   @override
@@ -644,7 +644,7 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
                     child: const Text('Cancel'),
                   ),
                   ElevatedButton(
-                    onPressed: () => _saveLoan('Pending'),
+                    onPressed: () => _saveLoan(widget.loan?.status ?? 'Pending Supervisor'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blueGrey,
                       foregroundColor: Colors.white,
@@ -654,7 +654,7 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
                     child: const Text('Save Draft'),
                   ),
                   ElevatedButton(
-                    onPressed: () => _saveLoan('Approved'),
+                    onPressed: null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.active,
                       foregroundColor: Colors.white,
@@ -674,7 +674,7 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
                     child: const Text('Reject'),
                   ),
                   ElevatedButton(
-                    onPressed: () => _saveLoan('Active'),
+                    onPressed: widget.loan?.status == 'Approved' ? () => _saveLoan('Active') : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,

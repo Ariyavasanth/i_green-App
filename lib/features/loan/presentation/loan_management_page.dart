@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../leave/providers/leave_providers.dart';
 import '../domain/employee_loan.dart';
 import '../providers/loan_providers.dart';
 
@@ -54,7 +55,7 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
     'Other'
   ];
 
-  final List<String> _statuses = ['All', 'Pending', 'Approved', 'Rejected', 'Active', 'Closed'];
+  final List<String> _statuses = ['All', 'Pending Supervisor', 'Pending HR', 'Pending MD', 'Approved', 'Rejected', 'Active', 'Closed'];
 
   @override
   Widget build(BuildContext context) {
@@ -181,7 +182,7 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
     final currencyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
     final activeLoansCount = loans.where((l) => l.status == 'Active').length;
-    final pendingLoansCount = loans.where((l) => l.status == 'Pending').length;
+    final pendingLoansCount = loans.where((l) => l.status.startsWith('Pending')).length;
     final closedLoansCount = loans.where((l) => l.status == 'Closed').length;
 
     final outstandingSum = loans
@@ -488,7 +489,7 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
           value: 'edit',
           child: Row(children: [Icon(Icons.edit_outlined, size: 16), SizedBox(width: 8), Text('Edit')]),
         ),
-        if (loan.status == 'Pending') ...[
+        if (loan.status == 'Pending' || loan.status.startsWith('Pending ')) ...[
           const PopupMenuItem(
             value: 'approve',
             child: Row(children: [Icon(Icons.check_circle_outline, size: 16, color: Colors.blue), SizedBox(width: 8), Text('Approve', style: TextStyle(color: Colors.blue))]),
@@ -528,9 +529,17 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
           context.push('/loan-management/create', extra: loan);
           break;
         case 'approve':
-          await repository.changeLoanStatus(loan.id, 'Approved');
+          final currentEmployee = ref.read(currentEmployeeProvider);
+          if (currentEmployee == null) throw StateError('Current employee not found.');
+          final nextStatus = await repository.approveLoan(
+            id: loan.id,
+            approverName: currentEmployee.fullName,
+            approverRole: currentEmployee.userType,
+          );
           ref.invalidate(allLoansProvider);
-          _showSnackBar('Loan ${loan.loanId} approved.');
+          _showSnackBar(nextStatus == 'Approved'
+              ? 'Loan ${loan.loanId} approved.'
+              : 'Loan ${loan.loanId} sent to ${nextStatus.replaceFirst('Pending ', '')}.');
           break;
         case 'reject':
           await repository.changeLoanStatus(loan.id, 'Rejected');

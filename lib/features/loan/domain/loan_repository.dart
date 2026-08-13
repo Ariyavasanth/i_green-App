@@ -10,4 +10,9 @@ abstract class LoanRepository {
   Future<void> deleteLoan(int id);
   Future<void> updateLoanBalance(String loanId, double deductionAmount);
   Future<void> changeLoanStatus(int id, String status);
+  Future<String> approveLoan({
+    required int id,
+    required String approverName,
+    required String approverRole,
+  });
 }

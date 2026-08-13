@@ -395,6 +395,69 @@ class SqliteLoanRepository implements LoanRepository {
     );
   }
 
+  /// Existing payroll policy uses this boundary for lower-salaried employees.
+  static const double lowerSalaryThreshold = 21000.0;
+
+  @override
+  Future<String> approveLoan({
+    required int id,
+    required String approverName,
+    required String approverRole,
+  }) async {
+    final db = await database;
+    return db.transaction((txn) async {
+      final rows = await txn.query('employee_loans', where: 'id = ?', whereArgs: [id], limit: 1);
+      if (rows.isEmpty) throw StateError('Loan not found.');
+      final loan = EmployeeLoan.fromMap(rows.first);
+      final role = approverRole.trim().toUpperCase().replaceAll(' ', '_');
+      final employeeRows = await txn.query('employees', where: 'id = ?', whereArgs: [loan.employeeId], limit: 1);
+      final employee = employeeRows.isEmpty ? <String, Object?>{} : employeeRows.first;
+      final salary = (employee['salary_total_ctc'] as num?)?.toDouble() ?? 0.0;
+      final reportingManager = (employee['reporting_manager'] as String? ?? '').trim().toLowerCase();
+      final actor = approverName.trim().toLowerCase();
+
+      String nextStatus;
+      switch (loan.status) {
+        case 'Pending Supervisor':
+        case 'Pending':
+          final isSupervisor = reportingManager.isNotEmpty && reportingManager == actor;
+          final isAdminOverride = role == 'SUPER_ADMIN' || role == 'ADMIN';
+          if (!isSupervisor && !isAdminOverride) throw StateError('Only the reporting supervisor can approve this request.');
+          nextStatus = 'Pending HR';
+          break;
+        case 'Pending HR':
+          if (role != 'HR' && role != 'SUPER_ADMIN' && role != 'ADMIN') {
+            throw StateError('Only HR can approve this request at this stage.');
+          }
+          nextStatus = salary > 0 && salary <= lowerSalaryThreshold ? 'Pending MD' : 'Approved';
+          break;
+        case 'Pending MD':
+          final isMd = role == 'MD' || role == 'MANAGING_DIRECTOR' || role == 'SUPER_ADMIN';
+          if (!isMd) throw StateError('Only the Managing Director can approve this request at this stage.');
+          nextStatus = 'Approved';
+          break;
+        default:
+          throw StateError('This loan is not awaiting approval.');
+      }
+
+      final today = DateTime.now().toIso8601String().split('T').first;
+      final approvalTrail = loan.approvedBy.trim().isEmpty
+          ? approverName.trim()
+          : '${loan.approvedBy} → ${approverName.trim()}';
+      await txn.update(
+        'employee_loans',
+        {
+          'status': nextStatus,
+          'approved_by': approvalTrail,
+          if (nextStatus == 'Approved') 'approval_date': today,
+        },
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      return nextStatus;
+    });
+  }
+
   bool isMonthInTerm(String month, String start, String end) {
     final mVal = _parseMonthYear(month);
     final sVal = _parseMonthYear(start);

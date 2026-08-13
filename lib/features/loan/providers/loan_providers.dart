@@ -1,11 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+// ignore: unused_import -- kept so switching repositories remains a one-line change.
 import '../data/firebase_loan_repository.dart';
+import '../data/sqlite_loan_repository.dart';
 import '../domain/employee_loan.dart';
 import '../domain/loan_repository.dart';
 
-// Firestore implementation active.
+// Change only this line to FirebaseLoanRepository() when its stub is implemented.
 final loanRepositoryProvider = Provider<LoanRepository>(
-  (ref) => FirebaseLoanRepository(),
+  (ref) => SqliteLoanRepository(),
 );
 
 final allLoansProvider = FutureProvider<List<EmployeeLoan>>((ref) {

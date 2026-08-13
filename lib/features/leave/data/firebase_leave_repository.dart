@@ -203,6 +203,9 @@ class FirebaseLeaveRepository implements LeaveRepository {
 
   @override
   Future<void> submitLeaveRequest(LeaveRequest request) async {
+    if (request.id != 0) {
+      throw StateError('Leave dates cannot be changed after submission.');
+    }
     if (request.leaveType.toLowerCase().startsWith('permission')) {
       await _validatePermissionRequest(request);
     }

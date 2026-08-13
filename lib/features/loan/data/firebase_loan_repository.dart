@@ -12,4 +12,6 @@ class FirebaseLoanRepository implements LoanRepository {
   @override Future<void> deleteLoan(int id) async {}
   @override Future<void> updateLoanBalance(String loanId, double deductionAmount) async {}
   @override Future<void> changeLoanStatus(int id, String status) async {}
+  @override
+  Future<String> approveLoan({required int id, required String approverName, required String approverRole}) async => '';
 }

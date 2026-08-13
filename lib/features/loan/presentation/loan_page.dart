@@ -138,7 +138,7 @@ class _LoanPageState extends ConsumerState<LoanPage> {
     final currencyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
     final activeLoansCount = loans.where((l) => l.status == 'Active').length;
-    final pendingLoansCount = loans.where((l) => l.status == 'Pending').length;
+    final pendingLoansCount = loans.where((l) => l.status.startsWith('Pending')).length;
     final closedLoansCount = loans.where((l) => l.status == 'Closed').length;
 
     final outstandingSum = loans
@@ -541,7 +541,7 @@ class _RequestLoanDialogState extends ConsumerState<_RequestLoanDialog> {
       approvedBy: '',
       approvalDate: '',
       remarks: '',
-      status: 'Pending',
+      status: 'Pending Supervisor',
       remainingBalance: amount,
     );
 
