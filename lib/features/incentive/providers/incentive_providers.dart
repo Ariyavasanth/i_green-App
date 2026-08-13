@@ -4,7 +4,7 @@ import '../domain/incentive_repository.dart';
 import '../domain/incentive_request.dart';
 import '../domain/incentive_settings.dart';
 
-// Firestore implementation active.
+// Firestore implementation active. Screens depend only on the interface.
 final incentiveRepositoryProvider = Provider<IncentiveRepository>(
   (ref) => FirebaseIncentiveRepository(),
 );

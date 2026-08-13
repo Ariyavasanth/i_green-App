@@ -3,7 +3,7 @@ import '../../incentive/domain/incentive_request.dart';
 import '../data/firebase_incentive_management_repository.dart';
 import '../domain/incentive_management_repository.dart';
 
-// Firestore implementation active.
+// Firestore implementation active. Both sides use incentive_requests.
 final incentiveManagementRepositoryProvider = Provider<IncentiveManagementRepository>(
   (ref) => FirebaseIncentiveManagementRepository(),
 );

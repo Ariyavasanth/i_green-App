@@ -111,7 +111,9 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
 
     try {
       await ref.read(incentiveRepositoryProvider).createRequest(newRequest);
-      ref.invalidate(allIncentiveRequestsProvider);
+      // Do not report success until My Requests has re-read Firestore. This
+      // prevents the tab from continuing to display a stale cached result.
+      await ref.refresh(allIncentiveRequestsProvider.future);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -914,7 +916,7 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
                   final rejectedCount = filteredRequests.where((r) => r.status == 'Rejected').length;
 
                   return Expanded(
-                    child: Column(
+                    child: ListView(
                       children: [
                         // Stat summary pills
                         Row(
@@ -936,27 +938,26 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
                         _buildDateFilterBar(),
                         const SizedBox(height: 16),
 
-                        // Filtered Requests List
-                        Expanded(
-                          child: filteredRequests.isEmpty
-                              ? const Center(
-                                  child: Padding(
-                                    padding: EdgeInsets.all(32.0),
-                                    child: Text(
-                                      'No incentive requests match your search or filter.',
-                                      style: TextStyle(color: Colors.grey),
-                                    ),
-                                  ),
-                                )
-                              : ListView.separated(
-                                  itemCount: filteredRequests.length,
-                                  separatorBuilder: (context, index) => const SizedBox(height: 12),
-                                  itemBuilder: (context, index) {
-                                    final req = filteredRequests[index];
-                                    return _buildRequestRowItem(req);
-                                  },
-                                ),
-                        ),
+                        // Keep the controls and results in one scrollable area.
+                        // This prevents a vertical Flex overflow on short
+                        // windows while preserving the existing layout.
+                        if (filteredRequests.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.all(32.0),
+                            child: Center(
+                              child: Text(
+                                'No incentive requests match your search or filter.',
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                            ),
+                          )
+                        else
+                          ...filteredRequests.indexed.expand((entry) sync* {
+                            if (entry.$1 > 0) {
+                              yield const SizedBox(height: 12);
+                            }
+                            yield _buildRequestRowItem(entry.$2);
+                          }),
                       ],
                     ),
                   );
@@ -1263,8 +1264,10 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
 
           if (isPending && req.id != null) ...[
             const SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 OutlinedButton.icon(
                   onPressed: () => _showEditDialog(req),
@@ -1276,7 +1279,6 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
                   icon: const Icon(Icons.edit_outlined, size: 14),
                   label: const Text('Edit Request', style: TextStyle(fontSize: 12)),
                 ),
-                const SizedBox(width: 8),
                 OutlinedButton.icon(
                   onPressed: () => _cancelRequest(req.id!),
                   style: OutlinedButton.styleFrom(
