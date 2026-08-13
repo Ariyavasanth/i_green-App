@@ -6,6 +6,8 @@ import '../../../../core/theme/app_colors.dart';
 import '../../domain/employee.dart';
 import '../../providers/employee_providers.dart';
 
+import '../employee_registration_page.dart';
+
 class EmployeeFormDialog extends ConsumerStatefulWidget {
   const EmployeeFormDialog({this.employee, super.key});
 
@@ -39,6 +41,35 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
   late final TextEditingController _leaveEffectiveDateController;
   bool _isSaving = false;
   late Set<String> _selectedPermissions;
+  String _phoneCountryCode = '+91';
+
+  (String, String) _parsePhoneAndCountryCode(String fullPhone) {
+    final trimmed = fullPhone.trim();
+    if (trimmed.isEmpty) return ('+91', '');
+    
+    final sortedCodes = EmployeeRegistrationPage.allWorldCountryCodes.map((e) => e['code']!).toList()
+      ..sort((a, b) => b.length.compareTo(a.length));
+
+    for (final code in sortedCodes) {
+      if (trimmed.startsWith(code)) {
+        return (code, trimmed.substring(code.length).trim());
+      }
+    }
+    if (trimmed.startsWith('+')) {
+      final spaceIdx = trimmed.indexOf(' ');
+      if (spaceIdx > 0) {
+        return (trimmed.substring(0, spaceIdx), trimmed.substring(spaceIdx + 1).trim());
+      }
+    }
+    return ('+91', trimmed);
+  }
+
+  String _formatPhoneWithCountryCode(String countryCode, String phoneDigits) {
+    final digits = phoneDigits.trim();
+    if (digits.isEmpty) return '';
+    if (digits.startsWith('+')) return digits;
+    return '$countryCode $digits';
+  }
 
   @override
   void initState() {
@@ -48,7 +79,9 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
     _firstNameController = TextEditingController(text: emp?.firstName ?? '');
     _lastNameController = TextEditingController(text: emp?.lastName ?? '');
     _emailController = TextEditingController(text: emp?.emailAddress ?? '');
-    _phoneController = TextEditingController(text: emp?.phoneNumber ?? '');
+    final (cc, phoneNum) = _parsePhoneAndCountryCode(emp?.phoneNumber ?? '');
+    _phoneCountryCode = cc;
+    _phoneController = TextEditingController(text: phoneNum);
     _orgController = TextEditingController(text: emp?.organizationName ?? '');
     _deptController = TextEditingController(
       text: (emp?.department ?? '').isNotEmpty
@@ -116,7 +149,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                 firstName: _firstNameController.text.trim(),
                 lastName: _lastNameController.text.trim(),
                 emailAddress: _emailController.text.trim(),
-                phoneNumber: _phoneController.text.trim(),
+                phoneNumber: _formatPhoneWithCountryCode(_phoneCountryCode, _phoneController.text),
                 gender: 'Male',
                 dob: '',
                 organizationName: _orgController.text.trim(),
@@ -132,7 +165,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
         firstName: _firstNameController.text.trim(),
         lastName: _lastNameController.text.trim(),
         emailAddress: _emailController.text.trim(),
-        phoneNumber: _phoneController.text.trim(),
+        phoneNumber: _formatPhoneWithCountryCode(_phoneCountryCode, _phoneController.text),
         organizationName: _orgController.text.trim(),
         department: _deptController.text.trim(),
         designation: _designationController.text.trim(),
@@ -274,10 +307,46 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                   child2: TextFormField(
                     controller: _phoneController,
                     keyboardType: TextInputType.phone,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     autovalidateMode: AutovalidateMode.onUserInteraction,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Phone Number *',
-                      border: OutlineInputBorder(),
+                      border: const OutlineInputBorder(),
+                      prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+                      prefixIcon: Container(
+                        margin: const EdgeInsets.only(right: 6),
+                        padding: const EdgeInsets.only(left: 8, right: 4),
+                        decoration: const BoxDecoration(
+                          border: Border(
+                            right: BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+                          ),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: EmployeeRegistrationPage.allWorldCountryCodes.any((c) => c['code'] == _phoneCountryCode)
+                                ? _phoneCountryCode
+                                : '+91',
+                            isDense: true,
+                            menuMaxHeight: 300,
+                            style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w500),
+                            icon: const Icon(Icons.keyboard_arrow_down, size: 14, color: Colors.black54),
+                            items: EmployeeRegistrationPage.allWorldCountryCodes.map((item) {
+                              return DropdownMenuItem<String>(
+                                value: item['code'],
+                                child: Text(
+                                  item['label']!,
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() => _phoneCountryCode = val);
+                              }
+                            },
+                          ),
+                        ),
+                      ),
                     ),
                     validator: (v) {
                       if (v != null && v.isNotEmpty && RegExp(r'[a-zA-Z]').hasMatch(v)) {

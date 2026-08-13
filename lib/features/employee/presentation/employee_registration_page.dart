@@ -52,6 +52,7 @@ class _EmployeeRegistrationPageState
   final _dobController = TextEditingController();
   final _aadhaarController = TextEditingController();
   final _phoneController = TextEditingController();
+  String _phoneCountryCode = '+91';
   String _department = 'Management';
   String _designation = 'Company Director';
   final _joiningDateController = TextEditingController();
@@ -67,6 +68,7 @@ class _EmployeeRegistrationPageState
   final _adminNameController = TextEditingController(text: 'Saravanan G S');
   final _coordinatorNameController = TextEditingController(text: 'Admin Team');
   final _coordinatorPhoneController = TextEditingController(text: '8760098789');
+  String _coordinatorPhoneCountryCode = '+91';
   String _leaveType = 'As Needed';
   String _leaveAllocationFrequency = 'Monthly';
   final _allowedLeavesController = TextEditingController(text: '1.0');
@@ -108,14 +110,17 @@ class _EmployeeRegistrationPageState
   // Tab 5: History
   final _originalDobController = TextEditingController();
   final _personalMobileController = TextEditingController();
+  String _personalMobileCountryCode = '+91';
   final _panController = TextEditingController();
   final _passportController = TextEditingController();
   final _drivingLicenseController = TextEditingController();
   final _healthIssuesController = TextEditingController();
   final _emergencyNameController = TextEditingController();
   final _emergencyMobileController = TextEditingController();
+  String _emergencyMobileCountryCode = '+91';
   final _referredByNameController = TextEditingController();
   final _referredByMobileController = TextEditingController();
+  String _referredByMobileCountryCode = '+91';
   final _fatherNameController = TextEditingController();
   final _motherNameController = TextEditingController();
   String _maritalStatus = 'Unmarried';
@@ -309,6 +314,35 @@ class _EmployeeRegistrationPageState
   bool _draftLoaded = false;
   final Set<String> _savedTabs = {};
 
+  (String, String) _parsePhoneAndCountryCode(String fullPhone) {
+    final trimmed = fullPhone.trim();
+    if (trimmed.isEmpty) return ('+91', '');
+    
+    // Sort codes by length descending so longer codes match first
+    final sortedCodes = allWorldCountryCodes.map((e) => e['code']!).toList()
+      ..sort((a, b) => b.length.compareTo(a.length));
+
+    for (final code in sortedCodes) {
+      if (trimmed.startsWith(code)) {
+        return (code, trimmed.substring(code.length).trim());
+      }
+    }
+    if (trimmed.startsWith('+')) {
+      final spaceIdx = trimmed.indexOf(' ');
+      if (spaceIdx > 0) {
+        return (trimmed.substring(0, spaceIdx), trimmed.substring(spaceIdx + 1).trim());
+      }
+    }
+    return ('+91', trimmed);
+  }
+
+  String _formatPhoneWithCountryCode(String countryCode, String phoneDigits) {
+    final digits = phoneDigits.trim();
+    if (digits.isEmpty) return '';
+    if (digits.startsWith('+')) return digits;
+    return '$countryCode $digits';
+  }
+
   void _populateFromEmployee(Employee emp) {
     setState(() {
       _currentEmployee = emp;
@@ -320,7 +354,9 @@ class _EmployeeRegistrationPageState
       if (emp.status.isNotEmpty) _status = emp.status;
       _dobController.text = emp.dob;
       _aadhaarController.text = emp.aadhaarNumber;
-      _phoneController.text = emp.phoneNumber;
+      final (phoneCc, phoneNum) = _parsePhoneAndCountryCode(emp.phoneNumber);
+      _phoneCountryCode = phoneCc;
+      _phoneController.text = phoneNum;
       if (emp.department.isNotEmpty) _department = emp.department;
       if (emp.designation.isNotEmpty) _designation = emp.designation;
       _joiningDateController.text = emp.joiningDate;
@@ -334,7 +370,9 @@ class _EmployeeRegistrationPageState
       _reportingManagerTitleController.text = emp.reportingManagerTitle.isNotEmpty ? emp.reportingManagerTitle : 'Managing Director';
       _adminNameController.text = emp.adminName.isNotEmpty ? emp.adminName : 'Saravanan G S';
       _coordinatorNameController.text = emp.coordinatorName.isNotEmpty ? emp.coordinatorName : 'Admin Team';
-      _coordinatorPhoneController.text = emp.coordinatorPhone.isNotEmpty ? emp.coordinatorPhone : '8760098789';
+      final (coordCc, coordNum) = _parsePhoneAndCountryCode(emp.coordinatorPhone.isNotEmpty ? emp.coordinatorPhone : '8760098789');
+      _coordinatorPhoneCountryCode = coordCc;
+      _coordinatorPhoneController.text = coordNum;
       if (emp.reportingManager.isNotEmpty) _reportingToController.text = emp.reportingManager;
       if (emp.leaveType.isNotEmpty) {
         _leaveType = emp.leaveType == 'Once a Month' ? 'Manual Allocation' : emp.leaveType;
@@ -357,15 +395,21 @@ class _EmployeeRegistrationPageState
       if (emp.presentCountry.isNotEmpty) _presCountryController.text = emp.presentCountry;
 
       _originalDobController.text = emp.originalDob;
-      _personalMobileController.text = emp.personalMobile;
+      final (personalCc, personalNum) = _parsePhoneAndCountryCode(emp.personalMobile);
+      _personalMobileCountryCode = personalCc;
+      _personalMobileController.text = personalNum;
       _panController.text = emp.panNumber;
       _passportController.text = emp.passportNumber;
       _drivingLicenseController.text = emp.drivingLicenseNumber;
       _healthIssuesController.text = emp.healthIssues;
       _emergencyNameController.text = emp.emergencyName;
-      _emergencyMobileController.text = emp.emergencyMobile;
+      final (emergencyCc, emergencyNum) = _parsePhoneAndCountryCode(emp.emergencyMobile);
+      _emergencyMobileCountryCode = emergencyCc;
+      _emergencyMobileController.text = emergencyNum;
       _referredByNameController.text = emp.referredByName;
-      _referredByMobileController.text = emp.referredByMobile;
+      final (refCc, refNum) = _parsePhoneAndCountryCode(emp.referredByMobile);
+      _referredByMobileCountryCode = refCc;
+      _referredByMobileController.text = refNum;
       _fatherNameController.text = emp.fatherName;
       _motherNameController.text = emp.motherName;
       if (emp.maritalStatus.isNotEmpty) _maritalStatus = emp.maritalStatus;
@@ -860,7 +904,7 @@ class _EmployeeRegistrationPageState
         firstName: _firstNameController.text.trim(),
         lastName: _lastNameController.text.trim(),
         emailAddress: _emailController.text.trim(),
-        phoneNumber: _phoneController.text.trim(),
+        phoneNumber: _formatPhoneWithCountryCode(_phoneCountryCode, _phoneController.text),
         gender: _gender,
         dob: _dobController.text.trim(),
         organizationName: (link?.organizationName ?? '').isEmpty
@@ -892,15 +936,15 @@ class _EmployeeRegistrationPageState
         educationListJson: jsonEncode(_educationList.map((e) => e.toMap()).toList()),
         experienceListJson: jsonEncode(_experienceList.map((e) => e.toMap()).toList()),
         originalDob: _originalDobController.text.trim(),
-        personalMobile: _personalMobileController.text.trim(),
+        personalMobile: _formatPhoneWithCountryCode(_personalMobileCountryCode, _personalMobileController.text),
         passportNumber: _passportController.text.trim(),
         drivingLicenseNumber: _drivingLicenseController.text.trim(),
         drivingLicenseBatch: '',
         healthIssues: _healthIssuesController.text.trim(),
         emergencyName: _emergencyNameController.text.trim(),
-        emergencyMobile: _emergencyMobileController.text.trim(),
+        emergencyMobile: _formatPhoneWithCountryCode(_emergencyMobileCountryCode, _emergencyMobileController.text),
         referredByName: _referredByNameController.text.trim(),
-        referredByMobile: _referredByMobileController.text.trim(),
+        referredByMobile: _formatPhoneWithCountryCode(_referredByMobileCountryCode, _referredByMobileController.text),
         fatherName: _fatherNameController.text.trim(),
         motherName: _motherNameController.text.trim(),
         maritalStatus: _maritalStatus,
@@ -930,7 +974,7 @@ class _EmployeeRegistrationPageState
         reportingManagerTitle: _reportingManagerTitleController.text.trim(),
         adminName: _adminNameController.text.trim(),
         coordinatorName: _coordinatorNameController.text.trim(),
-        coordinatorPhone: _coordinatorPhoneController.text.trim(),
+        coordinatorPhone: _formatPhoneWithCountryCode(_coordinatorPhoneCountryCode, _coordinatorPhoneController.text),
         leaveType: _leaveType,
         leaveAllocationFrequency: _leaveType == 'Manual Allocation' ? _leaveAllocationFrequency : '',
         allowedLeaves: _leaveType == 'Manual Allocation' ? (double.tryParse(_allowedLeavesController.text.trim()) ?? 0.0) : 0.0,
@@ -1712,7 +1756,14 @@ class _EmployeeRegistrationPageState
         _buildRow2or3(
           isMobile: isMobile,
           children: [
-            _buildTextField('Contact Number', _phoneController, placeholder: '8760098789', isNumber: true),
+            _buildTextField(
+              'Contact Number',
+              _phoneController,
+              placeholder: '8760098789',
+              isPhone: true,
+              countryCode: _phoneCountryCode,
+              onCountryCodeChanged: (val) => setState(() => _phoneCountryCode = val),
+            ),
             _buildTextField('Email', _emailController, placeholder: 'Saravanan@igreentec.in'),
             _buildTextField('PF Number', _pfNumberController, placeholder: '100338738050', isNumber: true),
           ],
@@ -1835,7 +1886,9 @@ class _EmployeeRegistrationPageState
                 const Text('Phone', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                 const SizedBox(height: 2),
                 Text(
-                  _phoneController.text.isEmpty ? '-' : _phoneController.text,
+                  _phoneController.text.isEmpty
+                      ? '-'
+                      : _formatPhoneWithCountryCode(_phoneCountryCode, _phoneController.text),
                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.black87),
                 ),
                 const SizedBox(height: 14),
@@ -1970,7 +2023,9 @@ class _EmployeeRegistrationPageState
                   'Coordinator Contact Phone',
                   _coordinatorPhoneController,
                   placeholder: 'e.g. 8760098789',
-                  isNumber: true,
+                  isPhone: true,
+                  countryCode: _coordinatorPhoneCountryCode,
+                  onCountryCodeChanged: (val) => setState(() => _coordinatorPhoneCountryCode = val),
                 ),
               ],
             ),
@@ -2524,7 +2579,14 @@ class _EmployeeRegistrationPageState
               isMobile: isMobile,
               children: [
                 _buildDateField('Original DOB', _originalDobController, placeholder: 'dd-mm-yyyy'),
-                _buildTextField('Personal Mobile Number', _personalMobileController, placeholder: 'Personal Mobile Number', isNumber: true),
+                _buildTextField(
+                  'Personal Mobile Number',
+                  _personalMobileController,
+                  placeholder: 'Personal Mobile Number',
+                  isPhone: true,
+                  countryCode: _personalMobileCountryCode,
+                  onCountryCodeChanged: (val) => setState(() => _personalMobileCountryCode = val),
+                ),
                 _buildTextField('PAN No', _panController, placeholder: 'PAN'),
               ],
             ),
@@ -2545,7 +2607,14 @@ class _EmployeeRegistrationPageState
               isMobile: isMobile,
               children: [
                 _buildTextField('Name', _emergencyNameController, placeholder: 'Emergency Name'),
-                _buildTextField('Mobile Number', _emergencyMobileController, placeholder: 'Emergency Contact', isNumber: true),
+                _buildTextField(
+                  'Mobile Number',
+                  _emergencyMobileController,
+                  placeholder: 'Emergency Contact',
+                  isPhone: true,
+                  countryCode: _emergencyMobileCountryCode,
+                  onCountryCodeChanged: (val) => setState(() => _emergencyMobileCountryCode = val),
+                ),
               ],
             ),
             const SizedBox(height: 20),
@@ -2555,7 +2624,14 @@ class _EmployeeRegistrationPageState
               isMobile: isMobile,
               children: [
                 _buildTextField('Name', _referredByNameController, placeholder: 'Referred By'),
-                _buildTextField('Mobile Number', _referredByMobileController, placeholder: 'Referred Mobile', isNumber: true),
+                _buildTextField(
+                  'Mobile Number',
+                  _referredByMobileController,
+                  placeholder: 'Referred Mobile',
+                  isPhone: true,
+                  countryCode: _referredByMobileCountryCode,
+                  onCountryCodeChanged: (val) => setState(() => _referredByMobileCountryCode = val),
+                ),
               ],
             ),
             const SizedBox(height: 20),
@@ -2981,6 +3057,278 @@ class _EmployeeRegistrationPageState
     );
   }
 
+  static const List<Map<String, String>> allWorldCountryCodes = [
+    {'code': '+91', 'label': '+91 🇮🇳 (India)'},
+    {'code': '+1', 'label': '+1 🇺🇸 (USA / Canada)'},
+    {'code': '+44', 'label': '+44 🇬🇧 (UK)'},
+    {'code': '+971', 'label': '+971 🇦🇪 (UAE)'},
+    {'code': '+966', 'label': '+966 🇸🇦 (Saudi Arabia)'},
+    {'code': '+65', 'label': '+65 🇸🇬 (Singapore)'},
+    {'code': '+61', 'label': '+61 🇦🇺 (Australia)'},
+    {'code': '+60', 'label': '+60 🇲🇾 (Malaysia)'},
+    {'code': '+49', 'label': '+49 🇩🇪 (Germany)'},
+    {'code': '+33', 'label': '+33 🇫🇷 (France)'},
+    {'code': '+81', 'label': '+81 🇯🇵 (Japan)'},
+    {'code': '+86', 'label': '+86 🇨🇳 (China)'},
+    {'code': '+93', 'label': '+93 🇦🇫 (Afghanistan)'},
+    {'code': '+355', 'label': '+355 🇦🇱 (Albania)'},
+    {'code': '+213', 'label': '+213 🇩🇿 (Algeria)'},
+    {'code': '+1684', 'label': '+1684 🇦🇸 (American Samoa)'},
+    {'code': '+376', 'label': '+376 🇦🇩 (Andorra)'},
+    {'code': '+244', 'label': '+244 🇦🇴 (Angola)'},
+    {'code': '+1264', 'label': '+1264 🇦🇮 (Anguilla)'},
+    {'code': '+1268', 'label': '+1268 🇦🇬 (Antigua & Barbuda)'},
+    {'code': '+54', 'label': '+54 🇦🇷 (Argentina)'},
+    {'code': '+374', 'label': '+374 🇦🇲 (Armenia)'},
+    {'code': '+297', 'label': '+297 🇦🇼 (Aruba)'},
+    {'code': '+43', 'label': '+43 🇦🇹 (Austria)'},
+    {'code': '+994', 'label': '+994 🇦🇿 (Azerbaijan)'},
+    {'code': '+1242', 'label': '+1242 🇧🇸 (Bahamas)'},
+    {'code': '+973', 'label': '+973 🇧🇭 (Bahrain)'},
+    {'code': '+880', 'label': '+880 🇧🇩 (Bangladesh)'},
+    {'code': '+1246', 'label': '+1246 🇧🇧 (Barbados)'},
+    {'code': '+375', 'label': '+375 🇧🇾 (Belarus)'},
+    {'code': '+32', 'label': '+32 🇧🇪 (Belgium)'},
+    {'code': '+501', 'label': '+501 🇧🇿 (Belize)'},
+    {'code': '+229', 'label': '+229 🇧🇯 (Benin)'},
+    {'code': '+1441', 'label': '+1441 🇧🇲 (Bermuda)'},
+    {'code': '+975', 'label': '+975 🇧🇹 (Bhutan)'},
+    {'code': '+591', 'label': '+591 🇧🇴 (Bolivia)'},
+    {'code': '+387', 'label': '+387 🇧🇦 (Bosnia & Herzegovina)'},
+    {'code': '+267', 'label': '+267 🇧🇼 (Botswana)'},
+    {'code': '+55', 'label': '+55 🇧🇷 (Brazil)'},
+    {'code': '+246', 'label': '+246 🇮🇴 (British Indian Ocean Territory)'},
+    {'code': '+1284', 'label': '+1284 🇻🇬 (British Virgin Islands)'},
+    {'code': '+673', 'label': '+673 🇧🇳 (Brunei)'},
+    {'code': '+359', 'label': '+359 🇧🇬 (Bulgaria)'},
+    {'code': '+226', 'label': '+226 🇧🇫 (Burkina Faso)'},
+    {'code': '+257', 'label': '+257 🇧🇮 (Burundi)'},
+    {'code': '+855', 'label': '+855 🇰🇭 (Cambodia)'},
+    {'code': '+237', 'label': '+237 🇨🇲 (Cameroon)'},
+    {'code': '+238', 'label': '+238 🇨🇻 (Cape Verde)'},
+    {'code': '+1345', 'label': '+1345 🇰🇾 (Cayman Islands)'},
+    {'code': '+236', 'label': '+236 🇨🇫 (Central African Republic)'},
+    {'code': '+235', 'label': '+235 🇹🇩 (Chad)'},
+    {'code': '+56', 'label': '+56 🇨🇱 (Chile)'},
+    {'code': '+57', 'label': '+57 🇨🇴 (Colombia)'},
+    {'code': '+269', 'label': '+269 🇰🇲 (Comoros)'},
+    {'code': '+242', 'label': '+242 🇨🇬 (Congo - Brazzaville)'},
+    {'code': '+243', 'label': '+243 🇨🇩 (Congo - Kinshasa)'},
+    {'code': '+682', 'label': '+682 🇨🇰 (Cook Islands)'},
+    {'code': '+506', 'label': '+506 🇨🇷 (Costa Rica)'},
+    {'code': '+385', 'label': '+385 🇭🇷 (Croatia)'},
+    {'code': '+53', 'label': '+53 🇨🇺 (Cuba)'},
+    {'code': '+599', 'label': '+599 🇨🇼 (Curaçao)'},
+    {'code': '+357', 'label': '+357 🇨🇾 (Cyprus)'},
+    {'code': '+420', 'label': '+420 🇨🇿 (Czech Republic)'},
+    {'code': '+45', 'label': '+45 🇩🇰 (Denmark)'},
+    {'code': '+253', 'label': '+253 🇩🇯 (Djibouti)'},
+    {'code': '+1767', 'label': '+1767 🇩🇲 (Dominica)'},
+    {'code': '+1809', 'label': '+1809 🇩🇴 (Dominican Republic)'},
+    {'code': '+593', 'label': '+593 🇪🇨 (Ecuador)'},
+    {'code': '+20', 'label': '+20 🇪🇬 (Egypt)'},
+    {'code': '+503', 'label': '+503 🇸🇻 (El Salvador)'},
+    {'code': '+240', 'label': '+240 🇬🇶 (Equatorial Guinea)'},
+    {'code': '+291', 'label': '+291 🇪🇷 (Eritrea)'},
+    {'code': '+372', 'label': '+372 🇪🇪 (Estonia)'},
+    {'code': '+251', 'label': '+251 🇪🇹 (Ethiopia)'},
+    {'code': '+500', 'label': '+500 🇫🇰 (Falkland Islands)'},
+    {'code': '+298', 'label': '+298 🇫🇴 (Faroe Islands)'},
+    {'code': '+679', 'label': '+679 🇫🇯 (Fiji)'},
+    {'code': '+358', 'label': '+358 🇫🇮 (Finland)'},
+    {'code': '+594', 'label': '+594 🇬🇫 (French Guiana)'},
+    {'code': '+689', 'label': '+689 🇵🇫 (French Polynesia)'},
+    {'code': '+241', 'label': '+241 🇬🇦 (Gabon)'},
+    {'code': '+220', 'label': '+220 🇬🇲 (Gambia)'},
+    {'code': '+995', 'label': '+995 🇬🇪 (Georgia)'},
+    {'code': '+233', 'label': '+233 🇬🇭 (Ghana)'},
+    {'code': '+350', 'label': '+350 🇬🇮 (Gibraltar)'},
+    {'code': '+30', 'label': '+30 🇬🇷 (Greece)'},
+    {'code': '+299', 'label': '+299 🇬🇱 (Greenland)'},
+    {'code': '+1473', 'label': '+1473 🇬🇩 (Grenada)'},
+    {'code': '+590', 'label': '+590 🇬🇵 (Guadeloupe)'},
+    {'code': '+1671', 'label': '+1671 🇬🇺 (Guam)'},
+    {'code': '+502', 'label': '+502 🇬🇹 (Guatemala)'},
+    {'code': '+224', 'label': '+224 🇬🇳 (Guinea)'},
+    {'code': '+245', 'label': '+245 🇬🇼 (Guinea-Bissau)'},
+    {'code': '+592', 'label': '+592 🇬🇾 (Guyana)'},
+    {'code': '+509', 'label': '+509 🇭🇹 (Haiti)'},
+    {'code': '+504', 'label': '+504 🇭🇳 (Honduras)'},
+    {'code': '+852', 'label': '+852 🇭🇰 (Hong Kong)'},
+    {'code': '+36', 'label': '+36 🇭🇺 (Hungary)'},
+    {'code': '+354', 'label': '+354 🇮🇸 (Iceland)'},
+    {'code': '+62', 'label': '+62 🇮🇩 (Indonesia)'},
+    {'code': '+98', 'label': '+98 🇮🇷 (Iran)'},
+    {'code': '+964', 'label': '+964 🇮🇶 (Iraq)'},
+    {'code': '+353', 'label': '+353 🇮🇪 (Ireland)'},
+    {'code': '+441624', 'label': '+441624 🇮🇲 (Isle of Man)'},
+    {'code': '+972', 'label': '+972 🇮🇱 (Israel)'},
+    {'code': '+39', 'label': '+39 🇮🇹 (Italy)'},
+    {'code': '+225', 'label': '+225 🇨🇮 (Ivory Coast)'},
+    {'code': '+1876', 'label': '+1876 🇯🇲 (Jamaica)'},
+    {'code': '+962', 'label': '+962 🇯🇴 (Jordan)'},
+    {'code': '+7', 'label': '+7 🇰🇿 (Kazakhstan / Russia)'},
+    {'code': '+254', 'label': '+254 🇰🇪 (Kenya)'},
+    {'code': '+686', 'label': '+686 🇰🇮 (Kiribati)'},
+    {'code': '+383', 'label': '+383 🇽🇰 (Kosovo)'},
+    {'code': '+965', 'label': '+965 🇰🇼 (Kuwait)'},
+    {'code': '+996', 'label': '+996 🇰🇬 (Kyrgyzstan)'},
+    {'code': '+856', 'label': '+856 🇱🇦 (Laos)'},
+    {'code': '+371', 'label': '+371 🇱🇻 (Latvia)'},
+    {'code': '+961', 'label': '+961 🇱🇧 (Lebanon)'},
+    {'code': '+266', 'label': '+266 🇱🇸 (Lesotho)'},
+    {'code': '+231', 'label': '+231 🇱🇷 (Liberia)'},
+    {'code': '+218', 'label': '+218 🇱🇾 (Libya)'},
+    {'code': '+423', 'label': '+423 🇱🇮 (Liechtenstein)'},
+    {'code': '+370', 'label': '+370 🇱🇹 (Lithuania)'},
+    {'code': '+352', 'label': '+352 🇱🇺 (Luxembourg)'},
+    {'code': '+853', 'label': '+853 🇲🇴 (Macau)'},
+    {'code': '+389', 'label': '+389 🇲🇰 (North Macedonia)'},
+    {'code': '+261', 'label': '+261 🇲🇬 (Madagascar)'},
+    {'code': '+265', 'label': '+265 🇲🇼 (Malawi)'},
+    {'code': '+960', 'label': '+960 🇲🇻 (Maldives)'},
+    {'code': '+223', 'label': '+223 🇲🇱 (Mali)'},
+    {'code': '+356', 'label': '+356 🇲🇹 (Malta)'},
+    {'code': '+692', 'label': '+692 🇲🇭 (Marshall Islands)'},
+    {'code': '+596', 'label': '+596 🇲🇶 (Martinique)'},
+    {'code': '+222', 'label': '+222 🇲🇷 (Mauritania)'},
+    {'code': '+230', 'label': '+230 🇲🇺 (Mauritius)'},
+    {'code': '+262', 'label': '+262 🇾🇹 (Mayotte / Réunion)'},
+    {'code': '+52', 'label': '+52 🇲🇽 (Mexico)'},
+    {'code': '+691', 'label': '+691 🇫🇲 (Micronesia)'},
+    {'code': '+373', 'label': '+373 🇲🇩 (Moldova)'},
+    {'code': '+377', 'label': '+377 🇲🇨 (Monaco)'},
+    {'code': '+976', 'label': '+976 🇲🇳 (Mongolia)'},
+    {'code': '+382', 'label': '+382 🇲🇪 (Montenegro)'},
+    {'code': '+1664', 'label': '+1664 🇲🇸 (Montserrat)'},
+    {'code': '+212', 'label': '+212 🇲🇦 (Morocco)'},
+    {'code': '+258', 'label': '+258 🇲🇿 (Mozambique)'},
+    {'code': '+95', 'label': '+95 🇲🇲 (Myanmar)'},
+    {'code': '+264', 'label': '+264 🇳🇦 (Namibia)'},
+    {'code': '+674', 'label': '+674 🇳🇷 (Nauru)'},
+    {'code': '+977', 'label': '+977 🇳🇵 (Nepal)'},
+    {'code': '+31', 'label': '+31 🇳🇱 (Netherlands)'},
+    {'code': '+687', 'label': '+687 🇳🇨 (New Caledonia)'},
+    {'code': '+64', 'label': '+64 🇳🇿 (New Zealand)'},
+    {'code': '+505', 'label': '+505 🇳🇮 (Nicaragua)'},
+    {'code': '+227', 'label': '+227 🇳🇪 (Niger)'},
+    {'code': '+234', 'label': '+234 🇳🇬 (Nigeria)'},
+    {'code': '+683', 'label': '+683 🇳🇺 (Niue)'},
+    {'code': '+850', 'label': '+850 🇰🇵 (North Korea)'},
+    {'code': '+1670', 'label': '+1670 🇲🇵 (Northern Mariana Islands)'},
+    {'code': '+47', 'label': '+47 🇳🇴 (Norway)'},
+    {'code': '+968', 'label': '+968 🇴🇲 (Oman)'},
+    {'code': '+92', 'label': '+92 🇵🇰 (Pakistan)'},
+    {'code': '+680', 'label': '+680 🇵🇼 (Palau)'},
+    {'code': '+970', 'label': '+970 🇵🇸 (Palestine)'},
+    {'code': '+507', 'label': '+507 🇵🇦 (Panama)'},
+    {'code': '+675', 'label': '+675 🇵🇬 (Papua New Guinea)'},
+    {'code': '+595', 'label': '+595 🇵🇾 (Paraguay)'},
+    {'code': '+51', 'label': '+51 🇵🇪 (Peru)'},
+    {'code': '+63', 'label': '+63 🇵🇭 (Philippines)'},
+    {'code': '+48', 'label': '+48 🇵🇱 (Poland)'},
+    {'code': '+351', 'label': '+351 🇵🇹 (Portugal)'},
+    {'code': '+1787', 'label': '+1787 🇵🇷 (Puerto Rico)'},
+    {'code': '+974', 'label': '+974 🇶🇦 (Qatar)'},
+    {'code': '+40', 'label': '+40 🇷🇴 (Romania)'},
+    {'code': '+250', 'label': '+250 🇷🇼 (Rwanda)'},
+    {'code': '+290', 'label': '+290 🇸🇭 (St. Helena)'},
+    {'code': '+1869', 'label': '+1869 🇰🇳 (St. Kitts & Nevis)'},
+    {'code': '+1758', 'label': '+1758 🇱🇨 (St. Lucia)'},
+    {'code': '+508', 'label': '+508 🇵🇲 (St. Pierre & Miquelon)'},
+    {'code': '+1784', 'label': '+1784 🇻🇨 (St. Vincent & Grenadines)'},
+    {'code': '+685', 'label': '+685 🇼🇸 (Samoa)'},
+    {'code': '+378', 'label': '+378 🇸🇲 (San Marino)'},
+    {'code': '+239', 'label': '+239 🇸🇹 (Sao Tome & Principe)'},
+    {'code': '+221', 'label': '+221 🇸🇳 (Senegal)'},
+    {'code': '+381', 'label': '+381 🇷🇸 (Serbia)'},
+    {'code': '+248', 'label': '+248 🇸🇨 (Seychelles)'},
+    {'code': '+232', 'label': '+232 🇸🇱 (Sierra Leone)'},
+    {'code': '+1721', 'label': '+1721 🇸🇽 (Sint Maarten)'},
+    {'code': '+421', 'label': '+421 🇸🇰 (Slovakia)'},
+    {'code': '+386', 'label': '+386 🇸🇮 (Slovenia)'},
+    {'code': '+677', 'label': '+677 🇸🇧 (Solomon Islands)'},
+    {'code': '+252', 'label': '+252 🇸🇴 (Somalia)'},
+    {'code': '+27', 'label': '+27 🇿🇦 (South Africa)'},
+    {'code': '+82', 'label': '+82 🇰🇷 (South Korea)'},
+    {'code': '+211', 'label': '+211 🇸🇸 (South Sudan)'},
+    {'code': '+34', 'label': '+34 🇪🇸 (Spain)'},
+    {'code': '+94', 'label': '+94 🇱🇰 (Sri Lanka)'},
+    {'code': '+249', 'label': '+249 🇸🇩 (Sudan)'},
+    {'code': '+597', 'label': '+597 🇸🇷 (Suriname)'},
+    {'code': '+268', 'label': '+268 🇸🇿 (Eswatini)'},
+    {'code': '+46', 'label': '+46 🇸🇪 (Sweden)'},
+    {'code': '+41', 'label': '+41 🇨🇭 (Switzerland)'},
+    {'code': '+963', 'label': '+963 🇸🇾 (Syria)'},
+    {'code': '+886', 'label': '+886 🇹🇼 (Taiwan)'},
+    {'code': '+992', 'label': '+992 🇹🇯 (Tajikistan)'},
+    {'code': '+255', 'label': '+255 🇹🇿 (Tanzania)'},
+    {'code': '+66', 'label': '+66 🇹🇭 (Thailand)'},
+    {'code': '+670', 'label': '+670 🇹🇱 (Timor-Leste)'},
+    {'code': '+228', 'label': '+228 🇹🇬 (Togo)'},
+    {'code': '+690', 'label': '+690 🇹🇰 (Tokelau)'},
+    {'code': '+676', 'label': '+676 🇹🇴 (Tonga)'},
+    {'code': '+1868', 'label': '+1868 🇹🇹 (Trinidad & Tobago)'},
+    {'code': '+216', 'label': '+216 🇹🇳 (Tunisia)'},
+    {'code': '+90', 'label': '+90 🇹🇷 (Turkey)'},
+    {'code': '+993', 'label': '+993 🇹🇲 (Turkmenistan)'},
+    {'code': '+1649', 'label': '+1649 🇹🇨 (Turks & Caicos Islands)'},
+    {'code': '+688', 'label': '+688 🇹🇻 (Tuvalu)'},
+    {'code': '+1340', 'label': '+1340 🇻🇮 (U.S. Virgin Islands)'},
+    {'code': '+256', 'label': '+256 🇺🇬 (Uganda)'},
+    {'code': '+380', 'label': '+380 🇺🇦 (Ukraine)'},
+    {'code': '+598', 'label': '+598 🇺🇾 (Uruguay)'},
+    {'code': '+998', 'label': '+998 🇺🇿 (Uzbekistan)'},
+    {'code': '+678', 'label': '+678 🇻🇺 (Vanuatu)'},
+    {'code': '+379', 'label': '+379 🇻🇦 (Vatican City)'},
+    {'code': '+58', 'label': '+58 🇻🇪 (Venezuela)'},
+    {'code': '+84', 'label': '+84 🇻🇳 (Vietnam)'},
+    {'code': '+681', 'label': '+681 🇼🇫 (Wallis & Futuna)'},
+    {'code': '+967', 'label': '+967 🇾🇪 (Yemen)'},
+    {'code': '+260', 'label': '+260 🇿🇲 (Zambia)'},
+    {'code': '+263', 'label': '+263 🇿🇼 (Zimbabwe)'},
+  ];
+
+  Widget _buildCountryCodeDropdown({
+    required String selectedCode,
+    required ValueChanged<String> onChanged,
+  }) {
+    final effectiveCode = allWorldCountryCodes.any((c) => c['code'] == selectedCode) ? selectedCode : '+91';
+
+    return Container(
+      margin: const EdgeInsets.only(right: 6),
+      padding: const EdgeInsets.only(left: 8, right: 4),
+      decoration: const BoxDecoration(
+        border: Border(
+          right: BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+        ),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: effectiveCode,
+          isDense: true,
+          menuMaxHeight: 300,
+          style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w500),
+          icon: const Icon(Icons.keyboard_arrow_down, size: 14, color: Colors.black54),
+          items: allWorldCountryCodes.map((item) {
+            return DropdownMenuItem<String>(
+              value: item['code'],
+              child: Text(
+                item['label']!,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+              ),
+            );
+          }).toList(),
+          onChanged: (val) {
+            if (val != null) {
+              onChanged(val);
+            }
+          },
+        ),
+      ),
+    );
+  }
+
   Widget _buildTextField(
     String label,
     TextEditingController controller, {
@@ -2988,12 +3336,25 @@ class _EmployeeRegistrationPageState
     int maxLines = 1,
     ValueChanged<String>? onChanged,
     bool isNumber = false,
+    bool isPhone = false,
+    String countryCode = '+91',
+    ValueChanged<String>? onCountryCodeChanged,
     bool allowDecimal = false,
     TextInputType? keyboardType,
     List<TextInputFormatter>? inputFormatters,
     FormFieldValidator<String>? validator,
   }) {
-    final effectiveKeyboardType = keyboardType ?? (isNumber ? TextInputType.numberWithOptions(decimal: allowDecimal) : null);
+    final effectiveKeyboardType = keyboardType ?? (isPhone ? TextInputType.phone : (isNumber ? TextInputType.numberWithOptions(decimal: allowDecimal) : null));
+    final effectiveInputFormatters = inputFormatters ?? (
+      (isNumber || isPhone)
+        ? [
+            if (allowDecimal)
+              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+            else
+              FilteringTextInputFormatter.digitsOnly
+          ]
+        : null
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -3009,14 +3370,14 @@ class _EmployeeRegistrationPageState
           maxLines: maxLines,
           onChanged: onChanged,
           keyboardType: effectiveKeyboardType,
-          inputFormatters: inputFormatters,
+          inputFormatters: effectiveInputFormatters,
           autovalidateMode: AutovalidateMode.onUserInteraction,
           validator: (value) {
-            if (isNumber && value != null && value.isNotEmpty) {
+            if ((isNumber || isPhone) && value != null && value.isNotEmpty) {
               if (RegExp(r'[a-zA-Z]').hasMatch(value)) {
                 return 'Alphabets are not allowed. Please enter numbers only.';
               }
-              final pattern = allowDecimal ? RegExp(r'^\d*\.?\d*$') : RegExp(r'^\d+$');
+              final pattern = allowDecimal ? RegExp(r'^\d*\.?\d*$') : RegExp(r'^[\d\s\-]+$');
               if (!pattern.hasMatch(value.trim())) {
                 return 'Only numeric characters are allowed.';
               }
@@ -3032,6 +3393,15 @@ class _EmployeeRegistrationPageState
             hintStyle: const TextStyle(fontSize: 12, color: Colors.black38),
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            prefixIcon: isPhone && onCountryCodeChanged != null
+                ? _buildCountryCodeDropdown(
+                    selectedCode: countryCode,
+                    onChanged: onCountryCodeChanged,
+                  )
+                : null,
+            prefixIconConstraints: isPhone
+                ? const BoxConstraints(minWidth: 0, minHeight: 0)
+                : null,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
@@ -4166,7 +4536,7 @@ class _EmployeeRegistrationPageState
       firstName: _firstNameController.text.trim(),
       lastName: _lastNameController.text.trim(),
       emailAddress: _emailController.text.trim(),
-      phoneNumber: _phoneController.text.trim(),
+      phoneNumber: _formatPhoneWithCountryCode(_phoneCountryCode, _phoneController.text),
       gender: _gender,
       dob: _dobController.text.trim(),
       organizationName: link.organizationName.isEmpty
@@ -4196,15 +4566,15 @@ class _EmployeeRegistrationPageState
       educationListJson: jsonEncode(_educationList.map((e) => e.toMap()).toList()),
       experienceListJson: jsonEncode(_experienceList.map((e) => e.toMap()).toList()),
       originalDob: _originalDobController.text.trim(),
-      personalMobile: _personalMobileController.text.trim(),
+      personalMobile: _formatPhoneWithCountryCode(_personalMobileCountryCode, _personalMobileController.text),
       passportNumber: _passportController.text.trim(),
       drivingLicenseNumber: _drivingLicenseController.text.trim(),
       drivingLicenseBatch: '',
       healthIssues: _healthIssuesController.text.trim(),
       emergencyName: _emergencyNameController.text.trim(),
-      emergencyMobile: _emergencyMobileController.text.trim(),
+      emergencyMobile: _formatPhoneWithCountryCode(_emergencyMobileCountryCode, _emergencyMobileController.text),
       referredByName: _referredByNameController.text.trim(),
-      referredByMobile: _referredByMobileController.text.trim(),
+      referredByMobile: _formatPhoneWithCountryCode(_referredByMobileCountryCode, _referredByMobileController.text),
       fatherName: _fatherNameController.text.trim(),
       motherName: _motherNameController.text.trim(),
       maritalStatus: _maritalStatus,
@@ -4231,7 +4601,7 @@ class _EmployeeRegistrationPageState
       reportingManagerTitle: _reportingManagerTitleController.text.trim(),
       adminName: _adminNameController.text.trim(),
       coordinatorName: _coordinatorNameController.text.trim(),
-      coordinatorPhone: _coordinatorPhoneController.text.trim(),
+      coordinatorPhone: _formatPhoneWithCountryCode(_coordinatorPhoneCountryCode, _coordinatorPhoneController.text),
       weeklyOffDay: _weeklyOffDayController.text.trim(),
       salaryType: _salaryType,
       salaryTotalCtc: double.tryParse(_totalSalaryController.text.trim().replaceAll(',', '')) ?? 0.0,
