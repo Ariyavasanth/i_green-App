@@ -46,6 +46,7 @@ class _EmployeeRegistrationPageState
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   String _bloodGroup = 'B+';
+  String _bloodGroupDocFileName = 'No file chosen';
   String _gender = 'Male';
   String _userType = 'EMPLOYEE';
   String _status = 'ACTIVE';
@@ -317,6 +318,139 @@ class _EmployeeRegistrationPageState
   String? _selectedAcceptedLinkId;
   bool _draftLoaded = false;
   final Set<String> _savedTabs = {};
+  bool _isPopulating = false;
+  final Map<TextEditingController, String> _savedControllerTexts = {};
+
+  void _snapshotSavedTexts() {
+    final controllers = [
+      _firstNameController, _lastNameController, _dobController, _aadhaarController,
+      _phoneController, _emailController, _pfNumberController, _esiNumberController,
+      _permAddressController, _permCityController, _permCountryController,
+      _presAddressController, _presCityController, _presCountryController,
+      _originalDobController, _personalMobileController, _panController, _passportController,
+      _drivingLicenseController, _healthIssuesController, _emergencyNameController,
+      _emergencyMobileController, _referredByNameController, _referredByMobileController,
+      _fatherNameController, _motherNameController, _spouseNameController,
+      _kids1NameController, _kids2NameController, _kids3NameController,
+      _bankHolderController, _bankNameController, _bankAccNumController,
+      _bankIfscController, _bankBranchController,
+      _facebookController, _twitterController, _linkedinController, _googleController,
+      _joiningDateController, _contractEndDateController, _reportingToController,
+      _reportingManagerTitleController, _adminNameController, _coordinatorNameController,
+      _coordinatorPhoneController, _weeklyOffDayController, _inTimeController,
+      _outTimeController, _allowedLeavesController,
+      _totalSalaryController, _basicPayController, _hraController, _specialAllowanceController,
+      _eduAllowanceController, _travelAllowanceController, _otherAllowanceController,
+      _pfController, _esiController, _professionalTaxController, _tdsController,
+      _employeeCustomIdController, _passwordController,
+    ];
+    for (final c in controllers) {
+      _savedControllerTexts[c] = c.text;
+    }
+  }
+
+  void _markTabUnsaved(String tab) {
+    if (_isPopulating) return;
+    if (_savedTabs.contains(tab)) {
+      setState(() {
+        _savedTabs.remove(tab);
+      });
+    }
+  }
+
+  void _attachControllerListeners() {
+    _snapshotSavedTexts();
+    void addListenerTo(TextEditingController controller, String tabName) {
+      _savedControllerTexts[controller] = controller.text;
+      controller.addListener(() {
+        if (!_isPopulating && _savedTabs.contains(tabName)) {
+          final lastSavedText = _savedControllerTexts[controller] ?? '';
+          if (controller.text != lastSavedText) {
+            _markTabUnsaved(tabName);
+          }
+        }
+      });
+    }
+
+    // Personal Info Tab
+    addListenerTo(_firstNameController, 'Personal Info');
+    addListenerTo(_lastNameController, 'Personal Info');
+    addListenerTo(_dobController, 'Personal Info');
+    addListenerTo(_aadhaarController, 'Personal Info');
+    addListenerTo(_phoneController, 'Personal Info');
+    addListenerTo(_emailController, 'Personal Info');
+    addListenerTo(_pfNumberController, 'Personal Info');
+    addListenerTo(_esiNumberController, 'Personal Info');
+
+    // Address Tab
+    addListenerTo(_permAddressController, 'Address');
+    addListenerTo(_permCityController, 'Address');
+    addListenerTo(_permCountryController, 'Address');
+    addListenerTo(_presAddressController, 'Address');
+    addListenerTo(_presCityController, 'Address');
+    addListenerTo(_presCountryController, 'Address');
+
+    // History Tab
+    addListenerTo(_originalDobController, 'History');
+    addListenerTo(_personalMobileController, 'History');
+    addListenerTo(_panController, 'History');
+    addListenerTo(_passportController, 'History');
+    addListenerTo(_drivingLicenseController, 'History');
+    addListenerTo(_healthIssuesController, 'History');
+    addListenerTo(_emergencyNameController, 'History');
+    addListenerTo(_emergencyMobileController, 'History');
+    addListenerTo(_referredByNameController, 'History');
+    addListenerTo(_referredByMobileController, 'History');
+    addListenerTo(_fatherNameController, 'History');
+    addListenerTo(_motherNameController, 'History');
+    addListenerTo(_spouseNameController, 'History');
+    addListenerTo(_kids1NameController, 'History');
+    addListenerTo(_kids2NameController, 'History');
+    addListenerTo(_kids3NameController, 'History');
+
+    // Bank Account Tab
+    addListenerTo(_bankHolderController, 'Bank Account');
+    addListenerTo(_bankNameController, 'Bank Account');
+    addListenerTo(_bankAccNumController, 'Bank Account');
+    addListenerTo(_bankIfscController, 'Bank Account');
+    addListenerTo(_bankBranchController, 'Bank Account');
+
+    // Social Media Tab
+    addListenerTo(_facebookController, 'Social Media');
+    addListenerTo(_twitterController, 'Social Media');
+    addListenerTo(_linkedinController, 'Social Media');
+    addListenerTo(_googleController, 'Social Media');
+
+    // Job & Admin Details Tab
+    addListenerTo(_joiningDateController, 'Job & Admin Details');
+    addListenerTo(_contractEndDateController, 'Job & Admin Details');
+    addListenerTo(_reportingToController, 'Job & Admin Details');
+    addListenerTo(_reportingManagerTitleController, 'Job & Admin Details');
+    addListenerTo(_adminNameController, 'Job & Admin Details');
+    addListenerTo(_coordinatorNameController, 'Job & Admin Details');
+    addListenerTo(_coordinatorPhoneController, 'Job & Admin Details');
+    addListenerTo(_weeklyOffDayController, 'Job & Admin Details');
+    addListenerTo(_inTimeController, 'Job & Admin Details');
+    addListenerTo(_outTimeController, 'Job & Admin Details');
+    addListenerTo(_allowedLeavesController, 'Job & Admin Details');
+
+    // Salary Details Tab
+    addListenerTo(_totalSalaryController, 'Salary & Offer Letter');
+    addListenerTo(_basicPayController, 'Salary & Offer Letter');
+    addListenerTo(_hraController, 'Salary & Offer Letter');
+    addListenerTo(_specialAllowanceController, 'Salary & Offer Letter');
+    addListenerTo(_eduAllowanceController, 'Salary & Offer Letter');
+    addListenerTo(_travelAllowanceController, 'Salary & Offer Letter');
+    addListenerTo(_otherAllowanceController, 'Salary & Offer Letter');
+    addListenerTo(_pfController, 'Salary & Offer Letter');
+    addListenerTo(_esiController, 'Salary & Offer Letter');
+    addListenerTo(_professionalTaxController, 'Salary & Offer Letter');
+    addListenerTo(_tdsController, 'Salary & Offer Letter');
+
+    // Credentials Tab
+    addListenerTo(_employeeCustomIdController, 'Credentials');
+    addListenerTo(_passwordController, 'Credentials');
+  }
 
   (String, String) _parsePhoneAndCountryCode(String fullPhone) {
     final trimmed = fullPhone.trim();
@@ -348,6 +482,7 @@ class _EmployeeRegistrationPageState
   }
 
   void _populateFromEmployee(Employee emp) {
+    _isPopulating = true;
     setState(() {
       _currentEmployee = emp;
       _firstNameController.text = emp.firstName;
@@ -524,6 +659,7 @@ class _EmployeeRegistrationPageState
   }
 
   void _updateSavedTabsFromData() {
+    _isPopulating = true;
     // If loading an existing saved employee, mark all populated tabs as saved in draft history
     if (_firstNameController.text.isNotEmpty || _phoneController.text.isNotEmpty || _emailController.text.isNotEmpty) _savedTabs.add('Personal Info');
     if (_permAddressController.text.isNotEmpty || _presAddressController.text.isNotEmpty || _permCityController.text.isNotEmpty) _savedTabs.add('Address');
@@ -560,6 +696,7 @@ class _EmployeeRegistrationPageState
   @override
   void initState() {
     super.initState();
+    _attachControllerListeners();
     _selectedPermissions = widget.employee != null && widget.employee!.accessPermissions.isNotEmpty
         ? Set<String>.from(widget.employee!.accessPermissions)
         : (!_isManagementAdd ? <String>{} : Set<String>.from(Employee.allSidebarPermissions));
@@ -752,23 +889,23 @@ class _EmployeeRegistrationPageState
     super.dispose();
   }
 
-  Future<void> _selectDate(TextEditingController controller) async {
-    final now = DateTime.now();
+  Future<void> _selectDate(TextEditingController controller, {String? tabName}) async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: now,
+      initialDate: DateTime.now(),
       firstDate: DateTime(1950),
-      lastDate: DateTime(2040),
+      lastDate: DateTime(2100),
     );
     if (picked != null) {
-      final day = picked.day.toString().padLeft(2, '0');
-      final month = picked.month.toString().padLeft(2, '0');
-      final year = picked.year.toString();
-      setState(() {
-        controller.text = '$day-$month-$year';
-      });
+      final formatted = '${picked.day.toString().padLeft(2, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.year}';
+      controller.text = formatted;
+      if (tabName != null) {
+        _markTabUnsaved(tabName);
+      }
     }
   }
+
+
 
   void _removeProfileImage() {
     setState(() {
@@ -777,6 +914,28 @@ class _EmployeeRegistrationPageState
       _selectedFileName = 'No file chosen';
       _isProfileImageRemoved = true;
     });
+  }
+
+  Future<void> _pickBloodGroupDocFile() async {
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.any,
+        allowMultiple: false,
+        withData: true,
+      );
+      final file = result?.files.isNotEmpty == true ? result!.files.first : null;
+      if (file == null) return;
+      setState(() {
+        _bloodGroupDocFileName = file.name;
+      });
+      _markTabUnsaved('Personal Info');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to select file: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _pickProfileImage() async {
@@ -1305,7 +1464,7 @@ class _EmployeeRegistrationPageState
       ),
       onPressed: (_isSubmitting || _isDraftSaving)
           ? null
-          : () => _submitForm(link ??
+          : () => _showRegistrationPreviewDialog(link ??
               const RegistrationLink(
                   id: 0,
                   linkId: 'edit',
@@ -1741,8 +1900,60 @@ class _EmployeeRegistrationPageState
             _buildDropdown(
               'Blood Group',
               _bloodGroup,
-              ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'],
-              (val) => setState(() => _bloodGroup = val!),
+              ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-', 'A1+', 'A1-', 'A2+', 'A2-', 'A1B+', 'A1B-', 'A2B+', 'A2B-', 'Bombay Blood Group (hh)', "Other / Don't Know"],
+              (val) { if (val != null) { setState(() => _bloodGroup = val); _markTabUnsaved('Personal Info'); } },
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Blood Group Certificate / Test Report Document',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 5),
+            Row(
+              children: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF2F4F7),
+                    foregroundColor: Colors.black87,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                      side: const BorderSide(color: Color(0xFFD0D5DD)),
+                    ),
+                  ),
+                  onPressed: _pickBloodGroupDocFile,
+                  child: const Text('Choose file', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _bloodGroupDocFileName,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: _bloodGroupDocFileName == 'No file chosen' ? Colors.black54 : AppColors.active,
+                      fontWeight: _bloodGroupDocFileName == 'No file chosen' ? FontWeight.normal : FontWeight.w600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (_bloodGroupDocFileName != 'No file chosen')
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 16, color: Colors.grey),
+                    onPressed: () {
+                      setState(() {
+                        _bloodGroupDocFileName = 'No file chosen';
+                      });
+                      _markTabUnsaved('Personal Info');
+                    },
+                  ),
+              ],
             ),
           ],
         ),
@@ -1754,7 +1965,7 @@ class _EmployeeRegistrationPageState
               'Gender',
               _gender,
               ['Male', 'Female', 'Other'],
-              (val) => setState(() => _gender = val!),
+              (val) { if (val != null) { setState(() => _gender = val); _markTabUnsaved('Personal Info'); } },
             ),
             _buildDateField('Date Of Birth', _dobController, placeholder: '13-05-1982'),
             _buildTextField('Aadhar Number', _aadhaarController, placeholder: '833750993144', isNumber: true),
@@ -1770,7 +1981,7 @@ class _EmployeeRegistrationPageState
               placeholder: '8760098789',
               isPhone: true,
               countryCode: _phoneCountryCode,
-              onCountryCodeChanged: (val) => setState(() => _phoneCountryCode = val),
+              onCountryCodeChanged: (val) { setState(() => _phoneCountryCode = val); _markTabUnsaved('Personal Info'); },
             ),
             _buildTextField('Email', _emailController, placeholder: 'Saravanan@igreentec.in'),
             _buildTextField('PF Number', _pfNumberController, placeholder: '100338738050', isNumber: true),
@@ -1985,13 +2196,13 @@ class _EmployeeRegistrationPageState
                   'Department',
                   _department,
                   {...Employee.departmentOptions, if (_department.isNotEmpty) _department}.toList(),
-                  (val) => setState(() => _department = val!),
+                  (val) { if (val != null) { setState(() => _department = val); _markTabUnsaved('Job & Admin Details'); } },
                 ),
                 _buildDropdown(
                   'Designation',
                   _designation,
                   {...Employee.designationOptions, if (_designation.isNotEmpty) _designation}.toList(),
-                  (val) => setState(() => _designation = val!),
+                  (val) { if (val != null) { setState(() => _designation = val); _markTabUnsaved('Job & Admin Details'); } },
                 ),
                 _buildDateField('Date Of Joining', _joiningDateController, placeholder: '29-04-2017'),
               ],
@@ -2033,7 +2244,7 @@ class _EmployeeRegistrationPageState
                   placeholder: 'e.g. 8760098789',
                   isPhone: true,
                   countryCode: _coordinatorPhoneCountryCode,
-                  onCountryCodeChanged: (val) => setState(() => _coordinatorPhoneCountryCode = val),
+                  onCountryCodeChanged: (val) { setState(() => _coordinatorPhoneCountryCode = val); _markTabUnsaved('Job & Admin Details'); },
                 ),
               ],
             ),
@@ -2066,14 +2277,14 @@ class _EmployeeRegistrationPageState
                   'Leave Type',
                   _leaveType,
                   ['As Needed', 'Manual Allocation', 'No Leave'],
-                  (val) => setState(() => _leaveType = val!),
+                  (val) { if (val != null) { setState(() => _leaveType = val); _markTabUnsaved('Job & Admin Details'); } },
                 ),
                 if (_leaveType == 'Manual Allocation') ...[
                   _buildDropdown(
                     'Leave Allocation Frequency',
                     _leaveAllocationFrequency,
                     ['Monthly', 'Quarterly', 'Yearly'],
-                    (val) => setState(() => _leaveAllocationFrequency = val!),
+                    (val) { if (val != null) { setState(() => _leaveAllocationFrequency = val); _markTabUnsaved('Job & Admin Details'); } },
                   ),
                   _buildTextField(
                     'Number of Allowed Leaves',
@@ -2593,7 +2804,7 @@ class _EmployeeRegistrationPageState
                   placeholder: 'Personal Mobile Number',
                   isPhone: true,
                   countryCode: _personalMobileCountryCode,
-                  onCountryCodeChanged: (val) => setState(() => _personalMobileCountryCode = val),
+                  onCountryCodeChanged: (val) { setState(() => _personalMobileCountryCode = val); _markTabUnsaved('History'); },
                 ),
                 _buildTextField('PAN No', _panController, placeholder: 'PAN'),
               ],
@@ -2621,7 +2832,7 @@ class _EmployeeRegistrationPageState
                   placeholder: 'Emergency Contact',
                   isPhone: true,
                   countryCode: _emergencyMobileCountryCode,
-                  onCountryCodeChanged: (val) => setState(() => _emergencyMobileCountryCode = val),
+                  onCountryCodeChanged: (val) { setState(() => _emergencyMobileCountryCode = val); _markTabUnsaved('History'); },
                 ),
               ],
             ),
@@ -2638,7 +2849,7 @@ class _EmployeeRegistrationPageState
                   placeholder: 'Referred Mobile',
                   isPhone: true,
                   countryCode: _referredByMobileCountryCode,
-                  onCountryCodeChanged: (val) => setState(() => _referredByMobileCountryCode = val),
+                  onCountryCodeChanged: (val) { setState(() => _referredByMobileCountryCode = val); _markTabUnsaved('History'); },
                 ),
               ],
             ),
@@ -2660,14 +2871,14 @@ class _EmployeeRegistrationPageState
                         Radio<String>(
                           value: 'Married',
                           groupValue: _maritalStatus,
-                          onChanged: (val) => setState(() => _maritalStatus = val!),
+                          onChanged: (val) { if (val != null) { setState(() => _maritalStatus = val); _markTabUnsaved('History'); } },
                         ),
                         const Text('Married', style: TextStyle(fontSize: 12)),
                         const SizedBox(width: 8),
                         Radio<String>(
                           value: 'Unmarried',
                           groupValue: _maritalStatus,
-                          onChanged: (val) => setState(() => _maritalStatus = val!),
+                          onChanged: (val) { if (val != null) { setState(() => _maritalStatus = val); _markTabUnsaved('History'); } },
                         ),
                         const Text('Unmarried', style: TextStyle(fontSize: 12)),
                       ],
@@ -2745,7 +2956,7 @@ class _EmployeeRegistrationPageState
                   'Account Type',
                   _bankAccountType,
                   ['Savings', 'Current', 'Salary'],
-                  (val) => setState(() => _bankAccountType = val!),
+                  (val) { if (val != null) { setState(() => _bankAccountType = val); _markTabUnsaved('Bank Account'); } },
                 ),
               ],
             ),
@@ -2877,7 +3088,7 @@ class _EmployeeRegistrationPageState
                   'Document Type',
                   _docType,
                   ['Aadhaar Card', 'PAN Card', 'Educational Certificate', 'Passport', 'Relieving Letter', 'Other'],
-                  (val) => setState(() => _docType = val!),
+                  (val) { if (val != null) { setState(() => _docType = val); _markTabUnsaved('Document'); } },
                 ),
                 _buildTextField('Document Number / Reference', _docNumberController, placeholder: 'Document Number'),
               ],
@@ -3063,6 +3274,70 @@ class _EmployeeRegistrationPageState
         child: c,
       ))).toList(),
     );
+  }
+
+  static Map<String, dynamic> getCountryPhoneDetails(String code) {
+    switch (code) {
+      case '+91':
+        return {'digits': 10, 'placeholder': '9876543210', 'compact': '+91 🇮🇳'};
+      case '+1':
+        return {'digits': 10, 'placeholder': '2025550143', 'compact': '+1 🇺🇸'};
+      case '+44':
+        return {'digits': 10, 'placeholder': '7911123456', 'compact': '+44 🇬🇧'};
+      case '+971':
+        return {'digits': 9, 'placeholder': '501234567', 'compact': '+971 🇦🇪'};
+      case '+966':
+        return {'digits': 9, 'placeholder': '512345678', 'compact': '+966 🇸🇦'};
+      case '+65':
+        return {'digits': 8, 'placeholder': '81234567', 'compact': '+65 🇸🇬'};
+      case '+61':
+        return {'digits': 9, 'placeholder': '412345678', 'compact': '+61 🇦🇺'};
+      case '+60':
+        return {'digits': 10, 'placeholder': '1234567890', 'compact': '+60 🇲🇾'};
+      case '+49':
+        return {'digits': 11, 'placeholder': '15123456789', 'compact': '+49 🇩🇪'};
+      case '+33':
+        return {'digits': 9, 'placeholder': '612345678', 'compact': '+33 🇫🇷'};
+      case '+81':
+        return {'digits': 10, 'placeholder': '9012345678', 'compact': '+81 🇯🇵'};
+      case '+86':
+        return {'digits': 11, 'placeholder': '13800138000', 'compact': '+86 🇨🇳'};
+      case '+880':
+        return {'digits': 10, 'placeholder': '1712345678', 'compact': '+880 🇧🇩'};
+      case '+94':
+        return {'digits': 9, 'placeholder': '712345678', 'compact': '+94 🇱🇰'};
+      case '+92':
+        return {'digits': 10, 'placeholder': '3001234567', 'compact': '+92 🇵🇰'};
+      case '+977':
+        return {'digits': 10, 'placeholder': '9812345678', 'compact': '+977 🇳🇵'};
+      case '+62':
+        return {'digits': 11, 'placeholder': '81234567890', 'compact': '+62 🇮🇩'};
+      case '+63':
+        return {'digits': 10, 'placeholder': '9171234567', 'compact': '+63 🇵🇭'};
+      case '+84':
+        return {'digits': 9, 'placeholder': '912345678', 'compact': '+84 🇻🇳'};
+      case '+66':
+        return {'digits': 9, 'placeholder': '812345678', 'compact': '+66 🇹🇭'};
+      case '+27':
+        return {'digits': 9, 'placeholder': '821234567', 'compact': '+27 🇿🇦'};
+      case '+20':
+        return {'digits': 10, 'placeholder': '1012345678', 'compact': '+20 🇪🇬'};
+      case '+234':
+        return {'digits': 10, 'placeholder': '8012345678', 'compact': '+234 🇳🇬'};
+      default:
+        final match = allWorldCountryCodes.firstWhere(
+          (c) => c['code'] == code,
+          orElse: () => {'code': code, 'label': '$code 🌐'},
+        );
+        final label = match['label'] ?? '';
+        final parts = label.split(' ');
+        final flag = parts.length > 1 ? parts[1] : '';
+        return {
+          'digits': 10,
+          'placeholder': '9876543210',
+          'compact': '$code $flag'.trim(),
+        };
+    }
   }
 
   static const List<Map<String, String>> allWorldCountryCodes = [
@@ -3318,6 +3593,19 @@ class _EmployeeRegistrationPageState
           menuMaxHeight: 300,
           style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w500),
           icon: const Icon(Icons.keyboard_arrow_down, size: 14, color: Colors.black54),
+          selectedItemBuilder: (context) {
+            return allWorldCountryCodes.map((item) {
+              final code = item['code']!;
+              final details = getCountryPhoneDetails(code);
+              return Container(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  details['compact'] as String,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87),
+                ),
+              );
+            }).toList();
+          },
           items: allWorldCountryCodes.map((item) {
             return DropdownMenuItem<String>(
               value: item['code'],
@@ -3352,6 +3640,12 @@ class _EmployeeRegistrationPageState
     List<TextInputFormatter>? inputFormatters,
     FormFieldValidator<String>? validator,
   }) {
+    final phoneDetails = isPhone ? getCountryPhoneDetails(countryCode) : null;
+    final maxPhoneDigits = phoneDetails != null ? (phoneDetails['digits'] as int) : 10;
+    final dynamicPlaceholder = isPhone
+        ? (placeholder ?? phoneDetails!['placeholder'] as String)
+        : placeholder;
+
     final effectiveKeyboardType = keyboardType ?? (isPhone ? TextInputType.phone : (isNumber ? TextInputType.numberWithOptions(decimal: allowDecimal) : null));
     final effectiveInputFormatters = inputFormatters ?? (
       (isNumber || isPhone)
@@ -3359,7 +3653,9 @@ class _EmployeeRegistrationPageState
             if (allowDecimal)
               FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
             else
-              FilteringTextInputFormatter.digitsOnly
+              FilteringTextInputFormatter.digitsOnly,
+            if (isPhone)
+              LengthLimitingTextInputFormatter(maxPhoneDigits),
           ]
         : null
     );
@@ -3389,6 +3685,9 @@ class _EmployeeRegistrationPageState
               if (!pattern.hasMatch(value.trim())) {
                 return 'Only numeric characters are allowed.';
               }
+              if (isPhone && value.trim().length != maxPhoneDigits) {
+                return 'Please enter exactly $maxPhoneDigits digits for $countryCode.';
+              }
             }
             if (validator != null) {
               return validator(value);
@@ -3397,7 +3696,7 @@ class _EmployeeRegistrationPageState
           },
           style: const TextStyle(fontSize: 12, color: Colors.black87),
           decoration: InputDecoration(
-            hintText: placeholder,
+            hintText: dynamicPlaceholder,
             hintStyle: const TextStyle(fontSize: 12, color: Colors.black38),
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -3545,6 +3844,345 @@ class _EmployeeRegistrationPageState
     );
   }
 
+  void _showRegistrationPreviewDialog(RegistrationLink? link) {
+    final name = '${_firstNameController.text} ${_lastNameController.text}'.trim();
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.85,
+            constraints: BoxConstraints(
+              maxWidth: 900,
+              maxHeight: MediaQuery.of(context).size.height * 0.85,
+            ),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.active.withOpacity(0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.assignment_turned_in, color: AppColors.active, size: 24),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Registration Details Preview',
+                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                                ),
+                                Text(
+                                  'Review all details for ${name.isEmpty ? "Candidate" : name} before final submission.',
+                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.grey),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+                const Divider(height: 24),
+                // Body content
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Section 1: Personal Info
+                        _buildPreviewSectionHeader('Personal Information', Icons.person_outline),
+                        _buildPreviewGrid([
+                          _buildPreviewField('First Name', _firstNameController.text),
+                          _buildPreviewField('Last Name', _lastNameController.text),
+                          _buildPreviewField('Blood Group', _bloodGroup),
+                          _buildPreviewField('Blood Group Report Doc', _bloodGroupDocFileName),
+                          _buildPreviewField('Gender', _gender),
+                          _buildPreviewField('Date of Birth', _dobController.text),
+                          _buildPreviewField('Aadhaar Number', _aadhaarController.text),
+                          _buildPreviewField('Contact Phone', _formatPhoneWithCountryCode(_phoneCountryCode, _phoneController.text)),
+                          _buildPreviewField('Email Address', _emailController.text),
+                          _buildPreviewField('PF Number', _pfNumberController.text),
+                          _buildPreviewField('ESI Number', _esiNumberController.text),
+                        ]),
+                        const SizedBox(height: 20),
+
+                        // Section 2: Address
+                        _buildPreviewSectionHeader('Address Information', Icons.location_on_outlined),
+                        _buildPreviewGrid([
+                          _buildPreviewField('Permanent Address', _permAddressController.text),
+                          _buildPreviewField('Permanent City', _permCityController.text),
+                          _buildPreviewField('Permanent Country', _permCountryController.text),
+                          _buildPreviewField('Present Address', _sameAsPermanent ? '${_permAddressController.text} (Same as permanent)' : _presAddressController.text),
+                          _buildPreviewField('Present City', _sameAsPermanent ? _permCityController.text : _presCityController.text),
+                          _buildPreviewField('Present Country', _sameAsPermanent ? _permCountryController.text : _presCountryController.text),
+                        ]),
+                        const SizedBox(height: 20),
+
+                        // Section 3: Education
+                        _buildPreviewSectionHeader('Education Details', Icons.school_outlined),
+                        if (_educationList.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 4),
+                            child: Text('No education entries added.', style: TextStyle(fontSize: 12, color: Colors.black54, fontStyle: FontStyle.italic)),
+                          )
+                        else
+                          ..._educationList.map((edu) => Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Text('• ${edu.degreeName} from ${edu.instituteName} (${edu.passingYear}) - ${edu.result}', style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                          )),
+                        const SizedBox(height: 20),
+
+                        // Section 4: Experience
+                        _buildPreviewSectionHeader('Work Experience', Icons.work_outline),
+                        if (_experienceList.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 4),
+                            child: Text('No experience entries added.', style: TextStyle(fontSize: 12, color: Colors.black54, fontStyle: FontStyle.italic)),
+                          )
+                        else
+                          ..._experienceList.map((exp) => Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Text('• ${exp.position} at ${exp.companyName} (${exp.workingDuration})', style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                          )),
+                        const SizedBox(height: 20),
+
+                        // Section 5: Personal & Family History
+                        _buildPreviewSectionHeader('Personal & Family History', Icons.history_edu_outlined),
+                        _buildPreviewGrid([
+                          _buildPreviewField('Original DOB', _originalDobController.text),
+                          _buildPreviewField('Personal Mobile', _formatPhoneWithCountryCode(_personalMobileCountryCode, _personalMobileController.text)),
+                          _buildPreviewField('PAN Number', _panController.text),
+                          _buildPreviewField('Passport Number', _passportController.text),
+                          _buildPreviewField('Driving License', _drivingLicenseController.text),
+                          _buildPreviewField('Health Issues', _healthIssuesController.text),
+                          _buildPreviewField('Emergency Contact Name', _emergencyNameController.text),
+                          _buildPreviewField('Emergency Contact Phone', _formatPhoneWithCountryCode(_emergencyMobileCountryCode, _emergencyMobileController.text)),
+                          _buildPreviewField('Referred By Name', _referredByNameController.text),
+                          _buildPreviewField('Referred By Phone', _formatPhoneWithCountryCode(_referredByMobileCountryCode, _referredByMobileController.text)),
+                          _buildPreviewField('Father Name', _fatherNameController.text),
+                          _buildPreviewField('Mother Name', _motherNameController.text),
+                          _buildPreviewField('Marital Status', _maritalStatus),
+                          _buildPreviewField('Spouse Name', _spouseNameController.text),
+                          _buildPreviewField('Kids Details', [_kids1NameController.text, _kids2NameController.text, _kids3NameController.text].where((k) => k.isNotEmpty).join(', ')),
+                        ]),
+                        const SizedBox(height: 20),
+
+                        // Section 6: Bank Account Details
+                        _buildPreviewSectionHeader('Bank Account Details', Icons.account_balance_outlined),
+                        _buildPreviewGrid([
+                          _buildPreviewField('Account Holder', _bankHolderController.text),
+                          _buildPreviewField('Bank Name', _bankNameController.text),
+                          _buildPreviewField('Account Number', _bankAccNumController.text),
+                          _buildPreviewField('IFSC Code', _bankIfscController.text),
+                          _buildPreviewField('Branch', _bankBranchController.text),
+                          _buildPreviewField('Account Type', _bankAccountType),
+                        ]),
+                        const SizedBox(height: 20),
+
+                        // Section 7: Documents
+                        _buildPreviewSectionHeader('Documents', Icons.folder_open_outlined),
+                        if (_documentList.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 4),
+                            child: Text('No document entries attached.', style: TextStyle(fontSize: 12, color: Colors.black54, fontStyle: FontStyle.italic)),
+                          )
+                        else
+                          ..._documentList.map((doc) => Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Text('• ${doc.documentType}: ${doc.documentNumber} (${doc.fileName})', style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                          )),
+                        const SizedBox(height: 20),
+
+                        // Section 8: Social Media
+                        _buildPreviewSectionHeader('Social Profiles', Icons.share_outlined),
+                        _buildPreviewGrid([
+                          _buildPreviewField('Facebook', _facebookController.text),
+                          _buildPreviewField('Twitter', _twitterController.text),
+                          _buildPreviewField('LinkedIn', _linkedinController.text),
+                          _buildPreviewField('Google', _googleController.text),
+                        ]),
+                        const SizedBox(height: 20),
+
+                        // Section 9: Job & Admin Details (Management mode)
+                        if (_isManagementAdd) ...[
+                          _buildPreviewSectionHeader('Job & Administrative Details', Icons.badge_outlined),
+                          _buildPreviewGrid([
+                            _buildPreviewField('Department', _department),
+                            _buildPreviewField('Designation', _designation),
+                            _buildPreviewField('Date of Joining', _joiningDateController.text),
+                            _buildPreviewField('Contract End Date', _contractEndDateController.text),
+                            _buildPreviewField('Reporting Manager', _reportingToController.text),
+                            _buildPreviewField('Reporting Manager Title', _reportingManagerTitleController.text),
+                            _buildPreviewField('Admin Name', _adminNameController.text),
+                            _buildPreviewField('Coordinator Name', _coordinatorNameController.text),
+                            _buildPreviewField('Coordinator Contact', _formatPhoneWithCountryCode(_coordinatorPhoneCountryCode, _coordinatorPhoneController.text)),
+                            _buildPreviewField('Weekly Off Day', _weeklyOffDayController.text),
+                            _buildPreviewField('Work Hours', '${_inTimeController.text} - ${_outTimeController.text}'),
+                            _buildPreviewField('Leave Type', _leaveType),
+                            if (_leaveType == 'Manual Allocation') ...[
+                              _buildPreviewField('Allocation Frequency', _leaveAllocationFrequency),
+                              _buildPreviewField('Allowed Leaves', _allowedLeavesController.text),
+                            ],
+                          ]),
+                          const SizedBox(height: 20),
+
+                          // Section 10: Salary Details
+                          _buildPreviewSectionHeader('Salary Details', Icons.payments_outlined),
+                          _buildPreviewGrid([
+                            _buildPreviewField('Salary Type', _salaryType),
+                            _buildPreviewField('Total CTC (Monthly)', _totalSalaryController.text),
+                            _buildPreviewField('Basic Pay', _basicPayController.text),
+                            _buildPreviewField('HRA', _hraController.text),
+                            _buildPreviewField('Special Allowance', _specialAllowanceController.text),
+                            _buildPreviewField('Education Allowance', _eduAllowanceController.text),
+                            _buildPreviewField('Travel Allowance', _travelAllowanceController.text),
+                            _buildPreviewField('Other Allowance', _otherAllowanceController.text),
+                            _buildPreviewField('PF Deduction', _pfController.text),
+                            _buildPreviewField('ESI Deduction', _esiController.text),
+                            _buildPreviewField('Professional Tax', _professionalTaxController.text),
+                            _buildPreviewField('TDS', _tdsController.text),
+                          ]),
+                          const SizedBox(height: 20),
+
+                          // Section 11: Credentials & Permissions
+                          _buildPreviewSectionHeader('Credentials & Permissions', Icons.security_outlined),
+                          _buildPreviewGrid([
+                            _buildPreviewField('Employee Custom ID', _employeeCustomIdController.text),
+                            _buildPreviewField('Temporary Password', _passwordController.text.isNotEmpty ? '••••••••' : '-'),
+                            _buildPreviewField('Access Permissions', _selectedPermissions.join(', ')),
+                          ]),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                const Divider(height: 24),
+                // Footer Action Buttons
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        side: const BorderSide(color: Colors.grey),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                      ),
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.edit, size: 16, color: Colors.black87),
+                      label: const Text('Go Back & Edit', style: TextStyle(color: Colors.black87, fontSize: 13, fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.active,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                      ),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        _submitForm(link, isSubmit: true);
+                      },
+                      icon: const Icon(Icons.check_circle_outline, size: 18),
+                      label: Text(
+                        _isEditing ? 'Confirm & Save Changes' : 'Confirm & Submit Registration',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPreviewSectionHeader(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: AppColors.active),
+          const SizedBox(width: 6),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.active),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreviewGrid(List<Widget> children) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isSmall = constraints.maxWidth < 500;
+        return Wrap(
+          spacing: 16,
+          runSpacing: 10,
+          children: children.map((child) => SizedBox(
+            width: isSmall ? constraints.maxWidth : (constraints.maxWidth - 16) / 2 - 1,
+            child: child,
+          )).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildPreviewField(String label, String value) {
+    final displayValue = value.trim().isEmpty ? '-' : value.trim();
+    final isEmpty = value.trim().isEmpty;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FA),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: const Color(0xFFE9ECEF)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 2),
+          Text(
+            displayValue,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: isEmpty ? Colors.grey : Colors.black87,
+              fontStyle: isEmpty ? FontStyle.italic : FontStyle.normal,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSaveButtonsRow(
     RegistrationLink link,
     String tabName, {
@@ -3552,45 +4190,60 @@ class _EmployeeRegistrationPageState
     String saveLabel = 'Save',
   }) {
     final isSaved = _savedTabs.contains(tabName);
-    return Row(
+    final isLastTab = _tabController.index == _tabs.length - 1;
+
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 12,
+      runSpacing: 10,
       children: [
-        ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.active,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-          ),
-          onPressed: (_isSubmitting || _isDraftSaving)
-              ? null
-              : () {
-                  if (onCustomSave != null) {
-                    onCustomSave();
-                  }
-                  _submitForm(link, isSubmit: false);
-                },
-          icon: _isDraftSaving
-              ? const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                )
-              : const Icon(Icons.check, size: 16),
-          label: Text(_isDraftSaving ? 'Saving...' : saveLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-        ),
-        const SizedBox(width: 8),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.active,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-          ),
-          onPressed: () {},
-          child: const Text('Cancel', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.active,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+              ),
+              onPressed: (_isSubmitting || _isDraftSaving)
+                  ? null
+                  : () {
+                      if (onCustomSave != null) {
+                        onCustomSave();
+                      }
+                      _submitForm(link, isSubmit: false);
+                    },
+              icon: _isDraftSaving
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.check, size: 16),
+              label: Text(_isDraftSaving ? 'Saving...' : saveLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.active,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+              ),
+              onPressed: () {
+                if (GoRouter.of(context).canPop()) {
+                  GoRouter.of(context).pop();
+                } else {
+                  GoRouter.of(context).go('/employee');
+                }
+              },
+              child: const Text('Cancel', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+            ),
+          ],
         ),
         if (isSaved) ...[
-          const SizedBox(width: 16),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
@@ -3614,7 +4267,49 @@ class _EmployeeRegistrationPageState
               ],
             ),
           ),
+          if (!isLastTab)
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2E7D32),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+              ),
+              onPressed: () {
+                final currentIndex = _tabController.index;
+                if (currentIndex < _tabs.length - 1) {
+                  _tabController.animateTo(currentIndex + 1);
+                }
+              },
+              icon: const Icon(Icons.arrow_forward, size: 16),
+              label: const Text('Next Tab →', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+            ),
         ],
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8F9FA),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: const Color(0xFFE9ECEF)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.info_outline, size: 14, color: AppColors.active),
+              const SizedBox(width: 6),
+              Text(
+                isLastTab
+                    ? 'Press Save to save progress, then click Submit Registration when done.'
+                    : (isSaved ? 'Page saved! Click Next Tab to proceed.' : 'Press Save to save progress and unlock Next button.'),
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }

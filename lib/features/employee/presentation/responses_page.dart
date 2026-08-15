@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../organization/presentation/widgets/column_selection_dialog.dart';
@@ -35,6 +36,23 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
   int _currentPage = 0;
   int _rowsPerPage = 10;
   final Set<int> _selectedIds = {};
+  late final TextEditingController _mobileSearchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _mobileSearchController.dispose();
+    super.dispose();
+  }
+
+  String _getInitials(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty || trimmed == '-') return 'C';
+    final parts = trimmed.split(RegExp(r'\s+'));
+    if (parts.length >= 2 && parts[0].isNotEmpty && parts[1].isNotEmpty) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+    return trimmed.substring(0, trimmed.length >= 2 ? 2 : 1).toUpperCase();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,86 +63,59 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     final statusFilter = ref.watch(responseStatusFilterProvider);
     final dateRange = ref.watch(responseDateRangeProvider);
 
-    return ColoredBox(
-      color: Colors.white,
-      child: Column(
-        children: [
-          _buildToolbar(context, prefAsync),
-          const Divider(height: 1),
-          Expanded(
-            child: linksAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, _) => Center(
-                child: Text('Unable to load responses: $err'),
-              ),
-              data: (links) {
-                final employees = employeesAsync.valueOrNull ?? const <Employee>[];
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 720;
 
-                final statusList = const [
-                  'All Statuses',
-                  'Pending',
-                  'Submitted',
-                  'Accepted',
-                  'Rejected',
-                ];
+        return ColoredBox(
+          color: Colors.white,
+          child: linksAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (err, _) => Center(
+              child: Text('Unable to load responses: $err'),
+            ),
+            data: (links) {
+              final employees = employeesAsync.valueOrNull ?? const <Employee>[];
 
-                final filtered = links.where((link) {
-                  final q = searchQuery.toLowerCase().trim();
-                  final candidateId = _candidateId(link);
-                  final employee = _employeeForLink(link, employees);
-                  final matchesSearch = q.isEmpty ||
-                      candidateId.toLowerCase().contains(q) ||
-                      link.linkId.toLowerCase().contains(q) ||
-                      link.employeeName.toLowerCase().contains(q) ||
-                      _candidateName(link, employee).toLowerCase().contains(q) ||
-                      _emailForLink(link, employee).toLowerCase().contains(q) ||
-                      _phoneForLink(link, employee).toLowerCase().contains(q) ||
-                      link.linkStatus.toLowerCase().contains(q);
+              final statusList = const [
+                'All Statuses',
+                'Pending',
+                'Submitted',
+                'Accepted',
+                'Rejected',
+              ];
 
-                  final status = link.linkStatus.trim().toLowerCase();
-                  final filter = statusFilter.trim().toLowerCase();
+              final filtered = links.where((link) {
+                final q = searchQuery.toLowerCase().trim();
+                final candidateId = _candidateId(link);
+                final employee = _employeeForLink(link, employees);
+                final matchesSearch = q.isEmpty ||
+                    candidateId.toLowerCase().contains(q) ||
+                    link.linkId.toLowerCase().contains(q) ||
+                    link.employeeName.toLowerCase().contains(q) ||
+                    _candidateName(link, employee).toLowerCase().contains(q) ||
+                    _emailForLink(link, employee).toLowerCase().contains(q) ||
+                    _phoneForLink(link, employee).toLowerCase().contains(q) ||
+                    link.linkStatus.toLowerCase().contains(q);
 
-                  bool matchesStatus = false;
-                  if (filter == 'all statuses') {
-                    matchesStatus = true;
-                  } else if (filter == 'submitted') {
-                    matchesStatus = status == 'submitted' || status == 'completed';
-                  } else {
-                    matchesStatus = status == filter;
-                  }
+                final status = link.linkStatus.trim().toLowerCase();
+                final filter = statusFilter.trim().toLowerCase();
 
-                  final matchesDate = _matchesDateRange(link, dateRange);
-
-                  return matchesSearch && matchesStatus && matchesDate;
-                }).toList();
-
-                if (filtered.isEmpty) {
-                  return Column(
-                    children: [
-                      _buildFiltersRow([], [], statusList),
-                      const Expanded(
-                        child: Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(32),
-                            child: Text(
-                              'No candidate responses found.',
-                              style: TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
+                bool matchesStatus = false;
+                if (filter == 'all statuses') {
+                  matchesStatus = true;
+                } else if (filter == 'submitted') {
+                  matchesStatus = status == 'submitted' || status == 'completed';
+                } else {
+                  matchesStatus = status == filter;
                 }
 
-                final pref = prefAsync.valueOrNull;
-                final visibleCols = (pref != null && pref.visibleColumns.isNotEmpty)
-                    ? pref.visibleColumns
-                    : List<String>.from(_defaultAllColumns);
+                final matchesDate = _matchesDateRange(link, dateRange);
 
+                return matchesSearch && matchesStatus && matchesDate;
+              }).toList();
+
+              if (isMobile) {
                 final totalItems = filtered.length;
                 final totalPages = (totalItems / _rowsPerPage).ceil();
                 final pageIndex = _currentPage.clamp(0, (totalPages - 1).clamp(0, 999));
@@ -134,14 +125,23 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
 
                 return Column(
                   children: [
-                    _buildFiltersRow([], [], statusList),
-                    const Divider(height: 1),
+                    _buildMobileSearch(context, searchQuery),
+                    _buildMobileFilterChips(context, statusList),
                     Expanded(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) => constraints.maxWidth < 720
-                            ? _buildMobileList(pageItems, employees)
-                            : _buildDesktopTable(pageItems, visibleCols, constraints.maxWidth, employees),
-                      ),
+                      child: filtered.isEmpty
+                          ? const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(32),
+                                child: Text(
+                                  'No candidate responses found.',
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            )
+                          : _buildMobileList(pageItems, employees),
                     ),
                     _buildPaginationBar(
                       totalItems: totalItems,
@@ -150,13 +150,70 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                       currentPage: pageIndex,
                       totalPages: totalPages,
                     ),
+                    _buildStickyAddEmployeeButton(context),
                   ],
                 );
-              },
-            ),
+              }
+
+              // Desktop View Layout
+              if (filtered.isEmpty) {
+                return Column(
+                  children: [
+                    _buildToolbar(context, prefAsync),
+                    const Divider(height: 1),
+                    _buildFiltersRow(statusList),
+                    const Expanded(
+                      child: Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(32),
+                          child: Text(
+                            'No candidate responses found.',
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }
+
+              final pref = prefAsync.valueOrNull;
+              final visibleCols = (pref != null && pref.visibleColumns.isNotEmpty)
+                  ? pref.visibleColumns
+                  : List<String>.from(_defaultAllColumns);
+
+              final totalItems = filtered.length;
+              final totalPages = (totalItems / _rowsPerPage).ceil();
+              final pageIndex = _currentPage.clamp(0, (totalPages - 1).clamp(0, 999));
+              final startIndex = pageIndex * _rowsPerPage;
+              final endIndex = (startIndex + _rowsPerPage).clamp(0, totalItems);
+              final pageItems = filtered.sublist(startIndex, endIndex);
+
+              return Column(
+                children: [
+                  _buildToolbar(context, prefAsync),
+                  const Divider(height: 1),
+                  _buildFiltersRow(statusList),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: _buildDesktopTable(pageItems, visibleCols, constraints.maxWidth, employees),
+                  ),
+                  _buildPaginationBar(
+                    totalItems: totalItems,
+                    startIndex: startIndex,
+                    endIndex: endIndex,
+                    currentPage: pageIndex,
+                    totalPages: totalPages,
+                  ),
+                ],
+              );
+            },
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -175,8 +232,8 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
         ref.read(responseSearchQueryProvider.notifier).state = '';
         setState(() => _currentPage = 0);
       },
-      primaryActionLabel: 'Add Employee',
-      primaryActionIcon: Icons.add,
+      primaryActionLabel: 'Generate Link',
+      primaryActionIcon: Icons.link_sharp,
       onPrimaryAction: () => _openAddLinkDialog(context),
       secondaryActions: [
         AdminToolbarAction(
@@ -196,6 +253,377 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
           icon: Icons.view_column_outlined,
           tooltip: 'Columns',
           onPressed: () => _openColumnSelectionDialog(context),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileSearch(BuildContext context, String searchQuery) {
+    if (_mobileSearchController.text != searchQuery) {
+      _mobileSearchController.text = searchQuery;
+      _mobileSearchController.selection = TextSelection.fromPosition(
+        TextPosition(offset: searchQuery.length),
+      );
+    }
+
+    return Container(
+      height: 48,
+      margin: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+      child: TextField(
+        controller: _mobileSearchController,
+        style: const TextStyle(fontSize: 14),
+        decoration: InputDecoration(
+          hintText: 'Search responses...',
+          hintStyle: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+          prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
+          suffixIcon: searchQuery.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear, size: 18),
+                  onPressed: () {
+                    ref.read(responseSearchQueryProvider.notifier).state = '';
+                    setState(() => _currentPage = 0);
+                  },
+                )
+              : null,
+          contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          filled: true,
+          fillColor: Colors.grey.withValues(alpha: 0.05),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: AppColors.divider),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: AppColors.divider),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: AppColors.active),
+          ),
+        ),
+        onChanged: (val) {
+          ref.read(responseSearchQueryProvider.notifier).state = val;
+          setState(() => _currentPage = 0);
+        },
+      ),
+    );
+  }
+
+  Widget _buildMobileFilterChips(
+    BuildContext context,
+    List<String> statuses,
+  ) {
+    final currentStatus = ref.watch(responseStatusFilterProvider);
+    final currentDateRange = ref.watch(responseDateRangeProvider);
+
+    int activeCount = 0;
+    if (currentStatus != 'All Statuses') activeCount++;
+    if (currentDateRange != null) activeCount++;
+
+    return Container(
+      height: 42,
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            InkWell(
+              onTap: () => _openFilterBottomSheet(context, statuses),
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: activeCount > 0
+                      ? AppColors.active.withValues(alpha: 0.12)
+                      : Colors.grey.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: activeCount > 0 ? AppColors.active : AppColors.divider,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.tune,
+                      size: 16,
+                      color: activeCount > 0 ? AppColors.active : AppColors.textPrimary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Filters${activeCount > 0 ? " • $activeCount active" : ""}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: activeCount > 0 ? AppColors.active : AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+
+            if (currentStatus != 'All Statuses')
+              _buildActiveChip(
+                label: currentStatus,
+                onClear: () {
+                  ref.read(responseStatusFilterProvider.notifier).state = 'All Statuses';
+                  setState(() => _currentPage = 0);
+                },
+              ),
+            if (currentDateRange != null)
+              _buildActiveChip(
+                label: '${DateFormat('MMM d').format(currentDateRange.start)} - ${DateFormat('MMM d').format(currentDateRange.end)}',
+                onClear: () {
+                  ref.read(responseDateRangeProvider.notifier).state = null;
+                  setState(() => _currentPage = 0);
+                },
+              ),
+
+            if (activeCount == 0)
+              ...statuses.where((s) => s != 'All Statuses').map((status) {
+                final isSelected = currentStatus == status;
+                return Container(
+                  margin: const EdgeInsets.only(right: 6),
+                  child: InkWell(
+                    onTap: () {
+                      ref.read(responseStatusFilterProvider.notifier).state =
+                          isSelected ? 'All Statuses' : status;
+                      setState(() => _currentPage = 0);
+                    },
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppColors.active.withValues(alpha: 0.12)
+                            : Colors.grey.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isSelected ? AppColors.active : AppColors.divider,
+                        ),
+                      ),
+                      child: Text(
+                        status,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          color: isSelected ? AppColors.active : AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActiveChip({
+    required String label,
+    required VoidCallback onClear,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(right: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.active.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.active, width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: AppColors.active,
+            ),
+          ),
+          const SizedBox(width: 4),
+          InkWell(
+            onTap: onClear,
+            child: const Icon(
+              Icons.close,
+              size: 14,
+              color: AppColors.active,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openFilterBottomSheet(
+    BuildContext context,
+    List<String> statuses,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return Consumer(
+          builder: (context, ref, child) {
+            final currentStatus = ref.watch(responseStatusFilterProvider);
+            final currentDateRange = ref.watch(responseDateRangeProvider);
+
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 16,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Filter Responses',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _buildBottomSheetDropdown(
+                    label: 'Status',
+                    value: currentStatus,
+                    items: statuses,
+                    onChanged: (val) {
+                      ref.read(responseStatusFilterProvider.notifier).state = val;
+                      setState(() => _currentPage = 0);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Submitted Date Range',
+                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 4),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 44),
+                          alignment: Alignment.centerLeft,
+                          side: const BorderSide(color: AppColors.divider),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () async {
+                          final picked = await showDateRangePicker(
+                            context: context,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2100),
+                            initialDateRange: currentDateRange,
+                          );
+                          if (picked != null) {
+                            ref.read(responseDateRangeProvider.notifier).state = picked;
+                            setState(() => _currentPage = 0);
+                          }
+                        },
+                        icon: const Icon(Icons.calendar_today_outlined, size: 16, color: AppColors.textSecondary),
+                        label: Text(
+                          currentDateRange != null
+                              ? '${DateFormat('MMM d, yyyy').format(currentDateRange.start)} - ${DateFormat('MMM d, yyyy').format(currentDateRange.end)}'
+                              : 'Select Date Range',
+                          style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            ref.read(responseStatusFilterProvider.notifier).state = 'All Statuses';
+                            ref.read(responseDateRangeProvider.notifier).state = null;
+                            setState(() => _currentPage = 0);
+                          },
+                          child: const Text('Reset All'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.active,
+                          ),
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Apply'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildBottomSheetDropdown({
+    required String label,
+    required String value,
+    required List<String> items,
+    required ValueChanged<String> onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: items.contains(value) ? value : items.first,
+              isExpanded: true,
+              items: items
+                  .map((i) => DropdownMenuItem(value: i, child: Text(i, style: const TextStyle(fontSize: 14))))
+                  .toList(),
+              onChanged: (val) {
+                if (val != null) onChanged(val);
+              },
+            ),
+          ),
         ),
       ],
     );
@@ -224,7 +652,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
            (date.isBefore(end) || date.isAtSameMomentAs(end));
   }
 
-  Widget _buildFiltersRow(List<String> orgs, List<String> depts, List<String> statuses) {
+  Widget _buildFiltersRow(List<String> statuses) {
     final currentStatus = ref.watch(responseStatusFilterProvider);
     final currentDateRange = ref.watch(responseDateRangeProvider);
     final selectedStatus = statuses.contains(currentStatus)
@@ -374,13 +802,65 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     );
   }
 
-  void _exportData() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Exporting Response list to Excel / PDF...'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+  Future<void> _exportData() async {
+    final links = ref.read(registrationLinksProvider).valueOrNull ?? const [];
+    final employees = ref.read(allEmployeesProvider).valueOrNull ?? const [];
+
+    if (links.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No candidate responses available to export.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
+    final buffer = StringBuffer();
+    buffer.writeln('Candidate ID,Candidate Name,Email,Phone Number,Status,Generated Date,Submitted Date');
+    for (final link in links) {
+      final emp = _employeeForLink(link, employees);
+      final cId = _candidateId(link);
+      final cName = _candidateName(link, emp);
+      final email = _emailForLink(link, emp);
+      final phone = _phoneForLink(link, emp);
+      final status = link.linkStatus;
+      final genDate = link.generatedDate;
+      final subDate = link.submittedDate;
+
+      buffer.writeln(
+        '"$cId","${cName.replaceAll('"', '""')}","$email","$phone","$status","$genDate","$subDate"',
+      );
+    }
+
+    final String csvContent = buffer.toString();
+    final Uri url = Uri.parse('data:text/csv;charset=utf-8,${Uri.encodeComponent(csvContent)}');
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Successfully exported ${links.length} candidate responses!'),
+              backgroundColor: AppColors.active,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Export error: $e'),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   void _openAddLinkDialog(BuildContext context) {
@@ -574,99 +1054,210 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
 
   Widget _buildMobileList(List<RegistrationLink> links, List<Employee> employees) {
     return ListView.separated(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       itemCount: links.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 10),
-      itemBuilder: (context, index) {
-        final link = links[index];
-        final rawStatus = link.linkStatus.trim();
-        final displayStatus = (rawStatus.toLowerCase() == 'completed' || rawStatus.toLowerCase() == 'pending')
-            ? 'Submitted'
-            : rawStatus;
-        final statusColor = _getStatusColor(displayStatus);
-        final employee = _employeeForLink(link, employees);
+      separatorBuilder: (context, index) => const SizedBox(height: 10),
+      itemBuilder: (context, index) => _buildCompactResponseCard(context, links[index], employees),
+    );
+  }
 
-        return Card(
-          elevation: 1.5,
-          margin: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-            side: const BorderSide(color: AppColors.divider, width: 0.8),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _candidateName(link, employee).isEmpty ? 'Candidate' : _candidateName(link, employee),
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.active,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.active.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                            _candidateId(link),
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.active,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: statusColor, width: 0.8),
-                      ),
-                      child: Text(
-                        displayStatus,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: statusColor,
-                        ),
-                      ),
-                    ),
-                  ],
+  Widget _buildCompactResponseCard(BuildContext context, RegistrationLink link, List<Employee> employees) {
+    final employee = _employeeForLink(link, employees);
+    final candidateName = _candidateName(link, employee);
+    final rawStatus = link.linkStatus.trim();
+    final displayStatus = (rawStatus.toLowerCase() == 'completed' || rawStatus.toLowerCase() == 'pending')
+        ? 'Submitted'
+        : rawStatus;
+    final statusColor = _getStatusColor(displayStatus);
+    final initials = _getInitials(candidateName);
+    final email = _emailForLink(link, employee);
+    final phone = _phoneForLink(link, employee);
+
+    return Card(
+      elevation: 1,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: const BorderSide(color: AppColors.divider, width: 0.8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Initials Avatar
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.active.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                initials,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.active,
                 ),
-                const SizedBox(height: 10),
-                Text('Email: ${_emailForLink(link, employee).isEmpty ? '-' : _emailForLink(link, employee)}', style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
-                Text('Phone: ${_phoneForLink(link, employee).isEmpty ? '-' : _phoneForLink(link, employee)}', style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
-                const SizedBox(height: 6),
-                if (employee != null) ...[
-                  Text('Organization: ${employee.organizationName.isEmpty ? '-' : employee.organizationName}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                  Text('Department: ${employee.department.isEmpty ? '-' : employee.department}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              ),
+            ),
+            const SizedBox(width: 12),
+
+            // Details Column
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    candidateName.isEmpty ? 'Candidate' : candidateName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'ID: ${_candidateId(link)}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.active,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Email: ${email.isEmpty ? '-' : email}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Phone: ${phone.isEmpty ? '-' : phone}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                 ],
-                const SizedBox(height: 10),
-                const Divider(height: 1),
-                const SizedBox(height: 6),
-                _buildRowActions(link, isMobile: true),
+              ),
+            ),
+            const SizedBox(width: 8),
+
+            // Status Badge (equal size/height to View Button) + View Button + ⋮ Menu
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  height: 32,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: statusColor, width: 1),
+                  ),
+                  child: Text(
+                    displayStatus,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: statusColor,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                SizedBox(
+                  height: 32,
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      side: const BorderSide(color: AppColors.divider),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                    onPressed: () => _openViewDialog(context, link),
+                    child: const Text(
+                      'View',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  itemBuilder: (context) {
+                    final status = link.linkStatus.trim().toLowerCase();
+                    final isSubmittedOrPending = status == 'submitted' || status == 'pending' || status == 'completed';
+                    final isAccepted = status == 'accepted';
+
+                    return [
+                      if (isSubmittedOrPending)
+                        const PopupMenuItem(
+                          value: 'accept',
+                          child: Row(
+                            children: [
+                              Icon(Icons.check_circle_outline, size: 18, color: Colors.blue),
+                              SizedBox(width: 8),
+                              Text('Accept', style: TextStyle(fontSize: 13, color: Colors.blue, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      if (isAccepted)
+                        const PopupMenuItem(
+                          value: 'register',
+                          child: Row(
+                            children: [
+                              Icon(Icons.person_add_outlined, size: 18, color: Colors.green),
+                              SizedBox(width: 8),
+                              Text('Register', style: TextStyle(fontSize: 13, color: Colors.green, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      if (isSubmittedOrPending || isAccepted)
+                        const PopupMenuItem(
+                          value: 'reject',
+                          child: Row(
+                            children: [
+                              Icon(Icons.cancel_outlined, size: 18, color: Colors.redAccent),
+                              SizedBox(width: 8),
+                              Text('Reject', style: TextStyle(fontSize: 13, color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                    ];
+                  },
+                  onSelected: (value) {
+                    if (value == 'accept') {
+                      _setResponseStatus(link, 'Accepted');
+                    } else if (value == 'register') {
+                      GoRouter.of(context).push('/employee/register/new?acceptedLinkId=${link.linkId}');
+                    } else if (value == 'reject') {
+                      _setResponseStatus(link, 'Rejected');
+                    }
+                  },
+                ),
               ],
             ),
-          ),
-        );
-      },
+          ],
+        ),
+      ),
     );
   }
 
@@ -674,7 +1265,6 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     final status = link.linkStatus.trim().toLowerCase();
     final isSubmittedOrPending = status == 'submitted' || status == 'pending' || status == 'completed';
     final isAccepted = status == 'accepted';
-    final isRejected = status == 'rejected';
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -689,7 +1279,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
           icon: Icon(Icons.remove_red_eye_outlined, size: isMobile ? 14 : 16, color: AppColors.textPrimary),
           label: Text('View', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
         ),
-        if (isSubmittedOrPending || isRejected) ...[
+        if (isSubmittedOrPending) ...[
           const SizedBox(width: 6),
           TextButton.icon(
             style: TextButton.styleFrom(
@@ -701,19 +1291,17 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             icon: Icon(Icons.check_circle_outline, size: isMobile ? 14 : 16, color: Colors.blue),
             label: Text('Accept', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.bold, color: Colors.blue)),
           ),
-          if (isSubmittedOrPending) ...[
-            const SizedBox(width: 6),
-            TextButton.icon(
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              onPressed: () => _setResponseStatus(link, 'Rejected'),
-              icon: Icon(Icons.cancel_outlined, size: isMobile ? 14 : 16, color: Colors.redAccent),
-              label: Text('Reject', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.bold, color: Colors.redAccent)),
+          const SizedBox(width: 6),
+          TextButton.icon(
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
-          ],
+            onPressed: () => _setResponseStatus(link, 'Rejected'),
+            icon: Icon(Icons.cancel_outlined, size: isMobile ? 14 : 16, color: Colors.redAccent),
+            label: Text('Reject', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.bold, color: Colors.redAccent)),
+          ),
         ],
         if (isAccepted) ...[
           const SizedBox(width: 6),
@@ -742,6 +1330,46 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _buildStickyAddEmployeeButton(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        10,
+        16,
+        10 + MediaQuery.of(context).padding.bottom,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: const Border(top: BorderSide(color: AppColors.divider)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 4,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        height: 44,
+        child: FilledButton.icon(
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.active,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          onPressed: () => _openAddLinkDialog(context),
+          icon: const Icon(Icons.link_sharp, size: 20),
+          label: const Text(
+            'Generate Link',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ),
     );
   }
 

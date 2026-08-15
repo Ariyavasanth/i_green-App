@@ -50,11 +50,12 @@ class EmployeeDetailsDialog extends StatelessWidget {
         width: (screenWidth * 0.9).clamp(280.0, 720.0),
         height: 620,
         child: DefaultTabController(
-          length: 8,
+          length: 11,
           child: Column(
             children: [
               const TabBar(
                 isScrollable: true,
+                tabAlignment: TabAlignment.start,
                 labelColor: AppColors.active,
                 unselectedLabelColor: AppColors.textSecondary,
                 indicatorColor: AppColors.active,
@@ -67,6 +68,9 @@ class EmployeeDetailsDialog extends StatelessWidget {
                   Tab(text: 'Bank Account'),
                   Tab(text: 'Document'),
                   Tab(text: 'Social Media'),
+                  Tab(text: 'Salary Details'),
+                  Tab(text: 'Credentials'),
+                  Tab(text: 'Access Permissions'),
                 ],
               ),
               const Divider(height: 1),
@@ -81,6 +85,9 @@ class EmployeeDetailsDialog extends StatelessWidget {
                     _buildBankAccountTab(),
                     _buildDocumentTab(),
                     _buildSocialMediaTab(),
+                    _buildSalaryTab(),
+                    _buildCredentialsTab(),
+                    _buildPermissionsTab(),
                   ],
                 ),
               ),

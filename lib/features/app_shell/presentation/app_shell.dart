@@ -12,6 +12,7 @@ import '../../../widgets/navigation/sidebar_drawer.dart';
 import '../../authentication/providers/authentication_providers.dart';
 import '../../books/providers/books_providers.dart';
 import '../../employee/providers/employee_providers.dart';
+import '../../employee/presentation/dialogs/registration_links_dialog.dart';
 
 final sidebarStateStorageProvider = Provider<SidebarStateStorage>(
   (_) => createSidebarStateStorage(),
@@ -332,6 +333,7 @@ class AppShell extends ConsumerWidget {
                           _TopBar(
                             compact: compact,
                             expanded: expanded,
+                            currentLocation: currentLocation,
                             onMenuPressed: compact
                                 ? () =>
                                       Scaffold.of(scaffoldContext).openDrawer()
@@ -363,14 +365,29 @@ class _TopBar extends StatelessWidget {
   const _TopBar({
     required this.compact,
     required this.expanded,
+    required this.currentLocation,
     required this.onMenuPressed,
   });
   final bool compact;
   final bool expanded;
+  final String currentLocation;
   final VoidCallback onMenuPressed;
+
+  String _getHeading(String location) {
+    final cleanLoc = location.split('?').first;
+    for (final dest in AppShell.destinations) {
+      if (dest.path == cleanLoc || (dest.path != '/home' && cleanLoc.startsWith(dest.path))) {
+        return dest.label;
+      }
+    }
+    if (cleanLoc.startsWith('/employee/register')) return 'Employee Registration';
+    return 'Green Technology';
+  }
 
   @override
   Widget build(BuildContext context) {
+    final headingText = compact ? _getHeading(currentLocation) : 'Welcome back';
+
     final content = SafeArea(
       bottom: false,
       child: ConstrainedBox(
@@ -387,54 +404,97 @@ class _TopBar extends StatelessWidget {
               child: InkWell(
                 onTap: onMenuPressed,
                 borderRadius: BorderRadius.circular(8),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 10),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
                   child: Text(
-                    'Welcome back',
+                    headingText,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    textAlign: compact ? TextAlign.center : TextAlign.start,
                     style: AppTextStyles.heading,
                   ),
                 ),
               ),
             ),
-            IconButton(
-              tooltip: 'Search current section',
-              onPressed: () => showDialog<void>(
-                context: context,
-                builder: (dialogContext) => AlertDialog(
-                  title: const Text('Search'),
-                  content: TextField(
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      hintText: 'Search records',
-                      prefixIcon: Icon(Icons.search),
+            if (compact) ...[
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert, color: AppColors.textPrimary),
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'export',
+                    child: Row(
+                      children: [
+                        Icon(Icons.file_download_outlined, size: 18, color: AppColors.textPrimary),
+                        SizedBox(width: 8),
+                        Text('Export (CSV/PDF)'),
+                      ],
                     ),
-                    onChanged: (value) => ProviderScope.containerOf(
-                      context,
-                    ).read(booksSearchQueryProvider.notifier).state = value,
-                    onSubmitted: (_) => Navigator.pop(dialogContext),
                   ),
-                  actions: [
-                    TextButton(
-                      onPressed: () {
-                        ProviderScope.containerOf(
-                          context,
-                        ).read(booksSearchQueryProvider.notifier).state = '';
-                        Navigator.pop(dialogContext);
-                      },
-                      child: const Text('Clear'),
+                  const PopupMenuItem(
+                    value: 'response',
+                    child: Row(
+                      children: [
+                        Icon(Icons.rate_review_outlined, size: 18, color: AppColors.textPrimary),
+                        SizedBox(width: 8),
+                        Text('Response'),
+                      ],
                     ),
-                    TextButton(
-                      onPressed: () => Navigator.pop(dialogContext),
-                      child: const Text('Done'),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
+                onSelected: (value) {
+                  if (value == 'export') {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Downloading data file (CSV/PDF)...'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  } else if (value == 'response') {
+                    showDialog<void>(
+                      context: context,
+                      builder: (context) => const RegistrationLinksDialog(),
+                    );
+                  }
+                },
               ),
-              icon: const Icon(Icons.search),
-            ),
-            if (!compact)
+            ],
+            if (!compact) ...[
+              IconButton(
+                tooltip: 'Search current section',
+                onPressed: () => showDialog<void>(
+                  context: context,
+                  builder: (dialogContext) => AlertDialog(
+                    title: const Text('Search'),
+                    content: TextField(
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        hintText: 'Search records',
+                        prefixIcon: Icon(Icons.search),
+                      ),
+                      onChanged: (value) => ProviderScope.containerOf(
+                        context,
+                      ).read(booksSearchQueryProvider.notifier).state = value,
+                      onSubmitted: (_) => Navigator.pop(dialogContext),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () {
+                          ProviderScope.containerOf(
+                            context,
+                          ).read(booksSearchQueryProvider.notifier).state = '';
+                          Navigator.pop(dialogContext);
+                        },
+                        child: const Text('Clear'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(dialogContext),
+                        child: const Text('Done'),
+                      ),
+                    ],
+                  ),
+                ),
+                icon: const Icon(Icons.search),
+              ),
               PopupMenuButton<String>(
                 tooltip: 'Quick create',
                 icon: const Icon(
@@ -459,11 +519,12 @@ class _TopBar extends StatelessWidget {
                   ),
                 ],
               ),
-            IconButton(
-              tooltip: 'Notifications',
-              onPressed: () {},
-              icon: const Icon(Icons.notifications_none),
-            ),
+              IconButton(
+                tooltip: 'Notifications',
+                onPressed: () {},
+                icon: const Icon(Icons.notifications_none),
+              ),
+            ],
             if (MediaQuery.sizeOf(context).width >= 520)
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 12),
@@ -478,7 +539,12 @@ class _TopBar extends StatelessWidget {
       ),
     );
 
-    if (compact) return content;
+    if (compact) {
+      return Container(
+        color: Colors.white,
+        child: content,
+      );
+    }
     return GlassPanel(radius: 0, child: content);
   }
 }
