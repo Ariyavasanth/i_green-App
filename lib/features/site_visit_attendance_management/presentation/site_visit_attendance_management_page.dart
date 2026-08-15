@@ -16,6 +16,8 @@ import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
 import '../../site_visit_attendance/domain/site_visit_record.dart';
 import '../providers/site_visit_attendance_management_providers.dart';
+import 'widgets/assign_on_duty_dialog.dart';
+import 'widgets/on_duty_management_view.dart';
 
 class SiteVisitAttendanceManagementPage extends ConsumerStatefulWidget {
   const SiteVisitAttendanceManagementPage({super.key});
@@ -26,7 +28,7 @@ class SiteVisitAttendanceManagementPage extends ConsumerStatefulWidget {
 }
 
 enum SiteVisitViewMode { matrix, table }
-enum AttendanceCategory { siteVisit, staticVisit }
+enum AttendanceCategory { siteVisit, staticVisit, onDuty }
 
 class _SiteVisitAttendanceManagementPageState
     extends ConsumerState<SiteVisitAttendanceManagementPage> {
@@ -41,10 +43,14 @@ class _SiteVisitAttendanceManagementPageState
   SiteVisitViewMode _viewMode = SiteVisitViewMode.matrix;
   AttendanceCategory _category = AttendanceCategory.siteVisit;
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
+  void _openAssignOnDutyDialog([Employee? employee, SiteVisitRecord? visit]) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AssignOnDutyDialog(
+        initialEmployee: employee,
+        initialVisit: visit,
+      ),
+    );
   }
 
   @override
@@ -79,7 +85,40 @@ class _SiteVisitAttendanceManagementPageState
     Widget toolbarWidget;
     Widget mainViewWidget;
 
-    if (isSite) {
+    if (_category == AttendanceCategory.onDuty) {
+      kpiWidget = const SizedBox.shrink();
+      toolbarWidget = Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Center(
+          child: SegmentedButton<AttendanceCategory>(
+            segments: const [
+              ButtonSegment(
+                value: AttendanceCategory.siteVisit,
+                icon: Icon(Icons.explore_outlined, size: 16),
+                label: Text('Site Visits', style: TextStyle(fontSize: 12)),
+              ),
+              ButtonSegment(
+                value: AttendanceCategory.staticVisit,
+                icon: Icon(Icons.home_work_outlined, size: 16),
+                label: Text('Static Visits', style: TextStyle(fontSize: 12)),
+              ),
+              ButtonSegment(
+                value: AttendanceCategory.onDuty,
+                icon: Icon(Icons.assignment_ind_outlined, size: 16),
+                label: Text('On-Duty Management', style: TextStyle(fontSize: 12)),
+              ),
+            ],
+            selected: {_category},
+            onSelectionChanged: (set) {
+              setState(() {
+                _category = set.first;
+              });
+            },
+          ),
+        ),
+      );
+      mainViewWidget = const OnDutyManagementView();
+    } else if (isSite) {
       kpiWidget = visitsAsync.when(
         loading: () => const SizedBox.shrink(),
         error: (e, _) => const SizedBox.shrink(),
@@ -111,6 +150,7 @@ class _SiteVisitAttendanceManagementPageState
             onDelete: _handleDeleteRecord,
             onLocationTap: _openMap,
             onPhotoTap: _openPhotoPreview,
+            onAssignOnDuty: (record) => _openAssignOnDutyDialog(null, record),
           );
         },
       );
@@ -224,6 +264,11 @@ class _SiteVisitAttendanceManagementPageState
               icon: Icon(Icons.home_work_outlined, size: 16),
               label: Text('Static Visits', style: TextStyle(fontSize: 12)),
             ),
+            ButtonSegment(
+              value: AttendanceCategory.onDuty,
+              icon: Icon(Icons.assignment_ind_outlined, size: 16),
+              label: Text('On-Duty Management', style: TextStyle(fontSize: 12)),
+            ),
           ],
           selected: {_category},
           onSelectionChanged: (set) {
@@ -295,6 +340,21 @@ class _SiteVisitAttendanceManagementPageState
           icon: const Icon(Icons.add, size: 18),
           label: const Text(
             '+ Add Site Visit',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+        const SizedBox(width: 10),
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF414A51),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          onPressed: () => _openAssignOnDutyDialog(),
+          icon: const Icon(Icons.assignment_ind, size: 18),
+          label: const Text(
+            '+ Assign On-Duty',
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
         ),
@@ -1596,12 +1656,14 @@ class _DetailedSiteVisitLogTable extends StatelessWidget {
     required this.onDelete,
     required this.onLocationTap,
     required this.onPhotoTap,
+    required this.onAssignOnDuty,
   });
 
   final Map<String, List<SiteVisitRecord>> groupedVisits;
   final Future<void> Function(SiteVisitRecord record) onDelete;
   final Future<void> Function(SiteVisitRecord record) onLocationTap;
   final Future<void> Function(String photoUrl) onPhotoTap;
+  final void Function(SiteVisitRecord record) onAssignOnDuty;
 
   @override
   Widget build(BuildContext context) {
@@ -1639,6 +1701,7 @@ class _DetailedSiteVisitLogTable extends StatelessWidget {
               onDelete: onDelete,
               onLocationTap: onLocationTap,
               onPhotoTap: onPhotoTap,
+              onAssignOnDuty: onAssignOnDuty,
             ),
           );
         }),
@@ -1655,6 +1718,7 @@ class _DetailedVisitDayCard extends StatelessWidget {
     required this.onDelete,
     required this.onLocationTap,
     required this.onPhotoTap,
+    required this.onAssignOnDuty,
   });
 
   final String employeeName;
@@ -1663,6 +1727,7 @@ class _DetailedVisitDayCard extends StatelessWidget {
   final Future<void> Function(SiteVisitRecord record) onDelete;
   final Future<void> Function(SiteVisitRecord record) onLocationTap;
   final Future<void> Function(String photoUrl) onPhotoTap;
+  final void Function(SiteVisitRecord record) onAssignOnDuty;
 
   @override
   Widget build(BuildContext context) {
@@ -1704,6 +1769,29 @@ class _DetailedVisitDayCard extends StatelessWidget {
                   ),
                 ),
                 _StatusChip(status: _statusForVisits(visits)),
+                const SizedBox(width: 8),
+                InkWell(
+                  onTap: () => onAssignOnDuty(first),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF414A51),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.assignment_ind, size: 14, color: Colors.white),
+                        SizedBox(width: 4),
+                        Text(
+                          '+ Assign',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 12),

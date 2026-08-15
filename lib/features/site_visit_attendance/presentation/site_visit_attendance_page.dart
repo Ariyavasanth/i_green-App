@@ -14,6 +14,7 @@ import '../../leave/presentation/my_leave_requests_page.dart';
 import '../domain/site_visit_record.dart';
 import '../providers/site_visit_attendance_providers.dart';
 import 'site_visit_camera_page.dart';
+import '../../on_duty/on_duty.dart';
 
 class SiteVisitAttendancePage extends ConsumerStatefulWidget {
   const SiteVisitAttendancePage({super.key});
@@ -146,6 +147,8 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
     AsyncValue<List<SiteVisitRecord>> todayVisitsAsync,
     AsyncValue<List<SiteVisitRecord>> selectedVisitsAsync,
   ) {
+    final activeOnDutyAsync = ref.watch(activeOnDutyAssignmentProvider(currentEmp.id));
+
     return SingleChildScrollView(
       controller: _scrollController,
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
@@ -174,6 +177,17 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
             ],
           ),
           const SizedBox(height: 16),
+
+          // On-Duty Active / Assigned Card
+          activeOnDutyAsync.when(
+            loading: () => const SizedBox.shrink(),
+            error: (e, _) => const SizedBox.shrink(),
+            data: (assignment) {
+              if (assignment == null) return const SizedBox.shrink();
+              return _buildOnDutyCard(assignment);
+            },
+          ),
+
           _buildTodayOverviewCard(currentEmp, todayVisitsAsync),
           const SizedBox(height: 20),
           AnimatedSwitcher(
@@ -199,6 +213,35 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
             ? 'No site visit logged yet'
             : 'At ${visits.last.siteName} since ${visits.last.visitTime}';
         final visitCountLabel = visits.isEmpty ? '0 sites today' : '${visits.length} sites today';
+
+        final firstVisit = visits.isNotEmpty ? visits.first : null;
+        final locationName = firstVisit != null
+            ? (firstVisit.siteName.isNotEmpty ? firstVisit.siteName : (firstVisit.address.isNotEmpty ? firstVisit.address : 'Tambaram'))
+            : 'Tambaram';
+        final lat = firstVisit?.latitude ?? 12.9249;
+        final lng = firstVisit?.longitude ?? 80.1000;
+        final startTime = firstVisit?.visitTime ?? '10:00 PM';
+
+        // Calculate work time elapsed
+        String workTimeStr = '00h 00m / 09h';
+        if (firstVisit != null) {
+          try {
+            final now = DateTime.now();
+            final parts = startTime.split(' ');
+            final tParts = parts[0].split(':');
+            var h = int.parse(tParts[0]);
+            final m = int.parse(tParts[1]);
+            if (parts.length > 1 && parts[1].toUpperCase() == 'PM' && h < 12) h += 12;
+            if (parts.length > 1 && parts[1].toUpperCase() == 'AM' && h == 12) h = 0;
+            final startDt = DateTime(now.year, now.month, now.day, h, m);
+            final diff = now.difference(startDt);
+            if (!diff.isNegative) {
+              final hours = diff.inHours.toString().padLeft(2, '0');
+              final mins = (diff.inMinutes % 60).toString().padLeft(2, '0');
+              workTimeStr = '${hours}h ${mins}m / 09h';
+            }
+          } catch (_) {}
+        }
 
         return Container(
           padding: const EdgeInsets.all(16),
@@ -226,7 +269,7 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Today\'s Site Visit',
+                          'Today\'s Site Visit Attendance',
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
@@ -251,15 +294,137 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
                 ],
               ),
               const SizedBox(height: 16),
-              Text(
-                statusText,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+
+              if (visits.isNotEmpty) ...[
+                // Captured Photo preview if available
+                if (firstVisit?.photoUrl.isNotEmpty == true) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      height: 140,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.black12,
+                        image: DecorationImage(
+                          image: NetworkImage(firstVisit!.photoUrl),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      child: Stack(
+                        children: [
+                          Positioned(
+                            bottom: 8,
+                            left: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.7),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.camera_alt, color: Colors.white, size: 14),
+                                  SizedBox(width: 4),
+                                  Text('Photo Captured', style: TextStyle(color: Colors.white, fontSize: 11)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                // Attendance Metadata Card
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.check_circle, color: Color(0xFF9CC70A), size: 18),
+                          const SizedBox(width: 6),
+                          const Text(
+                            '✓ Attendance Started',
+                            style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF414A51), fontSize: 13),
+                          ),
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF9CC70A).withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Text(
+                              '🟢 Working',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Time', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          Text(startTime, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Location', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          Text('📍 $locationName', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Latitude', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          Text(lat.toStringAsFixed(4), style: const TextStyle(fontSize: 12, color: Color(0xFF414A51))),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Longitude', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          Text(lng.toStringAsFixed(4), style: const TextStyle(fontSize: 12, color: Color(0xFF414A51))),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Work Time', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          Text(workTimeStr, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF9CC70A))),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
+              ] else ...[
+                Text(
+                  statusText,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
               SizedBox(
                 width: double.infinity,
                 height: 48,
@@ -1769,7 +1934,167 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
       },
     );
   }
+
+  Widget _buildOnDutyCard(OnDutyAssignment assignment) {
+    final isAssigned = assignment.status == 'assigned';
+    final isActive = assignment.status == 'active';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isAssigned ? Colors.blue.shade50 : const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isAssigned ? Colors.blue.shade300 : const Color(0xFF9CC70A),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isAssigned ? Icons.info_outline : Icons.play_circle_fill,
+                color: isAssigned ? Colors.blue.shade800 : const Color(0xFF414A51),
+                size: 22,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                isAssigned ? '🔵 NEW ON-DUTY WORK' : '🔵 ON-DUTY ACTIVE',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: isAssigned ? Colors.blue.shade900 : const Color(0xFF414A51),
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+          const Divider(height: 20),
+          _onDutyRow('From', '📍 ${assignment.fromLocation}'),
+          const SizedBox(height: 6),
+          _onDutyRow('Go To / Destination', '📍 ${assignment.destination}', isBold: true),
+          const SizedBox(height: 6),
+          _onDutyRow('Task', assignment.task),
+          if (assignment.instructions.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            _onDutyRow('Instructions', assignment.instructions),
+          ],
+          const SizedBox(height: 6),
+          _onDutyRow('Assigned By', assignment.assignedBy),
+          if (isActive) ...[
+            const SizedBox(height: 6),
+            _onDutyRow('Started Time', assignment.startedTime ?? '--'),
+          ],
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: ElevatedButton(
+              onPressed: () {
+                if (isAssigned) {
+                  _startOnDuty(assignment);
+                } else {
+                  _completeOnDuty(assignment);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isAssigned ? const Color(0xFF414A51) : const Color(0xFF9CC70A),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: Text(
+                isAssigned ? 'Start On-Duty' : 'Complete On-Duty',
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _onDutyRow(String label, String value, {bool isBold = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey)),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
+              color: const Color(0xFF414A51),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _startOnDuty(OnDutyAssignment assignment) async {
+    final nowStr = DateFormat('hh:mm a').format(DateTime.now());
+    final repository = ref.read(onDutyRepositoryProvider);
+    await repository.updateAssignmentStatus(
+      id: assignment.id,
+      status: 'active',
+      startedTime: nowStr,
+    );
+    ref.invalidate(activeOnDutyAssignmentProvider(assignment.employeeId));
+    ref.invalidate(allOnDutyAssignmentsProvider);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('On-Duty started! Timer active.'),
+          backgroundColor: Color(0xFF9CC70A),
+        ),
+      );
+    }
+  }
+
+  Future<void> _completeOnDuty(OnDutyAssignment assignment) async {
+    final now = DateTime.now();
+    final nowStr = DateFormat('hh:mm a').format(now);
+
+    int durationMins = 0;
+    if (assignment.startedTime != null) {
+      try {
+        final parts = assignment.startedTime!.split(' ');
+        final timeParts = parts[0].split(':');
+        var hour = int.parse(timeParts[0]);
+        final min = int.parse(timeParts[1]);
+        if (parts.length > 1 && parts[1].toUpperCase() == 'PM' && hour < 12) hour += 12;
+        if (parts.length > 1 && parts[1].toUpperCase() == 'AM' && hour == 12) hour = 0;
+        final startDt = DateTime(now.year, now.month, now.day, hour, min);
+        durationMins = now.difference(startDt).inMinutes.clamp(1, 1440);
+      } catch (_) {
+        durationMins = 60; // Default 1h fallback
+      }
+    }
+
+    final repository = ref.read(onDutyRepositoryProvider);
+    await repository.updateAssignmentStatus(
+      id: assignment.id,
+      status: 'completed',
+      completedTime: nowStr,
+      durationMinutes: durationMins,
+    );
+    ref.invalidate(activeOnDutyAssignmentProvider(assignment.employeeId));
+    ref.invalidate(allOnDutyAssignmentsProvider);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('On-Duty completed! Duration: ${durationMins ~/ 60}h ${durationMins % 60}m recorded.'),
+          backgroundColor: const Color(0xFF9CC70A),
+        ),
+      );
+    }
+  }
 }
-
-
-

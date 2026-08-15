@@ -543,6 +543,7 @@ class Employee {
   final bool siteRequireGpsVerification;
 
   String get fullName => '$firstName $lastName'.trim();
+  String get name => fullName;
 
   String get leavePolicy => leaveType.isNotEmpty ? leaveType : 'As Needed';
 
