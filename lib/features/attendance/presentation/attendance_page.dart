@@ -177,6 +177,8 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
             _buildCalendarTab(currentEmp, attendanceAsync, leaveAsync),
             // Tab 2: Leave Dashboard Tab
             _buildLeaveTab(currentEmp, userLeaveRequestsAsync),
+            // Tab 3: Salary & LOP Tab
+            _buildSalaryLopTab(currentEmp, userLeaveRequestsAsync),
           ],
         ),
       ),
@@ -214,6 +216,11 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
               icon: Icon(Icons.event_note_outlined),
               activeIcon: Icon(Icons.event_note),
               label: 'Leave',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.account_balance_wallet_outlined),
+              activeIcon: Icon(Icons.account_balance_wallet),
+              label: 'Salary & LOP',
             ),
           ],
         ),
@@ -3360,6 +3367,222 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
           if (mounted) setState(() {});
         },
       ),
+    );
+  }
+
+  Widget _buildSalaryLopTab(Employee currentEmp, AsyncValue<List<LeaveRequest>> leaveRequestsAsync) {
+    final leaves = leaveRequestsAsync.valueOrNull ?? [];
+
+    final grossSalary = currentEmp.salaryTotalCtc > 0
+        ? currentEmp.salaryTotalCtc
+        : (currentEmp.salaryBasic > 0
+            ? (currentEmp.salaryBasic + currentEmp.salaryHra + currentEmp.salaryAllowances)
+            : 35000.0);
+
+    const workingDays = 26;
+    final perDayRate = grossSalary > 0 ? (grossSalary / workingDays) : 0.0;
+
+    final approvedLeaves = leaves.where((l) => l.status.toLowerCase() == 'approved').toList();
+    final approvedLeaveDays = approvedLeaves.fold<double>(
+      0.0,
+      (sum, l) => sum + (l.numDays > 0 ? l.numDays : 1.0),
+    );
+
+    final lopLeaves = leaves.where((l) {
+      final st = l.status.toLowerCase();
+      final type = l.leaveType.toLowerCase();
+      return (st == 'approved' && (type.contains('lop') || type.contains('unpaid') || type.contains('loss of pay'))) ||
+          st == 'denied' ||
+          st == 'rejected';
+    }).toList();
+
+    final lopDays = lopLeaves.fold<double>(
+      0.0,
+      (sum, l) => sum + (l.numDays > 0 ? l.numDays : (l.lopDates.isNotEmpty ? l.lopDates.length.toDouble() : 1.0)),
+    );
+
+    final lopDeduction = lopDays * perDayRate;
+    final finalPayableSalary = (grossSalary - lopDeduction).clamp(0.0, double.infinity);
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top Hero Banner Card
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2E7D32),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF2E7D32).withValues(alpha: 0.25),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  const Text(
+                    'Final Payable Salary (Current Month)',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white70,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '₹${finalPayableSalary.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                      fontSize: 36,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    lopDays > 0
+                        ? '${lopDays.toStringAsFixed(0)} Day(s) LOP Deduction (-₹${lopDeduction.toStringAsFixed(0)}) applied'
+                        : 'No LOP Deductions applied this month 🎉',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white70,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Responsive 2-Card Layout (Side-by-Side on Desktop, Stacked on Mobile)
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isDesktop = constraints.maxWidth >= 700;
+
+                final salaryCard = Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.02),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Salary Breakdown',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      const Divider(height: 20, color: Color(0xFFF1F5F9)),
+                      _buildRowDetail('Gross Monthly Salary', '₹${grossSalary.toStringAsFixed(0)}'),
+                      const SizedBox(height: 12),
+                      _buildRowDetail('Working Days', '$workingDays Days'),
+                      const SizedBox(height: 12),
+                      _buildRowDetail('Per Day Salary Rate', '₹${perDayRate.toStringAsFixed(0)}'),
+                    ],
+                  ),
+                );
+
+                final leaveImpactCard = Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.02),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Leave Impact',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      const Divider(height: 20, color: Color(0xFFF1F5F9)),
+                      _buildRowDetail('Approved Leave Days', '${approvedLeaveDays.toStringAsFixed(0)} Days'),
+                      const SizedBox(height: 12),
+                      _buildRowDetail('LOP Days', '${lopDays.toStringAsFixed(0)} Days'),
+                      const SizedBox(height: 12),
+                      _buildRowDetail('LOP Deduction', '₹${lopDeduction.toStringAsFixed(0)}'),
+                    ],
+                  ),
+                );
+
+                if (isDesktop) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: salaryCard),
+                      const SizedBox(width: 16),
+                      Expanded(child: leaveImpactCard),
+                    ],
+                  );
+                } else {
+                  return Column(
+                    children: [
+                      salaryCard,
+                      const SizedBox(height: 14),
+                      leaveImpactCard,
+                    ],
+                  );
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRowDetail(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 13,
+            color: Color(0xFF64748B),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF0F172A),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -381,7 +381,11 @@ class _TopBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     String headingText;
-    if (currentLocation.startsWith('/attendance')) {
+    final isAttendanceManagement = currentLocation.startsWith('/attendance-management');
+
+    if (isAttendanceManagement) {
+      headingText = 'Attendance Management';
+    } else if (currentLocation == '/attendance' || currentLocation.startsWith('/attendance/')) {
       final tabIndex = ref.watch(attendanceActiveTabProvider);
       switch (tabIndex) {
         case 1:
@@ -390,11 +394,14 @@ class _TopBar extends ConsumerWidget {
         case 2:
           headingText = 'Leave';
           break;
+        case 3:
+          headingText = 'Salary & Loss of Pay Calculation';
+          break;
         default:
           headingText = 'Attendance';
       }
     } else {
-      headingText = compact ? _getHeading(currentLocation) : 'Welcome back';
+      headingText = _getHeading(currentLocation);
     }
 
     final content = SafeArea(
@@ -415,15 +422,41 @@ class _TopBar extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(8),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Text(
-                    headingText,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1E293B),
-                    ),
+                  child: Row(
+                    children: [
+                      Text(
+                        headingText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
+                      if (isAttendanceManagement) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8F5E9),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFF81C784)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.circle, size: 8, color: Color(0xFF2E7D32)),
+                              SizedBox(width: 5),
+                              Text(
+                                'Live Sync',
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ),

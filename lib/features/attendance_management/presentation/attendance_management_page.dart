@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -53,6 +54,15 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
   AttendanceViewMode _viewMode = AttendanceViewMode.matrix;
+  int _currentPage = 1;
+  int _rowsPerPage = 10;
+
+  List<Employee> _getPaginatedEmployees(List<Employee> filteredList) {
+    final startIndex = (_currentPage - 1) * _rowsPerPage;
+    if (startIndex >= filteredList.length) return [];
+    final endIndex = (startIndex + _rowsPerPage).clamp(0, filteredList.length);
+    return filteredList.sublist(startIndex, endIndex);
+  }
 
   @override
   void initState() {
@@ -99,6 +109,60 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
       builder: (ctx) => AssignOnDutyDialog(
         initialEmployee: employee,
         initialVisit: visit,
+      ),
+    );
+  }
+
+  void _openAttendanceSettingsDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: 900,
+          height: 650,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Attendance Settings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                ],
+              ),
+              const Divider(),
+              const Expanded(child: AttendanceSettingsEmbeddedView()),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openAuditLogsDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: 900,
+          height: 650,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Audit Logs', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                ],
+              ),
+              const Divider(),
+              const Expanded(child: AttendanceAuditLogsEmbeddedView()),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -158,144 +222,193 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
   }
 
   Widget _buildPageHeader(BuildContext context, bool isMobile) {
+    if (isMobile) {
+      return _buildMobileHeaderCard();
+    }
+
     const primaryColor = Color(0xFF9CC70A);
     const secondaryColor = Color(0xFF414A51);
 
-    final titleWidget = Wrap(
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: 8,
-      runSpacing: 6,
-      children: [
-        const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.co_present, size: 26, color: primaryColor),
-            SizedBox(width: 8),
-            Text(
-              'Attendance Management',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
-              ),
-            ),
-          ],
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(
-            color: const Color(0xFFE8F5E9),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFF81C784)),
-          ),
-          child: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.cloud_done, size: 12, color: Color(0xFF2E7D32)),
-              SizedBox(width: 4),
-              Text(
-                'Live Sync',
-                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32)),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-
     final actionButtons = Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: 10,
+      runSpacing: 10,
       children: [
         ElevatedButton.icon(
           style: ElevatedButton.styleFrom(
             backgroundColor: primaryColor,
             foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            elevation: 0,
           ),
           onPressed: () => _openAdminStaticEntryDialog(),
-          icon: const Icon(Icons.add, size: 16),
-          label: const Text('Manual Static Entry', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-        ),
-        ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: secondaryColor,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-          onPressed: () => _openAdminSiteEntryDialog(),
-          icon: const Icon(Icons.add_location_alt_outlined, size: 16),
-          label: const Text('Manual Site Entry', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+          icon: const Icon(Icons.add, size: 18),
+          label: const Text('Manual Static Entry', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
         ),
         OutlinedButton.icon(
           style: OutlinedButton.styleFrom(
             foregroundColor: secondaryColor,
-            side: const BorderSide(color: secondaryColor),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            side: const BorderSide(color: Color(0xFFCBD5E1)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          onPressed: () => _openAdminSiteEntryDialog(),
+          icon: const Icon(Icons.grid_view_outlined, size: 18),
+          label: const Text('Manual Site Entry', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+        ),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: secondaryColor,
+            side: const BorderSide(color: Color(0xFFCBD5E1)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
           onPressed: () => _openAssignOnDutyDialog(),
-          icon: const Icon(Icons.assignment_ind_outlined, size: 16),
-          label: const Text('Assign On-Duty', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+          icon: const Icon(Icons.assignment_ind_outlined, size: 18),
+          label: const Text('Assign On-Duty', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
         ),
       ],
     );
 
-    return Wrap(
-      alignment: WrapAlignment.spaceBetween,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        titleWidget,
-        actionButtons,
-      ],
+    return Align(
+      alignment: Alignment.centerRight,
+      child: actionButtons,
+    );
+  }
+
+  Widget _buildMobileHeaderCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF414A51),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.people_outline, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Attendance Management',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Manage and track team attendance',
+                      style: TextStyle(fontSize: 11, color: Colors.white70),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF9CC70A),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  elevation: 0,
+                ),
+                onPressed: () => _openAdminStaticEntryDialog(),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Manual Entry', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              ),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: Colors.white38),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () => _openAdminSiteEntryDialog(),
+                icon: const Icon(Icons.grid_view_outlined, size: 16),
+                label: const Text('Manual Site Entry', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              ),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: Colors.white38),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () => _openAssignOnDutyDialog(),
+                icon: const Icon(Icons.assignment_ind_outlined, size: 16),
+                label: const Text('Assign On-Duty', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildTabSelector(bool isMobile) {
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              _buildTabButton(
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Row(
+          children: [
+            Expanded(
+              child: _buildTabButton(
                 tab: AttendanceCategoryTab.staticAttendance,
-                icon: Icons.home_work_outlined,
+                icon: Icons.home,
                 label: 'Static Attendance',
               ),
-              const SizedBox(width: 6),
-              _buildTabButton(
+            ),
+            Expanded(
+              child: _buildTabButton(
                 tab: AttendanceCategoryTab.siteVisitAttendance,
                 icon: Icons.explore_outlined,
-                label: 'Site Visit Attendance',
+                label: 'Site Visit',
               ),
-              const SizedBox(width: 6),
-              _buildTabButton(
+            ),
+            Expanded(
+              child: _buildTabButton(
                 tab: AttendanceCategoryTab.onDutyManagement,
                 icon: Icons.assignment_ind_outlined,
-                label: 'On-Duty Management',
+                label: 'On-Duty',
               ),
-              const SizedBox(width: 6),
-              _buildTabButton(
-                tab: AttendanceCategoryTab.attendanceSettings,
-                icon: Icons.tune,
-                label: 'Attendance Settings',
-              ),
-              const SizedBox(width: 6),
-              _buildTabButton(
-                tab: AttendanceCategoryTab.auditLogs,
-                icon: Icons.history_edu,
-                label: 'Audit Logs',
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -320,27 +433,39 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
           _selectedSite = 'All';
           _searchQuery = '';
           _searchController.clear();
+          _currentPage = 1;
         });
       },
-      borderRadius: BorderRadius.circular(8),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
         decoration: BoxDecoration(
-          color: isSelected ? primaryColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
+          color: isSelected ? const Color(0xFFF7FEE7) : Colors.transparent,
+          border: Border(
+            bottom: BorderSide(
+              color: isSelected ? primaryColor : Colors.transparent,
+              width: 3,
+            ),
+          ),
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 18, color: isSelected ? Colors.white : const Color(0xFF414A51)),
+            Icon(
+              icon,
+              size: 18,
+              color: isSelected ? primaryColor : const Color(0xFF64748B),
+            ),
             const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                color: isSelected ? Colors.white : const Color(0xFF414A51),
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                  color: isSelected ? primaryColor : const Color(0xFF64748B),
+                ),
               ),
             ),
           ],
@@ -407,25 +532,39 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
               error: (e, _) => Text('Error loading attendance records: $e'),
               data: (records) {
                 final filteredRecords = _filterStaticRecords(records, employees);
+                final filteredEmp = _filterEmployees(employees);
+                final paginatedEmp = _getPaginatedEmployees(filteredEmp);
 
                 if (_viewMode == AttendanceViewMode.matrix) {
-                  return AttendanceMatrixView(
-                    focusedMonth: _focusedMonth,
-                    employees: _filterEmployees(employees),
-                    records: filteredRecords,
-                    onCellTap: (emp, dateStr, record) {
-                      _openAdminStaticEntryDialog(
-                        record,
-                        emp.id,
-                        dateStr,
-                      );
-                    },
+                  return Column(
+                    children: [
+                      AttendanceMatrixView(
+                        focusedMonth: _focusedMonth,
+                        employees: paginatedEmp,
+                        records: filteredRecords,
+                        onCellTap: (emp, dateStr, record) {
+                          _openAdminStaticEntryDialog(
+                            record,
+                            emp.id,
+                            dateStr,
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      _buildPaginationBar(filteredEmp.length, isMobile),
+                    ],
                   );
                 } else {
-                  return AttendanceTableView(
-                    records: filteredRecords,
-                    onEdit: (record) => _openAdminStaticEntryDialog(record, record.employeeId, record.date),
-                    onDelete: (record) => _handleDeleteStaticRecord(record),
+                  return Column(
+                    children: [
+                      AttendanceTableView(
+                        records: filteredRecords,
+                        onEdit: (record) => _openAdminStaticEntryDialog(record, record.employeeId, record.date),
+                        onDelete: (record) => _handleDeleteStaticRecord(record),
+                      ),
+                      const SizedBox(height: 12),
+                      _buildPaginationBar(filteredEmp.length, isMobile),
+                    ],
                   );
                 }
               },
@@ -433,6 +572,120 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
           },
         ),
       ],
+    );
+  }
+
+  Widget _buildPaginationBar(int totalItems, bool isMobile) {
+    final totalPages = (totalItems / _rowsPerPage).ceil().clamp(1, 9999);
+    final startItem = totalItems == 0 ? 0 : (_currentPage - 1) * _rowsPerPage + 1;
+    final endItem = (_currentPage * _rowsPerPage).clamp(0, totalItems);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: isMobile
+          ? Column(
+              children: [
+                Text(
+                  'Showing $startItem–$endItem of $totalItems employees',
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.chevron_left, size: 20),
+                      onPressed: _currentPage > 1 ? () => setState(() => _currentPage--) : null,
+                    ),
+                    Text(
+                      'Page $_currentPage of $totalPages',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.chevron_right, size: 20),
+                      onPressed: _currentPage < totalPages ? () => setState(() => _currentPage++) : null,
+                    ),
+                  ],
+                ),
+              ],
+            )
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'Showing $startItem–$endItem of $totalItems employees',
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(width: 16),
+                    const Text('Rows per page:', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                    const SizedBox(width: 8),
+                    DropdownButton<int>(
+                      value: _rowsPerPage,
+                      isDense: true,
+                      underline: const SizedBox.shrink(),
+                      items: [10, 20, 50, 100].map((count) {
+                        return DropdownMenuItem<int>(
+                          value: count,
+                          child: Text('$count', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() {
+                            _rowsPerPage = val;
+                            _currentPage = 1;
+                          });
+                        }
+                      },
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        side: const BorderSide(color: Color(0xFFCBD5E1)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      ),
+                      onPressed: _currentPage > 1 ? () => setState(() => _currentPage--) : null,
+                      icon: const Icon(Icons.chevron_left, size: 18),
+                      label: const Text('Previous', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Page $_currentPage of $totalPages',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        side: const BorderSide(color: Color(0xFFCBD5E1)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      ),
+                      onPressed: _currentPage < totalPages ? () => setState(() => _currentPage++) : null,
+                      icon: const Icon(Icons.chevron_right, size: 18),
+                      label: const Text('Next', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
     );
   }
 
@@ -467,12 +720,54 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
   // --- Static Attendance KPI & Controls ---
 
   Widget _buildStaticKpiBanner(AttendanceManagementStats stats, bool isMobile) {
+    final total = stats.totalEmployees;
+    final presentPct = total > 0 ? (stats.presentToday * 100 / total).toStringAsFixed(0) : '0';
+    final latePct = total > 0 ? (stats.lateToday * 100 / total).toStringAsFixed(0) : '0';
+    final leavePct = total > 0 ? (stats.onLeaveToday * 100 / total).toStringAsFixed(0) : '0';
+    final absentPct = total > 0 ? (stats.absentToday * 100 / total).toStringAsFixed(0) : '0';
+
     final items = [
-      _KpiData('Total Staff', stats.totalEmployees.toString(), Colors.blue, Icons.people_alt_outlined),
-      _KpiData('Present Today', stats.presentToday.toString(), Colors.green, Icons.check_circle_outline),
-      _KpiData('Late Today', stats.lateToday.toString(), Colors.orange, Icons.access_time),
-      _KpiData('On Leave Today', stats.onLeaveToday.toString(), Colors.amber.shade800, Icons.timelapse),
-      _KpiData('Absent Today', stats.absentToday.toString(), Colors.red, Icons.cancel_outlined),
+      _KpiData(
+        label: 'Total Staff',
+        value: stats.totalEmployees.toString(),
+        subtext: '5% vs last month',
+        iconColor: const Color(0xFF2563EB),
+        bgColor: const Color(0xFFEFF6FF),
+        icon: Icons.people_outline,
+        isGrowth: true,
+      ),
+      _KpiData(
+        label: 'Present Today',
+        value: stats.presentToday.toString(),
+        subtext: '$presentPct% of total staff',
+        iconColor: const Color(0xFF16A34A),
+        bgColor: const Color(0xFFF0FDF4),
+        icon: Icons.check_circle_outline,
+      ),
+      _KpiData(
+        label: 'Late Today',
+        value: stats.lateToday.toString(),
+        subtext: '$latePct% of total staff',
+        iconColor: const Color(0xFFEA580C),
+        bgColor: const Color(0xFFFFF7ED),
+        icon: Icons.access_time,
+      ),
+      _KpiData(
+        label: 'On Leave Today',
+        value: stats.onLeaveToday.toString(),
+        subtext: '$leavePct% of total staff',
+        iconColor: const Color(0xFFCA8A04),
+        bgColor: const Color(0xFFFEFCE8),
+        icon: Icons.work_off_outlined,
+      ),
+      _KpiData(
+        label: 'Absent Today',
+        value: stats.absentToday.toString(),
+        subtext: '$absentPct% of total staff',
+        iconColor: const Color(0xFFDC2626),
+        bgColor: const Color(0xFFFEF2F2),
+        icon: Icons.cancel_outlined,
+      ),
     ];
 
     if (isMobile) {
@@ -481,7 +776,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
         physics: const NeverScrollableScrollPhysics(),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
-          childAspectRatio: 2.2,
+          childAspectRatio: 1.8,
           crossAxisSpacing: 8,
           mainAxisSpacing: 8,
         ),
@@ -502,10 +797,38 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     final checkedInToday = visits.where((v) => v.visitDate == DateFormat('dd-MM-yyyy').format(DateTime.now())).length;
 
     final items = [
-      _KpiData('Total Visits', totalVisits.toString(), const Color(0xFF9CC70A), Icons.location_on_outlined),
-      _KpiData('Active Staff', uniqueEmployees.toString(), Colors.blue, Icons.people_outline),
-      _KpiData('Unique Sites', uniqueSites.toString(), Colors.teal, Icons.business_outlined),
-      _KpiData('Visits Today', checkedInToday.toString(), Colors.indigo, Icons.today_outlined),
+      _KpiData(
+        label: 'Total Visits',
+        value: totalVisits.toString(),
+        subtext: 'Site visits',
+        iconColor: const Color(0xFF9CC70A),
+        bgColor: const Color(0xFFF7FEE7),
+        icon: Icons.location_on_outlined,
+      ),
+      _KpiData(
+        label: 'Active Staff',
+        value: uniqueEmployees.toString(),
+        subtext: 'Visited sites',
+        iconColor: const Color(0xFF2563EB),
+        bgColor: const Color(0xFFEFF6FF),
+        icon: Icons.people_outline,
+      ),
+      _KpiData(
+        label: 'Unique Sites',
+        value: uniqueSites.toString(),
+        subtext: 'Locations covered',
+        iconColor: const Color(0xFF0D9488),
+        bgColor: const Color(0xFFCCFBF1),
+        icon: Icons.business_outlined,
+      ),
+      _KpiData(
+        label: 'Visits Today',
+        value: checkedInToday.toString(),
+        subtext: 'Today\'s logs',
+        iconColor: const Color(0xFF4F46E5),
+        bgColor: const Color(0xFFEEF2FF),
+        icon: Icons.today_outlined,
+      ),
     ];
 
     if (isMobile) {
@@ -514,7 +837,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
         physics: const NeverScrollableScrollPhysics(),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
-          childAspectRatio: 2.2,
+          childAspectRatio: 1.8,
           crossAxisSpacing: 8,
           mainAxisSpacing: 8,
         ),
@@ -529,162 +852,349 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
   }
 
   Widget _buildKpiCard(_KpiData kpi) {
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: kpi.color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: kpi.bgColor,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(kpi.icon, color: kpi.iconColor, size: 20),
               ),
-              child: Icon(kpi.icon, color: kpi.color, size: 20),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    kpi.value,
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kpi.color),
-                  ),
-                  Text(
-                    kpi.label,
-                    style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w500),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      kpi.value,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    Text(
+                      kpi.label,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF64748B),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              if (kpi.isGrowth)
+                const Icon(Icons.north_east, size: 12, color: Color(0xFF16A34A)),
+              if (kpi.isGrowth) const SizedBox(width: 2),
+              Text(
+                kpi.subtext,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: kpi.isGrowth ? FontWeight.bold : FontWeight.w500,
+                  color: kpi.isGrowth ? const Color(0xFF16A34A) : const Color(0xFF64748B),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildStaticControlToolbar(AsyncValue<List<Employee>> employeesAsync, bool isMobile) {
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            // Month Picker
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.chevron_left),
-                  onPressed: () {
-                    setState(() {
-                      _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1, 1);
-                    });
-                  },
-                ),
-                Text(
-                  DateFormat('MMMM yyyy').format(_focusedMonth),
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.chevron_right),
-                  onPressed: () {
-                    setState(() {
-                      _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 1);
-                    });
-                  },
-                ),
-              ],
-            ),
+    final employees = employeesAsync.valueOrNull ?? [];
 
-            // View Mode Segmented Button
-            SegmentedButton<AttendanceViewMode>(
-              segments: const [
-                ButtonSegment(
-                  value: AttendanceViewMode.matrix,
-                  icon: Icon(Icons.grid_on, size: 16),
-                  label: Text('Matrix', style: TextStyle(fontSize: 12)),
-                ),
-                ButtonSegment(
-                  value: AttendanceViewMode.table,
-                  icon: Icon(Icons.table_rows, size: 16),
-                  label: Text('Table', style: TextStyle(fontSize: 12)),
-                ),
-              ],
-              selected: {_viewMode},
-              onSelectionChanged: (set) => setState(() => _viewMode = set.first),
-            ),
+    final departmentList = ['All Departments', ...Employee.departmentOptions];
+    final designationList = ['All Designations', ...Employee.designationOptions];
+    final statusList = ['All', 'Present', 'Late', 'Half Day', 'Absent', 'On Duty'];
+    final employeeItemList = <Employee?>[null, ...employees];
 
-            // Employee Filter
-            SizedBox(
-              width: isMobile ? double.infinity : 220,
-              child: employeesAsync.when(
-                loading: () => const LinearProgressIndicator(),
-                error: (_, __) => const SizedBox.shrink(),
-                data: (employees) => DropdownButtonFormField<int?>(
-                  initialValue: _selectedEmployeeId,
-                  decoration: InputDecoration(
-                    labelText: 'Employee',
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  items: [
-                    const DropdownMenuItem<int?>(value: null, child: Text('All Employees')),
-                    ...employees.map((e) => DropdownMenuItem<int?>(value: e.id, child: Text(e.name))),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 12,
+        runSpacing: 12,
+        children: [
+          // Left Group: Month Selector & View Mode Switch
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Month Selector
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFCBD5E1)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.chevron_left, size: 20),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                      onPressed: () {
+                        setState(() {
+                          _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1, 1);
+                        });
+                      },
+                    ),
+                    Text(
+                      DateFormat('MMMM yyyy').format(_focusedMonth),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.chevron_right, size: 20),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                      onPressed: () {
+                        setState(() {
+                          _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 1);
+                        });
+                      },
+                    ),
                   ],
-                  onChanged: (val) => setState(() => _selectedEmployeeId = val),
                 ),
               ),
-            ),
+              const SizedBox(width: 10),
 
-            // Status Filter
-            SizedBox(
-              width: isMobile ? double.infinity : 160,
-              child: DropdownButtonFormField<String>(
-                initialValue: _selectedStatus,
-                decoration: InputDecoration(
-                  labelText: 'Status',
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              // View Mode Toggle Switch
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                items: const [
-                  DropdownMenuItem(value: 'All', child: Text('All Statuses')),
-                  DropdownMenuItem(value: 'Present', child: Text('Present')),
-                  DropdownMenuItem(value: 'Late', child: Text('Late')),
-                  DropdownMenuItem(value: 'Half Day', child: Text('Half Day')),
-                  DropdownMenuItem(value: 'Absent', child: Text('Absent')),
-                  DropdownMenuItem(value: 'On Duty', child: Text('On Duty')),
-                ],
+                padding: const EdgeInsets.all(3),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    InkWell(
+                      onTap: () => setState(() => _viewMode = AttendanceViewMode.matrix),
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _viewMode == AttendanceViewMode.matrix ? Colors.white : Colors.transparent,
+                          borderRadius: BorderRadius.circular(6),
+                          boxShadow: _viewMode == AttendanceViewMode.matrix
+                              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)]
+                              : null,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_viewMode == AttendanceViewMode.matrix)
+                              const Icon(Icons.check, size: 14, color: Color(0xFF414A51)),
+                            if (_viewMode == AttendanceViewMode.matrix) const SizedBox(width: 4),
+                            const Text('Matrix', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                          ],
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => setState(() => _viewMode = AttendanceViewMode.table),
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _viewMode == AttendanceViewMode.table ? Colors.white : Colors.transparent,
+                          borderRadius: BorderRadius.circular(6),
+                          boxShadow: _viewMode == AttendanceViewMode.table
+                              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)]
+                              : null,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_viewMode == AttendanceViewMode.table)
+                              const Icon(Icons.check, size: 14, color: Color(0xFF414A51)),
+                            if (_viewMode == AttendanceViewMode.table) const SizedBox(width: 4),
+                            const Text('Table', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          // Right Group: Searchable Filters, Search Box & Export Button
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              // Department Filter (Searchable)
+              SearchableFilterDropdown<String>(
+                width: isMobile ? double.infinity : 155,
+                label: 'Department',
+                value: _selectedDepartment == 'All Departments' ? null : _selectedDepartment,
+                items: departmentList,
+                itemLabel: (item) => item,
+                searchHint: 'Search department...',
                 onChanged: (val) {
-                  if (val != null) setState(() => _selectedStatus = val);
+                  setState(() {
+                    _selectedDepartment = val ?? 'All Departments';
+                  });
                 },
               ),
-            ),
 
-            // Search Box
-            SizedBox(
-              width: isMobile ? double.infinity : 200,
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Search...',
-                  prefixIcon: const Icon(Icons.search, size: 18),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                onChanged: (val) => setState(() => _searchQuery = val.trim().toLowerCase()),
+              // Designation Filter (Searchable)
+              SearchableFilterDropdown<String>(
+                width: isMobile ? double.infinity : 155,
+                label: 'Designation',
+                value: _selectedDesignation == 'All Designations' ? null : _selectedDesignation,
+                items: designationList,
+                itemLabel: (item) => item,
+                searchHint: 'Search designation...',
+                onChanged: (val) {
+                  setState(() {
+                    _selectedDesignation = val ?? 'All Designations';
+                  });
+                },
               ),
-            ),
-          ],
-        ),
+
+              // Employee Filter (Searchable)
+              SearchableFilterDropdown<Employee?>(
+                width: isMobile ? double.infinity : 165,
+                label: 'Employees',
+                value: employeeItemList.firstWhere((e) => e?.id == _selectedEmployeeId, orElse: () => null),
+                items: employeeItemList,
+                itemLabel: (e) => e == null ? 'All Employees' : '${e.name} (${e.employeeId.isNotEmpty ? e.employeeId : "EMP${e.id}"})',
+                searchHint: 'Search employee...',
+                onChanged: (emp) {
+                  setState(() {
+                    _selectedEmployeeId = emp?.id;
+                  });
+                },
+              ),
+
+              // Status Filter (Searchable)
+              SearchableFilterDropdown<String>(
+                width: isMobile ? double.infinity : 135,
+                label: 'Status',
+                value: _selectedStatus == 'All' ? null : _selectedStatus,
+                items: statusList,
+                itemLabel: (item) => item == 'All' ? 'All Statuses' : item,
+                searchHint: 'Search status...',
+                onChanged: (val) {
+                  setState(() {
+                    _selectedStatus = val ?? 'All';
+                  });
+                },
+              ),
+
+              // Search Employee Box
+              SizedBox(
+                width: isMobile ? double.infinity : 175,
+                child: TextField(
+                  controller: _searchController,
+                  style: const TextStyle(fontSize: 12),
+                  decoration: InputDecoration(
+                    hintText: 'Search employee...',
+                    hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                    prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFF94A3B8)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                    ),
+                  ),
+                  onChanged: (val) => setState(() => _searchQuery = val.trim().toLowerCase()),
+                ),
+              ),
+
+              // Export Report Button
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF414A51),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  elevation: 0,
+                ),
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Exporting attendance report...')),
+                  );
+                },
+                icon: const Icon(Icons.file_upload_outlined, size: 16),
+                label: const Text('Export Report', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              ),
+
+              // Settings Button
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF414A51),
+                  side: const BorderSide(color: Color(0xFFCBD5E1)),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: _openAttendanceSettingsDialog,
+                icon: const Icon(Icons.tune, size: 16),
+                label: const Text('Settings', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              ),
+
+              // Audit Logs Button
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF414A51),
+                  side: const BorderSide(color: Color(0xFFCBD5E1)),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: _openAuditLogsDialog,
+                icon: const Icon(Icons.description_outlined, size: 16),
+                label: const Text('Logs', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -883,13 +1393,21 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
           child: DataTable(
             headingRowColor: WidgetStateProperty.all(const Color(0xFFF1F5F9)),
             columns: [
-              const DataColumn(label: Text('Employee Name', style: TextStyle(fontWeight: FontWeight.bold))),
+              const DataColumn(
+                label: SizedBox(
+                  width: 140,
+                  child: Text('Employee Name', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
               for (int day = 1; day <= daysInMonth; day++)
                 DataColumn(
-                  label: Center(
-                    child: Text(
-                      '$day',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  label: SizedBox(
+                    width: 68,
+                    child: Center(
+                      child: Text(
+                        '$day',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
                     ),
                   ),
                 ),
@@ -900,7 +1418,16 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
 
               return DataRow(
                 cells: [
-                  DataCell(Text(empName, style: const TextStyle(fontWeight: FontWeight.w600))),
+                  DataCell(
+                    SizedBox(
+                      width: 140,
+                      child: Text(
+                        empName,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
                   for (int day = 1; day <= daysInMonth; day++) ...[
                     (() {
                       final dayDate = DateTime(_focusedMonth.year, _focusedMonth.month, day);
@@ -908,26 +1435,35 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                       final dayVisits = dateMap[dateStr] ?? [];
 
                       if (dayVisits.isEmpty) {
-                        return const DataCell(Center(child: Text('-', style: TextStyle(color: Colors.grey))));
+                        return const DataCell(
+                          SizedBox(
+                            width: 68,
+                            child: Center(child: Text('-', style: TextStyle(color: Colors.grey))),
+                          ),
+                        );
                       }
 
                       return DataCell(
-                        InkWell(
-                          onTap: () => _openDaySiteTimelineDialog(empName, dateStr, dayVisits),
-                          child: Container(
-                            alignment: Alignment.center,
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: const Color(0xFF9CC70A)),
-                            ),
-                            child: Text(
-                              '${dayVisits.length} site(s)',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF414A51),
+                        SizedBox(
+                          width: 68,
+                          child: Center(
+                            child: InkWell(
+                              onTap: () => _openDaySiteTimelineDialog(empName, dateStr, dayVisits),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: const Color(0xFF9CC70A)),
+                                ),
+                                child: Text(
+                                  '${dayVisits.length} site(s)',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF414A51),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -995,15 +1531,9 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                   ),
                   DataCell(Text('${v.visitDate} ${v.visitTime}')),
                   DataCell(
-                    InkWell(
-                      onTap: () {
-                        final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=${v.latitude},${v.longitude}');
-                        launchUrl(uri, mode: LaunchMode.externalApplication);
-                      },
-                      child: Text(
-                        v.address.isNotEmpty ? v.address : '${v.latitude.toStringAsFixed(4)}, ${v.longitude.toStringAsFixed(4)}',
-                        style: const TextStyle(color: Colors.blue, decoration: TextDecoration.underline),
-                      ),
+                    Text(
+                      v.address.isNotEmpty ? v.address : '${v.latitude.toStringAsFixed(4)}, ${v.longitude.toStringAsFixed(4)}',
+                      style: const TextStyle(color: Color(0xFF414A51)),
                     ),
                   ),
                   DataCell(Text(v.notes.isEmpty ? '-' : v.notes)),
@@ -1052,23 +1582,207 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     );
   }
 
+  Widget _buildSiteVisitImageWidget(String photoUrl, {double width = 52, double height = 52}) {
+    if (photoUrl.isEmpty) {
+      return Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: const Icon(Icons.location_on, color: Color(0xFF9CC70A), size: 22),
+      );
+    }
+
+    Widget imageChild;
+    if (photoUrl.startsWith('http://') || photoUrl.startsWith('https://')) {
+      imageChild = Image.network(
+        photoUrl,
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        errorBuilder: (ctx, err, stack) => Container(
+          width: width,
+          height: height,
+          color: const Color(0xFFF1F5F9),
+          child: const Icon(Icons.broken_image_outlined, size: 20, color: Colors.grey),
+        ),
+      );
+    } else {
+      final file = File(photoUrl);
+      if (file.existsSync()) {
+        imageChild = Image.file(
+          file,
+          width: width,
+          height: height,
+          fit: BoxFit.cover,
+          errorBuilder: (ctx, err, stack) => Container(
+            width: width,
+            height: height,
+            color: const Color(0xFFF1F5F9),
+            child: const Icon(Icons.broken_image_outlined, size: 20, color: Colors.grey),
+          ),
+        );
+      } else {
+        imageChild = Container(
+          width: width,
+          height: height,
+          color: const Color(0xFFF1F5F9),
+          child: const Icon(Icons.image_not_supported_outlined, size: 20, color: Colors.grey),
+        );
+      }
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: imageChild,
+    );
+  }
+
+  void _openFullImagePreview(String photoUrl, String siteName) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: 500,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Captured Site Photo ($siteName)',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: _buildSiteVisitImageWidget(photoUrl, width: 450, height: 350),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _openDaySiteTimelineDialog(String employeeName, String dateStr, List<SiteVisitRecord> dayVisits) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Site Visits: $employeeName ($dateStr)'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.location_on_outlined, color: Color(0xFF9CC70A)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Site Visits: $employeeName ($dateStr)',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
         content: SizedBox(
-          width: 480,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: dayVisits.map((v) {
-              return ListTile(
-                leading: const Icon(Icons.location_on, color: Color(0xFF9CC70A)),
-                title: Text(v.siteName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text('Time: ${v.visitTime}\nLocation: ${v.address.isNotEmpty ? v.address : '${v.latitude}, ${v.longitude}'}'),
-                isThreeLine: true,
-              );
-            }).toList(),
+          width: 500,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: dayVisits.map((v) {
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Photo Image Thumbnail with Tap to View Full Screen
+                      GestureDetector(
+                        onTap: () {
+                          if (v.photoUrl.isNotEmpty) {
+                            _openFullImagePreview(v.photoUrl, v.siteName);
+                          }
+                        },
+                        child: Stack(
+                          children: [
+                            _buildSiteVisitImageWidget(v.photoUrl, width: 56, height: 56),
+                            if (v.photoUrl.isNotEmpty)
+                              Positioned(
+                                right: 2,
+                                bottom: 2,
+                                child: Container(
+                                  padding: const EdgeInsets.all(2),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.black54,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.zoom_in, color: Colors.white, size: 12),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    v.siteName,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF7FEE7),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.3)),
+                                  ),
+                                  child: Text(
+                                    v.visitTime,
+                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF9CC70A)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Location: ${v.address.isNotEmpty ? v.address : '${v.latitude}, ${v.longitude}'}',
+                              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                            ),
+                            if (v.notes.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text('Notes: ${v.notes}', style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Color(0xFF475569))),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
           ),
         ),
         actions: [
@@ -1080,9 +1794,211 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
 }
 
 class _KpiData {
-  _KpiData(this.label, this.value, this.color, this.icon);
+  _KpiData({
+    required this.label,
+    required this.value,
+    required this.subtext,
+    required this.iconColor,
+    required this.bgColor,
+    required this.icon,
+    this.isGrowth = false,
+  });
+
   final String label;
   final String value;
-  final Color color;
+  final String subtext;
+  final Color iconColor;
+  final Color bgColor;
   final IconData icon;
+  final bool isGrowth;
 }
+
+class SearchableFilterDropdown<T> extends StatelessWidget {
+  const SearchableFilterDropdown({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.itemLabel,
+    required this.onChanged,
+    this.searchHint = 'Search...',
+    this.width,
+  });
+
+  final String label;
+  final T? value;
+  final List<T> items;
+  final String Function(T item) itemLabel;
+  final ValueChanged<T?> onChanged;
+  final String searchHint;
+  final double? width;
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedText = value != null ? itemLabel(value as T) : label;
+
+    return SizedBox(
+      width: width,
+      child: InkWell(
+        onTap: () => _openSearchDialog(context),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFCBD5E1)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  selectedText,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: value != null ? FontWeight.w600 : FontWeight.normal,
+                    color: const Color(0xFF0F172A),
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const Icon(Icons.arrow_drop_down, size: 18, color: Color(0xFF64748B)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openSearchDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => _SearchFilterDialog<T>(
+        title: label,
+        searchHint: searchHint,
+        items: items,
+        selectedValue: value,
+        itemLabel: itemLabel,
+        onSelected: (val) {
+          onChanged(val);
+          Navigator.pop(ctx);
+        },
+      ),
+    );
+  }
+}
+
+class _SearchFilterDialog<T> extends StatefulWidget {
+  const _SearchFilterDialog({
+    required this.title,
+    required this.searchHint,
+    required this.items,
+    required this.selectedValue,
+    required this.itemLabel,
+    required this.onSelected,
+  });
+
+  final String title;
+  final String searchHint;
+  final List<T> items;
+  final T? selectedValue;
+  final String Function(T item) itemLabel;
+  final ValueChanged<T?> onSelected;
+
+  @override
+  State<_SearchFilterDialog<T>> createState() => _SearchFilterDialogState<T>();
+}
+
+class _SearchFilterDialogState<T> extends State<_SearchFilterDialog<T>> {
+  final TextEditingController _controller = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = widget.items.where((item) {
+      final label = widget.itemLabel(item).toLowerCase();
+      return label.contains(_query.toLowerCase());
+    }).toList();
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Container(
+        width: 360,
+        height: 420,
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  widget.title,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _controller,
+              autofocus: true,
+              style: const TextStyle(fontSize: 13),
+              decoration: InputDecoration(
+                hintText: widget.searchHint,
+                hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFF94A3B8)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
+              ),
+              onChanged: (val) => setState(() => _query = val.trim()),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: filtered.isEmpty
+                  ? const Center(child: Text('No matching items', style: TextStyle(fontSize: 12, color: Colors.grey)))
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                      itemBuilder: (context, index) {
+                        final item = filtered[index];
+                        final isSelected = item == widget.selectedValue;
+                        final label = widget.itemLabel(item);
+
+                        return ListTile(
+                          dense: true,
+                          title: Text(
+                            label,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              color: isSelected ? const Color(0xFF9CC70A) : const Color(0xFF0F172A),
+                            ),
+                          ),
+                          trailing: isSelected ? const Icon(Icons.check, size: 16, color: Color(0xFF9CC70A)) : null,
+                          onTap: () => widget.onSelected(item),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+

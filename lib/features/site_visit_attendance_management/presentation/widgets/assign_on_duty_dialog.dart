@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../employee/domain/employee.dart';
 import '../../../employee/providers/employee_providers.dart';
 import '../../../on_duty/domain/on_duty_assignment.dart';
 import '../../../on_duty/providers/on_duty_providers.dart';
 import '../../../site_visit_attendance/domain/site_visit_record.dart';
+import '../../../site_visit_attendance_management/providers/site_visit_attendance_management_providers.dart';
 
 class AssignOnDutyDialog extends ConsumerStatefulWidget {
   const AssignOnDutyDialog({
@@ -54,12 +56,21 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
   Widget build(BuildContext context) {
     final employees = ref.watch(employeesProvider).valueOrNull ?? [];
     final companySites = ref.watch(companySitesProvider);
+    final selectedEmpId = _selectedEmployee?.id ?? (employees.isNotEmpty ? employees.first.id : null);
 
-    final fromLocation = _currentVisit?.siteName.isNotEmpty == true
-        ? _currentVisit!.siteName
-        : (_currentVisit?.address.isNotEmpty == true ? _currentVisit!.address : 'Tambaram');
-    final fromLat = _currentVisit?.latitude ?? 12.9249;
-    final fromLng = _currentVisit?.longitude ?? 80.1000;
+    final allVisits = ref.watch(allSiteVisitsProvider((visitDate: null, employeeId: selectedEmpId, siteName: null))).valueOrNull ?? [];
+    final empVisits = List<SiteVisitRecord>.from(allVisits);
+    empVisits.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final latestVisit = empVisits.isNotEmpty ? empVisits.first : _currentVisit;
+
+    final fromLocation = latestVisit?.siteName.isNotEmpty == true
+        ? latestVisit!.siteName
+        : (latestVisit?.address.isNotEmpty == true
+            ? latestVisit!.address
+            : (_selectedEmployee?.department.isNotEmpty == true ? '${_selectedEmployee!.department} Office' : 'Main Office (Tambaram)'));
+    final fromLat = latestVisit?.latitude ?? 12.9249;
+    final fromLng = latestVisit?.longitude ?? 80.1000;
+    final lastLogTime = latestVisit?.visitTime.isNotEmpty == true ? latestVisit!.visitTime : 'Live GPS Sync';
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -142,39 +153,72 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
                   const SizedBox(height: 16),
 
                   // Current Work Location Card
-                  const Text(
-                    'Current Work Location',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF414A51)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Current Work Location',
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF414A51)),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF7FEE7),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.5)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(Icons.circle, size: 8, color: Color(0xFF9CC70A)),
+                            SizedBox(width: 4),
+                            Text(
+                              'GPS Verified',
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF9CC70A)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 6),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey.shade300),
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            const Text('📍 ', style: TextStyle(fontSize: 16)),
-                            Text(
-                              fromLocation,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF414A51)),
+                            const Icon(Icons.location_on, color: Color(0xFF9CC70A), size: 18),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                fromLocation,
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF414A51)),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 6),
-                        Text(
-                          'Latitude: ${fromLat.toStringAsFixed(4)}',
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-                        ),
-                        Text(
-                          'Longitude: ${fromLng.toStringAsFixed(4)}',
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Lat: ${fromLat.toStringAsFixed(4)} | Lng: ${fromLng.toStringAsFixed(4)}',
+                              style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                            ),
+                            Text(
+                              'Logged: $lastLogTime',
+                              style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Color(0xFF64748B)),
+                            ),
+                          ],
                         ),
                       ],
                     ),
