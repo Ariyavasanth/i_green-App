@@ -8,7 +8,9 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../employee/domain/employee.dart';
 import '../../leave/domain/leave_request.dart';
+import '../../leave/domain/leave_type.dart';
 import '../../leave/providers/leave_providers.dart';
+import '../../leave/presentation/my_leave_requests_page.dart';
 import '../domain/site_visit_record.dart';
 import '../providers/site_visit_attendance_providers.dart';
 import 'site_visit_camera_page.dart';
@@ -21,6 +23,7 @@ class SiteVisitAttendancePage extends ConsumerStatefulWidget {
 }
 
 class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePage> {
+  int _activeTab = 0; // 0: Home, 1: Calendar, 2: Leave
   DateTime _focusedMonth = DateTime.now();
   DateTime _selectedDate = DateTime.now();
   bool _showVisitForm = false;
@@ -30,6 +33,12 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
 
   final _siteController = TextEditingController();
   final _notesController = TextEditingController();
+
+  String _statusFilter = 'All';
+  String _requestTypeFilter = 'All';
+  String _leaveTypeFilter = 'All';
+  DateTime? _filterFromDate;
+  DateTime? _filterToDate;
 
   String _formatKey(DateTime date) =>
       '${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}';
@@ -47,7 +56,7 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
     final currentEmp = ref.watch(currentEmployeeProvider);
     if (currentEmp == null) {
       return const Scaffold(
-        backgroundColor: Color(0xFFEFF3F6),
+        backgroundColor: Color(0xFFF8FAFC),
         body: Center(child: Text('No employee profile found.')),
       );
     }
@@ -63,56 +72,117 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
     final allVisitsAsync = ref.watch(allSiteVisitRecordsProvider(null));
     final leaveAsync = ref.watch(leaveRequestsProvider(currentEmp.id));
 
+    Widget bodyContent;
+    if (_activeTab == 0) {
+      bodyContent = _buildSiteVisitHomeTab(currentEmp, todayVisitsAsync, selectedVisitsAsync);
+    } else if (_activeTab == 1) {
+      bodyContent = leaveAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF9CC70A))),
+        error: (e, _) => Text('Error loading leaves: $e'),
+        data: (leaveRequests) => allVisitsAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF9CC70A))),
+          error: (e, _) => Text('Error loading site visits: $e'),
+          data: (allVisits) => SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildCalendar(leaveRequests.cast<LeaveRequest>(), allVisits),
+                const SizedBox(height: 20),
+                _buildSelectedDaySection(selectedVisitsAsync),
+              ],
+            ),
+          ),
+        ),
+      );
+    } else {
+      bodyContent = _buildLeaveTab(currentEmp, leaveAsync);
+    }
+
     return Scaffold(
-      backgroundColor: const Color(0xFFEFF3F6),
+      backgroundColor: const Color(0xFFF8FAFC),
       body: SafeArea(
         top: false,
         bottom: true,
-        child: SingleChildScrollView(
-          controller: _scrollController,
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        child: bodyContent,
+      ),
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _activeTab,
+          onTap: (index) => setState(() => _activeTab = index),
+          backgroundColor: Colors.white,
+          selectedItemColor: const Color(0xFF9CC70A),
+          unselectedItemColor: const Color(0xFF94A3B8),
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
+          elevation: 8,
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined),
+              activeIcon: Icon(Icons.home),
+              label: 'Home',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.calendar_month_outlined),
+              activeIcon: Icon(Icons.calendar_month),
+              label: 'Calendar',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.event_note_outlined),
+              activeIcon: Icon(Icons.event_note),
+              label: 'Leave',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSiteVisitHomeTab(
+    Employee currentEmp,
+    AsyncValue<List<SiteVisitRecord>> todayVisitsAsync,
+    AsyncValue<List<SiteVisitRecord>> selectedVisitsAsync,
+  ) {
+    return SingleChildScrollView(
+      controller: _scrollController,
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              const Row(
-                children: [
-                  Icon(Icons.location_on_outlined, size: 24, color: AppColors.active),
-                  SizedBox(width: 8),
-                  Text(
-                    'Site Visit Attendance',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              _buildTodayOverviewCard(currentEmp, todayVisitsAsync),
-              const SizedBox(height: 20),
-              leaveAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Text('Error loading leaves: $e'),
-                data: (leaveRequests) => allVisitsAsync.when(
-                  loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (e, _) => Text('Error loading site visits: $e'),
-                  data: (allVisits) => _buildCalendar(
-                    leaveRequests.cast<LeaveRequest>(),
-                    allVisits,
-                  ),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF9CC70A).withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
                 ),
+                child: const Icon(Icons.location_on_outlined, size: 20, color: Color(0xFF414A51)),
               ),
-              const SizedBox(height: 20),
-              _buildSelectedDaySection(selectedVisitsAsync),
-              const SizedBox(height: 20),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
-                child: _showVisitForm ? _buildCaptureCard(currentEmp) : const SizedBox.shrink(),
+              const SizedBox(width: 10),
+              const Text(
+                'Site Visit Attendance',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E293B),
+                ),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 16),
+          _buildTodayOverviewCard(currentEmp, todayVisitsAsync),
+          const SizedBox(height: 20),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            child: _showVisitForm ? _buildCaptureCard(currentEmp) : const SizedBox.shrink(),
+          ),
+          if (_showVisitForm) const SizedBox(height: 20),
+          _buildSelectedDaySection(selectedVisitsAsync),
+        ],
       ),
     );
   }
@@ -195,8 +265,8 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
                 height: 48,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.active,
-                    foregroundColor: Colors.white,
+                    backgroundColor: const Color(0xFF9CC70A),
+                    foregroundColor: const Color(0xFF414A51),
                     elevation: 1,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
@@ -214,8 +284,8 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
                 height: 48,
                 child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.textPrimary,
-                    side: const BorderSide(color: Color(0xFFD8DDE3)),
+                    foregroundColor: const Color(0xFF414A51),
+                    side: const BorderSide(color: Color(0xFFCBD5E1)),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   onPressed: () {
@@ -515,25 +585,49 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
   Widget _buildSelectedDaySection(AsyncValue<List<SiteVisitRecord>> selectedVisitsAsync) {
     final title = DateFormat('EEEE, dd MMMM yyyy').format(_selectedDate);
     final isToday = _formatKey(_selectedDate) == _formatKey(DateTime.now());
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Day detail',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Day Records',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                isToday ? 'Today' : DateFormat('dd MMM yyyy').format(_selectedDate),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF414A51)),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 4),
         Text(
-          isToday ? ' Ã¢â‚¬Â¢ Today' : title,
-          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          title,
+          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
         ),
         const SizedBox(height: 12),
         selectedVisitsAsync.when(
-          loading: () => _cardShell(const Center(child: CircularProgressIndicator())),
+          loading: () => _cardShell(const Center(child: CircularProgressIndicator(color: Color(0xFF9CC70A)))),
           error: (e, _) => _cardShell(Text('Error loading visits: $e')),
           data: (visits) {
             if (visits.isEmpty) {
-              return _cardShell(const Center(child: Text('No visits for this day')));
+              return _cardShell(
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Center(
+                    child: Text('No site visit records for this day.', style: TextStyle(color: Color(0xFF64748B))),
+                  ),
+                ),
+              );
             }
             return Column(children: visits.map((visit) => _buildVisitTile(visit)).toList());
           },
@@ -730,13 +824,20 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
   }
 
   DateTime? _parseDateKey(String value) {
-    final parts = value.split('-');
-    if (parts.length != 3) return null;
-    final day = int.tryParse(parts[0]);
-    final month = int.tryParse(parts[1]);
-    final year = int.tryParse(parts[2]);
-    if (day == null || month == null || year == null) return null;
-    return DateTime(year, month, day);
+    if (value.isEmpty) return null;
+    try {
+      final isoDate = DateTime.tryParse(value);
+      if (isoDate != null) return isoDate;
+      final parts = value.split('-');
+      if (parts.length == 3) {
+        if (parts[0].length == 4) {
+          return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+        } else {
+          return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+        }
+      }
+    } catch (_) {}
+    return null;
   }
 
   Future<void> _openCameraAndSave(Employee employee) async {
@@ -888,6 +989,785 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
     }
 
     return Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+  }
+
+  // ==========================================
+  // TAB 2: LEAVE TAB FOR SITE VISIT ATTENDANCE
+  // ==========================================
+  Widget _buildLeaveTab(Employee currentEmp, AsyncValue<List<LeaveRequest>> userLeaveRequestsAsync) {
+    return userLeaveRequestsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF9CC70A))),
+      error: (e, _) => Center(child: Text('Error loading leave requests: $e')),
+      data: (requests) {
+        final filteredRequests = _getFilteredRequests(requests);
+        final totalRequests = requests.length;
+        final pendingCount = requests.where((r) => r.status == 'Pending').length;
+        final approvedCount = requests.where((r) => r.status == 'Approved').length;
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildLeaveStatCard(
+                      'Total Requests',
+                      '$totalRequests',
+                      Icons.folder_outlined,
+                      const Color(0xFF0288D1),
+                      const Color(0xFFE1F5FE),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildLeaveStatCard(
+                      'Pending Requests',
+                      '$pendingCount',
+                      Icons.hourglass_top_outlined,
+                      const Color(0xFFE65100),
+                      const Color(0xFFFFF3E0),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildLeaveStatCard(
+                      'Approved Leaves',
+                      '$approvedCount',
+                      Icons.check_circle_outline,
+                      const Color(0xFF2E7D32),
+                      const Color(0xFFE8F5E9),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(child: SizedBox.shrink()),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'My Leave Requests',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                  ),
+                  Row(
+                    children: [
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF414A51),
+                          side: const BorderSide(color: Color(0xFFCBD5E1)),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () => Navigator.of(context, rootNavigator: true).push(
+                          MaterialPageRoute(
+                            builder: (context) => MyLeaveRequestsPage(currentEmp: currentEmp),
+                          ),
+                        ),
+                        icon: const Icon(Icons.list_alt, size: 16, color: Color(0xFF414A51)),
+                        label: const Text(
+                          'My Requests',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF9CC70A),
+                          foregroundColor: const Color(0xFF414A51),
+                          elevation: 1,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () => _showApplyLeaveDialog(currentEmp),
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text(
+                          'Apply Leave',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _statusFilter,
+                          isDense: true,
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                          items: ['All', 'Pending', 'Approved', 'Denied', 'Cancelled'].map((st) {
+                            return DropdownMenuItem(
+                              value: st,
+                              child: Text(st == 'All' ? 'All Status' : st),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) setState(() => _statusFilter = val);
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF414A51),
+                        side: BorderSide(
+                          color: (_filterFromDate != null || _filterToDate != null)
+                              ? const Color(0xFF9CC70A)
+                              : const Color(0xFFCBD5E1),
+                        ),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      onPressed: _showDateFilterBottomSheet,
+                      icon: const Icon(Icons.calendar_today_outlined, size: 14),
+                      label: Text(
+                        (_filterFromDate != null || _filterToDate != null)
+                            ? 'Date Filter Active'
+                            : 'Date',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF414A51),
+                        side: const BorderSide(color: Color(0xFFCBD5E1)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      onPressed: _showAdvancedFiltersBottomSheet,
+                      icon: const Icon(Icons.tune_outlined, size: 14),
+                      label: const Text('Filters', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Showing ${filteredRequests.length} requests',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                  ),
+                  if (_statusFilter != 'All' || _requestTypeFilter != 'All' || _leaveTypeFilter != 'All' || _filterFromDate != null || _filterToDate != null)
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _statusFilter = 'All';
+                          _requestTypeFilter = 'All';
+                          _leaveTypeFilter = 'All';
+                          _filterFromDate = null;
+                          _filterToDate = null;
+                        });
+                      },
+                      child: const Text(
+                        'Reset Filters',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0288D1)),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              if (filteredRequests.isEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: const Column(
+                    children: [
+                      Icon(Icons.inbox_outlined, size: 40, color: Color(0xFF94A3B8)),
+                      SizedBox(height: 12),
+                      Text('No leave requests match your criteria.', style: TextStyle(color: Color(0xFF64748B))),
+                    ],
+                  ),
+                )
+              else
+                Column(
+                  children: filteredRequests.map((req) => _buildLeaveActivityCard(req, currentEmp)).toList(),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  List<LeaveRequest> _getFilteredRequests(List<LeaveRequest> requests) {
+    return requests.where((req) {
+      if (_statusFilter != 'All' && req.status.toLowerCase() != _statusFilter.toLowerCase()) {
+        return false;
+      }
+      final isPerm = req.leaveType.toLowerCase().startsWith('permission');
+      if (_requestTypeFilter == 'Leave' && isPerm) return false;
+      if (_requestTypeFilter == 'Permission' && !isPerm) return false;
+      if (_leaveTypeFilter != 'All' && !req.leaveType.toLowerCase().contains(_leaveTypeFilter.toLowerCase())) {
+        return false;
+      }
+      if (_filterFromDate != null || _filterToDate != null) {
+        final reqFrom = _parseDateKey(req.fromDate);
+        final reqTo = _parseDateKey(req.toDate) ?? reqFrom;
+        if (reqFrom != null && reqTo != null) {
+          if (_filterFromDate != null && reqTo.isBefore(_filterFromDate!)) return false;
+          if (_filterToDate != null && reqFrom.isAfter(_filterToDate!)) return false;
+        }
+      }
+      return true;
+    }).toList();
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'approved':
+        return const Color(0xFF2E7D32);
+      case 'pending':
+        return const Color(0xFFE65100);
+      case 'denied':
+      case 'rejected':
+        return const Color(0xFFC62828);
+      default:
+        return const Color(0xFF414A51);
+    }
+  }
+
+  String _formatDateStr(String dateStr) {
+    if (dateStr.isEmpty) return 'N/A';
+    try {
+      final isoDate = DateTime.tryParse(dateStr);
+      if (isoDate != null) return DateFormat('dd MMM yyyy').format(isoDate);
+      final parts = dateStr.split('-');
+      if (parts.length == 3) {
+        if (parts[0].length == 4) {
+          return DateFormat('dd MMM yyyy').format(DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2])));
+        } else {
+          return DateFormat('dd MMM yyyy').format(DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0])));
+        }
+      }
+    } catch (_) {}
+    return dateStr;
+  }
+
+  String _formatDurationDisplay(LeaveRequest req) {
+    if (req.leaveType.toLowerCase().startsWith('permission')) {
+      if (req.leaveType.contains('(') && req.leaveType.contains(')')) {
+        final timePart = req.leaveType.substring(req.leaveType.indexOf('(') + 1, req.leaveType.indexOf(')'));
+        return 'Permission ($timePart)';
+      }
+      final hours = req.numDays * 8.0;
+      if (hours > 0) {
+        final h = hours.floor();
+        final m = ((hours - h) * 60).round();
+        if (h > 0 && m > 0) return '$h Hr $m Mins';
+        if (h > 0) return '$h Hour${h > 1 ? 's' : ''}';
+        return '$m Mins';
+      }
+      return 'Permission';
+    }
+    final isWhole = (req.numDays == req.numDays.roundToDouble());
+    final daysStr = isWhole ? req.numDays.toInt().toString() : req.numDays.toStringAsFixed(1);
+    return '$daysStr Day${req.numDays == 1.0 ? '' : 's'}';
+  }
+
+  Widget _buildLeaveStatCard(String title, String countStr, IconData icon, Color iconColor, Color iconBg) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, color: iconColor, size: 20),
+          ),
+          const SizedBox(height: 12),
+          Text(title, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
+          const SizedBox(height: 4),
+          Text(countStr, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLeaveActivityCard(LeaveRequest req, Employee currentEmp) {
+    final isPending = req.status.toLowerCase() == 'pending';
+    final statusColor = _getStatusColor(req.status);
+    final isPermission = req.leaveType.toLowerCase().startsWith('permission');
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: isPermission
+                      ? const Color(0xFF3B82F6).withValues(alpha: 0.12)
+                      : const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isPermission ? Icons.access_time : Icons.event_note,
+                  size: 18,
+                  color: isPermission ? const Color(0xFF2563EB) : const Color(0xFF414A51),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      req.leaveType,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1E293B)),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Submitted: ${_formatDateStr(req.createdAt)}',
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                    ),
+                  ],
+                ),
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      req.status,
+                      style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  if (isPending)
+                    IconButton(
+                      constraints: const BoxConstraints(),
+                      padding: const EdgeInsets.all(4),
+                      icon: const Icon(Icons.edit_outlined, size: 18, color: Color(0xFF0288D1)),
+                      tooltip: 'Edit Request',
+                      onPressed: () => _showApplyLeaveDialog(currentEmp, existingRequest: req),
+                    )
+                  else
+                    IconButton(
+                      constraints: const BoxConstraints(),
+                      padding: const EdgeInsets.all(4),
+                      icon: const Icon(Icons.visibility_outlined, size: 18, color: Color(0xFF64748B)),
+                      tooltip: 'View Details',
+                      onPressed: () => _showViewLeaveDialog(req),
+                    ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  '${_formatDateStr(req.fromDate)} → ${_formatDateStr(req.toDate)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF475569)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _formatDurationDisplay(req),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                  color: isPermission ? const Color(0xFF2563EB) : const Color(0xFF9CC70A),
+                ),
+              ),
+            ],
+          ),
+          if (req.reason.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Reason: ${req.reason}',
+              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _showViewLeaveDialog(LeaveRequest req) {
+    final statusColor = _getStatusColor(req.status);
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  req.leaveType,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1E293B)),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  req.status,
+                  style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _detailRow('Submitted On', _formatDateStr(req.createdAt)),
+                  const SizedBox(height: 12),
+                  _detailRow('Date Range', '${_formatDateStr(req.fromDate)} → ${_formatDateStr(req.toDate)}'),
+                  const SizedBox(height: 12),
+                  _detailRow('Duration', _formatDurationDisplay(req)),
+                  const SizedBox(height: 12),
+                  _detailRow('Reason', req.reason.isNotEmpty ? req.reason : 'N/A'),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text('Close', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+        const SizedBox(height: 2),
+        Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1E293B))),
+      ],
+    );
+  }
+
+  void _showDateFilterBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Container(
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Filter by Date',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Color(0xFF64748B)),
+                        onPressed: () => Navigator.pop(sheetCtx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF9CC70A),
+                            foregroundColor: const Color(0xFF414A51),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: () {
+                            setState(() {});
+                            Navigator.pop(sheetCtx);
+                          },
+                          child: const Text('Apply Filter', style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showAdvancedFiltersBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Container(
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Filters',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Color(0xFF64748B)),
+                        onPressed: () => Navigator.pop(sheetCtx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF9CC70A),
+                      foregroundColor: const Color(0xFF414A51),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () {
+                      setState(() {});
+                      Navigator.pop(sheetCtx);
+                    },
+                    child: const Text('Apply', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showApplyLeaveDialog(Employee currentEmp, {LeaveRequest? existingRequest}) {
+    final isEditing = existingRequest != null;
+    final reasonController = TextEditingController(text: isEditing ? existingRequest.reason : '');
+    final leaveTypesAsync = ref.read(leaveTypesProvider);
+    LeaveType? selectedType;
+    if (isEditing) {
+      leaveTypesAsync.whenData((types) {
+        selectedType = types.where((t) => t.name == existingRequest.leaveType).firstOrNull;
+      });
+    }
+
+    DateTime fromDate = isEditing
+        ? (_parseDateKey(existingRequest.fromDate) ?? DateTime.now())
+        : DateTime.now();
+    DateTime toDate = isEditing
+        ? (_parseDateKey(existingRequest.toDate) ?? DateTime.now())
+        : DateTime.now();
+    bool submitting = false;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Text(
+                isEditing ? 'Edit Leave Request' : 'Apply for Leave',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1E293B)),
+              ),
+              content: SingleChildScrollView(
+                child: SizedBox(
+                  width: 400,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      leaveTypesAsync.when(
+                        loading: () => const CircularProgressIndicator(),
+                        error: (e, _) => Text('Error loading leave types: $e'),
+                        data: (types) => DropdownButtonFormField<LeaveType>(
+                          value: selectedType,
+                          decoration: const InputDecoration(
+                            labelText: 'Leave Type',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: types.map((t) => DropdownMenuItem(value: t, child: Text(t.name))).toList(),
+                          onChanged: (val) => setDialogState(() => selectedType = val),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: reasonController,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                          labelText: 'Reason',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogCtx),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF9CC70A),
+                    foregroundColor: const Color(0xFF414A51),
+                  ),
+                  onPressed: submitting
+                      ? null
+                      : () async {
+                          if (selectedType == null) return;
+                          setDialogState(() => submitting = true);
+                          final repo = ref.read(leaveRepositoryProvider);
+                          final nowStr = DateTime.now().toIso8601String();
+                          final fromStr = DateFormat('yyyy-MM-dd').format(fromDate);
+                          final toStr = DateFormat('yyyy-MM-dd').format(toDate);
+
+                          if (isEditing) {
+                            final updated = LeaveRequest(
+                              id: existingRequest.id,
+                              employeeId: currentEmp.id,
+                              employeeName: currentEmp.fullName,
+                              employeeCustomId: currentEmp.employeeId,
+                              leaveType: selectedType!.name,
+                              fromDate: fromStr,
+                              toDate: toStr,
+                              reason: reasonController.text.trim(),
+                              status: 'Pending',
+                              createdAt: existingRequest.createdAt,
+                              numDays: toDate.difference(fromDate).inDays + 1.0,
+                            );
+                            await repo.updateLeaveRequest(updated);
+                          } else {
+                            final newReq = LeaveRequest(
+                              id: 0,
+                              employeeId: currentEmp.id,
+                              employeeName: currentEmp.fullName,
+                              employeeCustomId: currentEmp.employeeId,
+                              leaveType: selectedType!.name,
+                              fromDate: fromStr,
+                              toDate: toStr,
+                              reason: reasonController.text.trim(),
+                              status: 'Pending',
+                              createdAt: nowStr,
+                              numDays: toDate.difference(fromDate).inDays + 1.0,
+                            );
+                            await repo.submitLeaveRequest(newReq);
+                          }
+
+                          ref.invalidate(leaveRequestsProvider(currentEmp.id));
+                          if (mounted) Navigator.pop(dialogCtx);
+                        },
+                  child: Text(submitting ? 'Submitting...' : (isEditing ? 'Update' : 'Submit')),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 }
 
