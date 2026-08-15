@@ -486,6 +486,10 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
           child: Row(children: [Icon(Icons.visibility_outlined, size: 16), SizedBox(width: 8), Text('View')]),
         ),
         const PopupMenuItem(
+          value: 'history',
+          child: Row(children: [Icon(Icons.history_outlined, size: 16), SizedBox(width: 8), Text('Employee Loan History')]),
+        ),
+        const PopupMenuItem(
           value: 'edit',
           child: Row(children: [Icon(Icons.edit_outlined, size: 16), SizedBox(width: 8), Text('Edit')]),
         ),
@@ -525,6 +529,9 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
         case 'view':
           context.push('/loan-management/details/${loan.id}');
           break;
+        case 'history':
+          await _showEmployeeLoanHistory(loan);
+          break;
         case 'edit':
           context.push('/loan-management/create', extra: loan);
           break;
@@ -563,6 +570,114 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
     } catch (e) {
       _showSnackBar('Failed to perform action: $e', isError: true);
     }
+  }
+
+  Future<void> _showEmployeeLoanHistory(EmployeeLoan selectedLoan) async {
+    final history = await ref
+        .read(loanRepositoryProvider)
+        .getLoansForEmployee(selectedLoan.employeeId);
+    if (!mounted) return;
+
+    final currencyFormat = NumberFormat.currency(
+      locale: 'en_IN',
+      symbol: '\u20B9',
+      decimalDigits: 0,
+    );
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        titlePadding: const EdgeInsets.fromLTRB(24, 20, 16, 12),
+        contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+        title: Row(
+          children: [
+            const Icon(Icons.history_outlined, color: AppColors.active),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${selectedLoan.employeeName} - Loan History',
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    selectedLoan.employeeCustomId,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: 'Close',
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              icon: const Icon(Icons.close),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 760,
+          height: MediaQuery.sizeOf(dialogContext).height * 0.6,
+          child: history.isEmpty
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 32),
+                  child: Center(child: Text('No loan history found.')),
+                )
+              : ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: history.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final loan = history[index];
+                    return ListTile(
+                      contentPadding: const EdgeInsets.symmetric(vertical: 6),
+                      leading: CircleAvatar(
+                        backgroundColor: AppColors.active.withValues(alpha: 0.1),
+                        child: const Icon(
+                          Icons.account_balance_wallet_outlined,
+                          color: AppColors.active,
+                          size: 20,
+                        ),
+                      ),
+                      title: Text(
+                        '${loan.loanId}  •  ${loan.loanType}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      subtitle: Text(
+                        '${loan.loanDate.isEmpty ? 'Date not available' : loan.loanDate}  •  EMI ${currencyFormat.format(loan.emiAmount)}  •  Balance ${currencyFormat.format(loan.remainingBalance)}',
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildStatusBadge(loan.status),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            tooltip: 'View loan details',
+                            icon: const Icon(Icons.chevron_right),
+                            onPressed: () {
+                              Navigator.of(dialogContext).pop();
+                              context.push('/loan-management/details/${loan.id}');
+                            },
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ),
+    );
   }
 
   void _showSnackBar(String message, {bool isError = false}) {
