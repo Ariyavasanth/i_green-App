@@ -8,6 +8,7 @@ abstract class LeaveRepository {
   Future<List<LeaveRequest>> getLeaveRequests(int employeeId);
   Future<List<LeaveRequest>> getAllLeaveRequests();
   Future<void> submitLeaveRequest(LeaveRequest request);
+  Future<void> updateLeaveRequest(LeaveRequest request);
   Future<void> approveLeaveRequest(
     int id,
     String adminName, {

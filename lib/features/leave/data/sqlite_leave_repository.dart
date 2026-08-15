@@ -279,6 +279,17 @@ class SqliteLeaveRepository implements LeaveRepository {
     await db.insert('leave_requests', request.toMap());
   }
 
+  @override
+  Future<void> updateLeaveRequest(LeaveRequest request) async {
+    final db = await database;
+    await db.update(
+      'leave_requests',
+      request.toMap(),
+      where: 'id = ?',
+      whereArgs: [request.id],
+    );
+  }
+
   Future<void> _validatePermissionRequest(LeaveRequest request) async {
     final requestedHours = request.numDays * 8;
     if (requestedHours <= 0 || requestedHours > 1.0001) {

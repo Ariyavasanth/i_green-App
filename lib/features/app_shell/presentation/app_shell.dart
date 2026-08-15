@@ -12,6 +12,8 @@ import '../../../widgets/navigation/sidebar_drawer.dart';
 import '../../authentication/providers/authentication_providers.dart';
 import '../../books/providers/books_providers.dart';
 import '../../employee/providers/employee_providers.dart';
+import '../../leave/providers/leave_providers.dart';
+import '../../attendance/providers/attendance_providers.dart';
 import '../../employee/presentation/dialogs/registration_links_dialog.dart';
 
 final sidebarStateStorageProvider = Provider<SidebarStateStorage>(
@@ -21,6 +23,8 @@ final sidebarStateStorageProvider = Provider<SidebarStateStorage>(
 final sidebarExpandedProvider = StateProvider<bool>((ref) {
   return ref.read(sidebarStateStorageProvider).readExpanded() ?? true;
 });
+
+final attendanceActiveTabProvider = StateProvider<int>((ref) => 0);
 
 final userDestinationsProvider = Provider<List<SidebarDestination>>((ref) {
   final userEmail = ref.watch(currentUserEmailProvider);
@@ -316,11 +320,7 @@ class AppShell extends ConsumerWidget {
           drawer: compact ? Drawer(width: 250, child: sidebar) : null,
           body: DecoratedBox(
             decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [AppColors.canvas, AppColors.canvas],
-              ),
+              color: Color(0xFFF8FAFC),
             ),
             child: Builder(
               builder: (scaffoldContext) {
@@ -361,7 +361,7 @@ class AppShell extends ConsumerWidget {
   }
 }
 
-class _TopBar extends StatelessWidget {
+class _TopBar extends ConsumerWidget {
   const _TopBar({
     required this.compact,
     required this.expanded,
@@ -385,14 +385,29 @@ class _TopBar extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final headingText = compact ? _getHeading(currentLocation) : 'Welcome back';
+  Widget build(BuildContext context, WidgetRef ref) {
+    String headingText;
+    if (currentLocation.startsWith('/attendance')) {
+      final tabIndex = ref.watch(attendanceActiveTabProvider);
+      switch (tabIndex) {
+        case 1:
+          headingText = 'Calendar';
+          break;
+        case 2:
+          headingText = 'Leave';
+          break;
+        default:
+          headingText = 'Attendance';
+      }
+    } else {
+      headingText = compact ? _getHeading(currentLocation) : 'Welcome back';
+    }
 
     final content = SafeArea(
       bottom: false,
-      child: ConstrainedBox(
-        // A minimum height preserves the design while allowing large text to grow.
-        constraints: const BoxConstraints(minHeight: 64),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        constraints: const BoxConstraints(minHeight: 56),
         child: Row(
           children: [
             _AnimatedMenuButton(
@@ -405,57 +420,50 @@ class _TopBar extends StatelessWidget {
                 onTap: onMenuPressed,
                 borderRadius: BorderRadius.circular(8),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Text(
                     headingText,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    textAlign: compact ? TextAlign.center : TextAlign.start,
-                    style: AppTextStyles.heading,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1E293B),
+                    ),
                   ),
                 ),
               ),
             ),
             if (compact) ...[
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert, color: AppColors.textPrimary),
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'export',
-                    child: Row(
-                      children: [
-                        Icon(Icons.file_download_outlined, size: 18, color: AppColors.textPrimary),
-                        SizedBox(width: 8),
-                        Text('Export (CSV/PDF)'),
-                      ],
+              Stack(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.notifications_outlined, color: Color(0xFF414A51), size: 20),
+                      onPressed: () {},
                     ),
                   ),
-                  const PopupMenuItem(
-                    value: 'response',
-                    child: Row(
-                      children: [
-                        Icon(Icons.rate_review_outlined, size: 18, color: AppColors.textPrimary),
-                        SizedBox(width: 8),
-                        Text('Response'),
-                      ],
+                  Positioned(
+                    right: 8,
+                    top: 8,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFC62828),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Text(
+                        '1',
+                        style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ),
                 ],
-                onSelected: (value) {
-                  if (value == 'export') {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Downloading data file (CSV/PDF)...'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  } else if (value == 'response') {
-                    showDialog<void>(
-                      context: context,
-                      builder: (context) => const RegistrationLinksDialog(),
-                    );
-                  }
-                },
               ),
             ],
             if (!compact) ...[
@@ -541,7 +549,7 @@ class _TopBar extends StatelessWidget {
 
     if (compact) {
       return Container(
-        color: Colors.white,
+        color: const Color(0xFFF8FAFC),
         child: content,
       );
     }

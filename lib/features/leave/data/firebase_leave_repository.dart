@@ -228,6 +228,19 @@ class FirebaseLeaveRepository implements LeaveRepository {
     await docRef.set(data);
   }
 
+  @override
+  Future<void> updateLeaveRequest(LeaveRequest request) async {
+    final doc = await _findRequestDoc(request.id);
+    if (doc == null || !doc.exists) {
+      throw Exception('Leave request document not found for ID: ${request.id}');
+    }
+    final data = Map<String, dynamic>.from(request.toMap());
+    data['approved_dates'] = request.approvedDates;
+    data['lop_dates'] = request.lopDates;
+    data['updated_at'] = FieldValue.serverTimestamp();
+    await doc.reference.update(data);
+  }
+
   Future<void> _validatePermissionRequest(LeaveRequest request) async {
     final requestedHours = request.numDays * 8;
     if (requestedHours <= 0 || requestedHours > 1.0001) {

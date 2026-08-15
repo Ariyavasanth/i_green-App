@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,7 +9,10 @@ import '../../../core/theme/app_colors.dart';
 import '../domain/attendance_record.dart';
 import '../../employee/domain/employee.dart';
 import '../../leave/domain/leave_request.dart';
+import '../../leave/domain/leave_type.dart';
+import '../../leave/domain/leave_balance.dart';
 import '../../leave/providers/leave_providers.dart';
+import '../../leave/presentation/my_leave_requests_page.dart';
 import '../domain/attendance_repository.dart';
 import '../providers/attendance_providers.dart';
 
@@ -20,15 +24,125 @@ class AttendancePage extends ConsumerStatefulWidget {
 }
 
 class _AttendancePageState extends ConsumerState<AttendancePage> {
+  int _currentTabIndex = 0;
   DateTime _focusedMonth = DateTime.now();
+
+  // Leave List Filter State
+  String _statusFilter = 'All';
+  String _requestTypeFilter = 'All';
+  String _leaveTypeFilter = 'All';
+  DateTime? _filterFromDate;
+  DateTime? _filterToDate;
+
+  int get _activeFilterCount {
+    int count = 0;
+    if (_statusFilter != 'All') count++;
+    if (_requestTypeFilter != 'All') count++;
+    if (_leaveTypeFilter != 'All') count++;
+    if (_filterFromDate != null || _filterToDate != null) count++;
+    return count;
+  }
+
+  List<LeaveRequest> _getFilteredRequests(List<LeaveRequest> requests) {
+    return requests.where((req) {
+      if (_statusFilter != 'All' && req.status.toLowerCase() != _statusFilter.toLowerCase()) {
+        return false;
+      }
+      final isPerm = req.leaveType.toLowerCase().startsWith('permission');
+      if (_requestTypeFilter == 'Leave' && isPerm) return false;
+      if (_requestTypeFilter == 'Permission' && !isPerm) return false;
+
+      if (_leaveTypeFilter != 'All' && req.leaveType != _leaveTypeFilter) {
+        return false;
+      }
+
+      if (_filterFromDate != null || _filterToDate != null) {
+        final reqFrom = _parseKey(req.fromDate);
+        final reqTo = _parseKey(req.toDate) ?? reqFrom;
+        if (reqFrom != null && reqTo != null) {
+          if (_filterFromDate != null && reqTo.isBefore(_filterFromDate!)) {
+            return false;
+          }
+          if (_filterToDate != null && reqFrom.isAfter(_filterToDate!.add(const Duration(days: 1)))) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }).toList();
+  }
+
+  // Apply Leave Form State
+  String _selectedLeaveType = 'Casual Leave';
+  DateTime? _fromDate = DateTime.now();
+  DateTime? _toDate = DateTime.now();
+  final TextEditingController _reasonController = TextEditingController();
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
 
   String _formatKey(DateTime date) =>
       '${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}';
 
   DateTime? _parseKey(String value) {
-    final parts = value.split('-');
-    if (parts.length != 3) return null;
-    return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+    if (value.isEmpty) return null;
+    try {
+      final isoDate = DateTime.tryParse(value);
+      if (isoDate != null) return isoDate;
+
+      final parts = value.split('-');
+      if (parts.length == 3) {
+        if (parts[0].length == 4) {
+          return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+        } else {
+          return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'approved':
+      case 'present':
+        return const Color(0xFF2E7D32);
+      case 'pending':
+      case 'late':
+        return const Color(0xFFE65100);
+      case 'denied':
+      case 'rejected':
+      case 'absent':
+        return const Color(0xFFC62828);
+      case 'leave':
+        return const Color(0xFFE65100);
+      default:
+        return const Color(0xFF414A51);
+    }
+  }
+
+  String _formatDateStr(String dateStr) {
+    if (dateStr.isEmpty) return 'N/A';
+    try {
+      final isoDate = DateTime.tryParse(dateStr);
+      if (isoDate != null) {
+        return DateFormat('dd MMM yyyy').format(isoDate);
+      }
+      final parts = dateStr.split('-');
+      if (parts.length == 3) {
+        if (parts[0].length == 4) {
+          final d = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+          return DateFormat('dd MMM yyyy').format(d);
+        } else {
+          final d = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+          return DateFormat('dd MMM yyyy').format(d);
+        }
+      }
+    } catch (_) {}
+    return dateStr;
   }
 
   @override
@@ -36,7 +150,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     final currentEmp = ref.watch(currentEmployeeProvider);
     if (currentEmp == null) {
       return const Scaffold(
-        backgroundColor: Color(0xFFEFF3F6),
+        backgroundColor: Color(0xFFF8FAFC),
         body: Center(child: Text('No employee profile found.')),
       );
     }
@@ -44,58 +158,2599 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     final attendanceAsync = ref.watch(attendanceRecordsProvider(currentEmp.id));
     final todayAttendanceAsync = ref.watch(todayAttendanceRecordProvider(currentEmp.id));
     final leaveAsync = ref.watch(attendanceLeaveRequestsProvider(currentEmp.id));
+    final userLeaveRequestsAsync = ref.watch(leaveRequestsProvider(currentEmp.id));
+
+    final activeTab = ref.watch(attendanceActiveTabProvider);
+    _currentTabIndex = activeTab;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFEFF3F6),
+      backgroundColor: const Color(0xFFF8FAFC),
       body: SafeArea(
         top: false,
         bottom: true,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
-          child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: IndexedStack(
+          index: _currentTabIndex,
           children: [
-            // Page Header
-            const Row(
-              children: [
-                Icon(Icons.calendar_month, size: 24, color: AppColors.active),
-                SizedBox(width: 8),
-                Text(
-                  'Attendance',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-              ],
+            // Tab 0: Home Overview Tab
+            _buildHomeTab(currentEmp, todayAttendanceAsync, attendanceAsync, leaveAsync),
+            // Tab 1: Monthly Calendar Tab
+            _buildCalendarTab(currentEmp, attendanceAsync, leaveAsync),
+            // Tab 2: Leave Dashboard Tab
+            _buildLeaveTab(currentEmp, userLeaveRequestsAsync),
+          ],
+        ),
+      ),
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFFF8FAFC),
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _currentTabIndex,
+          onTap: (index) {
+            ref.read(attendanceActiveTabProvider.notifier).state = index;
+            setState(() {
+              _currentTabIndex = index;
+            });
+          },
+          selectedItemColor: const Color(0xFF9CC70A),
+          unselectedItemColor: const Color(0xFF94A3B8),
+          backgroundColor: const Color(0xFFF8FAFC),
+          elevation: 0,
+          type: BottomNavigationBarType.fixed,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+          unselectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined),
+              activeIcon: Icon(Icons.home),
+              label: 'Home',
             ),
-            const SizedBox(height: 16),
-
-            // Today's Status Banner Hero Card
-            _buildTodayBannerCard(currentEmp, todayAttendanceAsync),
-            const SizedBox(height: 20),
-
-            // Monthly Calendar Section
-            attendanceAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Text('Error loading attendance: $e'),
-              data: (attendanceRecords) => leaveAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Text('Error loading leaves: $e'),
-                data: (leaveRequests) => _buildCalendar(
-                  attendanceRecords,
-                  leaveRequests.cast<LeaveRequest>(),
-                ),
-              ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.calendar_month_outlined),
+              activeIcon: Icon(Icons.calendar_month),
+              label: 'Calendar',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.event_note_outlined),
+              activeIcon: Icon(Icons.event_note),
+              label: 'Leave',
             ),
           ],
         ),
       ),
-    ),
-  );
+    );
   }
 
+  // ==========================================
+  // TAB 0: HOME OVERVIEW TAB
+  // ==========================================
+  Widget _buildHomeTab(
+    Employee currentEmp,
+    AsyncValue<AttendanceRecord?> todayAttendanceAsync,
+    AsyncValue<List<AttendanceRecord>> attendanceAsync,
+    AsyncValue<List<LeaveRequest>> leaveAsync,
+  ) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Today's Status Banner Card
+          _buildTodayBannerCard(currentEmp, todayAttendanceAsync),
+          const SizedBox(height: 20),
+
+          // This Month Overview Card
+          attendanceAsync.when(
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+            data: (records) => leaveAsync.when(
+              loading: () => const SizedBox.shrink(),
+              error: (_, __) => const SizedBox.shrink(),
+              data: (leaves) => _buildMonthOverviewCard(records, leaves.cast<LeaveRequest>()),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Recent Records Header & List
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Recent Records',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E293B),
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  ref.read(attendanceActiveTabProvider.notifier).state = 1;
+                  setState(() {
+                    _currentTabIndex = 1; // Switch to Calendar
+                  });
+                },
+                child: const Text(
+                  'View all',
+                  style: TextStyle(
+                    color: Color(0xFF2E7D32),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // Recent Records List
+          attendanceAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => Text('Error: $e'),
+            data: (records) => _buildRecentRecordsList(records),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMonthOverviewCard(List<AttendanceRecord> records, List<LeaveRequest> leaves) {
+    final now = DateTime.now();
+    final currentMonthRecords = records.where((r) {
+      final parsed = _parseKey(r.date);
+      return parsed != null && parsed.month == now.month && parsed.year == now.year;
+    }).toList();
+
+    final presentCount = currentMonthRecords.where((r) => r.status == 'Present' || r.status == 'Checked Out').length;
+    final absentCount = currentMonthRecords.where((r) => r.status == 'Absent').length;
+    final leaveCount = leaves.where((l) => l.status == 'Approved').length;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'This Month Overview',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF475569),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  children: [
+                    Text(
+                      '$presentCount',
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF2E7D32),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Present',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ),
+              Container(width: 1, height: 36, color: const Color(0xFFE2E8F0)),
+              Expanded(
+                child: Column(
+                  children: [
+                    Text(
+                      '$absentCount',
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFE65100),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Absent',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ),
+              Container(width: 1, height: 36, color: const Color(0xFFE2E8F0)),
+              Expanded(
+                child: Column(
+                  children: [
+                    Text(
+                      '$leaveCount',
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFC62828),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Leave',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecentRecordsList(List<AttendanceRecord> records) {
+    final sorted = List<AttendanceRecord>.from(records);
+    sorted.sort((a, b) {
+      final da = _parseKey(a.date) ?? DateTime(2000);
+      final db = _parseKey(b.date) ?? DateTime(2000);
+      return db.compareTo(da);
+    });
+
+    final recentList = sorted.take(5).toList();
+
+    if (recentList.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: const Center(
+          child: Text('No attendance records found.', style: TextStyle(color: Color(0xFF64748B))),
+        ),
+      );
+    }
+
+    return Column(
+      children: recentList.map((rec) {
+        final dt = _parseKey(rec.date);
+        final dateFormatted = dt != null ? DateFormat('dd MMM yyyy').format(dt) : rec.date;
+        final dayName = dt != null ? DateFormat('EEEE').format(dt) : '';
+        final isPresent = rec.status == 'Present' || rec.status == 'Checked Out';
+        final statusColor = isPresent
+            ? const Color(0xFF2E7D32)
+            : rec.status == 'Late'
+                ? const Color(0xFFE65100)
+                : const Color(0xFFC62828);
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      dateFormatted,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B)),
+                    ),
+                    if (dayName.isNotEmpty)
+                      Text(
+                        dayName,
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                      ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      rec.status,
+                      style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 11),
+                    ),
+                  ),
+                  if (rec.effectiveCheckInTime.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Check-in: ${rec.effectiveCheckInTime}',
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  // ==========================================
+  // TAB 1: CALENDAR TAB
+  // ==========================================
+  // ==========================================
+  // TAB 1: CALENDAR TAB
+  // ==========================================
+  Widget _buildCalendarTab(
+    Employee currentEmp,
+    AsyncValue<List<AttendanceRecord>> attendanceAsync,
+    AsyncValue<List<LeaveRequest>> leaveAsync,
+  ) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Monthly Calendar Section
+          attendanceAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF9CC70A))),
+            error: (e, _) => Text('Error loading attendance: $e'),
+            data: (attendanceRecords) => leaveAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF9CC70A))),
+              error: (e, _) => Text('Error loading leaves: $e'),
+              data: (leaveRequests) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildCalendar(
+                    attendanceRecords,
+                    leaveRequests.cast<LeaveRequest>(),
+                  ),
+                  const SizedBox(height: 20),
+                  _buildMonthlyAttendanceHistory(
+                    attendanceRecords,
+                    leaveRequests.cast<LeaveRequest>(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMonthlyAttendanceHistory(
+    List<AttendanceRecord> records,
+    List<LeaveRequest> leaveRequests,
+  ) {
+    final year = _focusedMonth.year;
+    final month = _focusedMonth.month;
+    final daysInMonth = DateTime(year, month + 1, 0).day;
+    final now = DateTime.now();
+
+    final Map<String, AttendanceRecord> attMap = {};
+    for (final r in records) {
+      final dt = _parseKey(r.date);
+      if (dt != null) {
+        final key = '${dt.day.toString().padLeft(2, '0')}-${dt.month.toString().padLeft(2, '0')}-${dt.year}';
+        attMap[key] = r;
+      }
+    }
+
+    final Map<String, LeaveRequest> leaveMap = {};
+    for (final l in leaveRequests) {
+      final from = _parseKey(l.fromDate);
+      final to = _parseKey(l.toDate) ?? from;
+      if (from != null && to != null) {
+        var curr = from;
+        while (!curr.isAfter(to)) {
+          final key = '${curr.day.toString().padLeft(2, '0')}-${curr.month.toString().padLeft(2, '0')}-${curr.year}';
+          leaveMap[key] = l;
+          curr = curr.add(const Duration(days: 1));
+        }
+      }
+    }
+
+    int presentCount = 0;
+    int lateCount = 0;
+    int leaveCount = 0;
+    int absentCount = 0;
+
+    List<_DailyHistoryItem> items = [];
+
+    final lastDayToDisplay = (year == now.year && month == now.month) ? math.min(now.day, daysInMonth) : daysInMonth;
+
+    for (int day = lastDayToDisplay; day >= 1; day--) {
+      final dt = DateTime(year, month, day);
+      final key = '${day.toString().padLeft(2, '0')}-${month.toString().padLeft(2, '0')}-${year}';
+      final isSunday = dt.weekday == DateTime.sunday;
+
+      final att = attMap[key];
+      final leave = leaveMap[key];
+
+      String status = 'Absent';
+      String checkIn = '';
+      String checkOut = '';
+      String duration = '';
+      String note = '';
+
+      if (att != null) {
+        status = att.status.isNotEmpty ? att.status : 'Present';
+        checkIn = att.effectiveCheckInTime;
+        checkOut = att.checkOutTime;
+        if (att.totalHours > 0) {
+          duration = '${att.totalHours} hrs';
+        }
+        note = att.notes;
+      } else if (leave != null) {
+        status = leave.status.toLowerCase() == 'approved' || leave.status.toLowerCase() == 'pending' ? 'Leave' : 'Denied';
+        duration = _formatDurationDisplay(leave);
+        note = 'Reason: ${leave.reason}';
+      } else if (isSunday) {
+        status = 'Week Off';
+      }
+
+      final stLower = status.toLowerCase();
+      if (stLower == 'present') presentCount++;
+      else if (stLower == 'late') lateCount++;
+      else if (stLower == 'leave') leaveCount++;
+      else if (stLower == 'absent') absentCount++;
+
+      items.add(_DailyHistoryItem(
+        date: dt,
+        status: status,
+        checkIn: checkIn,
+        checkOut: checkOut,
+        duration: duration,
+        note: note,
+      ));
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Attendance History',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                DateFormat('MMMM yyyy').format(_focusedMonth),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF414A51)),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            _buildMiniStatTile('Present', '$presentCount', const Color(0xFF2E7D32)),
+            const SizedBox(width: 8),
+            _buildMiniStatTile('Late', '$lateCount', const Color(0xFFE65100)),
+            const SizedBox(width: 8),
+            _buildMiniStatTile('Leave', '$leaveCount', const Color(0xFF2563EB)),
+            const SizedBox(width: 8),
+            _buildMiniStatTile('Absent', '$absentCount', const Color(0xFFC62828)),
+          ],
+        ),
+        const SizedBox(height: 14),
+        if (items.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: const Center(
+              child: Text('No attendance history for this month.', style: TextStyle(color: Color(0xFF64748B))),
+            ),
+          )
+        else
+          Column(
+            children: items.map((item) => _buildHistoryCard(item)).toList(),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildHistoryCard(_DailyHistoryItem item) {
+    final statusColor = _getStatusColor(item.status);
+    final dateStr = DateFormat('dd MMM yyyy (EEEE)').format(item.date);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    dateStr,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B)),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  item.status,
+                  style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+          if (item.checkIn.isNotEmpty || item.checkOut.isNotEmpty || item.duration.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  item.checkIn.isNotEmpty
+                      ? 'In: ${item.checkIn}${item.checkOut.isNotEmpty ? '  |  Out: ${item.checkOut}' : ''}'
+                      : (item.duration.isNotEmpty ? item.duration : ''),
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+                ),
+                if (item.duration.isNotEmpty && item.checkIn.isNotEmpty)
+                  Text(
+                    item.duration,
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: statusColor),
+                  ),
+              ],
+            ),
+          ],
+          if (item.note.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              item.note,
+              style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMiniStatTile(String label, String count, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: Column(
+          children: [
+            Text(count, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: color)),
+            Text(label, style: const TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDayDetailCard(AsyncValue<List<AttendanceRecord>> attendanceAsync) {
+    final todayStr = DateFormat('dd MMMM yyyy, Today').format(DateTime.now());
+    final todayKey = _formatKey(DateTime.now());
+
+    return attendanceAsync.maybeWhen(
+      data: (records) {
+        final rec = records.where((r) => r.date == todayKey).firstOrNull;
+        final hasCheckIn = rec != null && rec.effectiveCheckInTime.isNotEmpty;
+        final hasCheckOut = rec != null && rec.checkOutTime.isNotEmpty;
+
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                todayStr,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B)),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: hasCheckIn ? const Color(0xFF2E7D32) : Colors.grey,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        hasCheckIn ? 'Checked In' : 'Not Marked',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          color: hasCheckIn ? const Color(0xFF2E7D32) : Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    hasCheckIn ? rec!.effectiveCheckInTime : '--:--',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Working Hours',
+                    style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                  ),
+                  Text(
+                    hasCheckOut && rec != null && rec.totalHours > 0
+                        ? '${rec.totalHours} hrs'
+                        : '-- : --',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B)),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+
+  // ==========================================
+  // TAB 2: LEAVE TAB (Matching Image 2 design)
+  // ==========================================
+  Widget _buildLeaveTab(Employee currentEmp, AsyncValue<List<LeaveRequest>> userLeaveRequestsAsync) {
+    return userLeaveRequestsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF9CC70A))),
+      error: (e, _) => Center(child: Text('Error loading leave requests: $e')),
+      data: (requests) {
+        final filteredRequests = _getFilteredRequests(requests);
+        final totalRequests = requests.length;
+        final pendingCount = requests.where((r) => r.status == 'Pending').length;
+        final approvedCount = requests.where((r) => r.status == 'Approved').length;
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Top Summary Stat Cards Grid
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildLeaveStatCard(
+                      'Total Requests',
+                      '$totalRequests',
+                      Icons.folder_outlined,
+                      const Color(0xFF0288D1),
+                      const Color(0xFFE1F5FE),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildLeaveStatCard(
+                      'Pending Requests',
+                      '$pendingCount',
+                      Icons.hourglass_top_outlined,
+                      const Color(0xFFE65100),
+                      const Color(0xFFFFF3E0),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildLeaveStatCard(
+                      'Approved Leaves',
+                      '$approvedCount',
+                      Icons.check_circle_outline,
+                      const Color(0xFF2E7D32),
+                      const Color(0xFFE8F5E9),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(child: SizedBox.shrink()),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // Header + My Requests Button + Lime Green Apply Leave Button
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'My Leave Requests',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                  ),
+                  Row(
+                    children: [
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF414A51),
+                          side: const BorderSide(color: Color(0xFFCBD5E1)),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () => Navigator.of(context, rootNavigator: true).push(
+                          MaterialPageRoute(
+                            builder: (context) => MyLeaveRequestsPage(currentEmp: currentEmp),
+                          ),
+                        ),
+                        icon: const Icon(Icons.list_alt, size: 16, color: Color(0xFF414A51)),
+                        label: const Text(
+                          'My Requests',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF9CC70A),
+                          foregroundColor: const Color(0xFF414A51),
+                          elevation: 1,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () => _showApplyLeaveDialog(currentEmp),
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text(
+                          'Apply Leave',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              // Filter Action Bar: [ All Status ▼ ]  [ 📅 Date ]  [ ⚙ Filters ]
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    // Quick Status Dropdown Pill
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _statusFilter,
+                          isDense: true,
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                          items: ['All', 'Pending', 'Approved', 'Denied', 'Cancelled']
+                              .map((st) => DropdownMenuItem(value: st, child: Text(st == 'All' ? 'All Status' : st)))
+                              .toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() => _statusFilter = val);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+
+                    // Date Filter Pill Button
+                    InkWell(
+                      onTap: () => _showDateFilterBottomSheet(),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: (_filterFromDate != null || _filterToDate != null)
+                              ? const Color(0xFF9CC70A).withValues(alpha: 0.15)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: (_filterFromDate != null || _filterToDate != null)
+                                ? const Color(0xFF9CC70A)
+                                : const Color(0xFFE2E8F0),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Text(
+                              _filterFromDate != null && _filterToDate != null
+                                  ? '${DateFormat('dd MMM').format(_filterFromDate!)} – ${DateFormat('dd MMM').format(_filterToDate!)} 📅'
+                                  : '📅 Date',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: (_filterFromDate != null || _filterToDate != null)
+                                    ? const Color(0xFF414A51)
+                                    : const Color(0xFF64748B),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+
+                    // Advanced Filters Button
+                    InkWell(
+                      onTap: () => _showAdvancedFiltersBottomSheet(),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _activeFilterCount > 0
+                              ? const Color(0xFF414A51)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: _activeFilterCount > 0 ? const Color(0xFF414A51) : const Color(0xFFE2E8F0),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.tune,
+                              size: 16,
+                              color: _activeFilterCount > 0 ? Colors.white : const Color(0xFF64748B),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Filters',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: _activeFilterCount > 0 ? Colors.white : const Color(0xFF64748B),
+                              ),
+                            ),
+                            if (_activeFilterCount > 0) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF9CC70A),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  '$_activeFilterCount',
+                                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // "Showing X requests" count label
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Showing ${filteredRequests.length} request${filteredRequests.length == 1 ? '' : 's'}',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                  ),
+                  if (_activeFilterCount > 0)
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          _statusFilter = 'All';
+                          _requestTypeFilter = 'All';
+                          _leaveTypeFilter = 'All';
+                          _filterFromDate = null;
+                          _filterToDate = null;
+                        });
+                      },
+                      child: const Text(
+                        'Reset Filters',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFC62828)),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Filtered Recent Leave Requests List
+              if (filteredRequests.isEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Column(
+                    children: [
+                      const Text(
+                        'No leave requests found matching selected filters.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Color(0xFF64748B)),
+                      ),
+                      if (_activeFilterCount > 0) ...[
+                        const SizedBox(height: 12),
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _statusFilter = 'All';
+                              _requestTypeFilter = 'All';
+                              _leaveTypeFilter = 'All';
+                              _filterFromDate = null;
+                              _filterToDate = null;
+                            });
+                          },
+                          child: const Text(
+                            'Reset All Filters',
+                            style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2E7D32)),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                )
+              else
+                Column(
+                  children: filteredRequests.map((req) => _buildLeaveActivityCard(req, currentEmp)).toList(),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLeaveStatCard(String title, String value, IconData icon, Color iconColor, Color bg) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+                child: Icon(icon, size: 16, color: iconColor),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLeaveActivityCard(LeaveRequest req, Employee currentEmp) {
+    final statusColor = _getStatusColor(req.status);
+    final isPermission = req.leaveType.toLowerCase().startsWith('permission');
+    final isPending = req.status == 'Pending';
+
+    return InkWell(
+      onTap: () {
+        if (isPending) {
+          _showApplyLeaveDialog(currentEmp, existingRequest: req);
+        } else {
+          _showViewLeaveDialog(req);
+        }
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: isPermission
+                        ? const Color(0xFF3B82F6).withValues(alpha: 0.12)
+                        : const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    isPermission ? Icons.access_time : Icons.event_note,
+                    size: 18,
+                    color: isPermission ? const Color(0xFF2563EB) : const Color(0xFF414A51),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        req.leaveType,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1E293B)),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Submitted: ${_formatDateStr(req.createdAt)}',
+                        style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                      ),
+                    ],
+                  ),
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        req.status,
+                        style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    if (isPending)
+                      IconButton(
+                        constraints: const BoxConstraints(),
+                        padding: const EdgeInsets.all(4),
+                        icon: const Icon(Icons.edit_outlined, size: 18, color: Color(0xFFE65100)),
+                        tooltip: 'Edit Request',
+                        onPressed: () => _showApplyLeaveDialog(currentEmp, existingRequest: req),
+                      )
+                    else
+                      IconButton(
+                        constraints: const BoxConstraints(),
+                        padding: const EdgeInsets.all(4),
+                        icon: const Icon(Icons.visibility_outlined, size: 18, color: Color(0xFF64748B)),
+                        tooltip: 'View Details',
+                        onPressed: () => _showViewLeaveDialog(req),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    '${_formatDateStr(req.fromDate)} → ${_formatDateStr(req.toDate)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF475569)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _formatDurationDisplay(req),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: isPermission ? const Color(0xFF2563EB) : const Color(0xFF9CC70A),
+                  ),
+                ),
+              ],
+            ),
+            if (req.reason.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Reason: ${req.reason}',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatDurationDisplay(LeaveRequest req) {
+    if (req.leaveType.toLowerCase().startsWith('permission')) {
+      if (req.leaveType.contains('(') && req.leaveType.contains(')')) {
+        final timePart = req.leaveType.substring(req.leaveType.indexOf('(') + 1, req.leaveType.indexOf(')'));
+        return 'Permission ($timePart)';
+      }
+      final hours = req.numDays * 8.0;
+      if (hours > 0) {
+        final h = hours.floor();
+        final m = ((hours - h) * 60).round();
+        if (h > 0 && m > 0) return '$h Hr $m Mins';
+        if (h > 0) return '$h Hour${h > 1 ? 's' : ''}';
+        return '$m Mins';
+      }
+      return 'Permission';
+    }
+    final isWhole = (req.numDays == req.numDays.roundToDouble());
+    final daysStr = isWhole ? req.numDays.toInt().toString() : req.numDays.toStringAsFixed(1);
+    return '$daysStr Day${req.numDays == 1.0 ? '' : 's'}';
+  }
+
+  // --- DATE FILTER BOTTOM SHEET ---
+  void _showDateFilterBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (sheetCtx, setSheetState) {
+            final now = DateTime.now();
+
+            void setQuickDate(DateTime from, DateTime to) {
+              setSheetState(() {
+                _filterFromDate = from;
+                _filterToDate = to;
+              });
+              setState(() {});
+            }
+
+            return Container(
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Filter by Date',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Color(0xFF64748B)),
+                          onPressed: () => Navigator.pop(sheetCtx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Text('Quick Select', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            side: const BorderSide(color: Color(0xFFCBD5E1)),
+                          ),
+                          onPressed: () => setQuickDate(DateTime(now.year, now.month, 1), DateTime(now.year, now.month + 1, 0)),
+                          child: const Text('This Month', style: TextStyle(color: Color(0xFF414A51), fontWeight: FontWeight.w600)),
+                        ),
+                        OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            side: const BorderSide(color: Color(0xFFCBD5E1)),
+                          ),
+                          onPressed: () => setQuickDate(DateTime(now.year, now.month - 1, 1), DateTime(now.year, now.month, 0)),
+                          child: const Text('Last Month', style: TextStyle(color: Color(0xFF414A51), fontWeight: FontWeight.w600)),
+                        ),
+                        OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            side: const BorderSide(color: Color(0xFFCBD5E1)),
+                          ),
+                          onPressed: () => setQuickDate(DateTime(now.year, now.month - 3, now.day), now),
+                          child: const Text('Last 3 Months', style: TextStyle(color: Color(0xFF414A51), fontWeight: FontWeight.w600)),
+                        ),
+                        OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            side: const BorderSide(color: Color(0xFFCBD5E1)),
+                          ),
+                          onPressed: () => setQuickDate(DateTime(now.year, 1, 1), DateTime(now.year, 12, 31)),
+                          child: const Text('This Year', style: TextStyle(color: Color(0xFF414A51), fontWeight: FontWeight.w600)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('From Date', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                              const SizedBox(height: 6),
+                              InkWell(
+                                onTap: () async {
+                                  final picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: _filterFromDate ?? now,
+                                    firstDate: DateTime(2020),
+                                    lastDate: DateTime(2030),
+                                  );
+                                  if (picked != null) {
+                                    setSheetState(() => _filterFromDate = picked);
+                                    setState(() {});
+                                  }
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        _filterFromDate != null ? DateFormat('dd MMM yyyy').format(_filterFromDate!) : 'Select Date',
+                                        style: const TextStyle(fontSize: 13, color: Color(0xFF414A51)),
+                                      ),
+                                      const Icon(Icons.calendar_today, size: 16, color: Color(0xFF64748B)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('To Date', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                              const SizedBox(height: 6),
+                              InkWell(
+                                onTap: () async {
+                                  final picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: _filterToDate ?? now,
+                                    firstDate: _filterFromDate ?? DateTime(2020),
+                                    lastDate: DateTime(2030),
+                                  );
+                                  if (picked != null) {
+                                    setSheetState(() => _filterToDate = picked);
+                                    setState(() {});
+                                  }
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        _filterToDate != null ? DateFormat('dd MMM yyyy').format(_filterToDate!) : 'Select Date',
+                                        style: const TextStyle(fontSize: 13, color: Color(0xFF414A51)),
+                                      ),
+                                      const Icon(Icons.calendar_today, size: 16, color: Color(0xFF64748B)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              side: const BorderSide(color: Color(0xFFCBD5E1)),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onPressed: () {
+                              setSheetState(() {
+                                _filterFromDate = null;
+                                _filterToDate = null;
+                              });
+                              setState(() {});
+                            },
+                            child: const Text('Reset', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF9CC70A),
+                              foregroundColor: const Color(0xFF414A51),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onPressed: () {
+                              setState(() {});
+                              Navigator.pop(sheetCtx);
+                            },
+                            child: const Text('Apply Filter', style: TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // --- ADVANCED FILTERS BOTTOM SHEET ---
+  void _showAdvancedFiltersBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (sheetCtx, setSheetState) {
+            final now = DateTime.now();
+
+            return Container(
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Filters',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Color(0xFF64748B)),
+                          onPressed: () => Navigator.pop(sheetCtx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    const Text('Status', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: ['All', 'Pending', 'Approved', 'Denied', 'Cancelled'].map((st) {
+                        final selected = _statusFilter == st;
+                        return ChoiceChip(
+                          label: Text(st),
+                          selected: selected,
+                          selectedColor: const Color(0xFF9CC70A).withValues(alpha: 0.25),
+                          labelStyle: TextStyle(
+                            color: selected ? const Color(0xFF414A51) : const Color(0xFF64748B),
+                            fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+                          ),
+                          onSelected: (val) {
+                            setSheetState(() => _statusFilter = st);
+                            setState(() {});
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Request Type', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      children: ['All', 'Leave', 'Permission'].map((rt) {
+                        final selected = _requestTypeFilter == rt;
+                        return ChoiceChip(
+                          label: Text(rt),
+                          selected: selected,
+                          selectedColor: const Color(0xFF9CC70A).withValues(alpha: 0.25),
+                          labelStyle: TextStyle(
+                            color: selected ? const Color(0xFF414A51) : const Color(0xFF64748B),
+                            fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+                          ),
+                          onSelected: (val) {
+                            setSheetState(() => _requestTypeFilter = rt);
+                            setState(() {});
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Leave Type', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String>(
+                      initialValue: _leaveTypeFilter,
+                      decoration: InputDecoration(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFF9CC70A), width: 2),
+                        ),
+                      ),
+                      items: [
+                        'All',
+                        'Sick Leave',
+                        'Casual Leave',
+                        'Annual Leave',
+                        'Optional Leave',
+                        'Emergency Leave',
+                        'Work From Home',
+                        'Comp Off',
+                      ]
+                          .map((type) => DropdownMenuItem(value: type, child: Text(type)))
+                          .toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setSheetState(() => _leaveTypeFilter = val);
+                          setState(() {});
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('From Date', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                              const SizedBox(height: 6),
+                              InkWell(
+                                onTap: () async {
+                                  final picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: _filterFromDate ?? now,
+                                    firstDate: DateTime(2020),
+                                    lastDate: DateTime(2030),
+                                  );
+                                  if (picked != null) {
+                                    setSheetState(() => _filterFromDate = picked);
+                                    setState(() {});
+                                  }
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        _filterFromDate != null ? DateFormat('dd MMM yyyy').format(_filterFromDate!) : 'Select Date',
+                                        style: const TextStyle(fontSize: 13, color: Color(0xFF414A51)),
+                                      ),
+                                      const Icon(Icons.calendar_today, size: 16, color: Color(0xFF64748B)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('To Date', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                              const SizedBox(height: 6),
+                              InkWell(
+                                onTap: () async {
+                                  final picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: _filterToDate ?? now,
+                                    firstDate: _filterFromDate ?? DateTime(2020),
+                                    lastDate: DateTime(2030),
+                                  );
+                                  if (picked != null) {
+                                    setSheetState(() => _filterToDate = picked);
+                                    setState(() {});
+                                  }
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        _filterToDate != null ? DateFormat('dd MMM yyyy').format(_filterToDate!) : 'Select Date',
+                                        style: const TextStyle(fontSize: 13, color: Color(0xFF414A51)),
+                                      ),
+                                      const Icon(Icons.calendar_today, size: 16, color: Color(0xFF64748B)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              side: const BorderSide(color: Color(0xFFCBD5E1)),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onPressed: () {
+                              setSheetState(() {
+                                _statusFilter = 'All';
+                                _requestTypeFilter = 'All';
+                                _leaveTypeFilter = 'All';
+                                _filterFromDate = null;
+                                _filterToDate = null;
+                              });
+                              setState(() {});
+                            },
+                            child: const Text('Reset', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF9CC70A),
+                              foregroundColor: const Color(0xFF414A51),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onPressed: () {
+                              setState(() {});
+                              Navigator.pop(sheetCtx);
+                            },
+                            child: const Text('Apply', style: TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // --- MY REQUESTS MONTH-WISE & STATUS-WISE DIALOG ---
+  void _showMyRequestsMonthWiseDialog(Employee currentEmp, List<LeaveRequest> allRequests) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        DateTime selectedMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
+        String monthStatus = 'All';
+
+        bool isInMonth(LeaveRequest req, DateTime month) {
+          final from = _parseKey(req.fromDate);
+          final to = _parseKey(req.toDate) ?? from;
+          if (from == null && to == null) return false;
+
+          final start = DateTime(month.year, month.month, 1);
+          final end = DateTime(month.year, month.month + 1, 0, 23, 59, 59);
+
+          if (from != null && from.isAfter(start.subtract(const Duration(seconds: 1))) && from.isBefore(end.add(const Duration(seconds: 1)))) {
+            return true;
+          }
+          if (to != null && to.isAfter(start.subtract(const Duration(seconds: 1))) && to.isBefore(end.add(const Duration(seconds: 1)))) {
+            return true;
+          }
+          return false;
+        }
+
+        return StatefulBuilder(
+          builder: (sheetCtx, setSheetState) {
+            final monthRequests = allRequests.where((r) => isInMonth(r, selectedMonth)).toList();
+
+            final totalInMonth = monthRequests.length;
+            final pendingInMonth = monthRequests.where((r) => r.status.toLowerCase() == 'pending').length;
+            final approvedInMonth = monthRequests.where((r) => r.status.toLowerCase() == 'approved').length;
+            final deniedInMonth = monthRequests.where((r) => r.status.toLowerCase() == 'denied' || r.status.toLowerCase() == 'rejected').length;
+            final cancelledInMonth = monthRequests.where((r) => r.status.toLowerCase() == 'cancelled').length;
+
+            final filteredMonthRequests = monthRequests.where((r) {
+              if (monthStatus != 'All' && r.status.toLowerCase() != monthStatus.toLowerCase()) {
+                return false;
+              }
+              return true;
+            }).toList();
+
+            return Container(
+              height: MediaQuery.of(sheetCtx).size.height * 0.85,
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                color: Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF9CC70A).withValues(alpha: 0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.list_alt, size: 20, color: Color(0xFF414A51)),
+                          ),
+                          const SizedBox(width: 10),
+                          const Text(
+                            'My Requests',
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                          ),
+                        ],
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Color(0xFF64748B)),
+                        onPressed: () => Navigator.pop(sheetCtx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Month Navigation Bar
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.chevron_left, color: Color(0xFF414A51)),
+                          onPressed: () {
+                            setSheetState(() {
+                              selectedMonth = DateTime(selectedMonth.year, selectedMonth.month - 1, 1);
+                            });
+                          },
+                        ),
+                        InkWell(
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: selectedMonth,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2030),
+                            );
+                            if (picked != null) {
+                              setSheetState(() {
+                                selectedMonth = DateTime(picked.year, picked.month, 1);
+                              });
+                            }
+                          },
+                          child: Row(
+                            children: [
+                              const Icon(Icons.calendar_month, size: 18, color: Color(0xFF9CC70A)),
+                              const SizedBox(width: 8),
+                              Text(
+                                DateFormat('MMMM yyyy').format(selectedMonth),
+                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.chevron_right, color: Color(0xFF414A51)),
+                          onPressed: () {
+                            setSheetState(() {
+                              selectedMonth = DateTime(selectedMonth.year, selectedMonth.month + 1, 1);
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Monthly Stat Summary Row
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Column(
+                            children: [
+                              Text('$totalInMonth', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0288D1))),
+                              const Text('Total', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Column(
+                            children: [
+                              Text('$pendingInMonth', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFFE65100))),
+                              const Text('Pending', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Column(
+                            children: [
+                              Text('$approvedInMonth', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF2E7D32))),
+                              const Text('Approved', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Column(
+                            children: [
+                              Text('${deniedInMonth + cancelledInMonth}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFFC62828))),
+                              const Text('Denied', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Status Filter Chips
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _statusChip('All ($totalInMonth)', 'All', monthStatus, (val) => setSheetState(() => monthStatus = val)),
+                        const SizedBox(width: 6),
+                        _statusChip('Pending ($pendingInMonth)', 'Pending', monthStatus, (val) => setSheetState(() => monthStatus = val)),
+                        const SizedBox(width: 6),
+                        _statusChip('Approved ($approvedInMonth)', 'Approved', monthStatus, (val) => setSheetState(() => monthStatus = val)),
+                        const SizedBox(width: 6),
+                        _statusChip('Denied ($deniedInMonth)', 'Denied', monthStatus, (val) => setSheetState(() => monthStatus = val)),
+                        const SizedBox(width: 6),
+                        _statusChip('Cancelled ($cancelledInMonth)', 'Cancelled', monthStatus, (val) => setSheetState(() => monthStatus = val)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // List of filtered requests in month
+                  Expanded(
+                    child: filteredMonthRequests.isEmpty
+                        ? Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.inbox_outlined, size: 40, color: Color(0xFF94A3B8)),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'No requests found for ${DateFormat('MMMM yyyy').format(selectedMonth)}.',
+                                  style: const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: filteredMonthRequests.length,
+                            itemBuilder: (context, index) {
+                              final req = filteredMonthRequests[index];
+                              return _buildLeaveActivityCard(req, currentEmp);
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _statusChip(String label, String value, String currentValue, ValueChanged<String> onSelect) {
+    final selected = currentValue.toLowerCase() == value.toLowerCase();
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      selectedColor: const Color(0xFF9CC70A).withValues(alpha: 0.25),
+      labelStyle: TextStyle(
+        color: selected ? const Color(0xFF414A51) : const Color(0xFF64748B),
+        fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+        fontSize: 12,
+      ),
+      onSelected: (_) => onSelect(value),
+    );
+  }
+
+  void _showViewLeaveDialog(LeaveRequest req) {
+    final statusColor = _getStatusColor(req.status);
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  req.leaveType,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1E293B)),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  req.status,
+                  style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _detailRow('Submitted On', _formatDateStr(req.createdAt)),
+                  const SizedBox(height: 12),
+                  _detailRow('Date Range', '${_formatDateStr(req.fromDate)} → ${_formatDateStr(req.toDate)}'),
+                  const SizedBox(height: 12),
+                  _detailRow('Duration', _formatDurationDisplay(req)),
+                  const SizedBox(height: 12),
+                  _detailRow('Reason', req.reason.isNotEmpty ? req.reason : 'N/A'),
+                  if (req.approvedBy != null && req.approvedBy!.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _detailRow('Approved By', req.approvedBy!),
+                  ],
+                  if (req.rejectionReason != null && req.rejectionReason!.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _detailRow('Rejection Reason', req.rejectionReason!),
+                  ],
+                  if (req.overrideReason != null && req.overrideReason!.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _detailRow('Override Note', req.overrideReason!),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text('Close', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+        ),
+      ],
+    );
+  }
+
+  // --- APPLY LEAVE DIALOG ---
+  Future<void> _showApplyLeaveDialog(Employee currentEmp, {LeaveRequest? existingRequest}) async {
+    final permissionAllowance = await ref
+        .read(leaveRepositoryProvider)
+        .getPermissionAllowance(currentEmp.id, DateTime.now());
+    if (!mounted) return;
+    final allLeaveTypes = ref.read(leaveTypesProvider).value ?? [];
+    final activeLeaveTypes = allLeaveTypes.where((t) => t.isActive).toList();
+
+    String requestType = 'Leave';
+    if (existingRequest != null) {
+      if (existingRequest.leaveType.toLowerCase().startsWith('permission')) {
+        requestType = 'Permission';
+      } else {
+        requestType = 'Leave';
+        _selectedLeaveType = existingRequest.leaveType;
+      }
+      _fromDate = _parseKey(existingRequest.fromDate) ?? DateTime.now();
+      _toDate = _parseKey(existingRequest.toDate) ?? DateTime.now();
+      _reasonController.text = existingRequest.reason;
+    } else {
+      if (activeLeaveTypes.isNotEmpty && !activeLeaveTypes.any((t) => t.name == _selectedLeaveType)) {
+        _selectedLeaveType = activeLeaveTypes.first.name;
+      }
+      _fromDate = DateTime.now();
+      _toDate = DateTime.now();
+      _reasonController.clear();
+    }
+
+    TimeOfDay fromTime = const TimeOfDay(hour: 9, minute: 0);
+    TimeOfDay toTime = const TimeOfDay(hour: 10, minute: 0);
+
+    String formatTimeOfDay(TimeOfDay time) {
+      final now = DateTime.now();
+      final dt = DateTime(now.year, now.month, now.day, time.hour, time.minute);
+      return DateFormat('hh:mm a').format(dt);
+    }
+
+    double calculatePermissionHours(TimeOfDay from, TimeOfDay to) {
+      final fromMinutes = from.hour * 60 + from.minute;
+      final toMinutes = to.hour * 60 + to.minute;
+      final diffMinutes = toMinutes - fromMinutes;
+      if (diffMinutes <= 0) return 0.0;
+      return diffMinutes / 60.0;
+    }
+
+    String formatPermissionDuration(double hours) {
+      if (hours <= 0) return '0 Hours';
+      final h = hours.floor();
+      final m = ((hours - h) * 60).round();
+      if (h > 0 && m > 0) {
+        return '$h Hour${h > 1 ? 's' : ''} $m Mins';
+      } else if (h > 0) {
+        return '$h Hour${h > 1 ? 's' : ''}';
+      } else {
+        return '$m Mins';
+      }
+    }
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            double days = 1.0;
+            if (_fromDate != null && _toDate != null) {
+              final diff = _toDate!.difference(_fromDate!).inDays + 1;
+              days = math.max(1.0, diff.toDouble());
+            }
+
+            final permHours = calculatePermissionHours(fromTime, toTime);
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    existingRequest != null ? 'Edit Leave Request' : 'Apply For Leave',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF414A51)),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Color(0xFF64748B)),
+                    onPressed: () => Navigator.pop(dialogCtx),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: SizedBox(
+                  width: 450,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Request Type Dropdown
+                      const Text('Request Type', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
+                      const SizedBox(height: 6),
+                      DropdownButtonFormField<String>(
+                        initialValue: requestType,
+                        decoration: InputDecoration(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Color(0xFF9CC70A), width: 2),
+                          ),
+                        ),
+                        items: ['Leave', 'Permission']
+                            .map((type) => DropdownMenuItem(value: type, child: Text(type)))
+                            .toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setDialogState(() => requestType = val);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      if (requestType == 'Leave') ...[
+                        const Text('Leave Type', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
+                        const SizedBox(height: 6),
+                        DropdownButtonFormField<String>(
+                          initialValue: (activeLeaveTypes.isNotEmpty && activeLeaveTypes.any((t) => t.name == _selectedLeaveType))
+                              ? _selectedLeaveType
+                              : (activeLeaveTypes.isNotEmpty ? activeLeaveTypes.first.name : _selectedLeaveType),
+                          decoration: InputDecoration(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: Color(0xFF9CC70A), width: 2),
+                            ),
+                          ),
+                          items: (activeLeaveTypes.isNotEmpty
+                                  ? activeLeaveTypes.map((type) => type.name).toList()
+                                  : [
+                                      'Sick Leave',
+                                      'Casual Leave',
+                                      'Annual Leave',
+                                      'Optional Leave',
+                                      'Emergency Leave',
+                                      'Work From Home',
+                                      'Comp Off',
+                                    ])
+                              .map((type) => DropdownMenuItem(value: type, child: Text(type)))
+                              .toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setDialogState(() => _selectedLeaveType = val);
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 16),
+
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('From Date', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                                  const SizedBox(height: 6),
+                                  InkWell(
+                                    onTap: () async {
+                                      final picked = await showDatePicker(
+                                        context: context,
+                                        initialDate: _fromDate ?? DateTime.now(),
+                                        firstDate: DateTime(2020),
+                                        lastDate: DateTime(2030),
+                                      );
+                                      if (picked != null) {
+                                        setDialogState(() {
+                                          _fromDate = picked;
+                                          if (_toDate != null && _toDate!.isBefore(picked)) {
+                                            _toDate = picked;
+                                          }
+                                        });
+                                      }
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            _fromDate != null ? DateFormat('dd MMM yyyy').format(_fromDate!) : 'Select Date',
+                                            style: const TextStyle(fontSize: 13, color: Color(0xFF414A51)),
+                                          ),
+                                          const Icon(Icons.calendar_today, size: 16, color: Color(0xFF64748B)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('To Date', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                                  const SizedBox(height: 6),
+                                  InkWell(
+                                    onTap: () async {
+                                      final picked = await showDatePicker(
+                                        context: context,
+                                        initialDate: _toDate ?? DateTime.now(),
+                                        firstDate: _fromDate ?? DateTime(2020),
+                                        lastDate: DateTime(2030),
+                                      );
+                                      if (picked != null) {
+                                        setDialogState(() {
+                                          _toDate = picked;
+                                        });
+                                      }
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            _toDate != null ? DateFormat('dd MMM yyyy').format(_toDate!) : 'Select Date',
+                                            style: const TextStyle(fontSize: 13, color: Color(0xFF414A51)),
+                                          ),
+                                          const Icon(Icons.calendar_today, size: 16, color: Color(0xFF64748B)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            'Duration: ${days.toStringAsFixed(0)} Day${days > 1 ? 's' : ''}',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF9CC70A)),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ] else ...[
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('From Time', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                                  const SizedBox(height: 6),
+                                  InkWell(
+                                    onTap: () async {
+                                      final picked = await showTimePicker(
+                                        context: context,
+                                        initialTime: fromTime,
+                                      );
+                                      if (picked != null) {
+                                        setDialogState(() {
+                                          fromTime = picked;
+                                        });
+                                      }
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            formatTimeOfDay(fromTime),
+                                            style: const TextStyle(fontSize: 13, color: Color(0xFF414A51)),
+                                          ),
+                                          const Icon(Icons.access_time, size: 16, color: Color(0xFF64748B)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('To Time', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                                  const SizedBox(height: 6),
+                                  InkWell(
+                                    onTap: () async {
+                                      final picked = await showTimePicker(
+                                        context: context,
+                                        initialTime: toTime,
+                                      );
+                                      if (picked != null) {
+                                        setDialogState(() {
+                                          toTime = picked;
+                                        });
+                                      }
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            formatTimeOfDay(toTime),
+                                            style: const TextStyle(fontSize: 13, color: Color(0xFF414A51)),
+                                          ),
+                                          const Icon(Icons.access_time, size: 16, color: Color(0xFF64748B)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            'Duration: ${formatPermissionDuration(permHours)}',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF9CC70A)),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // Description
+                      const Text('Description', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: _reasonController,
+                        maxLines: 3,
+                        decoration: InputDecoration(
+                          hintText: 'Enter reason / description...',
+                          hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Color(0xFF9CC70A), width: 2),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogCtx),
+                  child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF9CC70A),
+                    foregroundColor: const Color(0xFF414A51),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  onPressed: () async {
+                    if (_reasonController.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Please enter a description / reason'),
+                          backgroundColor: Color(0xFFC62828),
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (requestType == 'Permission') {
+                      final permissionHours = calculatePermissionHours(fromTime, toTime);
+                      if (permissionHours <= 0 || permissionHours > 1.0001) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Permission must be between 1 minute and 1 hour per day.'),
+                            backgroundColor: Color(0xFFC62828),
+                          ),
+                        );
+                        return;
+                      }
+                      if (permissionHours > permissionAllowance.remainingHours + 0.0001) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('You have only ${formatPermissionDuration(permissionAllowance.remainingHours)} of permission remaining this month.'),
+                            backgroundColor: const Color(0xFFC62828),
+                          ),
+                        );
+                        return;
+                      }
+                    }
+
+                    final messenger = ScaffoldMessenger.of(context);
+                    final nav = Navigator.of(dialogCtx);
+
+                    try {
+                      if (existingRequest != null) {
+                        final fromStr = requestType == 'Leave'
+                            ? DateFormat('dd-MM-yyyy').format(_fromDate!)
+                            : DateFormat('dd-MM-yyyy').format(DateTime.now());
+                        final toStr = requestType == 'Leave'
+                            ? DateFormat('dd-MM-yyyy').format(_toDate!)
+                            : DateFormat('dd-MM-yyyy').format(DateTime.now());
+                        final leaveTypeStr = requestType == 'Leave'
+                            ? _selectedLeaveType
+                            : 'Permission (${formatTimeOfDay(fromTime)} - ${formatTimeOfDay(toTime)})';
+
+                        final updatedReq = existingRequest.copyWith(
+                          leaveType: leaveTypeStr,
+                          fromDate: fromStr,
+                          toDate: toStr,
+                          numDays: requestType == 'Leave' ? days : (calculatePermissionHours(fromTime, toTime) / 8.0),
+                          reason: _reasonController.text.trim(),
+                        );
+
+                        await ref.read(leaveRepositoryProvider).updateLeaveRequest(updatedReq);
+                      } else {
+                        LeaveRequest newReq;
+                        if (requestType == 'Leave') {
+                          final fromStr = DateFormat('dd-MM-yyyy').format(_fromDate!);
+                          final toStr = DateFormat('dd-MM-yyyy').format(_toDate!);
+
+                          newReq = LeaveRequest(
+                            id: 0,
+                            employeeId: currentEmp.id,
+                            employeeName: currentEmp.fullName,
+                            employeeCustomId: currentEmp.employeeId,
+                            leaveType: _selectedLeaveType,
+                            fromDate: fromStr,
+                            toDate: toStr,
+                            numDays: days,
+                            reason: _reasonController.text.trim(),
+                            status: 'Pending',
+                            createdAt: DateTime.now().toIso8601String(),
+                          );
+                        } else {
+                          final todayStr = DateFormat('dd-MM-yyyy').format(DateTime.now());
+                          final fromTimeStr = formatTimeOfDay(fromTime);
+                          final toTimeStr = formatTimeOfDay(toTime);
+
+                          newReq = LeaveRequest(
+                            id: 0,
+                            employeeId: currentEmp.id,
+                            employeeName: currentEmp.fullName,
+                            employeeCustomId: currentEmp.employeeId,
+                            leaveType: 'Permission ($fromTimeStr - $toTimeStr)',
+                            fromDate: todayStr,
+                            toDate: todayStr,
+                            numDays: permHours / 8.0,
+                            reason: _reasonController.text.trim(),
+                            status: 'Pending',
+                            createdAt: DateTime.now().toIso8601String(),
+                          );
+                        }
+                        await ref.read(leaveRepositoryProvider).submitLeaveRequest(newReq);
+                      }
+
+                      ref.invalidate(leaveRequestsProvider(currentEmp.id));
+                      ref.invalidate(allLeaveRequestsProvider);
+                      ref.invalidate(permissionAllowanceProvider(currentEmp.id));
+
+                      nav.pop();
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text(existingRequest != null
+                              ? 'Leave request updated successfully!'
+                              : '${requestType == 'Permission' ? 'Permission' : 'Leave'} request submitted successfully!'),
+                          backgroundColor: const Color(0xFF2E7D32),
+                        ),
+                      );
+                    } catch (e) {
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text('Failed: $e'),
+                          backgroundColor: const Color(0xFFC62828),
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.send, size: 16),
+                  label: Text(existingRequest != null ? 'Update Request' : 'Submit Request', style: const TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // --- TODAY BANNER CARD ---
   Widget _buildTodayBannerCard(
     Employee employee,
     AsyncValue<AttendanceRecord?> todayAttendanceAsync,
@@ -165,7 +2820,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Today\'s Overview',
+                          'Today\'s Status',
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
@@ -191,7 +2846,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
               ),
               const SizedBox(height: 16),
 
-              // Primary Action Button (Full-width, large touch target)
+              // Primary Action Button
               if (!hasCheckedIn) ...[
                 SizedBox(
                   width: double.infinity,
@@ -269,7 +2924,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                 ),
               ],
 
-              // Secondary Action (Less prominent / outlined)
+              // Secondary Status Summary
               if (!hasCheckedIn) ...[
                 const SizedBox(height: 8),
                 SizedBox(
@@ -314,80 +2969,11 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                 ),
               ],
 
-              if (hasCheckedIn) ...[
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  height: 36,
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFFC62828),
-                      side: const BorderSide(color: Color(0xFFEF9A9A)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    onPressed: () async {
-                      final confirm = await showDialog<bool>(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          title: const Text('Reset Attendance (Dev Tool)'),
-                          content: const Text(
-                            'Are you sure you want to remove today\'s attendance record from Cloud Firestore for development testing?',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(ctx).pop(false),
-                              child: const Text('Cancel'),
-                            ),
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFC62828),
-                                foregroundColor: Colors.white,
-                              ),
-                              onPressed: () => Navigator.of(ctx).pop(true),
-                              child: const Text('Remove'),
-                            ),
-                          ],
-                        ),
-                      );
-
-                      if (confirm == true) {
-                        final repo = ref.read(attendanceRepositoryProvider);
-                        final dateKey = _formatKey(today);
-                        await repo.unmarkAttendance(
-                          employeeId: employee.id,
-                          date: dateKey,
-                        );
-                        ref.invalidate(attendanceRecordsProvider(employee.id));
-                        ref.invalidate(allAttendanceRecordsProvider);
-                        ref.invalidate(todayAttendanceRecordProvider(employee.id));
-                        ref.invalidate(attendanceAttemptsProvider);
-                        if (mounted) {
-                          setState(() {});
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Today\'s attendance record removed from Cloud Firestore (Dev Mode).'),
-                              backgroundColor: Colors.orange,
-                            ),
-                          );
-                        }
-                      }
-                    },
-                    icon: const Icon(Icons.delete_sweep, size: 16),
-                    label: const Text(
-                      'Remove Today\'s Attendance (Dev Tool)',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-              ],
-
               const SizedBox(height: 16),
               const Divider(height: 1, color: Color(0xFFEEEEEE)),
               const SizedBox(height: 16),
 
-              // Stat Chips Row (3 equal-width columns below button)
+              // Stat Chips Row
               Row(
                 children: [
                   Expanded(
@@ -524,6 +3110,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     );
   }
 
+  // --- CALENDAR WIDGET ---
   Widget _buildCalendar(List<AttendanceRecord> attendanceRecords, List<LeaveRequest> leaveRequests) {
     final attendanceMap = <String, AttendanceRecord>{};
     for (final rec in attendanceRecords) {
@@ -601,6 +3188,10 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                     onPressed: () => setState(
                       () => _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1),
                     ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.calendar_today, size: 20, color: AppColors.active),
+                    onPressed: () {},
                   ),
                 ],
               ),
@@ -722,8 +3313,9 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
               children: [
                 _legend(const Color(0xFFD6ECFF), 'Today'),
                 _legend(const Color(0xFFE53935), 'Leave'),
-                _legend(const Color(0xFF2E7D32), 'Present / Checked Out'),
+                _legend(const Color(0xFF2E7D32), 'Present'),
                 _legend(const Color(0xFFE65100), 'Late'),
+                _legend(const Color(0xFF9C27B0), 'Holiday'),
               ],
             ),
           ),
@@ -943,9 +3535,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
       final actionTitle = widget.isCheckOut ? 'Check Out' : 'Check In';
       final now = DateTime.now();
       final dateKey = _formatKey(widget.date);
-      final timeStr = DateFormat('HH:mm:ss').format(now);
 
-      // GPS Position Verification (checked if GPS verification is required for global or site employee)
       final emp = widget.currentEmployee;
       final settings = await widget.attendanceRepository.getAttendanceSettings();
       final bool canUseSite = emp.isDynamicEmployee && (emp.siteLatitude != 0 || emp.siteLongitude != 0);
@@ -1170,4 +3760,22 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
       ],
     );
   }
+}
+
+class _DailyHistoryItem {
+  final DateTime date;
+  final String status;
+  final String checkIn;
+  final String checkOut;
+  final String duration;
+  final String note;
+
+  _DailyHistoryItem({
+    required this.date,
+    required this.status,
+    this.checkIn = '',
+    this.checkOut = '',
+    this.duration = '',
+    this.note = '',
+  });
 }

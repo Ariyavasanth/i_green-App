@@ -6,6 +6,7 @@ import '../../leave/providers/leave_providers.dart';
 import '../data/firebase_attendance_repository.dart';
 import '../domain/attendance_record.dart';
 import '../domain/attendance_repository.dart';
+export '../../app_shell/presentation/app_shell.dart' show attendanceActiveTabProvider;
 
 final attendanceRepositoryProvider = Provider<AttendanceRepository>(
   (ref) => FirebaseAttendanceRepository(),

@@ -74,11 +74,35 @@ class LeaveRequest {
   }
 
   factory LeaveRequest.fromMap(Map<String, dynamic> map) {
+    int parseInt(dynamic raw) {
+      if (raw == null) return 0;
+      if (raw is int) return raw;
+      if (raw is num) return raw.toInt();
+      if (raw is String) {
+        final parsed = int.tryParse(raw);
+        if (parsed != null) return parsed;
+        final digits = raw.replaceAll(RegExp(r'\D'), '');
+        if (digits.isNotEmpty) return int.tryParse(digits) ?? 0;
+      }
+      return 0;
+    }
+
+    String parseString(dynamic raw) {
+      if (raw == null) return '';
+      if (raw is String) return raw;
+      if (raw.runtimeType.toString().contains('Timestamp')) {
+        try {
+          final dt = (raw as dynamic).toDate() as DateTime;
+          return dt.toIso8601String();
+        } catch (_) {}
+      }
+      if (raw is DateTime) return raw.toIso8601String();
+      return raw.toString();
+    }
+
     List<String> parseList(dynamic raw) {
       if (raw == null) return [];
-      // Firestore native array of strings
       if (raw is List) return raw.map((e) => e.toString()).toList();
-      // SQLite JSON-encoded string
       if (raw is String && raw.isNotEmpty) {
         try {
           final decoded = jsonDecode(raw);
@@ -96,28 +120,30 @@ class LeaveRequest {
       return false;
     }
 
+    final createdAtRaw = map['created_at'] ?? map['submitted_at'];
+
     return LeaveRequest(
-      id: map['id'] as int? ?? 0,
-      employeeId: map['employee_id'] as int? ?? 0,
-      employeeName: map['employee_name'] as String? ?? '',
-      employeeCustomId: map['employee_custom_id'] as String? ?? '',
-      leaveType: map['leave_type'] as String? ?? '',
-      fromDate: map['from_date'] as String? ?? '',
-      toDate: map['to_date'] as String? ?? '',
+      id: parseInt(map['id']),
+      employeeId: parseInt(map['employee_id']),
+      employeeName: parseString(map['employee_name']),
+      employeeCustomId: parseString(map['employee_custom_id']),
+      leaveType: parseString(map['leave_type']),
+      fromDate: parseString(map['from_date']),
+      toDate: parseString(map['to_date']),
       numDays: (map['num_days'] as num?)?.toDouble() ?? 0.0,
-      reason: map['reason'] as String? ?? '',
-      status: map['status'] as String? ?? 'Pending',
-      createdAt: map['created_at'] as String? ?? '',
+      reason: parseString(map['reason']),
+      status: parseString(map['status']).isEmpty ? 'Pending' : parseString(map['status']),
+      createdAt: parseString(createdAtRaw),
       approvedDates: parseList(map['approved_dates']),
       lopDates: parseList(map['lop_dates']),
       isEmergency: parseBool(map['is_emergency']),
-      attachmentUrl: map['attachment_url'] as String?,
-      rejectionReason: map['rejection_reason'] as String?,
+      attachmentUrl: map['attachment_url'] != null ? parseString(map['attachment_url']) : null,
+      rejectionReason: map['rejection_reason'] != null ? parseString(map['rejection_reason']) : null,
       isHalfDay: parseBool(map['is_half_day']),
-      halfDayPeriod: map['half_day_period'] as String?,
+      halfDayPeriod: map['half_day_period'] != null ? parseString(map['half_day_period']) : null,
       isOverride: parseBool(map['is_override']),
-      overrideReason: map['override_reason'] as String?,
-      approvedBy: map['approved_by'] as String?,
+      overrideReason: map['override_reason'] != null ? parseString(map['override_reason']) : null,
+      approvedBy: map['approved_by'] != null ? parseString(map['approved_by']) : null,
     );
   }
 
