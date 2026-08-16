@@ -31,6 +31,8 @@ class EmployeeRegistrationPage extends ConsumerStatefulWidget {
   final int? acceptedEmpId;
   final String? acceptedLinkId;
 
+  static List<Map<String, String>> get allWorldCountryCodes => _EmployeeRegistrationPageState.allWorldCountryCodes;
+
   @override
   ConsumerState<EmployeeRegistrationPage> createState() =>
       _EmployeeRegistrationPageState();
@@ -62,6 +64,8 @@ class _EmployeeRegistrationPageState
   final _pfNumberController = TextEditingController();
   final _esiNumberController = TextEditingController();
   final _reportingToController = TextEditingController(text: 'Saravanan G S');
+  String _workScheduleType = 'Fixed Schedule';
+  final _requiredWorkingHoursController = TextEditingController(text: '9 Hours');
   final _inTimeController = TextEditingController();
   final _outTimeController = TextEditingController();
   final _weeklyOffDayController = TextEditingController();
@@ -129,6 +133,8 @@ class _EmployeeRegistrationPageState
   final _kids1NameController = TextEditingController();
   final _kids2NameController = TextEditingController();
   final _kids3NameController = TextEditingController();
+  bool _hasCriminalCases = false;
+  final _criminalCaseDetailsController = TextEditingController();
 
   // Tab 6: Bank Account
   final _bankHolderController = TextEditingController();
@@ -197,6 +203,26 @@ class _EmployeeRegistrationPageState
 
   void _recalculateSalaryAmountsFromPercentages() {
     final totalSalary = double.tryParse(_totalSalaryController.text.replaceAll(',', '').trim()) ?? 0.0;
+    if (totalSalary <= 0) return;
+
+    if ((double.tryParse(_basicPercentController.text.trim()) ?? 0.0) == 0.0) {
+      _basicPercentController.text = '50.0';
+    }
+    if ((double.tryParse(_hraPercentController.text.trim()) ?? 0.0) == 0.0) {
+      _hraPercentController.text = '20.0';
+    }
+    if ((double.tryParse(_specialAllowancePercentController.text.trim()) ?? 0.0) == 0.0 &&
+        (double.tryParse(_eduAllowancePercentController.text.trim()) ?? 0.0) == 0.0 &&
+        (double.tryParse(_travelAllowancePercentController.text.trim()) ?? 0.0) == 0.0 &&
+        (double.tryParse(_otherAllowancePercentController.text.trim()) ?? 0.0) == 0.0) {
+      _specialAllowancePercentController.text = '30.0';
+    }
+    if ((double.tryParse(_pfPercentController.text.trim()) ?? 0.0) == 0.0) {
+      _pfPercentController.text = '12.0';
+    }
+    if (totalSalary <= 21000 && (double.tryParse(_esiPercentController.text.trim()) ?? 0.0) == 0.0) {
+      _esiPercentController.text = '0.75';
+    }
 
     void calcAmount(TextEditingController percentCtrl, TextEditingController amountCtrl, double basis) {
       final pct = double.tryParse(percentCtrl.text.trim()) ?? 0.0;
@@ -282,14 +308,22 @@ class _EmployeeRegistrationPageState
     });
   }
 
+  bool get _isCandidateLink =>
+      widget.linkId.isNotEmpty &&
+      widget.linkId != 'new' &&
+      widget.linkId != 'edit' &&
+      widget.acceptedLinkId == null &&
+      widget.acceptedEmpId == null;
+
   bool get _isManagementAdd =>
-      widget.linkId == 'new' ||
-      widget.linkId == 'edit' ||
-      widget.linkId.isEmpty ||
-      widget.employee != null ||
-      widget.acceptedLinkId != null ||
-      widget.acceptedEmpId != null ||
-      _registrationMode == 'accepted_response';
+      !_isCandidateLink &&
+      (widget.linkId == 'new' ||
+       widget.linkId == 'edit' ||
+       widget.linkId.isEmpty ||
+       widget.employee != null ||
+       widget.acceptedLinkId != null ||
+       widget.acceptedEmpId != null ||
+       _registrationMode == 'accepted_response');
 
   void _updateTabControllerIfNeeded() {
     if (_tabController.length != _tabs.length) {
@@ -314,6 +348,7 @@ class _EmployeeRegistrationPageState
   Employee? _submittedEmployee;
   Employee? _currentEmployee;
   String _registrationMode = 'manual';
+  // ignore: unused_field
   int? _selectedAcceptedEmpId;
   String? _selectedAcceptedLinkId;
   bool _draftLoaded = false;
@@ -332,6 +367,7 @@ class _EmployeeRegistrationPageState
       _emergencyMobileController, _referredByNameController, _referredByMobileController,
       _fatherNameController, _motherNameController, _spouseNameController,
       _kids1NameController, _kids2NameController, _kids3NameController,
+      _criminalCaseDetailsController,
       _bankHolderController, _bankNameController, _bankAccNumController,
       _bankIfscController, _bankBranchController,
       _facebookController, _twitterController, _linkedinController, _googleController,
@@ -407,6 +443,7 @@ class _EmployeeRegistrationPageState
     addListenerTo(_kids1NameController, 'History');
     addListenerTo(_kids2NameController, 'History');
     addListenerTo(_kids3NameController, 'History');
+    addListenerTo(_criminalCaseDetailsController, 'History');
 
     // Bank Account Tab
     addListenerTo(_bankHolderController, 'Bank Account');
@@ -432,6 +469,7 @@ class _EmployeeRegistrationPageState
     addListenerTo(_weeklyOffDayController, 'Job & Admin Details');
     addListenerTo(_inTimeController, 'Job & Admin Details');
     addListenerTo(_outTimeController, 'Job & Admin Details');
+    addListenerTo(_requiredWorkingHoursController, 'Job & Admin Details');
     addListenerTo(_allowedLeavesController, 'Job & Admin Details');
 
     // Salary Details Tab
@@ -481,6 +519,43 @@ class _EmployeeRegistrationPageState
     return '$countryCode $digits';
   }
 
+  Employee? _findMatchingEmployee(RegistrationLink link, List<Employee> employees) {
+    if (link.employeeId.isNotEmpty) {
+      for (final emp in employees) {
+        if (emp.employeeId == link.employeeId || emp.id.toString() == link.employeeId) {
+          return emp;
+        }
+      }
+    }
+    if (link.linkId.isNotEmpty) {
+      for (final emp in employees) {
+        if (emp.employeeId == link.linkId || emp.id.toString() == link.linkId) {
+          return emp;
+        }
+      }
+    }
+    if (link.employeeName.trim().isNotEmpty) {
+      final targetName = link.employeeName.trim().toLowerCase();
+      for (final emp in employees) {
+        final empFullName = emp.fullName.trim().toLowerCase();
+        final empFirstName = emp.firstName.trim().toLowerCase();
+        if (empFullName == targetName || empFirstName == targetName) {
+          return emp;
+        }
+      }
+    }
+    if (link.employeeName.trim().isNotEmpty) {
+      final targetName = link.employeeName.trim().toLowerCase();
+      for (final emp in employees) {
+        final empFullName = emp.fullName.trim().toLowerCase();
+        if (empFullName.isNotEmpty && (empFullName.contains(targetName) || targetName.contains(empFullName))) {
+          return emp;
+        }
+      }
+    }
+    return null;
+  }
+
   void _populateFromEmployee(Employee emp) {
     _isPopulating = true;
     setState(() {
@@ -488,6 +563,7 @@ class _EmployeeRegistrationPageState
       _firstNameController.text = emp.firstName;
       _lastNameController.text = emp.lastName;
       if (emp.bloodGroup.isNotEmpty) _bloodGroup = emp.bloodGroup;
+      if (emp.bloodGroupReport.isNotEmpty) _bloodGroupDocFileName = emp.bloodGroupReport;
       if (emp.gender.isNotEmpty) _gender = emp.gender;
       if (emp.userType.isNotEmpty) _userType = emp.userType;
       if (emp.status.isNotEmpty) _status = emp.status;
@@ -506,6 +582,12 @@ class _EmployeeRegistrationPageState
       _inTimeController.text = emp.inTime;
       _outTimeController.text = emp.outTime;
       _weeklyOffDayController.text = emp.weeklyOffDay;
+      if (emp.isDynamicEmployee || (emp.inTime.isEmpty && emp.outTime.isEmpty && !emp.isStaticEmployee)) {
+        _workScheduleType = 'Flexible Schedule';
+      } else {
+        _workScheduleType = 'Fixed Schedule';
+      }
+      _requiredWorkingHoursController.text = '${emp.requiredWorkingHours > 0 ? emp.requiredWorkingHours.toStringAsFixed(0) : "9"} Hours';
       _reportingManagerTitleController.text = emp.reportingManagerTitle.isNotEmpty ? emp.reportingManagerTitle : 'Managing Director';
       _adminNameController.text = emp.adminName.isNotEmpty ? emp.adminName : 'Saravanan G S';
       _coordinatorNameController.text = emp.coordinatorName.isNotEmpty ? emp.coordinatorName : 'Admin Team';
@@ -556,6 +638,8 @@ class _EmployeeRegistrationPageState
       _kids1NameController.text = emp.kids1Name;
       _kids2NameController.text = emp.kids2Name;
       _kids3NameController.text = emp.kids3Name;
+      _hasCriminalCases = emp.hasCriminalCases;
+      _criminalCaseDetailsController.text = emp.criminalCaseDetails;
 
       _bankHolderController.text = emp.bankAccountHolder;
       _bankNameController.text = emp.bankName;
@@ -586,39 +670,51 @@ class _EmployeeRegistrationPageState
       // Salary fields
       if (emp.salaryType.isNotEmpty) _salaryType = emp.salaryType;
       if (emp.salaryTotalCtc > 0) _totalSalaryController.text = emp.salaryTotalCtc.toStringAsFixed(2);
-      if (emp.salaryBasic > 0) _basicPayController.text = emp.salaryBasic.toStringAsFixed(2);
-      if (emp.salaryHra > 0) _hraController.text = emp.salaryHra.toStringAsFixed(2);
-      if (emp.salaryEducationAllowance > 0) _eduAllowanceController.text = emp.salaryEducationAllowance.toStringAsFixed(2);
-      if (emp.salarySpecialAllowance > 0) _specialAllowanceController.text = emp.salarySpecialAllowance.toStringAsFixed(2);
-      if (emp.salaryTravelAllowance > 0) _travelAllowanceController.text = emp.salaryTravelAllowance.toStringAsFixed(2);
-      if (emp.salaryOtherAllowance > 0) _otherAllowanceController.text = emp.salaryOtherAllowance.toStringAsFixed(2);
-      if (emp.salaryPf > 0) _pfController.text = emp.salaryPf.toStringAsFixed(2);
-      if (emp.salaryEsi > 0) _esiController.text = emp.salaryEsi.toStringAsFixed(2);
-      if (emp.salaryEsiEmployer > 0) _esiEmployerController.text = emp.salaryEsiEmployer.toStringAsFixed(2);
-      if (emp.salaryProfessionalTax > 0) _professionalTaxController.text = emp.salaryProfessionalTax.toStringAsFixed(2);
-      if (emp.salaryTax > 0) _tdsController.text = emp.salaryTax.toStringAsFixed(2);
 
       final total = emp.salaryTotalCtc;
-      final basic = emp.salaryBasic > 0 ? emp.salaryBasic : total * 0.5;
+      final basic = emp.salaryBasic > 0 ? emp.salaryBasic : (total > 0 ? total * 0.5 : 0.0);
+      final hra = emp.salaryHra > 0 ? emp.salaryHra : (total > 0 ? total * 0.2 : 0.0);
+      final special = emp.salarySpecialAllowance > 0 ? emp.salarySpecialAllowance : (total > 0 ? total * 0.3 : 0.0);
+      final edu = emp.salaryEducationAllowance;
+      final travel = emp.salaryTravelAllowance;
+      final other = emp.salaryOtherAllowance;
+      final pf = emp.salaryPf > 0 ? emp.salaryPf : (basic > 0 ? basic * 0.12 : 0.0);
+      final esi = emp.salaryEsi > 0 ? emp.salaryEsi : (total <= 21000 && basic > 0 ? basic * 0.0075 : 0.0);
+      final esiEmployer = emp.salaryEsiEmployer > 0 ? emp.salaryEsiEmployer : (total <= 21000 && total > 0 ? total * 0.0325 : 0.0);
+      final pt = emp.salaryProfessionalTax;
+      final tds = emp.salaryTax;
+
+      if (basic > 0) _basicPayController.text = basic.toStringAsFixed(2);
+      if (hra > 0) _hraController.text = hra.toStringAsFixed(2);
+      if (special > 0) _specialAllowanceController.text = special.toStringAsFixed(2);
+      if (edu > 0) _eduAllowanceController.text = edu.toStringAsFixed(2);
+      if (travel > 0) _travelAllowanceController.text = travel.toStringAsFixed(2);
+      if (other > 0) _otherAllowanceController.text = other.toStringAsFixed(2);
+      if (pf > 0) _pfController.text = pf.toStringAsFixed(2);
+      if (esi > 0) _esiController.text = esi.toStringAsFixed(2);
+      if (esiEmployer > 0) _esiEmployerController.text = esiEmployer.toStringAsFixed(2);
+      if (pt > 0) _professionalTaxController.text = pt.toStringAsFixed(2);
+      if (tds > 0) _tdsController.text = tds.toStringAsFixed(2);
+
       if (total > 0) {
-        _basicPercentController.text = ((emp.salaryBasic / total) * 100).toStringAsFixed(1);
-        _hraPercentController.text = ((emp.salaryHra / total) * 100).toStringAsFixed(1);
-        _specialAllowancePercentController.text = ((emp.salarySpecialAllowance / total) * 100).toStringAsFixed(1);
-        _eduAllowancePercentController.text = ((emp.salaryEducationAllowance / total) * 100).toStringAsFixed(1);
-        _travelAllowancePercentController.text = ((emp.salaryTravelAllowance / total) * 100).toStringAsFixed(1);
-        _otherAllowancePercentController.text = ((emp.salaryOtherAllowance / total) * 100).toStringAsFixed(1);
+        _basicPercentController.text = ((basic / total) * 100).toStringAsFixed(1);
+        _hraPercentController.text = ((hra / total) * 100).toStringAsFixed(1);
+        _specialAllowancePercentController.text = ((special / total) * 100).toStringAsFixed(1);
+        _eduAllowancePercentController.text = ((edu / total) * 100).toStringAsFixed(1);
+        _travelAllowancePercentController.text = ((travel / total) * 100).toStringAsFixed(1);
+        _otherAllowancePercentController.text = ((other / total) * 100).toStringAsFixed(1);
         if (total <= 21000) {
-          _esiPercentController.text = basic > 0 ? ((emp.salaryEsi / basic) * 100).toStringAsFixed(1) : '0.0';
-          _esiEmployerPercentController.text = ((emp.salaryEsiEmployer / total) * 100).toStringAsFixed(1);
+          _esiPercentController.text = basic > 0 ? ((esi / basic) * 100).toStringAsFixed(1) : '0.0';
+          _esiEmployerPercentController.text = ((esiEmployer / total) * 100).toStringAsFixed(1);
         } else {
           _esiController.text = '';
           _esiEmployerController.text = '';
         }
-        _professionalTaxPercentController.text = ((emp.salaryProfessionalTax / total) * 100).toStringAsFixed(1);
-        _tdsPercentController.text = ((emp.salaryTax / total) * 100).toStringAsFixed(1);
+        _professionalTaxPercentController.text = ((pt / total) * 100).toStringAsFixed(1);
+        _tdsPercentController.text = ((tds / total) * 100).toStringAsFixed(1);
       }
       if (basic > 0) {
-        _pfPercentController.text = ((emp.salaryPf / basic) * 100).toStringAsFixed(1);
+        _pfPercentController.text = ((pf / basic) * 100).toStringAsFixed(1);
       }
       _salaryPercentagesInitialized = true;
 
@@ -712,20 +808,14 @@ class _EmployeeRegistrationPageState
       _registrationMode = 'accepted_response';
       _selectedAcceptedLinkId = widget.acceptedLinkId;
       WidgetsBinding.instance.addPostFrameCallback((_) async {
+        ref.invalidate(allEmployeesProvider);
+        ref.invalidate(registrationLinksProvider);
         final links = await ref.read(registrationLinksProvider.future);
         final allEmps = await ref.read(allEmployeesProvider.future);
         final matchingLinks = links.where((l) => l.linkId == widget.acceptedLinkId).toList();
         if (matchingLinks.isNotEmpty && mounted) {
           final link = matchingLinks.first;
-          Employee? matchedEmployee;
-          for (final emp in allEmps) {
-            if ((emp.employeeId.isNotEmpty && emp.employeeId == link.employeeId) ||
-                emp.id.toString() == link.employeeId ||
-                emp.employeeId == link.linkId) {
-              matchedEmployee = emp;
-              break;
-            }
-          }
+          final matchedEmployee = _findMatchingEmployee(link, allEmps);
           if (matchedEmployee != null) {
             _selectedAcceptedEmpId = matchedEmployee.id;
             _populateFromEmployee(matchedEmployee);
@@ -735,7 +825,7 @@ class _EmployeeRegistrationPageState
           }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Auto-fetched candidate details for ${link.employeeName.isNotEmpty ? link.employeeName : link.linkId}. Complete details to finalize registration.'),
+              content: Text('Auto-fetched candidate details for ${matchedEmployee?.fullName.isNotEmpty == true ? matchedEmployee!.fullName : (link.employeeName.isNotEmpty ? link.employeeName : link.linkId)}. Complete details to finalize registration.'),
               behavior: SnackBarBehavior.floating,
               duration: const Duration(seconds: 3),
             ),
@@ -746,6 +836,7 @@ class _EmployeeRegistrationPageState
       _registrationMode = 'accepted_response';
       _selectedAcceptedEmpId = widget.acceptedEmpId;
       WidgetsBinding.instance.addPostFrameCallback((_) async {
+        ref.invalidate(allEmployeesProvider);
         final emps = await ref.read(allEmployeesProvider.future);
         final matches = emps.where((e) => e.id == widget.acceptedEmpId).toList();
         if (matches.isNotEmpty && mounted) {
@@ -761,23 +852,17 @@ class _EmployeeRegistrationPageState
         }
       });
     } else if (widget.linkId.isNotEmpty && widget.linkId != 'new' && widget.linkId != 'edit') {
-      _registrationMode = 'accepted_response';
+      _registrationMode = 'candidate';
       _selectedAcceptedLinkId = widget.linkId;
       WidgetsBinding.instance.addPostFrameCallback((_) async {
+        ref.invalidate(allEmployeesProvider);
+        ref.invalidate(registrationLinksProvider);
         final links = await ref.read(registrationLinksProvider.future);
         final allEmps = await ref.read(allEmployeesProvider.future);
         final matchingLinks = links.where((l) => l.linkId == widget.linkId).toList();
         if (matchingLinks.isNotEmpty && mounted) {
           final link = matchingLinks.first;
-          Employee? matchedEmployee;
-          for (final emp in allEmps) {
-            if ((emp.employeeId.isNotEmpty && emp.employeeId == link.employeeId) ||
-                emp.id.toString() == link.employeeId ||
-                emp.employeeId == link.linkId) {
-              matchedEmployee = emp;
-              break;
-            }
-          }
+          final matchedEmployee = _findMatchingEmployee(link, allEmps);
           if (matchedEmployee != null) {
             _selectedAcceptedEmpId = matchedEmployee.id;
             _populateFromEmployee(matchedEmployee);
@@ -789,7 +874,7 @@ class _EmployeeRegistrationPageState
           }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Auto-fetched candidate details for ${link.employeeName.isNotEmpty ? link.employeeName : link.linkId}. Complete details to finalize registration.'),
+              content: Text('Auto-fetched candidate details for ${matchedEmployee?.fullName.isNotEmpty == true ? matchedEmployee!.fullName : (link.employeeName.isNotEmpty ? link.employeeName : link.linkId)}. Complete details to finalize registration.'),
               behavior: SnackBarBehavior.floating,
               duration: const Duration(seconds: 3),
             ),
@@ -816,6 +901,7 @@ class _EmployeeRegistrationPageState
     _inTimeController.dispose();
     _outTimeController.dispose();
     _weeklyOffDayController.dispose();
+    _requiredWorkingHoursController.dispose();
     _reportingManagerTitleController.dispose();
     _adminNameController.dispose();
     _coordinatorNameController.dispose();
@@ -851,6 +937,7 @@ class _EmployeeRegistrationPageState
     _kids1NameController.dispose();
     _kids2NameController.dispose();
     _kids3NameController.dispose();
+    _criminalCaseDetailsController.dispose();
     _bankHolderController.dispose();
     _bankNameController.dispose();
     _bankAccNumController.dispose();
@@ -1085,6 +1172,7 @@ class _EmployeeRegistrationPageState
             ? (_status.isEmpty || _status == 'PENDING' ? 'ACTIVE' : _status)
             : 'Draft',
         bloodGroup: _bloodGroup,
+        bloodGroupReport: _bloodGroupDocFileName,
         userType: _userType,
         contractEndDate: _contractEndDateController.text.trim(),
         permanentAddress: _permAddressController.text.trim(),
@@ -1119,6 +1207,8 @@ class _EmployeeRegistrationPageState
         kids1Name: _kids1NameController.text.trim(),
         kids2Name: _kids2NameController.text.trim(),
         kids3Name: _kids3NameController.text.trim(),
+        hasCriminalCases: _hasCriminalCases,
+        criminalCaseDetails: _hasCriminalCases ? _criminalCaseDetailsController.text.trim() : '',
         bankAccountHolder: _bankHolderController.text.trim(),
         bankName: _bankNameController.text.trim(),
         bankAccountNumber: _bankAccNumController.text.trim(),
@@ -1134,8 +1224,9 @@ class _EmployeeRegistrationPageState
         googleUrl: _googleController.text.trim(),
         pfNumber: _pfNumberController.text.trim(),
         esiNumber: _esiNumberController.text.trim(),
-        inTime: _inTimeController.text.trim(),
-        outTime: _outTimeController.text.trim(),
+        inTime: _workScheduleType == 'Fixed Schedule' ? _inTimeController.text.trim() : '',
+        outTime: _workScheduleType == 'Fixed Schedule' ? _outTimeController.text.trim() : '',
+        requiredWorkingHours: double.tryParse(_requiredWorkingHoursController.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 9.0,
         weeklyOffDay: _weeklyOffDayController.text.trim(),
         reportingManager: _reportingToController.text.trim(),
         reportingManagerTitle: _reportingManagerTitleController.text.trim(),
@@ -1160,8 +1251,8 @@ class _EmployeeRegistrationPageState
         salaryEsiEmployer: double.tryParse(_esiEmployerController.text.trim().replaceAll(',', '')) ?? 0.0,
         salaryProfessionalTax: double.tryParse(_professionalTaxController.text.trim().replaceAll(',', '')) ?? 0.0,
         accessPermissions: _selectedPermissions.toList(),
-        isStaticEmployee: _selectedPermissions.contains('Attendance') || _selectedPermissions.contains('Attendance Management'),
-        isDynamicEmployee: _selectedPermissions.contains('Site Visit Attendance') || _selectedPermissions.contains('Site Visit Attendance Management'),
+        isStaticEmployee: _workScheduleType == 'Fixed Schedule',
+        isDynamicEmployee: _workScheduleType == 'Flexible Schedule',
         profileImageUrl: profileImageUrl,
         profileImagePublicId: profileImagePublicId,
         profileImageFolder: profileImageFolder,
@@ -1272,13 +1363,13 @@ class _EmployeeRegistrationPageState
           ),
         );
 
-        // Redirect if it's a final submission (not draft save) and we are in manager add/edit/accepted response flow
-        if (isSubmit && (widget.linkId == 'new' || widget.linkId.isEmpty || isEditMode || _registrationMode == 'accepted_response' || _selectedAcceptedLinkId != null)) {
-          if (GoRouter.of(context).canPop()) {
-            GoRouter.of(context).pop();
-          } else {
-            GoRouter.of(context).go('/employee');
-          }
+        // Redirect to /employee only for management/admin additions or edits; candidate link submissions remain on confirmation screen
+        if (isSubmit && _isManagementAdd) {
+          Future.delayed(const Duration(milliseconds: 600), () {
+            if (mounted) {
+              GoRouter.of(context).go('/employee');
+            }
+          });
         }
       }
     } catch (e) {
@@ -1363,15 +1454,17 @@ class _EmployeeRegistrationPageState
                     );
                   }
 
-                  if (link.linkStatus == 'Submitted' || link.linkStatus == 'Converted' || _submittedEmployee != null) {
+                  if (link.linkStatus == 'Submitted' || link.linkStatus == 'Converted' || link.linkStatus == 'Completed' || _submittedEmployee != null) {
                     final emp = _submittedEmployee;
                     return _buildStatusCard(
                       icon: Icons.check_circle_outline,
                       color: const Color(0xFF28A745),
-                      title: 'Registration Submitted Successfully!',
-                      message:
-                          'Thank you! Your employee registration has been submitted.\n\n'
-                          '${emp != null ? "Generated Candidate ID: ${emp.employeeId}" : "Status: Registration Submitted"}',
+                      title: _submittedEmployee != null
+                          ? 'Registration Submitted Successfully!'
+                          : 'Registration Link Already Used',
+                      message: _submittedEmployee != null
+                          ? 'Thank you! Your employee registration has been submitted successfully.\n\n${emp != null && emp.employeeId.isNotEmpty ? "Candidate ID: ${emp.employeeId}" : "Status: Registration Submitted"}'
+                          : 'This candidate registration link has already been submitted and cannot be opened a second time.\n\nIf you need to make changes or require assistance, please contact HR Admin.',
                     );
                   }
 
@@ -1390,17 +1483,7 @@ class _EmployeeRegistrationPageState
                     WidgetsBinding.instance.addPostFrameCallback((_) async {
                       try {
                         final emps = await ref.read(allEmployeesProvider.future);
-                        Employee? matchedEmployee;
-                        for (final emp in emps) {
-                          if (link.employeeId.isNotEmpty && emp.employeeId == link.employeeId) {
-                            matchedEmployee = emp;
-                            break;
-                          }
-                          if (emp.id.toString() == link.employeeId || emp.employeeId == link.linkId) {
-                            matchedEmployee = emp;
-                            break;
-                          }
-                        }
+                        final matchedEmployee = _findMatchingEmployee(link, emps);
                         if (matchedEmployee != null && mounted) {
                           _selectedAcceptedEmpId = matchedEmployee.id;
                           _populateFromEmployee(matchedEmployee);
@@ -1411,9 +1494,7 @@ class _EmployeeRegistrationPageState
                             }
                           });
                         }
-                      } catch (e) {
-                        debugPrint('Error loading draft employee: $e');
-                      }
+                      } catch (_) {}
                     });
                   }
 
@@ -1822,13 +1903,7 @@ class _EmployeeRegistrationPageState
                                     border: OutlineInputBorder(),
                                   ),
                                   items: acceptedLinks.map((link) {
-                                    Employee? matchedEmployee;
-                                    for (final emp in allEmps) {
-                                      if (emp.employeeId == link.employeeId || emp.id.toString() == link.employeeId) {
-                                        matchedEmployee = emp;
-                                        break;
-                                      }
-                                    }
+                                    final matchedEmployee = _findMatchingEmployee(link, allEmps);
 
                                     final displayName = matchedEmployee?.fullName.isNotEmpty == true
                                         ? matchedEmployee!.fullName
@@ -1848,13 +1923,7 @@ class _EmployeeRegistrationPageState
                                   onChanged: (selectedLinkId) {
                                     if (selectedLinkId != null) {
                                       final selectedLink = acceptedLinks.firstWhere((e) => e.linkId == selectedLinkId);
-                                      Employee? selectedEmployee;
-                                      for (final emp in allEmps) {
-                                        if (emp.employeeId == selectedLink.employeeId || emp.id.toString() == selectedLink.employeeId) {
-                                          selectedEmployee = emp;
-                                          break;
-                                        }
-                                      }
+                                      final selectedEmployee = _findMatchingEmployee(selectedLink, allEmps);
 
                                       setState(() {
                                         _selectedAcceptedEmpId = selectedEmployee?.id;
@@ -1897,84 +1966,96 @@ class _EmployeeRegistrationPageState
           children: [
             _buildTextField('First Name', _firstNameController, placeholder: 'First Name'),
             _buildTextField('Last Name', _lastNameController, placeholder: 'Last Name'),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _buildRow2or3(
+          isMobile: isMobile,
+          children: [
             _buildDropdown(
               'Blood Group',
               _bloodGroup,
               ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-', 'A1+', 'A1-', 'A2+', 'A2-', 'A1B+', 'A1B-', 'A2B+', 'A2B-', 'Bombay Blood Group (hh)', "Other / Don't Know"],
               (val) { if (val != null) { setState(() => _bloodGroup = val); _markTabUnsaved('Personal Info'); } },
             ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Blood Group Certificate / Test Report Document',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 5),
-            Row(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFF2F4F7),
-                    foregroundColor: Colors.black87,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4),
-                      side: const BorderSide(color: Color(0xFFD0D5DD)),
-                    ),
-                  ),
-                  onPressed: _pickBloodGroupDocFile,
-                  child: const Text('Choose file', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                const Text(
+                  'Blood Group Certificate / Test Report Document',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _bloodGroupDocFileName,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: _bloodGroupDocFileName == 'No file chosen' ? Colors.black54 : AppColors.active,
-                      fontWeight: _bloodGroupDocFileName == 'No file chosen' ? FontWeight.normal : FontWeight.w600,
-                    ),
-                    overflow: TextOverflow.ellipsis,
+                const SizedBox(height: 5),
+                Container(
+                  height: 38,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFD0D5DD), width: 0.8),
+                  ),
+                  child: Row(
+                    children: [
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFF2F4F7),
+                          foregroundColor: Colors.black87,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(4),
+                            side: const BorderSide(color: Color(0xFFD0D5DD)),
+                          ),
+                        ),
+                        onPressed: _pickBloodGroupDocFile,
+                        child: const Text('Choose file', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _bloodGroupDocFileName,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: _bloodGroupDocFileName == 'No file chosen' ? Colors.black54 : AppColors.active,
+                            fontWeight: _bloodGroupDocFileName == 'No file chosen' ? FontWeight.normal : FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (_bloodGroupDocFileName != 'No file chosen')
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _bloodGroupDocFileName = 'No file chosen';
+                            });
+                            _markTabUnsaved('Personal Info');
+                          },
+                          child: const Padding(
+                            padding: EdgeInsets.only(left: 4),
+                            child: Icon(Icons.close, size: 16, color: Colors.grey),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-                if (_bloodGroupDocFileName != 'No file chosen')
-                  IconButton(
-                    icon: const Icon(Icons.close, size: 16, color: Colors.grey),
-                    onPressed: () {
-                      setState(() {
-                        _bloodGroupDocFileName = 'No file chosen';
-                      });
-                      _markTabUnsaved('Personal Info');
-                    },
-                  ),
               ],
             ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _buildRow2or3(
-          isMobile: isMobile,
-          children: [
             _buildDropdown(
               'Gender',
               _gender,
               ['Male', 'Female', 'Other'],
               (val) { if (val != null) { setState(() => _gender = val); _markTabUnsaved('Personal Info'); } },
             ),
-            _buildDateField('Date Of Birth', _dobController, placeholder: '13-05-1982'),
-            _buildTextField('Aadhar Number', _aadhaarController, placeholder: '833750993144', isNumber: true),
           ],
         ),
         const SizedBox(height: 12),
         _buildRow2or3(
           isMobile: isMobile,
           children: [
+            _buildDateField('Date Of Birth', _dobController, placeholder: '13-05-1982'),
+            _buildTextField('Aadhar Number', _aadhaarController, placeholder: '833750993144', isNumber: true),
             _buildTextField(
               'Contact Number',
               _phoneController,
@@ -1983,17 +2064,15 @@ class _EmployeeRegistrationPageState
               countryCode: _phoneCountryCode,
               onCountryCodeChanged: (val) { setState(() => _phoneCountryCode = val); _markTabUnsaved('Personal Info'); },
             ),
-            _buildTextField('Email', _emailController, placeholder: 'Saravanan@igreentec.in'),
-            _buildTextField('PF Number', _pfNumberController, placeholder: '100338738050', isNumber: true),
           ],
         ),
         const SizedBox(height: 12),
         _buildRow2or3(
           isMobile: isMobile,
           children: [
+            _buildTextField('Email', _emailController, placeholder: 'Saravanan@igreentec.in'),
+            _buildTextField('PF Number', _pfNumberController, placeholder: '100338738050', isNumber: true),
             _buildTextField('ESI Number', _esiNumberController, placeholder: 'ESI Number', isNumber: true),
-            const SizedBox.shrink(),
-            const SizedBox.shrink(),
           ],
         ),
         const SizedBox(height: 20),
@@ -2252,27 +2331,46 @@ class _EmployeeRegistrationPageState
             _buildRow2or3(
               isMobile: isMobile,
               children: [
+                _buildDropdown(
+                  'Work Schedule Type',
+                  _workScheduleType,
+                  ['Fixed Schedule', 'Flexible Schedule'],
+                  (val) {
+                    if (val != null) {
+                      setState(() => _workScheduleType = val);
+                      _markTabUnsaved('Job & Admin Details');
+                    }
+                  },
+                ),
                 _buildTextField(
                   'Weekly Off Day',
                   _weeklyOffDayController,
                   placeholder: 'e.g. Sunday',
                 ),
-                _buildTextField(
-                  'In Time',
-                  _inTimeController,
-                  placeholder: 'e.g. 09:00 AM',
-                ),
-                _buildTextField(
-                  'Out Time',
-                  _outTimeController,
-                  placeholder: 'e.g. 06:00 PM',
-                ),
+                if (_workScheduleType == 'Fixed Schedule')
+                  _buildTextField(
+                    'In Time',
+                    _inTimeController,
+                    placeholder: 'e.g. 09:00 AM',
+                  )
+                else
+                  _buildTextField(
+                    'Required Working Hours',
+                    _requiredWorkingHoursController,
+                    placeholder: 'e.g. 9 Hours',
+                  ),
               ],
             ),
             const SizedBox(height: 12),
             _buildRow2or3(
               isMobile: isMobile,
               children: [
+                if (_workScheduleType == 'Fixed Schedule')
+                  _buildTextField(
+                    'Out Time',
+                    _outTimeController,
+                    placeholder: 'e.g. 06:00 PM',
+                  ),
                 _buildDropdown(
                   'Leave Type',
                   _leaveType,
@@ -2905,6 +3003,36 @@ class _EmployeeRegistrationPageState
                 const SizedBox.shrink(),
               ],
             ),
+            const SizedBox(height: 20),
+            const Text('Criminal Background Check :', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Checkbox(
+                  value: _hasCriminalCases,
+                  activeColor: AppColors.active,
+                  onChanged: (val) {
+                    setState(() => _hasCriminalCases = val ?? false);
+                    _markTabUnsaved('History');
+                  },
+                ),
+                const Expanded(
+                  child: Text(
+                    'Does the employee have any criminal cases or legal charges?',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.black87),
+                  ),
+                ),
+              ],
+            ),
+            if (_hasCriminalCases) ...[
+              const SizedBox(height: 10),
+              _buildTextField(
+                'Criminal Case Details / Description *',
+                _criminalCaseDetailsController,
+                placeholder: 'Enter details regarding the criminal case(s)...',
+                maxLines: 3,
+              ),
+            ],
             const SizedBox(height: 24),
             _buildSaveButtonsRow(link, 'History'),
           ],
@@ -3087,7 +3215,7 @@ class _EmployeeRegistrationPageState
                 _buildDropdown(
                   'Document Type',
                   _docType,
-                  ['Aadhaar Card', 'PAN Card', 'Educational Certificate', 'Passport', 'Relieving Letter', 'Other'],
+                  ['Aadhaar Card', 'PAN Card', 'Educational Certificate', 'Passport', 'Relieving Letter', 'Blood Group Certificate', 'Test Report', 'Other'],
                   (val) { if (val != null) { setState(() => _docType = val); _markTabUnsaved('Document'); } },
                 ),
                 _buildTextField('Document Number / Reference', _docNumberController, placeholder: 'Document Number'),
@@ -3651,7 +3779,7 @@ class _EmployeeRegistrationPageState
       (isNumber || isPhone)
         ? [
             if (allowDecimal)
-              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))
             else
               FilteringTextInputFormatter.digitsOnly,
             if (isPhone)
@@ -3672,7 +3800,21 @@ class _EmployeeRegistrationPageState
         TextFormField(
           controller: controller,
           maxLines: maxLines,
-          onChanged: onChanged,
+          onChanged: (val) {
+            if (isNumber || isPhone) {
+              final pattern = allowDecimal ? RegExp(r'[^0-9.]') : RegExp(r'[^0-9]');
+              if (pattern.hasMatch(val)) {
+                final sanitized = val.replaceAll(pattern, '');
+                controller.value = controller.value.copyWith(
+                  text: sanitized,
+                  selection: TextSelection.collapsed(offset: sanitized.length),
+                );
+                if (onChanged != null) onChanged(sanitized);
+                return;
+              }
+            }
+            if (onChanged != null) onChanged(val);
+          },
           keyboardType: effectiveKeyboardType,
           inputFormatters: effectiveInputFormatters,
           autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -3845,7 +3987,11 @@ class _EmployeeRegistrationPageState
   }
 
   void _showRegistrationPreviewDialog(RegistrationLink? link) {
+    if (_totalSalaryController.text.trim().isNotEmpty) {
+      _recalculateSalaryAmountsFromPercentages();
+    }
     final name = '${_firstNameController.text} ${_lastNameController.text}'.trim();
+    final isMobile = MediaQuery.of(context).size.width < 600;
 
     showDialog(
       context: context,
@@ -3854,12 +4000,12 @@ class _EmployeeRegistrationPageState
         return Dialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           child: Container(
-            width: MediaQuery.of(context).size.width * 0.85,
+            width: isMobile ? MediaQuery.of(context).size.width * 0.95 : MediaQuery.of(context).size.width * 0.85,
             constraints: BoxConstraints(
               maxWidth: 900,
               maxHeight: MediaQuery.of(context).size.height * 0.85,
             ),
-            padding: const EdgeInsets.all(24),
+            padding: EdgeInsets.all(isMobile ? 14 : 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -3911,6 +4057,32 @@ class _EmployeeRegistrationPageState
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Candidate Profile Photo header if present
+                        if (_profileImageBytes != null || _profileImageDataUrl.isNotEmpty) ...[
+                          Center(
+                            child: Column(
+                              children: [
+                                CircleAvatar(
+                                  radius: 36,
+                                  backgroundColor: Colors.grey.shade200,
+                                  backgroundImage: _profileImageBytes != null
+                                      ? MemoryImage(_profileImageBytes!)
+                                      : (_profileImageDataUrl.startsWith('http') ? NetworkImage(_profileImageDataUrl) as ImageProvider : null),
+                                  child: (_profileImageBytes == null && !_profileImageDataUrl.startsWith('http'))
+                                      ? const Icon(Icons.person, size: 36, color: Colors.grey)
+                                      : null,
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  name.isEmpty ? 'Candidate Photo' : name,
+                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 12),
+                              ],
+                            ),
+                          ),
+                        ],
+
                         // Section 1: Personal Info
                         _buildPreviewSectionHeader('Personal Information', Icons.person_outline),
                         _buildPreviewGrid([
@@ -3986,6 +4158,9 @@ class _EmployeeRegistrationPageState
                           _buildPreviewField('Marital Status', _maritalStatus),
                           _buildPreviewField('Spouse Name', _spouseNameController.text),
                           _buildPreviewField('Kids Details', [_kids1NameController.text, _kids2NameController.text, _kids3NameController.text].where((k) => k.isNotEmpty).join(', ')),
+                          _buildPreviewField('Has Criminal Record', _hasCriminalCases ? 'Yes' : 'No'),
+                          if (_hasCriminalCases)
+                            _buildPreviewField('Criminal Case Details', _criminalCaseDetailsController.text),
                         ]),
                         const SizedBox(height: 20),
 
@@ -4015,7 +4190,7 @@ class _EmployeeRegistrationPageState
                           )),
                         const SizedBox(height: 20),
 
-                        // Section 8: Social Media
+                        // Section 8: Social Profiles
                         _buildPreviewSectionHeader('Social Profiles', Icons.share_outlined),
                         _buildPreviewGrid([
                           _buildPreviewField('Facebook', _facebookController.text),
@@ -4025,12 +4200,14 @@ class _EmployeeRegistrationPageState
                         ]),
                         const SizedBox(height: 20),
 
-                        // Section 9: Job & Admin Details (Management mode)
-                        if (_isManagementAdd) ...[
+                        // Section 9: Job & Admin Details
+                        if (_isManagementAdd || _isEditing || _department.isNotEmpty || _joiningDateController.text.isNotEmpty || link != null) ...[
                           _buildPreviewSectionHeader('Job & Administrative Details', Icons.badge_outlined),
                           _buildPreviewGrid([
                             _buildPreviewField('Department', _department),
                             _buildPreviewField('Designation', _designation),
+                            _buildPreviewField('User Role / Type', _userType),
+                            _buildPreviewField('Account Status', _status),
                             _buildPreviewField('Date of Joining', _joiningDateController.text),
                             _buildPreviewField('Contract End Date', _contractEndDateController.text),
                             _buildPreviewField('Reporting Manager', _reportingToController.text),
@@ -4038,12 +4215,22 @@ class _EmployeeRegistrationPageState
                             _buildPreviewField('Admin Name', _adminNameController.text),
                             _buildPreviewField('Coordinator Name', _coordinatorNameController.text),
                             _buildPreviewField('Coordinator Contact', _formatPhoneWithCountryCode(_coordinatorPhoneCountryCode, _coordinatorPhoneController.text)),
+                            _buildPreviewField('Work Schedule Type', _workScheduleType),
                             _buildPreviewField('Weekly Off Day', _weeklyOffDayController.text),
-                            _buildPreviewField('Work Hours', '${_inTimeController.text} - ${_outTimeController.text}'),
+                            if (_workScheduleType == 'Fixed Schedule')
+                              _buildPreviewField('Work Hours', '${_inTimeController.text} - ${_outTimeController.text}')
+                            else
+                              _buildPreviewField('Required Working Hours', _requiredWorkingHoursController.text),
+                            if (_siteLatitudeController.text.isNotEmpty || _siteLongitudeController.text.isNotEmpty)
+                              _buildPreviewField('Site Geo-Fence Location', '${_siteLatitudeController.text}, ${_siteLongitudeController.text}'),
+                            if (_siteRadiusController.text.isNotEmpty)
+                              _buildPreviewField('Allowed Site Radius', '${_siteRadiusController.text} meters'),
+                            _buildPreviewField('GPS Verification Required', _siteRequireGpsVerification ? 'Yes' : 'No'),
                             _buildPreviewField('Leave Type', _leaveType),
                             if (_leaveType == 'Manual Allocation') ...[
                               _buildPreviewField('Allocation Frequency', _leaveAllocationFrequency),
                               _buildPreviewField('Allowed Leaves', _allowedLeavesController.text),
+                              _buildPreviewField('Leave Effective Date', _leaveEffectiveDateController.text),
                             ],
                           ]),
                           const SizedBox(height: 20),
@@ -4060,7 +4247,8 @@ class _EmployeeRegistrationPageState
                             _buildPreviewField('Travel Allowance', _travelAllowanceController.text),
                             _buildPreviewField('Other Allowance', _otherAllowanceController.text),
                             _buildPreviewField('PF Deduction', _pfController.text),
-                            _buildPreviewField('ESI Deduction', _esiController.text),
+                            _buildPreviewField('ESI Deduction (Employee)', _esiController.text),
+                            _buildPreviewField('ESI Contribution (Employer)', _esiEmployerController.text),
                             _buildPreviewField('Professional Tax', _professionalTaxController.text),
                             _buildPreviewField('TDS', _tdsController.text),
                           ]),
@@ -4071,7 +4259,9 @@ class _EmployeeRegistrationPageState
                           _buildPreviewGrid([
                             _buildPreviewField('Employee Custom ID', _employeeCustomIdController.text),
                             _buildPreviewField('Temporary Password', _passwordController.text.isNotEmpty ? '••••••••' : '-'),
-                            _buildPreviewField('Access Permissions', _selectedPermissions.join(', ')),
+                            _buildPreviewField('User Role', _userType),
+                            _buildPreviewField('Account Status', _status),
+                            _buildPreviewField('Access Permissions', _selectedPermissions.isEmpty ? '-' : _selectedPermissions.join(', ')),
                           ]),
                         ],
                       ],
@@ -4080,8 +4270,11 @@ class _EmployeeRegistrationPageState
                 ),
                 const Divider(height: 24),
                 // Footer Action Buttons
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 12,
+                  runSpacing: 10,
                   children: [
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
@@ -4093,7 +4286,6 @@ class _EmployeeRegistrationPageState
                       icon: const Icon(Icons.edit, size: 16, color: Colors.black87),
                       label: const Text('Go Back & Edit', style: TextStyle(color: Colors.black87, fontSize: 13, fontWeight: FontWeight.bold)),
                     ),
-                    const SizedBox(width: 12),
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.active,
@@ -4285,29 +4477,36 @@ class _EmployeeRegistrationPageState
               label: const Text('Next Tab →', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
             ),
         ],
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8F9FA),
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: const Color(0xFFE9ECEF)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.info_outline, size: 14, color: AppColors.active),
-              const SizedBox(width: 6),
-              Text(
-                isLastTab
-                    ? 'Press Save to save progress, then click Submit Registration when done.'
-                    : (isSaved ? 'Page saved! Click Next Tab to proceed.' : 'Press Save to save progress and unlock Next button.'),
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textSecondary,
+        ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width - 32),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8F9FA),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: const Color(0xFFE9ECEF)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.info_outline, size: 14, color: AppColors.active),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    isLastTab
+                        ? 'Press Save to save progress, then click Submit Registration when done.'
+                        : (isSaved ? 'Page saved! Click Next Tab to proceed.' : 'Press Save to save progress and unlock Next button.'),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textSecondary,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ],
@@ -5302,6 +5501,8 @@ class _EmployeeRegistrationPageState
       kids1Name: _kids1NameController.text.trim(),
       kids2Name: _kids2NameController.text.trim(),
       kids3Name: _kids3NameController.text.trim(),
+      hasCriminalCases: _hasCriminalCases,
+      criminalCaseDetails: _hasCriminalCases ? _criminalCaseDetailsController.text.trim() : '',
       bankAccountHolder: _bankHolderController.text.trim(),
       bankName: _bankNameController.text.trim(),
       bankAccountNumber: _bankAccNumController.text.trim(),
@@ -5322,6 +5523,9 @@ class _EmployeeRegistrationPageState
       adminName: _adminNameController.text.trim(),
       coordinatorName: _coordinatorNameController.text.trim(),
       coordinatorPhone: _formatPhoneWithCountryCode(_coordinatorPhoneCountryCode, _coordinatorPhoneController.text),
+      inTime: _workScheduleType == 'Fixed Schedule' ? _inTimeController.text.trim() : '',
+      outTime: _workScheduleType == 'Fixed Schedule' ? _outTimeController.text.trim() : '',
+      requiredWorkingHours: double.tryParse(_requiredWorkingHoursController.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 9.0,
       weeklyOffDay: _weeklyOffDayController.text.trim(),
       salaryType: _salaryType,
       salaryTotalCtc: double.tryParse(_totalSalaryController.text.trim().replaceAll(',', '')) ?? 0.0,
@@ -5335,8 +5539,8 @@ class _EmployeeRegistrationPageState
       salaryEsi: double.tryParse(_esiController.text.trim().replaceAll(',', '')) ?? 0.0,
       salaryEsiEmployer: double.tryParse(_esiEmployerController.text.trim().replaceAll(',', '')) ?? 0.0,
       salaryProfessionalTax: double.tryParse(_professionalTaxController.text.trim().replaceAll(',', '')) ?? 0.0,
-      isStaticEmployee: _selectedPermissions.contains('Attendance') || _selectedPermissions.contains('Attendance Management'),
-      isDynamicEmployee: _selectedPermissions.contains('Site Visit Attendance') || _selectedPermissions.contains('Site Visit Attendance Management'),
+      isStaticEmployee: _workScheduleType == 'Fixed Schedule',
+      isDynamicEmployee: _workScheduleType == 'Flexible Schedule',
       siteLatitude: (_selectedPermissions.contains('Site Visit Attendance') || _selectedPermissions.contains('Site Visit Attendance Management')) ? (AttendanceLocationFields.parseCoordinate(_siteLatitudeController.text) ?? 0.0) : 0.0,
       siteLongitude: (_selectedPermissions.contains('Site Visit Attendance') || _selectedPermissions.contains('Site Visit Attendance Management')) ? (AttendanceLocationFields.parseCoordinate(_siteLongitudeController.text) ?? 0.0) : 0.0,
       siteAllowedRadiusMeters: (_selectedPermissions.contains('Site Visit Attendance') || _selectedPermissions.contains('Site Visit Attendance Management')) ? (int.tryParse(_siteRadiusController.text.trim()) ?? 15) : 15,

@@ -118,6 +118,8 @@ class SqliteEmployeeRepository implements EmployeeRepository {
         linkedin_url TEXT,
         google_url TEXT,
         personal_history_details TEXT,
+        has_criminal_cases INTEGER DEFAULT 0,
+        criminal_case_details TEXT,
         salary_type TEXT,
         salary_basic REAL,
         salary_hra REAL,
@@ -156,6 +158,7 @@ class SqliteEmployeeRepository implements EmployeeRepository {
         allowed_leaves REAL,
         effective_date TEXT,
         requires_leave_approval INTEGER DEFAULT 1,
+        required_working_hours REAL DEFAULT 9.0,
         is_static_employee INTEGER DEFAULT 0,
         is_dynamic_employee INTEGER DEFAULT 0,
         site_latitude REAL DEFAULT 0.0,
@@ -260,12 +263,15 @@ class SqliteEmployeeRepository implements EmployeeRepository {
       'coordinator_name': 'TEXT',
       'coordinator_phone': 'TEXT',
       'weekly_off_day': 'TEXT',
+      'required_working_hours': 'REAL DEFAULT 9.0',
       'is_static_employee': 'INTEGER DEFAULT 0',
       'is_dynamic_employee': 'INTEGER DEFAULT 0',
       'site_latitude': 'REAL DEFAULT 0.0',
       'site_longitude': 'REAL DEFAULT 0.0',
       'site_allowed_radius_meters': 'INTEGER DEFAULT 15',
       'site_require_gps_verification': 'INTEGER DEFAULT 1',
+      'has_criminal_cases': 'INTEGER DEFAULT 0',
+      'criminal_case_details': 'TEXT',
     };
 
     for (final entry in requiredColumns.entries) {
@@ -345,16 +351,28 @@ class SqliteEmployeeRepository implements EmployeeRepository {
   Future<void> _migrateLegacyAttendanceFlags(Database db) async {
     final tableInfo = await db.rawQuery('PRAGMA table_info(employees)');
     final existingColumns = tableInfo.map((row) => row['name'] as String).toSet();
-    if (!existingColumns.contains('is_site_employee')) return;
-    if (!existingColumns.contains('is_static_employee') || !existingColumns.contains('is_dynamic_employee')) return;
+    if (existingColumns.contains('is_site_employee') &&
+        existingColumns.contains('is_static_employee') &&
+        existingColumns.contains('is_dynamic_employee')) {
+      await db.execute('''
+        UPDATE employees
+        SET
+          is_static_employee = CASE WHEN IFNULL(is_site_employee, 0) = 0 THEN 1 ELSE 0 END,
+          is_dynamic_employee = CASE WHEN IFNULL(is_site_employee, 0) = 1 THEN 1 ELSE 0 END
+        WHERE is_site_employee IS NOT NULL
+      ''');
+    }
 
-    await db.execute('''
-      UPDATE employees
-      SET
-        is_static_employee = CASE WHEN IFNULL(is_site_employee, 0) = 0 THEN 1 ELSE 0 END,
-        is_dynamic_employee = CASE WHEN IFNULL(is_site_employee, 0) = 1 THEN 1 ELSE 0 END
-      WHERE is_site_employee IS NOT NULL
-    ''');
+    if (existingColumns.contains('is_static_employee') && existingColumns.contains('is_dynamic_employee')) {
+      await db.execute('''
+        UPDATE employees
+        SET
+          is_static_employee = CASE WHEN (IFNULL(in_time, '') != '' OR IFNULL(out_time, '') != '') THEN 1 ELSE 0 END,
+          is_dynamic_employee = CASE WHEN (IFNULL(in_time, '') != '' OR IFNULL(out_time, '') != '') THEN 0 ELSE 1 END
+        WHERE (IFNULL(is_static_employee, 0) = 1 AND IFNULL(is_dynamic_employee, 0) = 1)
+           OR (IFNULL(is_static_employee, 0) = 0 AND IFNULL(is_dynamic_employee, 0) = 0)
+      ''');
+    }
   }
 
   @override
@@ -594,7 +612,7 @@ class SqliteEmployeeRepository implements EmployeeRepository {
       final finalEmployee = employeeData.copyWith(
         id: existingId,
         employeeId: newEmpId,
-        status: isSubmit ? 'Active' : 'Draft',
+        status: isSubmit ? 'Submitted' : 'Draft',
         temporaryPassword: tempPassword,
       );
       await db.update(
@@ -607,7 +625,7 @@ class SqliteEmployeeRepository implements EmployeeRepository {
     } else {
       final finalEmployee = employeeData.copyWith(
         employeeId: newEmpId,
-        status: isSubmit ? 'Active' : 'Draft',
+        status: isSubmit ? 'Submitted' : 'Draft',
         temporaryPassword: tempPassword,
       );
       final empDbId = await db.insert('employees', finalEmployee.toMap());
@@ -626,8 +644,8 @@ class SqliteEmployeeRepository implements EmployeeRepository {
     await db.update(
       'registration_links',
       updatedLink.toMap(),
-      where: 'id = ?',
-      whereArgs: [link.id],
+      where: 'link_id = ? OR id = ?',
+      whereArgs: [link.linkId, link.id],
     );
 
     return createdEmployee;

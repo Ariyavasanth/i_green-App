@@ -125,11 +125,12 @@ class _AddEmployeeLinkDialogState
         children: [
           const Icon(Icons.person_add_alt_1_outlined, color: AppColors.active),
           const SizedBox(width: 8),
-          const Text(
-            'Add Employee - Registration Link',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          const Expanded(
+            child: Text(
+              'Registration Link',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
           ),
-          const Spacer(),
           IconButton(
             icon: const Icon(Icons.close, size: 20),
             onPressed: () => Navigator.of(context).pop(),
@@ -230,12 +231,14 @@ class _AddEmployeeLinkDialogState
                         children: [
                           Icon(Icons.check_circle, color: AppColors.active, size: 20),
                           SizedBox(width: 8),
-                          Text(
-                            'Registration Link Generated Successfully!',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.active,
+                          Expanded(
+                            child: Text(
+                              'Registration Link Generated Successfully!',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.active,
+                              ),
                             ),
                           ),
                         ],

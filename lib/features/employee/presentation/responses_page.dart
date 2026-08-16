@@ -1574,9 +1574,10 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
   }
 
   Employee? _employeeForLink(RegistrationLink link, List<Employee> employees) {
-    if (link.employeeId.isEmpty) return null;
     for (final employee in employees) {
-      if (employee.employeeId == link.employeeId || employee.id.toString() == link.employeeId) {
+      if ((link.employeeId.isNotEmpty && (employee.employeeId == link.employeeId || employee.id.toString() == link.employeeId)) ||
+          (link.linkId.isNotEmpty && employee.employeeId == link.linkId) ||
+          (link.employeeName.isNotEmpty && employee.fullName.trim().toLowerCase() == link.employeeName.trim().toLowerCase())) {
         return employee;
       }
     }

@@ -188,6 +188,8 @@ class Employee {
     this.linkedinUrl = '',
     this.googleUrl = '',
     this.personalHistoryDetails = '',
+    this.hasCriminalCases = false,
+    this.criminalCaseDetails = '',
     this.salaryType = 'Monthly',
     this.salaryBasic = 0.0,
     this.salaryHra = 0.0,
@@ -227,6 +229,7 @@ class Employee {
     this.disciplinaryRecords = '',
     this.temporaryPassword = '',
     this.accessPermissions = const [],
+    this.requiredWorkingHours = 9.0,
     this.isStaticEmployee = false,
     this.isDynamicEmployee = false,
     this.siteLatitude = 0.0,
@@ -489,6 +492,8 @@ class Employee {
   final String googleUrl;
 
   final String personalHistoryDetails;
+  final bool hasCriminalCases;
+  final String criminalCaseDetails;
 
   final String salaryType;
   final double salaryBasic;
@@ -535,6 +540,7 @@ class Employee {
   final String temporaryPassword;
   final List<String> accessPermissions;
 
+  final double requiredWorkingHours;
   final bool isStaticEmployee;
   final bool isDynamicEmployee;
   final double siteLatitude;
@@ -653,6 +659,8 @@ class Employee {
       'linkedin_url': linkedinUrl,
       'google_url': googleUrl,
       'personal_history_details': personalHistoryDetails,
+      'has_criminal_cases': hasCriminalCases ? 1 : 0,
+      'criminal_case_details': criminalCaseDetails,
       'salary_type': salaryType,
       'salary_basic': salaryBasic,
       'salary_hra': salaryHra,
@@ -692,6 +700,7 @@ class Employee {
       'disciplinary_records': disciplinaryRecords,
       'temporary_password': temporaryPassword,
       'access_permissions': jsonEncode(accessPermissions),
+      'required_working_hours': requiredWorkingHours,
       'is_static_employee': isStaticEmployee ? 1 : 0,
       'is_dynamic_employee': isDynamicEmployee ? 1 : 0,
       'site_latitude': siteLatitude,
@@ -777,6 +786,8 @@ class Employee {
       linkedinUrl: map['linkedin_url'] as String? ?? '',
       googleUrl: map['google_url'] as String? ?? '',
       personalHistoryDetails: map['personal_history_details'] as String? ?? '',
+      hasCriminalCases: map['has_criminal_cases'] == true || map['has_criminal_cases'] == 1,
+      criminalCaseDetails: map['criminal_case_details'] as String? ?? '',
       salaryType: map['salary_type'] as String? ?? 'Monthly',
       salaryBasic: (map['salary_basic'] as num?)?.toDouble() ?? 0.0,
       salaryHra: (map['salary_hra'] as num?)?.toDouble() ?? 0.0,
@@ -845,51 +856,68 @@ class Employee {
         }
         return <String>[];
       }(),
+      requiredWorkingHours: (map['required_working_hours'] ?? map['requiredWorkingHours'] as num?)?.toDouble() ?? 9.0,
       isStaticEmployee: () {
-        final permsRaw = map['access_permissions'] ?? map['accessPermissions'];
-        List<String> perms = [];
-        if (permsRaw is List) perms = permsRaw.map((e) => e.toString()).toList();
-        if (permsRaw is String && permsRaw.startsWith('[')) {
-          try {
-            final decoded = jsonDecode(permsRaw);
-            if (decoded is List) perms = decoded.map((e) => e.toString()).toList();
-          } catch (_) {}
+        final valStatic = map['is_static_employee'] ?? map['isStaticEmployee'];
+        final valDynamic = map['is_dynamic_employee'] ?? map['isDynamicEmployee'];
+        bool? isStatic;
+        if (valStatic is bool) {
+          isStatic = valStatic;
+        } else if (valStatic is num) {
+          isStatic = valStatic != 0;
+        } else if (valStatic is String) {
+          isStatic = valStatic.toLowerCase() == 'true' || valStatic == '1';
         }
-        if (perms.contains('Attendance') || perms.contains('Attendance Management')) {
-          return true;
+
+        bool? isDynamic;
+        if (valDynamic is bool) {
+          isDynamic = valDynamic;
+        } else if (valDynamic is num) {
+          isDynamic = valDynamic != 0;
+        } else if (valDynamic is String) {
+          isDynamic = valDynamic.toLowerCase() == 'true' || valDynamic == '1';
         }
-        final val = map['is_static_employee'] ?? map['isStaticEmployee'];
-        if (val is bool) return val;
-        if (val is num) return val != 0;
-        if (val is String) return val.toLowerCase() == 'true' || val == '1';
-        final legacy = map['is_site_employee'] ?? map['isSiteEmployee'];
-        if (legacy is bool) return !legacy;
-        if (legacy is num) return legacy == 0;
-        if (legacy is String) return !(legacy.toLowerCase() == 'true' || legacy == '1');
-        return false;
+
+        if ((isStatic == true && isDynamic == true) || (isStatic == false && isDynamic == false) || (isStatic == null && isDynamic == null)) {
+          final inTime = (map['in_time'] ?? map['inTime'] as String? ?? '').toString().trim();
+          final outTime = (map['out_time'] ?? map['outTime'] as String? ?? '').toString().trim();
+          if (inTime.isNotEmpty || outTime.isNotEmpty) {
+            return true;
+          }
+          return false;
+        }
+        return isStatic ?? false;
       }(),
       isDynamicEmployee: () {
-        final permsRaw = map['access_permissions'] ?? map['accessPermissions'];
-        List<String> perms = [];
-        if (permsRaw is List) perms = permsRaw.map((e) => e.toString()).toList();
-        if (permsRaw is String && permsRaw.startsWith('[')) {
-          try {
-            final decoded = jsonDecode(permsRaw);
-            if (decoded is List) perms = decoded.map((e) => e.toString()).toList();
-          } catch (_) {}
+        final valStatic = map['is_static_employee'] ?? map['isStaticEmployee'];
+        final valDynamic = map['is_dynamic_employee'] ?? map['isDynamicEmployee'];
+        bool? isStatic;
+        if (valStatic is bool) {
+          isStatic = valStatic;
+        } else if (valStatic is num) {
+          isStatic = valStatic != 0;
+        } else if (valStatic is String) {
+          isStatic = valStatic.toLowerCase() == 'true' || valStatic == '1';
         }
-        if (perms.contains('Site Visit Attendance') || perms.contains('Site Visit Attendance Management')) {
+
+        bool? isDynamic;
+        if (valDynamic is bool) {
+          isDynamic = valDynamic;
+        } else if (valDynamic is num) {
+          isDynamic = valDynamic != 0;
+        } else if (valDynamic is String) {
+          isDynamic = valDynamic.toLowerCase() == 'true' || valDynamic == '1';
+        }
+
+        if ((isStatic == true && isDynamic == true) || (isStatic == false && isDynamic == false) || (isStatic == null && isDynamic == null)) {
+          final inTime = (map['in_time'] ?? map['inTime'] as String? ?? '').toString().trim();
+          final outTime = (map['out_time'] ?? map['outTime'] as String? ?? '').toString().trim();
+          if (inTime.isNotEmpty || outTime.isNotEmpty) {
+            return false;
+          }
           return true;
         }
-        final val = map['is_dynamic_employee'] ?? map['isDynamicEmployee'];
-        if (val is bool) return val;
-        if (val is num) return val != 0;
-        if (val is String) return val.toLowerCase() == 'true' || val == '1';
-        final legacy = map['is_site_employee'] ?? map['isSiteEmployee'];
-        if (legacy is bool) return legacy;
-        if (legacy is num) return legacy != 0;
-        if (legacy is String) return legacy.toLowerCase() == 'true' || legacy == '1';
-        return false;
+        return isDynamic ?? false;
       }(),
       siteLatitude: (map['site_latitude'] ?? map['siteLatitude'] as num?)?.toDouble() ?? 0.0,
       siteLongitude: (map['site_longitude'] ?? map['siteLongitude'] as num?)?.toDouble() ?? 0.0,
@@ -979,6 +1007,8 @@ class Employee {
     String? linkedinUrl,
     String? googleUrl,
     String? personalHistoryDetails,
+    bool? hasCriminalCases,
+    String? criminalCaseDetails,
     double? salaryBasic,
     double? salaryHra,
     double? salaryEducationAllowance,
@@ -1017,6 +1047,7 @@ class Employee {
     String? disciplinaryRecords,
     String? temporaryPassword,
     List<String>? accessPermissions,
+    double? requiredWorkingHours,
     bool? isStaticEmployee,
     bool? isDynamicEmployee,
     double? siteLatitude,
@@ -1099,6 +1130,8 @@ class Employee {
       linkedinUrl: linkedinUrl ?? this.linkedinUrl,
       googleUrl: googleUrl ?? this.googleUrl,
       personalHistoryDetails: personalHistoryDetails ?? this.personalHistoryDetails,
+      hasCriminalCases: hasCriminalCases ?? this.hasCriminalCases,
+      criminalCaseDetails: criminalCaseDetails ?? this.criminalCaseDetails,
       salaryBasic: salaryBasic ?? this.salaryBasic,
       salaryHra: salaryHra ?? this.salaryHra,
       salaryEducationAllowance: salaryEducationAllowance ?? this.salaryEducationAllowance,
@@ -1137,6 +1170,7 @@ class Employee {
       disciplinaryRecords: disciplinaryRecords ?? this.disciplinaryRecords,
       temporaryPassword: temporaryPassword ?? this.temporaryPassword,
       accessPermissions: accessPermissions ?? this.accessPermissions,
+      requiredWorkingHours: requiredWorkingHours ?? this.requiredWorkingHours,
       isStaticEmployee: isStaticEmployee ?? this.isStaticEmployee,
       isDynamicEmployee: isDynamicEmployee ?? this.isDynamicEmployee,
       siteLatitude: siteLatitude ?? this.siteLatitude,

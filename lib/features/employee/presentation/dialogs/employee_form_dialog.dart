@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -35,6 +36,12 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
   String _userType = 'EMPLOYEE';
   String _leaveType = 'As Needed';
   String _leaveAllocationFrequency = 'Monthly';
+  String _bloodGroup = 'B+';
+  String _bloodGroupDocFileName = 'No file chosen';
+  bool _hasCriminalCases = false;
+  late final TextEditingController _criminalCaseDetailsController;
+  String _workScheduleType = 'Fixed Schedule';
+  late final TextEditingController _requiredWorkingHoursController;
   late final TextEditingController _inTimeController;
   late final TextEditingController _outTimeController;
   late final TextEditingController _allowedLeavesController;
@@ -101,7 +108,20 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
     _outTimeController = TextEditingController(text: emp?.outTime ?? '');
     _allowedLeavesController = TextEditingController(text: emp?.allowedLeaves.toString() ?? '1.0');
     _leaveEffectiveDateController = TextEditingController(text: emp?.effectiveDate ?? '');
+    _bloodGroup = (emp?.bloodGroup.isNotEmpty ?? false) ? emp!.bloodGroup : 'B+';
+    _bloodGroupDocFileName = (emp?.bloodGroupReport.isNotEmpty ?? false) ? emp!.bloodGroupReport : 'No file chosen';
+    _hasCriminalCases = emp?.hasCriminalCases ?? false;
+    _criminalCaseDetailsController = TextEditingController(text: emp?.criminalCaseDetails ?? '');
+
     if (emp != null) {
+      if (emp.isDynamicEmployee || (emp.inTime.isEmpty && emp.outTime.isEmpty && !emp.isStaticEmployee)) {
+        _workScheduleType = 'Flexible Schedule';
+      } else {
+        _workScheduleType = 'Fixed Schedule';
+      }
+      _requiredWorkingHoursController = TextEditingController(
+        text: '${emp.requiredWorkingHours > 0 ? emp.requiredWorkingHours.toStringAsFixed(0) : "9"} Hours',
+      );
       _employmentType = emp.employmentType.isEmpty ? 'Full-Time' : emp.employmentType;
       _status = emp.status.isEmpty ? 'Active' : emp.status;
       _userType = emp.userType.isEmpty ? 'EMPLOYEE' : emp.userType;
@@ -112,6 +132,8 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
           ? Set<String>.from(emp.accessPermissions)
           : Set<String>.from(Employee.allSidebarPermissions);
     } else {
+      _workScheduleType = 'Fixed Schedule';
+      _requiredWorkingHoursController = TextEditingController(text: '9 Hours');
       _selectedPermissions = Set<String>.from(Employee.allSidebarPermissions);
     }
   }
@@ -127,11 +149,27 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
     _deptController.dispose();
     _designationController.dispose();
     _joiningDateController.dispose();
+    _requiredWorkingHoursController.dispose();
     _inTimeController.dispose();
     _outTimeController.dispose();
     _allowedLeavesController.dispose();
     _leaveEffectiveDateController.dispose();
+    _criminalCaseDetailsController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickBloodGroupDocFile() async {
+    try {
+      final res = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg'],
+      );
+      if (res != null && res.files.single.name.isNotEmpty) {
+        setState(() {
+          _bloodGroupDocFileName = res.files.single.name;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _save() async {
@@ -173,15 +211,20 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
         joiningDate: _joiningDateController.text.trim(),
         status: _status,
         userType: _userType,
+        bloodGroup: _bloodGroup,
+        bloodGroupReport: _bloodGroupDocFileName,
+        hasCriminalCases: _hasCriminalCases,
+        criminalCaseDetails: _hasCriminalCases ? _criminalCaseDetailsController.text.trim() : '',
         leaveType: _leaveType,
         leaveAllocationFrequency: _leaveType == 'Manual Allocation' ? _leaveAllocationFrequency : '',
-        inTime: _inTimeController.text.trim(),
-        outTime: _outTimeController.text.trim(),
+        inTime: _workScheduleType == 'Fixed Schedule' ? _inTimeController.text.trim() : '',
+        outTime: _workScheduleType == 'Fixed Schedule' ? _outTimeController.text.trim() : '',
+        requiredWorkingHours: double.tryParse(_requiredWorkingHoursController.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 9.0,
         allowedLeaves: _leaveType == 'Manual Allocation' ? (double.tryParse(_allowedLeavesController.text.trim()) ?? 0.0) : 0.0,
         effectiveDate: _leaveEffectiveDateController.text.trim(),
         accessPermissions: _selectedPermissions.toList(),
-        isStaticEmployee: _selectedPermissions.contains('Attendance') || _selectedPermissions.contains('Attendance Management'),
-        isDynamicEmployee: _selectedPermissions.contains('Site Visit Attendance') || _selectedPermissions.contains('Site Visit Attendance Management'),
+        isStaticEmployee: _workScheduleType == 'Fixed Schedule',
+        isDynamicEmployee: _workScheduleType == 'Flexible Schedule',
       );
 
       if (isEdit) {
@@ -359,6 +402,65 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                 const SizedBox(height: 12),
                 _buildFieldPair(
                   isMobile: isMobile,
+                  child1: DropdownButtonFormField<String>(
+                    initialValue: ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-', 'A1+', 'A1-', 'A2+', 'A2-', 'A1B+', 'A1B-', 'A2B+', 'A2B-', 'Bombay Blood Group (hh)', "Other / Don't Know"].contains(_bloodGroup)
+                        ? _bloodGroup
+                        : 'B+',
+                    decoration: const InputDecoration(
+                      labelText: 'Blood Group',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-', 'A1+', 'A1-', 'A2+', 'A2-', 'A1B+', 'A1B-', 'A2B+', 'A2B-', 'Bombay Blood Group (hh)', "Other / Don't Know"]
+                        .map((bg) => DropdownMenuItem(value: bg, child: Text(bg)))
+                        .toList(),
+                    onChanged: (val) {
+                      if (val != null) setState(() => _bloodGroup = val);
+                    },
+                  ),
+                  child2: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Blood Group Certificate / Test Report Document',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFF2F4F7),
+                              foregroundColor: Colors.black87,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(4),
+                                side: const BorderSide(color: Color(0xFFD0D5DD)),
+                              ),
+                            ),
+                            onPressed: _pickBloodGroupDocFile,
+                            child: const Text('Choose file', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _bloodGroupDocFileName,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: _bloodGroupDocFileName == 'No file chosen' ? Colors.black54 : AppColors.active,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildFieldPair(
+                  isMobile: isMobile,
                   child1: TextFormField(
                     controller: _orgController,
                     decoration: const InputDecoration(
@@ -511,23 +613,52 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                 const SizedBox(height: 12),
                 _buildFieldPair(
                   isMobile: isMobile,
-                  child1: TextFormField(
-                    controller: _inTimeController,
+                  child1: DropdownButtonFormField<String>(
+                    initialValue: _workScheduleType,
                     decoration: const InputDecoration(
-                      labelText: 'In Time',
-                      hintText: '09:00 AM',
+                      labelText: 'Work Schedule Type',
                       border: OutlineInputBorder(),
                     ),
+                    items: ['Fixed Schedule', 'Flexible Schedule']
+                        .map((type) => DropdownMenuItem(value: type, child: Text(type)))
+                        .toList(),
+                    onChanged: (val) {
+                      if (val != null) setState(() => _workScheduleType = val);
+                    },
                   ),
-                  child2: TextFormField(
-                    controller: _outTimeController,
-                    decoration: const InputDecoration(
-                      labelText: 'Out Time',
-                      hintText: '06:00 PM',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
+                  child2: _workScheduleType == 'Fixed Schedule'
+                      ? TextFormField(
+                          controller: _inTimeController,
+                          decoration: const InputDecoration(
+                            labelText: 'In Time',
+                            hintText: '09:00 AM',
+                            border: OutlineInputBorder(),
+                          ),
+                        )
+                      : TextFormField(
+                          controller: _requiredWorkingHoursController,
+                          decoration: const InputDecoration(
+                            labelText: 'Required Working Hours',
+                            hintText: 'e.g. 9 Hours',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
                 ),
+                if (_workScheduleType == 'Fixed Schedule') ...[
+                  const SizedBox(height: 12),
+                  _buildFieldPair(
+                    isMobile: isMobile,
+                    child1: TextFormField(
+                      controller: _outTimeController,
+                      decoration: const InputDecoration(
+                        labelText: 'Out Time',
+                        hintText: '06:00 PM',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    child2: const SizedBox.shrink(),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 _buildFieldPair(
                   isMobile: isMobile,
@@ -536,7 +667,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                           controller: _allowedLeavesController,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           inputFormatters: [
-                            FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                            FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
                           ],
                           decoration: const InputDecoration(
                             labelText: 'Allowed Leaves',
@@ -587,6 +718,49 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                           },
                         )
                       : const SizedBox.shrink(),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFAFAFA),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFFE0E0E0)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Checkbox(
+                            value: _hasCriminalCases,
+                            activeColor: AppColors.active,
+                            onChanged: (val) {
+                              setState(() => _hasCriminalCases = val ?? false);
+                            },
+                          ),
+                          const Expanded(
+                            child: Text(
+                              'Does the employee have any criminal cases or legal history?',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_hasCriminalCases) ...[
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: _criminalCaseDetailsController,
+                          maxLines: 2,
+                          decoration: const InputDecoration(
+                            labelText: 'Criminal Case Details / Description *',
+                            hintText: 'Enter details about the criminal case...',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 20),
                 const Divider(),

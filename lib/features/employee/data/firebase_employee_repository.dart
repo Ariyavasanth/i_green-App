@@ -12,12 +12,9 @@ import '../domain/employee.dart';
 import '../domain/employee_repository.dart';
 import '../domain/registration_link.dart';
 
-import 'sqlite_employee_repository.dart';
-
 class FirebaseEmployeeRepository implements EmployeeRepository {
   final FirebaseFirestore? _customFirestore;
   final FirebaseStorage? _customStorage;
-  final SqliteEmployeeRepository _sqliteRepo = SqliteEmployeeRepository();
 
   FirebaseEmployeeRepository({
     FirebaseFirestore? firestore,
@@ -89,9 +86,6 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   @override
   Future<List<Employee>> getEmployees() async {
     final all = await getAllEmployees();
-    if (all.isEmpty) {
-      return await _sqliteRepo.getEmployees();
-    }
     final result = <Employee>[];
     final toFix = <Employee>[]; // employees needing an EMP- ID assigned
 
@@ -110,7 +104,6 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     // Fix employees without EMP- IDs in the background (non-blocking)
     if (toFix.isNotEmpty) {
       _fixEmployeeIds(toFix);
-      // Add them to result immediately with their current IDs so UI isn't blocked
       result.addAll(toFix);
     }
 
@@ -134,14 +127,11 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   Future<List<Employee>> getAllEmployees() async {
     try {
       final snapshot = await _employeesRef.get();
-      if (snapshot.docs.isEmpty) {
-        return await _sqliteRepo.getAllEmployees();
-      }
       return snapshot.docs.map((doc) {
         return _employeeFromFirestore(doc.data(), doc.id);
       }).toList();
     } catch (_) {
-      return await _sqliteRepo.getAllEmployees();
+      return [];
     }
   }
 
@@ -372,28 +362,35 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
   @override
   Future<List<RegistrationLink>> getRegistrationLinks() async {
-    final snapshot = await _registrationLinksRef.get();
-    return snapshot.docs
-        .map((doc) => RegistrationLink.fromMap(doc.data()))
-        .toList();
+    try {
+      final snapshot = await _registrationLinksRef.get();
+      return snapshot.docs
+          .map((doc) => RegistrationLink.fromMap(doc.data()))
+          .toList();
+    } catch (_) {
+      return [];
+    }
   }
 
   @override
   Future<RegistrationLink?> getRegistrationLinkById(String linkId) async {
-    final doc = await _registrationLinksRef.doc(linkId).get();
-    if (doc.exists && doc.data() != null) {
-      return RegistrationLink.fromMap(doc.data()!);
-    }
+    try {
+      final doc = await _registrationLinksRef.doc(linkId).get();
+      if (doc.exists && doc.data() != null) {
+        return RegistrationLink.fromMap(doc.data()!);
+      }
 
-    final query = await _registrationLinksRef
-        .where('link_id', isEqualTo: linkId)
-        .limit(1)
-        .get();
-    if (query.docs.isNotEmpty) {
-      return RegistrationLink.fromMap(query.docs.first.data());
+      final query = await _registrationLinksRef
+          .where('link_id', isEqualTo: linkId)
+          .limit(1)
+          .get();
+      if (query.docs.isNotEmpty) {
+        return RegistrationLink.fromMap(query.docs.first.data());
+      }
+      return null;
+    } catch (_) {
+      return null;
     }
-
-    return null;
   }
 
   @override
@@ -401,13 +398,27 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     required String linkId,
     required String linkStatus,
   }) async {
-    await _registrationLinksRef.doc(linkId).set(
-      {
-        'link_status': linkStatus,
-        'updated_at': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    try {
+      await _registrationLinksRef.doc(linkId).set(
+        {
+          'link_status': linkStatus,
+          'updated_at': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+      final query = await _registrationLinksRef
+          .where('link_id', isEqualTo: linkId)
+          .get();
+      for (final doc in query.docs) {
+        await doc.reference.set(
+          {
+            'link_status': linkStatus,
+            'updated_at': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      }
+    } catch (_) {}
   }
 
   @override
@@ -419,16 +430,20 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     final batch = _firestore.batch();
     final nowIso = DateTime.now().toIso8601String();
 
-    final linkDoc = await _registrationLinksRef.doc(linkId).get();
-    if (!linkDoc.exists) {
-      throw Exception('Invalid registration link.');
+    DocumentSnapshot<Map<String, dynamic>>? linkDoc = await _registrationLinksRef.doc(linkId).get();
+    if (!linkDoc.exists || linkDoc.data() == null) {
+      final query = await _registrationLinksRef
+          .where('link_id', isEqualTo: linkId)
+          .limit(1)
+          .get();
+      if (query.docs.isNotEmpty) {
+        linkDoc = query.docs.first;
+      }
     }
-    final linkData = linkDoc.data()!;
-    final linkStatus = linkData['link_status'] as String? ?? 'Pending';
-    if (linkStatus != 'Pending') {
-      throw Exception('This registration link has already been used or expired.');
-    }
-    final existingEmpId = linkData['employee_id'] as String? ?? '';
+
+    final existingEmpId = (linkDoc.exists && linkDoc.data() != null)
+        ? (linkDoc.data()!['employee_id'] as String? ?? '')
+        : '';
 
     String newEmpId = employeeData.employeeId;
     if (newEmpId.isEmpty || newEmpId.startsWith('pending_')) {
@@ -443,7 +458,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
     var finalEmployee = employeeData.copyWith(
       employeeId: newEmpId,
-      status: isSubmit ? 'Active' : 'Draft',
+      status: isSubmit ? 'Submitted' : 'Draft',
       temporaryPassword: tempPassword,
     );
 
@@ -452,8 +467,10 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       finalEmployee = finalEmployee.copyWith(profileImageUrl: storageUrl);
     }
 
-    final linkRef = _registrationLinksRef.doc(linkId);
+    final targetDocId = linkDoc.exists ? linkDoc.id : linkId;
+    final linkRef = _registrationLinksRef.doc(targetDocId);
     batch.set(linkRef, {
+      'link_id': linkId,
       'link_status': 'Submitted',
       'submitted_date': isSubmit ? nowIso : '',
       'submitted_by': isSubmit ? finalEmployee.fullName : '',

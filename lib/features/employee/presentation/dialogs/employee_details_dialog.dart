@@ -50,7 +50,7 @@ class EmployeeDetailsDialog extends StatelessWidget {
         width: (screenWidth * 0.9).clamp(280.0, 720.0),
         height: 620,
         child: DefaultTabController(
-          length: 11,
+          length: 12,
           child: Column(
             children: [
               const TabBar(
@@ -68,6 +68,7 @@ class EmployeeDetailsDialog extends StatelessWidget {
                   Tab(text: 'Bank Account'),
                   Tab(text: 'Document'),
                   Tab(text: 'Social Media'),
+                  Tab(text: 'Job & Admin Details'),
                   Tab(text: 'Salary Details'),
                   Tab(text: 'Credentials'),
                   Tab(text: 'Access Permissions'),
@@ -85,6 +86,7 @@ class EmployeeDetailsDialog extends StatelessWidget {
                     _buildBankAccountTab(),
                     _buildDocumentTab(),
                     _buildSocialMediaTab(),
+                    _buildJobAdminDetailsTab(),
                     _buildSalaryTab(),
                     _buildCredentialsTab(),
                     _buildPermissionsTab(),
@@ -113,6 +115,7 @@ class EmployeeDetailsDialog extends StatelessWidget {
           _InfoItem('First Name', employee.firstName),
           _InfoItem('Last Name', employee.lastName),
           _InfoItem('Blood Group', employee.bloodGroup),
+          _InfoItem('Blood Group Report Doc', employee.bloodGroupReport),
           _InfoItem('Gender', employee.gender),
           _InfoItem('Date of Birth', employee.dob),
           _InfoItem('Aadhaar Number', employee.aadhaarNumber),
@@ -324,6 +327,13 @@ class EmployeeDetailsDialog extends StatelessWidget {
           _InfoItem('Kids 2 Name', employee.kids2Name),
           _InfoItem('Kids 3 Name', employee.kids3Name),
         ]),
+        const SizedBox(height: 20),
+        _buildSectionHeader('Criminal Background Check'),
+        _buildInfoGrid([
+          _InfoItem('Has Criminal Cases', employee.hasCriminalCases ? 'Yes' : 'No'),
+          if (employee.hasCriminalCases)
+            _InfoItem('Criminal Case Details', employee.criminalCaseDetails),
+        ]),
       ],
     );
   }
@@ -404,23 +414,79 @@ class EmployeeDetailsDialog extends StatelessWidget {
     );
   }
 
+  Widget _buildJobAdminDetailsTab() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _buildSectionHeader('Job & Administrative Details'),
+        _buildInfoGrid([
+          _InfoItem('Department', employee.department),
+          _InfoItem('Designation', employee.designation),
+          _InfoItem('User Role / Type', employee.userType),
+          _InfoItem('Account Status', employee.status),
+          _InfoItem('Date of Joining', employee.joiningDate),
+          _InfoItem('Contract End Date', employee.contractEndDate),
+          _InfoItem('Reporting Manager', employee.reportingManager),
+          _InfoItem('Reporting Manager Title', employee.reportingManagerTitle),
+          _InfoItem('Admin Name', employee.adminName),
+          _InfoItem('Coordinator Name', employee.coordinatorName),
+          _InfoItem('Coordinator Contact', employee.coordinatorPhone),
+          _InfoItem('Work Schedule Type', employee.isDynamicEmployee ? 'Flexible Schedule' : 'Fixed Schedule'),
+          _InfoItem('Weekly Off Day', employee.weeklyOffDay),
+          if (!employee.isDynamicEmployee && employee.inTime.isNotEmpty)
+            _InfoItem('Work Hours', '${employee.inTime} - ${employee.outTime}')
+          else
+            _InfoItem('Required Working Hours', '${employee.requiredWorkingHours > 0 ? employee.requiredWorkingHours.toStringAsFixed(0) : "9"} Hours'),
+        ]),
+        const SizedBox(height: 20),
+        _buildSectionHeader('Attendance & Geo-Fence Settings'),
+        _buildInfoGrid([
+          _InfoItem('Site Geo-Fence Location', employee.siteLatitude != 0 ? '${employee.siteLatitude.toStringAsFixed(6)}, ${employee.siteLongitude.toStringAsFixed(6)}' : '-'),
+          _InfoItem('Allowed Radius', employee.siteAllowedRadiusMeters > 0 ? '${employee.siteAllowedRadiusMeters} meters' : '-'),
+          _InfoItem('GPS Verification Required', employee.siteRequireGpsVerification ? 'Yes' : 'No'),
+        ]),
+        const SizedBox(height: 20),
+        _buildSectionHeader('Leave Allocation & Policy'),
+        _buildInfoGrid([
+          _InfoItem('Leave Type', employee.leaveType),
+          _InfoItem('Allocation Frequency', employee.leaveAllocationFrequency),
+          _InfoItem('Allowed Leaves', employee.allowedLeaves > 0 ? employee.allowedLeaves.toString() : '-'),
+          _InfoItem('Leave Effective Date', employee.effectiveDate),
+        ]),
+      ],
+    );
+  }
+
   Widget _buildSalaryTab() {
+    final total = employee.salaryTotalCtc;
+    final basic = employee.salaryBasic > 0 ? employee.salaryBasic : (total > 0 ? total * 0.5 : 0.0);
+    final hra = employee.salaryHra > 0 ? employee.salaryHra : (total > 0 ? total * 0.2 : 0.0);
+    final special = employee.salarySpecialAllowance > 0 ? employee.salarySpecialAllowance : (total > 0 ? total * 0.3 : 0.0);
+    final edu = employee.salaryEducationAllowance;
+    final travel = employee.salaryTravelAllowance;
+    final other = employee.salaryOtherAllowance;
+    final pf = employee.salaryPf > 0 ? employee.salaryPf : (basic > 0 ? basic * 0.12 : 0.0);
+    final esi = employee.salaryEsi > 0 ? employee.salaryEsi : (total <= 21000 && basic > 0 ? basic * 0.0075 : 0.0);
+    final esiEmployer = employee.salaryEsiEmployer > 0 ? employee.salaryEsiEmployer : (total <= 21000 && total > 0 ? total * 0.0325 : 0.0);
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         _buildSectionHeader('Salary Details'),
         _buildInfoGrid([
           _InfoItem('Salary Type', employee.salaryType),
-          _InfoItem('Total CTC', employee.salaryTotalCtc == 0 ? '' : employee.salaryTotalCtc.toStringAsFixed(2)),
-          _InfoItem('Basic Pay', employee.salaryBasic == 0 ? '' : employee.salaryBasic.toStringAsFixed(2)),
-          _InfoItem('HRA', employee.salaryHra == 0 ? '' : employee.salaryHra.toStringAsFixed(2)),
-          _InfoItem('Education Allowance', employee.salaryEducationAllowance == 0 ? '' : employee.salaryEducationAllowance.toStringAsFixed(2)),
-          _InfoItem('Special Allowance', employee.salarySpecialAllowance == 0 ? '' : employee.salarySpecialAllowance.toStringAsFixed(2)),
-          _InfoItem('Travel Allowance', employee.salaryTravelAllowance == 0 ? '' : employee.salaryTravelAllowance.toStringAsFixed(2)),
-          _InfoItem('Other Allowance', employee.salaryOtherAllowance == 0 ? '' : employee.salaryOtherAllowance.toStringAsFixed(2)),
-          _InfoItem('PF', employee.salaryPf == 0 ? '' : employee.salaryPf.toStringAsFixed(2)),
-          _InfoItem('ESI', employee.salaryEsi == 0 ? '' : employee.salaryEsi.toStringAsFixed(2)),
-          _InfoItem('Professional Tax', employee.salaryProfessionalTax == 0 ? '' : employee.salaryProfessionalTax.toStringAsFixed(2)),
+          _InfoItem('Total CTC', total == 0 ? '-' : total.toStringAsFixed(2)),
+          _InfoItem('Basic Pay', basic == 0 ? '-' : basic.toStringAsFixed(2)),
+          _InfoItem('HRA', hra == 0 ? '-' : hra.toStringAsFixed(2)),
+          _InfoItem('Special Allowance', special == 0 ? '-' : special.toStringAsFixed(2)),
+          _InfoItem('Education Allowance', edu == 0 ? '-' : edu.toStringAsFixed(2)),
+          _InfoItem('Travel Allowance', travel == 0 ? '-' : travel.toStringAsFixed(2)),
+          _InfoItem('Other Allowance', other == 0 ? '-' : other.toStringAsFixed(2)),
+          _InfoItem('PF Deduction', pf == 0 ? '-' : pf.toStringAsFixed(2)),
+          _InfoItem('ESI Deduction (Employee)', esi == 0 ? '-' : esi.toStringAsFixed(2)),
+          _InfoItem('ESI Contribution (Employer)', esiEmployer == 0 ? '-' : esiEmployer.toStringAsFixed(2)),
+          _InfoItem('Professional Tax', employee.salaryProfessionalTax == 0 ? '-' : employee.salaryProfessionalTax.toStringAsFixed(2)),
+          _InfoItem('TDS', employee.salaryTax == 0 ? '-' : employee.salaryTax.toStringAsFixed(2)),
         ]),
       ],
     );
