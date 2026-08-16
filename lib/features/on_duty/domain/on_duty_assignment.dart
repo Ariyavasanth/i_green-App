@@ -18,6 +18,7 @@ class OnDutyAssignment {
     this.completedTime,
     this.durationMinutes = 0,
     this.allowCheckoutFromDestination = false,
+    this.photoProofPath,
     required this.status,
     required this.date,
     required this.createdAt,
@@ -41,6 +42,7 @@ class OnDutyAssignment {
   final String? completedTime;
   final int durationMinutes;
   final bool allowCheckoutFromDestination;
+  final String? photoProofPath;
   final String status; // 'assigned', 'active', 'completed', 'requires_review', 'cancelled'
   final String date; // 'dd-MM-yyyy'
   final String createdAt;
@@ -64,6 +66,7 @@ class OnDutyAssignment {
         'completed_time': completedTime,
         'duration_minutes': durationMinutes,
         'allow_checkout_from_destination': allowCheckoutFromDestination ? 1 : 0,
+        'photo_proof_path': photoProofPath,
         'status': status,
         'date': date,
         'created_at': createdAt,
@@ -88,6 +91,7 @@ class OnDutyAssignment {
         completedTime: map['completed_time'] as String?,
         durationMinutes: map['duration_minutes'] as int? ?? 0,
         allowCheckoutFromDestination: (map['allow_checkout_from_destination'] as int? ?? 0) == 1 || (map['allow_checkout_from_destination'] as bool? ?? false),
+        photoProofPath: map['photo_proof_path'] as String?,
         status: map['status'] as String? ?? 'assigned',
         date: map['date'] as String? ?? '',
         createdAt: map['created_at'] as String? ?? '',
@@ -112,6 +116,7 @@ class OnDutyAssignment {
     String? completedTime,
     int? durationMinutes,
     bool? allowCheckoutFromDestination,
+    String? photoProofPath,
     String? status,
     String? date,
     String? createdAt,
@@ -135,6 +140,7 @@ class OnDutyAssignment {
       completedTime: completedTime ?? this.completedTime,
       durationMinutes: durationMinutes ?? this.durationMinutes,
       allowCheckoutFromDestination: allowCheckoutFromDestination ?? this.allowCheckoutFromDestination,
+      photoProofPath: photoProofPath ?? this.photoProofPath,
       status: status ?? this.status,
       date: date ?? this.date,
       createdAt: createdAt ?? this.createdAt,

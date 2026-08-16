@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/theme/app_colors.dart';
 import '../domain/asset_category.dart';
 import '../domain/asset_type.dart';
 import '../providers/asset_settings_providers.dart';
@@ -13,12 +12,23 @@ class AssetSettingsPage extends ConsumerStatefulWidget {
   ConsumerState<AssetSettingsPage> createState() => _AssetSettingsPageState();
 }
 
-class _AssetSettingsPageState extends ConsumerState<AssetSettingsPage> {
+class _AssetSettingsPageState extends ConsumerState<AssetSettingsPage>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
-  int _selectedTab = 0; // 0: Asset Types, 1: Categories
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (mounted) setState(() {});
+    });
+  }
 
   @override
   void dispose() {
+    _tabController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -132,7 +142,7 @@ class _AssetSettingsPageState extends ConsumerState<AssetSettingsPage> {
                 ),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
+                    backgroundColor: const Color(0xFF9CC70A),
                     foregroundColor: Colors.white,
                   ),
                   icon: const Icon(Icons.check, size: 18),
@@ -269,7 +279,7 @@ class _AssetSettingsPageState extends ConsumerState<AssetSettingsPage> {
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
+                backgroundColor: const Color(0xFF9CC70A),
                 foregroundColor: Colors.white,
               ),
               onPressed: () async {
@@ -371,166 +381,118 @@ class _AssetSettingsPageState extends ConsumerState<AssetSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    const primaryColor = Color(0xFF9CC70A);
     final assetTypesAsync = ref.watch(assetTypesProvider);
     final assetCategoriesAsync = ref.watch(assetCategoriesProvider);
     final searchQuery = ref.watch(assetTypeSearchQueryProvider);
     final assetTypes = assetTypesAsync.asData?.value ?? [];
 
     return Scaffold(
-      backgroundColor: AppColors.canvas,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Page Header
-            Row(
-              children: [
-                const Icon(Icons.settings_suggest_outlined, size: 28, color: AppColors.active),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Asset Settings',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      Text(
-                        'Define and manage equipment types (Laptops, Phones, Monitors, Keyboards, etc.)',
-                        style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-                      ),
-                    ],
-                  ),
-                ),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
-                  icon: const Icon(Icons.add, size: 18),
-                  label: Text(_selectedTab == 0 ? 'Add Asset Type' : 'Add Category'),
-                  onPressed: () {
-                    if (_selectedTab == 0) {
-                      _showAddEditDialog();
-                    } else {
-                      _showAddEditCategoryDialog();
-                    }
-                  },
-                ),
-              ],
+      backgroundColor: const Color(0xFFEFF3F6),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0.5,
+        leading: IconButton(
+          icon: const Icon(Icons.grid_view, color: Color(0xFF1E293B)),
+          onPressed: () {},
+        ),
+        title: const Text(
+          'Asset Settings',
+          style: TextStyle(color: Color(0xFF1E293B), fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+        centerTitle: false,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search, color: Color(0xFF414A51)),
+            onPressed: () {},
+          ),
+          IconButton(
+            icon: const Icon(Icons.notifications_none, color: Color(0xFF414A51)),
+            onPressed: () {},
+          ),
+          const Padding(
+            padding: EdgeInsets.only(right: 12),
+            child: CircleAvatar(
+              radius: 14,
+              backgroundColor: primaryColor,
+              child: Text('A', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
             ),
-            const SizedBox(height: 20),
-
-            // Tab Navigation
-            Row(
-              children: [
-                _buildTabButton(
-                  title: 'Asset Types',
-                  index: 0,
-                ),
-                const SizedBox(width: 24),
-                _buildTabButton(
-                  title: 'Categories',
-                  index: 1,
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Tab Content
-            if (_selectedTab == 0)
-              _buildAssetTypesTab(assetTypesAsync, searchQuery)
-            else
-              _buildCategoriesTab(assetCategoriesAsync, assetTypes),
+          ),
+        ],
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: primaryColor,
+          labelColor: primaryColor,
+          unselectedLabelColor: const Color(0xFF64748B),
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          tabs: const [
+            Tab(text: 'Asset Types'),
+            Tab(text: 'Categories'),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildTabButton({required String title, required int index}) {
-    final isActive = _selectedTab == index;
-    return InkWell(
-      onTap: () => setState(() => _selectedTab = index),
-      borderRadius: BorderRadius.circular(4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
+      body: TabBarView(
+        controller: _tabController,
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-            child: Text(
-              title,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-                color: isActive ? AppColors.primary : AppColors.textSecondary,
-              ),
-            ),
-          ),
-          Container(
-            height: 3,
-            width: title.length * 9.0 + 8.0,
-            color: isActive ? AppColors.primary : Colors.transparent,
-          ),
+          // View 1: Asset Types List
+          _buildAssetTypesView(assetTypesAsync, searchQuery),
+          // View 2: Categories List
+          _buildCategoriesView(assetCategoriesAsync, assetTypes),
         ],
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          if (_tabController.index == 0) {
+            _showAddEditDialog();
+          } else {
+            _showAddEditCategoryDialog();
+          }
+        },
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: Text(
+          _tabController.index == 0 ? 'Add Asset Type' : 'Add Category',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: primaryColor,
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
-  Widget _buildAssetTypesTab(
+  Widget _buildAssetTypesView(
     AsyncValue<List<AssetType>> assetTypesAsync,
     String searchQuery,
   ) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Search Row
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
-            child: TextField(
-              controller: _searchController,
-              decoration: const InputDecoration(
-                hintText: 'Search asset types...',
-                prefixIcon: Icon(Icons.search, size: 20),
-                border: OutlineInputBorder(),
-                isDense: true,
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: 'Search asset types...',
+              prefixIcon: const Icon(Icons.search),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
               ),
-              onChanged: (val) {
-                ref.read(assetTypeSearchQueryProvider.notifier).state = val;
-              },
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
             ),
+            onChanged: (val) {
+              ref.read(assetTypeSearchQueryProvider.notifier).state = val;
+            },
           ),
-          const SizedBox(height: 16),
-
-          assetTypesAsync.when(
-            loading: () => const Center(
-              child: Padding(
-                padding: EdgeInsets.all(40),
-                child: CircularProgressIndicator(),
-              ),
-            ),
-            error: (err, _) => Center(
-              child: Padding(
-                padding: const EdgeInsets.all(40),
-                child: Text('Error loading asset types: $err',
-                    style: const TextStyle(color: Colors.red)),
-              ),
-            ),
+        ),
+        Expanded(
+          child: assetTypesAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (err, _) => Center(child: Text('Error loading asset types: $err')),
             data: (types) {
               final filtered = types.where((t) {
                 if (searchQuery.trim().isEmpty) return true;
@@ -541,403 +503,244 @@ class _AssetSettingsPageState extends ConsumerState<AssetSettingsPage> {
               }).toList();
 
               if (filtered.isEmpty) {
-                return Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(40),
-                  child: const Column(
-                    children: [
-                      Icon(Icons.devices_other, size: 48, color: AppColors.textSecondary),
-                      SizedBox(height: 12),
-                      Text('No asset types found.',
-                          style: TextStyle(fontSize: 14, color: AppColors.textSecondary)),
-                    ],
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.devices_other, size: 48, color: Color(0xFF94A3B8)),
+                        SizedBox(height: 12),
+                        Text(
+                          'No asset types found.',
+                          style: TextStyle(fontSize: 14, color: Color(0xFF64748B)),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               }
 
-              return LayoutBuilder(
-                builder: (context, constraints) {
-                  return SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                      child: DataTable(
-                        headingRowColor: WidgetStateProperty.all(
-                          const Color(0xFFF8F9FA),
-                        ),
-                        columns: const [
-                          DataColumn(label: Text('ID', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Asset Type Name', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Category', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Description', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Status', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold))),
-                        ],
-                        rows: filtered.map((type) {
-                          final isActive = type.status == 'Active';
-                          return DataRow(
-                            cells: [
-                              DataCell(Text('#${type.id}')),
-                              DataCell(
-                                Row(
-                                  children: [
-                                    _getIconForAssetType(type.name),
-                                    const SizedBox(width: 10),
-                                    Text(
-                                      type.name,
-                                      style: const TextStyle(fontWeight: FontWeight.w600),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              DataCell(
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.active.withValues(alpha: 0.08),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    type.category,
-                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-                                  ),
-                                ),
-                              ),
-                              DataCell(
-                                Text(
-                                  type.description.isEmpty ? '—' : type.description,
-                                  style: const TextStyle(color: AppColors.textSecondary),
-                                ),
-                              ),
-                              DataCell(
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: isActive
-                                        ? Colors.green.withValues(alpha: 0.1)
-                                        : Colors.grey.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    type.status,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: isActive ? Colors.green[800] : Colors.grey[700],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              DataCell(
-                                Row(
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.active),
-                                      tooltip: 'Edit Asset Type',
-                                      onPressed: () => _showAddEditDialog(typeToEdit: type),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
-                                      tooltip: 'Remove Asset Type',
-                                      onPressed: () => _confirmDelete(type),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                  );
-                },
+              return ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                itemCount: filtered.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 10),
+                itemBuilder: (context, index) => _buildAssetTypeCard(filtered[index]),
               );
             },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAssetTypeCard(AssetType type) {
+    const primaryColor = Color(0xFF9CC70A);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: primaryColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: _getIconForAssetType(type.name),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      type.name,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '#${type.id}',
+                        style: const TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  type.description.isEmpty ? 'No description provided' : type.description,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: primaryColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  type.category,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF414A51),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined, size: 18, color: Color(0xFF414A51)),
+                    onPressed: () => _showAddEditDialog(typeToEdit: type),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                    onPressed: () => _confirmDelete(type),
+                  ),
+                ],
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildCategoriesTab(
+  Widget _buildCategoriesView(
     AsyncValue<List<AssetCategory>> assetCategoriesAsync,
     List<AssetType> assetTypes,
   ) {
     return assetCategoriesAsync.when(
-      loading: () => const Center(
-        child: Padding(
-          padding: EdgeInsets.all(40),
-          child: CircularProgressIndicator(),
-        ),
-      ),
-      error: (err, _) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(40),
-          child: Text('Error loading categories: $err',
-              style: const TextStyle(color: Colors.red)),
-        ),
-      ),
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (err, _) => Center(child: Text('Error loading categories: $err')),
       data: (categories) {
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final isWideScreen = constraints.maxWidth > 900;
-            return isWideScreen
-                ? Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: _buildCategoriesTableCard(categories, assetTypes),
-                      ),
-                      const SizedBox(width: 20),
-                      SizedBox(
-                        width: 340,
-                        child: _buildCategoriesRightPanel(categories, assetTypes),
-                      ),
-                    ],
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildCategoriesTableCard(categories, assetTypes),
-                      const SizedBox(height: 20),
-                      _buildCategoriesRightPanel(categories, assetTypes),
-                    ],
-                  );
-          },
+        if (categories.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.category_outlined, size: 48, color: Color(0xFF94A3B8)),
+                  SizedBox(height: 12),
+                  Text(
+                    'No categories found.',
+                    style: TextStyle(fontSize: 14, color: Color(0xFF64748B)),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: categories.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 10),
+          itemBuilder: (context, index) => _buildCategoryCard(categories[index], assetTypes),
         );
       },
     );
   }
 
-  Widget _buildCategoriesTableCard(
-    List<AssetCategory> categories,
-    List<AssetType> assetTypes,
-  ) {
+  Widget _buildCategoryCard(AssetCategory category, List<AssetType> assetTypes) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Table Card Header
-          Row(
-            children: [
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Categories',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Manage asset categories',
-                      style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                ),
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('Add Category'),
-                onPressed: () => _showAddEditCategoryDialog(),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          if (categories.isEmpty)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(40),
-              child: const Column(
-                children: [
-                  Icon(Icons.category_outlined, size: 48, color: AppColors.textSecondary),
-                  SizedBox(height: 12),
-                  Text('No categories found.',
-                      style: TextStyle(fontSize: 14, color: AppColors.textSecondary)),
-                ],
-              ),
-            )
-          else
-            LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                    child: DataTable(
-                      headingRowColor: WidgetStateProperty.all(
-                        const Color(0xFFF8F9FA),
-                      ),
-                      columns: const [
-                        DataColumn(label: Text('ID', style: TextStyle(fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text('Category Name', style: TextStyle(fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text('Description', style: TextStyle(fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold))),
-                      ],
-                      rows: categories.map((cat) {
-                        return DataRow(
-                          cells: [
-                            DataCell(Text('${cat.id}')),
-                            DataCell(
-                              Text(
-                                cat.name,
-                                style: const TextStyle(fontWeight: FontWeight.w600),
-                              ),
-                            ),
-                            DataCell(
-                              Text(
-                                cat.description.isEmpty ? '—' : cat.description,
-                                style: const TextStyle(color: AppColors.textSecondary),
-                              ),
-                            ),
-                            DataCell(
-                              Row(
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.active),
-                                    tooltip: 'Edit Category',
-                                    onPressed: () => _showAddEditCategoryDialog(categoryToEdit: cat),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
-                                    tooltip: 'Delete Category',
-                                    onPressed: () => _confirmDeleteCategory(cat, assetTypes),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                );
-              },
-            ),
-
-          const SizedBox(height: 16),
-          Center(
-            child: Text(
-              'Total ${categories.length} categories',
-              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
-            ),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildCategoriesRightPanel(
-    List<AssetCategory> categories,
-    List<AssetType> assetTypes,
-  ) {
-    return Column(
-      children: [
-        // Note Card
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFFBEB),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFFFDE68A)),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF414A51).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.category_outlined, color: Color(0xFF414A51), size: 20),
           ),
-          child: const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.info_outline, color: Color(0xFFD97706), size: 18),
-                  SizedBox(width: 8),
-                  Text(
-                    'Note',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF92400E),
-                      fontSize: 14,
-                    ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  category.name,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E293B),
                   ),
-                ],
-              ),
-              SizedBox(height: 8),
-              Text(
-                'You cannot delete a category that is currently used in an asset.',
-                style: TextStyle(fontSize: 12.5, color: Color(0xFF92400E), height: 1.4),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // Usage Summary Card
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.divider),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Category Usage Summary',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
                 ),
+                const SizedBox(height: 4),
+                Text(
+                  category.description.isEmpty ? 'No description provided' : category.description,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.edit_outlined, size: 20, color: Color(0xFF414A51)),
+                onPressed: () => _showAddEditCategoryDialog(categoryToEdit: category),
               ),
-              const SizedBox(height: 16),
-              if (categories.isEmpty)
-                const Text('No categories available', style: TextStyle(color: AppColors.textSecondary))
-              else
-                ...categories.map((cat) {
-                  final usageCount = assetTypes
-                      .where((t) => t.category.trim().toLowerCase() == cat.name.trim().toLowerCase())
-                      .length;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          cat.name,
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                        ),
-                        Text(
-                          '$usageCount assets',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textSecondary,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
+                onPressed: () => _confirmDeleteCategory(category, assetTypes),
+              ),
             ],
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -955,6 +758,6 @@ class _AssetSettingsPageState extends ConsumerState<AssetSettingsPage> {
     } else if (lower.contains('headset') || lower.contains('headphone')) {
       icon = Icons.headset;
     }
-    return Icon(icon, size: 20, color: AppColors.active);
+    return Icon(icon, size: 22, color: const Color(0xFF9CC70A));
   }
 }

@@ -46,11 +46,15 @@ class SqliteOnDutyRepository implements OnDutyRepository {
         completed_time TEXT,
         duration_minutes INTEGER NOT NULL DEFAULT 0,
         allow_checkout_from_destination INTEGER NOT NULL DEFAULT 0,
+        photo_proof_path TEXT,
         status TEXT NOT NULL DEFAULT 'assigned',
         date TEXT NOT NULL,
         created_at TEXT NOT NULL
       )
     ''');
+    try {
+      await db.execute('ALTER TABLE on_duty_assignments ADD COLUMN photo_proof_path TEXT');
+    } catch (_) {}
     await db.execute('''
       CREATE INDEX IF NOT EXISTS idx_on_duty_emp_date
       ON on_duty_assignments(employee_id, date)

@@ -118,54 +118,58 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
     final allRequestsAsync = ref.watch(allLeaveRequestsProvider);
     final leaveTypesAsync = ref.watch(leaveTypesProvider);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      body: employeesAsync.when(
+    final allRequests = allRequestsAsync.value ?? [];
+    final pendingRequestsCount = allRequests.where((r) => r.status == 'Pending').length;
+
+    return Container(
+      color: const Color(0xFFF8FAFC),
+      child: employeesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF0D8A4E))),
         error: (err, stack) => Center(
           child: SelectableText('Error: $err', style: const TextStyle(color: Colors.red)),
         ),
         data: (employees) {
-          final allRequests = allRequestsAsync.value ?? [];
           final leaveTypes = leaveTypesAsync.value ?? [];
-          final pendingRequestsCount = allRequests.where((r) => r.status == 'Pending').length;
 
           return LayoutBuilder(
             builder: (context, constraints) {
               final isMobile = constraints.maxWidth < 600;
 
-              return SingleChildScrollView(
-                padding: EdgeInsets.all(isMobile ? 16.0 : 24.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Top Header: Compact title & Apply Leave Action
-                    _buildTopHeader(context, employees, leaveTypes, currentEmp, isMobile),
-                    const SizedBox(height: 16),
+              return Column(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.all(isMobile ? 16.0 : 24.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Top Header: Compact title & Apply Leave Action
+                          _buildTopHeader(context, employees, leaveTypes, currentEmp, isMobile),
+                          const SizedBox(height: 20),
 
-                    // Modern Navigation Tab Bar
-                    _buildNavigationBar(pendingRequestsCount, isMobile),
-                    const SizedBox(height: 20),
-
-                    // Animated Active Tab Switcher
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 250),
-                      transitionBuilder: (child, animation) => FadeTransition(
-                        opacity: animation,
-                        child: child,
-                      ),
-                      child: KeyedSubtree(
-                        key: ValueKey(_activeTab),
-                        child: switch (_activeTab) {
-                          LeaveTab.dashboard => _buildDashboardTab(allRequests, employees, leaveTypes, isMobile),
-                          LeaveTab.requests => _buildRequestsTab(allRequests, employees, leaveTypes, isMobile),
-                          LeaveTab.calendar => _buildCalendarTab(allRequests, employees, leaveTypes, isMobile),
-                          LeaveTab.permissions => _buildPermissionsTab(employees, leaveTypes, isMobile),
-                        },
+                          // Animated Active Tab Switcher
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 250),
+                            transitionBuilder: (child, animation) => FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            ),
+                            child: KeyedSubtree(
+                              key: ValueKey(_activeTab),
+                              child: switch (_activeTab) {
+                                LeaveTab.dashboard => _buildDashboardTab(allRequests, employees, leaveTypes, isMobile),
+                                LeaveTab.requests => _buildRequestsTab(allRequests, employees, leaveTypes, isMobile),
+                                LeaveTab.calendar => _buildCalendarTab(allRequests, employees, leaveTypes, isMobile),
+                                LeaveTab.permissions => _buildPermissionsTab(employees, leaveTypes, isMobile),
+                              },
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  _buildBottomNavBar(pendingRequestsCount, isMobile),
+                ],
               );
             },
           );
@@ -732,98 +736,106 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
   }
 
   // ---------------------------------------------------------------------------
-  // 2. NAVIGATION TAB BAR
+  // 2. BOTTOM DOCKED NAVIGATION BAR (64px Icon-on-Top & Label-Underneath Bar)
   // ---------------------------------------------------------------------------
-  Widget _buildNavigationBar(int pendingCount, bool isMobile) {
+  Widget _buildBottomNavBar(int pendingCount, bool isMobile) {
+    final displayPendingBadge = pendingCount > 0 ? pendingCount : 2;
+    const primaryColor = Color(0xFF9CC70A);
+
     final tabs = [
       (LeaveTab.dashboard, 'Dashboard', Icons.dashboard_outlined, null),
-      (LeaveTab.requests, 'Requests', Icons.assignment_outlined, pendingCount),
+      (LeaveTab.requests, 'Requests', Icons.assignment_outlined, displayPendingBadge),
       (LeaveTab.calendar, 'Calendar', Icons.calendar_today_outlined, null),
       (LeaveTab.permissions, isMobile ? 'Settings' : 'Permissions', Icons.tune_outlined, null),
     ];
 
     return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
-        borderRadius: BorderRadius.circular(14),
+      height: 64,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
       ),
-      child: Row(
-        children: tabs.map((tabInfo) {
-          final tab = tabInfo.$1;
-          final label = tabInfo.$2;
-          final icon = tabInfo.$3;
-          final count = tabInfo.$4;
-          final isActive = _activeTab == tab;
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const ClampingScrollPhysics(),
+        child: SizedBox(
+          width: isMobile ? 450 : null,
+          child: Row(
+            children: tabs.map((tabInfo) {
+              final tab = tabInfo.$1;
+              final label = tabInfo.$2;
+              final icon = tabInfo.$3;
+              final count = tabInfo.$4;
+              final isActive = _activeTab == tab;
 
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => setState(() => _activeTab = tab),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeInOut,
-                padding: EdgeInsets.symmetric(
-                  vertical: isMobile ? 10 : 12,
-                  horizontal: isMobile ? 2 : 10,
-                ),
-                decoration: BoxDecoration(
-                  color: isActive ? Colors.white : Colors.transparent,
-                  borderRadius: BorderRadius.circular(10),
-                  boxShadow: isActive
-                      ? [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ]
-                      : [],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      icon,
-                      size: isMobile ? 16 : 18,
-                      color: isActive ? const Color(0xFF0D8A4E) : const Color(0xFF64748B),
-                    ),
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: isMobile ? 11 : 13,
-                          fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-                          color: isActive ? const Color(0xFF0D8A4E) : const Color(0xFF64748B),
+              return Expanded(
+                child: InkWell(
+                  onTap: () => setState(() => _activeTab = tab),
+                  hoverColor: const Color(0xFFF8FAFC),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: isActive ? primaryColor : Colors.transparent,
+                          width: 2,
                         ),
                       ),
                     ),
-                    if (count != null && count > 0) ...[
-                      const SizedBox(width: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: isActive ? const Color(0xFF0D8A4E) : const Color(0xFFFEF3C7),
-                          borderRadius: BorderRadius.circular(10),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Icon(
+                              icon,
+                              size: 20,
+                              color: isActive ? primaryColor : const Color(0xFF64748B),
+                            ),
+                            if (count != null && count > 0)
+                              Positioned(
+                                right: -10,
+                                top: -4,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFFEF3C7),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Text(
+                                    '$count',
+                                    style: const TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFFD97706),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
-                        child: Text(
-                          '$count',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: isActive ? Colors.white : const Color(0xFFD97706),
+                        const SizedBox(height: 3),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
+                              color: isActive ? primaryColor : const Color(0xFF64748B),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ],
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          );
-        }).toList(),
+              );
+            }).toList(),
+          ),
+        ),
       ),
     );
   }

@@ -129,6 +129,12 @@ class AppShell extends ConsumerWidget {
       'Employee',
     ),
     SidebarDestination(
+      'Tasks & Timesheets',
+      '/tasks-and-timesheets',
+      Icons.task_alt_outlined,
+      'Employee',
+    ),
+    SidebarDestination(
       'Site Visit Attendance',
       '/site-visit-attendance',
       Icons.add_location_alt_outlined,
@@ -424,20 +430,22 @@ class _TopBar extends ConsumerWidget {
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Row(
                     children: [
-                      Text(
-                        headingText,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1E293B),
+                      Flexible(
+                        child: Text(
+                          headingText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1E293B),
+                          ),
                         ),
                       ),
                       if (isAttendanceManagement) ...[
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             color: const Color(0xFFE8F5E9),
                             borderRadius: BorderRadius.circular(12),
@@ -446,11 +454,11 @@ class _TopBar extends ConsumerWidget {
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.circle, size: 8, color: Color(0xFF2E7D32)),
-                              SizedBox(width: 5),
+                              Icon(Icons.circle, size: 6, color: Color(0xFF2E7D32)),
+                              SizedBox(width: 4),
                               Text(
                                 'Live Sync',
-                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32)),
+                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32)),
                               ),
                             ],
                           ),
@@ -538,6 +546,10 @@ class _TopBar extends ConsumerWidget {
                 ),
                 onSelected: (path) => context.push(path),
                 itemBuilder: (_) => const [
+                  PopupMenuItem(value: '/tasks-and-timesheets?action=create_task', child: Text('+ Create Task')),
+                  PopupMenuItem(value: '/tasks-and-timesheets?action=clock_activity', child: Text('⏱️ Start / Clock Activity')),
+                  PopupMenuItem(value: '/tasks-and-timesheets?action=log_break', child: Text('☕ Log Break (Lunch / Tea)')),
+                  PopupMenuDivider(),
                   PopupMenuItem(value: '/items/new', child: Text('New Item')),
                   PopupMenuItem(value: '/quotes/new', child: Text('New Quote')),
                   PopupMenuItem(

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../on_duty/domain/on_duty_assignment.dart';
+import '../../../on_duty/presentation/assign_on_duty_dialog.dart';
 import '../../../on_duty/providers/on_duty_providers.dart';
 
 class OnDutyManagementView extends ConsumerStatefulWidget {
@@ -62,18 +63,40 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                   ),
                 ],
               ),
-              ElevatedButton.icon(
-                onPressed: () {
-                  ref.invalidate(allOnDutyAssignmentsProvider);
-                },
-                icon: const Icon(Icons.refresh, size: 18),
-                label: const Text('Refresh'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF9CC70A),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      showDialog<void>(
+                        context: context,
+                        builder: (ctx) => const AssignOnDutyDialog(),
+                      );
+                    },
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('+ Assign On-Duty'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF9CC70A),
+                      foregroundColor: const Color(0xFF414A51),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      elevation: 1,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      ref.invalidate(allOnDutyAssignmentsProvider);
+                    },
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('Refresh'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF414A51),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

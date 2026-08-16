@@ -9,11 +9,15 @@ import '../../attendance/domain/attendance_record.dart';
 import '../../attendance_settings/presentation/widgets/attendance_settings_embedded_view.dart';
 import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
+import '../../on_duty/presentation/assign_on_duty_dialog.dart';
+import '../../on_duty/presentation/employee_on_duty_card.dart';
+import '../../on_duty/providers/on_duty_providers.dart';
 import '../../site_visit_attendance/domain/site_visit_record.dart';
 import '../../site_visit_attendance_management/presentation/widgets/admin_manual_site_visit_dialog.dart';
-import '../../site_visit_attendance_management/presentation/widgets/assign_on_duty_dialog.dart';
 import '../../site_visit_attendance_management/presentation/widgets/on_duty_management_view.dart';
 import '../../site_visit_attendance_management/providers/site_visit_attendance_management_providers.dart';
+import '../../task_management/presentation/task_board_page.dart';
+import '../../time_clocking/presentation/clocking_timeline_view.dart';
 import '../domain/attendance_management_stats.dart';
 import '../providers/attendance_management_providers.dart';
 import 'widgets/admin_manual_attendance_dialog.dart';
@@ -25,6 +29,8 @@ enum AttendanceCategoryTab {
   staticAttendance,
   siteVisitAttendance,
   onDutyManagement,
+  taskTracker,
+  dailyClocking,
   attendanceSettings,
   auditLogs,
 }
@@ -103,12 +109,11 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     );
   }
 
-  void _openAssignOnDutyDialog([Employee? employee, SiteVisitRecord? visit]) {
+  void _openAssignOnDutyDialog([Employee? employee]) {
     showDialog(
       context: context,
       builder: (ctx) => AssignOnDutyDialog(
-        initialEmployee: employee,
-        initialVisit: visit,
+        preSelectedEmployee: employee,
       ),
     );
   }
@@ -192,31 +197,34 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
 
     final allEmployeesList = employeesAsync.valueOrNull ?? [];
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFEFF3F6),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(isMobile ? 12 : 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Responsive Page Header with Quick Actions
-            _buildPageHeader(context, isMobile),
-            const SizedBox(height: 16),
+    return Container(
+      color: const Color(0xFFEFF3F6),
+      child: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.all(isMobile ? 12 : 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Responsive Page Header with Quick Actions
+                  _buildPageHeader(context, isMobile),
+                  const SizedBox(height: 16),
 
-            // Segmented Tab Selector
-            _buildTabSelector(isMobile),
-            const SizedBox(height: 16),
-
-            // Tab View Body
-            _buildActiveTabContent(
-              isMobile: isMobile,
-              allEmployees: allEmployeesList,
-              staticStatsAsync: staticStatsAsync,
-              staticRecordsAsync: staticRecordsAsync,
-              siteVisitsAsync: siteVisitsAsync,
+                  // Tab View Body
+                  _buildActiveTabContent(
+                    isMobile: isMobile,
+                    allEmployees: allEmployeesList,
+                    staticStatsAsync: staticStatsAsync,
+                    staticRecordsAsync: staticRecordsAsync,
+                    siteVisitsAsync: siteVisitsAsync,
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
+          ),
+          _buildBottomNavBar(isMobile),
+        ],
       ),
     );
   }
@@ -270,16 +278,36 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
       ],
     );
 
-    return Align(
-      alignment: Alignment.centerRight,
-      child: actionButtons,
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Attendance Management',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Track and manage office attendance, site visits, and on-duty assignments',
+                style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 16),
+        actionButtons,
+      ],
     );
   }
 
   Widget _buildMobileHeaderCard() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xFF414A51),
         borderRadius: BorderRadius.circular(16),
@@ -311,56 +339,80 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                   children: [
                     Text(
                       'Attendance Management',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     SizedBox(height: 2),
                     Text(
                       'Manage and track team attendance',
                       style: TextStyle(fontSize: 11, color: Colors.white70),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          const SizedBox(height: 12),
+          Row(
             children: [
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF9CC70A),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  elevation: 0,
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white38),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  onPressed: () => _openAdminStaticEntryDialog(),
+                  child: const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.add, size: 16),
+                      SizedBox(height: 2),
+                      Text('Manual', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
                 ),
-                onPressed: () => _openAdminStaticEntryDialog(),
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('Manual Entry', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
               ),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white38),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              const SizedBox(width: 6),
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white38),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  onPressed: () => _openAdminSiteEntryDialog(),
+                  child: const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.grid_view_outlined, size: 16),
+                      SizedBox(height: 2),
+                      Text('Site Entry', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
                 ),
-                onPressed: () => _openAdminSiteEntryDialog(),
-                icon: const Icon(Icons.grid_view_outlined, size: 16),
-                label: const Text('Manual Site Entry', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
               ),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white38),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              const SizedBox(width: 6),
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white38),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  onPressed: () => _openAssignOnDutyDialog(),
+                  child: const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.assignment_ind_outlined, size: 16),
+                      SizedBox(height: 2),
+                      Text('On-Duty', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
                 ),
-                onPressed: () => _openAssignOnDutyDialog(),
-                icon: const Icon(Icons.assignment_ind_outlined, size: 16),
-                label: const Text('Assign On-Duty', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
               ),
             ],
           ),
@@ -369,52 +421,55 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     );
   }
 
-  Widget _buildTabSelector(bool isMobile) {
+  Widget _buildBottomNavBar(bool isMobile) {
+    final navItems = [
+      _buildBottomNavItem(
+        tab: AttendanceCategoryTab.staticAttendance,
+        icon: Icons.storefront_outlined,
+        label: 'Office / Site',
+      ),
+      _buildBottomNavItem(
+        tab: AttendanceCategoryTab.siteVisitAttendance,
+        icon: Icons.location_on_outlined,
+        label: 'Site Visits',
+      ),
+      _buildBottomNavItem(
+        tab: AttendanceCategoryTab.onDutyManagement,
+        icon: Icons.business_center_outlined,
+        label: 'On-Duty',
+      ),
+      _buildBottomNavItem(
+        tab: AttendanceCategoryTab.taskTracker,
+        icon: Icons.assignment_outlined,
+        label: 'Task Tracker',
+      ),
+      _buildBottomNavItem(
+        tab: AttendanceCategoryTab.dailyClocking,
+        icon: Icons.timer_outlined,
+        label: 'Daily Clocking',
+      ),
+    ];
+
     return Container(
-      decoration: BoxDecoration(
+      height: 64,
+      decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border(top: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Row(
-          children: [
-            Expanded(
-              child: _buildTabButton(
-                tab: AttendanceCategoryTab.staticAttendance,
-                icon: Icons.home,
-                label: 'Static Attendance',
+      child: isMobile
+          ? SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const ClampingScrollPhysics(),
+              child: SizedBox(
+                width: 550,
+                child: Row(children: navItems),
               ),
-            ),
-            Expanded(
-              child: _buildTabButton(
-                tab: AttendanceCategoryTab.siteVisitAttendance,
-                icon: Icons.explore_outlined,
-                label: 'Site Visit',
-              ),
-            ),
-            Expanded(
-              child: _buildTabButton(
-                tab: AttendanceCategoryTab.onDutyManagement,
-                icon: Icons.assignment_ind_outlined,
-                label: 'On-Duty',
-              ),
-            ),
-          ],
-        ),
-      ),
+            )
+          : Row(children: navItems),
     );
   }
 
-  Widget _buildTabButton({
+  Widget _buildBottomNavItem({
     required AttendanceCategoryTab tab,
     required IconData icon,
     required String label,
@@ -422,53 +477,55 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     final isSelected = _activeTab == tab;
     const primaryColor = Color(0xFF9CC70A);
 
-    return InkWell(
-      onTap: () {
-        setState(() {
-          _activeTab = tab;
-          _selectedEmployeeId = null;
-          _selectedDepartment = 'All Departments';
-          _selectedDesignation = 'All Designations';
-          _selectedStatus = 'All';
-          _selectedSite = 'All';
-          _searchQuery = '';
-          _searchController.clear();
-          _currentPage = 1;
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFF7FEE7) : Colors.transparent,
-          border: Border(
-            bottom: BorderSide(
-              color: isSelected ? primaryColor : Colors.transparent,
-              width: 3,
-            ),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 18,
-              color: isSelected ? primaryColor : const Color(0xFF64748B),
-            ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                label,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                  color: isSelected ? primaryColor : const Color(0xFF64748B),
-                ),
+    return Expanded(
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            _activeTab = tab;
+            _selectedEmployeeId = null;
+            _selectedDepartment = 'All Departments';
+            _selectedDesignation = 'All Designations';
+            _selectedStatus = 'All';
+            _selectedSite = 'All';
+            _searchQuery = '';
+            _searchController.clear();
+            _currentPage = 1;
+          });
+        },
+        hoverColor: const Color(0xFFF8FAFC),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: isSelected ? primaryColor : Colors.transparent,
+                width: 2,
               ),
             ),
-          ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 20,
+                color: isSelected ? primaryColor : const Color(0xFF64748B),
+              ),
+              const SizedBox(height: 3),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                    color: isSelected ? primaryColor : const Color(0xFF64748B),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -491,12 +548,34 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
       case AttendanceCategoryTab.onDutyManagement:
         return const OnDutyManagementView();
 
+      case AttendanceCategoryTab.taskTracker:
+        return const TaskBoardPage(embedded: true);
+
+      case AttendanceCategoryTab.dailyClocking:
+        return const ClockingTimelineView(embedded: true);
+
       case AttendanceCategoryTab.attendanceSettings:
         return const AttendanceSettingsEmbeddedView();
 
       case AttendanceCategoryTab.auditLogs:
         return const AttendanceAuditLogsEmbeddedView();
     }
+  }
+
+  Widget _buildActiveOnDutyBanner() {
+    if (_selectedEmployeeId == null) return const SizedBox.shrink();
+    final activeOnDutyAsync = ref.watch(activeOnDutyAssignmentProvider(_selectedEmployeeId!));
+    return activeOnDutyAsync.when(
+      data: (assignment) {
+        if (assignment == null) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: EmployeeOnDutyCard(assignment: assignment),
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+    );
   }
 
   Widget _buildStaticAttendanceView(
@@ -510,6 +589,9 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Active On-Duty Employee Mobile Banner (If assigned)
+        _buildActiveOnDutyBanner(),
+
         // KPI Banner
         statsAsync.when(
           loading: () => const SizedBox.shrink(),
@@ -776,7 +858,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
         physics: const NeverScrollableScrollPhysics(),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
-          childAspectRatio: 1.8,
+          childAspectRatio: 1.25,
           crossAxisSpacing: 8,
           mainAxisSpacing: 8,
         ),
@@ -837,7 +919,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
         physics: const NeverScrollableScrollPhysics(),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
-          childAspectRatio: 1.8,
+          childAspectRatio: 1.25,
           crossAxisSpacing: 8,
           mainAxisSpacing: 8,
         ),
@@ -853,7 +935,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
 
   Widget _buildKpiCard(_KpiData kpi) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -873,15 +955,15 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
           Row(
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 34,
+                height: 34,
                 decoration: BoxDecoration(
                   color: kpi.bgColor,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(kpi.icon, color: kpi.iconColor, size: 20),
+                child: Icon(kpi.icon, color: kpi.iconColor, size: 18),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -889,18 +971,21 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                     Text(
                       kpi.value,
                       style: const TextStyle(
-                        fontSize: 22,
+                        fontSize: 18,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF0F172A),
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     Text(
                       kpi.label,
                       style: const TextStyle(
-                        fontSize: 12,
+                        fontSize: 11,
                         fontWeight: FontWeight.w500,
                         color: Color(0xFF64748B),
                       ),
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
@@ -908,18 +993,22 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
           Row(
             children: [
               if (kpi.isGrowth)
-                const Icon(Icons.north_east, size: 12, color: Color(0xFF16A34A)),
+                const Icon(Icons.north_east, size: 10, color: Color(0xFF16A34A)),
               if (kpi.isGrowth) const SizedBox(width: 2),
-              Text(
-                kpi.subtext,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: kpi.isGrowth ? FontWeight.bold : FontWeight.w500,
-                  color: kpi.isGrowth ? const Color(0xFF16A34A) : const Color(0xFF64748B),
+              Expanded(
+                child: Text(
+                  kpi.subtext,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: kpi.isGrowth ? FontWeight.bold : FontWeight.w500,
+                    color: kpi.isGrowth ? const Color(0xFF16A34A) : const Color(0xFF64748B),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -1699,7 +1788,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              children: dayVisits.map((v) {
+              children: dayVisits.whereType<SiteVisitRecord>().map((v) {
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(12),

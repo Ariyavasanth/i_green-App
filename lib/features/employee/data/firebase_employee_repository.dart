@@ -12,15 +12,21 @@ import '../domain/employee.dart';
 import '../domain/employee_repository.dart';
 import '../domain/registration_link.dart';
 
+import 'sqlite_employee_repository.dart';
+
 class FirebaseEmployeeRepository implements EmployeeRepository {
-  final FirebaseFirestore _firestore;
-  final FirebaseStorage _storage;
+  final FirebaseFirestore? _customFirestore;
+  final FirebaseStorage? _customStorage;
+  final SqliteEmployeeRepository _sqliteRepo = SqliteEmployeeRepository();
 
   FirebaseEmployeeRepository({
     FirebaseFirestore? firestore,
     FirebaseStorage? storage,
-  })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        _storage = storage ?? FirebaseStorage.instance;
+  })  : _customFirestore = firestore,
+        _customStorage = storage;
+
+  FirebaseFirestore get _firestore => _customFirestore ?? FirebaseFirestore.instance;
+  FirebaseStorage get _storage => _customStorage ?? FirebaseStorage.instance;
 
   CollectionReference<Map<String, dynamic>> get _employeesRef =>
       _firestore.collection('employees');
@@ -83,12 +89,15 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   @override
   Future<List<Employee>> getEmployees() async {
     final all = await getAllEmployees();
+    if (all.isEmpty) {
+      return await _sqliteRepo.getEmployees();
+    }
     final result = <Employee>[];
     final toFix = <Employee>[]; // employees needing an EMP- ID assigned
 
     for (final emp in all) {
       final s = emp.status.trim().toLowerCase();
-      if (s == 'active' || s == 'converted' || s == 'submitted') {
+      if (s == 'active' || s == 'converted' || s == 'submitted' || s.isEmpty) {
         final empIdUpper = emp.employeeId.trim().toUpperCase();
         if (empIdUpper.isEmpty || !empIdUpper.startsWith('EMP-')) {
           toFix.add(emp);
@@ -105,7 +114,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       result.addAll(toFix);
     }
 
-    return result;
+    return result.isNotEmpty ? result : all;
   }
 
   /// Assigns proper EMP- IDs to employees in the background without blocking the UI.
@@ -123,13 +132,17 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
   @override
   Future<List<Employee>> getAllEmployees() async {
-    final snapshot = await _employeesRef.get();
-    if (snapshot.docs.isEmpty) {
-      return [];
+    try {
+      final snapshot = await _employeesRef.get();
+      if (snapshot.docs.isEmpty) {
+        return await _sqliteRepo.getAllEmployees();
+      }
+      return snapshot.docs.map((doc) {
+        return _employeeFromFirestore(doc.data(), doc.id);
+      }).toList();
+    } catch (_) {
+      return await _sqliteRepo.getAllEmployees();
     }
-    return snapshot.docs.map((doc) {
-      return _employeeFromFirestore(doc.data(), doc.id);
-    }).toList();
   }
 
   @override

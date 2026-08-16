@@ -3,11 +3,16 @@ import '../../attendance/domain/attendance_record.dart';
 import '../domain/attendance_management_repository.dart';
 import '../domain/attendance_management_stats.dart';
 
+import 'sqlite_attendance_management_repository.dart';
+
 class FirebaseAttendanceManagementRepository implements AttendanceManagementRepository {
-  final FirebaseFirestore _firestore;
+  final FirebaseFirestore? _customFirestore;
+  final SqliteAttendanceManagementRepository _sqliteRepo = SqliteAttendanceManagementRepository();
 
   FirebaseAttendanceManagementRepository({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+      : _customFirestore = firestore;
+
+  FirebaseFirestore get _firestore => _customFirestore ?? FirebaseFirestore.instance;
 
   CollectionReference<Map<String, dynamic>> get _recordsRef =>
       _firestore.collection('attendance_records');
@@ -22,77 +27,100 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
     String? monthYear,
     String? statusFilter,
   }) async {
-    Query<Map<String, dynamic>> query = _recordsRef;
+    try {
+      Query<Map<String, dynamic>> query = _recordsRef;
 
-    if (employeeId != null) {
-      query = query.where('employee_id', isEqualTo: employeeId);
-    }
+      if (employeeId != null) {
+        query = query.where('employee_id', isEqualTo: employeeId);
+      }
 
-    final snap = await query.get();
-    var list = snap.docs.map((d) => AttendanceRecord.fromMap(d.data())).toList();
+      final snap = await query.get();
+      if (snap.docs.isEmpty) {
+        return await _sqliteRepo.getAllAttendanceRecords(
+          employeeId: employeeId,
+          monthYear: monthYear,
+          statusFilter: statusFilter,
+        );
+      }
+      var list = snap.docs.map((d) => AttendanceRecord.fromMap(d.data())).toList();
 
-    // In-memory filter for monthYear (MM-yyyy) or date range if provided
-    if (monthYear != null && monthYear.isNotEmpty) {
-      list = list.where((r) {
-        if (r.date.length >= 10) {
-          final parts = r.date.split('-');
-          if (parts.length == 3) {
-            final recordMonthYear = '${parts[1]}-${parts[2]}';
-            return recordMonthYear == monthYear;
+      // In-memory filter for monthYear (MM-yyyy) or date range if provided
+      if (monthYear != null && monthYear.isNotEmpty) {
+        list = list.where((r) {
+          if (r.date.length >= 10) {
+            final parts = r.date.split('-');
+            if (parts.length == 3) {
+              final recordMonthYear = '${parts[1]}-${parts[2]}';
+              return recordMonthYear == monthYear;
+            }
           }
-        }
-        return true;
-      }).toList();
-    }
+          return true;
+        }).toList();
+      }
 
-    if (statusFilter != null && statusFilter.isNotEmpty && statusFilter != 'All') {
-      list = list.where((r) => r.status == statusFilter).toList();
-    }
+      if (statusFilter != null && statusFilter.isNotEmpty && statusFilter != 'All') {
+        list = list.where((r) => r.status == statusFilter).toList();
+      }
 
-    list.sort((a, b) => b.date.compareTo(a.date));
-    return list;
+      list.sort((a, b) => b.date.compareTo(a.date));
+      return list;
+    } catch (_) {
+      return await _sqliteRepo.getAllAttendanceRecords(
+        employeeId: employeeId,
+        monthYear: monthYear,
+        statusFilter: statusFilter,
+      );
+    }
   }
 
   @override
   Future<AttendanceManagementStats> getAttendanceStats({String? date}) async {
-    final targetDate = date ??
-        '${DateTime.now().day.toString().padLeft(2, '0')}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().year}';
+    try {
+      final targetDate = date ??
+          '${DateTime.now().day.toString().padLeft(2, '0')}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().year}';
 
-    final empSnap = await _employeesRef.get();
-    final totalEmployees = empSnap.docs.length;
+      final empSnap = await _employeesRef.get();
+      final totalEmployees = empSnap.docs.length;
 
-    final recordsSnap = await _recordsRef.where('date', isEqualTo: targetDate).get();
-    final todayRecords = recordsSnap.docs.map((d) => AttendanceRecord.fromMap(d.data())).toList();
+      final recordsSnap = await _recordsRef.where('date', isEqualTo: targetDate).get();
+      final todayRecords = recordsSnap.docs.map((d) => AttendanceRecord.fromMap(d.data())).toList();
 
-    int present = 0;
-    int late = 0;
-    int checkedOut = 0;
-    double totalHoursSum = 0;
-    int hoursCount = 0;
-
-    for (final r in todayRecords) {
-      if (r.status == 'Present') present++;
-      if (r.status == 'Late') late++;
-      if (r.status == 'Checked Out') checkedOut++;
-      if (r.totalHours > 0) {
-        totalHoursSum += r.totalHours;
-        hoursCount++;
+      if (totalEmployees == 0 && todayRecords.isEmpty) {
+        return await _sqliteRepo.getAttendanceStats(date: date);
       }
+
+      int present = 0;
+      int late = 0;
+      int checkedOut = 0;
+      double totalHoursSum = 0;
+      int hoursCount = 0;
+
+      for (final r in todayRecords) {
+        if (r.status == 'Present') present++;
+        if (r.status == 'Late') late++;
+        if (r.status == 'Checked Out') checkedOut++;
+        if (r.totalHours > 0) {
+          totalHoursSum += r.totalHours;
+          hoursCount++;
+        }
+      }
+
+      final markedTotal = present + late + checkedOut;
+      final absent = (totalEmployees - markedTotal).clamp(0, 9999);
+      final avgHours = hoursCount > 0 ? double.parse((totalHoursSum / hoursCount).toStringAsFixed(1)) : 0.0;
+
+      return AttendanceManagementStats(
+        totalEmployees: totalEmployees > 0 ? totalEmployees : markedTotal,
+        presentToday: present,
+        lateToday: late,
+        checkedOutToday: checkedOut,
+        absentToday: absent,
+        onLeaveToday: 0,
+        averageWorkHours: avgHours,
+      );
+    } catch (_) {
+      return await _sqliteRepo.getAttendanceStats(date: date);
     }
-
-    final markedTotal = present + late + checkedOut;
-    final absent = (totalEmployees - markedTotal).clamp(0, 9999);
-    final avgHours = hoursCount > 0 ? double.parse((totalHoursSum / hoursCount).toStringAsFixed(1)) : 0.0;
-
-    return AttendanceManagementStats(
-      totalEmployees: totalEmployees > 0 ? totalEmployees : markedTotal,
-      presentToday: present,
-      lateToday: late,
-      checkedOutToday: checkedOut,
-      absentToday: absent,
-      onLeaveToday: 0,
-      averageWorkHours: avgHours,
-    );
   }
 
   @override

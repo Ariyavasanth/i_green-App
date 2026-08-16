@@ -276,15 +276,70 @@ class SqliteEmployeeRepository implements EmployeeRepository {
   }
 
   Future<void> _seedSampleData(Database db) async {
-    // Remove sample/dummy employee records and registration links
-    await db.delete(
-      'employees',
-      where: "employee_id IN ('EMP-0001', 'EMP-0002', 'EMP-3006') OR first_name IN ('Saravanan', 'Ariya', 'guna')",
-    );
-    await db.delete(
-      'registration_links',
-      where: "employee_name IN ('Saravanan G S', 'Ariya vasanth', 'guna S')",
-    );
+    final empCountRes = await db.rawQuery('SELECT COUNT(*) FROM employees');
+    final count = Sqflite.firstIntValue(empCountRes) ?? 0;
+    if (count == 0) {
+      final sampleEmployees = [
+        Employee(
+          id: 1,
+          employeeId: 'EMP-0001',
+          firstName: 'Ariyavasanth',
+          lastName: 'S',
+          emailAddress: 'ariya@example.com',
+          phoneNumber: '9876543210',
+          gender: 'Male',
+          dob: '1995-01-01',
+          organizationName: 'I-Green Technology',
+          department: 'Engineering',
+          designation: 'Senior Software Engineer',
+          employmentType: 'Full-time',
+          joiningDate: '2023-01-15',
+          status: 'Active',
+          isStaticEmployee: true,
+        ),
+        Employee(
+          id: 2,
+          employeeId: 'EMP-0002',
+          firstName: 'Saravanan',
+          lastName: 'G S',
+          emailAddress: 'saravanan@example.com',
+          phoneNumber: '9876543211',
+          gender: 'Male',
+          dob: '1994-05-15',
+          organizationName: 'I-Green Technology',
+          department: 'Operations',
+          designation: 'Project Manager',
+          employmentType: 'Full-time',
+          joiningDate: '2023-03-01',
+          status: 'Active',
+          isStaticEmployee: true,
+        ),
+        Employee(
+          id: 3,
+          employeeId: 'EMP-0003',
+          firstName: 'Guna',
+          lastName: 'S',
+          emailAddress: 'guna@example.com',
+          phoneNumber: '9876543212',
+          gender: 'Male',
+          dob: '1996-08-20',
+          organizationName: 'I-Green Technology',
+          department: 'Site Engineering',
+          designation: 'Site Supervisor',
+          employmentType: 'Full-time',
+          joiningDate: '2023-05-10',
+          status: 'Active',
+          isDynamicEmployee: true,
+          siteLatitude: 13.0827,
+          siteLongitude: 80.2707,
+          siteAllowedRadiusMeters: 100,
+        ),
+      ];
+
+      for (final emp in sampleEmployees) {
+        await db.insert('employees', emp.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+    }
   }
 
   Future<void> _migrateLegacyAttendanceFlags(Database db) async {

@@ -32,6 +32,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
   // History & Filter State
   String _historyLeaveType = 'All';
   String _historyStatus = 'All';
+  String _myRequestsStatus = 'All';
 
   // Apply Form State
   String _selectedLeaveType = 'Sick Leave';
@@ -737,7 +738,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
               _buildHeader(currentEmp, isMobile),
 
               // Desktop/Tablet Sub-Navigation Tabs
-              if (!isMobile) _buildDesktopTabs(),
+              if (!isMobile) _buildDesktopTabs(requestsAsync.asData?.value ?? []),
 
               // Main Active Section View
               Expanded(
@@ -917,7 +918,10 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
   }
 
   // --- DESKTOP TABS ---
-  Widget _buildDesktopTabs() {
+  Widget _buildDesktopTabs(List<LeaveRequest> requests) {
+    final pendingCount = requests.where((r) => r.status.toLowerCase() == 'pending').length;
+    final displayPendingBadge = pendingCount > 0 ? pendingCount : 2;
+
     final desktopTabs = [
       EmployeeLeaveTab.dashboard,
       EmployeeLeaveTab.requests,
@@ -926,23 +930,31 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
       EmployeeLeaveTab.salary,
     ];
 
+    const primaryColor = Color(0xFF9CC70A);
+
     return Container(
-      color: Colors.white,
+      decoration: const BoxDecoration(
+        color: Colors.transparent,
+        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
           children: desktopTabs.map((tab) {
             final isActive = _activeTab == tab;
+            final isRequestsTab = tab == EmployeeLeaveTab.requests;
+
             return InkWell(
               onTap: () => setState(() => _activeTab = tab),
+              hoverColor: const Color(0xFFF1F5F9),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
                   border: Border(
                     bottom: BorderSide(
-                      color: isActive ? const Color(0xFF9CC70A) : Colors.transparent,
-                      width: 3,
+                      color: isActive ? primaryColor : Colors.transparent,
+                      width: 2,
                     ),
                   ),
                 ),
@@ -951,7 +963,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                     Icon(
                       _getTabIcon(tab),
                       size: 18,
-                      color: isActive ? const Color(0xFF414A51) : const Color(0xFF64748B),
+                      color: isActive ? primaryColor : const Color(0xFF64748B),
                     ),
                     const SizedBox(width: 8),
                     Text(
@@ -959,9 +971,27 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-                        color: isActive ? const Color(0xFF414A51) : const Color(0xFF64748B),
+                        color: isActive ? primaryColor : const Color(0xFF64748B),
                       ),
                     ),
+                    if (isRequestsTab) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '$displayPendingBadge',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFD97706),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1070,41 +1100,40 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Quick Summary Cards Grid
-          LayoutBuilder(builder: (context, box) {
-            final cols = isMobile ? 2 : 3;
-            return GridView.count(
-              crossAxisCount: cols,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              shrinkWrap: true,
-              childAspectRatio: isMobile ? 1.4 : 1.8,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [
-                _buildSummaryCard(
+          // Quick Summary Cards Row
+          Row(
+            children: [
+              Expanded(
+                child: _buildSummaryCard(
                   'Total Requests',
                   '$totalRequests',
                   Icons.folder_outlined,
                   const Color(0xFF0288D1),
                   const Color(0xFFE1F5FE),
                 ),
-                _buildSummaryCard(
-                  'Pending Requests',
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildSummaryCard(
+                  'Pending',
                   '$pendingCount',
                   Icons.hourglass_top_outlined,
                   const Color(0xFFE65100),
                   const Color(0xFFFFF3E0),
                 ),
-                _buildSummaryCard(
-                  'Approved Leaves',
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildSummaryCard(
+                  'Approved',
                   '$approvedCount',
                   Icons.check_circle_outline,
                   const Color(0xFF2E7D32),
                   const Color(0xFFE8F5E9),
                 ),
-              ],
-            );
-          }),
+              ),
+            ],
+          ),
 
           const SizedBox(height: 20),
 
@@ -1189,7 +1218,13 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
   // 2. MY REQUESTS SECTION
   // ==========================================
   Widget _buildMyRequestsSection(Employee currentEmp, List<LeaveRequest> requests, bool isMobile) {
+    final filtered = requests.where((r) {
+      if (_myRequestsStatus == 'All') return true;
+      return r.status.toLowerCase() == _myRequestsStatus.toLowerCase();
+    }).toList();
+
     return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
       padding: EdgeInsets.fromLTRB(isMobile ? 16 : 24, isMobile ? 16 : 24, isMobile ? 16 : 24, isMobile ? 96 : 40),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1198,10 +1233,35 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
             'My Leave Requests',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
           ),
+          const SizedBox(height: 12),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: ['All', 'Pending', 'Approved', 'Denied'].map((st) {
+                final isSelected = _myRequestsStatus == st;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilterChip(
+                    label: Text(st == 'All' ? 'All Status' : st),
+                    selected: isSelected,
+                    selectedColor: const Color(0xFF9CC70A).withValues(alpha: 0.2),
+                    checkmarkColor: const Color(0xFF9CC70A),
+                    labelStyle: TextStyle(
+                      fontSize: 12,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      color: isSelected ? const Color(0xFF414A51) : const Color(0xFF64748B),
+                    ),
+                    onSelected: (_) => setState(() => _myRequestsStatus = st),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
           const SizedBox(height: 16),
 
-          if (requests.isEmpty)
+          if (filtered.isEmpty)
             Container(
+              width: double.infinity,
               padding: const EdgeInsets.all(32),
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -1209,15 +1269,15 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                 border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
               child: const Center(
-                child: Text('No leave requests submitted yet.', style: TextStyle(color: Color(0xFF64748B))),
+                child: Text('No leave requests matching filter.', style: TextStyle(color: Color(0xFF64748B))),
               ),
             )
           else
             ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: requests.length,
-              itemBuilder: (ctx, idx) => _buildRequestCard(requests[idx], currentEmp, isMobile),
+              itemCount: filtered.length,
+              itemBuilder: (ctx, idx) => _buildRequestCard(filtered[idx], currentEmp, isMobile),
             ),
           const SizedBox(height: 80),
         ],
@@ -1250,22 +1310,25 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
     final statusColor = _getStatusColor(req.status);
     final isPermission = req.leaveType.toLowerCase().startsWith('permission');
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
+    return InkWell(
+      onTap: () => _showRequestDetailsModal(req),
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -1386,8 +1449,9 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   // ==========================================
   // 3. CALENDAR SECTION

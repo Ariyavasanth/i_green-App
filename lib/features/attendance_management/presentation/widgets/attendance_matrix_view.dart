@@ -177,10 +177,13 @@ class AttendanceMatrixView extends StatelessWidget {
                             CircleAvatar(
                               radius: 14,
                               backgroundColor: AppColors.active.withValues(alpha: 0.15),
-                              backgroundImage: emp.profileImageUrl.isNotEmpty
+                              backgroundImage: (emp.profileImageUrl.isNotEmpty && emp.profileImageUrl.startsWith('http'))
                                   ? NetworkImage(emp.profileImageUrl)
                                   : null,
-                              child: emp.profileImageUrl.isEmpty
+                              onForegroundImageError: (emp.profileImageUrl.isNotEmpty && emp.profileImageUrl.startsWith('http'))
+                                  ? (_, __) {}
+                                  : null,
+                              child: (emp.profileImageUrl.isEmpty || !emp.profileImageUrl.startsWith('http'))
                                   ? Text(
                                       emp.fullName.isNotEmpty ? emp.fullName[0].toUpperCase() : 'E',
                                       style: const TextStyle(

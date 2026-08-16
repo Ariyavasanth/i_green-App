@@ -9,10 +9,39 @@ class SqliteSiteVisitAttendanceManagementRepository implements SiteVisitAttendan
 
   Future<Database> get database async {
     if (_database != null) return _database!;
+    _database = await _initDatabase();
+    return _database!;
+  }
+
+  Future<Database> _initDatabase() async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, 'app_database.db');
-    _database = await openDatabase(path);
-    return _database!;
+    return openDatabase(
+      path,
+      version: 3,
+      onCreate: (db, _) async => _createTables(db),
+      onOpen: (db) async => _createTables(db),
+    );
+  }
+
+  Future<void> _createTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS site_visit_records (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        employee_id INTEGER,
+        employee_name TEXT,
+        site_name TEXT,
+        visit_date TEXT,
+        visit_time TEXT,
+        check_out_time TEXT,
+        purpose TEXT,
+        notes TEXT,
+        latitude REAL,
+        longitude REAL,
+        status TEXT,
+        created_at TEXT
+      )
+    ''');
   }
 
   @override
