@@ -411,6 +411,51 @@ class _TaskBoardPageState extends ConsumerState<TaskBoardPage> {
     );
   }
 
+  Future<void> _confirmDeleteTask(TaskItem task) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Delete Task'),
+          ],
+        ),
+        content: Text('Are you sure you want to delete "${task.title}" (${task.projectOrOfficeCode}) assigned to ${task.assignedTo}?'),
+        actions: [
+          OutlinedButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final repo = ref.read(taskRepositoryProvider);
+      await repo.deleteTask(task.id);
+      ref.invalidate(tasksProvider);
+      ref.invalidate(taskProjectHoursProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Task "${task.title}" deleted successfully'),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildTaskCard(TaskItem task, Color primaryColor) {
     final statusColor = task.status == 'COMPLETED'
         ? const Color(0xFF9CC70A)
@@ -440,9 +485,25 @@ class _TaskBoardPageState extends ConsumerState<TaskBoardPage> {
                   style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.edit_outlined, size: 16),
-                onPressed: () => _openCreateTaskDialog(task),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined, size: 18, color: Color(0xFF64748B)),
+                    onPressed: () => _openCreateTaskDialog(task),
+                    tooltip: 'Edit Task',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                    onPressed: () => _confirmDeleteTask(task),
+                    tooltip: 'Delete Task',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
               ),
             ],
           ),
@@ -463,19 +524,97 @@ class _TaskBoardPageState extends ConsumerState<TaskBoardPage> {
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              const Icon(Icons.access_time, size: 12, color: Color(0xFF94A3B8)),
-              const SizedBox(width: 4),
-              Text(
-                '${DateFormat('dd MMM HH:mm').format(task.startTime)} (${task.durationInHours.toStringAsFixed(1)} hrs)',
-                style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+          const SizedBox(height: 8),
+          if (task.status == 'COMPLETED') ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF9CC70A).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.3)),
               ),
-            ],
-          ),
+              child: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.play_circle_outline, size: 14, color: Color(0xFF475569)),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Start: ${DateFormat('h:mm a').format(task.startTime)}',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+                      ),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.stop_circle_outlined, size: 14, color: Color(0xFF475569)),
+                      const SizedBox(width: 4),
+                      Text(
+                        'End: ${task.endTime != null ? DateFormat('h:mm a').format(task.endTime!) : '-'}',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    'Duration: ${_formatWorkedDuration(task.duration)}',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                  ),
+                ],
+              ),
+            ),
+          ] else if (task.status == 'IN_PROGRESS') ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.blue.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.play_circle_outline, size: 14, color: Colors.blue),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Start: ${DateFormat('h:mm a').format(task.startTime)}',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    'Running: ${_formatWorkedDuration(task.duration)}',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue),
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            Row(
+              children: [
+                const Icon(Icons.access_time, size: 12, color: Color(0xFF94A3B8)),
+                const SizedBox(width: 4),
+                Text(
+                  'Created: ${DateFormat('dd MMM yyyy h:mm a').format(task.startTime)}',
+                  style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  String _formatWorkedDuration(Duration duration) {
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes % 60;
+    if (hours > 0) {
+      return '${hours}h ${minutes}m';
+    }
+    return '${minutes}m';
   }
 }

@@ -129,9 +129,15 @@ class AppShell extends ConsumerWidget {
       'Employee',
     ),
     SidebarDestination(
-      'Tasks & Timesheets',
-      '/tasks-and-timesheets',
+      'My Tasks',
+      '/my-tasks',
       Icons.task_alt_outlined,
+      'Employee',
+    ),
+    SidebarDestination(
+      'Task Management',
+      '/tasks-and-timesheets',
+      Icons.assignment_outlined,
       'Employee',
     ),
     SidebarDestination(

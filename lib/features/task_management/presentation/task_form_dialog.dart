@@ -95,159 +95,268 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
     const primaryColor = Color(0xFF9CC70A);
     final employeesAsync = ref.watch(employeesProvider);
     final employees = employeesAsync.valueOrNull ?? [];
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       child: Container(
-        width: 540,
-        padding: const EdgeInsets.all(24),
+        constraints: const BoxConstraints(maxWidth: 540),
+        width: screenWidth * 0.95,
+        padding: EdgeInsets.all(isMobile ? 16 : 24),
         child: Form(
           key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: primaryColor.withValues(alpha: 0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.assignment_turned_in_outlined, color: primaryColor),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              widget.existingTask == null ? 'Create Task Assignment' : 'Edit Task Assignment',
+                              style: TextStyle(
+                                fontSize: isMobile ? 16 : 18,
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF1E293B),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                const Divider(height: 24),
+                TextFormField(
+                  controller: _titleController,
+                  decoration: const InputDecoration(
+                    labelText: 'Task Title *',
+                    hintText: 'e.g. Implement Riverpod state management',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (val) => val == null || val.trim().isEmpty ? 'Required' : null,
+                ),
+                const SizedBox(height: 16),
+                if (isMobile) ...[
+                  TextFormField(
+                    controller: _codeController,
+                    decoration: const InputDecoration(
+                      labelText: 'Project / Office Code *',
+                      hintText: 'e.g. PRJ-102, OFFICE-GEN',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (val) => val == null || val.trim().isEmpty ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: _selectedAssignedTo,
+                    decoration: const InputDecoration(
+                      labelText: 'Assign To',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      const DropdownMenuItem(value: 'EMP-001', child: Text('EMP-001 (Self)')),
+                      ...employees.map(
+                        (emp) => DropdownMenuItem(
+                          value: emp.employeeId,
+                          child: Text('${emp.employeeId} - ${emp.fullName}'),
+                        ),
+                      ),
+                    ],
+                    onChanged: (val) => setState(() => _selectedAssignedTo = val),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: _status,
+                    decoration: const InputDecoration(
+                      labelText: 'Status',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'TODO', child: Text('TODO')),
+                      DropdownMenuItem(value: 'IN_PROGRESS', child: Text('IN_PROGRESS')),
+                      DropdownMenuItem(value: 'COMPLETED', child: Text('COMPLETED')),
+                    ],
+                    onChanged: (val) => setState(() => _status = val ?? 'TODO'),
+                  ),
+                  const SizedBox(height: 16),
+                  InkWell(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _startTime,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2030),
+                      );
+                      if (picked != null) {
+                        setState(() => _startTime = picked);
+                      }
+                    },
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Start Date',
+                        border: OutlineInputBorder(),
+                        suffixIcon: Icon(Icons.calendar_today, size: 18),
+                      ),
+                      child: Text(DateFormat('dd MMM yyyy').format(_startTime)),
+                    ),
+                  ),
+                ] else ...[
                   Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: primaryColor.withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
+                      Expanded(
+                        child: TextFormField(
+                          controller: _codeController,
+                          decoration: const InputDecoration(
+                            labelText: 'Project / Office Code *',
+                            hintText: 'e.g. PRJ-102, OFFICE-GEN',
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (val) => val == null || val.trim().isEmpty ? 'Required' : null,
                         ),
-                        child: const Icon(Icons.assignment_turned_in_outlined, color: primaryColor),
                       ),
                       const SizedBox(width: 12),
-                      Text(
-                        widget.existingTask == null ? 'Create Task Assignment' : 'Edit Task Assignment',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1E293B),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: _selectedAssignedTo,
+                          decoration: const InputDecoration(
+                            labelText: 'Assign To',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: [
+                            const DropdownMenuItem(value: 'EMP-001', child: Text('EMP-001 (Self)')),
+                            ...employees.map(
+                              (emp) => DropdownMenuItem(
+                                value: emp.employeeId,
+                                child: Text('${emp.employeeId} - ${emp.fullName}'),
+                              ),
+                            ),
+                          ],
+                          onChanged: (val) => setState(() => _selectedAssignedTo = val),
                         ),
                       ),
                     ],
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-              const Divider(height: 24),
-              TextFormField(
-                controller: _titleController,
-                decoration: const InputDecoration(
-                  labelText: 'Task Title *',
-                  hintText: 'e.g. Implement Riverpod state management',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (val) => val == null || val.trim().isEmpty ? 'Required' : null,
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _codeController,
-                      decoration: const InputDecoration(
-                        labelText: 'Project / Office Code *',
-                        hintText: 'e.g. PRJ-102, OFFICE-GEN',
-                        border: OutlineInputBorder(),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: _status,
+                          decoration: const InputDecoration(
+                            labelText: 'Status',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: 'TODO', child: Text('TODO')),
+                            DropdownMenuItem(value: 'IN_PROGRESS', child: Text('IN_PROGRESS')),
+                            DropdownMenuItem(value: 'COMPLETED', child: Text('COMPLETED')),
+                          ],
+                          onChanged: (val) => setState(() => _status = val ?? 'TODO'),
+                        ),
                       ),
-                      validator: (val) => val == null || val.trim().isEmpty ? 'Required' : null,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      value: _selectedAssignedTo,
-                      decoration: const InputDecoration(
-                        labelText: 'Assign To',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: [
-                        const DropdownMenuItem(value: 'EMP-001', child: Text('EMP-001 (Self)')),
-                        ...employees.map(
-                          (emp) => DropdownMenuItem(
-                            value: emp.employeeId,
-                            child: Text('${emp.employeeId} - ${emp.fullName}'),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: InkWell(
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: _startTime,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2030),
+                            );
+                            if (picked != null) {
+                              setState(() => _startTime = picked);
+                            }
+                          },
+                          child: InputDecorator(
+                            decoration: const InputDecoration(
+                              labelText: 'Start Date',
+                              border: OutlineInputBorder(),
+                              suffixIcon: Icon(Icons.calendar_today, size: 18),
+                            ),
+                            child: Text(DateFormat('dd MMM yyyy').format(_startTime)),
                           ),
                         ),
-                      ],
-                      onChanged: (val) => setState(() => _selectedAssignedTo = val),
-                    ),
+                      ),
+                    ],
                   ),
                 ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      value: _status,
-                      decoration: const InputDecoration(
-                        labelText: 'Status',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 'TODO', child: Text('TODO')),
-                        DropdownMenuItem(value: 'IN_PROGRESS', child: Text('IN_PROGRESS')),
-                        DropdownMenuItem(value: 'COMPLETED', child: Text('COMPLETED')),
-                      ],
-                      onChanged: (val) => setState(() => _status = val ?? 'TODO'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: InkWell(
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: _startTime,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2030),
-                        );
-                        if (picked != null) {
-                          setState(() => _startTime = picked);
-                        }
-                      },
-                      child: InputDecorator(
-                        decoration: const InputDecoration(
-                          labelText: 'Start Date',
-                          border: OutlineInputBorder(),
-                          suffixIcon: Icon(Icons.calendar_today, size: 18),
+                const SizedBox(height: 24),
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 10,
+                  children: [
+                    if (widget.existingTask != null)
+                      TextButton.icon(
+                        style: TextButton.styleFrom(foregroundColor: Colors.red),
+                        onPressed: () async {
+                          final repo = ref.read(taskRepositoryProvider);
+                          await repo.deleteTask(widget.existingTask!.id);
+                          ref.invalidate(tasksProvider);
+                          ref.invalidate(taskProjectHoursProvider);
+                          if (mounted) {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Task deleted successfully'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.delete_outline, size: 18),
+                        label: const Text('Delete'),
+                      )
+                    else
+                      const SizedBox.shrink(),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Cancel'),
                         ),
-                        child: Text(DateFormat('dd MMM yyyy').format(_startTime)),
-                      ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primaryColor,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          ),
+                          onPressed: _saveTask,
+                          child: Text(widget.existingTask == null ? 'Create Task' : 'Save Changes'),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: 12),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    ),
-                    onPressed: _saveTask,
-                    child: Text(widget.existingTask == null ? 'Create Task' : 'Save Changes'),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

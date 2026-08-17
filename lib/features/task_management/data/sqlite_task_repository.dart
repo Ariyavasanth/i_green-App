@@ -36,6 +36,31 @@ class SqliteTaskRepository implements TaskRepository {
         status TEXT
       )
     ''');
+
+    final count = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM tasks'));
+    if (count == null || count == 0) {
+      final now = DateTime.now();
+      await db.insert('tasks', {
+        'id': '101',
+        'title': 'Client Website',
+        'project_or_office_code': 'PRJ-101',
+        'assigned_by': 'Manager',
+        'assigned_to': 'EMP-001',
+        'start_time': now.toIso8601String(),
+        'end_time': null,
+        'status': 'TODO',
+      });
+      await db.insert('tasks', {
+        'id': '205',
+        'title': 'Employee Report',
+        'project_or_office_code': 'OFF-205',
+        'assigned_by': 'Manager',
+        'assigned_to': 'EMP-001',
+        'start_time': now.toIso8601String(),
+        'end_time': null,
+        'status': 'TODO',
+      });
+    }
   }
 
   @override
