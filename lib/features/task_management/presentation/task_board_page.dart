@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../time_clocking/presentation/clocking_timeline_view.dart';
 import '../domain/task_item.dart';
 import '../providers/task_providers.dart';
 import 'task_form_dialog.dart';
@@ -9,18 +10,27 @@ class TaskBoardPage extends ConsumerStatefulWidget {
   const TaskBoardPage({
     super.key,
     this.embedded = false,
+    this.initialTab = 0,
   });
 
   final bool embedded;
+  final int initialTab;
 
   @override
   ConsumerState<TaskBoardPage> createState() => _TaskBoardPageState();
 }
 
 class _TaskBoardPageState extends ConsumerState<TaskBoardPage> {
+  late int _activeTab;
   String _selectedStatus = 'All';
   final String _selectedProjectCode = 'All';
   String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _activeTab = widget.initialTab;
+  }
 
   void _openCreateTaskDialog([TaskItem? task]) {
     showDialog(
@@ -51,47 +61,60 @@ class _TaskBoardPageState extends ConsumerState<TaskBoardPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Top Header Action Card with Section Title
             _buildHeaderActionCard(context, primaryColor, secondaryColor),
             const SizedBox(height: 16),
-            _buildMetricGrid(hoursAsync, primaryColor, secondaryColor),
-            const SizedBox(height: 16),
-            _buildSearchAndFilters(primaryColor),
-            const SizedBox(height: 16),
-            tasksAsync.when(
-              data: (tasks) {
-                final filtered = tasks.where((t) {
-                  if (_searchQuery.isEmpty) return true;
-                  return t.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-                      t.projectOrOfficeCode.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-                      t.assignedTo.toLowerCase().contains(_searchQuery.toLowerCase());
-                }).toList();
 
-                if (filtered.isEmpty) {
-                  return _buildEmptyState(primaryColor);
-                }
+            // Tab Navigation Switch: Task Tracker vs Daily Clocking
+            _buildTabSelector(primaryColor),
+            const SizedBox(height: 16),
 
-                return LayoutBuilder(
-                  builder: (context, constraints) {
-                    if (constraints.maxWidth > 900) {
-                      return _buildKanbanColumns(filtered, primaryColor);
-                    }
-                    return _buildTaskList(filtered, primaryColor);
-                  },
-                );
-              },
-              loading: () => const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: CircularProgressIndicator(),
+            // Tab 0: Tasks Tracker View
+            if (_activeTab == 0) ...[
+              _buildMetricGrid(hoursAsync, primaryColor, secondaryColor),
+              const SizedBox(height: 16),
+              _buildSearchAndFilters(primaryColor),
+              const SizedBox(height: 16),
+              tasksAsync.when(
+                data: (tasks) {
+                  final filtered = tasks.where((t) {
+                    if (_searchQuery.isEmpty) return true;
+                    return t.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                        t.projectOrOfficeCode.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                        t.assignedTo.toLowerCase().contains(_searchQuery.toLowerCase());
+                  }).toList();
+
+                  if (filtered.isEmpty) {
+                    return _buildEmptyState(primaryColor);
+                  }
+
+                  return LayoutBuilder(
+                    builder: (context, constraints) {
+                      if (constraints.maxWidth > 900) {
+                        return _buildKanbanColumns(filtered, primaryColor);
+                      }
+                      return _buildTaskList(filtered, primaryColor);
+                    },
+                  );
+                },
+                loading: () => const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32),
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
+                error: (err, _) => Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Text('Error loading tasks: $err'),
+                  ),
                 ),
               ),
-              error: (err, _) => Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Text('Error loading tasks: $err'),
-                ),
-              ),
-            ),
+            ]
+            // Tab 1: Daily Clocking View
+            else ...[
+              const ClockingTimelineView(embedded: true),
+            ],
           ],
         ),
       ),
@@ -104,6 +127,90 @@ class _TaskBoardPageState extends ConsumerState<TaskBoardPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFEFF3F6),
       body: mainBody,
+    );
+  }
+
+  Widget _buildTabSelector(Color primaryColor) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFE2E8F0),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      padding: const EdgeInsets.all(3),
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              onTap: () => setState(() => _activeTab = 0),
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: _activeTab == 0 ? Colors.white : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: _activeTab == 0
+                      ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)]
+                      : null,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.assignment_outlined,
+                      size: 18,
+                      color: _activeTab == 0 ? primaryColor : const Color(0xFF64748B),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Task Tracker',
+                      style: TextStyle(
+                        fontWeight: _activeTab == 0 ? FontWeight.bold : FontWeight.w500,
+                        color: _activeTab == 0 ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: InkWell(
+              onTap: () => setState(() => _activeTab = 1),
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: _activeTab == 1 ? Colors.white : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: _activeTab == 1
+                      ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)]
+                      : null,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.timer_outlined,
+                      size: 18,
+                      color: _activeTab == 1 ? primaryColor : const Color(0xFF64748B),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Daily Clocking',
+                      style: TextStyle(
+                        fontWeight: _activeTab == 1 ? FontWeight.bold : FontWeight.w500,
+                        color: _activeTab == 1 ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -141,12 +248,12 @@ class _TaskBoardPageState extends ConsumerState<TaskBoardPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Task & Code Hour Tracker',
+                      'Tasks and Clocking Management',
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
                     ),
                     SizedBox(height: 2),
                     Text(
-                      'Project assignments & code duration logs',
+                      'Manage employee task assignments & review daily activity clockings',
                       style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                     ),
                   ],

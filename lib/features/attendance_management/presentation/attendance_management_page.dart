@@ -29,8 +29,6 @@ enum AttendanceCategoryTab {
   staticAttendance,
   siteVisitAttendance,
   onDutyManagement,
-  taskTracker,
-  dailyClocking,
   attendanceSettings,
   auditLogs,
 }
@@ -438,16 +436,6 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
         icon: Icons.business_center_outlined,
         label: 'On-Duty',
       ),
-      _buildBottomNavItem(
-        tab: AttendanceCategoryTab.taskTracker,
-        icon: Icons.assignment_outlined,
-        label: 'Task Tracker',
-      ),
-      _buildBottomNavItem(
-        tab: AttendanceCategoryTab.dailyClocking,
-        icon: Icons.timer_outlined,
-        label: 'Daily Clocking',
-      ),
     ];
 
     return Container(
@@ -547,12 +535,6 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
 
       case AttendanceCategoryTab.onDutyManagement:
         return const OnDutyManagementView();
-
-      case AttendanceCategoryTab.taskTracker:
-        return const TaskBoardPage(embedded: true);
-
-      case AttendanceCategoryTab.dailyClocking:
-        return const ClockingTimelineView(embedded: true);
 
       case AttendanceCategoryTab.attendanceSettings:
         return const AttendanceSettingsEmbeddedView();

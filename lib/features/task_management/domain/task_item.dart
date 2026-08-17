@@ -26,6 +26,19 @@ class TaskItem {
 
   double get durationInHours => duration.inMinutes / 60.0;
 
+  String get formattedDuration {
+    final dur = duration;
+    final hours = dur.inHours;
+    final mins = dur.inMinutes.remainder(60);
+    if (hours > 0 && mins > 0) {
+      return '$hours hr $mins min';
+    } else if (hours > 0) {
+      return '$hours hr${hours > 1 ? 's' : ''}';
+    } else {
+      return '$mins min';
+    }
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,

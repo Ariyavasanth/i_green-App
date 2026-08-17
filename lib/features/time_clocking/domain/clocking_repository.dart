@@ -8,9 +8,13 @@ abstract class ClockingRepository {
 
   Future<ClockEntry?> getActiveEntry(String employeeId);
 
+  Future<List<ClockEntry>> getAllActiveEntries();
+
   Future<void> startClockEntry(ClockEntry entry);
 
   Future<void> clockOutActiveEntry(String employeeId, {DateTime? time});
+
+  Future<void> adminClockOutEntry(String id, DateTime endTime);
 
   Future<double> getTotalWorkHours(String employeeId, DateTime date);
 

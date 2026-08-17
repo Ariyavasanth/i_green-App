@@ -127,7 +127,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/tasks-and-timesheets',
-            builder: (_, _) => const TaskBoardPage(),
+            builder: (_, state) {
+              final action = state.uri.queryParameters['action'];
+              final tab = state.uri.queryParameters['tab'];
+              int initialTab = 0;
+              if (action == 'clock_activity' || tab == '1' || tab == 'clocking') {
+                initialTab = 1;
+              }
+              return TaskBoardPage(initialTab: initialTab);
+            },
           ),
           GoRoute(
             path: '/site-visit-attendance',

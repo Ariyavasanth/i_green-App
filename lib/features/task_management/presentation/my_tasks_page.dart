@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../domain/task_item.dart';
 import '../providers/task_providers.dart';
 import '../../employee/providers/employee_providers.dart';
+import '../../time_clocking/providers/clocking_providers.dart';
 
 class MyTasksPage extends ConsumerStatefulWidget {
   const MyTasksPage({
@@ -42,24 +43,95 @@ class _MyTasksPageState extends ConsumerState<MyTasksPage> {
 
   Future<void> _startTask(TaskItem task) async {
     final repo = ref.read(taskRepositoryProvider);
+    final clockingRepo = ref.read(clockingRepositoryProvider);
+    final rawEmpId = task.assignedTo.isNotEmpty ? task.assignedTo : _selectedEmployeeId;
+    final empId = rawEmpId == 'EMP-0001' ? 'EMP-001' : rawEmpId;
+    final now = DateTime.now();
+
+    // 1. Check if a Clocking activity is currently running
+    final activeClocking = await clockingRepo.getActiveEntry(empId) ??
+        await clockingRepo.getActiveEntry('EMP-001') ??
+        await clockingRepo.getActiveEntry('EMP-0001');
+
+    if (activeClocking != null) {
+      if (mounted) {
+        await showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 24),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Activity Currently Running',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              'Clocking activity "${activeClocking.entryType}" is currently running.\n\nPlease stop your active clocking activity before starting a task.',
+              style: const TextStyle(fontSize: 14, color: Color(0xFF334155)),
+            ),
+            actions: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF9CC70A),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
+
+    // 2. Auto-complete any other task currently IN_PROGRESS for this employee
+    final allTasks = await repo.getTasks(assignedTo: empId);
+    for (final t in allTasks) {
+      if (t.status == 'IN_PROGRESS' && t.id != task.id) {
+        await repo.updateTask(t.copyWith(status: 'COMPLETED', endTime: now));
+      }
+    }
+
+    // 3. Start the target task
     final updatedTask = task.copyWith(
       status: 'IN_PROGRESS',
-      startTime: DateTime.now(),
+      startTime: now,
     );
     await repo.updateTask(updatedTask);
-    ref.invalidate(tasksProvider);
-    ref.invalidate(taskProjectHoursProvider);
+    _refreshAll(empId);
   }
 
   Future<void> _stopTask(TaskItem task) async {
     final repo = ref.read(taskRepositoryProvider);
+    final empId = task.assignedTo.isNotEmpty ? task.assignedTo : _selectedEmployeeId;
     final updatedTask = task.copyWith(
       status: 'COMPLETED',
       endTime: DateTime.now(),
     );
     await repo.updateTask(updatedTask);
+    _refreshAll(empId);
+  }
+
+  void _refreshAll(String empId) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     ref.invalidate(tasksProvider);
+    ref.invalidate(activeTaskProvider(empId));
+    ref.invalidate(activeTaskProvider('EMP-001'));
+    ref.invalidate(activeTaskProvider('EMP-0001'));
     ref.invalidate(taskProjectHoursProvider);
+    ref.invalidate(activeClockEntryProvider(empId));
+    ref.invalidate(clockEntriesProvider((employeeId: empId, date: today)));
+    ref.invalidate(totalWorkHoursProvider((employeeId: empId, date: today)));
+    ref.invalidate(totalBreakHoursProvider((employeeId: empId, date: today)));
   }
 
   String _formatDuration(Duration duration) {

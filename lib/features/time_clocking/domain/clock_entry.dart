@@ -24,7 +24,23 @@ class ClockEntry {
 
   double get durationInHours => duration.inMinutes / 60.0;
 
-  bool get isBreak => entryType == 'LUNCH_BREAK' || entryType == 'TEA_BREAK' || entryType == 'IDLE';
+  bool get isBreak {
+    final lower = entryType.toLowerCase();
+    return lower.contains('break') || lower.contains('lunch') || lower.contains('tea') || lower == 'idle';
+  }
+
+  String get formattedDuration {
+    final dur = duration;
+    final hours = dur.inHours;
+    final mins = dur.inMinutes.remainder(60);
+    if (hours > 0 && mins > 0) {
+      return '$hours hr $mins min';
+    } else if (hours > 0) {
+      return '$hours hr${hours > 1 ? 's' : ''}';
+    } else {
+      return '$mins min';
+    }
+  }
 
   Map<String, dynamic> toMap() {
     return {

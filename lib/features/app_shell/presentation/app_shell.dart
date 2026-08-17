@@ -61,7 +61,8 @@ final userDestinationsProvider = Provider<List<SidebarDestination>>((ref) {
               d.label == 'Home' ||
               d.label == 'My Exit' ||
               d.label == 'My Asset' ||
-              allowed.contains(d.label))
+              allowed.contains(d.label) ||
+              (d.label == 'Tasks and Clocking Management' && allowed.contains('Task Management')))
           .toList();
     },
     orElse: () => AppShell.destinations,
@@ -135,7 +136,7 @@ class AppShell extends ConsumerWidget {
       'Employee',
     ),
     SidebarDestination(
-      'Task Management',
+      'Tasks and Clocking Management',
       '/tasks-and-timesheets',
       Icons.assignment_outlined,
       'Employee',

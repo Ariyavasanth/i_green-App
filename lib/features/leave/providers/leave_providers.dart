@@ -88,7 +88,7 @@ final currentEmployeeProvider = Provider<Employee?>((ref) {
       if (list.isEmpty) {
         return const Employee(
           id: 1,
-          employeeId: 'EMP-0001',
+          employeeId: 'EMP-001',
           firstName: 'Admin',
           lastName: 'User',
           emailAddress: 'admin@company.com',
@@ -123,7 +123,7 @@ final currentEmployeeProvider = Provider<Employee?>((ref) {
     },
     orElse: () => const Employee(
       id: 1,
-      employeeId: 'EMP-0001',
+      employeeId: 'EMP-001',
       firstName: 'Admin',
       lastName: 'User',
       emailAddress: 'admin@company.com',

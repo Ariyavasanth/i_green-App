@@ -3,7 +3,7 @@ import '../domain/task_item.dart';
 import '../domain/task_repository.dart';
 
 class FirebaseTaskRepository implements TaskRepository {
-  final FirebaseFirestore _firestore;
+  final FirebaseFirestore? _firestore;
   static final List<TaskItem> _fallbackTasks = [
     TaskItem(
       id: '101',
@@ -26,10 +26,18 @@ class FirebaseTaskRepository implements TaskRepository {
   ];
 
   FirebaseTaskRepository({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+      : _firestore = firestore ?? _getFirestoreSafely();
 
-  CollectionReference<Map<String, dynamic>> get _tasksRef =>
-      _firestore.collection('tasks');
+  static FirebaseFirestore? _getFirestoreSafely() {
+    try {
+      return FirebaseFirestore.instance;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  CollectionReference<Map<String, dynamic>>? get _tasksRef =>
+      _firestore?.collection('tasks');
 
   @override
   Future<List<TaskItem>> getTasks({
@@ -39,21 +47,23 @@ class FirebaseTaskRepository implements TaskRepository {
   }) async {
     final List<TaskItem> result = [];
     try {
-      Query<Map<String, dynamic>> query = _tasksRef;
+      if (_tasksRef != null) {
+        Query<Map<String, dynamic>> query = _tasksRef!;
 
-      if (assignedTo != null && assignedTo.isNotEmpty && assignedTo != 'All') {
-        query = query.where('assigned_to', isEqualTo: assignedTo);
-      }
-      if (projectOrOfficeCode != null && projectOrOfficeCode.isNotEmpty && projectOrOfficeCode != 'All') {
-        query = query.where('project_or_office_code', isEqualTo: projectOrOfficeCode);
-      }
-      if (status != null && status.isNotEmpty && status != 'All') {
-        query = query.where('status', isEqualTo: status);
-      }
+        if (assignedTo != null && assignedTo.isNotEmpty && assignedTo != 'All') {
+          query = query.where('assigned_to', isEqualTo: assignedTo);
+        }
+        if (projectOrOfficeCode != null && projectOrOfficeCode.isNotEmpty && projectOrOfficeCode != 'All') {
+          query = query.where('project_or_office_code', isEqualTo: projectOrOfficeCode);
+        }
+        if (status != null && status.isNotEmpty && status != 'All') {
+          query = query.where('status', isEqualTo: status);
+        }
 
-      final snapshot = await query.get();
-      final firestoreTasks = snapshot.docs.map((doc) => TaskItem.fromMap(doc.data())).toList();
-      result.addAll(firestoreTasks);
+        final snapshot = await query.get();
+        final firestoreTasks = snapshot.docs.map((doc) => TaskItem.fromMap(doc.data())).toList();
+        result.addAll(firestoreTasks);
+      }
     } catch (_) {}
 
     final fallbackFiltered = _filterFallback(
@@ -97,11 +107,13 @@ class FirebaseTaskRepository implements TaskRepository {
   @override
   Future<TaskItem?> getTaskById(String id) async {
     try {
-      final doc = await _tasksRef.doc(id).get();
-      if (!doc.exists || doc.data() == null) {
-        return _fallbackTasks.firstWhere((t) => t.id == id, orElse: () => _fallbackTasks.first);
+      if (_tasksRef != null) {
+        final doc = await _tasksRef!.doc(id).get();
+        if (doc.exists && doc.data() != null) {
+          return TaskItem.fromMap(doc.data()!);
+        }
       }
-      return TaskItem.fromMap(doc.data()!);
+      return _fallbackTasks.firstWhere((t) => t.id == id, orElse: () => _fallbackTasks.first);
     } catch (_) {
       final index = _fallbackTasks.indexWhere((t) => t.id == id);
       return index >= 0 ? _fallbackTasks[index] : null;
@@ -111,7 +123,9 @@ class FirebaseTaskRepository implements TaskRepository {
   @override
   Future<void> createTask(TaskItem task) async {
     try {
-      await _tasksRef.doc(task.id).set(task.toMap());
+      if (_tasksRef != null) {
+        await _tasksRef!.doc(task.id).set(task.toMap());
+      }
     } catch (_) {}
     _fallbackTasks.removeWhere((t) => t.id == task.id);
     _fallbackTasks.insert(0, task);
@@ -120,7 +134,9 @@ class FirebaseTaskRepository implements TaskRepository {
   @override
   Future<void> updateTask(TaskItem task) async {
     try {
-      await _tasksRef.doc(task.id).update(task.toMap());
+      if (_tasksRef != null) {
+        await _tasksRef!.doc(task.id).update(task.toMap());
+      }
     } catch (_) {}
     final index = _fallbackTasks.indexWhere((t) => t.id == task.id);
     if (index >= 0) {
@@ -133,7 +149,9 @@ class FirebaseTaskRepository implements TaskRepository {
   @override
   Future<void> deleteTask(String id) async {
     try {
-      await _tasksRef.doc(id).delete();
+      if (_tasksRef != null) {
+        await _tasksRef!.doc(id).delete();
+      }
     } catch (_) {}
     _fallbackTasks.removeWhere((t) => t.id == id);
   }

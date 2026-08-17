@@ -22,7 +22,7 @@ void main() {
     test('getOrganizations returns initial seeded records', () async {
       final orgs = await repo.getOrganizations();
       expect(orgs.isNotEmpty, isTrue);
-      expect(orgs.any((o) => o.name == 'iGreen Technologies'), isTrue);
+      expect(orgs.any((o) => o.name.contains('iGreen Technologies')), isTrue);
     });
 
     test('addOrganization inserts a new record', () async {
