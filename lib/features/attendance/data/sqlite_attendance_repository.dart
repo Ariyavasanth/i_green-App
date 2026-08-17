@@ -295,11 +295,49 @@ class SqliteAttendanceRepository implements AttendanceRepository {
       message: result.message,
     );
     if (result.allowed && !(await hasAttendanceForDate(employeeId, date))) {
-      final status = _attendanceStatus(
-        scheduledCheckInTime: scheduledCheckInTime,
-        actualCheckIn: now,
-        settings: settings,
-      );
+      final db = await database;
+      Employee? employee;
+      try {
+        final maps = await db.query('employees', where: 'id = ?', whereArgs: [employeeId], limit: 1);
+        if (maps.isNotEmpty) {
+          employee = Employee.fromMap(maps.first);
+        }
+      } catch (_) {}
+
+      String status = 'Present';
+      String notes = '';
+
+      final isDynamic = employee?.isDynamicEmployee ?? false;
+      if (isDynamic) {
+        // Flexible employee:
+        // Employee starts, no "Late" calculation
+        status = 'Present';
+        notes = 'Flexible schedule';
+      } else {
+        // Fixed employee:
+        // Schedule e.g. 09:00 -> 18:00
+        final schedIn = (employee?.inTime.isNotEmpty == true)
+            ? employee!.inTime
+            : (scheduledCheckInTime.isNotEmpty ? scheduledCheckInTime : '09:00');
+
+        final scheduledMinutes = _parseMinutes(schedIn);
+        final actualMinutes = now.hour * 60 + now.minute;
+        final delay = actualMinutes - scheduledMinutes;
+
+        if (delay > settings.gracePeriodMinutes) {
+          if (delay > settings.absentThresholdMinutes) {
+            status = 'Absent';
+            notes = 'Absent (Late by $delay mins)';
+          } else {
+            status = 'Late';
+            notes = 'Late = $delay minutes';
+          }
+        } else {
+          status = 'Present';
+          notes = 'On time';
+        }
+      }
+
       await markAttendance(
         employeeId: employeeId,
         employeeName: employeeName,
@@ -308,6 +346,7 @@ class SqliteAttendanceRepository implements AttendanceRepository {
         verificationStatus: result.verificationStatus,
         similarityScore: score,
         status: status,
+        notes: notes,
       );
     }
     return result;
@@ -383,6 +422,7 @@ class SqliteAttendanceRepository implements AttendanceRepository {
     required String verificationStatus,
     required double similarityScore,
     required String status,
+    String notes = '',
   }) async {
     final db = await database;
     final record = AttendanceRecord(
@@ -397,6 +437,7 @@ class SqliteAttendanceRepository implements AttendanceRepository {
       checkInTime: time,
       checkInVerificationStatus: verificationStatus,
       checkInSimilarityScore: similarityScore,
+      notes: notes,
       markedAt: DateTime.now().toIso8601String(),
     );
     await db.insert(
@@ -420,12 +461,54 @@ class SqliteAttendanceRepository implements AttendanceRepository {
 
     final inTime = existing.effectiveCheckInTime;
     final hours = _calculateTotalHours(inTime, checkOutTime);
+
+    Employee? employee;
+    try {
+      final maps = await db.query('employees', where: 'id = ?', whereArgs: [employeeId], limit: 1);
+      if (maps.isNotEmpty) {
+        employee = Employee.fromMap(maps.first);
+      }
+    } catch (_) {}
+
+    final isDynamic = employee?.isDynamicEmployee ?? false;
+    final requiredHours = (employee?.requiredWorkingHours ?? 0) > 0
+        ? employee!.requiredWorkingHours
+        : 9.0;
+
+    String finalStatus;
+    String updatedNotes;
+
+    final hasCompletedRequiredHours = hours >= requiredHours;
+
+    if (isDynamic) {
+      if (hasCompletedRequiredHours) {
+        finalStatus = 'Completed';
+        updatedNotes = 'Worked ${hours.toStringAsFixed(1)} hrs (Completed ${requiredHours.toStringAsFixed(0)} hrs target)';
+      } else {
+        finalStatus = 'Insufficient hours';
+        updatedNotes = 'Worked ${hours.toStringAsFixed(1)} hrs (Insufficient hours - target ${requiredHours.toStringAsFixed(0)} hrs)';
+      }
+    } else {
+      if (hasCompletedRequiredHours) {
+        finalStatus = existing.status == 'Late' ? 'Late' : 'Completed';
+        updatedNotes = existing.notes.isNotEmpty
+            ? '${existing.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Completed shift)'
+            : 'Worked ${hours.toStringAsFixed(1)} hrs (Completed shift)';
+      } else {
+        finalStatus = 'Insufficient hours';
+        updatedNotes = existing.notes.isNotEmpty
+            ? '${existing.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Insufficient hours)'
+            : 'Worked ${hours.toStringAsFixed(1)} hrs (Insufficient hours)';
+      }
+    }
+
     final updatedRecord = existing.copyWith(
       checkOutTime: checkOutTime,
       checkOutVerificationStatus: verificationStatus,
       checkOutSimilarityScore: similarityScore,
       totalHours: hours,
-      status: existing.status == 'Present' || existing.status == 'Late' ? 'Checked Out' : existing.status,
+      status: finalStatus,
+      notes: updatedNotes,
     );
 
     await db.update(

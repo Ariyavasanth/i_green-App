@@ -82,9 +82,11 @@ class AttendanceTableView extends StatelessWidget {
     Color statusColor;
     switch (record.status) {
       case 'Present':
+      case 'Completed':
         statusColor = const Color(0xFF2E7D32);
         break;
       case 'Late':
+      case 'Insufficient hours':
         statusColor = const Color(0xFFE65100);
         break;
       case 'Checked Out':

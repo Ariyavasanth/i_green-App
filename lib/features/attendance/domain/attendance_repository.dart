@@ -53,6 +53,7 @@ abstract class AttendanceRepository {
     required String verificationStatus,
     required double similarityScore,
     required String status,
+    String notes = '',
   });
   Future<void> checkOut({
     required int employeeId,

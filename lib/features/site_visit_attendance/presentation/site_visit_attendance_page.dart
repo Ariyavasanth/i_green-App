@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../employee/domain/employee.dart';
@@ -43,6 +46,389 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
 
   String _formatKey(DateTime date) =>
       '${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}';
+
+  Future<void> _openMap(double latitude, double longitude, {String address = ''}) async {
+    final query = (latitude != 0.0 || longitude != 0.0)
+        ? '$latitude,$longitude'
+        : (address.isNotEmpty ? Uri.encodeComponent(address) : '');
+
+    if (query.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No location coordinates or address available for this record.')),
+        );
+      }
+      return;
+    }
+
+    final Uri googleMapsUrl = Uri.parse('https://www.google.com/maps/search/?api=1&query=$query');
+    final Uri geoUrl = Uri.parse('geo:$latitude,$longitude?q=$query');
+
+    try {
+      if (await canLaunchUrl(googleMapsUrl)) {
+        await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
+        return;
+      }
+      if (await canLaunchUrl(geoUrl)) {
+        await launchUrl(geoUrl, mode: LaunchMode.externalApplication);
+        return;
+      }
+      // Direct launch fallback without canLaunchUrl check (fixes Android 11+ package visibility restriction)
+      await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      try {
+        await launchUrl(googleMapsUrl, mode: LaunchMode.platformDefault);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not open map: $e')),
+          );
+        }
+      }
+    }
+  }
+
+  void _openPhotoViewer(BuildContext context, String photoUrl) {
+    if (photoUrl.isEmpty) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Align(
+              alignment: Alignment.topRight,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white),
+                onPressed: () => Navigator.of(ctx).pop(),
+              ),
+            ),
+            Flexible(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: InteractiveViewer(
+                  child: photoUrl.startsWith('http')
+                      ? Image.network(
+                          photoUrl,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(20),
+                              child: Text('Failed to load photo', style: TextStyle(color: Colors.white)),
+                            ),
+                          ),
+                        )
+                      : Image.file(
+                          File(photoUrl),
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(20),
+                              child: Text('Failed to load photo', style: TextStyle(color: Colors.white)),
+                            ),
+                          ),
+                        ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openCaptureForm() {
+    setState(() => _showVisitForm = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _captureCardKey.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          alignment: 0.1,
+        );
+      } else {
+        _scrollToBottom();
+      }
+    });
+  }
+
+  void _scrollToBottom() {
+    if (!_scrollController.hasClients) return;
+    _scrollController.animateTo(
+      _scrollController.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  Widget _cardShell(Widget child) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  Widget _buildCountChip(String label) {
+    final color = AppColors.active;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color)),
+    );
+  }
+
+  Widget _legend(Color color, String label) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3)),
+          ),
+          const SizedBox(width: 5),
+          Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+        ],
+      );
+
+  Future<void> _confirmRemoveAttendance(List<SiteVisitRecord> visits) async {
+    if (visits.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No attendance record to remove.')),
+      );
+      return;
+    }
+
+    final record = visits.last;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove attendance?'),
+        content: Text('Delete the latest entry for ${record.siteName} at ${record.visitTime}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    await ref.read(siteVisitAttendanceRepositoryProvider).deleteVisit(record.id);
+    ref.invalidate(allSiteVisitRecordsProvider(null));
+    ref.invalidate(siteVisitRecordsProvider((employeeId: record.employeeId, visitDate: record.visitDate)));
+    ref.invalidate(siteVisitRecordsProvider((employeeId: ref.read(currentEmployeeProvider)!.id, visitDate: _formatKey(DateTime.now()))));
+    ref.invalidate(siteVisitRecordsProvider((employeeId: ref.read(currentEmployeeProvider)!.id, visitDate: _formatKey(_selectedDate))));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Attendance removed.')),
+    );
+  }
+
+  int _roughHoursBetween(String start, String end) {
+    int minutes(String value) {
+      final parsed = DateFormat('hh:mm a').parse(value);
+      return parsed.hour * 60 + parsed.minute;
+    }
+
+    final diff = minutes(end) - minutes(start);
+    return diff < 0 ? 0 : diff ~/ 60;
+  }
+
+  DateTime? _parseDateKey(String value) {
+    if (value.isEmpty) return null;
+    try {
+      final isoDate = DateTime.tryParse(value);
+      if (isoDate != null) return isoDate;
+      final parts = value.split('-');
+      if (parts.length == 3) {
+        if (parts[0].length == 4) {
+          return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+        } else {
+          return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> _openCameraAndSave(Employee employee) async {
+    final siteName = _siteController.text.trim();
+    if (siteName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a site name before opening the camera.')),
+      );
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      final cameraStatus = await Permission.camera.request();
+      if (!cameraStatus.isGranted) {
+        throw Exception('Camera permission is required to capture a site visit photo.');
+      }
+
+      final cameras = await availableCameras();
+      if (cameras.isEmpty) {
+        throw Exception('No camera is available on this device.');
+      }
+
+      final pickedPath = await Navigator.of(context).push<String>(
+        MaterialPageRoute(builder: (_) => SiteVisitCameraPage(camera: cameras.first)),
+      );
+      if (pickedPath == null || pickedPath.isEmpty) {
+        throw Exception('Camera was closed without taking a photo.');
+      }
+
+      final position = await _getCurrentLocationWithPermissionPrompt();
+      final now = DateTime.now();
+      final visitDate = DateFormat('dd-MM-yyyy').format(now);
+      final visitTime = DateFormat('hh:mm a').format(now);
+      final repo = ref.read(siteVisitAttendanceRepositoryProvider);
+      final stampedAsset = await repo.createVisitPhotoUrl(
+        localImagePath: pickedPath,
+        employeeName: employee.fullName,
+        siteName: siteName,
+        visitDate: visitDate,
+        visitTime: visitTime,
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
+
+      await repo.saveVisit(
+        SiteVisitRecord(
+          id: 0,
+          employeeId: employee.id,
+          employeeName: employee.fullName,
+          siteName: siteName,
+          visitDate: visitDate,
+          visitTime: visitTime,
+          photoUrl: stampedAsset.url,
+          photoPublicId: stampedAsset.publicId,
+          latitude: position.latitude,
+          longitude: position.longitude,
+          address: '',
+          notes: _notesController.text.trim(),
+          createdAt: DateTime.now().toIso8601String(),
+        ),
+      );
+
+      ref.invalidate(siteVisitRecordsProvider((employeeId: employee.id, visitDate: _formatKey(DateTime.now()))));
+      ref.invalidate(siteVisitRecordsProvider((employeeId: employee.id, visitDate: _formatKey(_selectedDate))));
+      ref.invalidate(allSiteVisitRecordsProvider(null));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Site visit saved successfully.')),
+        );
+        setState(() {
+          _saving = false;
+          _showVisitForm = false;
+          _siteController.clear();
+          _notesController.clear();
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _openCheckoutAndSave(Employee employee) async {
+    setState(() => _saving = true);
+    try {
+      final position = await _getCurrentLocationWithPermissionPrompt();
+      final now = DateTime.now();
+      final visitDate = DateFormat('dd-MM-yyyy').format(now);
+      final visitTime = DateFormat('hh:mm a').format(now);
+      final repo = ref.read(siteVisitAttendanceRepositoryProvider);
+
+      await repo.saveDayCheckout(
+        employeeId: employee.id,
+        employeeName: employee.fullName,
+        visitDate: visitDate,
+        visitTime: visitTime,
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
+
+      ref.invalidate(siteVisitRecordsProvider((employeeId: employee.id, visitDate: _formatKey(DateTime.now()))));
+      ref.invalidate(siteVisitRecordsProvider((employeeId: employee.id, visitDate: _formatKey(_selectedDate))));
+      ref.invalidate(allSiteVisitRecordsProvider(null));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Day checkout saved successfully.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<Position> _getCurrentLocationWithPermissionPrompt() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      throw Exception(
+        'Location services are turned off. Please enable location from your phone settings and try again.',
+      );
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    if (permission == LocationPermission.denied) {
+      throw Exception(
+        'Location permission is denied. Please allow location access when the phone prompt appears.',
+      );
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      throw Exception(
+        'Location permission is permanently denied. Open system settings and allow location access for this app.',
+      );
+    }
+
+    return Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+  }
 
   @override
   void dispose() {
@@ -178,7 +564,6 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
           ),
           const SizedBox(height: 16),
 
-          // On-Duty Active / Assigned Card
           activeOnDutyAsync.when(
             loading: () => const SizedBox.shrink(),
             error: (e, _) => const SizedBox.shrink(),
@@ -222,7 +607,6 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
         final lng = firstVisit?.longitude ?? 80.1000;
         final startTime = firstVisit?.visitTime ?? '10:00 PM';
 
-        // Calculate work time elapsed
         String workTimeStr = '00h 00m / 09h';
         if (firstVisit != null) {
           try {
@@ -296,48 +680,51 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
               const SizedBox(height: 16),
 
               if (visits.isNotEmpty) ...[
-                // Captured Photo preview if available
                 if (firstVisit?.photoUrl.isNotEmpty == true) ...[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      height: 140,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.black12,
-                        image: DecorationImage(
-                          image: NetworkImage(firstVisit!.photoUrl),
-                          fit: BoxFit.cover,
+                  GestureDetector(
+                    onTap: () => _openPhotoViewer(context, firstVisit!.photoUrl),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        height: 140,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Colors.black12,
+                          image: DecorationImage(
+                            image: firstVisit!.photoUrl.startsWith('http')
+                                ? NetworkImage(firstVisit.photoUrl)
+                                : FileImage(File(firstVisit.photoUrl)) as ImageProvider,
+                            fit: BoxFit.cover,
+                          ),
                         ),
-                      ),
-                      child: Stack(
-                        children: [
-                          Positioned(
-                            bottom: 8,
-                            left: 8,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.7),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Row(
-                                children: [
-                                  Icon(Icons.camera_alt, color: Colors.white, size: 14),
-                                  SizedBox(width: 4),
-                                  Text('Photo Captured', style: TextStyle(color: Colors.white, fontSize: 11)),
-                                ],
+                        child: Stack(
+                          children: [
+                            Positioned(
+                              bottom: 8,
+                              left: 8,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.7),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Icon(Icons.camera_alt, color: Colors.white, size: 14),
+                                    SizedBox(width: 4),
+                                    Text('Photo Captured (Tap to view)', style: TextStyle(color: Colors.white, fontSize: 11)),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(height: 12),
                 ],
 
-                // Attendance Metadata Card
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -360,7 +747,7 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF9CC70A).withOpacity(0.15),
+                              color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: const Text(
@@ -379,28 +766,39 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
                         ],
                       ),
                       const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Location', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                          Text('📍 $locationName', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Latitude', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                          Text(lat.toStringAsFixed(4), style: const TextStyle(fontSize: 12, color: Color(0xFF414A51))),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Longitude', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                          Text(lng.toStringAsFixed(4), style: const TextStyle(fontSize: 12, color: Color(0xFF414A51))),
-                        ],
+                      InkWell(
+                        onTap: () => _openMap(lat, lng, address: locationName),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: Column(
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('Location', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                  Text('📍 $locationName', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, decoration: TextDecoration.underline)),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('Latitude', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                  Text(lat.toStringAsFixed(4), style: const TextStyle(fontSize: 12, color: Color(0xFF414A51), fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('Longitude', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                  Text(lng.toStringAsFixed(4), style: const TextStyle(fontSize: 12, color: Color(0xFF414A51), fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 6),
                       Row(
@@ -667,7 +1065,6 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
               final isToday = key == todayKey;
               final isLeave = leaveDates.contains(key);
               final visitCount = visitsByDate[key]?.length ?? 0;
-              final record = visitsByDate[key]?.isNotEmpty == true ? visitsByDate[key]!.last : null;
 
               Color? bg;
               if (isLeave) {
@@ -820,15 +1217,28 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: Container(
-              width: 56,
-              height: 56,
-              color: const Color(0xFFF1F5F9),
-              child: visit.photoUrl.isEmpty
-                  ? const Icon(Icons.image_outlined, color: AppColors.textSecondary)
-                  : Image.network(visit.photoUrl, fit: BoxFit.cover),
+          GestureDetector(
+            onTap: () => _openPhotoViewer(context, visit.photoUrl),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                width: 56,
+                height: 56,
+                color: const Color(0xFFF1F5F9),
+                child: visit.photoUrl.isEmpty
+                    ? const Icon(Icons.image_outlined, color: AppColors.textSecondary)
+                    : (visit.photoUrl.startsWith('http')
+                        ? Image.network(
+                            visit.photoUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: AppColors.textSecondary),
+                          )
+                        : Image.file(
+                            File(visit.photoUrl),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: AppColors.textSecondary),
+                          )),
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -856,6 +1266,37 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
                       visit.visitTime,
                       style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                     ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => _openMap(visit.latitude, visit.longitude, address: visit.address),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.map_outlined, size: 14, color: Color(0xFF9CC70A)),
+                              const SizedBox(width: 3),
+                              Flexible(
+                                child: Text(
+                                  (visit.latitude != 0.0 || visit.longitude != 0.0)
+                                      ? '${visit.latitude.toStringAsFixed(5)}, ${visit.longitude.toStringAsFixed(5)}'
+                                      : (visit.address.isNotEmpty ? visit.address : 'No Geo Data'),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFF414A51),
+                                    fontWeight: FontWeight.bold,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -866,299 +1307,6 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
     );
   }
 
-  void _openCaptureForm() {
-    setState(() => _showVisitForm = true);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final ctx = _captureCardKey.currentContext;
-      if (ctx != null) {
-        Scrollable.ensureVisible(
-          ctx,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-          alignment: 0.1,
-        );
-      } else {
-        _scrollToBottom();
-      }
-    });
-  }
-
-  void _scrollToBottom() {
-    if (!_scrollController.hasClients) return;
-    _scrollController.animateTo(
-      _scrollController.position.maxScrollExtent,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
-  }
-
-  Widget _cardShell(Widget child) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: child,
-    );
-  }
-
-  Widget _buildCountChip(String label) {
-    final color = AppColors.active;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-      ),
-      child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color)),
-    );
-  }
-
-  Future<void> _confirmRemoveAttendance(List<SiteVisitRecord> visits) async {
-    if (visits.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No attendance record to remove.')),
-      );
-      return;
-    }
-
-    final record = visits.last;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Remove attendance?'),
-        content: Text('Delete the latest entry for ${record.siteName} at ${record.visitTime}?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    await ref.read(siteVisitAttendanceRepositoryProvider).deleteVisit(record.id);
-    ref.invalidate(allSiteVisitRecordsProvider(null));
-    ref.invalidate(siteVisitRecordsProvider((employeeId: record.employeeId, visitDate: record.visitDate)));
-    ref.invalidate(siteVisitRecordsProvider((employeeId: ref.read(currentEmployeeProvider)!.id, visitDate: _formatKey(DateTime.now()))));
-    ref.invalidate(siteVisitRecordsProvider((employeeId: ref.read(currentEmployeeProvider)!.id, visitDate: _formatKey(_selectedDate))));
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Attendance removed.')),
-    );
-  }
-
-  Widget _legend(Color color, String label) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3)),
-          ),
-          const SizedBox(width: 5),
-          Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-        ],
-      );
-
-  int _roughHoursBetween(String start, String end) {
-    int minutes(String value) {
-      final parsed = DateFormat('hh:mm a').parse(value);
-      return parsed.hour * 60 + parsed.minute;
-    }
-
-    final diff = minutes(end) - minutes(start);
-    return diff < 0 ? 0 : diff ~/ 60;
-  }
-
-  DateTime? _parseDateKey(String value) {
-    if (value.isEmpty) return null;
-    try {
-      final isoDate = DateTime.tryParse(value);
-      if (isoDate != null) return isoDate;
-      final parts = value.split('-');
-      if (parts.length == 3) {
-        if (parts[0].length == 4) {
-          return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
-        } else {
-          return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
-        }
-      }
-    } catch (_) {}
-    return null;
-  }
-
-  Future<void> _openCameraAndSave(Employee employee) async {
-    final siteName = _siteController.text.trim();
-    if (siteName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a site name before opening the camera.')),
-      );
-      return;
-    }
-
-    setState(() => _saving = true);
-    try {
-      final cameraStatus = await Permission.camera.request();
-      if (!cameraStatus.isGranted) {
-        throw Exception('Camera permission is required to capture a site visit photo.');
-      }
-
-      final cameras = await availableCameras();
-      if (cameras.isEmpty) {
-        throw Exception('No camera is available on this device.');
-      }
-
-      final pickedPath = await Navigator.of(context).push<String>(
-        MaterialPageRoute(builder: (_) => SiteVisitCameraPage(camera: cameras.first)),
-      );
-      if (pickedPath == null || pickedPath.isEmpty) {
-        throw Exception('Camera was closed without taking a photo.');
-      }
-
-      final position = await _getCurrentLocationWithPermissionPrompt();
-      final now = DateTime.now();
-      final visitDate = DateFormat('dd-MM-yyyy').format(now);
-      final visitTime = DateFormat('hh:mm a').format(now);
-      final repo = ref.read(siteVisitAttendanceRepositoryProvider);
-      final stampedAsset = await repo.createVisitPhotoUrl(
-        localImagePath: pickedPath,
-        employeeName: employee.fullName,
-        siteName: siteName,
-        visitDate: visitDate,
-        visitTime: visitTime,
-        latitude: position.latitude,
-        longitude: position.longitude,
-      );
-
-      await repo.saveVisit(
-        SiteVisitRecord(
-          id: 0,
-          employeeId: employee.id,
-          employeeName: employee.fullName,
-          siteName: siteName,
-          visitDate: visitDate,
-          visitTime: visitTime,
-          photoUrl: stampedAsset.url,
-          photoPublicId: stampedAsset.publicId,
-          latitude: position.latitude,
-          longitude: position.longitude,
-          address: '',
-          notes: _notesController.text.trim(),
-          createdAt: DateTime.now().toIso8601String(),
-        ),
-      );
-
-      ref.invalidate(siteVisitRecordsProvider((employeeId: employee.id, visitDate: _formatKey(DateTime.now()))));
-      ref.invalidate(siteVisitRecordsProvider((employeeId: employee.id, visitDate: _formatKey(_selectedDate))));
-      ref.invalidate(allSiteVisitRecordsProvider(null));
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Site visit saved successfully.')),
-        );
-        setState(() {
-          _saving = false;
-          _showVisitForm = false;
-          _siteController.clear();
-          _notesController.clear();
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  Future<void> _openCheckoutAndSave(Employee employee) async {
-    setState(() => _saving = true);
-    try {
-      final position = await _getCurrentLocationWithPermissionPrompt();
-      final now = DateTime.now();
-      final visitDate = DateFormat('dd-MM-yyyy').format(now);
-      final visitTime = DateFormat('hh:mm a').format(now);
-      final repo = ref.read(siteVisitAttendanceRepositoryProvider);
-
-      await repo.saveDayCheckout(
-        employeeId: employee.id,
-        employeeName: employee.fullName,
-        visitDate: visitDate,
-        visitTime: visitTime,
-        latitude: position.latitude,
-        longitude: position.longitude,
-      );
-
-      ref.invalidate(siteVisitRecordsProvider((employeeId: employee.id, visitDate: _formatKey(DateTime.now()))));
-      ref.invalidate(siteVisitRecordsProvider((employeeId: employee.id, visitDate: _formatKey(_selectedDate))));
-      ref.invalidate(allSiteVisitRecordsProvider(null));
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Day checkout saved successfully.')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  Future<Position> _getCurrentLocationWithPermissionPrompt() async {
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      throw Exception(
-        'Location services are turned off. Please enable location from your phone settings and try again.',
-      );
-    }
-
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-
-    if (permission == LocationPermission.denied) {
-      throw Exception(
-        'Location permission is denied. Please allow location access when the phone prompt appears.',
-      );
-    }
-
-    if (permission == LocationPermission.deniedForever) {
-      throw Exception(
-        'Location permission is permanently denied. Open system settings and allow location access for this app.',
-      );
-    }
-
-    return Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-  }
-
-  // ==========================================
-  // TAB 2: LEAVE TAB FOR SITE VISIT ATTENDANCE
-  // ==========================================
   Widget _buildLeaveTab(Employee currentEmp, AsyncValue<List<LeaveRequest>> userLeaveRequestsAsync) {
     return userLeaveRequestsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF9CC70A))),

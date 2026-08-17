@@ -144,11 +144,57 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     );
     await logAttendanceAttempt(employeeId: employeeId, employeeName: employeeName, date: date, time: time, verificationStatus: result.verificationStatus, similarityScore: score, message: result.message);
     if (result.allowed && !(await hasAttendanceForDate(employeeId, date))) {
-      final scheduledMinutes = int.tryParse(scheduledCheckInTime.split(':').first) ?? 0;
-      final actualMinutes = now.hour * 60 + now.minute;
-      final delay = actualMinutes - scheduledMinutes;
-      final status = delay <= settings.gracePeriodMinutes ? 'Present' : delay > settings.absentThresholdMinutes ? 'Absent' : 'Late';
-      await markAttendance(employeeId: employeeId, employeeName: employeeName, date: date, time: time, verificationStatus: result.verificationStatus, similarityScore: score, status: status);
+      Employee? employee;
+      try {
+        final snap = await _firestore.collection('employees').where('id', isEqualTo: employeeId).limit(1).get();
+        if (snap.docs.isNotEmpty) {
+          employee = Employee.fromMap(snap.docs.first.data());
+        }
+      } catch (_) {}
+
+      String status = 'Present';
+      String notes = '';
+
+      final isDynamic = employee?.isDynamicEmployee ?? false;
+      if (isDynamic) {
+        status = 'Present';
+        notes = 'Flexible schedule';
+      } else {
+        final schedIn = (employee?.inTime.isNotEmpty == true)
+            ? employee!.inTime
+            : (scheduledCheckInTime.isNotEmpty ? scheduledCheckInTime : '09:00');
+
+        final parts = schedIn.split(':');
+        final schedHours = parts.isNotEmpty ? (int.tryParse(parts[0]) ?? 9) : 9;
+        final schedMins = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
+        final scheduledMinutes = schedHours * 60 + schedMins;
+        final actualMinutes = now.hour * 60 + now.minute;
+        final delay = actualMinutes - scheduledMinutes;
+
+        if (delay > settings.gracePeriodMinutes) {
+          if (delay > settings.absentThresholdMinutes) {
+            status = 'Absent';
+            notes = 'Absent (Late by $delay mins)';
+          } else {
+            status = 'Late';
+            notes = 'Late = $delay minutes';
+          }
+        } else {
+          status = 'Present';
+          notes = 'On time';
+        }
+      }
+
+      await markAttendance(
+        employeeId: employeeId,
+        employeeName: employeeName,
+        date: date,
+        time: time,
+        verificationStatus: result.verificationStatus,
+        similarityScore: score,
+        status: status,
+        notes: notes,
+      );
     }
     return result;
   }
@@ -204,7 +250,16 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
   }
 
   @override
-  Future<void> markAttendance({required int employeeId, required String employeeName, required String date, required String time, required String verificationStatus, required double similarityScore, required String status}) async {
+  Future<void> markAttendance({
+    required int employeeId,
+    required String employeeName,
+    required String date,
+    required String time,
+    required String verificationStatus,
+    required double similarityScore,
+    required String status,
+    String notes = '',
+  }) async {
     await _recordsRef.doc('${employeeId}_${date.replaceAll('-', '')}').set({
       'employee_id': employeeId,
       'employee_name': employeeName,
@@ -216,6 +271,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       'check_in_time': time,
       'check_in_verification_status': verificationStatus,
       'check_in_similarity_score': similarityScore,
+      'notes': notes,
       'marked_at': DateTime.now().toIso8601String(),
     }, SetOptions(merge: true));
   }
@@ -245,12 +301,53 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       }
     } catch (_) {}
 
+    Employee? employee;
+    try {
+      final empSnap = await _firestore.collection('employees').where('id', isEqualTo: employeeId).limit(1).get();
+      if (empSnap.docs.isNotEmpty) {
+        employee = Employee.fromMap(empSnap.docs.first.data());
+      }
+    } catch (_) {}
+
+    final isDynamic = employee?.isDynamicEmployee ?? false;
+    final requiredHours = (employee?.requiredWorkingHours ?? 0) > 0
+        ? employee!.requiredWorkingHours
+        : 9.0;
+
+    String finalStatus;
+    String updatedNotes;
+
+    final hasCompletedRequiredHours = hours >= requiredHours;
+
+    if (isDynamic) {
+      if (hasCompletedRequiredHours) {
+        finalStatus = 'Completed';
+        updatedNotes = 'Worked ${hours.toStringAsFixed(1)} hrs (Completed ${requiredHours.toStringAsFixed(0)} hrs target)';
+      } else {
+        finalStatus = 'Insufficient hours';
+        updatedNotes = 'Worked ${hours.toStringAsFixed(1)} hrs (Insufficient hours - target ${requiredHours.toStringAsFixed(0)} hrs)';
+      }
+    } else {
+      if (hasCompletedRequiredHours) {
+        finalStatus = record.status == 'Late' ? 'Late' : 'Completed';
+        updatedNotes = record.notes.isNotEmpty
+            ? '${record.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Completed shift)'
+            : 'Worked ${hours.toStringAsFixed(1)} hrs (Completed shift)';
+      } else {
+        finalStatus = 'Insufficient hours';
+        updatedNotes = record.notes.isNotEmpty
+            ? '${record.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Insufficient hours)'
+            : 'Worked ${hours.toStringAsFixed(1)} hrs (Insufficient hours)';
+      }
+    }
+
     await docRef.set({
       'check_out_time': checkOutTime,
       'check_out_verification_status': verificationStatus,
       'check_out_similarity_score': similarityScore,
       'total_hours': hours,
-      'status': 'Checked Out',
+      'status': finalStatus,
+      'notes': updatedNotes,
     }, SetOptions(merge: true));
   }
 

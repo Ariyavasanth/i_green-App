@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:image/image.dart' as img;
 
 import '../domain/site_visit_attendance_repository.dart';
 import '../domain/site_visit_photo_asset.dart';
@@ -145,6 +146,28 @@ class FirebaseSiteVisitAttendanceRepository implements SiteVisitAttendanceReposi
         final file = File(localImagePath);
         if (await file.exists()) {
           bytes = await file.readAsBytes();
+        }
+      }
+
+      if (bytes != null && bytes.isNotEmpty) {
+        final decoded = img.decodeImage(bytes);
+        if (decoded != null) {
+          final stamp = img.copyResize(decoded, width: decoded.width);
+          final black = img.ColorRgb8(0, 0, 0);
+          final white = img.ColorRgb8(255, 255, 255);
+          final accent = img.ColorRgb8(156, 199, 10);
+          final footerHeight = (stamp.height * 0.22).clamp(140, 220).toInt();
+          final canvas = img.Image(width: stamp.width, height: stamp.height + footerHeight);
+          img.fill(canvas, color: black);
+          img.compositeImage(canvas, stamp, dstX: 0, dstY: 0);
+          img.fillRect(canvas, x1: 0, y1: stamp.height, x2: stamp.width, y2: stamp.height + footerHeight - 1, color: black);
+          img.fillRect(canvas, x1: 0, y1: stamp.height, x2: stamp.width, y2: stamp.height + 5, color: accent);
+          img.drawString(canvas, 'Site visit verified', font: img.arial24, x: 16, y: stamp.height + 14, color: white);
+          img.drawString(canvas, employeeName, font: img.arial24, x: 16, y: stamp.height + 42, color: white);
+          img.drawString(canvas, siteName, font: img.arial24, x: 16, y: stamp.height + 68, color: white);
+          img.drawString(canvas, 'Time: $visitDate $visitTime', font: img.arial14, x: 16, y: stamp.height + 98, color: white);
+          img.drawString(canvas, 'Geo: ${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}', font: img.arial14, x: 16, y: stamp.height + 120, color: white);
+          bytes = Uint8List.fromList(img.encodeJpg(canvas));
         }
       }
 

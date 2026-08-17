@@ -341,12 +341,18 @@ class AttendanceMatrixView extends StatelessWidget {
     } else {
       switch (record.status) {
         case 'Present':
+        case 'Completed':
+        case 'Checked Out':
           bgColor = const Color(0xFFDCFCE7);
           iconWidget = const Icon(Icons.check, size: 13, color: Color(0xFF16A34A));
           break;
         case 'Late':
           bgColor = const Color(0xFFFFEDD5);
           iconWidget = const Text('L', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFEA580C)));
+          break;
+        case 'Insufficient hours':
+          bgColor = const Color(0xFFFFEDD5);
+          iconWidget = const Text('I', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFEA580C)));
           break;
         case 'On Leave':
         case 'Half Day':

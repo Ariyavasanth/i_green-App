@@ -109,9 +109,12 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     switch (status.toLowerCase()) {
       case 'approved':
       case 'present':
+      case 'completed':
         return const Color(0xFF2E7D32);
       case 'pending':
       case 'late':
+      case 'insufficient hours':
+      case 'insufficient':
         return const Color(0xFFE65100);
       case 'denied':
       case 'rejected':
@@ -308,7 +311,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       return parsed != null && parsed.month == now.month && parsed.year == now.year;
     }).toList();
 
-    final presentCount = currentMonthRecords.where((r) => r.status == 'Present' || r.status == 'Checked Out').length;
+    final presentCount = currentMonthRecords.where((r) => r.status == 'Present' || r.status == 'Checked Out' || r.status == 'Completed').length;
     final absentCount = currentMonthRecords.where((r) => r.status == 'Absent').length;
     final leaveCount = leaves.where((l) => l.status == 'Approved').length;
 
@@ -436,7 +439,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         final dt = _parseKey(rec.date);
         final dateFormatted = dt != null ? DateFormat('dd MMM yyyy').format(dt) : rec.date;
         final dayName = dt != null ? DateFormat('EEEE').format(dt) : '';
-        final isPresent = rec.status == 'Present' || rec.status == 'Checked Out';
+        final isPresent = rec.status == 'Present' || rec.status == 'Checked Out' || rec.status == 'Completed';
         final statusColor = isPresent
             ? const Color(0xFF2E7D32)
             : rec.status == 'Late'
@@ -621,8 +624,8 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       }
 
       final stLower = status.toLowerCase();
-      if (stLower == 'present') presentCount++;
-      else if (stLower == 'late') lateCount++;
+      if (stLower == 'present' || stLower == 'completed' || stLower == 'checked out') presentCount++;
+      else if (stLower == 'late' || stLower == 'insufficient hours' || stLower == 'insufficient') lateCount++;
       else if (stLower == 'leave') leaveCount++;
       else if (stLower == 'absent') absentCount++;
 
@@ -3038,9 +3041,11 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     Color color;
     switch (record.status) {
       case 'Present':
+      case 'Completed':
         color = const Color(0xFF2E7D32);
         break;
       case 'Late':
+      case 'Insufficient hours':
         color = const Color(0xFFE65100);
         break;
       case 'Checked Out':
@@ -3634,17 +3639,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
     try {
       final emp = widget.currentEmployee;
       final settings = await widget.attendanceRepository.getAttendanceSettings();
-      final bool canUseSite = emp.isDynamicEmployee && (emp.siteLatitude != 0 || emp.siteLongitude != 0);
-      final bool canUseOffice = emp.isStaticEmployee;
-      if (!canUseSite && !canUseOffice) {
-        if (!mounted) return;
-        setState(() {
-          _withinAllowedRadius = false;
-          _locationMessage = 'This employee is not assigned to any attendance type.';
-        });
-        return;
-      }
-      final bool isSite = canUseSite && !canUseOffice;
+      final bool isSite = emp.isDynamicEmployee && (emp.siteLatitude != 0 || emp.siteLongitude != 0);
       final double targetLat = isSite ? emp.siteLatitude : settings.officeLatitude;
       final double targetLng = isSite ? emp.siteLongitude : settings.officeLongitude;
       final int targetRadius = isSite ? emp.siteAllowedRadiusMeters : settings.allowedAttendanceRadiusMeters;
@@ -3761,12 +3756,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
 
       final emp = widget.currentEmployee;
       final settings = await widget.attendanceRepository.getAttendanceSettings();
-      final bool canUseSite = emp.isDynamicEmployee && (emp.siteLatitude != 0 || emp.siteLongitude != 0);
-      final bool canUseOffice = emp.isStaticEmployee;
-      if (!canUseSite && !canUseOffice) {
-        throw Exception('This employee is not assigned to any attendance type.');
-      }
-      final bool isSite = canUseSite && !canUseOffice;
+      final bool isSite = emp.isDynamicEmployee && (emp.siteLatitude != 0 || emp.siteLongitude != 0);
       final bool requireGps = isSite ? emp.siteRequireGpsVerification : settings.requireGpsVerification;
       double currentLat = 0.0;
       double currentLng = 0.0;

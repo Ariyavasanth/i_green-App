@@ -3,11 +3,8 @@ import '../../attendance/domain/attendance_record.dart';
 import '../domain/attendance_management_repository.dart';
 import '../domain/attendance_management_stats.dart';
 
-import 'sqlite_attendance_management_repository.dart';
-
 class FirebaseAttendanceManagementRepository implements AttendanceManagementRepository {
   final FirebaseFirestore? _customFirestore;
-  final SqliteAttendanceManagementRepository _sqliteRepo = SqliteAttendanceManagementRepository();
 
   FirebaseAttendanceManagementRepository({FirebaseFirestore? firestore})
       : _customFirestore = firestore;
@@ -35,13 +32,6 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
       }
 
       final snap = await query.get();
-      if (snap.docs.isEmpty) {
-        return await _sqliteRepo.getAllAttendanceRecords(
-          employeeId: employeeId,
-          monthYear: monthYear,
-          statusFilter: statusFilter,
-        );
-      }
       var list = snap.docs.map((d) => AttendanceRecord.fromMap(d.data())).toList();
 
       // In-memory filter for monthYear (MM-yyyy) or date range if provided
@@ -65,11 +55,7 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
       list.sort((a, b) => b.date.compareTo(a.date));
       return list;
     } catch (_) {
-      return await _sqliteRepo.getAllAttendanceRecords(
-        employeeId: employeeId,
-        monthYear: monthYear,
-        statusFilter: statusFilter,
-      );
+      return [];
     }
   }
 
@@ -84,10 +70,6 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
 
       final recordsSnap = await _recordsRef.where('date', isEqualTo: targetDate).get();
       final todayRecords = recordsSnap.docs.map((d) => AttendanceRecord.fromMap(d.data())).toList();
-
-      if (totalEmployees == 0 && todayRecords.isEmpty) {
-        return await _sqliteRepo.getAttendanceStats(date: date);
-      }
 
       int present = 0;
       int late = 0;
@@ -119,7 +101,15 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
         averageWorkHours: avgHours,
       );
     } catch (_) {
-      return await _sqliteRepo.getAttendanceStats(date: date);
+      return const AttendanceManagementStats(
+        totalEmployees: 0,
+        presentToday: 0,
+        lateToday: 0,
+        checkedOutToday: 0,
+        absentToday: 0,
+        onLeaveToday: 0,
+        averageWorkHours: 0,
+      );
     }
   }
 

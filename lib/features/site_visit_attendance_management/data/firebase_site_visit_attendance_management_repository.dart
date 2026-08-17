@@ -1,12 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'sqlite_site_visit_attendance_management_repository.dart';
 import '../../site_visit_attendance/domain/site_visit_record.dart';
 import '../domain/site_visit_attendance_management_repository.dart';
 
 class FirebaseSiteVisitAttendanceManagementRepository
     implements SiteVisitAttendanceManagementRepository {
   final FirebaseFirestore? _customFirestore;
-  final SqliteSiteVisitAttendanceManagementRepository _sqliteRepo = SqliteSiteVisitAttendanceManagementRepository();
 
   FirebaseSiteVisitAttendanceManagementRepository({FirebaseFirestore? firestore})
       : _customFirestore = firestore;
@@ -25,9 +23,7 @@ class FirebaseSiteVisitAttendanceManagementRepository
         return;
       }
       await _visitsRef.doc(id.toString()).delete();
-    } catch (_) {
-      await _sqliteRepo.deleteSiteVisit(id);
-    }
+    } catch (_) {}
   }
 
   @override
@@ -38,9 +34,6 @@ class FirebaseSiteVisitAttendanceManagementRepository
   }) async {
     try {
       QuerySnapshot<Map<String, dynamic>> snap = await _visitsRef.get();
-      if (snap.docs.isEmpty) {
-        return await _sqliteRepo.getAllSiteVisits(visitDate: visitDate, employeeId: employeeId, siteName: siteName);
-      }
       var visits = snap.docs
           .map((doc) => SiteVisitRecord.fromMap({
                 ...doc.data(),
@@ -65,7 +58,7 @@ class FirebaseSiteVisitAttendanceManagementRepository
       });
       return visits;
     } catch (_) {
-      return await _sqliteRepo.getAllSiteVisits(visitDate: visitDate, employeeId: employeeId, siteName: siteName);
+      return [];
     }
   }
 }
