@@ -26,35 +26,156 @@ class SqliteOnDutyRepository implements OnDutyRepository {
   }
 
   Future<void> _createTables(Database db) async {
+    final tableInfo = await db.rawQuery('PRAGMA table_info(on_duty_assignments)');
+    if (tableInfo.isNotEmpty) {
+      final existingColumns = tableInfo.map((row) => row['name']?.toString() ?? '').toSet();
+      if (existingColumns.contains('from_location') || !existingColumns.contains('destination')) {
+        await _migrateTable(db, tableInfo);
+        return;
+      }
+    }
+
     await db.execute('''
       CREATE TABLE IF NOT EXISTS on_duty_assignments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         employee_id INTEGER NOT NULL,
         employee_name TEXT NOT NULL,
-        attendance_id INTEGER,
-        from_location TEXT NOT NULL,
-        from_latitude REAL,
-        from_longitude REAL,
+        od_type TEXT NOT NULL DEFAULT 'Customer Visit',
+        purpose TEXT NOT NULL DEFAULT '',
         destination TEXT NOT NULL,
-        destination_latitude REAL,
-        destination_longitude REAL,
-        task TEXT NOT NULL,
-        instructions TEXT NOT NULL DEFAULT '',
-        assigned_by TEXT NOT NULL DEFAULT 'Supervisor',
-        assigned_time TEXT NOT NULL,
-        started_time TEXT,
-        completed_time TEXT,
-        duration_minutes INTEGER NOT NULL DEFAULT 0,
-        allow_checkout_from_destination INTEGER NOT NULL DEFAULT 0,
-        photo_proof_path TEXT,
-        status TEXT NOT NULL DEFAULT 'assigned',
         date TEXT NOT NULL,
+        planned_start_time TEXT NOT NULL,
+        planned_end_time TEXT,
+        actual_start_time TEXT,
+        actual_end_time TEXT,
+        start_latitude REAL,
+        start_longitude REAL,
+        end_latitude REAL,
+        end_longitude REAL,
+        start_photo TEXT,
+        end_photo TEXT,
+        status TEXT NOT NULL DEFAULT 'ASSIGNED',
+        notes TEXT NOT NULL DEFAULT '',
+        assigned_by TEXT NOT NULL DEFAULT 'Admin',
+        duration_minutes INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL
       )
     ''');
+
+    // Safe migration for missing columns if table already existed in older version
+    final columnsToEnsure = [
+      'od_type TEXT NOT NULL DEFAULT "Customer Visit"',
+      'purpose TEXT NOT NULL DEFAULT ""',
+      'planned_start_time TEXT NOT NULL DEFAULT ""',
+      'planned_end_time TEXT',
+      'actual_start_time TEXT',
+      'actual_end_time TEXT',
+      'start_latitude REAL',
+      'start_longitude REAL',
+      'end_latitude REAL',
+      'end_longitude REAL',
+      'start_photo TEXT',
+      'end_photo TEXT',
+      'notes TEXT NOT NULL DEFAULT ""',
+    ];
+
+    for (final col in columnsToEnsure) {
+      try {
+        await db.execute('ALTER TABLE on_duty_assignments ADD COLUMN $col');
+      } catch (_) {}
+    }
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_on_duty_emp_date
+      ON on_duty_assignments(employee_id, date)
+    ''');
+  }
+
+  Future<void> _migrateTable(Database db, List<Map<String, dynamic>> tableInfo) async {
+    await db.execute('DROP TABLE IF EXISTS on_duty_assignments_old');
+    await db.execute('ALTER TABLE on_duty_assignments RENAME TO on_duty_assignments_old');
+
+    await db.execute('''
+      CREATE TABLE on_duty_assignments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        employee_id INTEGER NOT NULL,
+        employee_name TEXT NOT NULL,
+        od_type TEXT NOT NULL DEFAULT 'Customer Visit',
+        purpose TEXT NOT NULL DEFAULT '',
+        destination TEXT NOT NULL,
+        date TEXT NOT NULL,
+        planned_start_time TEXT NOT NULL,
+        planned_end_time TEXT,
+        actual_start_time TEXT,
+        actual_end_time TEXT,
+        start_latitude REAL,
+        start_longitude REAL,
+        end_latitude REAL,
+        end_longitude REAL,
+        start_photo TEXT,
+        end_photo TEXT,
+        status TEXT NOT NULL DEFAULT 'ASSIGNED',
+        notes TEXT NOT NULL DEFAULT '',
+        assigned_by TEXT NOT NULL DEFAULT 'Admin',
+        duration_minutes INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      )
+    ''');
+
+    final oldCols = tableInfo.map((row) => row['name']?.toString() ?? '').toSet();
+
+    String selectCol(String preferred, List<String> fallbacks, String defaultVal) {
+      if (oldCols.contains(preferred)) return preferred;
+      for (final fb in fallbacks) {
+        if (oldCols.contains(fb)) return fb;
+      }
+      return "'$defaultVal'";
+    }
+
+    final idCol = oldCols.contains('id') ? 'id' : 'NULL';
+    final empIdCol = oldCols.contains('employee_id') ? 'employee_id' : '0';
+    final empNameCol = oldCols.contains('employee_name') ? 'employee_name' : "''";
+    final odTypeCol = selectCol('od_type', ['task'], 'Customer Visit');
+    final purposeCol = selectCol('purpose', ['task'], '');
+    final destCol = selectCol('destination', ['destination_location', 'from_location'], 'Workplace');
+    final dateCol = oldCols.contains('date') ? 'date' : "''";
+    final plannedStartCol = selectCol('planned_start_time', ['assigned_time'], '09:00 AM');
+    final plannedEndCol = oldCols.contains('planned_end_time') ? 'planned_end_time' : 'NULL';
+    final actualStartCol = selectCol('actual_start_time', ['started_time'], 'NULL');
+    final actualEndCol = selectCol('actual_end_time', ['completed_time'], 'NULL');
+    final startLatCol = selectCol('start_latitude', ['from_latitude'], 'NULL');
+    final startLngCol = selectCol('start_longitude', ['from_longitude'], 'NULL');
+    final endLatCol = selectCol('end_latitude', ['destination_latitude'], 'NULL');
+    final endLngCol = selectCol('end_longitude', ['destination_longitude'], 'NULL');
+    final startPhotoCol = oldCols.contains('start_photo') ? 'start_photo' : 'NULL';
+    final endPhotoCol = selectCol('end_photo', ['photo_proof_path'], 'NULL');
+    final statusCol = oldCols.contains('status') ? 'status' : "'ASSIGNED'";
+    final notesCol = selectCol('notes', ['instructions'], '');
+    final assignedByCol = oldCols.contains('assigned_by') ? 'assigned_by' : "'Admin'";
+    final durationCol = oldCols.contains('duration_minutes') ? 'duration_minutes' : '0';
+    final createdAtCol = oldCols.contains('created_at') ? 'created_at' : "''";
+
     try {
-      await db.execute('ALTER TABLE on_duty_assignments ADD COLUMN photo_proof_path TEXT');
+      await db.execute('''
+        INSERT INTO on_duty_assignments (
+          ${idCol != 'NULL' ? 'id,' : ''}
+          employee_id, employee_name, od_type, purpose, destination, date,
+          planned_start_time, planned_end_time, actual_start_time, actual_end_time,
+          start_latitude, start_longitude, end_latitude, end_longitude,
+          start_photo, end_photo, status, notes, assigned_by, duration_minutes, created_at
+        )
+        SELECT
+          ${idCol != 'NULL' ? '$idCol,' : ''}
+          $empIdCol, $empNameCol, $odTypeCol, $purposeCol, $destCol, $dateCol,
+          $plannedStartCol, $plannedEndCol, $actualStartCol, $actualEndCol,
+          $startLatCol, $startLngCol, $endLatCol, $endLngCol,
+          $startPhotoCol, $endPhotoCol, $statusCol, $notesCol, $assignedByCol, $durationCol, $createdAtCol
+        FROM on_duty_assignments_old
+      ''');
     } catch (_) {}
+
+    await db.execute('DROP TABLE IF EXISTS on_duty_assignments_old');
+
     await db.execute('''
       CREATE INDEX IF NOT EXISTS idx_on_duty_emp_date
       ON on_duty_assignments(employee_id, date)
@@ -98,8 +219,11 @@ class SqliteOnDutyRepository implements OnDutyRepository {
       args.add(date);
     }
     if (statusFilter != null && statusFilter.isNotEmpty && statusFilter != 'All') {
-      conditions.add('status = ?');
-      args.add(statusFilter.toLowerCase());
+      conditions.add('(UPPER(status) = ? OR UPPER(status) = ?)');
+      final filterUpper = statusFilter.toUpperCase();
+      final altFilter = filterUpper == 'IN_PROGRESS' ? 'ACTIVE' : filterUpper;
+      args.add(filterUpper);
+      args.add(altFilter);
     }
     if (employeeId != null && employeeId != 0) {
       conditions.add('employee_id = ?');
@@ -121,9 +245,9 @@ class SqliteOnDutyRepository implements OnDutyRepository {
     final db = await database;
     final rows = await db.query(
       'on_duty_assignments',
-      where: 'employee_id = ? AND (status = ? OR status = ?)',
-      whereArgs: [employeeId, 'active', 'assigned'],
-      orderBy: 'created_at DESC',
+      where: 'employee_id = ? AND (UPPER(status) = ? OR UPPER(status) = ? OR UPPER(status) = ?)',
+      whereArgs: [employeeId, 'IN_PROGRESS', 'ASSIGNED', 'ACTIVE'],
+      orderBy: 'CASE UPPER(status) WHEN "IN_PROGRESS" THEN 1 WHEN "ACTIVE" THEN 1 WHEN "ASSIGNED" THEN 2 ELSE 3 END, created_at DESC',
       limit: 1,
     );
     if (rows.isEmpty) return null;
@@ -146,11 +270,21 @@ class SqliteOnDutyRepository implements OnDutyRepository {
   @override
   Future<int> createAssignment(OnDutyAssignment assignment) async {
     final db = await database;
-    return await db.insert(
-      'on_duty_assignments',
-      assignment.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    try {
+      return await db.insert(
+        'on_duty_assignments',
+        assignment.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    } catch (_) {
+      final tableInfo = await db.rawQuery('PRAGMA table_info(on_duty_assignments)');
+      await _migrateTable(db, tableInfo);
+      return await db.insert(
+        'on_duty_assignments',
+        assignment.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
   }
 
   @override
@@ -168,16 +302,28 @@ class SqliteOnDutyRepository implements OnDutyRepository {
   Future<void> updateAssignmentStatus({
     required int id,
     required String status,
-    String? startedTime,
-    String? completedTime,
+    String? actualStartTime,
+    String? actualEndTime,
+    double? latitude,
+    double? longitude,
+    String? photoPath,
     int? durationMinutes,
   }) async {
     final db = await database;
     final updates = <String, dynamic>{
-      'status': status,
+      'status': status.toUpperCase(),
     };
-    if (startedTime != null) updates['started_time'] = startedTime;
-    if (completedTime != null) updates['completed_time'] = completedTime;
+    if (actualStartTime != null) updates['actual_start_time'] = actualStartTime;
+    if (actualEndTime != null) updates['actual_end_time'] = actualEndTime;
+    if (status.toUpperCase() == 'IN_PROGRESS') {
+      if (latitude != null) updates['start_latitude'] = latitude;
+      if (longitude != null) updates['start_longitude'] = longitude;
+      if (photoPath != null) updates['start_photo'] = photoPath;
+    } else if (status.toUpperCase() == 'COMPLETED') {
+      if (latitude != null) updates['end_latitude'] = latitude;
+      if (longitude != null) updates['end_longitude'] = longitude;
+      if (photoPath != null) updates['end_photo'] = photoPath;
+    }
     if (durationMinutes != null) updates['duration_minutes'] = durationMinutes;
 
     await db.update(

@@ -3,146 +3,158 @@ class OnDutyAssignment {
     required this.id,
     required this.employeeId,
     required this.employeeName,
-    this.attendanceId,
-    required this.fromLocation,
-    this.fromLatitude,
-    this.fromLongitude,
+    required this.odType,
+    required this.purpose,
     required this.destination,
-    this.destinationLatitude,
-    this.destinationLongitude,
-    required this.task,
-    this.instructions = '',
-    required this.assignedBy,
-    required this.assignedTime,
-    this.startedTime,
-    this.completedTime,
-    this.durationMinutes = 0,
-    this.allowCheckoutFromDestination = false,
-    this.photoProofPath,
-    required this.status,
     required this.date,
+    required this.plannedStartTime,
+    this.plannedEndTime,
+    this.actualStartTime,
+    this.actualEndTime,
+    this.startLatitude,
+    this.startLongitude,
+    this.endLatitude,
+    this.endLongitude,
+    this.startPhoto,
+    this.endPhoto,
+    required this.status,
+    this.notes = '',
+    required this.assignedBy,
+    this.durationMinutes = 0,
     required this.createdAt,
   });
 
   final int id;
   final int employeeId;
   final String employeeName;
-  final int? attendanceId;
-  final String fromLocation;
-  final double? fromLatitude;
-  final double? fromLongitude;
+  final String odType; // 'Customer Visit', 'Branch Visit', 'External Meeting', 'Govt Office', 'Field Work', 'Other'
+  final String purpose;
   final String destination;
-  final double? destinationLatitude;
-  final double? destinationLongitude;
-  final String task;
-  final String instructions;
-  final String assignedBy;
-  final String assignedTime;
-  final String? startedTime;
-  final String? completedTime;
-  final int durationMinutes;
-  final bool allowCheckoutFromDestination;
-  final String? photoProofPath;
-  final String status; // 'assigned', 'active', 'completed', 'requires_review', 'cancelled'
   final String date; // 'dd-MM-yyyy'
+  final String plannedStartTime; // '10:00 AM'
+  final String? plannedEndTime; // '04:00 PM'
+  final String? actualStartTime;
+  final String? actualEndTime;
+  final double? startLatitude;
+  final double? startLongitude;
+  final double? endLatitude;
+  final double? endLongitude;
+  final String? startPhoto;
+  final String? endPhoto;
+  final String status; // 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'
+  final String notes;
+  final String assignedBy;
+  final int durationMinutes;
   final String createdAt;
 
   Map<String, dynamic> toMap() => {
         if (id != 0) 'id': id,
         'employee_id': employeeId,
         'employee_name': employeeName,
-        'attendance_id': attendanceId,
-        'from_location': fromLocation,
-        'from_latitude': fromLatitude,
-        'from_longitude': fromLongitude,
+        'od_type': odType,
+        'purpose': purpose,
         'destination': destination,
-        'destination_latitude': destinationLatitude,
-        'destination_longitude': destinationLongitude,
-        'task': task,
-        'instructions': instructions,
-        'assigned_by': assignedBy,
-        'assigned_time': assignedTime,
-        'started_time': startedTime,
-        'completed_time': completedTime,
-        'duration_minutes': durationMinutes,
-        'allow_checkout_from_destination': allowCheckoutFromDestination ? 1 : 0,
-        'photo_proof_path': photoProofPath,
-        'status': status,
         'date': date,
+        'planned_start_time': plannedStartTime,
+        'planned_end_time': plannedEndTime,
+        'actual_start_time': actualStartTime,
+        'actual_end_time': actualEndTime,
+        'start_latitude': startLatitude,
+        'start_longitude': startLongitude,
+        'end_latitude': endLatitude,
+        'end_longitude': endLongitude,
+        'start_photo': startPhoto,
+        'end_photo': endPhoto,
+        'status': status,
+        'notes': notes,
+        'assigned_by': assignedBy,
+        'duration_minutes': durationMinutes,
         'created_at': createdAt,
       };
 
-  factory OnDutyAssignment.fromMap(Map<String, dynamic> map) => OnDutyAssignment(
-        id: map['id'] as int? ?? 0,
-        employeeId: map['employee_id'] as int? ?? 0,
-        employeeName: map['employee_name'] as String? ?? '',
-        attendanceId: map['attendance_id'] as int?,
-        fromLocation: map['from_location'] as String? ?? '',
-        fromLatitude: (map['from_latitude'] as num?)?.toDouble(),
-        fromLongitude: (map['from_longitude'] as num?)?.toDouble(),
-        destination: map['destination'] as String? ?? '',
-        destinationLatitude: (map['destination_latitude'] as num?)?.toDouble(),
-        destinationLongitude: (map['destination_longitude'] as num?)?.toDouble(),
-        task: map['task'] as String? ?? '',
-        instructions: map['instructions'] as String? ?? '',
-        assignedBy: map['assigned_by'] as String? ?? 'Supervisor',
-        assignedTime: map['assigned_time'] as String? ?? '',
-        startedTime: map['started_time'] as String?,
-        completedTime: map['completed_time'] as String?,
-        durationMinutes: map['duration_minutes'] as int? ?? 0,
-        allowCheckoutFromDestination: (map['allow_checkout_from_destination'] as int? ?? 0) == 1 || (map['allow_checkout_from_destination'] as bool? ?? false),
-        photoProofPath: map['photo_proof_path'] as String?,
-        status: map['status'] as String? ?? 'assigned',
-        date: map['date'] as String? ?? '',
-        createdAt: map['created_at'] as String? ?? '',
-      );
+  factory OnDutyAssignment.fromMap(Map<String, dynamic> map) {
+    var rawStatus = (map['status']?.toString() ?? 'ASSIGNED').toUpperCase();
+    if (rawStatus == 'ACTIVE') rawStatus = 'IN_PROGRESS';
+
+    int parseId(dynamic val) {
+      if (val is int) return val;
+      if (val is num) return val.toInt();
+      if (val != null) return int.tryParse(val.toString()) ?? 0;
+      return 0;
+    }
+
+    return OnDutyAssignment(
+      id: parseId(map['id']),
+      employeeId: parseId(map['employee_id']),
+      employeeName: map['employee_name']?.toString() ?? '',
+      odType: map['od_type']?.toString() ?? map['task']?.toString() ?? 'Customer Visit',
+      purpose: map['purpose']?.toString() ?? map['task']?.toString() ?? '',
+      destination: map['destination']?.toString() ?? map['destination_location']?.toString() ?? map['from_location']?.toString() ?? '',
+      date: map['date']?.toString() ?? '',
+      plannedStartTime: map['planned_start_time']?.toString() ?? map['assigned_time']?.toString() ?? '',
+      plannedEndTime: map['planned_end_time']?.toString(),
+      actualStartTime: map['actual_start_time']?.toString() ?? map['started_time']?.toString(),
+      actualEndTime: map['actual_end_time']?.toString() ?? map['completed_time']?.toString(),
+      startLatitude: (map['start_latitude'] as num?)?.toDouble() ?? (map['from_latitude'] as num?)?.toDouble(),
+      startLongitude: (map['start_longitude'] as num?)?.toDouble() ?? (map['from_longitude'] as num?)?.toDouble(),
+      endLatitude: (map['end_latitude'] as num?)?.toDouble() ?? (map['destination_latitude'] as num?)?.toDouble(),
+      endLongitude: (map['end_longitude'] as num?)?.toDouble() ?? (map['destination_longitude'] as num?)?.toDouble(),
+      startPhoto: map['start_photo']?.toString(),
+      endPhoto: map['end_photo']?.toString() ?? map['photo_proof_path']?.toString(),
+      status: rawStatus,
+      notes: map['notes']?.toString() ?? map['instructions']?.toString() ?? '',
+      assignedBy: map['assigned_by']?.toString() ?? 'Admin',
+      durationMinutes: parseId(map['duration_minutes']),
+      createdAt: map['created_at']?.toString() ?? map['createdAt']?.toString() ?? '',
+    );
+  }
 
   OnDutyAssignment copyWith({
     int? id,
     int? employeeId,
     String? employeeName,
-    int? attendanceId,
-    String? fromLocation,
-    double? fromLatitude,
-    double? fromLongitude,
+    String? odType,
+    String? purpose,
     String? destination,
-    double? destinationLatitude,
-    double? destinationLongitude,
-    String? task,
-    String? instructions,
-    String? assignedBy,
-    String? assignedTime,
-    String? startedTime,
-    String? completedTime,
-    int? durationMinutes,
-    bool? allowCheckoutFromDestination,
-    String? photoProofPath,
-    String? status,
     String? date,
+    String? plannedStartTime,
+    String? plannedEndTime,
+    String? actualStartTime,
+    String? actualEndTime,
+    double? startLatitude,
+    double? startLongitude,
+    double? endLatitude,
+    double? endLongitude,
+    String? startPhoto,
+    String? endPhoto,
+    String? status,
+    String? notes,
+    String? assignedBy,
+    int? durationMinutes,
     String? createdAt,
   }) {
     return OnDutyAssignment(
       id: id ?? this.id,
       employeeId: employeeId ?? this.employeeId,
       employeeName: employeeName ?? this.employeeName,
-      attendanceId: attendanceId ?? this.attendanceId,
-      fromLocation: fromLocation ?? this.fromLocation,
-      fromLatitude: fromLatitude ?? this.fromLatitude,
-      fromLongitude: fromLongitude ?? this.fromLongitude,
+      odType: odType ?? this.odType,
+      purpose: purpose ?? this.purpose,
       destination: destination ?? this.destination,
-      destinationLatitude: destinationLatitude ?? this.destinationLatitude,
-      destinationLongitude: destinationLongitude ?? this.destinationLongitude,
-      task: task ?? this.task,
-      instructions: instructions ?? this.instructions,
-      assignedBy: assignedBy ?? this.assignedBy,
-      assignedTime: assignedTime ?? this.assignedTime,
-      startedTime: startedTime ?? this.startedTime,
-      completedTime: completedTime ?? this.completedTime,
-      durationMinutes: durationMinutes ?? this.durationMinutes,
-      allowCheckoutFromDestination: allowCheckoutFromDestination ?? this.allowCheckoutFromDestination,
-      photoProofPath: photoProofPath ?? this.photoProofPath,
-      status: status ?? this.status,
       date: date ?? this.date,
+      plannedStartTime: plannedStartTime ?? this.plannedStartTime,
+      plannedEndTime: plannedEndTime ?? this.plannedEndTime,
+      actualStartTime: actualStartTime ?? this.actualStartTime,
+      actualEndTime: actualEndTime ?? this.actualEndTime,
+      startLatitude: startLatitude ?? this.startLatitude,
+      startLongitude: startLongitude ?? this.startLongitude,
+      endLatitude: endLatitude ?? this.endLatitude,
+      endLongitude: endLongitude ?? this.endLongitude,
+      startPhoto: startPhoto ?? this.startPhoto,
+      endPhoto: endPhoto ?? this.endPhoto,
+      status: status ?? this.status,
+      notes: notes ?? this.notes,
+      assignedBy: assignedBy ?? this.assignedBy,
+      durationMinutes: durationMinutes ?? this.durationMinutes,
       createdAt: createdAt ?? this.createdAt,
     );
   }

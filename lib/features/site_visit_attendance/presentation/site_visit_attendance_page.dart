@@ -565,11 +565,11 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
           const SizedBox(height: 16),
 
           activeOnDutyAsync.when(
-            loading: () => const SizedBox.shrink(),
-            error: (e, _) => const SizedBox.shrink(),
+            loading: () => _buildEmptyOnDutyCard(currentEmp),
+            error: (e, _) => _buildEmptyOnDutyCard(currentEmp),
             data: (assignment) {
-              if (assignment == null) return const SizedBox.shrink();
-              return _buildOnDutyCard(assignment);
+              if (assignment == null) return _buildEmptyOnDutyCard(currentEmp);
+              return EmployeeOnDutyCard(assignment: assignment);
             },
           ),
 
@@ -581,6 +581,77 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
           ),
           if (_showVisitForm) const SizedBox(height: 20),
           _buildSelectedDaySection(selectedVisitsAsync),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyOnDutyCard(Employee currentEmp) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.assignment_ind_outlined, color: Color(0xFF414A51), size: 24),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'MY ON-DUTY',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: Color(0xFF414A51),
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'No active On-Duty task assigned today.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              showDialog<void>(
+                context: context,
+                builder: (ctx) => AssignOnDutyDialog(preSelectedEmployee: currentEmp),
+              );
+            },
+            icon: const Icon(Icons.add, size: 15),
+            label: const Text('+ Apply OD'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF9CC70A),
+              foregroundColor: const Color(0xFF414A51),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              elevation: 0,
+            ),
+          ),
         ],
       ),
     );
@@ -2081,168 +2152,5 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
         );
       },
     );
-  }
-
-  Widget _buildOnDutyCard(OnDutyAssignment assignment) {
-    final isAssigned = assignment.status == 'assigned';
-    final isActive = assignment.status == 'active';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isAssigned ? Colors.blue.shade50 : const Color(0xFFF0FDF4),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isAssigned ? Colors.blue.shade300 : const Color(0xFF9CC70A),
-          width: 1.5,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                isAssigned ? Icons.info_outline : Icons.play_circle_fill,
-                color: isAssigned ? Colors.blue.shade800 : const Color(0xFF414A51),
-                size: 22,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                isAssigned ? '🔵 NEW ON-DUTY WORK' : '🔵 ON-DUTY ACTIVE',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: isAssigned ? Colors.blue.shade900 : const Color(0xFF414A51),
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
-          ),
-          const Divider(height: 20),
-          _onDutyRow('From', '📍 ${assignment.fromLocation}'),
-          const SizedBox(height: 6),
-          _onDutyRow('Go To / Destination', '📍 ${assignment.destination}', isBold: true),
-          const SizedBox(height: 6),
-          _onDutyRow('Task', assignment.task),
-          if (assignment.instructions.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            _onDutyRow('Instructions', assignment.instructions),
-          ],
-          const SizedBox(height: 6),
-          _onDutyRow('Assigned By', assignment.assignedBy),
-          if (isActive) ...[
-            const SizedBox(height: 6),
-            _onDutyRow('Started Time', assignment.startedTime ?? '--'),
-          ],
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            height: 46,
-            child: ElevatedButton(
-              onPressed: () {
-                if (isAssigned) {
-                  _startOnDuty(assignment);
-                } else {
-                  _completeOnDuty(assignment);
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isAssigned ? const Color(0xFF414A51) : const Color(0xFF9CC70A),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              child: Text(
-                isAssigned ? 'Start On-Duty' : 'Complete On-Duty',
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _onDutyRow(String label, String value, {bool isBold = false}) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey)),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            value,
-            textAlign: TextAlign.right,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
-              color: const Color(0xFF414A51),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _startOnDuty(OnDutyAssignment assignment) async {
-    final nowStr = DateFormat('hh:mm a').format(DateTime.now());
-    final repository = ref.read(onDutyRepositoryProvider);
-    await repository.updateAssignmentStatus(
-      id: assignment.id,
-      status: 'active',
-      startedTime: nowStr,
-    );
-    ref.invalidate(activeOnDutyAssignmentProvider(assignment.employeeId));
-    ref.invalidate(allOnDutyAssignmentsProvider);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('On-Duty started! Timer active.'),
-          backgroundColor: Color(0xFF9CC70A),
-        ),
-      );
-    }
-  }
-
-  Future<void> _completeOnDuty(OnDutyAssignment assignment) async {
-    final now = DateTime.now();
-    final nowStr = DateFormat('hh:mm a').format(now);
-
-    int durationMins = 0;
-    if (assignment.startedTime != null) {
-      try {
-        final parts = assignment.startedTime!.split(' ');
-        final timeParts = parts[0].split(':');
-        var hour = int.parse(timeParts[0]);
-        final min = int.parse(timeParts[1]);
-        if (parts.length > 1 && parts[1].toUpperCase() == 'PM' && hour < 12) hour += 12;
-        if (parts.length > 1 && parts[1].toUpperCase() == 'AM' && hour == 12) hour = 0;
-        final startDt = DateTime(now.year, now.month, now.day, hour, min);
-        durationMins = now.difference(startDt).inMinutes.clamp(1, 1440);
-      } catch (_) {
-        durationMins = 60; // Default 1h fallback
-      }
-    }
-
-    final repository = ref.read(onDutyRepositoryProvider);
-    await repository.updateAssignmentStatus(
-      id: assignment.id,
-      status: 'completed',
-      completedTime: nowStr,
-      durationMinutes: durationMins,
-    );
-    ref.invalidate(activeOnDutyAssignmentProvider(assignment.employeeId));
-    ref.invalidate(allOnDutyAssignmentsProvider);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('On-Duty completed! Duration: ${durationMins ~/ 60}h ${durationMins % 60}m recorded.'),
-          backgroundColor: const Color(0xFF9CC70A),
-        ),
-      );
-    }
   }
 }

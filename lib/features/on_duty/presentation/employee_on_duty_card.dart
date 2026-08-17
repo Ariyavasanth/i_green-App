@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 
 import '../domain/on_duty_assignment.dart';
@@ -10,11 +11,9 @@ class EmployeeOnDutyCard extends ConsumerStatefulWidget {
   const EmployeeOnDutyCard({
     super.key,
     required this.assignment,
-    this.onCheckoutRequested,
   });
 
   final OnDutyAssignment assignment;
-  final VoidCallback? onCheckoutRequested;
 
   @override
   ConsumerState<EmployeeOnDutyCard> createState() => _EmployeeOnDutyCardState();
@@ -23,13 +22,14 @@ class EmployeeOnDutyCard extends ConsumerStatefulWidget {
 class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
   Timer? _timer;
   Duration _elapsed = Duration.zero;
-  String? _capturedPhotoPath;
+  String? _startPhotoPath;
+  String? _endPhotoPath;
   bool _isActionLoading = false;
 
   @override
   void initState() {
     super.initState();
-    if (widget.assignment.status.toLowerCase() == 'active') {
+    if (widget.assignment.status == 'IN_PROGRESS') {
       _startLiveTimer();
     }
   }
@@ -37,9 +37,9 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
   @override
   void didUpdateWidget(covariant EmployeeOnDutyCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.assignment.status.toLowerCase() == 'active' && _timer == null) {
+    if (widget.assignment.status == 'IN_PROGRESS' && _timer == null) {
       _startLiveTimer();
-    } else if (widget.assignment.status.toLowerCase() != 'active') {
+    } else if (widget.assignment.status != 'IN_PROGRESS') {
       _timer?.cancel();
     }
   }
@@ -53,9 +53,9 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
   void _startLiveTimer() {
     _timer?.cancel();
     DateTime? startTime;
-    if (widget.assignment.startedTime != null && widget.assignment.startedTime!.isNotEmpty) {
+    if (widget.assignment.actualStartTime != null && widget.assignment.actualStartTime!.isNotEmpty) {
       try {
-        final parsed = DateFormat('hh:mm a').parse(widget.assignment.startedTime!);
+        final parsed = DateFormat('hh:mm a').parse(widget.assignment.actualStartTime!);
         final now = DateTime.now();
         startTime = DateTime(now.year, now.month, now.day, parsed.hour, parsed.minute);
       } catch (_) {}
@@ -83,41 +83,55 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
   String _formatDurationSummary(int durationMinutes) {
     final hours = durationMinutes ~/ 60;
     final mins = durationMinutes % 60;
-    return '${hours.toString().padLeft(2, '0')}h ${mins.toString().padLeft(2, '0')}m';
+    return '${hours}h ${mins}m';
+  }
+
+  Future<Position?> _getGpsPosition() async {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return null;
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        return null;
+      }
+      return await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+    } catch (_) {
+      return null;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final status = widget.assignment.status.toLowerCase();
+    final status = widget.assignment.status;
 
-    if (status == 'assigned') {
-      return _buildScreenAAssigned();
-    } else if (status == 'active') {
-      return _buildScreenBInProgress();
-    } else if (status == 'completed') {
-      if (widget.assignment.allowCheckoutFromDestination) {
-        return _buildScreenCOutcome2AllowCheckout();
-      } else {
-        return _buildScreenCOutcome1ReturnToShift();
-      }
+    if (status == 'ASSIGNED') {
+      return _buildAssignedCard();
+    } else if (status == 'IN_PROGRESS') {
+      return _buildInProgressCard();
+    } else if (status == 'COMPLETED') {
+      return _buildCompletedCard();
     }
 
     return const SizedBox.shrink();
   }
 
   // ==========================================
-  // Screen A: Notification & Task Banner (When Assigned)
+  // Card View 1: ASSIGNED State
   // ==========================================
-  Widget _buildScreenAAssigned() {
+  Widget _buildAssignedCard() {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF2563EB).withValues(alpha: 0.4), width: 1.5),
+        border: Border.all(color: const Color(0xFF9CC70A), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF2563EB).withValues(alpha: 0.08),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -131,19 +145,19 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: const BoxDecoration(
-              color: Color(0xFF2563EB),
+              color: Color(0xFF414A51),
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(14),
                 topRight: Radius.circular(14),
               ),
             ),
-            child: const Row(
+            child: Row(
               children: [
-                Icon(Icons.directions_bus_outlined, color: Colors.white, size: 20),
-                SizedBox(width: 8),
+                const Icon(Icons.assignment_ind_outlined, color: Color(0xFF9CC70A), size: 20),
+                const SizedBox(width: 8),
                 Text(
-                  '🔵 ON-DUTY ASSIGNED',
-                  style: TextStyle(
+                  'MY ON-DUTY (${widget.assignment.odType.toUpperCase()})',
+                  style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
@@ -154,27 +168,37 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
             ),
           ),
 
-          // Banner Body
+          // Details Body
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildMetaRow(Icons.location_on_outlined, 'Destination', widget.assignment.destination, isBold: true),
-                const SizedBox(height: 8),
-                _buildMetaRow(Icons.assignment_outlined, 'Task', widget.assignment.task),
-                const SizedBox(height: 8),
-                _buildMetaRow(Icons.person_outline, 'Assigned By', widget.assignment.assignedBy),
+                Text(
+                  widget.assignment.destination,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${widget.assignment.date}  •  ${widget.assignment.plannedStartTime}${widget.assignment.plannedEndTime != null ? " → ${widget.assignment.plannedEndTime}" : ""}',
+                  style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 12),
+                _buildMetaRow(Icons.lightbulb_outline, 'Purpose', widget.assignment.purpose, isBold: true),
+                if (widget.assignment.notes.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  _buildMetaRow(Icons.notes, 'Notes', widget.assignment.notes),
+                ],
                 const SizedBox(height: 16),
 
-                // Start Button
+                // Start OD Button
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: _isActionLoading ? null : _handleStartOnDuty,
+                    onPressed: _isActionLoading ? null : _handleStartOd,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2563EB),
-                      foregroundColor: Colors.white,
+                      backgroundColor: const Color(0xFF9CC70A),
+                      foregroundColor: const Color(0xFF414A51),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       elevation: 2,
@@ -183,12 +207,12 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                         ? const SizedBox(
                             width: 18,
                             height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF414A51)),
                           )
                         : const Icon(Icons.play_arrow_rounded, size: 20),
                     label: const Text(
-                      '▶ START ON-DUTY',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      '[ START OD ]',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                     ),
                   ),
                 ),
@@ -201,18 +225,17 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
   }
 
   // ==========================================
-  // Screen B: Active On-Duty (Travel & Work in Progress)
+  // Card View 2: IN_PROGRESS State
   // ==========================================
-  Widget _buildScreenBInProgress() {
-    const darkTextColor = Color(0xFF414A51);
-    final hasPhoto = _capturedPhotoPath != null && _capturedPhotoPath!.isNotEmpty;
+  Widget _buildInProgressCard() {
+    final hasStartGps = widget.assignment.startLatitude != null && widget.assignment.startLongitude != null;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFD97706).withValues(alpha: 0.5), width: 1.5),
+        border: Border.all(color: const Color(0xFFD97706), width: 1.5),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFFD97706).withValues(alpha: 0.08),
@@ -224,7 +247,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Banner Header
+          // Header
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -238,17 +261,16 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Row(
+                Row(
                   children: [
-                    Icon(Icons.hourglass_top_rounded, color: Colors.white, size: 20),
-                    SizedBox(width: 8),
+                    const Icon(Icons.timer_outlined, color: Colors.white, size: 20),
+                    const SizedBox(width: 8),
                     Text(
-                      '🟡 ON-DUTY IN PROGRESS',
-                      style: TextStyle(
+                      widget.assignment.odType.toUpperCase(),
+                      style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
-                        letterSpacing: 0.5,
                       ),
                     ),
                   ],
@@ -256,7 +278,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
+                    color: Colors.white.withValues(alpha: 0.25),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
@@ -268,76 +290,64 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
             ),
           ),
 
-          // Banner Body
+          // Details Body
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Started at: ${widget.assignment.startedTime ?? "Just now"} (Timer: ${_formatTimerDisplay(_elapsed)})',
-                  style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+                  widget.assignment.destination,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
                 ),
-                const SizedBox(height: 6),
-                _buildMetaRow(Icons.assignment_outlined, 'Task', widget.assignment.task, isBold: true),
-                const SizedBox(height: 16),
-
-                // Proof of Completion Camera Box
-                const Text(
-                  'Proof of Completion *',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: darkTextColor),
-                ),
-                const SizedBox(height: 6),
-                InkWell(
-                  onTap: _takePhotoProof,
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    decoration: BoxDecoration(
-                      color: hasPhoto ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: hasPhoto ? const Color(0xFF86EFAC) : const Color(0xFFCBD5E1),
-                        style: BorderStyle.solid,
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Text(
+                      'Started: ${widget.assignment.actualStartTime ?? "10:00 AM"}',
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF414A51), fontWeight: FontWeight.w600),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.green.shade300),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.check_circle, size: 14, color: Colors.green.shade700),
+                          const SizedBox(width: 4),
+                          Text(
+                            hasStartGps ? 'GPS Captured ✓' : 'GPS Active',
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green.shade700),
+                          ),
+                        ],
                       ),
                     ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          hasPhoto ? Icons.check_circle_rounded : Icons.camera_alt_outlined,
-                          size: 28,
-                          color: hasPhoto ? const Color(0xFF16A34A) : const Color(0xFF64748B),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          hasPhoto ? 'Photo Proof Attached ✓' : '[ 📷 Take Photo Proof ]',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: hasPhoto ? const Color(0xFF15803D) : const Color(0xFF2563EB),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  ],
                 ),
+                if (hasStartGps) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'GPS: ${widget.assignment.startLatitude!.toStringAsFixed(4)}, ${widget.assignment.startLongitude!.toStringAsFixed(4)}',
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                  ),
+                ],
                 const SizedBox(height: 16),
 
-                // Complete On-Duty Button (Disabled until photo proof is captured)
+                // Complete OD Button
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: (hasPhoto && !_isActionLoading) ? _handleCompleteOnDuty : null,
+                    onPressed: _isActionLoading ? null : _handleCompleteOd,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF16A34A),
                       foregroundColor: Colors.white,
-                      disabledBackgroundColor: const Color(0xFFE2E8F0),
-                      disabledForegroundColor: const Color(0xFF94A3B8),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      elevation: hasPhoto ? 2 : 0,
+                      elevation: 2,
                     ),
                     icon: _isActionLoading
                         ? const SizedBox(
@@ -346,9 +356,9 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
                         : const Icon(Icons.check_circle_outline, size: 20),
-                    label: Text(
-                      hasPhoto ? '[ ✓ COMPLETE ON-DUTY ]' : '[ ✓ COMPLETE ON-DUTY ] (Photo Required)',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                    label: const Text(
+                      '[ COMPLETE OD ]',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                     ),
                   ),
                 ),
@@ -361,175 +371,76 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
   }
 
   // ==========================================
-  // Screen C — Outcome 1: "Return & Continue Shift"
+  // Card View 3: COMPLETED State
   // ==========================================
-  Widget _buildScreenCOutcome1ReturnToShift() {
+  Widget _buildCompletedCard() {
     final durationMin = widget.assignment.durationMinutes > 0
         ? widget.assignment.durationMinutes
         : _elapsed.inMinutes;
 
+    final durationStr = _formatDurationSummary(durationMin);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFFF0FDF4),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFF86EFAC)),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: const BoxDecoration(
-              color: Color(0xFFDCFCE7),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 24),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
+                const Icon(Icons.check_circle, color: Color(0xFF16A34A), size: 22),
+                const SizedBox(width: 8),
                 Text(
-                  '🟢 On-Duty Complete! (${_formatDurationSummary(durationMin)} recorded)',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF14532D),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Please return to ${widget.assignment.fromLocation} site and continue your shift.',
-                  style: const TextStyle(fontSize: 12.5, color: Color(0xFF166534)),
+                  '${widget.assignment.odType} - COMPLETED',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF14532D)),
                 ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ==========================================
-  // Screen C — Outcome 2: "Allow Checkout from Destination"
-  // ==========================================
-  Widget _buildScreenCOutcome2AllowCheckout() {
-    final durationMin = widget.assignment.durationMinutes > 0
-        ? widget.assignment.durationMinutes
-        : _elapsed.inMinutes;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF16A34A), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF16A34A).withValues(alpha: 0.08),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Banner Header
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: const BoxDecoration(
-              color: Color(0xFF16A34A),
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(14),
-                topRight: Radius.circular(14),
-              ),
+            const Divider(height: 16),
+            Text(
+              widget.assignment.destination,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
             ),
-            child: const Row(
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(Icons.task_alt_rounded, color: Colors.white, size: 20),
-                SizedBox(width: 8),
                 Text(
-                  '🟢 On-Duty Completed',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    letterSpacing: 0.5,
-                  ),
+                  'Started: ${widget.assignment.actualStartTime ?? "--"}',
+                  style: const TextStyle(fontSize: 12.5, color: Color(0xFF414A51)),
+                ),
+                Text(
+                  'Completed: ${widget.assignment.actualEndTime ?? "--"}',
+                  style: const TextStyle(fontSize: 12.5, color: Color(0xFF414A51)),
                 ),
               ],
             ),
-          ),
-
-          // Banner Body
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
+                Text(
+                  'Duration: $durationStr',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF16A34A)),
+                ),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Task Duration: ${_formatDurationSummary(durationMin)}',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
-                    ),
-                    const Row(
-                      children: [
-                        Icon(Icons.check_circle, size: 16, color: Color(0xFF16A34A)),
-                        SizedBox(width: 4),
-                        Text(
-                          'Photo Proof: Uploaded ✓',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF16A34A)),
-                        ),
-                      ],
-                    ),
+                    if (widget.assignment.startLatitude != null)
+                      const Text('Start Location ✓  ', style: TextStyle(fontSize: 11, color: Color(0xFF15803D), fontWeight: FontWeight.w600)),
+                    if (widget.assignment.endLatitude != null)
+                      const Text('End Location ✓', style: TextStyle(fontSize: 11, color: Color(0xFF15803D), fontWeight: FontWeight.w600)),
                   ],
                 ),
-                const SizedBox(height: 10),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF0FDF4),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFFBBF7D0)),
-                  ),
-                  child: const Text(
-                    'You are authorized to end your shift from this destination.',
-                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF15803D)),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Direct Checkout Button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: widget.onCheckoutRequested,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFDC2626),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      elevation: 2,
-                    ),
-                    icon: const Icon(Icons.stop_circle_outlined, size: 20),
-                    label: const Text(
-                      '🛑 CHECK OUT NOW',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                    ),
-                  ),
-                ),
               ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -558,37 +469,29 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
     );
   }
 
-  void _takePhotoProof() {
-    setState(() {
-      _capturedPhotoPath = 'simulated_camera_photo_${DateTime.now().millisecondsSinceEpoch}.jpg';
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('📷 Photo proof captured successfully!'),
-        backgroundColor: Color(0xFF2E7D32),
-        duration: Duration(seconds: 2),
-      ),
-    );
-  }
-
-  Future<void> _handleStartOnDuty() async {
+  Future<void> _handleStartOd() async {
     setState(() => _isActionLoading = true);
     try {
+      final position = await _getGpsPosition();
       final nowStr = DateFormat('hh:mm a').format(DateTime.now());
-      final repo = ref.read(onDutyRepositoryProvider);
-      await repo.updateAssignmentStatus(
-        id: widget.assignment.id,
-        status: 'active',
-        startedTime: nowStr,
+
+      final updated = widget.assignment.copyWith(
+        status: 'IN_PROGRESS',
+        actualStartTime: nowStr,
+        startLatitude: position?.latitude,
+        startLongitude: position?.longitude,
       );
 
+      final repo = ref.read(onDutyRepositoryProvider);
+      await repo.updateAssignment(updated);
+
       ref.invalidate(activeOnDutyAssignmentProvider(widget.assignment.employeeId));
-      ref.invalidate(allOnDutyAssignmentsProvider);
+      ref.invalidate(allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: null)));
       _startLiveTimer();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to start on-duty: $e')),
+          SnackBar(content: Text('Failed to start On-Duty: $e')),
         );
       }
     } finally {
@@ -596,30 +499,40 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
     }
   }
 
-  Future<void> _handleCompleteOnDuty() async {
-    if (_capturedPhotoPath == null || _capturedPhotoPath!.isEmpty) return;
-
+  Future<void> _handleCompleteOd() async {
     setState(() => _isActionLoading = true);
     try {
+      final position = await _getGpsPosition();
       final nowStr = DateFormat('hh:mm a').format(DateTime.now());
-      final repo = ref.read(onDutyRepositoryProvider);
-      final durationMins = _elapsed.inMinutes > 0 ? _elapsed.inMinutes : 60;
+
+      int durationMins = _elapsed.inMinutes;
+      if (durationMins <= 0 && widget.assignment.actualStartTime != null) {
+        try {
+          final startDt = DateFormat('hh:mm a').parse(widget.assignment.actualStartTime!);
+          final now = DateTime.now();
+          final startFull = DateTime(now.year, now.month, now.day, startDt.hour, startDt.minute);
+          durationMins = now.difference(startFull).inMinutes;
+        } catch (_) {}
+      }
+      if (durationMins < 0) durationMins = 0;
 
       final updated = widget.assignment.copyWith(
-        status: 'completed',
-        completedTime: nowStr,
+        status: 'COMPLETED',
+        actualEndTime: nowStr,
+        endLatitude: position?.latitude,
+        endLongitude: position?.longitude,
         durationMinutes: durationMins,
-        photoProofPath: _capturedPhotoPath,
       );
 
+      final repo = ref.read(onDutyRepositoryProvider);
       await repo.updateAssignment(updated);
 
       ref.invalidate(activeOnDutyAssignmentProvider(widget.assignment.employeeId));
-      ref.invalidate(allOnDutyAssignmentsProvider);
+      ref.invalidate(allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: null)));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to complete on-duty: $e')),
+          SnackBar(content: Text('Failed to complete On-Duty: $e')),
         );
       }
     } finally {

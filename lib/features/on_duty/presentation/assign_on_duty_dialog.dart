@@ -21,12 +21,26 @@ class AssignOnDutyDialog extends ConsumerStatefulWidget {
 
 class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
   final _formKey = GlobalKey<FormState>();
-  final _destinationController = TextEditingController();
-  final _taskController = TextEditingController();
 
   Employee? _selectedEmployee;
-  bool _allowCheckoutFromDestination = false;
+  String _selectedOdType = 'Customer Visit';
+  final _purposeController = TextEditingController();
+  final _destinationController = TextEditingController();
+  DateTime _selectedDate = DateTime.now();
+  TimeOfDay _startTime = const TimeOfDay(hour: 10, minute: 0);
+  TimeOfDay? _endTime = const TimeOfDay(hour: 16, minute: 0);
+  final _notesController = TextEditingController();
+
   bool _isSubmitting = false;
+
+  static const _odTypes = [
+    'Customer Visit',
+    'Branch Visit',
+    'External Meeting',
+    'Govt Office',
+    'Field Work',
+    'Other',
+  ];
 
   @override
   void initState() {
@@ -34,18 +48,59 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
     _selectedEmployee = widget.preSelectedEmployee;
   }
 
+  final _searchController = TextEditingController();
+  String _employeeSearchQuery = '';
+
   @override
   void dispose() {
+    _purposeController.dispose();
     _destinationController.dispose();
-    _taskController.dispose();
+    _notesController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
-  String _getStartingLocation(Employee emp) {
-    if (emp.department.isNotEmpty && emp.department.contains('Site')) {
-      return emp.department;
+  bool _isCandidate(Employee emp) {
+    final empIdUpper = emp.employeeId.trim().toUpperCase();
+    if (empIdUpper.startsWith('CAN-') ||
+        empIdUpper.startsWith('REG-') ||
+        empIdUpper.startsWith('PENDING_')) {
+      return true;
     }
-    return 'Tambaram Site';
+    final status = emp.status.trim().toLowerCase();
+    if (status == 'candidate' ||
+        status == 'registration submitted' ||
+        status == 'draft') {
+      return true;
+    }
+    return false;
+  }
+
+  String _getEmployeeLabel(Employee emp) {
+    final name = emp.fullName.trim();
+    final empId = emp.employeeId.trim();
+    final fallbackId = empId.isNotEmpty ? empId : (emp.id > 0 ? "EMP-${emp.id}" : "EMP");
+
+    if (empId == 'EMP-001' || emp.employeeId == 'EMP-001 (Self)' || (widget.preSelectedEmployee != null && emp.id == widget.preSelectedEmployee!.id)) {
+      return '$fallbackId (Self)';
+    }
+
+    if (name.isNotEmpty) {
+      return fallbackId.isNotEmpty ? '$fallbackId - $name' : name;
+    }
+    if (emp.emailAddress.trim().isNotEmpty) {
+      return fallbackId.isNotEmpty ? '$fallbackId - ${emp.emailAddress.trim()}' : emp.emailAddress.trim();
+    }
+    if (emp.phoneNumber.trim().isNotEmpty) {
+      return fallbackId.isNotEmpty ? '$fallbackId - ${emp.phoneNumber.trim()}' : emp.phoneNumber.trim();
+    }
+    return fallbackId.isNotEmpty ? '$fallbackId - Employee' : 'Employee #${emp.id}';
+  }
+
+  String _formatTimeOfDay(TimeOfDay tod) {
+    final now = DateTime.now();
+    final dt = DateTime(now.year, now.month, now.day, tod.hour, tod.minute);
+    return DateFormat('hh:mm a').format(dt);
   }
 
   @override
@@ -56,13 +111,32 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
     final employeesAsync = ref.watch(allEmployeesProvider);
     final employees = employeesAsync.asData?.value ?? [];
 
-    if (_selectedEmployee == null && employees.isNotEmpty) {
-      _selectedEmployee = employees.first;
+    final confirmedEmployees = employees.where((emp) => !_isCandidate(emp)).toList();
+
+    final filteredEmployees = confirmedEmployees.where((emp) {
+      if (_employeeSearchQuery.isEmpty) return true;
+      final q = _employeeSearchQuery.toLowerCase();
+      final name = emp.fullName.toLowerCase();
+      final empId = emp.employeeId.toLowerCase();
+      final phone = emp.phoneNumber.toLowerCase();
+      final email = emp.emailAddress.toLowerCase();
+      final dept = emp.department.toLowerCase();
+      final label = _getEmployeeLabel(emp).toLowerCase();
+      return name.contains(q) ||
+          empId.contains(q) ||
+          phone.contains(q) ||
+          email.contains(q) ||
+          dept.contains(q) ||
+          label.contains(q);
+    }).toList();
+
+    if (_selectedEmployee == null && filteredEmployees.isNotEmpty) {
+      _selectedEmployee = filteredEmployees.first;
+    } else if (_selectedEmployee != null && filteredEmployees.isNotEmpty && !filteredEmployees.contains(_selectedEmployee)) {
+      _selectedEmployee = filteredEmployees.first;
     }
 
-    final startingLocation = _selectedEmployee != null
-        ? _getStartingLocation(_selectedEmployee!)
-        : 'Tambaram Site';
+    final dateStr = DateFormat('dd-MM-yyyy').format(_selectedDate);
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -82,7 +156,7 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
-                        'Assign On-Duty Task',
+                        'Assign On Duty',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -98,14 +172,67 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
                   const Divider(height: 20, color: Color(0xFFE2E8F0)),
                   const SizedBox(height: 8),
 
-                  // 1. Select Active Employee
+                  // 1. Select Employee
                   const Text(
-                    'Select Active Employee *',
+                    'Employee *',
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: darkTextColor),
                   ),
                   const SizedBox(height: 6),
-                  DropdownButtonFormField<Employee>(
-                    value: _selectedEmployee,
+                  InkWell(
+                    onTap: () {
+                      showDialog<void>(
+                        context: context,
+                        builder: (ctx) => _EmployeePickerModal(
+                          employees: confirmedEmployees,
+                          selectedEmployee: _selectedEmployee,
+                          getEmployeeLabel: _getEmployeeLabel,
+                          onSelected: (emp) {
+                            setState(() => _selectedEmployee = emp);
+                          },
+                        ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: const Color(0xFFCBD5E1),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _selectedEmployee != null
+                                  ? _getEmployeeLabel(_selectedEmployee!)
+                                  : 'Select Employee...',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: _selectedEmployee != null ? FontWeight.bold : FontWeight.normal,
+                                color: _selectedEmployee != null ? darkTextColor : const Color(0xFF94A3B8),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const Icon(Icons.arrow_drop_down, color: Color(0xFF64748B)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 2. OD Type
+                  const Text(
+                    'OD Type *',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: darkTextColor),
+                  ),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    value: _selectedOdType,
                     isExpanded: true,
                     decoration: InputDecoration(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -115,66 +242,58 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
                         borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
                       ),
                     ),
-                    items: employees.map((emp) {
-                      final site = _getStartingLocation(emp);
-                      final label = '${emp.fullName} (${emp.employeeId.isNotEmpty ? emp.employeeId : "EMP-${emp.id}"}) - At $site';
-                      return DropdownMenuItem<Employee>(
-                        value: emp,
+                    items: _odTypes.map((type) {
+                      return DropdownMenuItem<String>(
+                        value: type,
                         child: Text(
-                          label,
+                          type,
                           style: const TextStyle(fontSize: 13, color: darkTextColor),
-                          overflow: TextOverflow.ellipsis,
                         ),
                       );
                     }).toList(),
                     onChanged: (val) {
-                      if (val != null) {
-                        setState(() => _selectedEmployee = val);
-                      }
+                      if (val != null) setState(() => _selectedOdType = val);
                     },
-                    validator: (val) => val == null ? 'Please select an employee' : null,
                   ),
                   const SizedBox(height: 16),
 
-                  // 2. Starting From (Auto-detected)
+                  // 3. Purpose
                   const Text(
-                    'Starting From',
+                    'Purpose *',
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: darkTextColor),
                   ),
                   const SizedBox(height: 6),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                  TextFormField(
+                    controller: _purposeController,
+                    decoration: InputDecoration(
+                      hintText: 'Customer meeting / Site inspection',
+                      hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                      ),
                     ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.location_on_outlined, size: 18, color: Color(0xFF2563EB)),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            '📍 $startingLocation (Auto-detected from Check-in)',
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
-                          ),
-                        ),
-                      ],
-                    ),
+                    validator: (val) {
+                      if (val == null || val.trim().isEmpty) {
+                        return 'Purpose is required';
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 16),
 
-                  // 3. Destination Location
+                  // 4. Location / Destination
                   const Text(
-                    'Destination Location *',
+                    'Location / Destination *',
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: darkTextColor),
                   ),
                   const SizedBox(height: 6),
                   TextFormField(
                     controller: _destinationController,
                     decoration: InputDecoration(
-                      hintText: 'Enter destination, e.g., Perambur Site / Office',
+                      hintText: 'ABC Customer, Chennai / Tambaram Site',
                       hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
@@ -185,24 +304,169 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
                     ),
                     validator: (val) {
                       if (val == null || val.trim().isEmpty) {
-                        return 'Destination location is required';
+                        return 'Location / Destination is required';
                       }
                       return null;
                     },
                   ),
                   const SizedBox(height: 16),
 
-                  // 4. Task Description
+                  // 5. Date & Times Row
+                  Row(
+                    children: [
+                      // Date Picker
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Date *',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: darkTextColor),
+                            ),
+                            const SizedBox(height: 6),
+                            InkWell(
+                              onTap: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: _selectedDate,
+                                  firstDate: DateTime(2025),
+                                  lastDate: DateTime(2030),
+                                );
+                                if (picked != null) {
+                                  setState(() => _selectedDate = picked);
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFFCBD5E1)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.calendar_today, size: 16, color: darkTextColor),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        dateStr,
+                                        style: const TextStyle(fontSize: 13, color: darkTextColor),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  Row(
+                    children: [
+                      // Start Time
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Start Time *',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: darkTextColor),
+                            ),
+                            const SizedBox(height: 6),
+                            InkWell(
+                              onTap: () async {
+                                final picked = await showTimePicker(
+                                  context: context,
+                                  initialTime: _startTime,
+                                );
+                                if (picked != null) {
+                                  setState(() => _startTime = picked);
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFFCBD5E1)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.access_time, size: 16, color: darkTextColor),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _formatTimeOfDay(_startTime),
+                                      style: const TextStyle(fontSize: 13, color: darkTextColor),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Expected End Time
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Expected End Time',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: darkTextColor),
+                            ),
+                            const SizedBox(height: 6),
+                            InkWell(
+                              onTap: () async {
+                                final picked = await showTimePicker(
+                                  context: context,
+                                  initialTime: _endTime ?? const TimeOfDay(hour: 16, minute: 0),
+                                );
+                                if (picked != null) {
+                                  setState(() => _endTime = picked);
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFFCBD5E1)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.access_time, size: 16, color: darkTextColor),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _endTime != null ? _formatTimeOfDay(_endTime!) : 'Optional',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: _endTime != null ? darkTextColor : const Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 6. Notes
                   const Text(
-                    'Task Description *',
+                    'Notes',
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: darkTextColor),
                   ),
                   const SizedBox(height: 6),
                   TextFormField(
-                    controller: _taskController,
+                    controller: _notesController,
                     maxLines: 2,
                     decoration: InputDecoration(
-                      hintText: 'Deliver tool kit to Kumar',
+                      hintText: 'Meeting details, instructions...',
                       hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
@@ -211,87 +475,8 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
                         borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
                       ),
                     ),
-                    validator: (val) {
-                      if (val == null || val.trim().isEmpty) {
-                        return 'Task description is required';
-                      }
-                      return null;
-                    },
                   ),
-                  const SizedBox(height: 16),
-
-                  // 5. Outcome Radio Options
-                  const Text(
-                    'After Completing This On-Duty:',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: darkTextColor),
-                  ),
-                  const SizedBox(height: 4),
-                  InkWell(
-                    onTap: () => setState(() => _allowCheckoutFromDestination = false),
-                    child: Row(
-                      children: [
-                        Radio<bool>(
-                          value: false,
-                          groupValue: _allowCheckoutFromDestination,
-                          activeColor: primaryColor,
-                          onChanged: (val) {
-                            if (val != null) setState(() => _allowCheckoutFromDestination = val);
-                          },
-                        ),
-                        Expanded(
-                          child: Text(
-                            'Return and continue regular shift at $startingLocation',
-                            style: const TextStyle(fontSize: 12.5, color: darkTextColor),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  InkWell(
-                    onTap: () => setState(() => _allowCheckoutFromDestination = true),
-                    child: Row(
-                      children: [
-                        Radio<bool>(
-                          value: true,
-                          groupValue: _allowCheckoutFromDestination,
-                          activeColor: primaryColor,
-                          onChanged: (val) {
-                            if (val != null) setState(() => _allowCheckoutFromDestination = val);
-                          },
-                        ),
-                        const Expanded(
-                          child: Text(
-                            'Allow direct checkout from destination',
-                            style: TextStyle(fontSize: 12.5, color: darkTextColor),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // 6. Completion Proof Requirement Note
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEFF6FF),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFBFDBFE)),
-                    ),
-                    child: Row(
-                      children: const [
-                        Icon(Icons.camera_alt_outlined, color: Color(0xFF2563EB), size: 18),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            '📷 Completion Proof: Mandatory Photo required',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E40AF)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
                   // Action Buttons
                   Row(
@@ -308,7 +493,7 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
                         child: const Text('Cancel'),
                       ),
                       const SizedBox(width: 12),
-                      ElevatedButton.icon(
+                      ElevatedButton(
                         onPressed: _isSubmitting ? null : _submitAssignment,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: primaryColor,
@@ -317,17 +502,16 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
                           elevation: 1,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
-                        icon: _isSubmitting
+                        child: _isSubmitting
                             ? const SizedBox(
                                 width: 16,
                                 height: 16,
                                 child: CircularProgressIndicator(strokeWidth: 2, color: darkTextColor),
                               )
-                            : const Icon(Icons.send_rounded, size: 18),
-                        label: const Text(
-                          'Assign Duty',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
+                            : const Text(
+                                'Assign OD',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
                       ),
                     ],
                   ),
@@ -346,38 +530,40 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
     setState(() => _isSubmitting = true);
 
     try {
-      final now = DateTime.now();
-      final dateStr = DateFormat('dd-MM-yyyy').format(now);
-      final timeStr = DateFormat('hh:mm a').format(now);
-      final startingLocation = _getStartingLocation(_selectedEmployee!);
+      final dateStr = DateFormat('dd-MM-yyyy').format(_selectedDate);
+      final startTimeStr = _formatTimeOfDay(_startTime);
+      final endTimeStr = _endTime != null ? _formatTimeOfDay(_endTime!) : null;
 
       final assignment = OnDutyAssignment(
         id: 0,
         employeeId: _selectedEmployee!.id,
-        employeeName: _selectedEmployee!.fullName,
-        fromLocation: startingLocation,
+        employeeName: _selectedEmployee!.fullName.trim().isNotEmpty
+            ? _selectedEmployee!.fullName
+            : _getEmployeeLabel(_selectedEmployee!),
+        odType: _selectedOdType,
+        purpose: _purposeController.text.trim(),
         destination: _destinationController.text.trim(),
-        task: _taskController.text.trim(),
-        assignedBy: 'Supervisor',
-        assignedTime: timeStr,
-        allowCheckoutFromDestination: _allowCheckoutFromDestination,
-        status: 'assigned',
         date: dateStr,
-        createdAt: now.toIso8601String(),
+        plannedStartTime: startTimeStr,
+        plannedEndTime: endTimeStr,
+        status: 'ASSIGNED',
+        notes: _notesController.text.trim(),
+        assignedBy: widget.preSelectedEmployee != null ? 'Self' : 'Admin',
+        createdAt: DateTime.now().toIso8601String(),
       );
 
       final repo = ref.read(onDutyRepositoryProvider);
       await repo.createAssignment(assignment);
 
       // Invalidate providers
-      ref.invalidate(allOnDutyAssignmentsProvider);
+      ref.invalidate(allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: null)));
       ref.invalidate(activeOnDutyAssignmentProvider(_selectedEmployee!.id));
 
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('On-Duty task assigned to ${_selectedEmployee!.fullName}!'),
+            content: Text('On-Duty assigned to ${_getEmployeeLabel(_selectedEmployee!)}!'),
             backgroundColor: const Color(0xFF2E7D32),
           ),
         );
@@ -386,7 +572,7 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to assign task: $e'),
+            content: Text('Failed to assign OD: $e'),
             backgroundColor: const Color(0xFFC62828),
           ),
         );
@@ -394,5 +580,163 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
+  }
+}
+
+class _EmployeePickerModal extends StatefulWidget {
+  const _EmployeePickerModal({
+    required this.employees,
+    required this.selectedEmployee,
+    required this.getEmployeeLabel,
+    required this.onSelected,
+  });
+
+  final List<Employee> employees;
+  final Employee? selectedEmployee;
+  final String Function(Employee emp) getEmployeeLabel;
+  final ValueChanged<Employee> onSelected;
+
+  @override
+  State<_EmployeePickerModal> createState() => _EmployeePickerModalState();
+}
+
+class _EmployeePickerModalState extends State<_EmployeePickerModal> {
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = widget.employees.where((emp) {
+      if (_query.isEmpty) return true;
+      final q = _query.toLowerCase();
+      final name = emp.fullName.toLowerCase();
+      final empId = emp.employeeId.toLowerCase();
+      final phone = emp.phoneNumber.toLowerCase();
+      final email = emp.emailAddress.toLowerCase();
+      final label = widget.getEmployeeLabel(emp).toLowerCase();
+      return name.contains(q) || empId.contains(q) || phone.contains(q) || email.contains(q) || label.contains(q);
+    }).toList();
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      backgroundColor: const Color(0xFFF1F5F9),
+      child: Container(
+        width: 380,
+        height: 480,
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Employees',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 20, color: Color(0xFF64748B)),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Search Bar
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFCBD5E1)),
+              ),
+              child: TextField(
+                controller: _searchController,
+                autofocus: true,
+                style: const TextStyle(fontSize: 14, color: Color(0xFF1E293B)),
+                decoration: InputDecoration(
+                  hintText: 'Search employee...',
+                  hintStyle: const TextStyle(fontSize: 14, color: Color(0xFF94A3B8)),
+                  prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF94A3B8)),
+                  suffixIcon: _query.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18, color: Color(0xFF64748B)),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _query = '');
+                          },
+                        )
+                      : null,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  border: InputBorder.none,
+                ),
+                onChanged: (val) => setState(() => _query = val.trim()),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Employee List
+            Expanded(
+              child: filtered.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'No matching employees found',
+                        style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: filtered.length,
+                      itemBuilder: (context, index) {
+                        final emp = filtered[index];
+                        final isSelected = widget.selectedEmployee?.id == emp.id;
+                        final label = widget.getEmployeeLabel(emp);
+
+                        return InkWell(
+                          onTap: () {
+                            widget.onSelected(emp);
+                            Navigator.pop(context);
+                          },
+                          borderRadius: BorderRadius.circular(10),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 8.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    label,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                      color: isSelected ? const Color(0xFF9CC70A) : const Color(0xFF334155),
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (isSelected)
+                                  const Icon(Icons.check, size: 20, color: Color(0xFF9CC70A)),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

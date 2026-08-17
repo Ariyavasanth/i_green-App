@@ -23,8 +23,11 @@ abstract class OnDutyRepository {
   Future<void> updateAssignmentStatus({
     required int id,
     required String status,
-    String? startedTime,
-    String? completedTime,
+    String? actualStartTime,
+    String? actualEndTime,
+    double? latitude,
+    double? longitude,
+    String? photoPath,
     int? durationMinutes,
   });
 
