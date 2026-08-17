@@ -1,10 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/task_item.dart';
 import '../domain/task_repository.dart';
-import '../data/sqlite_task_repository.dart';
+import '../data/firebase_task_repository.dart';
 
 final taskRepositoryProvider = Provider<TaskRepository>((ref) {
-  return SqliteTaskRepository();
+  return FirebaseTaskRepository();
 });
 
 typedef TaskFilter = ({String? assignedTo, String? projectOrOfficeCode, String? status});

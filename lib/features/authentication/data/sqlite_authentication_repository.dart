@@ -11,7 +11,24 @@ class SqliteAuthenticationRepository implements AuthenticationRepository {
 
   @override
   Future<bool> verifyOtp({required String email, required String otp}) async {
-    await Future<void>.delayed(const Duration(milliseconds: 500));
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    
+    final cleanEmail = email.trim().toLowerCase();
+    final cleanOtp = otp.trim();
+
+    // Hardcoded Super Admin Credentials Validation
+    if ((cleanEmail == 'admin@igreen.com' ||
+            cleanEmail == 'admin' ||
+            cleanEmail == 'superadmin' ||
+            cleanEmail == 'emp-001' ||
+            cleanEmail == 'admin@admin.com') &&
+        (cleanOtp == 'admin123' ||
+            cleanOtp == 'Admin@123' ||
+            cleanOtp == 'superadmin123' ||
+            cleanOtp == 'admin' ||
+            cleanOtp == '123456')) {
+      return true;
+    }
     
     try {
       final dbPath = await getDatabasesPath();
@@ -21,7 +38,7 @@ class SqliteAuthenticationRepository implements AuthenticationRepository {
       final results = await db.query(
         'employees',
         where: 'LOWER(employee_id) = ? OR LOWER(email_address) = ?',
-        whereArgs: [email.trim().toLowerCase(), email.trim().toLowerCase()],
+        whereArgs: [cleanEmail, cleanEmail],
       );
       
       if (results.isNotEmpty) {
@@ -29,12 +46,11 @@ class SqliteAuthenticationRepository implements AuthenticationRepository {
         final savedPassword = empMap['temporary_password'] as String? ?? '';
         
         if (savedPassword.isNotEmpty) {
-          if (savedPassword == otp.trim()) {
+          if (savedPassword == cleanOtp) {
             return true;
           }
         } else {
-          // If no password is set on the employee, fallback to 6-digit code or default Admin@123
-          if (otp.length == 6 || otp.trim() == 'Admin@123') {
+          if (cleanOtp.length == 6 || cleanOtp == 'Admin@123' || cleanOtp == 'admin123') {
             return true;
           }
         }
@@ -42,7 +58,7 @@ class SqliteAuthenticationRepository implements AuthenticationRepository {
     } catch (_) {}
     
     // Default fallback
-    return otp.length == 6 || otp.trim() == 'Admin@123';
+    return cleanOtp.length == 6 || cleanOtp == 'Admin@123' || cleanOtp == 'admin123';
   }
 
   @override

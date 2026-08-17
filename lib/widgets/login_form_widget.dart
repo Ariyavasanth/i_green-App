@@ -91,9 +91,75 @@ class _LoginFormWidgetState extends ConsumerState<LoginFormWidget> {
           const Icon(Icons.lock_outline, size: 34, color: Color(0xFF414A51)),
           const SizedBox(height: 28),
           Text('Welcome back', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700, color: const Color(0xFF22282D))),
-          const SizedBox(height: 10),
-          const Text('Sign in securely with your credentials or verification code.', style: TextStyle(color: Color(0xFF69737A), height: 1.5)),
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
+          // Super Admin Hardcoded Credentials Card
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF9CC70A).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.4)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.admin_panel_settings, size: 18, color: Color(0xFF414A51)),
+                        SizedBox(width: 6),
+                        Text(
+                          'Super Admin Credentials',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF414A51)),
+                        ),
+                      ],
+                    ),
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          _email.text = 'admin@igreen.com';
+                          _otp.text = 'admin123';
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF9CC70A),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.flash_on, size: 12, color: Color(0xFF414A51)),
+                            SizedBox(width: 2),
+                            Text(
+                              'Auto-fill',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                RichText(
+                  text: const TextSpan(
+                    style: TextStyle(fontSize: 12, color: Color(0xFF414A51)),
+                    children: [
+                      TextSpan(text: 'Username: '),
+                      TextSpan(text: 'admin@igreen.com', style: TextStyle(fontWeight: FontWeight.bold)),
+                      TextSpan(text: '  |  Password: '),
+                      TextSpan(text: 'admin123', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
           CustomTextField(
             controller: _email,
             label: 'Email address or Employee ID',

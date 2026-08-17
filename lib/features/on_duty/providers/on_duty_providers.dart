@@ -1,11 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../data/sqlite_on_duty_repository.dart';
+import '../data/firebase_on_duty_repository.dart';
 import '../domain/on_duty_assignment.dart';
 import '../domain/on_duty_repository.dart';
 
 final onDutyRepositoryProvider = Provider<OnDutyRepository>((ref) {
-  return SqliteOnDutyRepository();
+  return FirebaseOnDutyRepository();
 });
 
 final activeOnDutyAssignmentProvider =
