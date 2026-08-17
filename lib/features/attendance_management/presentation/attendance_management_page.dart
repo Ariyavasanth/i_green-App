@@ -14,7 +14,6 @@ import '../../on_duty/presentation/employee_on_duty_card.dart';
 import '../../on_duty/providers/on_duty_providers.dart';
 import '../../site_visit_attendance/domain/site_visit_record.dart';
 import '../../site_visit_attendance_management/presentation/widgets/admin_manual_site_visit_dialog.dart';
-import '../../site_visit_attendance_management/presentation/widgets/on_duty_management_view.dart';
 import '../../site_visit_attendance_management/providers/site_visit_attendance_management_providers.dart';
 import '../../task_management/presentation/task_board_page.dart';
 import '../../time_clocking/presentation/clocking_timeline_view.dart';
@@ -28,7 +27,6 @@ import 'widgets/attendance_table_view.dart';
 enum AttendanceCategoryTab {
   staticAttendance,
   siteVisitAttendance,
-  onDutyManagement,
   attendanceSettings,
   auditLogs,
 }
@@ -431,11 +429,6 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
         icon: Icons.location_on_outlined,
         label: 'Site Visits',
       ),
-      _buildBottomNavItem(
-        tab: AttendanceCategoryTab.onDutyManagement,
-        icon: Icons.business_center_outlined,
-        label: 'On-Duty',
-      ),
     ];
 
     return Container(
@@ -532,9 +525,6 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
 
       case AttendanceCategoryTab.siteVisitAttendance:
         return _buildSiteVisitAttendanceView(isMobile, allEmployees, siteVisitsAsync);
-
-      case AttendanceCategoryTab.onDutyManagement:
-        return const OnDutyManagementView();
 
       case AttendanceCategoryTab.attendanceSettings:
         return const AttendanceSettingsEmbeddedView();

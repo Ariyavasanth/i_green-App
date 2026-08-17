@@ -43,6 +43,7 @@ class _TaskBoardPageState extends ConsumerState<TaskBoardPage> {
   Widget build(BuildContext context) {
     const primaryColor = Color(0xFF9CC70A);
     const secondaryColor = Color(0xFF414A51);
+    final isMobile = MediaQuery.of(context).size.width < 750;
 
     final tasksAsync = ref.watch(
       tasksProvider((
@@ -55,26 +56,24 @@ class _TaskBoardPageState extends ConsumerState<TaskBoardPage> {
     final hoursAsync = ref.watch(taskProjectHoursProvider(null));
 
     final mainBody = SafeArea(
+      top: false,
       child: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(
+          isMobile ? 12 : 16,
+          isMobile ? 12 : 16,
+          isMobile ? 12 : 16,
+          60,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Top Header Action Card with Section Title
-            _buildHeaderActionCard(context, primaryColor, secondaryColor),
-            const SizedBox(height: 16),
-
-            // Tab Navigation Switch: Task Tracker vs Daily Clocking
-            _buildTabSelector(primaryColor),
-            const SizedBox(height: 16),
-
             // Tab 0: Tasks Tracker View
             if (_activeTab == 0) ...[
               _buildMetricGrid(hoursAsync, primaryColor, secondaryColor),
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
               _buildSearchAndFilters(primaryColor),
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
               tasksAsync.when(
                 data: (tasks) {
                   final filtered = tasks.where((t) {
@@ -120,53 +119,62 @@ class _TaskBoardPageState extends ConsumerState<TaskBoardPage> {
       ),
     );
 
-    if (widget.embedded) {
-      return mainBody;
-    }
+    final fabWidget = _activeTab == 0
+        ? FloatingActionButton.extended(
+            backgroundColor: primaryColor,
+            foregroundColor: Colors.white,
+            elevation: 4,
+            onPressed: () => _openCreateTaskDialog(),
+            icon: const Icon(Icons.add, size: 20),
+            label: const Text('Create Task', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          )
+        : null;
 
     return Scaffold(
       backgroundColor: const Color(0xFFEFF3F6),
       body: mainBody,
+      bottomNavigationBar: _buildBottomNavBar(primaryColor),
+      floatingActionButton: fabWidget,
     );
   }
 
-  Widget _buildTabSelector(Color primaryColor) {
+  Widget _buildBottomNavBar(Color primaryColor) {
     return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFFE2E8F0),
-        borderRadius: BorderRadius.circular(10),
+      height: 60,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
       ),
-      padding: const EdgeInsets.all(3),
       child: Row(
         children: [
           Expanded(
             child: InkWell(
               onTap: () => setState(() => _activeTab = 0),
-              borderRadius: BorderRadius.circular(8),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10),
+                padding: const EdgeInsets.symmetric(vertical: 6),
                 decoration: BoxDecoration(
-                  color: _activeTab == 0 ? Colors.white : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: _activeTab == 0
-                      ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)]
-                      : null,
+                  border: Border(
+                    bottom: BorderSide(
+                      color: _activeTab == 0 ? primaryColor : Colors.transparent,
+                      width: 2.5,
+                    ),
+                  ),
                 ),
-                child: Row(
+                child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
                       Icons.assignment_outlined,
-                      size: 18,
-                      color: _activeTab == 0 ? primaryColor : const Color(0xFF64748B),
+                      size: 22,
+                      color: _activeTab == 0 ? primaryColor : const Color(0xFF94A3B8),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(height: 2),
                     Text(
                       'Task Tracker',
                       style: TextStyle(
+                        fontSize: 11.5,
                         fontWeight: _activeTab == 0 ? FontWeight.bold : FontWeight.w500,
-                        color: _activeTab == 0 ? const Color(0xFF0F172A) : const Color(0xFF64748B),
-                        fontSize: 13,
+                        color: _activeTab == 0 ? primaryColor : const Color(0xFF94A3B8),
                       ),
                     ),
                   ],
@@ -177,104 +185,36 @@ class _TaskBoardPageState extends ConsumerState<TaskBoardPage> {
           Expanded(
             child: InkWell(
               onTap: () => setState(() => _activeTab = 1),
-              borderRadius: BorderRadius.circular(8),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10),
+                padding: const EdgeInsets.symmetric(vertical: 6),
                 decoration: BoxDecoration(
-                  color: _activeTab == 1 ? Colors.white : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: _activeTab == 1
-                      ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)]
-                      : null,
+                  border: Border(
+                    bottom: BorderSide(
+                      color: _activeTab == 1 ? primaryColor : Colors.transparent,
+                      width: 2.5,
+                    ),
+                  ),
                 ),
-                child: Row(
+                child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
                       Icons.timer_outlined,
-                      size: 18,
-                      color: _activeTab == 1 ? primaryColor : const Color(0xFF64748B),
+                      size: 22,
+                      color: _activeTab == 1 ? primaryColor : const Color(0xFF94A3B8),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(height: 2),
                     Text(
                       'Daily Clocking',
                       style: TextStyle(
+                        fontSize: 11.5,
                         fontWeight: _activeTab == 1 ? FontWeight.bold : FontWeight.w500,
-                        color: _activeTab == 1 ? const Color(0xFF0F172A) : const Color(0xFF64748B),
-                        fontSize: 13,
+                        color: _activeTab == 1 ? primaryColor : const Color(0xFF94A3B8),
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeaderActionCard(BuildContext context, Color primaryColor, Color secondaryColor) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: primaryColor.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(Icons.task_alt_outlined, color: primaryColor, size: 20),
-              ),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Tasks and Clocking Management',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Manage employee task assignments & review daily activity clockings',
-                      style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                elevation: 0,
-              ),
-              onPressed: () => _openCreateTaskDialog(),
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('+ Create Task', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
             ),
           ),
         ],
@@ -403,6 +343,8 @@ class _TaskBoardPageState extends ConsumerState<TaskBoardPage> {
                     selected: isSelected,
                     selectedColor: primaryColor.withValues(alpha: 0.2),
                     checkmarkColor: primaryColor,
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     labelStyle: TextStyle(
                       fontSize: 11,
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
@@ -442,7 +384,7 @@ class _TaskBoardPageState extends ConsumerState<TaskBoardPage> {
           const SizedBox(height: 16),
           const Text('No Tasks Found', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
           const SizedBox(height: 6),
-          const Text('Create a task using + Create Task button above', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+          const Text('Create a task using + Create Task button at bottom right', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
         ],
       ),
     );

@@ -37,6 +37,7 @@ import '../../features/site_visit_attendance_management/presentation/site_visit_
 import '../../features/asset_settings/presentation/asset_settings_page.dart';
 import '../../features/salary_settings/presentation/salary_settings_page.dart';
 import '../../features/asset_management/presentation/asset_management_page.dart';
+import '../../features/on_duty/presentation/on_duty_management_page.dart';
 import '../../features/asset_management/presentation/my_asset_page.dart';
 import '../../screens/login_screen.dart';
 import '../../screens/customers/active_customers_list.dart';
@@ -148,6 +149,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/leave-management',
             builder: (_, _) => const LeaveManagementPage(),
+          ),
+          GoRoute(
+            path: '/on-duty-management',
+            builder: (_, _) => const OnDutyManagementPage(),
           ),
           GoRoute(
             path: '/asset-settings',

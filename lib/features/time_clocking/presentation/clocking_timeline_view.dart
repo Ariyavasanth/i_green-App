@@ -51,7 +51,6 @@ class _ClockingTimelineViewState extends ConsumerState<ClockingTimelineView> {
         return emp;
       }
     }
-    // Fallback search by ID pattern
     final numOnly = empId.replaceAll(RegExp(r'[^0-9]'), '');
     if (numOnly.isNotEmpty) {
       final parsedId = int.tryParse(numOnly);
@@ -67,17 +66,17 @@ class _ClockingTimelineViewState extends ConsumerState<ClockingTimelineView> {
   Color _getActivityColor(String activity) {
     final lower = activity.toLowerCase();
     if (lower.contains('work') || lower.contains('general')) {
-      return const Color(0xFF2563EB); // Blue
+      return const Color(0xFF2563EB);
     } else if (lower.contains('meeting')) {
-      return const Color(0xFF7C3AED); // Purple
+      return const Color(0xFF7C3AED);
     } else if (lower.contains('lunch') || lower.contains('tea') || lower.contains('break')) {
-      return const Color(0xFFEA580C); // Orange
+      return const Color(0xFFEA580C);
     } else if (lower.contains('client') || lower.contains('task')) {
-      return const Color(0xFF0D9488); // Teal
+      return const Color(0xFF0D9488);
     } else if (lower.contains('site')) {
-      return const Color(0xFF9CC70A); // Primary Olive Green
+      return const Color(0xFF9CC70A);
     } else {
-      return const Color(0xFF414A51); // Secondary Dark Slate
+      return const Color(0xFF414A51);
     }
   }
 
@@ -111,7 +110,6 @@ class _ClockingTimelineViewState extends ConsumerState<ClockingTimelineView> {
     final entries = clockEntriesAsync.valueOrNull ?? [];
     final activeEntries = activeEntriesAsync.valueOrNull ?? [];
 
-    // Filter entries by activity, status, search query
     final filteredEntries = entries.where((entry) {
       if (_selectedActivity != 'All' && entry.entryType != _selectedActivity) {
         return false;
@@ -136,7 +134,6 @@ class _ClockingTimelineViewState extends ConsumerState<ClockingTimelineView> {
       return true;
     }).toList();
 
-    // Stats calculation
     final totalClockings = filteredEntries.length;
     final activeCount = activeEntries.length;
     double workHours = 0.0;
@@ -155,7 +152,6 @@ class _ClockingTimelineViewState extends ConsumerState<ClockingTimelineView> {
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Employee Action Section (If employee view)
         if (_selectedEmployeeId != null && _selectedEmployeeId!.isNotEmpty) ...[
           ClockActionWidget(
             employeeId: _selectedEmployeeId!,
@@ -189,7 +185,7 @@ class _ClockingTimelineViewState extends ConsumerState<ClockingTimelineView> {
         _buildControlToolbar(allEmployees, isMobile),
         const SizedBox(height: 16),
 
-        // Daily Clockings Data Table
+        // Daily Clockings Data Table / Mobile Card List
         _buildClockingsTable(filteredEntries, allEmployees, primaryColor, secondaryColor, isMobile),
       ],
     );
@@ -373,9 +369,11 @@ class _ClockingTimelineViewState extends ConsumerState<ClockingTimelineView> {
           children: [
             Icon(Icons.info_outline, size: 18, color: Color(0xFF64748B)),
             SizedBox(width: 8),
-            Text(
-              'No employees are currently clocked into an active activity right now.',
-              style: TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+            Expanded(
+              child: Text(
+                'No employees are currently clocked into an active activity right now.',
+                style: TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+              ),
             ),
           ],
         ),
@@ -425,7 +423,7 @@ class _ClockingTimelineViewState extends ConsumerState<ClockingTimelineView> {
                 ],
               ),
               Text(
-                'Current Running Activities',
+                'Running Activities',
                 style: TextStyle(fontSize: 12, color: primaryColor, fontWeight: FontWeight.bold),
               ),
             ],
@@ -536,6 +534,212 @@ class _ClockingTimelineViewState extends ConsumerState<ClockingTimelineView> {
     final activityTypes = ['All', 'General Work', 'Meeting', 'Lunch Break', 'Tea Break', 'Client Website Task', 'Site Visit', 'Idle'];
     final statusTypes = ['All', 'Active', 'Completed'];
 
+    Widget dateNav = Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFCBD5E1)),
+      ),
+      child: Row(
+        mainAxisSize: isMobile ? MainAxisSize.max : MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.chevron_left, size: 20),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            onPressed: () {
+              setState(() {
+                _selectedDate = _selectedDate.subtract(const Duration(days: 1));
+              });
+            },
+          ),
+          InkWell(
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: _selectedDate,
+                firstDate: DateTime(2020),
+                lastDate: DateTime(2030),
+              );
+              if (picked != null) {
+                setState(() => _selectedDate = picked);
+              }
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_today, size: 15, color: Color(0xFF64748B)),
+                  const SizedBox(width: 6),
+                  Text(
+                    DateFormat('dd MMM yyyy').format(_selectedDate),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_right, size: 20),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            onPressed: () {
+              setState(() {
+                _selectedDate = _selectedDate.add(const Duration(days: 1));
+              });
+            },
+          ),
+        ],
+      ),
+    );
+
+    Widget employeeDropdown = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFCBD5E1)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String?>(
+          value: _selectedEmployeeId,
+          isExpanded: true,
+          hint: const Text('All Employees', style: TextStyle(fontSize: 12)),
+          style: const TextStyle(fontSize: 12, color: Color(0xFF0F172A), fontWeight: FontWeight.w500),
+          items: [
+            const DropdownMenuItem<String?>(
+              value: null,
+              child: Text('All Employees', style: TextStyle(fontSize: 12)),
+            ),
+            ...allEmployees.map((emp) {
+              return DropdownMenuItem<String?>(
+                value: emp.employeeId.isNotEmpty ? emp.employeeId : 'EMP-${emp.id}',
+                child: Text(
+                  '${emp.fullName} (${emp.employeeId.isNotEmpty ? emp.employeeId : "EMP${emp.id}"})',
+                  style: const TextStyle(fontSize: 12),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }),
+          ],
+          onChanged: (val) => setState(() => _selectedEmployeeId = val),
+        ),
+      ),
+    );
+
+    Widget activityDropdown = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFCBD5E1)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _selectedActivity,
+          isExpanded: true,
+          style: const TextStyle(fontSize: 12, color: Color(0xFF0F172A), fontWeight: FontWeight.w500),
+          items: activityTypes.map((act) {
+            return DropdownMenuItem<String>(
+              value: act,
+              child: Text(act == 'All' ? 'All Activities' : act, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+            );
+          }).toList(),
+          onChanged: (val) {
+            if (val != null) setState(() => _selectedActivity = val);
+          },
+        ),
+      ),
+    );
+
+    Widget statusDropdown = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFCBD5E1)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _selectedStatus,
+          isExpanded: true,
+          style: const TextStyle(fontSize: 12, color: Color(0xFF0F172A), fontWeight: FontWeight.w500),
+          items: statusTypes.map((st) {
+            return DropdownMenuItem<String>(
+              value: st,
+              child: Text(st == 'All' ? 'All Statuses' : st, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+            );
+          }).toList(),
+          onChanged: (val) {
+            if (val != null) setState(() => _selectedStatus = val);
+          },
+        ),
+      ),
+    );
+
+    Widget searchBox = SizedBox(
+      width: isMobile ? double.infinity : 160,
+      child: TextField(
+        controller: _searchController,
+        style: const TextStyle(fontSize: 12),
+        decoration: InputDecoration(
+          hintText: 'Search clockings...',
+          hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+          prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFF94A3B8)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          isDense: true,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+          ),
+        ),
+        onChanged: (val) => setState(() => _searchQuery = val.trim().toLowerCase()),
+      ),
+    );
+
+    Widget refreshBtn = IconButton(
+      icon: const Icon(Icons.refresh, size: 20, color: Color(0xFF64748B)),
+      tooltip: 'Refresh Data',
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+      onPressed: () {
+        ref.invalidate(clockEntriesProvider);
+        ref.invalidate(allActiveClockEntriesProvider);
+      },
+    );
+
+    if (isMobile) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(child: dateNav),
+                const SizedBox(width: 8),
+                refreshBtn,
+              ],
+            ),
+            const SizedBox(height: 8),
+            employeeDropdown,
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(child: activityDropdown),
+                const SizedBox(width: 8),
+                Expanded(child: statusDropdown),
+              ],
+            ),
+            const SizedBox(height: 8),
+            searchBox,
+          ],
+        ),
+      );
+    }
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
@@ -557,181 +761,18 @@ class _ClockingTimelineViewState extends ConsumerState<ClockingTimelineView> {
         spacing: 12,
         runSpacing: 12,
         children: [
-          // Left Group: Date Navigation
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFCBD5E1)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.chevron_left, size: 20),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                  onPressed: () {
-                    setState(() {
-                      _selectedDate = _selectedDate.subtract(const Duration(days: 1));
-                    });
-                  },
-                ),
-                InkWell(
-                  onTap: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: _selectedDate,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime(2030),
-                    );
-                    if (picked != null) {
-                      setState(() => _selectedDate = picked);
-                    }
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.calendar_today, size: 15, color: Color(0xFF64748B)),
-                        const SizedBox(width: 6),
-                        Text(
-                          DateFormat('dd MMM yyyy').format(_selectedDate),
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.chevron_right, size: 20),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                  onPressed: () {
-                    setState(() {
-                      _selectedDate = _selectedDate.add(const Duration(days: 1));
-                    });
-                  },
-                ),
-              ],
-            ),
-          ),
-
-          // Right Group: Filters & Search
+          dateNav,
           Wrap(
             alignment: WrapAlignment.end,
             spacing: 10,
             runSpacing: 10,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              // Employee Filter Dropdown
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFCBD5E1)),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String?>(
-                    value: _selectedEmployeeId,
-                    hint: const Text('All Employees', style: TextStyle(fontSize: 12)),
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF0F172A), fontWeight: FontWeight.w500),
-                    items: [
-                      const DropdownMenuItem<String?>(
-                        value: null,
-                        child: Text('All Employees', style: TextStyle(fontSize: 12)),
-                      ),
-                      ...allEmployees.map((emp) {
-                        return DropdownMenuItem<String?>(
-                          value: emp.employeeId.isNotEmpty ? emp.employeeId : 'EMP-${emp.id}',
-                          child: Text(
-                            '${emp.fullName} (${emp.employeeId.isNotEmpty ? emp.employeeId : "EMP${emp.id}"})',
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        );
-                      }),
-                    ],
-                    onChanged: (val) => setState(() => _selectedEmployeeId = val),
-                  ),
-                ),
-              ),
-
-              // Activity Filter Dropdown
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFCBD5E1)),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _selectedActivity,
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF0F172A), fontWeight: FontWeight.w500),
-                    items: activityTypes.map((act) {
-                      return DropdownMenuItem<String>(
-                        value: act,
-                        child: Text(act == 'All' ? 'All Activities' : act, style: const TextStyle(fontSize: 12)),
-                      );
-                    }).toList(),
-                    onChanged: (val) {
-                      if (val != null) setState(() => _selectedActivity = val);
-                    },
-                  ),
-                ),
-              ),
-
-              // Status Filter Dropdown
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFCBD5E1)),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _selectedStatus,
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF0F172A), fontWeight: FontWeight.w500),
-                    items: statusTypes.map((st) {
-                      return DropdownMenuItem<String>(
-                        value: st,
-                        child: Text(st == 'All' ? 'All Statuses' : st, style: const TextStyle(fontSize: 12)),
-                      );
-                    }).toList(),
-                    onChanged: (val) {
-                      if (val != null) setState(() => _selectedStatus = val);
-                    },
-                  ),
-                ),
-              ),
-
-              // Search Box
-              SizedBox(
-                width: isMobile ? double.infinity : 160,
-                child: TextField(
-                  controller: _searchController,
-                  style: const TextStyle(fontSize: 12),
-                  decoration: InputDecoration(
-                    hintText: 'Search clockings...',
-                    hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
-                    prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFF94A3B8)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
-                    ),
-                  ),
-                  onChanged: (val) => setState(() => _searchQuery = val.trim().toLowerCase()),
-                ),
-              ),
-
-              // Refresh Button
-              IconButton(
-                icon: const Icon(Icons.refresh, size: 20, color: Color(0xFF64748B)),
-                tooltip: 'Refresh Data',
-                onPressed: () {
-                  ref.invalidate(clockEntriesProvider);
-                  ref.invalidate(allActiveClockEntriesProvider);
-                },
-              ),
+              SizedBox(width: 180, child: employeeDropdown),
+              SizedBox(width: 140, child: activityDropdown),
+              SizedBox(width: 130, child: statusDropdown),
+              searchBox,
+              refreshBtn,
             ],
           ),
         ],
@@ -739,7 +780,7 @@ class _ClockingTimelineViewState extends ConsumerState<ClockingTimelineView> {
     );
   }
 
-  // --- DAILY CLOCKINGS TABLE ---
+  // --- DAILY CLOCKINGS TABLE / MOBILE CARDS ---
 
   Widget _buildClockingsTable(
     List<ClockEntry> entries,
@@ -772,6 +813,138 @@ class _ClockingTimelineViewState extends ConsumerState<ClockingTimelineView> {
             ),
           ],
         ),
+      );
+    }
+
+    if (isMobile) {
+      return Column(
+        children: entries.map((entry) {
+          final emp = _findEmployee(entry.employeeId, allEmployees);
+          final empName = emp != null ? emp.fullName : (entry.employeeId.isNotEmpty ? entry.employeeId : 'Saravanan G S');
+          final empDept = emp?.department ?? 'Staff';
+          final color = _getActivityColor(entry.entryType);
+          final icon = _getActivityIcon(entry.entryType);
+
+          final startTimeStr = DateFormat('HH:mm').format(entry.startTime);
+          final endTimeStr = entry.endTime != null ? DateFormat('HH:mm').format(entry.endTime!) : 'Running';
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 16,
+                          backgroundColor: primaryColor.withValues(alpha: 0.15),
+                          child: Text(
+                            empName.isNotEmpty ? empName[0].toUpperCase() : 'E',
+                            style: TextStyle(fontWeight: FontWeight.bold, color: primaryColor, fontSize: 12),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              empName,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                            ),
+                            Text(
+                              empDept,
+                              style: const TextStyle(fontSize: 10, color: Color(0xFF64748B)),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: color.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(icon, size: 12, color: color),
+                          const SizedBox(width: 4),
+                          Text(
+                            entry.entryType,
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: color),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '$startTimeStr → $endTimeStr',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+                    ),
+                    Text(
+                      entry.formattedDuration,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        color: entry.isActive ? const Color(0xFF16A34A) : color,
+                      ),
+                    ),
+                  ],
+                ),
+                if (entry.notes != null && entry.notes!.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    entry.notes!,
+                    style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                  ),
+                ],
+                if (entry.isActive) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.red,
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      ),
+                      icon: const Icon(Icons.stop, size: 14),
+                      label: const Text('Clock Out', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      onPressed: () async {
+                        final repo = ref.read(clockingRepositoryProvider);
+                        await repo.adminClockOutEntry(entry.id, DateTime.now());
+                        ref.invalidate(clockEntriesProvider);
+                        ref.invalidate(allActiveClockEntriesProvider);
+                      },
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
+        }).toList(),
       );
     }
 
@@ -817,7 +990,6 @@ class _ClockingTimelineViewState extends ConsumerState<ClockingTimelineView> {
 
             return DataRow(
               cells: [
-                // Employee Cell
                 DataCell(
                   Row(
                     children: [
@@ -847,8 +1019,6 @@ class _ClockingTimelineViewState extends ConsumerState<ClockingTimelineView> {
                     ],
                   ),
                 ),
-
-                // Activity Cell
                 DataCell(
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -870,16 +1040,12 @@ class _ClockingTimelineViewState extends ConsumerState<ClockingTimelineView> {
                     ),
                   ),
                 ),
-
-                // Start Time Cell
                 DataCell(
                   Text(
                     startTimeStr,
                     style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF334155)),
                   ),
                 ),
-
-                // End Time Cell
                 DataCell(
                   entry.isActive
                       ? Container(
@@ -906,8 +1072,6 @@ class _ClockingTimelineViewState extends ConsumerState<ClockingTimelineView> {
                           style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF334155)),
                         ),
                 ),
-
-                // Duration Cell
                 DataCell(
                   Text(
                     entry.formattedDuration,
@@ -918,8 +1082,6 @@ class _ClockingTimelineViewState extends ConsumerState<ClockingTimelineView> {
                     ),
                   ),
                 ),
-
-                // Notes Cell
                 DataCell(
                   SizedBox(
                     width: 180,
@@ -931,8 +1093,6 @@ class _ClockingTimelineViewState extends ConsumerState<ClockingTimelineView> {
                     ),
                   ),
                 ),
-
-                // Action Cell
                 DataCell(
                   entry.isActive
                       ? TextButton.icon(
