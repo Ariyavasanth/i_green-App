@@ -6,15 +6,11 @@ import '../../../core/layout/responsive_layout.dart';
 import '../../../core/storage/sidebar_state_storage.dart';
 import '../../../core/storage/sidebar_state_storage_factory.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/visual_effects.dart';
 import '../../../widgets/navigation/sidebar_drawer.dart';
 import '../../authentication/providers/authentication_providers.dart';
 import '../../books/providers/books_providers.dart';
 import '../../employee/providers/employee_providers.dart';
-import '../../leave/providers/leave_providers.dart';
-import '../../attendance/providers/attendance_providers.dart';
-import '../../employee/presentation/dialogs/registration_links_dialog.dart';
 
 final sidebarStateStorageProvider = Provider<SidebarStateStorage>(
   (_) => createSidebarStateStorage(),
@@ -109,12 +105,6 @@ class AppShell extends ConsumerWidget {
       'Employee Management',
       '/employee-management',
       Icons.badge_outlined,
-      'Employee',
-    ),
-    SidebarDestination(
-      'Leave',
-      '/leave',
-      Icons.event_note_outlined,
       'Employee',
     ),
     SidebarDestination(
