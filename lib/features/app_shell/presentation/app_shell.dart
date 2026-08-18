@@ -378,6 +378,15 @@ class _TopBar extends ConsumerWidget {
 
   String _getHeading(String location) {
     final cleanLoc = location.split('?').first;
+    if (cleanLoc == '/items/new') return 'New Item';
+    if (cleanLoc == '/customers/new') return 'New Customer';
+    if (cleanLoc == '/quotes/new') return 'New Quote';
+    if (cleanLoc == '/sales-orders/new') return 'New Sales Order';
+    if (cleanLoc == '/invoices/new') return 'New Invoice';
+    if (cleanLoc == '/bills/new') return 'New Bill';
+    if (cleanLoc == '/purchase-orders/new') return 'New Purchase Order';
+    if (cleanLoc == '/expenses/new') return 'New Expense';
+    if (cleanLoc == '/inventory-adjustments/new') return 'New Inventory Adjustment';
     for (final dest in AppShell.destinations) {
       if (dest.path == cleanLoc || (dest.path != '/home' && cleanLoc.startsWith(dest.path))) {
         return dest.label;

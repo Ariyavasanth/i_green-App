@@ -4,7 +4,6 @@ import '../data/firebase_vendor_repository.dart';
 import '../domain/vendor.dart';
 import '../domain/vendor_repository.dart';
 
-// Firestore implementation active.
 final vendorRepositoryProvider = Provider<VendorRepository>(
   (ref) => FirebaseVendorRepository(),
 );

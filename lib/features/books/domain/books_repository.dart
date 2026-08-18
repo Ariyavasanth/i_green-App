@@ -7,8 +7,12 @@ class BookItem {
     this.type = 'Goods',
     this.unit = 'pcs',
     this.hsnCode = '',
+    this.taxPreference = 'Taxable',
     this.taxRate = 18,
     this.costPrice = 0,
+    this.salesAccount = 'Sales',
+    this.cogsAccount = 'Cost of Goods Sold',
+    this.preferredVendor = '',
     this.trackInventory = false,
     this.stockOnHand = 0,
   });
@@ -16,7 +20,7 @@ class BookItem {
   final String name;
   final String sku;
   final double rate;
-  final String type, unit, hsnCode;
+  final String type, unit, hsnCode, taxPreference, salesAccount, cogsAccount, preferredVendor;
   final double taxRate, costPrice, stockOnHand;
   final bool trackInventory;
 }
@@ -274,6 +278,14 @@ abstract interface class BooksRepository {
     String sku = '',
     double rate = 0,
     String type = 'Goods',
+    String unit = 'pcs',
+    String hsnCode = '',
+    String taxPreference = 'Taxable',
+    double taxRate = 18,
+    double costPrice = 0,
+    String salesAccount = 'Sales',
+    String cogsAccount = 'Cost of Goods Sold',
+    String preferredVendor = '',
   });
   Future<List<Customer>> getCustomers();
   Future<void> addCustomer({

@@ -276,6 +276,14 @@ class SqliteBooksRepository implements BooksRepository {
     String sku = '',
     double rate = 0,
     String type = 'Goods',
+    String unit = 'pcs',
+    String hsnCode = '',
+    String taxPreference = 'Taxable',
+    double taxRate = 18,
+    double costPrice = 0,
+    String salesAccount = 'Sales',
+    String cogsAccount = 'Cost of Goods Sold',
+    String preferredVendor = '',
   }) async {
     final db = await _db;
     await db.transaction((txn) async {

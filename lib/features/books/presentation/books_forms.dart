@@ -9,6 +9,8 @@ import 'package:intl/intl.dart';
 import '../../../core/layout/responsive_layout.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/visual_effects.dart';
+import '../../vendors/domain/vendor.dart';
+import '../../vendors/providers/vendor_providers.dart';
 import '../domain/books_repository.dart';
 import '../invoice_voice/domain/invoice_voice_parameters.dart';
 import '../invoice_voice/providers/invoice_voice_providers.dart';
@@ -32,6 +34,65 @@ class _NewItemState extends ConsumerState<NewItemPage> {
   bool saving = false;
   bool trackInventory = false;
   String itemType = 'Goods';
+  String unit = 'pcs';
+  String taxPreference = 'Taxable';
+  String taxRate = '18%';
+  String salesAccount = 'Sales';
+  String cogsAccount = 'Cost of Goods Sold';
+  String? preferredVendor;
+
+  static const _unitOptions = [
+    'pcs',
+    'kg',
+    'g',
+    'ltr',
+    'ml',
+    'm',
+    'cm',
+    'box',
+    'pack',
+    'carton',
+    'bag',
+    'pair',
+    'set',
+    'dozen',
+  ];
+
+  static const _taxPreferenceOptions = [
+    'Taxable',
+    'Exempt',
+    'Zero Rated',
+    'Non-Taxable',
+  ];
+
+  static const _taxRateOptions = [
+    '0%',
+    '5%',
+    '12%',
+    '18%',
+    '28%',
+  ];
+
+  static const _salesAccountOptions = [
+    'Sales',
+    'Domestic Sales',
+    'Wholesale Sales',
+    'Retail Sales',
+    'Export Sales',
+    'Service Revenue',
+    'Other Sales',
+  ];
+
+  static const _cogsAccountOptions = [
+    'Cost of Goods Sold',
+    'Material Cost',
+    'Product Cost',
+    'Purchase Cost',
+    'Raw Material Cost',
+    'Direct Labour Cost',
+    'Other Direct Cost',
+  ];
+
   @override
   void dispose() {
     name.dispose();
@@ -45,145 +106,219 @@ class _NewItemState extends ConsumerState<NewItemPage> {
   }
 
   @override
-  Widget build(BuildContext context) => FormPage(
-    title: 'New Item',
-    saving: saving,
-    onSave: save,
-    maxWidth: 1120,
-    children: [
-      const SectionTitle('Basic Information'),
-      LayoutBuilder(
-        builder: (context, constraints) {
-          final details = Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              field(name, 'Name*'),
-              const SizedBox(height: 14),
-              const Text('Type'),
-              const SizedBox(height: 8),
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'Goods', label: Text('Goods')),
-                  ButtonSegment(value: 'Service', label: Text('Service')),
-                ],
-                selected: {itemType},
-                onSelectionChanged: (values) =>
-                    setState(() => itemType = values.first),
-              ),
-              const SizedBox(height: 14),
-              field(sku, 'SKU'),
-              const SizedBox(height: 14),
-              const StaticSelect('Unit', 'pcs'),
-              const SizedBox(height: 14),
-              field(hsnCode, 'HSN Code'),
-              const SizedBox(height: 14),
-              const StaticSelect('Tax Preference*', 'Taxable'),
-            ],
-          );
-          // The reference moves the image beside basic fields on wide screens.
-          if (constraints.maxWidth < AppBreakpoints.laptop) {
-            return Column(
+  Widget build(BuildContext context) {
+    final vendors = ref.watch(vendorsProvider).valueOrNull ?? const <Vendor>[];
+
+    return FormPage(
+      title: 'New Item',
+      saveLabel: 'Save',
+      saving: saving,
+      onSave: save,
+      maxWidth: 1120,
+      children: [
+        const SectionTitle('Basic Information'),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final details = Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                details,
-                const SizedBox(height: 18),
-                const ItemImageUpload(),
+                field(name, 'Name*'),
+                const SizedBox(height: 14),
+                const Text('Type'),
+                const SizedBox(height: 8),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'Goods', label: Text('Goods')),
+                    ButtonSegment(value: 'Service', label: Text('Service')),
+                  ],
+                  selected: {itemType},
+                  onSelectionChanged: (values) =>
+                      setState(() => itemType = values.first),
+                ),
+                const SizedBox(height: 14),
+                field(sku, 'SKU'),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<String>(
+                  initialValue: unit,
+                  decoration: const InputDecoration(labelText: 'Unit*'),
+                  items: _unitOptions
+                      .map((u) => DropdownMenuItem(value: u, child: Text(u)))
+                      .toList(),
+                  onChanged: (val) => setState(() => unit = val ?? 'pcs'),
+                ),
+                const SizedBox(height: 14),
+                field(hsnCode, 'HSN Code'),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<String>(
+                  initialValue: taxPreference,
+                  decoration: const InputDecoration(labelText: 'Tax Preference*'),
+                  items: _taxPreferenceOptions
+                      .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                      .toList(),
+                  onChanged: (val) => setState(() => taxPreference = val ?? 'Taxable'),
+                ),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<String>(
+                  initialValue: taxRate,
+                  decoration: const InputDecoration(labelText: 'Tax Rate'),
+                  items: _taxRateOptions
+                      .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+                      .toList(),
+                  onChanged: (val) => setState(() => taxRate = val ?? '18%'),
+                ),
               ],
             );
-          }
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(flex: 3, child: details),
-              const SizedBox(width: 32),
-              const Expanded(flex: 2, child: ItemImageUpload()),
-            ],
-          );
-        },
-      ),
-      const SizedBox(height: 28),
-      LayoutBuilder(
-        builder: (context, constraints) {
-          final sales = _ItemInfoSection(
-            title: 'Sales Information',
-            children: [
-              field(rate, 'Selling Price*', prefix: 'INR', number: true),
-              const SizedBox(height: 14),
-              field(salesDescription, 'Description', lines: 3),
-              const SizedBox(height: 14),
-              const StaticSelect('Account*', 'Sales'),
-            ],
-          );
-          final purchase = _ItemInfoSection(
-            title: 'Purchase Information',
-            children: [
-              field(costPrice, 'Cost Price', prefix: 'INR', number: true),
-              const SizedBox(height: 14),
-              field(purchaseDescription, 'Description', lines: 3),
-              const SizedBox(height: 14),
-              const StaticSelect('Account*', 'Cost of Goods Sold'),
-              const SizedBox(height: 14),
-              const StaticSelect('Preferred Vendor', 'Select a vendor'),
-            ],
-          );
-          if (constraints.maxWidth < AppBreakpoints.tablet) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [sales, const SizedBox(height: 28), purchase],
+            if (constraints.maxWidth < AppBreakpoints.laptop) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  details,
+                  const SizedBox(height: 18),
+                  const ItemImageUpload(),
+                ],
+              );
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(flex: 3, child: details),
+                const SizedBox(width: 32),
+                const Expanded(flex: 2, child: ItemImageUpload()),
+              ],
             );
-          }
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: sales),
-              const SizedBox(width: 28),
-              Expanded(child: purchase),
-            ],
-          );
-        },
-      ),
-      const SizedBox(height: 28),
-      const SectionTitle('Default Tax Rates'),
-      const ListTile(
-        contentPadding: EdgeInsets.zero,
-        title: Text('Intra State Tax Rate'),
-        trailing: Text('GST18 (18 %)'),
-      ),
-      const ListTile(
-        contentPadding: EdgeInsets.zero,
-        title: Text('Inter State Tax Rate'),
-        trailing: Text('IGST18 (18 %)'),
-      ),
-      const SizedBox(height: 18),
-      const SectionTitle('Inventory'),
-      CheckboxListTile(
-        contentPadding: EdgeInsets.zero,
-        controlAffinity: ListTileControlAffinity.leading,
-        value: trackInventory,
-        onChanged: (value) => setState(() => trackInventory = value ?? false),
-        title: const Text('Track Inventory for this item'),
-        subtitle: const Padding(
-          padding: EdgeInsets.only(top: 6),
-          child: Text(
-            'You cannot enable/disable inventory tracking once you\'ve created transactions for this item.',
+          },
+        ),
+        const SizedBox(height: 28),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final sales = _ItemInfoSection(
+              title: 'Sales Information',
+              children: [
+                field(rate, 'Selling Price*', prefix: 'INR', number: true),
+                const SizedBox(height: 14),
+                field(salesDescription, 'Description', lines: 3),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<String>(
+                  initialValue: salesAccount,
+                  decoration: const InputDecoration(labelText: 'Account*'),
+                  items: _salesAccountOptions
+                      .map((a) => DropdownMenuItem(value: a, child: Text(a)))
+                      .toList(),
+                  onChanged: (val) => setState(() => salesAccount = val ?? 'Sales'),
+                ),
+              ],
+            );
+            final purchase = _ItemInfoSection(
+              title: 'Purchase Information',
+              children: [
+                field(costPrice, 'Cost Price', prefix: 'INR', number: true),
+                const SizedBox(height: 14),
+                field(purchaseDescription, 'Description', lines: 3),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<String>(
+                  initialValue: cogsAccount,
+                  decoration: const InputDecoration(labelText: 'COGS Account*'),
+                  items: _cogsAccountOptions
+                      .map((a) => DropdownMenuItem(value: a, child: Text(a)))
+                      .toList(),
+                  onChanged: (val) => setState(() => cogsAccount = val ?? 'Cost of Goods Sold'),
+                ),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<String>(
+                  initialValue: preferredVendor,
+                  decoration: const InputDecoration(labelText: 'Preferred Vendor'),
+                  hint: const Text('Select Vendor'),
+                  items: vendors.map((v) {
+                    final nameStr = v.companyName.isEmpty ? v.name : v.companyName;
+                    return DropdownMenuItem(value: nameStr, child: Text(nameStr));
+                  }).toList(),
+                  onChanged: (val) => setState(() => preferredVendor = val),
+                ),
+              ],
+            );
+            if (constraints.maxWidth < AppBreakpoints.tablet) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [sales, const SizedBox(height: 28), purchase],
+              );
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: sales),
+                const SizedBox(width: 28),
+                Expanded(child: purchase),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 28),
+        const SectionTitle('Default Tax Rates'),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Intra State Tax Rate'),
+          trailing: Text('GST ($taxRate)'),
+        ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Inter State Tax Rate'),
+          trailing: Text('IGST ($taxRate)'),
+        ),
+        const SizedBox(height: 18),
+        const SectionTitle('Inventory'),
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          value: trackInventory,
+          onChanged: (value) => setState(() => trackInventory = value ?? false),
+          title: const Text('Track Inventory for this item'),
+          subtitle: const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: Text(
+              'You cannot enable/disable inventory tracking once you\'ve created transactions for this item.',
+            ),
           ),
         ),
-      ),
-    ],
-  );
+      ],
+    );
+  }
+
   Future<void> save() async {
-    if (name.text.trim().isEmpty) return;
+    final nameText = name.text.trim();
+    if (nameText.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter an item name.')),
+      );
+      return;
+    }
     setState(() => saving = true);
-    await ref
-        .read(booksRepositoryProvider)
-        .addItem(
-          name: name.text.trim(),
-          sku: sku.text.trim(),
-          rate: double.tryParse(rate.text) ?? 0,
-          type: itemType,
+    try {
+      final taxVal = double.tryParse(taxRate.replaceAll('%', '')) ?? 18;
+      await ref.read(booksRepositoryProvider).addItem(
+            name: nameText,
+            sku: sku.text.trim(),
+            rate: double.tryParse(rate.text) ?? 0,
+            type: itemType,
+            unit: unit,
+            hsnCode: hsnCode.text.trim(),
+            taxPreference: taxPreference,
+            taxRate: taxVal,
+            costPrice: double.tryParse(costPrice.text) ?? 0,
+            salesAccount: salesAccount,
+            cogsAccount: cogsAccount,
+            preferredVendor: preferredVendor ?? '',
+          );
+      ref.invalidate(itemsProvider);
+      if (mounted) context.pop();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save item: $e')),
         );
-    ref.invalidate(itemsProvider);
-    if (mounted) context.pop();
+      }
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
   }
 }
 
@@ -787,6 +922,7 @@ class FormPage extends StatelessWidget {
     this.maxWidth = AppLayout.maxFormWidth,
     this.saveLabel = 'Save as Draft',
     this.showLeading = true,
+    this.showAppBar = false,
     super.key,
   });
   final String title;
@@ -796,6 +932,7 @@ class FormPage extends StatelessWidget {
   final double maxWidth;
   final String saveLabel;
   final bool showLeading;
+  final bool showAppBar;
   @override
   Widget build(BuildContext context) => DecoratedBox(
     decoration: const BoxDecoration(
@@ -807,7 +944,7 @@ class FormPage extends StatelessWidget {
     ),
     child: Column(
       children: [
-        AppBar(automaticallyImplyLeading: showLeading, title: Text(title)),
+        if (showAppBar) AppBar(automaticallyImplyLeading: showLeading, title: Text(title)),
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -818,7 +955,7 @@ class FormPage extends StatelessWidget {
                   child: ListView(
                     keyboardDismissBehavior:
                         ScrollViewKeyboardDismissBehavior.onDrag,
-                    padding: EdgeInsets.fromLTRB(gutter, 20, gutter, 24),
+                    padding: EdgeInsets.fromLTRB(gutter, 12, gutter, 20),
                     children: [
                       GlassPanel(
                         padding: const EdgeInsets.all(20),
