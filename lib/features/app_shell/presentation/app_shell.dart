@@ -385,6 +385,7 @@ class _TopBar extends ConsumerWidget {
     if (cleanLoc == '/invoices/new') return 'New Invoice';
     if (cleanLoc == '/bills/new') return 'New Bill';
     if (cleanLoc == '/purchase-orders/new') return 'New Purchase Order';
+    if (cleanLoc == '/vendors/new') return 'New Vendors';
     if (cleanLoc == '/expenses/new') return 'New Expense';
     if (cleanLoc == '/inventory-adjustments/new') return 'New Inventory Adjustment';
     for (final dest in AppShell.destinations) {

@@ -63,7 +63,7 @@ class _NewBillPageState extends ConsumerState<NewBillPage> {
 
   @override
   Widget build(BuildContext context) {
-    final vendors = ref.watch(vendorsProvider).valueOrNull ?? const <Vendor>[];
+    final vendors = ref.watch(activeVendorsProvider).valueOrNull ?? const <Vendor>[];
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(

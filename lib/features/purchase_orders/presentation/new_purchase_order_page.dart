@@ -141,7 +141,7 @@ class _NewPurchaseOrderPageState extends ConsumerState<NewPurchaseOrderPage> {
 
   @override
   Widget build(BuildContext context) {
-    final vendorState = ref.watch(vendorsProvider);
+    final vendorState = ref.watch(activeVendorsProvider);
     final vendors = vendorState.valueOrNull ?? const <Vendor>[];
     return Scaffold(
       backgroundColor: AppColors.canvas,

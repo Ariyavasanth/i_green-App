@@ -107,7 +107,7 @@ class _NewItemState extends ConsumerState<NewItemPage> {
 
   @override
   Widget build(BuildContext context) {
-    final vendors = ref.watch(vendorsProvider).valueOrNull ?? const <Vendor>[];
+    final vendors = ref.watch(activeVendorsProvider).valueOrNull ?? const <Vendor>[];
 
     return FormPage(
       title: 'New Item',
