@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -14,6 +15,8 @@ import '../providers/employee_providers.dart';
 import 'dialogs/add_employee_link_dialog.dart';
 import 'dialogs/registration_links_dialog.dart';
 import 'widgets/admin_list_toolbar.dart';
+
+enum CandidateCardStatus { pending, accepted, rejected }
 
 class ResponsesPage extends ConsumerStatefulWidget {
   const ResponsesPage({super.key});
@@ -1061,201 +1064,287 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     );
   }
 
+  CandidateCardStatus _normalizeStatus(String rawStatus) {
+  final s = rawStatus.trim().toLowerCase();
+  if (s == 'accepted' || s == 'registered' || s == 'converted') {
+    return CandidateCardStatus.accepted;
+  }
+  if (s == 'rejected' || s == 'expired' || s == 'cancelled') {
+    return CandidateCardStatus.rejected;
+  }
+  return CandidateCardStatus.pending;
+}
+
+  String _formatAppliedDate(RegistrationLink link) {
+    final raw = link.submittedDate.trim().isNotEmpty ? link.submittedDate.trim() : link.generatedDate.trim();
+    if (raw.isEmpty) return 'N/A';
+    try {
+      final parsed = DateTime.tryParse(raw) ?? DateTime.tryParse(raw.replaceAll(' ', 'T'));
+      if (parsed != null) {
+        return DateFormat('d MMM yyyy').format(parsed);
+      }
+    } catch (_) {}
+    return raw;
+  }
+
   Widget _buildCompactResponseCard(BuildContext context, RegistrationLink link, List<Employee> employees) {
     final employee = _employeeForLink(link, employees);
-    final candidateName = _candidateName(link, employee);
-    final rawStatus = link.linkStatus.trim();
-    final displayStatus = (rawStatus.toLowerCase() == 'completed' || rawStatus.toLowerCase() == 'pending')
-        ? 'Submitted'
-        : rawStatus;
-    final statusColor = _getStatusColor(displayStatus);
-    final initials = _getInitials(candidateName);
+    final rawName = _candidateName(link, employee).trim();
+    final hasName = rawName.isNotEmpty && rawName != '-';
+    final candidateName = hasName ? rawName : 'Name not provided';
+
+    final normalizedStatus = _normalizeStatus(link.linkStatus);
+
+    final ({Color bg, Color text, String label}) statusBadge = switch (normalizedStatus) {
+      CandidateCardStatus.accepted => (
+          bg: const Color(0xFF2E7D32),
+          text: Colors.white,
+          label: 'Accepted',
+        ),
+      CandidateCardStatus.pending => (
+          bg: const Color(0xFFF57C00),
+          text: Colors.white,
+          label: 'Pending',
+        ),
+      CandidateCardStatus.rejected => (
+          bg: const Color(0xFFC62828),
+          text: Colors.white,
+          label: 'Rejected',
+        ),
+    };
+
+    final initials = hasName ? _getInitials(candidateName) : '?';
     final email = _emailForLink(link, employee);
     final phone = _phoneForLink(link, employee);
-
+    final appliedDate = _formatAppliedDate(link);
     return Card(
       elevation: 1,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         side: const BorderSide(color: AppColors.divider, width: 0.8),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // Initials Avatar
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: AppColors.active.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                initials,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.active,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-
-            // Details Column
-            Expanded(
-              child: Column(
+      child: InkWell(
+        onTap: () => _openViewDialog(context, link),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Row 1: Header (Avatar + Candidate Name & Subtitle + Solid Pill Status Badge)
+              Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    candidateName.isEmpty ? 'Candidate' : candidateName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: hasName
+                        ? AppColors.active.withValues(alpha: 0.15)
+                        : Colors.grey.withValues(alpha: 0.2),
+                    child: Text(
+                      initials,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: hasName ? AppColors.active : AppColors.textSecondary,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 3),
-                  Text(
-                    'ID: ${_candidateId(link)}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.active,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          candidateName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: hasName ? AppColors.textPrimary : AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '${_candidateId(link)} · $appliedDate',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Email: ${email.isEmpty ? '-' : email}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: statusBadge.bg,
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Phone: ${phone.isEmpty ? '-' : phone}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
+                    child: Text(
+                      statusBadge.label,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: statusBadge.text,
+                      ),
                     ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(width: 8),
 
-            // Status Badge (equal size/height to View Button) + View Button + ⋮ Menu
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  height: 32,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: statusColor, width: 1),
-                  ),
-                  child: Text(
-                    displayStatus,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: statusColor,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                SizedBox(
-                  height: 32,
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      side: const BorderSide(color: AppColors.divider),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                    onPressed: () => _openViewDialog(context, link),
-                    child: const Text(
-                      'View',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ),
-                ),
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  itemBuilder: (context) {
-                    final status = link.linkStatus.trim().toLowerCase();
-                    final isSubmittedOrPending = status == 'submitted' || status == 'pending' || status == 'completed';
-                    final isAccepted = status == 'accepted';
+              const SizedBox(height: 12),
 
-                    return [
-                      if (isSubmittedOrPending)
-                        const PopupMenuItem(
-                          value: 'accept',
-                          child: Row(
-                            children: [
-                              Icon(Icons.check_circle_outline, size: 18, color: Colors.blue),
-                              SizedBox(width: 8),
-                              Text('Accept', style: TextStyle(fontSize: 13, color: Colors.blue, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
+              // Row 2: Contact Info (Email & Phone side-by-side)
+              Wrap(
+                spacing: 16,
+                runSpacing: 4,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.email_outlined, size: 15, color: AppColors.textSecondary),
+                      const SizedBox(width: 6),
+                      Text(
+                        email.isEmpty ? 'Not provided' : email,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: email.isEmpty ? AppColors.textSecondary : AppColors.textPrimary,
                         ),
-                      if (isAccepted)
-                        const PopupMenuItem(
-                          value: 'register',
-                          child: Row(
-                            children: [
-                              Icon(Icons.person_add_outlined, size: 18, color: Colors.green),
-                              SizedBox(width: 8),
-                              Text('Register', style: TextStyle(fontSize: 13, color: Colors.green, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.phone_outlined, size: 15, color: AppColors.textSecondary),
+                      const SizedBox(width: 6),
+                      Text(
+                        phone.isEmpty ? 'Not provided' : phone,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: phone.isEmpty ? AppColors.textSecondary : AppColors.textPrimary,
                         ),
-                      if (isSubmittedOrPending || isAccepted)
-                        const PopupMenuItem(
-                          value: 'reject',
-                          child: Row(
-                            children: [
-                              Icon(Icons.cancel_outlined, size: 18, color: Colors.redAccent),
-                              SizedBox(width: 8),
-                              Text('Reject', style: TextStyle(fontSize: 13, color: Colors.redAccent, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+
+              // Divider Line
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 14),
+                child: Divider(height: 1, thickness: 0.8, color: AppColors.divider),
+              ),
+
+              // Row 3: Action Controls
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Left Action: Quiet "✕ Reject" text link
+                  if (normalizedStatus == CandidateCardStatus.pending || normalizedStatus == CandidateCardStatus.accepted)
+                    InkWell(
+                      onTap: () => _setResponseStatus(link, 'Rejected'),
+                      borderRadius: BorderRadius.circular(6),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('✕ ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFFE53935))),
+                            Text('Reject', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFFE53935))),
+                          ],
                         ),
-                    ];
-                  },
-                  onSelected: (value) {
-                    if (value == 'accept') {
-                      _setResponseStatus(link, 'Accepted');
-                    } else if (value == 'register') {
-                      GoRouter.of(context).push('/employee/register/new?acceptedLinkId=${link.linkId}');
-                    } else if (value == 'reject') {
-                      _setResponseStatus(link, 'Rejected');
-                    }
-                  },
-                ),
-              ],
-            ),
-          ],
+                      ),
+                    )
+                  else
+                    const SizedBox(),
+
+                  // Right Action: Main Action Pill Button + ⋮ Overflow Menu Icon
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (normalizedStatus == CandidateCardStatus.pending || normalizedStatus == CandidateCardStatus.rejected)
+                        FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF2E7D32),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          ),
+                          onPressed: () => _setResponseStatus(link, 'Accepted'),
+                          icon: const Text('✓', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+                          label: const Text('Accept', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                        ),
+
+                      const SizedBox(width: 4),
+
+                      // ⋮ Overflow Menu Button
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        itemBuilder: (context) => [
+                          if (normalizedStatus == CandidateCardStatus.accepted)
+                            const PopupMenuItem(
+                              value: 'register',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.person_add_outlined, size: 18, color: Colors.green),
+                                  SizedBox(width: 8),
+                                  Text('Register Candidate', style: TextStyle(fontSize: 13, color: Colors.green, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                          const PopupMenuItem(
+                            value: 'copy_link',
+                            child: Row(
+                              children: [
+                                Icon(Icons.copy, size: 18, color: AppColors.textPrimary),
+                                SizedBox(width: 8),
+                                Text('Copy Link URL', style: TextStyle(fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'view',
+                            child: Row(
+                              children: [
+                                Icon(Icons.visibility_outlined, size: 18, color: AppColors.textPrimary),
+                                SizedBox(width: 8),
+                                Text('Full Profile Details', style: TextStyle(fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                        ],
+                        onSelected: (value) {
+                          if (value == 'register') {
+                            GoRouter.of(context).push('/employee/register/new?acceptedLinkId=${link.linkId}');
+                          } else if (value == 'copy_link') {
+                            Clipboard.setData(ClipboardData(text: link.fullUrl));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Registration link copied!'),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          } else if (value == 'view') {
+                            _openViewDialog(context, link);
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
