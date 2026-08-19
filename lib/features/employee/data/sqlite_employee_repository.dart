@@ -565,11 +565,12 @@ class SqliteEmployeeRepository implements EmployeeRepository {
     required String linkStatus,
   }) async {
     final db = await database;
+    final parsedId = int.tryParse(linkId);
     await db.update(
       'registration_links',
       {'link_status': linkStatus},
-      where: 'link_id = ?',
-      whereArgs: [linkId],
+      where: 'link_id = ? OR id = ?',
+      whereArgs: [linkId, parsedId ?? -1],
     );
   }
 

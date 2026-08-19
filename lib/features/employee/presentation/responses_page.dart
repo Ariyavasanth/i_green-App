@@ -16,7 +16,7 @@ import 'dialogs/add_employee_link_dialog.dart';
 import 'dialogs/registration_links_dialog.dart';
 import 'widgets/admin_list_toolbar.dart';
 
-enum CandidateCardStatus { pending, accepted, rejected }
+enum CandidateCardStatus { pending, submitted, accepted, registered, rejected }
 
 class ResponsesPage extends ConsumerStatefulWidget {
   const ResponsesPage({super.key});
@@ -80,6 +80,12 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             data: (links) {
               final employees = employeesAsync.valueOrNull ?? const <Employee>[];
 
+              // Filter out registered/converted candidates so they don't show on responses page
+              final activeLinks = links.where((link) {
+                final s = link.linkStatus.trim().toLowerCase();
+                return s != 'registered' && s != 'converted';
+              }).toList();
+
               final statusList = const [
                 'All Statuses',
                 'Pending',
@@ -88,7 +94,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                 'Rejected',
               ];
 
-              final filtered = links.where((link) {
+              final filtered = activeLinks.where((link) {
                 final q = searchQuery.toLowerCase().trim();
                 final candidateId = _candidateId(link);
                 final employee = _employeeForLink(link, employees);
@@ -101,16 +107,22 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                     _phoneForLink(link, employee).toLowerCase().contains(q) ||
                     link.linkStatus.toLowerCase().contains(q);
 
-                final status = link.linkStatus.trim().toLowerCase();
+                final normStatus = _normalizeStatus(link.linkStatus);
                 final filter = statusFilter.trim().toLowerCase();
 
                 bool matchesStatus = false;
-                if (filter == 'all statuses') {
+                if (filter == 'all statuses' || filter == 'all') {
                   matchesStatus = true;
+                } else if (filter == 'pending') {
+                  matchesStatus = normStatus == CandidateCardStatus.pending;
                 } else if (filter == 'submitted') {
-                  matchesStatus = status == 'submitted' || status == 'completed';
+                  matchesStatus = normStatus == CandidateCardStatus.submitted;
+                } else if (filter == 'accepted') {
+                  matchesStatus = normStatus == CandidateCardStatus.accepted;
+                } else if (filter == 'rejected') {
+                  matchesStatus = normStatus == CandidateCardStatus.rejected;
                 } else {
-                  matchesStatus = status == filter;
+                  matchesStatus = link.linkStatus.trim().toLowerCase() == filter;
                 }
 
                 final matchesDate = _matchesDateRange(link, dateRange);
@@ -357,12 +369,18 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
   }
 
   Widget _buildStatusSummaryCards(BuildContext context, List<RegistrationLink> allLinks) {
+    final activeLinks = allLinks.where((l) {
+      final s = l.linkStatus.trim().toLowerCase();
+      return s != 'registered' && s != 'converted';
+    }).toList();
+
     final currentFilter = ref.watch(responseStatusFilterProvider);
 
-    final allCount = allLinks.length;
-    final pendingCount = allLinks.where((l) => _normalizeStatus(l.linkStatus) == CandidateCardStatus.pending).length;
-    final acceptedCount = allLinks.where((l) => _normalizeStatus(l.linkStatus) == CandidateCardStatus.accepted).length;
-    final rejectedCount = allLinks.where((l) => _normalizeStatus(l.linkStatus) == CandidateCardStatus.rejected).length;
+    final allCount = activeLinks.length;
+    final pendingCount = activeLinks.where((l) => _normalizeStatus(l.linkStatus) == CandidateCardStatus.pending).length;
+    final submittedCount = activeLinks.where((l) => _normalizeStatus(l.linkStatus) == CandidateCardStatus.submitted).length;
+    final acceptedCount = activeLinks.where((l) => _normalizeStatus(l.linkStatus) == CandidateCardStatus.accepted).length;
+    final rejectedCount = activeLinks.where((l) => _normalizeStatus(l.linkStatus) == CandidateCardStatus.rejected).length;
 
     return SizedBox(
       height: 64,
@@ -375,7 +393,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             count: allCount,
             icon: Icons.grid_view_rounded,
             iconColor: const Color(0xFF3E474E),
-            isSelected: currentFilter == 'All Statuses',
+            isSelected: currentFilter == 'All Statuses' || currentFilter == 'All',
             onTap: () {
               ref.read(responseStatusFilterProvider.notifier).state = 'All Statuses';
               setState(() => _currentPage = 0);
@@ -390,6 +408,18 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             isSelected: currentFilter == 'Pending',
             onTap: () {
               ref.read(responseStatusFilterProvider.notifier).state = 'Pending';
+              setState(() => _currentPage = 0);
+            },
+          ),
+          const SizedBox(width: 10),
+          _buildStatusTabCard(
+            title: 'Submitted',
+            count: submittedCount,
+            icon: Icons.assignment_turned_in_rounded,
+            iconColor: const Color(0xFF1976D2),
+            isSelected: currentFilter == 'Submitted',
+            onTap: () {
+              ref.read(responseStatusFilterProvider.notifier).state = 'Submitted';
               setState(() => _currentPage = 0);
             },
           ),
@@ -1378,15 +1408,21 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
   }
 
   CandidateCardStatus _normalizeStatus(String rawStatus) {
-  final s = rawStatus.trim().toLowerCase();
-  if (s == 'accepted' || s == 'registered' || s == 'converted') {
-    return CandidateCardStatus.accepted;
+    final s = rawStatus.trim().toLowerCase();
+    if (s == 'submitted' || s == 'completed') {
+      return CandidateCardStatus.submitted;
+    }
+    if (s == 'accepted') {
+      return CandidateCardStatus.accepted;
+    }
+    if (s == 'registered' || s == 'converted') {
+      return CandidateCardStatus.registered;
+    }
+    if (s == 'rejected' || s == 'expired' || s == 'cancelled') {
+      return CandidateCardStatus.rejected;
+    }
+    return CandidateCardStatus.pending;
   }
-  if (s == 'rejected' || s == 'expired' || s == 'cancelled') {
-    return CandidateCardStatus.rejected;
-  }
-  return CandidateCardStatus.pending;
-}
 
   String _formatAppliedDate(RegistrationLink link) {
     final raw = link.submittedDate.trim().isNotEmpty ? link.submittedDate.trim() : link.generatedDate.trim();
@@ -1423,10 +1459,20 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     final normalizedStatus = _normalizeStatus(link.linkStatus);
 
     final ({Color bg, Color color, IconData icon}) statusBadge = switch (normalizedStatus) {
+      CandidateCardStatus.submitted => (
+          bg: const Color(0xFFE3F2FD),
+          color: const Color(0xFF1976D2),
+          icon: Icons.assignment_turned_in,
+        ),
       CandidateCardStatus.accepted => (
           bg: const Color(0xFFE8F5E9),
           color: const Color(0xFF2E7D32),
           icon: Icons.check_circle,
+        ),
+      CandidateCardStatus.registered => (
+          bg: const Color(0xFFE0F2F1),
+          color: const Color(0xFF00695C),
+          icon: Icons.how_to_reg,
         ),
       CandidateCardStatus.pending => (
           bg: const Color(0xFFFFF8E1),
@@ -1556,7 +1602,29 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(),
                             itemBuilder: (context) => [
-                              if (normalizedStatus == CandidateCardStatus.accepted)
+                              if (normalizedStatus == CandidateCardStatus.submitted || normalizedStatus == CandidateCardStatus.pending) ...[
+                                const PopupMenuItem(
+                                  value: 'accept',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.check_circle_outline, size: 18, color: Colors.blue),
+                                      SizedBox(width: 8),
+                                      Text('Accept Response', style: TextStyle(fontSize: 13, color: Colors.blue, fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'reject',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.cancel_outlined, size: 18, color: Colors.redAccent),
+                                      SizedBox(width: 8),
+                                      Text('Reject Response', style: TextStyle(fontSize: 13, color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              if (normalizedStatus == CandidateCardStatus.accepted) ...[
                                 const PopupMenuItem(
                                   value: 'register',
                                   child: Row(
@@ -1567,6 +1635,17 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                                     ],
                                   ),
                                 ),
+                                const PopupMenuItem(
+                                  value: 'reject',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.cancel_outlined, size: 18, color: Colors.redAccent),
+                                      SizedBox(width: 8),
+                                      Text('Reject Response', style: TextStyle(fontSize: 13, color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                ),
+                              ],
                               const PopupMenuItem(
                                 value: 'copy_link',
                                 child: Row(
@@ -1589,7 +1668,11 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                               ),
                             ],
                             onSelected: (value) {
-                              if (value == 'register') {
+                              if (value == 'accept') {
+                                _setResponseStatus(link, 'Accepted');
+                              } else if (value == 'reject') {
+                                _setResponseStatus(link, 'Rejected');
+                              } else if (value == 'register') {
                                 GoRouter.of(context).push('/employee/register/new?acceptedLinkId=${link.linkId}');
                               } else if (value == 'copy_link') {
                                 Clipboard.setData(ClipboardData(text: link.fullUrl));
@@ -1700,6 +1783,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
 
   Widget _buildRowActions(RegistrationLink link, {bool isMobile = false}) {
     final status = link.linkStatus.trim().toLowerCase();
+    final isSubmittedOrPending = status == 'submitted' || status == 'pending' || status == 'completed';
     final isAccepted = status == 'accepted';
 
     return Row(
@@ -1715,6 +1799,30 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
           icon: Icon(Icons.remove_red_eye_outlined, size: isMobile ? 14 : 16, color: AppColors.textPrimary),
           label: Text('View', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
         ),
+        if (isSubmittedOrPending) ...[
+          const SizedBox(width: 6),
+          TextButton.icon(
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onPressed: () => _setResponseStatus(link, 'Accepted'),
+            icon: Icon(Icons.check_circle_outline, size: isMobile ? 14 : 16, color: Colors.blue),
+            label: Text('Accept', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.bold, color: Colors.blue)),
+          ),
+          const SizedBox(width: 6),
+          TextButton.icon(
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onPressed: () => _setResponseStatus(link, 'Rejected'),
+            icon: Icon(Icons.cancel_outlined, size: isMobile ? 14 : 16, color: Colors.redAccent),
+            label: Text('Reject', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.bold, color: Colors.redAccent)),
+          ),
+        ],
         if (isAccepted) ...[
           const SizedBox(width: 6),
           TextButton.icon(
@@ -1728,6 +1836,17 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             },
             icon: Icon(Icons.person_add_outlined, size: isMobile ? 14 : 16, color: Colors.green),
             label: Text('Register', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.bold, color: Colors.green)),
+          ),
+          const SizedBox(width: 6),
+          TextButton.icon(
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onPressed: () => _setResponseStatus(link, 'Rejected'),
+            icon: Icon(Icons.cancel_outlined, size: isMobile ? 14 : 16, color: Colors.redAccent),
+            label: Text('Reject', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.bold, color: Colors.redAccent)),
           ),
         ],
       ],
@@ -1841,15 +1960,19 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
 
   Color _getStatusBgColor(String status) {
     final s = status.trim().toLowerCase();
+    if (s == 'submitted' || s == 'completed') return const Color(0xFFE3F2FD);
     if (s == 'accepted') return const Color(0xFFE8F5E9);
-    if (s == 'rejected') return const Color(0xFFFFEBEE);
-    return const Color(0xFFFFF3E0);
+    if (s == 'registered' || s == 'converted') return const Color(0xFFE0F2F1);
+    if (s == 'rejected' || s == 'expired' || s == 'cancelled') return const Color(0xFFFFEBEE);
+    return const Color(0xFFFFF8E1);
   }
 
   Color _getStatusTextColor(String status) {
     final s = status.trim().toLowerCase();
+    if (s == 'submitted' || s == 'completed') return const Color(0xFF1976D2);
     if (s == 'accepted') return const Color(0xFF2E7D32);
-    if (s == 'rejected') return const Color(0xFFC62828);
+    if (s == 'registered' || s == 'converted') return const Color(0xFF00695C);
+    if (s == 'rejected' || s == 'expired' || s == 'cancelled') return const Color(0xFFC62828);
     return const Color(0xFFE65100);
   }
 
@@ -2144,7 +2267,25 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
       ref.invalidate(registrationLinksProvider);
       ref.invalidate(employeesProvider);
       ref.invalidate(allEmployeesProvider);
-      if (mounted) setState(() {});
+      await ref.read(registrationLinksProvider.future);
+      await ref.read(allEmployeesProvider.future);
+      
+      // Auto-switch to the target status filter tab so the user sees the updated item immediately
+      if (status == 'Accepted' || status == 'Rejected' || status == 'Submitted' || status == 'Pending') {
+        ref.read(responseStatusFilterProvider.notifier).state = status;
+      }
+      
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Candidate response status updated to "$status"'),
+            backgroundColor: status == 'Accepted' ? Colors.green : Colors.blueGrey,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
