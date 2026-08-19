@@ -104,7 +104,21 @@ class _EmployeeManagementPageState
                 final matchesOrg = orgFilter == 'All Organizations' || emp.organizationName == orgFilter;
                 final matchesDept = deptFilter == 'All Departments' || emp.department == deptFilter;
                 final matchesDesig = desigFilter == 'All Designations' || emp.designation == desigFilter;
-                final matchesStatus = statusFilter == 'All Statuses' || emp.status == statusFilter;
+
+                final statusLower = emp.status.trim().toLowerCase();
+                final filterLower = statusFilter.trim().toLowerCase();
+                bool matchesStatus = false;
+                if (filterLower == 'all statuses' || filterLower == 'all') {
+                  matchesStatus = true;
+                } else if (filterLower == 'active') {
+                  matchesStatus = statusLower == 'active' || statusLower == 'converted';
+                } else if (filterLower == 'inactive') {
+                  matchesStatus = statusLower == 'inactive';
+                } else if (filterLower == 'suspended') {
+                  matchesStatus = statusLower == 'suspended';
+                } else {
+                  matchesStatus = statusLower == filterLower;
+                }
 
                 return matchesSearch && matchesOrg && matchesDept && matchesDesig && matchesStatus;
               }).toList();
@@ -117,36 +131,46 @@ class _EmployeeManagementPageState
                 final endIndex = (startIndex + _rowsPerPage).clamp(0, totalItems);
                 final pageItems = filtered.sublist(startIndex, endIndex);
 
-                return Column(
-                  children: [
-                    _buildMobileSearch(context, searchQuery),
-                    _buildMobileFilterChips(context, deptList, desigList, statusList),
-                    const Divider(height: 1),
-                    Expanded(
-                      child: filtered.isEmpty
-                          ? const Center(
-                              child: Padding(
-                                padding: EdgeInsets.all(32),
-                                child: Text(
-                                  'No employees found.',
-                                  style: TextStyle(
-                                    color: AppColors.textSecondary,
-                                    fontSize: 14,
+                return Scaffold(
+                  backgroundColor: Colors.white,
+                  body: Column(
+                    children: [
+                      _buildMobileSearchAndFilter(context, searchQuery, deptList, desigList, statusList),
+                      const SizedBox(height: 8),
+                      _buildStatusSummaryCards(context, employees),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: filtered.isEmpty
+                            ? const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(32),
+                                  child: Text(
+                                    'No employees found.',
+                                    style: TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 14,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            )
-                          : _buildMobileList(pageItems),
-                    ),
-                    _buildPaginationBar(
-                      totalItems: totalItems,
-                      startIndex: startIndex,
-                      endIndex: endIndex,
-                      currentPage: pageIndex,
-                      totalPages: totalPages,
-                    ),
-                    _buildStickyAddEmployeeButton(context),
-                  ],
+                              )
+                            : _buildMobileList(pageItems),
+                      ),
+                      _buildPaginationBar(
+                        totalItems: totalItems,
+                        startIndex: startIndex,
+                        endIndex: endIndex,
+                        currentPage: pageIndex,
+                        totalPages: totalPages,
+                      ),
+                    ],
+                  ),
+                  floatingActionButton: FloatingActionButton(
+                    backgroundColor: AppColors.active,
+                    elevation: 3,
+                    shape: const CircleBorder(),
+                    onPressed: () => GoRouter.of(context).push('/employee/register/new'),
+                    child: const Icon(Icons.add, color: Colors.white, size: 26),
+                  ),
                 );
               }
 
@@ -740,7 +764,13 @@ class _EmployeeManagementPageState
     );
   }
 
-  Widget _buildMobileSearch(BuildContext context, String searchQuery) {
+  Widget _buildMobileSearchAndFilter(
+    BuildContext context,
+    String searchQuery,
+    List<String> depts,
+    List<String> desigs,
+    List<String> statuses,
+  ) {
     if (_mobileSearchController.text != searchQuery) {
       _mobileSearchController.text = searchQuery;
       _mobileSearchController.selection = TextSelection.fromPosition(
@@ -748,180 +778,217 @@ class _EmployeeManagementPageState
       );
     }
 
-    return Container(
-      height: 48,
-      margin: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-      child: TextField(
-        controller: _mobileSearchController,
-        style: const TextStyle(fontSize: 14),
-        decoration: InputDecoration(
-          hintText: 'Search employees...',
-          hintStyle: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
-          prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
-          suffixIcon: searchQuery.isNotEmpty
-              ? IconButton(
-                  icon: const Icon(Icons.clear, size: 18),
-                  onPressed: () {
-                    ref.read(empSearchQueryProvider.notifier).state = '';
-                    setState(() => _currentPage = 0);
-                  },
-                )
-              : null,
-          contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-          filled: true,
-          fillColor: Colors.grey.withValues(alpha: 0.05),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: AppColors.divider),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.divider, width: 0.8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: TextField(
+                controller: _mobileSearchController,
+                style: const TextStyle(fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Search employees...',
+                  hintStyle: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                  prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
+                  suffixIcon: searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          onPressed: () {
+                            ref.read(empSearchQueryProvider.notifier).state = '';
+                            setState(() => _currentPage = 0);
+                          },
+                        )
+                      : null,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                ),
+                onChanged: (val) {
+                  ref.read(empSearchQueryProvider.notifier).state = val;
+                  setState(() => _currentPage = 0);
+                },
+              ),
+            ),
           ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: AppColors.divider),
+          const SizedBox(width: 10),
+          InkWell(
+            onTap: () => _openFilterBottomSheet(context, depts, desigs, statuses),
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.divider, width: 0.8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.tune,
+                size: 20,
+                color: AppColors.textPrimary,
+              ),
+            ),
           ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: AppColors.active),
-          ),
-        ),
-        onChanged: (val) {
-          ref.read(empSearchQueryProvider.notifier).state = val;
-          setState(() => _currentPage = 0);
-        },
+        ],
       ),
     );
   }
 
-  Widget _buildMobileFilterChips(
-    BuildContext context,
-    List<String> depts,
-    List<String> desigs,
-    List<String> statuses,
-  ) {
-    final currentOrg = ref.watch(empOrgFilterProvider);
-    final currentDept = ref.watch(empDeptFilterProvider);
-    final currentDesig = ref.watch(empDesigFilterProvider);
-    final currentStatus = ref.watch(empStatusFilterProvider);
+  Widget _buildStatusSummaryCards(BuildContext context, List<Employee> allEmployees) {
+    final currentFilter = ref.watch(empStatusFilterProvider);
 
-    int activeCount = 0;
-    if (currentOrg != 'All Organizations') activeCount++;
-    if (currentDept != 'All Departments') activeCount++;
-    if (currentDesig != 'All Designations') activeCount++;
-    if (currentStatus != 'All Statuses') activeCount++;
+    final allCount = allEmployees.length;
+    final activeCount = allEmployees.where((e) {
+      final s = e.status.trim().toLowerCase();
+      return s == 'active' || s == 'converted';
+    }).length;
+    final inactiveCount = allEmployees.where((e) => e.status.trim().toLowerCase() == 'inactive').length;
+    final suspendedCount = allEmployees.where((e) => e.status.trim().toLowerCase() == 'suspended').length;
 
-    return Container(
-      height: 42,
-      margin: const EdgeInsets.only(bottom: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: SingleChildScrollView(
+    return SizedBox(
+      height: 64,
+      child: ListView(
         scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        children: [
+          _buildStatusTabCard(
+            title: 'All',
+            count: allCount,
+            icon: Icons.grid_view_rounded,
+            iconColor: const Color(0xFF3E474E),
+            isSelected: currentFilter == 'All Statuses' || currentFilter == 'All',
+            onTap: () {
+              ref.read(empStatusFilterProvider.notifier).state = 'All Statuses';
+              setState(() => _currentPage = 0);
+            },
+          ),
+          const SizedBox(width: 10),
+          _buildStatusTabCard(
+            title: 'Active',
+            count: activeCount,
+            icon: Icons.check_circle_rounded,
+            iconColor: const Color(0xFF2E7D32),
+            isSelected: currentFilter == 'Active',
+            onTap: () {
+              ref.read(empStatusFilterProvider.notifier).state = 'Active';
+              setState(() => _currentPage = 0);
+            },
+          ),
+          const SizedBox(width: 10),
+          _buildStatusTabCard(
+            title: 'Inactive',
+            count: inactiveCount,
+            icon: Icons.pause_circle_rounded,
+            iconColor: const Color(0xFFE65100),
+            isSelected: currentFilter == 'Inactive',
+            onTap: () {
+              ref.read(empStatusFilterProvider.notifier).state = 'Inactive';
+              setState(() => _currentPage = 0);
+            },
+          ),
+          const SizedBox(width: 10),
+          _buildStatusTabCard(
+            title: 'Suspended',
+            count: suspendedCount,
+            icon: Icons.remove_circle_rounded,
+            iconColor: const Color(0xFFC62828),
+            isSelected: currentFilter == 'Suspended',
+            onTap: () {
+              ref.read(empStatusFilterProvider.notifier).state = 'Suspended';
+              setState(() => _currentPage = 0);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusTabCard({
+    required String title,
+    required int count,
+    required IconData icon,
+    required Color iconColor,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        constraints: const BoxConstraints(minWidth: 100),
+        decoration: BoxDecoration(
+          color: isSelected ? iconColor.withValues(alpha: 0.08) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? iconColor : AppColors.divider,
+            width: isSelected ? 1.5 : 0.8,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            InkWell(
-              onTap: () => _openFilterBottomSheet(context, depts, desigs, statuses),
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: activeCount > 0
-                      ? AppColors.active.withValues(alpha: 0.12)
-                      : Colors.grey.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: activeCount > 0 ? AppColors.active : AppColors.divider,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.tune,
-                      size: 16,
-                      color: activeCount > 0 ? AppColors.active : AppColors.textPrimary,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Filters${activeCount > 0 ? " • $activeCount active" : ""}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: activeCount > 0 ? AppColors.active : AppColors.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
               ),
+              child: Icon(icon, size: 16, color: iconColor),
             ),
             const SizedBox(width: 8),
-
-            if (currentOrg != 'All Organizations')
-              _buildActiveChip(
-                label: currentOrg,
-                onClear: () {
-                  ref.read(empOrgFilterProvider.notifier).state = 'All Organizations';
-                  setState(() => _currentPage = 0);
-                },
-              ),
-            if (currentDept != 'All Departments')
-              _buildActiveChip(
-                label: currentDept,
-                onClear: () {
-                  ref.read(empDeptFilterProvider.notifier).state = 'All Departments';
-                  setState(() => _currentPage = 0);
-                },
-              ),
-            if (currentDesig != 'All Designations')
-              _buildActiveChip(
-                label: currentDesig,
-                onClear: () {
-                  ref.read(empDesigFilterProvider.notifier).state = 'All Designations';
-                  setState(() => _currentPage = 0);
-                },
-              ),
-            if (currentStatus != 'All Statuses')
-              _buildActiveChip(
-                label: currentStatus,
-                onClear: () {
-                  ref.read(empStatusFilterProvider.notifier).state = 'All Statuses';
-                  setState(() => _currentPage = 0);
-                },
-              ),
-
-            if (activeCount == 0)
-              ...statuses.where((s) => s != 'All Statuses').map((status) {
-                final isSelected = currentStatus == status;
-                return Container(
-                  margin: const EdgeInsets.only(right: 6),
-                  child: InkWell(
-                    onTap: () {
-                      ref.read(empStatusFilterProvider.notifier).state =
-                          isSelected ? 'All Statuses' : status;
-                      setState(() => _currentPage = 0);
-                    },
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? AppColors.active.withValues(alpha: 0.12)
-                            : Colors.grey.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isSelected ? AppColors.active : AppColors.divider,
-                        ),
-                      ),
-                      child: Text(
-                        status,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                          color: isSelected ? AppColors.active : AppColors.textPrimary,
-                        ),
-                      ),
-                    ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: isSelected ? iconColor : AppColors.textPrimary,
                   ),
-                );
-              }),
+                ),
+                Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: isSelected ? iconColor : AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -1120,150 +1187,131 @@ class _EmployeeManagementPageState
     );
   }
 
+  Color _getAvatarColor(String name) {
+    if (name.isEmpty || name == '-') {
+      return const Color(0xFFE8EAF6);
+    }
+    final colors = [
+      const Color(0xFFEDE7F6),
+      const Color(0xFFE3F2FD),
+      const Color(0xFFFCE4EC),
+      const Color(0xFFE8F5E9),
+      const Color(0xFFFFF3E0),
+    ];
+    return colors[name.hashCode.abs() % colors.length];
+  }
+
   Widget _buildCompactEmployeeCard(BuildContext context, Employee emp) {
     final statusColor = _getStatusColor(emp.status);
-    final initials = _getInitials(emp.fullName);
+    final empName = emp.fullName.trim().isEmpty ? 'Employee Name' : emp.fullName.trim();
+    final initials = _getInitials(empName);
+    final avatarBg = _getAvatarColor(empName);
 
-    return Card(
-      elevation: 1,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-        side: const BorderSide(color: AppColors.divider, width: 0.8),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider, width: 0.8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Initials Avatar
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: AppColors.active.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                initials,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.active,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-
-            // Employee Details
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    emp.fullName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+            // Top Row: Avatar + Name & ID + Status Badge + Menu
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: avatarBg,
+                  child: Text(
+                    initials,
                     style: const TextStyle(
-                      fontSize: 15,
+                      fontSize: 13,
                       fontWeight: FontWeight.bold,
                       color: AppColors.textPrimary,
                     ),
                   ),
-                  const SizedBox(height: 3),
-                  Text(
-                    'ID: ${emp.employeeId}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.active,
-                    ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        empName,
+                        softWrap: true,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'ID: ${emp.employeeId.isEmpty ? "-" : emp.employeeId}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.active,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    [
-                      if (emp.department.isNotEmpty) emp.department,
-                      if (emp.designation.isNotEmpty) emp.designation,
-                    ].join(' • '),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Email: ${emp.emailAddress.isEmpty ? '-' : emp.emailAddress} • Phone: ${emp.phoneNumber.isEmpty ? '-' : emp.phoneNumber}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-
-            // Status Badge (equal size/height to View Button) + View Button + ⋮ Menu
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+                ),
+                const SizedBox(width: 8),
+                // Status Badge Pill
                 Container(
-                  height: 32,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: statusColor, width: 1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: statusColor, width: 0.8),
                   ),
                   child: Text(
-                    emp.status,
+                    emp.status.isEmpty ? 'Active' : emp.status,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: FontWeight.bold,
                       color: statusColor,
                     ),
                   ),
                 ),
-                const SizedBox(width: 6),
-                SizedBox(
-                  height: 32,
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      side: const BorderSide(color: AppColors.divider),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                    onPressed: () => _openViewDialog(context, emp),
-                    child: const Text(
-                      'View',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ),
-                ),
+                const SizedBox(width: 4),
+                // Menu Icon (⋮)
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   itemBuilder: (context) => [
                     const PopupMenuItem(
+                      value: 'view',
+                      child: Row(
+                        children: [
+                          Icon(Icons.visibility_outlined, size: 18, color: AppColors.textPrimary),
+                          SizedBox(width: 8),
+                          Text('Full Details', style: TextStyle(fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
                       value: 'edit',
                       child: Row(
                         children: [
-                          Icon(Icons.edit_outlined, size: 18),
+                          Icon(Icons.edit_outlined, size: 18, color: AppColors.textPrimary),
                           SizedBox(width: 8),
-                          Text('Edit', style: TextStyle(fontSize: 13)),
+                          Text('Edit Employee', style: TextStyle(fontSize: 13)),
                         ],
                       ),
                     ),
@@ -1273,13 +1321,15 @@ class _EmployeeManagementPageState
                         children: [
                           Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
                           SizedBox(width: 8),
-                          Text('Delete', style: TextStyle(fontSize: 13, color: Colors.redAccent)),
+                          Text('Delete Employee', style: TextStyle(fontSize: 13, color: Colors.redAccent)),
                         ],
                       ),
                     ),
                   ],
                   onSelected: (value) {
-                    if (value == 'edit') {
+                    if (value == 'view') {
+                      _openViewDialog(context, emp);
+                    } else if (value == 'edit') {
                       _openEditDialog(context, emp);
                     } else if (value == 'delete') {
                       _confirmDelete(context, emp);
@@ -1287,6 +1337,87 @@ class _EmployeeManagementPageState
                   },
                 ),
               ],
+            ),
+
+            const SizedBox(height: 12),
+
+            // Department & Designation Chips (Side-by-side)
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF5F6F8),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.business_outlined, size: 13, color: AppColors.textSecondary),
+                      const SizedBox(width: 6),
+                      Text(
+                        emp.department.isEmpty ? 'No department' : emp.department,
+                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF5F6F8),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.badge_outlined, size: 13, color: AppColors.textSecondary),
+                      const SizedBox(width: 6),
+                      Text(
+                        emp.designation.isEmpty ? 'No designation' : emp.designation,
+                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 14),
+
+            // Full-width View Details Action Button
+            InkWell(
+              onTap: () => _openViewDialog(context, emp),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFAFAFE),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFEBF0FF), width: 0.8),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'View details',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF3E474E),
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: Color(0xFF3E474E),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
