@@ -1964,8 +1964,8 @@ class _EmployeeRegistrationPageState
         _buildRow2or3(
           isMobile: isMobile,
           children: [
-            _buildTextField('First Name', _firstNameController, placeholder: 'First Name'),
-            _buildTextField('Last Name', _lastNameController, placeholder: 'Last Name'),
+            _buildTextField('First Name', _firstNameController, placeholder: 'First Name', isName: true),
+            _buildTextField('Last Name', _lastNameController, placeholder: 'Last Name', isName: true),
           ],
         ),
         const SizedBox(height: 12),
@@ -2055,7 +2055,7 @@ class _EmployeeRegistrationPageState
           isMobile: isMobile,
           children: [
             _buildDateField('Date Of Birth', _dobController, placeholder: '13-05-1982'),
-            _buildTextField('Aadhar Number', _aadhaarController, placeholder: '833750993144', isNumber: true),
+            _buildTextField('Aadhar Number', _aadhaarController, placeholder: '833750993144', isNumber: true, maxLength: 12),
             _buildTextField(
               'Contact Number',
               _phoneController,
@@ -2071,8 +2071,8 @@ class _EmployeeRegistrationPageState
           isMobile: isMobile,
           children: [
             _buildTextField('Email', _emailController, placeholder: 'Saravanan@igreentec.in'),
-            _buildTextField('PF Number', _pfNumberController, placeholder: '100338738050', isNumber: true),
-            _buildTextField('ESI Number', _esiNumberController, placeholder: 'ESI Number', isNumber: true),
+            _buildTextField('PF Number', _pfNumberController, placeholder: '100338738050', isAlphanumeric: true, isUppercase: true, maxLength: 22),
+            _buildTextField('ESI Number', _esiNumberController, placeholder: 'ESI Number', isNumber: true, maxLength: 17),
           ],
         ),
         const SizedBox(height: 20),
@@ -2295,11 +2295,13 @@ class _EmployeeRegistrationPageState
                   'Reporting To',
                   _reportingToController,
                   placeholder: 'e.g. Saravanan G S',
+                  isName: true,
                 ),
                 _buildTextField(
                   'Reporting Manager Title',
                   _reportingManagerTitleController,
                   placeholder: 'e.g. Managing Director',
+                  isName: true,
                 ),
               ],
             ),
@@ -2311,11 +2313,13 @@ class _EmployeeRegistrationPageState
                   'Present Admin Name',
                   _adminNameController,
                   placeholder: 'e.g. Saravanan G S',
+                  isName: true,
                 ),
                 _buildTextField(
                   'Coordinator Name',
                   _coordinatorNameController,
                   placeholder: 'e.g. Admin Team',
+                  isName: true,
                 ),
                 _buildTextField(
                   'Coordinator Contact Phone',
@@ -2432,8 +2436,8 @@ class _EmployeeRegistrationPageState
             _buildRow2or3(
               isMobile: isMobile,
               children: [
-                _buildTextField('City', _permCityController, placeholder: 'City'),
-                _buildTextField('Country', _permCountryController, placeholder: 'Country'),
+                _buildTextField('City', _permCityController, placeholder: 'City', isName: true),
+                _buildTextField('Country', _permCountryController, placeholder: 'Country', isName: true),
               ],
             ),
             const SizedBox(height: 16),
@@ -2466,8 +2470,8 @@ class _EmployeeRegistrationPageState
             _buildRow2or3(
               isMobile: isMobile,
               children: [
-                _buildTextField('City', _presCityController, placeholder: 'City'),
-                _buildTextField('Country', _presCountryController, placeholder: 'Country'),
+                _buildTextField('City', _presCityController, placeholder: 'City', isName: true),
+                _buildTextField('Country', _presCountryController, placeholder: 'Country', isName: true),
               ],
             ),
             const SizedBox(height: 24),
@@ -2626,7 +2630,7 @@ class _EmployeeRegistrationPageState
               isMobile: isMobile,
               children: [
                 _buildTextField('Result', _eduResultController, placeholder: 'Result (e.g. 85% / Pass)'),
-                _buildTextField('Year', _eduYearController, placeholder: 'Year (e.g. 2024)', isNumber: true),
+                _buildTextField('Year', _eduYearController, placeholder: 'Year (e.g. 2024)', isNumber: true, maxLength: 4),
               ],
             ),
             const SizedBox(height: 12),
@@ -2904,15 +2908,15 @@ class _EmployeeRegistrationPageState
                   countryCode: _personalMobileCountryCode,
                   onCountryCodeChanged: (val) { setState(() => _personalMobileCountryCode = val); _markTabUnsaved('History'); },
                 ),
-                _buildTextField('PAN No', _panController, placeholder: 'PAN'),
+                _buildTextField('PAN No', _panController, placeholder: 'PAN (e.g. ABCDE1234F)', isPan: true),
               ],
             ),
             const SizedBox(height: 12),
             _buildRow2or3(
               isMobile: isMobile,
               children: [
-                _buildTextField('Passport No', _passportController, placeholder: 'Passport Number'),
-                _buildTextField('Driving License No.', _drivingLicenseController, placeholder: 'License Number'),
+                _buildTextField('Passport No', _passportController, placeholder: 'Passport Number', isPassport: true),
+                _buildTextField('Driving License No.', _drivingLicenseController, placeholder: 'License Number', isDrivingLicense: true),
               ],
             ),
             const SizedBox(height: 12),
@@ -2923,7 +2927,7 @@ class _EmployeeRegistrationPageState
             _buildRow2or3(
               isMobile: isMobile,
               children: [
-                _buildTextField('Name', _emergencyNameController, placeholder: 'Emergency Name'),
+                _buildTextField('Name', _emergencyNameController, placeholder: 'Emergency Name', isName: true),
                 _buildTextField(
                   'Mobile Number',
                   _emergencyMobileController,
@@ -2940,7 +2944,7 @@ class _EmployeeRegistrationPageState
             _buildRow2or3(
               isMobile: isMobile,
               children: [
-                _buildTextField('Name', _referredByNameController, placeholder: 'Referred By'),
+                _buildTextField('Name', _referredByNameController, placeholder: 'Referred By', isName: true),
                 _buildTextField(
                   'Mobile Number',
                   _referredByMobileController,
@@ -2957,8 +2961,8 @@ class _EmployeeRegistrationPageState
             _buildRow2or3(
               isMobile: isMobile,
               children: [
-                _buildTextField('Father Name', _fatherNameController, placeholder: 'Father Name'),
-                _buildTextField('Mother Name', _motherNameController, placeholder: 'Mother Name'),
+                _buildTextField('Father Name', _fatherNameController, placeholder: 'Father Name', isName: true),
+                _buildTextField('Mother Name', _motherNameController, placeholder: 'Mother Name', isName: true),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -2989,16 +2993,16 @@ class _EmployeeRegistrationPageState
             _buildRow2or3(
               isMobile: isMobile,
               children: [
-                _buildTextField('Spouse Name', _spouseNameController, placeholder: 'Spouse Name'),
-                _buildTextField('Kids1 Name', _kids1NameController, placeholder: 'Kids Name'),
-                _buildTextField('Kids2 Name', _kids2NameController, placeholder: 'Kids Name'),
+                _buildTextField('Spouse Name', _spouseNameController, placeholder: 'Spouse Name', isName: true),
+                _buildTextField('Kids1 Name', _kids1NameController, placeholder: 'Kids Name', isName: true),
+                _buildTextField('Kids2 Name', _kids2NameController, placeholder: 'Kids Name', isName: true),
               ],
             ),
             const SizedBox(height: 12),
             _buildRow2or3(
               isMobile: isMobile,
               children: [
-                _buildTextField('Kids3 Name', _kids3NameController, placeholder: 'Kids Name'),
+                _buildTextField('Kids3 Name', _kids3NameController, placeholder: 'Kids Name', isName: true),
                 const SizedBox.shrink(),
                 const SizedBox.shrink(),
               ],
@@ -3063,23 +3067,23 @@ class _EmployeeRegistrationPageState
             _buildRow2or3(
               isMobile: isMobile,
               children: [
-                _buildTextField('Account Holder Name', _bankHolderController, placeholder: 'Holder Name'),
-                _buildTextField('Bank Name', _bankNameController, placeholder: 'Bank Name'),
+                _buildTextField('Account Holder Name', _bankHolderController, placeholder: 'Holder Name', isName: true),
+                _buildTextField('Bank Name', _bankNameController, placeholder: 'Bank Name', isName: true),
               ],
             ),
             const SizedBox(height: 12),
             _buildRow2or3(
               isMobile: isMobile,
               children: [
-                _buildTextField('Account Number', _bankAccNumController, placeholder: 'Account Number', isNumber: true),
-                _buildTextField('IFSC Code', _bankIfscController, placeholder: 'IFSC Code'),
+                _buildTextField('Account Number', _bankAccNumController, placeholder: 'Account Number', isNumber: true, maxLength: 18),
+                _buildTextField('IFSC Code', _bankIfscController, placeholder: 'IFSC Code (e.g. SBIN0001234)', isIfsc: true),
               ],
             ),
             const SizedBox(height: 12),
             _buildRow2or3(
               isMobile: isMobile,
               children: [
-                _buildTextField('Branch Name', _bankBranchController, placeholder: 'Branch Name'),
+                _buildTextField('Branch Name', _bankBranchController, placeholder: 'Branch Name', isName: true),
                 _buildDropdown(
                   'Account Type',
                   _bankAccountType,
@@ -3761,6 +3765,14 @@ class _EmployeeRegistrationPageState
     ValueChanged<String>? onChanged,
     bool isNumber = false,
     bool isPhone = false,
+    bool isPan = false,
+    bool isIfsc = false,
+    bool isPassport = false,
+    bool isDrivingLicense = false,
+    bool isName = false,
+    bool isAlphanumeric = false,
+    bool isUppercase = false,
+    int? maxLength,
     String countryCode = '+91',
     ValueChanged<String>? onCountryCodeChanged,
     bool allowDecimal = false,
@@ -3774,18 +3786,57 @@ class _EmployeeRegistrationPageState
         ? (placeholder ?? phoneDetails!['placeholder'] as String)
         : placeholder;
 
-    final effectiveKeyboardType = keyboardType ?? (isPhone ? TextInputType.phone : (isNumber ? TextInputType.numberWithOptions(decimal: allowDecimal) : null));
+    final TextCapitalization textCapitalization = (isPan || isIfsc || isPassport || isDrivingLicense || isUppercase)
+        ? TextCapitalization.characters
+        : (isName ? TextCapitalization.words : TextCapitalization.none);
+
+    final effectiveKeyboardType = keyboardType ?? (
+      isPhone
+        ? TextInputType.phone
+        : (isNumber
+          ? TextInputType.numberWithOptions(decimal: allowDecimal)
+          : (isPan || isIfsc || isPassport || isDrivingLicense || isAlphanumeric
+            ? TextInputType.visiblePassword
+            : TextInputType.text))
+    );
+
     final effectiveInputFormatters = inputFormatters ?? (
-      (isNumber || isPhone)
-        ? [
-            if (allowDecimal)
-              FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))
-            else
-              FilteringTextInputFormatter.digitsOnly,
-            if (isPhone)
-              LengthLimitingTextInputFormatter(maxPhoneDigits),
-          ]
-        : null
+      isPan ? [
+        LengthLimitingTextInputFormatter(10),
+        FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
+        _UpperCaseTextFormatter(),
+      ] : isIfsc ? [
+        LengthLimitingTextInputFormatter(11),
+        FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
+        _UpperCaseTextFormatter(),
+      ] : isPassport ? [
+        LengthLimitingTextInputFormatter(9),
+        FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
+        _UpperCaseTextFormatter(),
+      ] : isDrivingLicense ? [
+        LengthLimitingTextInputFormatter(16),
+        FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9 \-]')),
+        _UpperCaseTextFormatter(),
+      ] : isAlphanumeric ? [
+        if (maxLength != null) LengthLimitingTextInputFormatter(maxLength),
+        FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
+        if (isUppercase) _UpperCaseTextFormatter(),
+      ] : isName ? [
+        if (maxLength != null) LengthLimitingTextInputFormatter(maxLength),
+        FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s.\-']")),
+      ] : (isNumber || isPhone) ? [
+        if (allowDecimal)
+          FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))
+        else
+          FilteringTextInputFormatter.digitsOnly,
+        if (isPhone)
+          LengthLimitingTextInputFormatter(maxPhoneDigits)
+        else if (maxLength != null)
+          LengthLimitingTextInputFormatter(maxLength),
+      ] : [
+        if (maxLength != null) LengthLimitingTextInputFormatter(maxLength),
+        if (isUppercase) _UpperCaseTextFormatter(),
+      ]
     );
 
     return Column(
@@ -3800,35 +3851,82 @@ class _EmployeeRegistrationPageState
         TextFormField(
           controller: controller,
           maxLines: maxLines,
+          textCapitalization: textCapitalization,
           onChanged: (val) {
-            if (isNumber || isPhone) {
-              final pattern = allowDecimal ? RegExp(r'[^0-9.]') : RegExp(r'[^0-9]');
-              if (pattern.hasMatch(val)) {
-                final sanitized = val.replaceAll(pattern, '');
-                controller.value = controller.value.copyWith(
-                  text: sanitized,
-                  selection: TextSelection.collapsed(offset: sanitized.length),
-                );
-                if (onChanged != null) onChanged(sanitized);
-                return;
-              }
+            String sanitized = val;
+            if (isPan || isIfsc || isPassport || isDrivingLicense || isUppercase) {
+              sanitized = sanitized.toUpperCase();
             }
-            if (onChanged != null) onChanged(val);
+            if (isPan || isIfsc || isPassport) {
+              sanitized = sanitized.replaceAll(RegExp(r'[^A-Z0-9]'), '');
+            } else if (isDrivingLicense) {
+              sanitized = sanitized.replaceAll(RegExp(r'[^A-Z0-9 \-]'), '');
+            } else if (isAlphanumeric) {
+              sanitized = sanitized.replaceAll(RegExp(r'[^A-Z0-9a-z]'), '');
+            } else if (isName) {
+              sanitized = sanitized.replaceAll(RegExp(r"[^a-zA-Z\s.\-']"), '');
+            } else if (isNumber || isPhone) {
+              final pattern = allowDecimal ? RegExp(r'[^0-9.]') : RegExp(r'[^0-9]');
+              sanitized = sanitized.replaceAll(pattern, '');
+            }
+
+            if (sanitized != val) {
+              controller.value = controller.value.copyWith(
+                text: sanitized,
+                selection: TextSelection.collapsed(offset: sanitized.length),
+              );
+            }
+            if (onChanged != null) onChanged(sanitized);
           },
           keyboardType: effectiveKeyboardType,
           inputFormatters: effectiveInputFormatters,
           autovalidateMode: AutovalidateMode.onUserInteraction,
           validator: (value) {
-            if ((isNumber || isPhone) && value != null && value.isNotEmpty) {
-              if (RegExp(r'[a-zA-Z]').hasMatch(value)) {
-                return 'Alphabets are not allowed. Please enter numbers only.';
-              }
-              final pattern = allowDecimal ? RegExp(r'^\d*\.?\d*$') : RegExp(r'^[\d\s\-]+$');
-              if (!pattern.hasMatch(value.trim())) {
-                return 'Only numeric characters are allowed.';
-              }
-              if (isPhone && value.trim().length != maxPhoneDigits) {
-                return 'Please enter exactly $maxPhoneDigits digits for $countryCode.';
+            final trimmed = (value ?? '').trim();
+            if (trimmed.isNotEmpty) {
+              if (isPan) {
+                if (trimmed.length != 10) {
+                  return 'PAN Number must be exactly 10 characters (e.g. ABCDE1234F).';
+                }
+                if (!RegExp(r'^[A-Z]{5}[0-9]{4}[A-Z]{1}$').hasMatch(trimmed)) {
+                  return 'Invalid PAN format. Example: ABCDE1234F.';
+                }
+              } else if (isIfsc) {
+                if (trimmed.length != 11) {
+                  return 'IFSC Code must be exactly 11 characters (e.g. SBIN0001234).';
+                }
+                if (!RegExp(r'^[A-Z]{4}0[A-Z0-9]{6}$').hasMatch(trimmed)) {
+                  return 'Invalid IFSC format. 5th character must be 0. Example: SBIN0001234.';
+                }
+              } else if (isPassport) {
+                if (trimmed.length < 8 || trimmed.length > 9) {
+                  return 'Passport Number must be 8 or 9 alphanumeric characters.';
+                }
+                if (RegExp(r'[^A-Z0-9]').hasMatch(trimmed)) {
+                  return 'Passport Number cannot contain symbols or spaces.';
+                }
+              } else if (isDrivingLicense) {
+                if (RegExp(r'[^A-Z0-9 \-]').hasMatch(trimmed)) {
+                  return r'Driving License cannot contain special symbols (e.g. $, #, /).';
+                }
+              } else if (isName) {
+                if (RegExp(r'[0-9]').hasMatch(trimmed)) {
+                  return 'Numbers are not allowed in name fields.';
+                }
+                if (RegExp(r"[^a-zA-Z\s.\-']").hasMatch(trimmed)) {
+                  return 'Special symbols are not allowed in name fields.';
+                }
+              } else if (isNumber || isPhone) {
+                if (RegExp(r'[a-zA-Z]').hasMatch(trimmed)) {
+                  return 'Alphabets are not allowed. Please enter numbers only.';
+                }
+                final pattern = allowDecimal ? RegExp(r'^\d*\.?\d*$') : RegExp(r'^\d+$');
+                if (!pattern.hasMatch(trimmed)) {
+                  return 'Only numeric characters (0-9) are allowed.';
+                }
+                if (isPhone && trimmed.length != maxPhoneDigits) {
+                  return 'Please enter exactly $maxPhoneDigits digits for $countryCode.';
+                }
               }
             }
             if (validator != null) {
@@ -3877,6 +3975,7 @@ class _EmployeeRegistrationPageState
       ],
     );
   }
+
 
   Widget _buildDateField(
     String label,
@@ -3998,12 +4097,15 @@ class _EmployeeRegistrationPageState
       barrierDismissible: true,
       builder: (BuildContext context) {
         return Dialog(
+          insetPadding: isMobile
+              ? const EdgeInsets.symmetric(horizontal: 12, vertical: 20)
+              : const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           child: Container(
-            width: isMobile ? MediaQuery.of(context).size.width * 0.95 : MediaQuery.of(context).size.width * 0.85,
+            width: isMobile ? double.infinity : MediaQuery.of(context).size.width * 0.85,
             constraints: BoxConstraints(
               maxWidth: 900,
-              maxHeight: MediaQuery.of(context).size.height * 0.85,
+              maxHeight: MediaQuery.of(context).size.height * 0.88,
             ),
             padding: EdgeInsets.all(isMobile ? 14 : 24),
             child: Column(
@@ -4031,11 +4133,13 @@ class _EmployeeRegistrationPageState
                               children: [
                                 const Text(
                                   'Registration Details Preview',
-                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                                 ),
+                                const SizedBox(height: 2),
                                 Text(
                                   'Review all details for ${name.isEmpty ? "Candidate" : name} before final submission.',
-                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, height: 1.3),
+                                  maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ],
@@ -4050,7 +4154,7 @@ class _EmployeeRegistrationPageState
                     ),
                   ],
                 ),
-                const Divider(height: 24),
+                const Divider(height: 20),
                 // Body content
                 Expanded(
                   child: SingleChildScrollView(
@@ -4268,43 +4372,77 @@ class _EmployeeRegistrationPageState
                     ),
                   ),
                 ),
-                const Divider(height: 24),
+                const Divider(height: 20),
                 // Footer Action Buttons
-                Wrap(
-                  alignment: WrapAlignment.end,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 12,
-                  runSpacing: 10,
-                  children: [
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        side: const BorderSide(color: Colors.grey),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                if (isMobile)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.active,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        ),
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          _submitForm(link, isSubmit: true);
+                        },
+                        icon: const Icon(Icons.check_circle_outline, size: 18),
+                        label: Text(
+                          _isEditing ? 'Confirm & Save Changes' : 'Confirm & Submit Registration',
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.edit, size: 16, color: Colors.black87),
-                      label: const Text('Go Back & Edit', style: TextStyle(color: Colors.black87, fontSize: 13, fontWeight: FontWeight.bold)),
-                    ),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.active,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          side: const BorderSide(color: Colors.grey),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        ),
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.edit, size: 16, color: Colors.black87),
+                        label: const Text('Go Back & Edit', style: TextStyle(color: Colors.black87, fontSize: 13, fontWeight: FontWeight.bold)),
                       ),
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                        _submitForm(link, isSubmit: true);
-                      },
-                      icon: const Icon(Icons.check_circle_outline, size: 18),
-                      label: Text(
-                        _isEditing ? 'Confirm & Save Changes' : 'Confirm & Submit Registration',
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                    ],
+                  )
+                else
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          side: const BorderSide(color: Colors.grey),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                        ),
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.edit, size: 16, color: Colors.black87),
+                        label: const Text('Go Back & Edit', style: TextStyle(color: Colors.black87, fontSize: 13, fontWeight: FontWeight.bold)),
                       ),
-                    ),
-                  ],
-                ),
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.active,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                        ),
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          _submitForm(link, isSubmit: true);
+                        },
+                        icon: const Icon(Icons.check_circle_outline, size: 18),
+                        label: Text(
+                          _isEditing ? 'Confirm & Save Changes' : 'Confirm & Submit Registration',
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
           ),
@@ -5944,3 +6082,17 @@ class _EmployeeRegistrationPageState
     );
   }
 }
+
+class _UpperCaseTextFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    return TextEditingValue(
+      text: newValue.text.toUpperCase(),
+      selection: newValue.selection,
+    );
+  }
+}
+

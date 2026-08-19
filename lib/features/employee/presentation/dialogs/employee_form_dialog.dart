@@ -321,19 +321,51 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                   isMobile: isMobile,
                   child1: TextFormField(
                     controller: _firstNameController,
+                    textCapitalization: TextCapitalization.words,
+                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s.\-']"))],
+                    onChanged: (val) {
+                      final sanitized = val.replaceAll(RegExp(r"[^a-zA-Z\s.\-']"), '');
+                      if (sanitized != val) {
+                        _firstNameController.value = _firstNameController.value.copyWith(
+                          text: sanitized,
+                          selection: TextSelection.collapsed(offset: sanitized.length),
+                        );
+                      }
+                    },
                     decoration: const InputDecoration(
                       labelText: 'First Name *',
                       border: OutlineInputBorder(),
                     ),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return 'Required';
+                      if (RegExp(r'[0-9]').hasMatch(v)) return 'Numbers not allowed';
+                      if (RegExp(r"[^a-zA-Z\s.\-']").hasMatch(v)) return 'Special symbols not allowed';
+                      return null;
+                    },
                   ),
                   child2: TextFormField(
                     controller: _lastNameController,
+                    textCapitalization: TextCapitalization.words,
+                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s.\-']"))],
+                    onChanged: (val) {
+                      final sanitized = val.replaceAll(RegExp(r"[^a-zA-Z\s.\-']"), '');
+                      if (sanitized != val) {
+                        _lastNameController.value = _lastNameController.value.copyWith(
+                          text: sanitized,
+                          selection: TextSelection.collapsed(offset: sanitized.length),
+                        );
+                      }
+                    },
                     decoration: const InputDecoration(
                       labelText: 'Last Name *',
                       border: OutlineInputBorder(),
                     ),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return 'Required';
+                      if (RegExp(r'[0-9]').hasMatch(v)) return 'Numbers not allowed';
+                      if (RegExp(r"[^a-zA-Z\s.\-']").hasMatch(v)) return 'Special symbols not allowed';
+                      return null;
+                    },
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -352,6 +384,15 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                     keyboardType: TextInputType.phone,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     autovalidateMode: AutovalidateMode.onUserInteraction,
+                    onChanged: (val) {
+                      final sanitized = val.replaceAll(RegExp(r'[^0-9]'), '');
+                      if (sanitized != val) {
+                        _phoneController.value = _phoneController.value.copyWith(
+                          text: sanitized,
+                          selection: TextSelection.collapsed(offset: sanitized.length),
+                        );
+                      }
+                    },
                     decoration: InputDecoration(
                       labelText: 'Phone Number *',
                       border: const OutlineInputBorder(),
@@ -392,10 +433,11 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                       ),
                     ),
                     validator: (v) {
-                      if (v != null && v.isNotEmpty && RegExp(r'[a-zA-Z]').hasMatch(v)) {
-                        return 'Alphabets are not allowed. Please enter numbers only.';
+                      if (v == null || v.trim().isEmpty) return 'Required';
+                      if (RegExp(r'[^0-9]').hasMatch(v.trim())) {
+                        return 'Alphabets/symbols are not allowed. Numbers only.';
                       }
-                      return v == null || v.trim().isEmpty ? 'Required' : null;
+                      return null;
                     },
                   ),
                 ),

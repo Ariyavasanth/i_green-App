@@ -423,6 +423,8 @@ class _TopBar extends ConsumerWidget {
       headingText = _getHeading(currentLocation);
     }
 
+    final isFormPage = currentLocation.endsWith('/new') || currentLocation.contains('/edit');
+
     final content = SafeArea(
       bottom: false,
       child: Container(
@@ -430,14 +432,27 @@ class _TopBar extends ConsumerWidget {
         constraints: const BoxConstraints(minHeight: 56),
         child: Row(
           children: [
-            _AnimatedMenuButton(
-              tooltip: compact ? 'Open navigation' : 'Toggle navigation',
-              onPressed: onMenuPressed,
-            ),
+            if (isFormPage)
+              IconButton(
+                icon: const Icon(Icons.arrow_back, color: Color(0xFF1E293B)),
+                tooltip: 'Back',
+                onPressed: () {
+                  if (Navigator.of(context).canPop()) {
+                    Navigator.of(context).pop();
+                  } else {
+                    context.go('/purchase-orders');
+                  }
+                },
+              )
+            else
+              _AnimatedMenuButton(
+                tooltip: compact ? 'Open navigation' : 'Toggle navigation',
+                onPressed: onMenuPressed,
+              ),
             const SizedBox(width: 8),
             Expanded(
               child: InkWell(
-                onTap: onMenuPressed,
+                onTap: isFormPage ? null : onMenuPressed,
                 borderRadius: BorderRadius.circular(8),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6),
@@ -455,7 +470,7 @@ class _TopBar extends ConsumerWidget {
                           ),
                         ),
                       ),
-                      if (isAttendanceManagement) ...[
+                        if (isAttendanceManagement) ...[
                         const SizedBox(width: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
