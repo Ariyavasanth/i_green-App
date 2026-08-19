@@ -1700,7 +1700,6 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
 
   Widget _buildRowActions(RegistrationLink link, {bool isMobile = false}) {
     final status = link.linkStatus.trim().toLowerCase();
-    final isSubmittedOrPending = status == 'submitted' || status == 'pending' || status == 'completed';
     final isAccepted = status == 'accepted';
 
     return Row(
@@ -1716,30 +1715,6 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
           icon: Icon(Icons.remove_red_eye_outlined, size: isMobile ? 14 : 16, color: AppColors.textPrimary),
           label: Text('View', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
         ),
-        if (isSubmittedOrPending) ...[
-          const SizedBox(width: 6),
-          TextButton.icon(
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            onPressed: () => _setResponseStatus(link, 'Accepted'),
-            icon: Icon(Icons.check_circle_outline, size: isMobile ? 14 : 16, color: Colors.blue),
-            label: Text('Accept', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.bold, color: Colors.blue)),
-          ),
-          const SizedBox(width: 6),
-          TextButton.icon(
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            onPressed: () => _setResponseStatus(link, 'Rejected'),
-            icon: Icon(Icons.cancel_outlined, size: isMobile ? 14 : 16, color: Colors.redAccent),
-            label: Text('Reject', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.bold, color: Colors.redAccent)),
-          ),
-        ],
         if (isAccepted) ...[
           const SizedBox(width: 6),
           TextButton.icon(
@@ -1753,17 +1728,6 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             },
             icon: Icon(Icons.person_add_outlined, size: isMobile ? 14 : 16, color: Colors.green),
             label: Text('Register', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.bold, color: Colors.green)),
-          ),
-          const SizedBox(width: 6),
-          TextButton.icon(
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            onPressed: () => _setResponseStatus(link, 'Rejected'),
-            icon: Icon(Icons.cancel_outlined, size: isMobile ? 14 : 16, color: Colors.redAccent),
-            label: Text('Reject', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.bold, color: Colors.redAccent)),
           ),
         ],
       ],
