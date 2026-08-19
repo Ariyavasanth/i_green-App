@@ -138,9 +138,9 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                 final endIndex = (startIndex + _rowsPerPage).clamp(0, totalItems);
                 final pageItems = filtered.sublist(startIndex, endIndex);
 
-                return ColoredBox(
-                  color: const Color(0xFFF8F9FA),
-                  child: Column(
+                return Scaffold(
+                  backgroundColor: const Color(0xFFF8F9FA),
+                  body: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildMobileSearchAndFilter(context, searchQuery),
@@ -162,15 +162,22 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                               )
                             : _buildMobileList(pageItems, employees),
                       ),
-                      _buildStickyBottomBar(
-                        context: context,
-                        totalItems: totalItems,
-                        startIndex: startIndex,
-                        endIndex: endIndex,
-                        currentPage: pageIndex,
-                        totalPages: totalPages,
-                      ),
                     ],
+                  ),
+                  bottomNavigationBar: _buildStickyBottomBar(
+                    context: context,
+                    totalItems: totalItems,
+                    startIndex: startIndex,
+                    endIndex: endIndex,
+                    currentPage: pageIndex,
+                    totalPages: totalPages,
+                  ),
+                  floatingActionButton: FloatingActionButton(
+                    backgroundColor: AppColors.active,
+                    elevation: 3,
+                    shape: const CircleBorder(),
+                    onPressed: () => _openAddLinkDialog(context),
+                    child: const Icon(Icons.link_sharp, color: Colors.white, size: 24),
                   ),
                 );
               }
@@ -548,56 +555,36 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
           ),
         ],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          Expanded(
+            child: Text(
+              totalItems == 0 ? 'Showing 0-0 of 0' : 'Showing ${startIndex + 1}-$endIndex of $totalItems',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                totalItems == 0 ? 'Showing 0-0 of 0' : 'Showing ${startIndex + 1}-$endIndex of $totalItems',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
+              IconButton(
+                icon: const Icon(Icons.chevron_left, size: 20),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                onPressed: currentPage > 0 ? () => setState(() => _currentPage -= 1) : null,
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.chevron_left, size: 20),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                    onPressed: currentPage > 0 ? () => setState(() => _currentPage -= 1) : null,
-                  ),
-                  Text(
-                    '${totalPages == 0 ? 0 : currentPage + 1} / $totalPages',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.chevron_right, size: 20),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                    onPressed: currentPage < totalPages - 1 ? () => setState(() => _currentPage += 1) : null,
-                  ),
-                ],
+              Text(
+                '${totalPages == 0 ? 0 : currentPage + 1} / $totalPages',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_right, size: 20),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                onPressed: currentPage < totalPages - 1 ? () => setState(() => _currentPage += 1) : null,
               ),
             ],
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            height: 42,
-            child: FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF3E474E),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              onPressed: () => _openAddLinkDialog(context),
-              icon: const Icon(Icons.link_sharp, size: 18),
-              label: const Text(
-                'Generate Link',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-              ),
-            ),
           ),
         ],
       ),
