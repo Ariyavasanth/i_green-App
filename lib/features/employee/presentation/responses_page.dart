@@ -126,35 +126,40 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                 final endIndex = (startIndex + _rowsPerPage).clamp(0, totalItems);
                 final pageItems = filtered.sublist(startIndex, endIndex);
 
-                return Column(
-                  children: [
-                    _buildMobileSearch(context, searchQuery),
-                    _buildMobileFilterChips(context, statusList),
-                    Expanded(
-                      child: filtered.isEmpty
-                          ? const Center(
-                              child: Padding(
-                                padding: EdgeInsets.all(32),
-                                child: Text(
-                                  'No candidate responses found.',
-                                  style: TextStyle(
-                                    color: AppColors.textSecondary,
-                                    fontSize: 14,
+                return ColoredBox(
+                  color: const Color(0xFFF8F9FA),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildMobileSearchAndFilter(context, searchQuery),
+                      _buildStatusSummaryCards(context, links),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: filtered.isEmpty
+                            ? const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(32),
+                                  child: Text(
+                                    'No candidate responses found.',
+                                    style: TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 14,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            )
-                          : _buildMobileList(pageItems, employees),
-                    ),
-                    _buildPaginationBar(
-                      totalItems: totalItems,
-                      startIndex: startIndex,
-                      endIndex: endIndex,
-                      currentPage: pageIndex,
-                      totalPages: totalPages,
-                    ),
-                    _buildStickyAddEmployeeButton(context),
-                  ],
+                              )
+                            : _buildMobileList(pageItems, employees),
+                      ),
+                      _buildStickyBottomBar(
+                        context: context,
+                        totalItems: totalItems,
+                        startIndex: startIndex,
+                        endIndex: endIndex,
+                        currentPage: pageIndex,
+                        totalPages: totalPages,
+                      ),
+                    ],
+                  ),
                 );
               }
 
@@ -258,6 +263,314 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
           onPressed: () => _openColumnSelectionDialog(context),
         ),
       ],
+    );
+  }
+
+  Widget _buildMobileHeader(BuildContext context, int totalCount) {
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildMobileSearchAndFilter(BuildContext context, String searchQuery) {
+    if (_mobileSearchController.text != searchQuery) {
+      _mobileSearchController.text = searchQuery;
+      _mobileSearchController.selection = TextSelection.fromPosition(
+        TextPosition(offset: searchQuery.length),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.divider, width: 0.8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: TextField(
+                controller: _mobileSearchController,
+                style: const TextStyle(fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Search responses...',
+                  hintStyle: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                  prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
+                  suffixIcon: searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          onPressed: () {
+                            ref.read(responseSearchQueryProvider.notifier).state = '';
+                            setState(() => _currentPage = 0);
+                          },
+                        )
+                      : null,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                ),
+                onChanged: (val) {
+                  ref.read(responseSearchQueryProvider.notifier).state = val;
+                  setState(() => _currentPage = 0);
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          InkWell(
+            onTap: () => _openFilterBottomSheet(context, const ['All Statuses', 'Pending', 'Submitted', 'Accepted', 'Rejected']),
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.divider, width: 0.8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.tune,
+                size: 20,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusSummaryCards(BuildContext context, List<RegistrationLink> allLinks) {
+    final currentFilter = ref.watch(responseStatusFilterProvider);
+
+    final allCount = allLinks.length;
+    final pendingCount = allLinks.where((l) => _normalizeStatus(l.linkStatus) == CandidateCardStatus.pending).length;
+    final acceptedCount = allLinks.where((l) => _normalizeStatus(l.linkStatus) == CandidateCardStatus.accepted).length;
+    final rejectedCount = allLinks.where((l) => _normalizeStatus(l.linkStatus) == CandidateCardStatus.rejected).length;
+
+    return SizedBox(
+      height: 64,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        children: [
+          _buildStatusTabCard(
+            title: 'All',
+            count: allCount,
+            icon: Icons.grid_view_rounded,
+            iconColor: const Color(0xFF3E474E),
+            isSelected: currentFilter == 'All Statuses',
+            onTap: () {
+              ref.read(responseStatusFilterProvider.notifier).state = 'All Statuses';
+              setState(() => _currentPage = 0);
+            },
+          ),
+          const SizedBox(width: 10),
+          _buildStatusTabCard(
+            title: 'Pending',
+            count: pendingCount,
+            icon: Icons.access_time_filled_rounded,
+            iconColor: const Color(0xFFE65100),
+            isSelected: currentFilter == 'Pending',
+            onTap: () {
+              ref.read(responseStatusFilterProvider.notifier).state = 'Pending';
+              setState(() => _currentPage = 0);
+            },
+          ),
+          const SizedBox(width: 10),
+          _buildStatusTabCard(
+            title: 'Accepted',
+            count: acceptedCount,
+            icon: Icons.check_circle_rounded,
+            iconColor: const Color(0xFF2E7D32),
+            isSelected: currentFilter == 'Accepted',
+            onTap: () {
+              ref.read(responseStatusFilterProvider.notifier).state = 'Accepted';
+              setState(() => _currentPage = 0);
+            },
+          ),
+          const SizedBox(width: 10),
+          _buildStatusTabCard(
+            title: 'Rejected',
+            count: rejectedCount,
+            icon: Icons.cancel_rounded,
+            iconColor: const Color(0xFFC62828),
+            isSelected: currentFilter == 'Rejected',
+            onTap: () {
+              ref.read(responseStatusFilterProvider.notifier).state = 'Rejected';
+              setState(() => _currentPage = 0);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusTabCard({
+    required String title,
+    required int count,
+    required IconData icon,
+    required Color iconColor,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        constraints: const BoxConstraints(minWidth: 100),
+        decoration: BoxDecoration(
+          color: isSelected ? iconColor.withValues(alpha: 0.08) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? iconColor : AppColors.divider,
+            width: isSelected ? 1.5 : 0.8,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 16, color: iconColor),
+            ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                    color: isSelected ? iconColor : AppColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: isSelected ? iconColor : AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStickyBottomBar({
+    required BuildContext context,
+    required int totalItems,
+    required int startIndex,
+    required int endIndex,
+    required int currentPage,
+    required int totalPages,
+  }) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        10,
+        16,
+        10 + MediaQuery.of(context).padding.bottom,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: const Border(top: BorderSide(color: AppColors.divider)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                totalItems == 0 ? 'Showing 0-0 of 0' : 'Showing ${startIndex + 1}-$endIndex of $totalItems',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left, size: 20),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    onPressed: currentPage > 0 ? () => setState(() => _currentPage -= 1) : null,
+                  ),
+                  Text(
+                    '${totalPages == 0 ? 0 : currentPage + 1} / $totalPages',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right, size: 20),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    onPressed: currentPage < totalPages - 1 ? () => setState(() => _currentPage += 1) : null,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            height: 42,
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF3E474E),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () => _openAddLinkDialog(context),
+              icon: const Icon(Icons.link_sharp, size: 18),
+              label: const Text(
+                'Generate Link',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1087,29 +1400,43 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     return raw;
   }
 
+  Color _getAvatarColor(String name) {
+    if (name.isEmpty || name == '-' || name == 'Name not provided' || name == 'Unknown Applicant') {
+      return const Color(0xFFE8EAF6);
+    }
+    final colors = [
+      const Color(0xFFEDE7F6),
+      const Color(0xFFE3F2FD),
+      const Color(0xFFFCE4EC),
+      const Color(0xFFE8F5E9),
+      const Color(0xFFFFF3E0),
+    ];
+    return colors[name.hashCode.abs() % colors.length];
+  }
+
   Widget _buildCompactResponseCard(BuildContext context, RegistrationLink link, List<Employee> employees) {
     final employee = _employeeForLink(link, employees);
     final rawName = _candidateName(link, employee).trim();
     final hasName = rawName.isNotEmpty && rawName != '-';
-    final candidateName = hasName ? rawName : 'Name not provided';
+    final candidateName = hasName ? rawName : 'Unknown Applicant';
 
     final normalizedStatus = _normalizeStatus(link.linkStatus);
 
-    final ({Color bg, Color text, String label}) statusBadge = switch (normalizedStatus) {
+    final ({Color bg, Color color, IconData icon}) statusBadge = switch (normalizedStatus) {
       CandidateCardStatus.accepted => (
-          bg: const Color(0xFF2E7D32),
-          text: Colors.white,
-          label: 'Accepted',
+          bg: const Color(0xFFE8F5E9),
+          color: const Color(0xFF2E7D32),
+          icon: Icons.check_circle,
         ),
       CandidateCardStatus.pending => (
-          bg: const Color(0xFFF57C00),
-          text: Colors.white,
-          label: 'Pending',
+          bg: const Color(0xFFFFF8E1),
+          color: const Color(0xFFE65100),
+          icon: Icons.access_time_filled,
         ),
       CandidateCardStatus.rejected => (
-          bg: const Color(0xFFC62828),
-          text: Colors.white,
-          label: 'Rejected',
+          bg: const Color(0xFFFFEBEE),
+          color: const Color(0xFFC62828),
+          icon: Icons.cancel,
         ),
     };
 
@@ -1117,231 +1444,252 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     final email = _emailForLink(link, employee);
     final phone = _phoneForLink(link, employee);
     final appliedDate = _formatAppliedDate(link);
-    return Card(
-      elevation: 1,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: AppColors.divider, width: 0.8),
+    final avatarBg = _getAvatarColor(candidateName);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider, width: 0.8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
-      child: InkWell(
-        onTap: () => _openViewDialog(context, link),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Row 1: Header (Avatar + Candidate Name & Subtitle + Solid Pill Status Badge)
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor: hasName
-                        ? AppColors.active.withValues(alpha: 0.15)
-                        : Colors.grey.withValues(alpha: 0.2),
-                    child: Text(
-                      initials,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: hasName ? AppColors.active : AppColors.textSecondary,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          candidateName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: hasName ? AppColors.textPrimary : AppColors.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          '${_candidateId(link)} · $appliedDate',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: statusBadge.bg,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      statusBadge.label,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: statusBadge.text,
-                      ),
-                    ),
-                  ),
-                ],
+              // Left Status Accent Strip
+              Container(
+                width: 4,
+                color: statusBadge.color,
               ),
-
-              const SizedBox(height: 12),
-
-              // Row 2: Contact Info (Email & Phone side-by-side)
-              Wrap(
-                spacing: 16,
-                runSpacing: 4,
-                children: [
-                  Row(
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.email_outlined, size: 15, color: AppColors.textSecondary),
-                      const SizedBox(width: 6),
-                      Text(
-                        email.isEmpty ? 'Not provided' : email,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: email.isEmpty ? AppColors.textSecondary : AppColors.textPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.phone_outlined, size: 15, color: AppColors.textSecondary),
-                      const SizedBox(width: 6),
-                      Text(
-                        phone.isEmpty ? 'Not provided' : phone,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: phone.isEmpty ? AppColors.textSecondary : AppColors.textPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-
-              // Divider Line
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 14),
-                child: Divider(height: 1, thickness: 0.8, color: AppColors.divider),
-              ),
-
-              // Row 3: Action Controls
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  // Left Action: Quiet "✕ Reject" text link
-                  if (normalizedStatus == CandidateCardStatus.pending || normalizedStatus == CandidateCardStatus.accepted)
-                    InkWell(
-                      onTap: () => _setResponseStatus(link, 'Rejected'),
-                      borderRadius: BorderRadius.circular(6),
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text('✕ ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFFE53935))),
-                            Text('Reject', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFFE53935))),
-                          ],
-                        ),
-                      ),
-                    )
-                  else
-                    const SizedBox(),
-
-                  // Right Action: Main Action Pill Button + ⋮ Overflow Menu Icon
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (normalizedStatus == CandidateCardStatus.pending || normalizedStatus == CandidateCardStatus.rejected)
-                        FilledButton.icon(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFF2E7D32),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                          ),
-                          onPressed: () => _setResponseStatus(link, 'Accepted'),
-                          icon: const Text('✓', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
-                          label: const Text('Accept', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                        ),
-
-                      const SizedBox(width: 4),
-
-                      // ⋮ Overflow Menu Button
-                      PopupMenuButton<String>(
-                        icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        itemBuilder: (context) => [
-                          if (normalizedStatus == CandidateCardStatus.accepted)
-                            const PopupMenuItem(
-                              value: 'register',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.person_add_outlined, size: 18, color: Colors.green),
-                                  SizedBox(width: 8),
-                                  Text('Register Candidate', style: TextStyle(fontSize: 13, color: Colors.green, fontWeight: FontWeight.bold)),
-                                ],
+                      // Header Row (Avatar + Candidate Full Name/Subtitle + Status Icon + ⋮ Menu)
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Stack(
+                            children: [
+                              CircleAvatar(
+                                radius: 20,
+                                backgroundColor: avatarBg,
+                                child: Text(
+                                  initials,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: hasName ? AppColors.active : AppColors.textSecondary,
+                                  ),
+                                ),
                               ),
-                            ),
-                          const PopupMenuItem(
-                            value: 'copy_link',
-                            child: Row(
+                              Positioned(
+                                right: 0,
+                                bottom: 0,
+                                child: Container(
+                                  width: 9,
+                                  height: 9,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF00C853),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white, width: 1.5),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(Icons.copy, size: 18, color: AppColors.textPrimary),
-                                SizedBox(width: 8),
-                                Text('Copy Link URL', style: TextStyle(fontSize: 13)),
+                                Text(
+                                  candidateName,
+                                  softWrap: true,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  '${_candidateId(link)} · $appliedDate',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textSecondary,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
-                          const PopupMenuItem(
-                            value: 'view',
+                          const SizedBox(width: 8),
+                          // Status Symbol Icon ONLY (No text!)
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: statusBadge.bg,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              statusBadge.icon,
+                              size: 18,
+                              color: statusBadge.color,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          PopupMenuButton<String>(
+                            icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            itemBuilder: (context) => [
+                              if (normalizedStatus == CandidateCardStatus.accepted)
+                                const PopupMenuItem(
+                                  value: 'register',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.person_add_outlined, size: 18, color: Colors.green),
+                                      SizedBox(width: 8),
+                                      Text('Register Candidate', style: TextStyle(fontSize: 13, color: Colors.green, fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                ),
+                              const PopupMenuItem(
+                                value: 'copy_link',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.copy, size: 18, color: AppColors.textPrimary),
+                                    SizedBox(width: 8),
+                                    Text('Copy Link URL', style: TextStyle(fontSize: 13)),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuItem(
+                                value: 'view',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.visibility_outlined, size: 18, color: AppColors.textPrimary),
+                                    SizedBox(width: 8),
+                                    Text('Full Profile Details', style: TextStyle(fontSize: 13)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            onSelected: (value) {
+                              if (value == 'register') {
+                                GoRouter.of(context).push('/employee/register/new?acceptedLinkId=${link.linkId}');
+                              } else if (value == 'copy_link') {
+                                Clipboard.setData(ClipboardData(text: link.fullUrl));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Registration link copied!'),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              } else if (value == 'view') {
+                                _openViewDialog(context, link);
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // Contact Chips (Email & Phone side-by-side)
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF5F6F8),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                             child: Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.visibility_outlined, size: 18, color: AppColors.textPrimary),
-                                SizedBox(width: 8),
-                                Text('Full Profile Details', style: TextStyle(fontSize: 13)),
+                                const Icon(Icons.email_outlined, size: 13, color: AppColors.textSecondary),
+                                const SizedBox(width: 6),
+                                Text(
+                                  email.isEmpty ? 'No email' : email,
+                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF5F6F8),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.phone_outlined, size: 13, color: AppColors.textSecondary),
+                                const SizedBox(width: 6),
+                                Text(
+                                  phone.isEmpty ? 'No phone' : phone,
+                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                ),
                               ],
                             ),
                           ),
                         ],
-                        onSelected: (value) {
-                          if (value == 'register') {
-                            GoRouter.of(context).push('/employee/register/new?acceptedLinkId=${link.linkId}');
-                          } else if (value == 'copy_link') {
-                            Clipboard.setData(ClipboardData(text: link.fullUrl));
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Registration link copied!'),
-                                behavior: SnackBarBehavior.floating,
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // Full-width View Details Button
+                      InkWell(
+                        onTap: () => _openViewDialog(context, link),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFAFAFE),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFEBF0FF), width: 0.8),
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'View details',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF3E474E),
+                                ),
                               ),
-                            );
-                          } else if (value == 'view') {
-                            _openViewDialog(context, link);
-                          }
-                        },
+                              Icon(
+                                Icons.chevron_right,
+                                size: 18,
+                                color: Color(0xFF3E474E),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                ],
+                ),
               ),
             ],
           ),
@@ -1527,97 +1875,298 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     unawaited(_openViewDialogAsync(context, link));
   }
 
+  Color _getStatusBgColor(String status) {
+    final s = status.trim().toLowerCase();
+    if (s == 'accepted') return const Color(0xFFE8F5E9);
+    if (s == 'rejected') return const Color(0xFFFFEBEE);
+    return const Color(0xFFFFF3E0);
+  }
+
+  Color _getStatusTextColor(String status) {
+    final s = status.trim().toLowerCase();
+    if (s == 'accepted') return const Color(0xFF2E7D32);
+    if (s == 'rejected') return const Color(0xFFC62828);
+    return const Color(0xFFE65100);
+  }
+
   Future<void> _openViewDialogAsync(BuildContext context, RegistrationLink link) async {
     final employees = await ref.read(allEmployeesProvider.future);
     final employee = _employeeForLink(link, employees);
     if (!context.mounted) return;
+
+    final candidateName = _candidateName(link, employee);
+    final displayName = (candidateName.isEmpty || candidateName == '-') ? 'Candidate Details' : candidateName;
+    final candidateId = _candidateId(link);
+    final dateStr = link.submittedDate.isNotEmpty
+        ? link.submittedDate
+        : (link.generatedDate.isNotEmpty ? link.generatedDate : '');
+
     showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(_candidateName(link, employee).isEmpty || _candidateName(link, employee) == '-'
-            ? 'Candidate Details'
-            : _candidateName(link, employee)),
-        content: SingleChildScrollView(
-          child: SizedBox(
-            width: 500,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildViewSection('Basic Info', [
-                  _buildViewItem('Candidate ID', _candidateId(link)),
-                  _buildViewItem('Name', _candidateName(link, employee)),
-                  _buildViewItem('Email', _emailForLink(link, employee)),
-                  _buildViewItem('Phone', _phoneForLink(link, employee)),
-                  _buildViewItem('Gender', employee?.gender ?? ''),
-                  _buildViewItem('DOB', employee?.dob ?? ''),
-                  _buildViewItem('Status', link.linkStatus),
-                ]),
-                const SizedBox(height: 16),
-                _buildViewSection('Address', [
-                  _buildViewItem('Permanent Address', employee?.permanentAddress ?? ''),
-                  _buildViewItem('Permanent City', employee?.permanentCity ?? ''),
-                  _buildViewItem('Permanent Country', employee?.permanentCountry ?? ''),
-                  _buildViewItem('Present Address', employee?.presentAddress ?? ''),
-                  _buildViewItem('Present City', employee?.presentCity ?? ''),
-                  _buildViewItem('Present Country', employee?.presentCountry ?? ''),
-                ]),
-                const SizedBox(height: 16),
-                _buildViewSection('Education', [
-                  _buildViewItem('Education Details', _joinItems(employee?.educationItems.map((e) => '${e.degreeName} | ${e.instituteName} | ${e.result} | ${e.passingYear}') ?? const [])),
-                ]),
-                const SizedBox(height: 16),
-                _buildViewSection('Experience', [
-                  _buildViewItem('Experience Details', _joinItems(employee?.experienceItems.map((e) => '${e.companyName} | ${e.position} | ${e.address} | ${e.workingDuration}') ?? const [])),
-                ]),
-                const SizedBox(height: 16),
-                _buildViewSection('History', [
-                  _buildViewItem('Original DOB', employee?.originalDob ?? ''),
-                  _buildViewItem('Personal Mobile Number', employee?.personalMobile ?? ''),
-                  _buildViewItem('PAN Card Number', employee?.panNumber ?? ''),
-                  _buildViewItem('Passport Number', employee?.passportNumber ?? ''),
-                  _buildViewItem('Driving License Number', employee?.drivingLicenseNumber ?? ''),
-                  _buildViewItem('Health Issues', employee?.healthIssues ?? ''),
-                  _buildViewItem('Emergency Contact', '${employee?.emergencyName ?? ''} ${employee?.emergencyMobile ?? ''}'.trim()),
-                  _buildViewItem('Referred By', '${employee?.referredByName ?? ''} ${employee?.referredByMobile ?? ''}'.trim()),
-                  _buildViewItem('Father Name', employee?.fatherName ?? ''),
-                  _buildViewItem('Mother Name', employee?.motherName ?? ''),
-                  _buildViewItem('Marital Status', employee?.maritalStatus ?? ''),
-                  _buildViewItem('Spouse Name', employee?.spouseName ?? ''),
-                  _buildViewItem('Kids 1 Name', employee?.kids1Name ?? ''),
-                  _buildViewItem('Kids 2 Name', employee?.kids2Name ?? ''),
-                  _buildViewItem('Kids 3 Name', employee?.kids3Name ?? ''),
-                ]),
-                const SizedBox(height: 16),
-                _buildViewSection('Bank Account', [
-                  _buildViewItem('Account Holder Name', employee?.bankAccountHolder ?? ''),
-                  _buildViewItem('Bank Name', employee?.bankName ?? ''),
-                  _buildViewItem('Account Number', employee?.bankAccountNumber ?? ''),
-                  _buildViewItem('IFSC Code', employee?.bankIfsc ?? ''),
-                  _buildViewItem('Branch Name', employee?.bankBranch ?? ''),
-                  _buildViewItem('Account Type', employee?.bankAccountType ?? ''),
-                ]),
-                const SizedBox(height: 16),
-                _buildViewSection('Document', [
-                  _buildViewItem('Documents', _joinItems(employee?.documentItems.map((e) => '${e.documentType} | ${e.documentNumber} | ${e.fileName} | ${e.uploadedDate}') ?? const [])),
-                ]),
-                const SizedBox(height: 16),
-                _buildViewSection('Social Media', [
-                  _buildViewItem('Facebook URL', employee?.facebookUrl ?? ''),
-                  _buildViewItem('Twitter URL', employee?.twitterUrl ?? ''),
-                  _buildViewItem('LinkedIn URL', employee?.linkedinUrl ?? ''),
-                  _buildViewItem('Google URL', employee?.googleUrl ?? ''),
-                ]),
-              ],
-            ),
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        child: Container(
+          width: 540,
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.85,
+          ),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Top Header with Category Subtitle & Close X Button
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Candidate details',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          displayName,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () => Navigator.of(context).pop(),
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFF0F4F8),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.close,
+                        size: 18,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Profile Summary Header Card
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E8F0), width: 0.8),
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 22,
+                      backgroundColor: AppColors.active,
+                      child: Text(
+                        _getInitials(displayName),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            displayName,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '$candidateId${dateStr.isNotEmpty ? " · $dateStr" : ""}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _getStatusBgColor(link.linkStatus),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        link.linkStatus.isNotEmpty ? link.linkStatus : 'Pending',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: _getStatusTextColor(link.linkStatus),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // Scrollable Details Sections
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    children: [
+                      _buildModernViewSection(
+                        title: 'Contact Information',
+                        icon: Icons.contact_mail_outlined,
+                        items: [
+                          _buildModernViewItem('Email', _emailForLink(link, employee), icon: Icons.email_outlined),
+                          _buildModernViewItem('Phone', _phoneForLink(link, employee), icon: Icons.phone_outlined),
+                          _buildModernViewItem('Date of Birth', employee?.dob ?? '', icon: Icons.cake_outlined),
+                          _buildModernViewItem('Gender', employee?.gender ?? ''),
+                          _buildModernViewItem('Candidate ID', _candidateId(link)),
+                          _buildModernViewItem('Status', link.linkStatus),
+                        ],
+                      ),
+                      _buildModernViewSection(
+                        title: 'Address Information',
+                        icon: Icons.location_on_outlined,
+                        items: [
+                          _buildModernViewItem('Permanent Address', employee?.permanentAddress ?? ''),
+                          _buildModernViewItem('Permanent City', employee?.permanentCity ?? ''),
+                          _buildModernViewItem('Permanent Country', employee?.permanentCountry ?? ''),
+                          _buildModernViewItem('Present Address', employee?.presentAddress ?? ''),
+                          _buildModernViewItem('Present City', employee?.presentCity ?? ''),
+                          _buildModernViewItem('Present Country', employee?.presentCountry ?? ''),
+                        ],
+                      ),
+                      _buildModernViewSection(
+                        title: 'Education Details',
+                        icon: Icons.school_outlined,
+                        items: [
+                          _buildModernViewItem(
+                            'Education History',
+                            _joinItems(employee?.educationItems.map((e) => '${e.degreeName} | ${e.instituteName} | ${e.result} | ${e.passingYear}') ?? const []),
+                          ),
+                        ],
+                      ),
+                      _buildModernViewSection(
+                        title: 'Work Experience',
+                        icon: Icons.work_outline_rounded,
+                        items: [
+                          _buildModernViewItem(
+                            'Experience History',
+                            _joinItems(employee?.experienceItems.map((e) => '${e.companyName} | ${e.position} | ${e.address} | ${e.workingDuration}') ?? const []),
+                          ),
+                        ],
+                      ),
+                      _buildModernViewSection(
+                        title: 'Personal & History',
+                        icon: Icons.badge_outlined,
+                        items: [
+                          _buildModernViewItem('Original DOB', employee?.originalDob ?? ''),
+                          _buildModernViewItem('Personal Mobile Number', employee?.personalMobile ?? ''),
+                          _buildModernViewItem('PAN Card Number', employee?.panNumber ?? ''),
+                          _buildModernViewItem('Passport Number', employee?.passportNumber ?? ''),
+                          _buildModernViewItem('Driving License Number', employee?.drivingLicenseNumber ?? ''),
+                          _buildModernViewItem('Health Issues', employee?.healthIssues ?? ''),
+                          _buildModernViewItem('Emergency Contact', '${employee?.emergencyName ?? ''} ${employee?.emergencyMobile ?? ''}'.trim()),
+                          _buildModernViewItem('Referred By', '${employee?.referredByName ?? ''} ${employee?.referredByMobile ?? ''}'.trim()),
+                          _buildModernViewItem('Father Name', employee?.fatherName ?? ''),
+                          _buildModernViewItem('Mother Name', employee?.motherName ?? ''),
+                          _buildModernViewItem('Marital Status', employee?.maritalStatus ?? ''),
+                          _buildModernViewItem('Spouse Name', employee?.spouseName ?? ''),
+                          _buildModernViewItem('Kids 1 Name', employee?.kids1Name ?? ''),
+                          _buildModernViewItem('Kids 2 Name', employee?.kids2Name ?? ''),
+                          _buildModernViewItem('Kids 3 Name', employee?.kids3Name ?? ''),
+                        ],
+                      ),
+                      _buildModernViewSection(
+                        title: 'Bank Account Details',
+                        icon: Icons.account_balance_outlined,
+                        items: [
+                          _buildModernViewItem('Account Holder Name', employee?.bankAccountHolder ?? ''),
+                          _buildModernViewItem('Bank Name', employee?.bankName ?? ''),
+                          _buildModernViewItem('Account Number', employee?.bankAccountNumber ?? ''),
+                          _buildModernViewItem('IFSC Code', employee?.bankIfsc ?? ''),
+                          _buildModernViewItem('Branch Name', employee?.bankBranch ?? ''),
+                          _buildModernViewItem('Account Type', employee?.bankAccountType ?? ''),
+                        ],
+                      ),
+                      _buildModernViewSection(
+                        title: 'Documents',
+                        icon: Icons.folder_open_outlined,
+                        items: [
+                          _buildModernViewItem(
+                            'Uploaded Documents',
+                            _joinItems(employee?.documentItems.map((e) => '${e.documentType} | ${e.documentNumber} | ${e.fileName} | ${e.uploadedDate}') ?? const []),
+                          ),
+                        ],
+                      ),
+                      _buildModernViewSection(
+                        title: 'Social Media',
+                        icon: Icons.public_outlined,
+                        items: [
+                          _buildModernViewItem('Facebook URL', employee?.facebookUrl ?? ''),
+                          _buildModernViewItem('Twitter URL', employee?.twitterUrl ?? ''),
+                          _buildModernViewItem('LinkedIn URL', employee?.linkedinUrl ?? ''),
+                          _buildModernViewItem('Google URL', employee?.googleUrl ?? ''),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Bottom Close Button (No Accept/Reject buttons)
+              SizedBox(
+                width: double.infinity,
+                height: 42,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFFCBD5E1)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'Close',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-        ],
       ),
     );
   }
@@ -1673,37 +2222,75 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     return null;
   }
 
-  Widget _buildViewSection(String title, List<Widget> items) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.active),
-        ),
-        const SizedBox(height: 8),
-        ...items,
-      ],
+  Widget _buildModernViewSection({
+    required String title,
+    required IconData icon,
+    required List<Widget> items,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFAFE),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFEBF0FF), width: 0.8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: AppColors.active),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Divider(height: 1, thickness: 0.6, color: Color(0xFFE2E8F0)),
+          const SizedBox(height: 10),
+          ...items,
+        ],
+      ),
     );
   }
 
-  Widget _buildViewItem(String label, String value) {
+  Widget _buildModernViewItem(String label, String value, {IconData? icon}) {
+    final displayValue = value.trim().isEmpty ? '-' : value.trim();
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (icon != null) ...[
+            Icon(icon, size: 14, color: AppColors.textSecondary),
+            const SizedBox(width: 6),
+          ],
           SizedBox(
-            width: 180,
+            width: 160,
             child: Text(
               label,
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
           Expanded(
             child: Text(
-              value.isEmpty ? '-' : value,
-              style: const TextStyle(fontSize: 13, color: AppColors.textPrimary, fontWeight: FontWeight.w500),
+              displayValue,
+              style: TextStyle(
+                fontSize: 13,
+                color: displayValue == '-' ? AppColors.textSecondary : AppColors.textPrimary,
+                fontWeight: displayValue == '-' ? FontWeight.normal : FontWeight.w600,
+              ),
             ),
           ),
         ],

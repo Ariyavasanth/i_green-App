@@ -428,8 +428,8 @@ class _TopBar extends ConsumerWidget {
     final content = SafeArea(
       bottom: false,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        constraints: const BoxConstraints(minHeight: 56),
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 2),
+        constraints: const BoxConstraints(minHeight: 48),
         child: Row(
           children: [
             if (isFormPage)
@@ -459,15 +459,44 @@ class _TopBar extends ConsumerWidget {
                   child: Row(
                     children: [
                       Flexible(
-                        child: Text(
-                          headingText,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1E293B),
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              headingText,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1E293B),
+                              ),
+                            ),
+                            if (currentLocation.startsWith('/responses'))
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 6,
+                                    height: 6,
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFF2E7D32),
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  const Text(
+                                    '78 total responses',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                          ],
                         ),
                       ),
                         if (isAttendanceManagement) ...[
@@ -682,19 +711,9 @@ class _FourTileMenuIcon extends StatelessWidget {
   const _FourTileMenuIcon();
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: 24,
-    height: 24,
-    padding: const EdgeInsets.all(3),
-    child: GridView.count(
-      crossAxisCount: 2,
-      mainAxisSpacing: 4.5,
-      crossAxisSpacing: 4.5,
-      physics: const NeverScrollableScrollPhysics(),
-      children: List.generate(
-        4,
-        (_) => const ColoredBox(color: AppColors.active),
-      ),
-    ),
-  );
+  Widget build(BuildContext context) => const Icon(
+        Icons.menu,
+        size: 24,
+        color: Color(0xFF1E293B),
+      );
 }
