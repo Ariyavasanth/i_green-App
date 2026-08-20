@@ -32,7 +32,9 @@ final employeesProvider = FutureProvider<List<Employee>>(
     final uniqueEmployees = <Employee>[];
     final seenIds = <int>{};
     for (final emp in employees) {
-      if (seenIds.add(emp.id)) {
+      if (!emp.employeeId.startsWith('CAN-') &&
+          emp.status.toLowerCase() != 'draft' &&
+          seenIds.add(emp.id)) {
         uniqueEmployees.add(emp);
       }
     }
@@ -46,7 +48,9 @@ final allEmployeesProvider = FutureProvider<List<Employee>>(
     final uniqueEmployees = <Employee>[];
     final seenIds = <int>{};
     for (final emp in employees) {
-      if (seenIds.add(emp.id)) {
+      if (!emp.employeeId.startsWith('CAN-') &&
+          emp.status.toLowerCase() != 'draft' &&
+          seenIds.add(emp.id)) {
         uniqueEmployees.add(emp);
       }
     }
@@ -54,9 +58,21 @@ final allEmployeesProvider = FutureProvider<List<Employee>>(
   },
 );
 
+final activeResponsesProvider = FutureProvider<List<RegistrationLink>>(
+  (ref) async {
+    final repo = ref.watch(employeeRepositoryProvider);
+    final links = await repo.getRegistrationLinks();
+    return links.where((link) {
+      final status = link.linkStatus.trim().toLowerCase();
+      return status != 'registered' && status != 'converted';
+    }).toList();
+  },
+);
+
 final registrationLinksProvider = FutureProvider<List<RegistrationLink>>(
   (ref) => ref.watch(employeeRepositoryProvider).getRegistrationLinks(),
 );
+
 
 final registrationLinkByIdProvider =
     FutureProvider.family<RegistrationLink?, String>(

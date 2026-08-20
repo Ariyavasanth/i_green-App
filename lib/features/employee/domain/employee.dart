@@ -216,6 +216,8 @@ class Employee {
     this.leaveType = 'As Needed',
     this.leaveAllocationFrequency = 'Monthly',
     this.allowedLeaves = 1.0,
+    this.monthlyPermissionLimitHours = 3.0,
+    this.dailyPermissionLimitHours = 1.0,
     this.effectiveDate = '',
     this.requiresLeaveApproval = true,
     this.companyAssets = '',
@@ -528,6 +530,8 @@ class Employee {
   final String leaveType;
   final String leaveAllocationFrequency;
   final double allowedLeaves;
+  final double monthlyPermissionLimitHours;
+  final double dailyPermissionLimitHours;
   final String effectiveDate;
   final bool requiresLeaveApproval;
   final String companyAssets;
@@ -691,6 +695,8 @@ class Employee {
       'leave_type': leaveType,
       'leave_allocation_frequency': leaveAllocationFrequency,
       'allowed_leaves': allowedLeaves,
+      'monthly_permission_limit_hours': monthlyPermissionLimitHours,
+      'daily_permission_limit_hours': dailyPermissionLimitHours,
       'effective_date': effectiveDate,
       'requires_leave_approval': requiresLeaveApproval ? 1 : 0,
       'company_assets': companyAssets,
@@ -749,7 +755,7 @@ class Employee {
       permanentAddress: map['permanent_address'] as String? ?? '',
       permanentCity: map['permanent_city'] as String? ?? '',
       permanentCountry: map['permanent_country'] as String? ?? 'India',
-      sameAsPermanent: (map['same_as_permanent'] as int? ?? 0) == 1,
+      sameAsPermanent: map['same_as_permanent'] == 1 || map['same_as_permanent'] == true,
       presentAddress: map['present_address'] as String? ?? '',
       presentCity: map['present_city'] as String? ?? '',
       presentCountry: map['present_country'] as String? ?? 'India',
@@ -795,7 +801,7 @@ class Employee {
       linkedinUrl: map['linkedin_url'] as String? ?? '',
       googleUrl: map['google_url'] as String? ?? '',
       personalHistoryDetails: map['personal_history_details'] as String? ?? '',
-      hasCriminalCases: map['has_criminal_cases'] == true || map['has_criminal_cases'] == 1,
+      hasCriminalCases: map['has_criminal_cases'] == 1 || map['has_criminal_cases'] == true,
       criminalCaseDetails: map['criminal_case_details'] as String? ?? '',
       salaryType: map['salary_type'] as String? ?? 'Monthly',
       salaryBasic: (map['salary_basic'] as num?)?.toDouble() ?? 0.0,
@@ -823,6 +829,8 @@ class Employee {
       leaveType: map['leave_type'] as String? ?? 'As Needed',
       leaveAllocationFrequency: map['leave_allocation_frequency'] as String? ?? 'Monthly',
       allowedLeaves: (map['allowed_leaves'] as num?)?.toDouble() ?? 1.0,
+      monthlyPermissionLimitHours: (map['monthly_permission_limit_hours'] as num?)?.toDouble() ?? 3.0,
+      dailyPermissionLimitHours: (map['daily_permission_limit_hours'] as num?)?.toDouble() ?? 1.0,
       effectiveDate: map['effective_date'] as String? ?? '',
       requiresLeaveApproval: () {
         final val = map['requires_leave_approval'];

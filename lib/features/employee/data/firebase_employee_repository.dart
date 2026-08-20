@@ -387,10 +387,24 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         candMap[resp.candidateId] = resp;
       }
 
+      final now = DateTime.now();
+
       for (final doc in snapshot.docs) {
         final data = Map<String, dynamic>.from(doc.data());
         final linkId = (data['link_id']?.toString() ?? doc.id).trim();
         data['link_id'] = linkId.isNotEmpty ? linkId : doc.id;
+
+        final link = RegistrationLink.fromMap(data);
+        final statusLower = link.linkStatus.trim().toLowerCase();
+
+        // Automatically delete pending registration links from Firebase if expired
+        if (statusLower == 'pending' && link.expiryDate.isNotEmpty) {
+          final expiry = DateTime.tryParse(link.expiryDate);
+          if (expiry != null && now.isAfter(expiry)) {
+            await doc.reference.delete();
+            continue;
+          }
+        }
 
         final cand = candMap[linkId] ?? candMap[data['employee_id']?.toString() ?? ''];
         if (cand != null) {
@@ -402,9 +416,9 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
           }
         }
 
-        final link = RegistrationLink.fromMap(data);
         links.add(link);
       }
+
 
       for (final doc in candSnapshot.docs) {
         final cand = CandidateResponse.fromMap(doc.data());
@@ -441,8 +455,17 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     try {
       final doc = await _registrationLinksRef.doc(linkId).get();
       if (doc.exists && doc.data() != null) {
-        return RegistrationLink.fromMap(doc.data()!);
+        final link = RegistrationLink.fromMap(doc.data()!);
+        if (link.linkStatus.trim().toLowerCase() == 'pending' && link.expiryDate.isNotEmpty) {
+          final expiry = DateTime.tryParse(link.expiryDate);
+          if (expiry != null && DateTime.now().isAfter(expiry)) {
+            await doc.reference.delete();
+            return null;
+          }
+        }
+        return link;
       }
+
 
       final query = await _registrationLinksRef
           .where('link_id', isEqualTo: linkId)
@@ -616,6 +639,45 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       return [];
     }
   }
+
+  @override
+  Future<Employee> submitCandidateRegistration({
+    required String linkId,
+    required Employee candidateData,
+  }) async {
+    return submitEmployeeRegistration(
+      linkId: linkId,
+      employeeData: candidateData,
+      isSubmit: true,
+    );
+  }
+
+  @override
+  Future<Employee> convertCandidateToEmployee({
+    required String linkId,
+    required Employee employeeData,
+  }) async {
+    final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+    final empId = (employeeData.employeeId.isNotEmpty && employeeData.employeeId.startsWith('EMP-'))
+        ? employeeData.employeeId
+        : 'EMP-${timestamp.substring(timestamp.length - 4)}';
+
+    final activeEmployee = employeeData.copyWith(
+      employeeId: empId,
+      status: 'Active',
+      userType: employeeData.userType.isEmpty ? 'EMPLOYEE' : employeeData.userType,
+    );
+
+    final savedEmployee = await addEmployee(activeEmployee);
+
+    await updateRegistrationLinkStatus(
+      linkId: linkId,
+      linkStatus: 'Registered',
+    );
+
+    return savedEmployee;
+  }
+
 
   /// Generates the next CAN-XXXX candidate ID for registration form submissions.
   /// This sequence is independent from the EMP-XXXX employee ID sequence.

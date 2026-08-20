@@ -8,6 +8,7 @@ import '../domain/leave_repository.dart';
 import '../domain/leave_balance.dart';
 import '../domain/leave_type.dart';
 import '../domain/salary_calculation.dart';
+import '../../employee/domain/employee.dart';
 
 class SqliteLeaveRepository implements LeaveRepository {
   static Database? _database;
@@ -296,6 +297,10 @@ class SqliteLeaveRepository implements LeaveRepository {
       throw Exception('Only up to 1 hour of permission can be taken per day.');
     }
     final requestDate = _parsePermissionDate(request.fromDate);
+    final allowance = await getPermissionAllowance(request.employeeId, requestDate);
+    if (requestedHours <= 0 || requestedHours > allowance.dailyLimitHours + 0.0001) {
+      throw Exception('Only up to ${allowance.dailyLimitHours.toStringAsFixed(0)} hour(s) of permission can be taken per day.');
+    }
     final requests = await getLeaveRequests(request.employeeId);
     final active = requests.where((item) =>
         item.leaveType.toLowerCase().startsWith('permission') &&
@@ -303,12 +308,11 @@ class SqliteLeaveRepository implements LeaveRepository {
     final usedToday = active
         .where((item) => item.fromDate == request.fromDate)
         .fold<double>(0, (sum, item) => sum + item.numDays * 8);
-    if (usedToday + requestedHours > 1.0001) {
-      throw Exception('The 1-hour permission limit for this day has already been used.');
+    if (usedToday + requestedHours > allowance.dailyLimitHours + 0.0001) {
+      throw Exception('The ${allowance.dailyLimitHours.toStringAsFixed(0)}-hour permission limit for this day has already been used.');
     }
-    final allowance = await getPermissionAllowance(request.employeeId, requestDate);
     if (allowance.usedHours + requestedHours > allowance.monthlyLimitHours + 0.0001) {
-      throw Exception('Only 3 hours of permission are available per month.');
+      throw Exception('Only ${allowance.monthlyLimitHours.toStringAsFixed(0)} hours of permission are available per month.');
     }
   }
 
@@ -322,6 +326,18 @@ class SqliteLeaveRepository implements LeaveRepository {
 
   @override
   Future<PermissionAllowance> getPermissionAllowance(int employeeId, DateTime month) async {
+    double monthlyLimit = 3.0;
+    double dailyLimit = 1.0;
+    try {
+      final db = await database;
+      final maps = await db.query('employees', where: 'id = ?', whereArgs: [employeeId], limit: 1);
+      if (maps.isNotEmpty) {
+        final emp = Employee.fromMap(maps.first);
+        monthlyLimit = emp.monthlyPermissionLimitHours;
+        dailyLimit = emp.dailyPermissionLimitHours;
+      }
+    } catch (_) {}
+
     final requests = await getLeaveRequests(employeeId);
     final used = requests.where((item) {
       if (!item.leaveType.toLowerCase().startsWith('permission') ||
@@ -332,8 +348,8 @@ class SqliteLeaveRepository implements LeaveRepository {
       return date.year == month.year && date.month == month.month;
     }).fold<double>(0, (sum, item) => sum + item.numDays * 8);
     return PermissionAllowance(
-      monthlyLimitHours: 3,
-      dailyLimitHours: 1,
+      monthlyLimitHours: monthlyLimit,
+      dailyLimitHours: dailyLimit,
       usedHours: used,
     );
   }

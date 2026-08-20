@@ -420,18 +420,75 @@ class _MyLeaveRequestsPageState extends ConsumerState<MyLeaveRequestsPage> {
     final statusColor = _getStatusColor(req.status);
     final isPermission = req.leaveType.toLowerCase().startsWith('permission');
 
+    String tagText = 'LEAVE';
+    Color tagBg = const Color(0xFFF0FDF4);
+    Color tagColor = const Color(0xFF15803D);
+    Color iconBg = const Color(0xFFDCFCE7);
+    Color iconColor = const Color(0xFF16A34A);
+    IconData leadingIcon = Icons.access_time_filled;
+
+    if (isPermission) {
+      tagText = 'PERMISSION';
+      tagBg = const Color(0xFFEFF6FF);
+      tagColor = const Color(0xFF1D4ED8);
+      iconBg = const Color(0xFFDBEAFE);
+      iconColor = const Color(0xFF2563EB);
+      leadingIcon = Icons.access_time_filled;
+    } else {
+      final typeLower = req.leaveType.toLowerCase();
+      if (typeLower.contains('casual')) {
+        tagText = 'CASUAL LEAVE';
+        tagBg = const Color(0xFFF0FDF4);
+        tagColor = const Color(0xFF15803D);
+        iconBg = const Color(0xFFDCFCE7);
+        iconColor = const Color(0xFF16A34A);
+        leadingIcon = Icons.access_time_filled;
+      } else if (typeLower.contains('annual')) {
+        tagText = 'ANNUAL LEAVE';
+        tagBg = const Color(0xFFFFF7ED);
+        tagColor = const Color(0xFFC2410C);
+        iconBg = const Color(0xFFFFEDD5);
+        iconColor = const Color(0xFFEA580C);
+        leadingIcon = Icons.access_time_filled;
+      } else if (typeLower.contains('sick')) {
+        tagText = 'SICK LEAVE';
+        tagBg = const Color(0xFFFEF2F2);
+        tagColor = const Color(0xFFB91C1C);
+        iconBg = const Color(0xFFFEE2E2);
+        iconColor = const Color(0xFFDC2626);
+        leadingIcon = Icons.access_time_filled;
+      } else {
+        tagText = req.leaveType.toUpperCase();
+        tagBg = const Color(0xFFF8FAFC);
+        tagColor = const Color(0xFF475569);
+        iconBg = const Color(0xFFF1F5F9);
+        iconColor = const Color(0xFF64748B);
+        leadingIcon = Icons.access_time_filled;
+      }
+    }
+
+    String cardTitle = req.leaveType;
+    if (!isPermission) {
+      cardTitle = '${req.leaveType} (${_formatDurationDisplay(req)})';
+    }
+
+    String dateDisplay = _formatDateStr(req.fromDate);
+    if (req.fromDate != req.toDate && req.toDate.isNotEmpty) {
+      dateDisplay = '${_formatDateStr(req.fromDate)} - ${_formatDateStr(req.toDate)}';
+    }
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -443,94 +500,134 @@ class _MyLeaveRequestsPageState extends ConsumerState<MyLeaveRequestsPage> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: isPermission
-                      ? const Color(0xFF3B82F6).withValues(alpha: 0.12)
-                      : const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                  color: iconBg,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
-                  isPermission ? Icons.access_time : Icons.event_note,
-                  size: 18,
-                  color: isPermission ? const Color(0xFF2563EB) : const Color(0xFF414A51),
-                ),
+                child: Icon(leadingIcon, size: 20, color: iconColor),
               ),
               const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      req.leaveType,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1E293B)),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Submitted: ${_formatDateStr(req.createdAt)}',
-                      style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
-                    ),
-                  ],
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: tagBg,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  tagText,
+                  style: TextStyle(
+                    color: tagColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 10,
+                    letterSpacing: 0.5,
+                  ),
                 ),
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      req.status,
-                      style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12),
-                    ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  req.status,
+                  style: TextStyle(
+                    color: statusColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
                   ),
-                  const SizedBox(width: 4),
-                  IconButton(
-                    constraints: const BoxConstraints(),
-                    padding: const EdgeInsets.all(4),
-                    icon: const Icon(Icons.visibility_outlined, size: 18, color: Color(0xFF64748B)),
-                    tooltip: 'View Details',
-                    onPressed: () => _showViewLeaveDialog(req),
+                ),
+              ),
+              const SizedBox(width: 4),
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_horiz, color: Color(0xFF94A3B8), size: 20),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                onSelected: (val) {
+                  if (val == 'view') {
+                    _showViewLeaveDialog(req);
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'view',
+                    child: Row(
+                      children: [
+                        Icon(Icons.visibility_outlined, size: 16, color: Color(0xFF64748B)),
+                        SizedBox(width: 8),
+                        Text('View Details', style: TextStyle(fontSize: 13)),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ],
           ),
           const SizedBox(height: 12),
+          Text(
+            cardTitle,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1E293B),
+            ),
+          ),
+          const SizedBox(height: 8),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: Text(
-                  '${_formatDateStr(req.fromDate)} → ${_formatDateStr(req.toDate)}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF475569)),
-                ),
-              ),
-              const SizedBox(width: 8),
+              const Icon(Icons.calendar_today_outlined, size: 15, color: Color(0xFF94A3B8)),
+              const SizedBox(width: 6),
               Text(
-                _formatDurationDisplay(req),
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
+                dateDisplay,
+                style: const TextStyle(
                   fontSize: 13,
-                  color: isPermission ? const Color(0xFF2563EB) : const Color(0xFF9CC70A),
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF64748B),
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 6),
           if (req.reason.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              'Reason: ${req.reason}',
-              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+            RichText(
+              text: TextSpan(
+                style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                children: [
+                  const TextSpan(text: 'Reason: ', style: TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF94A3B8))),
+                  TextSpan(text: req.reason, style: const TextStyle(color: Color(0xFF475569), fontWeight: FontWeight.w500)),
+                ],
+              ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
+            const SizedBox(height: 12),
           ],
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Submitted on ${_formatDateStr(req.createdAt)}',
+                style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8), fontStyle: FontStyle.italic),
+              ),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF65A30D),
+                  side: const BorderSide(color: Color(0xFF86EFAC), width: 1.2),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                ),
+                onPressed: () => _showViewLeaveDialog(req),
+                icon: const Icon(Icons.remove_red_eye_outlined, size: 15, color: Color(0xFF65A30D)),
+                label: const Text(
+                  'View Details',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF65A30D)),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

@@ -452,6 +452,8 @@ class EmployeeDetailsDialog extends StatelessWidget {
           _InfoItem('Allocation Frequency', employee.leaveAllocationFrequency),
           _InfoItem('Allowed Leaves', employee.allowedLeaves > 0 ? employee.allowedLeaves.toString() : '-'),
           _InfoItem('Leave Effective Date', employee.effectiveDate),
+          _InfoItem('Monthly Permission Limit', '${employee.monthlyPermissionLimitHours.toStringAsFixed(1)} Hours'),
+          _InfoItem('Daily Permission Limit', '${employee.dailyPermissionLimitHours.toStringAsFixed(1)} Hours'),
         ]),
       ],
     );

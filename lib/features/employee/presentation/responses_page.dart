@@ -274,22 +274,6 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
       onPrimaryAction: () => _openAddLinkDialog(context),
       secondaryActions: [
         AdminToolbarAction(
-          label: 'Refresh',
-          icon: Icons.refresh_rounded,
-          tooltip: 'Refresh Responses',
-          onPressed: () {
-            ref.invalidate(registrationLinksProvider);
-            ref.invalidate(allEmployeesProvider);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Refreshing candidate responses...'),
-                duration: Duration(seconds: 1),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          },
-        ),
-        AdminToolbarAction(
           label: 'Export',
           icon: Icons.file_download_outlined,
           tooltip: 'Export (CSV/PDF)',
@@ -410,43 +394,8 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
           ),
           const SizedBox(width: 8),
           InkWell(
-            onTap: () {
-              ref.invalidate(registrationLinksProvider);
-              ref.invalidate(allEmployeesProvider);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Refreshing candidate responses...'),
-                  duration: Duration(seconds: 1),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            },
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.divider, width: 0.8),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.02),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.refresh_rounded,
-                size: 20,
-                color: AppColors.textPrimary,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          InkWell(
             onTap: () => _openFilterBottomSheet(context, const ['All Statuses', 'Pending', 'Submitted', 'Accepted', 'Rejected']),
+
             borderRadius: BorderRadius.circular(16),
             child: Container(
               width: 44,

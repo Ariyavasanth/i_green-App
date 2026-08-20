@@ -122,3 +122,32 @@ class RegistrationLink {
     );
   }
 }
+
+enum RegistrationStatus {
+  pending,
+  submitted,
+  accepted,
+  rejected,
+  registered,
+}
+
+extension RegistrationStatusX on RegistrationStatus {
+  String get value => switch (this) {
+        RegistrationStatus.pending => 'Pending',
+        RegistrationStatus.submitted => 'Submitted',
+        RegistrationStatus.accepted => 'Accepted',
+        RegistrationStatus.rejected => 'Rejected',
+        RegistrationStatus.registered => 'Registered',
+      };
+
+  static RegistrationStatus fromString(String status) {
+    return switch (status.trim().toLowerCase()) {
+      'submitted' => RegistrationStatus.submitted,
+      'accepted' => RegistrationStatus.accepted,
+      'rejected' => RegistrationStatus.rejected,
+      'registered' || 'converted' => RegistrationStatus.registered,
+      _ => RegistrationStatus.pending,
+    };
+  }
+}
+

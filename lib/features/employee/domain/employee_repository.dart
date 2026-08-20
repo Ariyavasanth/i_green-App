@@ -44,6 +44,15 @@ abstract class EmployeeRepository {
     required Employee employeeData,
     bool isSubmit = true,
   });
+  Future<Employee> submitCandidateRegistration({
+    required String linkId,
+    required Employee candidateData,
+  });
+  Future<Employee> convertCandidateToEmployee({
+    required String linkId,
+    required Employee employeeData,
+  });
+
   Future<CandidateResponse?> getCandidateResponseByLinkId(String linkId);
   Future<CandidateResponse?> getCandidateResponseByCandidateId(String candidateId);
   Future<List<CandidateResponse>> getCandidateResponses();

@@ -6,6 +6,7 @@ import '../domain/leave_balance.dart';
 import '../domain/leave_type.dart';
 import '../domain/salary_calculation.dart';
 import '../domain/permission_allowance.dart';
+import '../../employee/domain/employee.dart';
 
 /// Full Firestore implementation of LeaveRepository.
 /// Collections used:
@@ -254,12 +255,12 @@ class FirebaseLeaveRepository implements LeaveRepository {
     final usedToday = active
         .where((item) => item.fromDate == request.fromDate)
         .fold<double>(0, (sum, item) => sum + item.numDays * 8);
-    if (usedToday + requestedHours > 1.0001) {
-      throw Exception('The 1-hour permission limit for this day has already been used.');
-    }
     final allowance = await getPermissionAllowance(request.employeeId, requestDate);
+    if (usedToday + requestedHours > allowance.dailyLimitHours + 0.0001) {
+      throw Exception('The ${allowance.dailyLimitHours.toStringAsFixed(0)}-hour permission limit for this day has already been used.');
+    }
     if (allowance.usedHours + requestedHours > allowance.monthlyLimitHours + 0.0001) {
-      throw Exception('Only 3 hours of permission are available per month.');
+      throw Exception('Only ${allowance.monthlyLimitHours.toStringAsFixed(0)} hours of permission are available per month.');
     }
   }
 
@@ -273,6 +274,17 @@ class FirebaseLeaveRepository implements LeaveRepository {
 
   @override
   Future<PermissionAllowance> getPermissionAllowance(int employeeId, DateTime month) async {
+    double monthlyLimit = 3.0;
+    double dailyLimit = 1.0;
+    try {
+      final snap = await _employeesRef.where('id', isEqualTo: employeeId).limit(1).get();
+      if (snap.docs.isNotEmpty) {
+        final empData = snap.docs.first.data();
+        monthlyLimit = (empData['monthly_permission_limit_hours'] as num?)?.toDouble() ?? 3.0;
+        dailyLimit = (empData['daily_permission_limit_hours'] as num?)?.toDouble() ?? 1.0;
+      }
+    } catch (_) {}
+
     final requests = await getLeaveRequests(employeeId);
     final used = requests.where((item) {
       if (!item.leaveType.toLowerCase().startsWith('permission') ||
@@ -283,8 +295,8 @@ class FirebaseLeaveRepository implements LeaveRepository {
       return date.year == month.year && date.month == month.month;
     }).fold<double>(0, (sum, item) => sum + item.numDays * 8);
     return PermissionAllowance(
-      monthlyLimitHours: 3,
-      dailyLimitHours: 1,
+      monthlyLimitHours: monthlyLimit,
+      dailyLimitHours: dailyLimit,
       usedHours: used,
     );
   }

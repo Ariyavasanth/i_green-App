@@ -77,6 +77,8 @@ class _EmployeeRegistrationPageState
   String _leaveType = 'As Needed';
   String _leaveAllocationFrequency = 'Monthly';
   final _allowedLeavesController = TextEditingController(text: '1.0');
+  final _monthlyPermissionLimitController = TextEditingController(text: '3.0');
+  final _dailyPermissionLimitController = TextEditingController(text: '1.0');
   final _leaveEffectiveDateController = TextEditingController();
 
   final _siteLatitudeController = TextEditingController();
@@ -375,6 +377,7 @@ class _EmployeeRegistrationPageState
       _reportingManagerTitleController, _adminNameController, _coordinatorNameController,
       _coordinatorPhoneController, _weeklyOffDayController, _inTimeController,
       _outTimeController, _allowedLeavesController,
+      _monthlyPermissionLimitController, _dailyPermissionLimitController,
       _totalSalaryController, _basicPayController, _hraController, _specialAllowanceController,
       _eduAllowanceController, _travelAllowanceController, _otherAllowanceController,
       _pfController, _esiController, _professionalTaxController, _tdsController,
@@ -471,6 +474,8 @@ class _EmployeeRegistrationPageState
     addListenerTo(_outTimeController, 'Job & Admin Details');
     addListenerTo(_requiredWorkingHoursController, 'Job & Admin Details');
     addListenerTo(_allowedLeavesController, 'Job & Admin Details');
+    addListenerTo(_monthlyPermissionLimitController, 'Job & Admin Details');
+    addListenerTo(_dailyPermissionLimitController, 'Job & Admin Details');
 
     // Salary Details Tab
     addListenerTo(_totalSalaryController, 'Salary & Offer Letter');
@@ -600,6 +605,8 @@ class _EmployeeRegistrationPageState
       }
       _leaveAllocationFrequency = emp.leaveAllocationFrequency.isEmpty ? 'Monthly' : emp.leaveAllocationFrequency;
       _allowedLeavesController.text = emp.allowedLeaves.toString();
+      _monthlyPermissionLimitController.text = emp.monthlyPermissionLimitHours > 0 ? emp.monthlyPermissionLimitHours.toString() : '3.0';
+      _dailyPermissionLimitController.text = emp.dailyPermissionLimitHours > 0 ? emp.dailyPermissionLimitHours.toString() : '1.0';
       _leaveEffectiveDateController.text = emp.effectiveDate;
 
       _siteLatitudeController.text = emp.siteLatitude != 0 ? emp.siteLatitude.toStringAsFixed(6) : '';
@@ -853,7 +860,8 @@ class _EmployeeRegistrationPageState
       });
     } else if (widget.linkId.isNotEmpty && widget.linkId != 'new' && widget.linkId != 'edit') {
       _registrationMode = 'candidate';
-      _selectedAcceptedLinkId = widget.linkId;
+      _selectedAcceptedLinkId = null;
+
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         ref.invalidate(allEmployeesProvider);
         ref.invalidate(registrationLinksProvider);
@@ -902,6 +910,8 @@ class _EmployeeRegistrationPageState
     _outTimeController.dispose();
     _weeklyOffDayController.dispose();
     _requiredWorkingHoursController.dispose();
+    _monthlyPermissionLimitController.dispose();
+    _dailyPermissionLimitController.dispose();
     _reportingManagerTitleController.dispose();
     _adminNameController.dispose();
     _coordinatorNameController.dispose();
@@ -1236,6 +1246,8 @@ class _EmployeeRegistrationPageState
         leaveType: _leaveType,
         leaveAllocationFrequency: _leaveType == 'Manual Allocation' ? _leaveAllocationFrequency : '',
         allowedLeaves: _leaveType == 'Manual Allocation' ? (double.tryParse(_allowedLeavesController.text.trim()) ?? 0.0) : 0.0,
+        monthlyPermissionLimitHours: double.tryParse(_monthlyPermissionLimitController.text.trim()) ?? 3.0,
+        dailyPermissionLimitHours: double.tryParse(_dailyPermissionLimitController.text.trim()) ?? 1.0,
         effectiveDate: _leaveEffectiveDateController.text.trim(),
         salaryType: _salaryType,
         salaryTotalCtc: double.tryParse(_totalSalaryController.text.trim().replaceAll(',', '')) ?? 0.0,
@@ -1266,9 +1278,10 @@ class _EmployeeRegistrationPageState
         final updated = employeeData.copyWith(id: targetId);
         await repo.updateEmployee(updated);
         savedEmployee = updated;
-      } else if (_registrationMode == 'accepted_response' || _selectedAcceptedLinkId != null) {
+      } else if (_registrationMode == 'accepted_response' || widget.acceptedLinkId != null || widget.acceptedEmpId != null) {
+
         if (!isSubmit) {
-          // Draft save: preserve candidate record, do not generate EMP- ID or update link status
+          // Draft save: preserve candidate record
           final targetId = _currentEmployee?.id ?? widget.acceptedEmpId ?? 0;
           final updated = employeeData.copyWith(
             id: targetId,
@@ -1284,23 +1297,12 @@ class _EmployeeRegistrationPageState
             savedEmployee = await repo.addEmployee(updated);
           }
         } else {
-          // Final Submit Registration: convert candidate to confirmed Employee with an EMP- ID
-          final imported = employeeData.copyWith(status: 'Active');
-          if (_currentEmployee != null && _currentEmployee!.id != 0) {
-            final updated = imported.copyWith(id: _currentEmployee!.id);
-            await repo.updateEmployee(updated);
-            savedEmployee = updated;
-          } else {
-            savedEmployee = await repo.addEmployee(imported);
-          }
-
-          // Update the RegistrationLink status to 'Converted' strictly on final submit success
-          if (_selectedAcceptedLinkId != null && _selectedAcceptedLinkId!.isNotEmpty) {
-            await repo.updateRegistrationLinkStatus(
-              linkId: _selectedAcceptedLinkId!,
-              linkStatus: 'Converted',
-            );
-          }
+          // Admin conversion mode: Convert Candidate to full Employee with EMP- ID and set status to Registered
+          final linkIdToConvert = _selectedAcceptedLinkId ?? widget.acceptedLinkId ?? widget.linkId;
+          savedEmployee = await repo.convertCandidateToEmployee(
+            linkId: linkIdToConvert,
+            employeeData: employeeData,
+          );
         }
       } else if (widget.linkId == 'new' || widget.linkId.isEmpty) {
         // Manual Add mode
@@ -1312,12 +1314,19 @@ class _EmployeeRegistrationPageState
           savedEmployee = await repo.addEmployee(employeeData);
         }
       } else {
-        // Link-based registration (candidate mode)
-        savedEmployee = await repo.submitEmployeeRegistration(
-          linkId: widget.linkId,
-          employeeData: employeeData,
-          isSubmit: isSubmit,
-        );
+        // Candidate Link submission
+        if (isSubmit) {
+          savedEmployee = await repo.submitCandidateRegistration(
+            linkId: widget.linkId,
+            candidateData: employeeData,
+          );
+        } else {
+          savedEmployee = await repo.submitEmployeeRegistration(
+            linkId: widget.linkId,
+            employeeData: employeeData,
+            isSubmit: false,
+          );
+        }
       }
 
       _currentEmployee = savedEmployee;
@@ -1327,8 +1336,10 @@ class _EmployeeRegistrationPageState
       _isProfileImageRemoved = false;
       ref.invalidate(employeesProvider);
       ref.invalidate(allEmployeesProvider);
+      ref.invalidate(activeResponsesProvider);
       ref.invalidate(registrationLinksProvider);
       ref.invalidate(candidateResponsesProvider);
+
       if (_selectedAcceptedLinkId != null && _selectedAcceptedLinkId!.isNotEmpty) {
         ref.invalidate(registrationLinkByIdProvider(_selectedAcceptedLinkId!));
       }
@@ -2408,6 +2419,35 @@ class _EmployeeRegistrationPageState
                   'Effective Date',
                   _leaveEffectiveDateController,
                   placeholder: 'dd-mm-yyyy',
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Permission Allowance Settings',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF414A51),
+              ),
+            ),
+            const SizedBox(height: 8),
+            _buildRow2or3(
+              isMobile: isMobile,
+              children: [
+                _buildTextField(
+                  'Monthly Permission Limit (Hours)',
+                  _monthlyPermissionLimitController,
+                  placeholder: 'e.g. 3.0 (3 hours/month)',
+                  isNumber: true,
+                  allowDecimal: true,
+                ),
+                _buildTextField(
+                  'Daily Permission Limit (Hours)',
+                  _dailyPermissionLimitController,
+                  placeholder: 'e.g. 1.0 (1 hour/day)',
+                  isNumber: true,
+                  allowDecimal: true,
                 ),
               ],
             ),
@@ -4350,6 +4390,8 @@ class _EmployeeRegistrationPageState
                               _buildPreviewField('Allowed Leaves', _allowedLeavesController.text),
                               _buildPreviewField('Leave Effective Date', _leaveEffectiveDateController.text),
                             ],
+                            _buildPreviewField('Monthly Permission Limit', '${_monthlyPermissionLimitController.text} Hours'),
+                            _buildPreviewField('Daily Permission Limit', '${_dailyPermissionLimitController.text} Hours'),
                           ]),
                           const SizedBox(height: 20),
 

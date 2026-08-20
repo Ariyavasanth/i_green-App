@@ -85,6 +85,56 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     super.dispose();
   }
 
+  Future<void> _cancelRequest(LeaveRequest req, Employee currentEmp) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Cancel Request'),
+        content: const Text('Are you sure you want to cancel this pending leave request?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('No, keep it', style: TextStyle(color: Color(0xFF414A51))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFC62828),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Yes, Cancel', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      try {
+        await ref.read(leaveRepositoryProvider).cancelLeaveRequest(req.id, currentEmp.fullName);
+        ref.invalidate(leaveRequestsProvider(currentEmp.id));
+        ref.invalidate(allLeaveRequestsProvider);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Leave request cancelled successfully'),
+              backgroundColor: Color(0xFF414A51),
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error cancelling request: $e'),
+              backgroundColor: const Color(0xFFC62828),
+            ),
+          );
+        }
+      }
+    }
+  }
+
   String _formatKey(DateTime date) =>
       '${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}';
 
@@ -900,72 +950,92 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       error: (e, _) => Center(child: Text('Error loading leave requests: $e')),
       data: (requests) {
         final filteredRequests = _getFilteredRequests(requests);
-        final totalRequests = requests.length;
-        final pendingCount = requests.where((r) => r.status == 'Pending').length;
-        final approvedCount = requests.where((r) => r.status == 'Approved').length;
+        final now = DateTime.now();
+        final thisMonthRequests = requests.where((r) {
+          final from = _parseKey(r.fromDate);
+          final to = _parseKey(r.toDate) ?? from;
+          if (from == null && to == null) return false;
+          final start = DateTime(now.year, now.month, 1);
+          final end = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
+          return (from != null && !from.isBefore(start) && !from.isAfter(end)) ||
+                 (to != null && !to.isBefore(start) && !to.isAfter(end));
+        }).toList();
 
-        return SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Top Summary Stat Cards Grid
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildLeaveStatCard(
-                      'Total Requests',
-                      '$totalRequests',
-                      Icons.folder_outlined,
-                      const Color(0xFF0288D1),
-                      const Color(0xFFE1F5FE),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildLeaveStatCard(
-                      'Pending Requests',
-                      '$pendingCount',
-                      Icons.hourglass_top_outlined,
-                      const Color(0xFFE65100),
-                      const Color(0xFFFFF3E0),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildLeaveStatCard(
-                      'Approved Leaves',
-                      '$approvedCount',
-                      Icons.check_circle_outline,
-                      const Color(0xFF2E7D32),
-                      const Color(0xFFE8F5E9),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(child: SizedBox.shrink()),
-                ],
-              ),
-              const SizedBox(height: 24),
+        final totalRequests = thisMonthRequests.length;
+        final pendingCount = thisMonthRequests.where((r) => r.status.toLowerCase() == 'pending').length;
+        final approvedCount = thisMonthRequests.where((r) => r.status.toLowerCase() == 'approved').length;
+        final deniedCount = thisMonthRequests.where((r) => r.status.toLowerCase() == 'denied' || r.status.toLowerCase() == 'rejected').length;
 
-              // Header + My Requests Button + Lime Green Apply Leave Button
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        return Stack(
+          children: [
+            SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'My Leave Requests',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
-                  ),
+                  // Top Summary Stat Cards Grid (This Month Details)
                   Row(
                     children: [
+                      Expanded(
+                        child: _buildLeaveStatCard(
+                          'Total Requests',
+                          '$totalRequests',
+                          Icons.folder_outlined,
+                          const Color(0xFF0288D1),
+                          const Color(0xFFE1F5FE),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildLeaveStatCard(
+                          'Pending Requests',
+                          '$pendingCount',
+                          Icons.hourglass_top_outlined,
+                          const Color(0xFFE65100),
+                          const Color(0xFFFFF3E0),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildLeaveStatCard(
+                          'Approved Leaves',
+                          '$approvedCount',
+                          Icons.check_circle_outline,
+                          const Color(0xFF2E7D32),
+                          const Color(0xFFE8F5E9),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildLeaveStatCard(
+                          'Denied Requests',
+                          '$deniedCount',
+                          Icons.cancel_outlined,
+                          const Color(0xFFC62828),
+                          const Color(0xFFFFEBEE),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Header + My Requests Button
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Requests',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                      ),
                       OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
                           foregroundColor: const Color(0xFF414A51),
                           side: const BorderSide(color: Color(0xFFCBD5E1)),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
                         onPressed: () => Navigator.of(context, rootNavigator: true).push(
@@ -979,199 +1049,143 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF9CC70A),
-                          foregroundColor: const Color(0xFF414A51),
-                          elevation: 1,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        onPressed: () => _showApplyLeaveDialog(currentEmp),
-                        icon: const Icon(Icons.add, size: 18),
-                        label: const Text(
-                          'Apply Leave',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                        ),
-                      ),
                     ],
                   ),
-                ],
-              ),
-              const SizedBox(height: 14),
+                  const SizedBox(height: 14),
 
-              // Filter Action Bar: [ All Status ▼ ]  [ 📅 Date ]  [ ⚙ Filters ]
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    // Quick Status Dropdown Pill
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _statusFilter,
-                          isDense: true,
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
-                          items: ['All', 'Pending', 'Approved', 'Denied', 'Cancelled']
-                              .map((st) => DropdownMenuItem(value: st, child: Text(st == 'All' ? 'All Status' : st)))
-                              .toList(),
-                          onChanged: (val) {
-                            if (val != null) {
-                              setState(() => _statusFilter = val);
-                            }
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-
-                    // Date Filter Pill Button
-                    InkWell(
-                      onTap: () => _showDateFilterBottomSheet(),
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: (_filterFromDate != null || _filterToDate != null)
-                              ? const Color(0xFF9CC70A).withValues(alpha: 0.15)
-                              : Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: (_filterFromDate != null || _filterToDate != null)
-                                ? const Color(0xFF9CC70A)
-                                : const Color(0xFFE2E8F0),
+                  // Filter Action Bar: [ All Status ▼ ]  [ 📅 Date ]  [ ⚙ Filters ]
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        // Quick Status Dropdown Pill
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: _statusFilter,
+                              isDense: true,
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                              items: ['All', 'Pending', 'Approved', 'Denied', 'Cancelled']
+                                  .map((st) => DropdownMenuItem(value: st, child: Text(st == 'All' ? 'All Status' : st)))
+                                  .toList(),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() => _statusFilter = val);
+                                }
+                              },
+                            ),
                           ),
                         ),
-                        child: Row(
-                          children: [
-                            Text(
-                              _filterFromDate != null && _filterToDate != null
-                                  ? '${DateFormat('dd MMM').format(_filterFromDate!)} – ${DateFormat('dd MMM').format(_filterToDate!)} 📅'
-                                  : '📅 Date',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
+                        const SizedBox(width: 8),
+
+                        // Date Filter Pill Button
+                        InkWell(
+                          onTap: () => _showDateFilterBottomSheet(),
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: (_filterFromDate != null || _filterToDate != null)
+                                  ? const Color(0xFF9CC70A).withValues(alpha: 0.15)
+                                  : Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
                                 color: (_filterFromDate != null || _filterToDate != null)
-                                    ? const Color(0xFF414A51)
-                                    : const Color(0xFF64748B),
+                                    ? const Color(0xFF9CC70A)
+                                    : const Color(0xFFE2E8F0),
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-
-                    // Advanced Filters Button
-                    InkWell(
-                      onTap: () => _showAdvancedFiltersBottomSheet(),
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: _activeFilterCount > 0
-                              ? const Color(0xFF414A51)
-                              : Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: _activeFilterCount > 0 ? const Color(0xFF414A51) : const Color(0xFFE2E8F0),
+                            child: Row(
+                              children: [
+                                Text(
+                                  _filterFromDate != null && _filterToDate != null
+                                      ? '${DateFormat('dd MMM').format(_filterFromDate!)} – ${DateFormat('dd MMM').format(_filterToDate!)} 📅'
+                                      : '📅 Date',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: (_filterFromDate != null || _filterToDate != null)
+                                        ? const Color(0xFF414A51)
+                                        : const Color(0xFF64748B),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.tune,
-                              size: 16,
-                              color: _activeFilterCount > 0 ? Colors.white : const Color(0xFF64748B),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Filters',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: _activeFilterCount > 0 ? Colors.white : const Color(0xFF64748B),
+                        const SizedBox(width: 8),
+
+                        // Advanced Filters Button
+                        InkWell(
+                          onTap: () => _showAdvancedFiltersBottomSheet(),
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: _activeFilterCount > 0
+                                  ? const Color(0xFF414A51)
+                                  : Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: _activeFilterCount > 0 ? const Color(0xFF414A51) : const Color(0xFFE2E8F0),
                               ),
                             ),
-                            if (_activeFilterCount > 0) ...[
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFF9CC70A),
-                                  shape: BoxShape.circle,
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.tune,
+                                  size: 16,
+                                  color: _activeFilterCount > 0 ? Colors.white : const Color(0xFF64748B),
                                 ),
-                                child: Text(
-                                  '$_activeFilterCount',
-                                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Filters',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: _activeFilterCount > 0 ? Colors.white : const Color(0xFF64748B),
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ],
+                                if (_activeFilterCount > 0) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFF9CC70A),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Text(
+                                      '$_activeFilterCount',
+                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // "Showing X requests" count label
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Showing ${filteredRequests.length} request${filteredRequests.length == 1 ? '' : 's'}',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
                   ),
-                  if (_activeFilterCount > 0)
-                    InkWell(
-                      onTap: () {
-                        setState(() {
-                          _statusFilter = 'All';
-                          _requestTypeFilter = 'All';
-                          _leaveTypeFilter = 'All';
-                          _filterFromDate = null;
-                          _filterToDate = null;
-                        });
-                      },
-                      child: const Text(
-                        'Reset Filters',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFC62828)),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 12),
+                  const SizedBox(height: 12),
 
-              // Filtered Recent Leave Requests List
-              if (filteredRequests.isEmpty)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: Column(
+                  // "Showing X requests" count label
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'No leave requests found matching selected filters.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Color(0xFF64748B)),
+                      Text(
+                        'Showing ${filteredRequests.length} request${filteredRequests.length == 1 ? '' : 's'}',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
                       ),
-                      if (_activeFilterCount > 0) ...[
-                        const SizedBox(height: 12),
-                        TextButton(
-                          onPressed: () {
+                      if (_activeFilterCount > 0)
+                        InkWell(
+                          onTap: () {
                             setState(() {
                               _statusFilter = 'All';
                               _requestTypeFilter = 'All';
@@ -1181,20 +1195,75 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                             });
                           },
                           child: const Text(
-                            'Reset All Filters',
-                            style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2E7D32)),
+                            'Reset Filters',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFC62828)),
                           ),
                         ),
-                      ],
                     ],
                   ),
-                )
-              else
-                Column(
-                  children: filteredRequests.map((req) => _buildLeaveActivityCard(req, currentEmp)).toList(),
+                  const SizedBox(height: 12),
+
+                  // Filtered Recent Leave Requests List
+                  if (filteredRequests.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Column(
+                        children: [
+                          const Text(
+                            'No leave requests found matching selected filters.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Color(0xFF64748B)),
+                          ),
+                          if (_activeFilterCount > 0) ...[
+                            const SizedBox(height: 12),
+                            TextButton(
+                              onPressed: () {
+                                setState(() {
+                                  _statusFilter = 'All';
+                                  _requestTypeFilter = 'All';
+                                  _leaveTypeFilter = 'All';
+                                  _filterFromDate = null;
+                                  _filterToDate = null;
+                                });
+                              },
+                              child: const Text(
+                                'Reset All Filters',
+                                style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2E7D32)),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    )
+                  else
+                    Column(
+                      children: filteredRequests.map((req) => _buildLeaveActivityCard(req, currentEmp)).toList(),
+                    ),
+                ],
+              ),
+            ),
+            Positioned(
+              bottom: 16,
+              right: 16,
+              child: FloatingActionButton(
+                heroTag: 'apply_leave_fab',
+                backgroundColor: const Color(0xFF9CC70A),
+                foregroundColor: const Color(0xFF414A51),
+                elevation: 4,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
                 ),
-            ],
-          ),
+                onPressed: () => _showApplyLeaveDialog(currentEmp),
+                child: const Icon(Icons.add, size: 26),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -1250,139 +1319,243 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
   Widget _buildLeaveActivityCard(LeaveRequest req, Employee currentEmp) {
     final statusColor = _getStatusColor(req.status);
     final isPermission = req.leaveType.toLowerCase().startsWith('permission');
-    final isPending = req.status == 'Pending';
+    final isPending = req.status.toLowerCase() == 'pending';
 
-    return InkWell(
-      onTap: () {
-        if (isPending) {
-          _showApplyLeaveDialog(currentEmp, existingRequest: req);
-        } else {
-          _showViewLeaveDialog(req);
-        }
-      },
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: isPermission
-                        ? const Color(0xFF3B82F6).withValues(alpha: 0.12)
-                        : const Color(0xFF9CC70A).withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    isPermission ? Icons.access_time : Icons.event_note,
-                    size: 18,
-                    color: isPermission ? const Color(0xFF2563EB) : const Color(0xFF414A51),
+    String tagText = 'LEAVE';
+    Color tagBg = const Color(0xFFF0FDF4);
+    Color tagColor = const Color(0xFF15803D);
+    Color iconBg = const Color(0xFFDCFCE7);
+    Color iconColor = const Color(0xFF16A34A);
+    IconData leadingIcon = Icons.access_time_filled;
+
+    if (isPermission) {
+      tagText = 'PERMISSION';
+      tagBg = const Color(0xFFEFF6FF);
+      tagColor = const Color(0xFF1D4ED8);
+      iconBg = const Color(0xFFDBEAFE);
+      iconColor = const Color(0xFF2563EB);
+      leadingIcon = Icons.access_time_filled;
+    } else {
+      final typeLower = req.leaveType.toLowerCase();
+      if (typeLower.contains('casual')) {
+        tagText = 'CASUAL LEAVE';
+        tagBg = const Color(0xFFF0FDF4);
+        tagColor = const Color(0xFF15803D);
+        iconBg = const Color(0xFFDCFCE7);
+        iconColor = const Color(0xFF16A34A);
+        leadingIcon = Icons.access_time_filled;
+      } else if (typeLower.contains('annual')) {
+        tagText = 'ANNUAL LEAVE';
+        tagBg = const Color(0xFFFFF7ED);
+        tagColor = const Color(0xFFC2410C);
+        iconBg = const Color(0xFFFFEDD5);
+        iconColor = const Color(0xFFEA580C);
+        leadingIcon = Icons.access_time_filled;
+      } else if (typeLower.contains('sick')) {
+        tagText = 'SICK LEAVE';
+        tagBg = const Color(0xFFFEF2F2);
+        tagColor = const Color(0xFFB91C1C);
+        iconBg = const Color(0xFFFEE2E2);
+        iconColor = const Color(0xFFDC2626);
+        leadingIcon = Icons.access_time_filled;
+      } else {
+        tagText = req.leaveType.toUpperCase();
+        tagBg = const Color(0xFFF8FAFC);
+        tagColor = const Color(0xFF475569);
+        iconBg = const Color(0xFFF1F5F9);
+        iconColor = const Color(0xFF64748B);
+        leadingIcon = Icons.access_time_filled;
+      }
+    }
+
+    String cardTitle = req.leaveType;
+    if (!isPermission) {
+      cardTitle = '${req.leaveType} (${_formatDurationDisplay(req)})';
+    }
+
+    String dateDisplay = _formatDateStr(req.fromDate);
+    if (req.fromDate != req.toDate && req.toDate.isNotEmpty) {
+      dateDisplay = '${_formatDateStr(req.fromDate)} - ${_formatDateStr(req.toDate)}';
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(leadingIcon, size: 20, color: iconColor),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: tagBg,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  tagText,
+                  style: TextStyle(
+                    color: tagColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 10,
+                    letterSpacing: 0.5,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        req.leaveType,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1E293B)),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Submitted: ${_formatDateStr(req.createdAt)}',
-                        style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
-                      ),
-                    ],
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  req.status,
+                  style: TextStyle(
+                    color: statusColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
                   ),
                 ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        req.status,
-                        style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12),
+              ),
+              const SizedBox(width: 4),
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_horiz, color: Color(0xFF94A3B8), size: 20),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                onSelected: (val) {
+                  if (val == 'view') {
+                    _showViewLeaveDialog(req);
+                  } else if (val == 'edit' && isPending) {
+                    _showApplyLeaveDialog(currentEmp, existingRequest: req);
+                  } else if (val == 'cancel' && isPending) {
+                    _cancelRequest(req, currentEmp);
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'view',
+                    child: Row(
+                      children: [
+                        Icon(Icons.visibility_outlined, size: 16, color: Color(0xFF64748B)),
+                        SizedBox(width: 8),
+                        Text('View Details', style: TextStyle(fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                  if (isPending) ...[
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_outlined, size: 16, color: Color(0xFFE65100)),
+                          SizedBox(width: 8),
+                          Text('Edit Request', style: TextStyle(fontSize: 13)),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    if (isPending)
-                      IconButton(
-                        constraints: const BoxConstraints(),
-                        padding: const EdgeInsets.all(4),
-                        icon: const Icon(Icons.edit_outlined, size: 18, color: Color(0xFFE65100)),
-                        tooltip: 'Edit Request',
-                        onPressed: () => _showApplyLeaveDialog(currentEmp, existingRequest: req),
-                      )
-                    else
-                      IconButton(
-                        constraints: const BoxConstraints(),
-                        padding: const EdgeInsets.all(4),
-                        icon: const Icon(Icons.visibility_outlined, size: 18, color: Color(0xFF64748B)),
-                        tooltip: 'View Details',
-                        onPressed: () => _showViewLeaveDialog(req),
+                    const PopupMenuItem(
+                      value: 'cancel',
+                      child: Row(
+                        children: [
+                          Icon(Icons.cancel_outlined, size: 16, color: Color(0xFFC62828)),
+                          SizedBox(width: 8),
+                          Text('Cancel Request', style: TextStyle(fontSize: 13, color: Color(0xFFC62828))),
+                        ],
                       ),
+                    ),
                   ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    '${_formatDateStr(req.fromDate)} → ${_formatDateStr(req.toDate)}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF475569)),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  _formatDurationDisplay(req),
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                    color: isPermission ? const Color(0xFF2563EB) : const Color(0xFF9CC70A),
-                  ),
-                ),
-              ],
-            ),
-            if (req.reason.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(
-                'Reason: ${req.reason}',
-                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+                ],
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            cardTitle,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1E293B),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(Icons.calendar_today_outlined, size: 15, color: Color(0xFF94A3B8)),
+              const SizedBox(width: 6),
+              Text(
+                dateDisplay,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          if (req.reason.isNotEmpty) ...[
+            RichText(
+              text: TextSpan(
+                style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                children: [
+                  const TextSpan(text: 'Reason: ', style: TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF94A3B8))),
+                  TextSpan(text: req.reason, style: const TextStyle(color: Color(0xFF475569), fontWeight: FontWeight.w500)),
+                ],
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 12),
           ],
-        ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Submitted on ${_formatDateStr(req.createdAt)}',
+                style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8), fontStyle: FontStyle.italic),
+              ),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF65A30D),
+                  side: const BorderSide(color: Color(0xFF86EFAC), width: 1.2),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                ),
+                onPressed: () => _showViewLeaveDialog(req),
+                icon: const Icon(Icons.remove_red_eye_outlined, size: 15, color: Color(0xFF65A30D)),
+                label: const Text(
+                  'View Details',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF65A30D)),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -2328,6 +2501,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
 
             return AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
               title: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -2343,7 +2517,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
               ),
               content: SingleChildScrollView(
                 child: SizedBox(
-                  width: 450,
+                  width: math.min(450.0, MediaQuery.of(context).size.width * 0.85),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -2352,7 +2526,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                       const Text('Request Type', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
                       const SizedBox(height: 6),
                       DropdownButtonFormField<String>(
-                        initialValue: requestType,
+                        value: requestType,
                         decoration: InputDecoration(
                           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -2376,7 +2550,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                         const Text('Leave Type', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
                         const SizedBox(height: 6),
                         DropdownButtonFormField<String>(
-                          initialValue: (activeLeaveTypes.isNotEmpty && activeLeaveTypes.any((t) => t.name == _selectedLeaveType))
+                          value: (activeLeaveTypes.isNotEmpty && activeLeaveTypes.any((t) => t.name == _selectedLeaveType))
                               ? _selectedLeaveType
                               : (activeLeaveTypes.isNotEmpty ? activeLeaveTypes.first.name : _selectedLeaveType),
                           decoration: InputDecoration(
@@ -2434,19 +2608,23 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                                       }
                                     },
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                                       decoration: BoxDecoration(
                                         border: Border.all(color: const Color(0xFFCBD5E1)),
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
-                                          Text(
-                                            _fromDate != null ? DateFormat('dd MMM yyyy').format(_fromDate!) : 'Select Date',
-                                            style: const TextStyle(fontSize: 13, color: Color(0xFF414A51)),
+                                          Expanded(
+                                            child: Text(
+                                              _fromDate != null ? DateFormat('dd MMM yyyy').format(_fromDate!) : 'Select Date',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(fontSize: 12, color: Color(0xFF414A51)),
+                                            ),
                                           ),
-                                          const Icon(Icons.calendar_today, size: 16, color: Color(0xFF64748B)),
+                                          const SizedBox(width: 2),
+                                          const Icon(Icons.calendar_today, size: 14, color: Color(0xFF64748B)),
                                         ],
                                       ),
                                     ),
@@ -2454,7 +2632,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 8),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2476,19 +2654,23 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                                       }
                                     },
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                                       decoration: BoxDecoration(
                                         border: Border.all(color: const Color(0xFFCBD5E1)),
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
-                                          Text(
-                                            _toDate != null ? DateFormat('dd MMM yyyy').format(_toDate!) : 'Select Date',
-                                            style: const TextStyle(fontSize: 13, color: Color(0xFF414A51)),
+                                          Expanded(
+                                            child: Text(
+                                              _toDate != null ? DateFormat('dd MMM yyyy').format(_toDate!) : 'Select Date',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(fontSize: 12, color: Color(0xFF414A51)),
+                                            ),
                                           ),
-                                          const Icon(Icons.calendar_today, size: 16, color: Color(0xFF64748B)),
+                                          const SizedBox(width: 2),
+                                          const Icon(Icons.calendar_today, size: 14, color: Color(0xFF64748B)),
                                         ],
                                       ),
                                     ),
@@ -2502,8 +2684,8 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                         Align(
                           alignment: Alignment.centerRight,
                           child: Text(
-                            'Duration: ${days.toStringAsFixed(0)} Day${days > 1 ? 's' : ''}',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF9CC70A)),
+                            'Duration: ${days == 1 ? '1 Day' : '$days Days'}',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF65A30D)),
                           ),
                         ),
                         const SizedBox(height: 16),

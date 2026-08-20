@@ -157,6 +157,8 @@ class SqliteEmployeeRepository implements EmployeeRepository {
         leave_type TEXT,
         leave_allocation_frequency TEXT,
         allowed_leaves REAL,
+        monthly_permission_limit_hours REAL DEFAULT 3.0,
+        daily_permission_limit_hours REAL DEFAULT 1.0,
         effective_date TEXT,
         requires_leave_approval INTEGER DEFAULT 1,
         required_working_hours REAL DEFAULT 9.0,
@@ -270,6 +272,8 @@ class SqliteEmployeeRepository implements EmployeeRepository {
       'leave_type': 'TEXT',
       'leave_allocation_frequency': 'TEXT',
       'allowed_leaves': 'REAL',
+      'monthly_permission_limit_hours': 'REAL DEFAULT 3.0',
+      'daily_permission_limit_hours': 'REAL DEFAULT 1.0',
       'effective_date': 'TEXT',
       'in_time': 'TEXT',
       'out_time': 'TEXT',
@@ -496,7 +500,25 @@ class SqliteEmployeeRepository implements EmployeeRepository {
   Future<List<RegistrationLink>> getRegistrationLinks() async {
     final db = await database;
     final maps = await db.query('registration_links', orderBy: 'id DESC');
-    final links = maps.map((map) => RegistrationLink.fromMap(map)).toList();
+    final rawLinks = maps.map((map) => RegistrationLink.fromMap(map)).toList();
+    final links = <RegistrationLink>[];
+    final now = DateTime.now();
+
+    for (final link in rawLinks) {
+      if (link.linkStatus.trim().toLowerCase() == 'pending' && link.expiryDate.isNotEmpty) {
+        final expiry = DateTime.tryParse(link.expiryDate);
+        if (expiry != null && now.isAfter(expiry)) {
+          await db.delete(
+            'registration_links',
+            where: 'id = ? OR link_id = ?',
+            whereArgs: [link.id, link.linkId],
+          );
+          continue;
+        }
+      }
+      links.add(link);
+    }
+
 
     try {
       final responsesMaps = await db.query('candidate_responses');
@@ -539,8 +561,21 @@ class SqliteEmployeeRepository implements EmployeeRepository {
       whereArgs: [linkId, linkId],
     );
     if (maps.isNotEmpty) {
-      return RegistrationLink.fromMap(maps.first);
+      final link = RegistrationLink.fromMap(maps.first);
+      if (link.linkStatus.trim().toLowerCase() == 'pending' && link.expiryDate.isNotEmpty) {
+        final expiry = DateTime.tryParse(link.expiryDate);
+        if (expiry != null && DateTime.now().isAfter(expiry)) {
+          await db.delete(
+            'registration_links',
+            where: 'id = ? OR link_id = ?',
+            whereArgs: [link.id, link.linkId],
+          );
+          return null;
+        }
+      }
+      return link;
     }
+
     final respMaps = await db.query(
       'candidate_responses',
       where: 'link_id = ? OR candidate_id = ?',
@@ -654,6 +689,45 @@ class SqliteEmployeeRepository implements EmployeeRepository {
 
     return finalEmployee;
   }
+
+  @override
+  Future<Employee> submitCandidateRegistration({
+    required String linkId,
+    required Employee candidateData,
+  }) async {
+    return submitEmployeeRegistration(
+      linkId: linkId,
+      employeeData: candidateData,
+      isSubmit: true,
+    );
+  }
+
+  @override
+  Future<Employee> convertCandidateToEmployee({
+    required String linkId,
+    required Employee employeeData,
+  }) async {
+    final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+    final empId = (employeeData.employeeId.isNotEmpty && employeeData.employeeId.startsWith('EMP-'))
+        ? employeeData.employeeId
+        : 'EMP-${timestamp.substring(timestamp.length - 4)}';
+
+    final activeEmployee = employeeData.copyWith(
+      employeeId: empId,
+      status: 'Active',
+      userType: employeeData.userType.isEmpty ? 'EMPLOYEE' : employeeData.userType,
+    );
+
+    final savedEmployee = await addEmployee(activeEmployee);
+
+    await updateRegistrationLinkStatus(
+      linkId: linkId,
+      linkStatus: 'Registered',
+    );
+
+    return savedEmployee;
+  }
+
 
   @override
   Future<CandidateResponse?> getCandidateResponseByLinkId(String linkId) async {
