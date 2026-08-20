@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -61,6 +62,13 @@ import '../../features/incentive/presentation/incentive_page.dart';
 import '../../features/incentive_management/presentation/incentive_management_page.dart';
 import '../../features/incentive_management/presentation/incentive_detail_page.dart';
 import '../../features/incentive_management/presentation/employee_incentive_requests_page.dart';
+import '../../features/permission/domain/permission_enums.dart';
+import '../../features/permission/domain/permission_request.dart';
+import '../../features/permission/presentation/admin_permission_management_page.dart';
+import '../../features/permission/presentation/apply_emergency_permission_page.dart';
+import '../../features/permission/presentation/apply_permission_page.dart';
+import '../../features/permission/presentation/permission_dashboard_page.dart';
+import '../../features/permission/presentation/permission_details_page.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
@@ -149,6 +157,39 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/leave-management',
             builder: (_, _) => const LeaveManagementPage(),
+          ),
+          GoRoute(
+            path: '/permission',
+            builder: (_, _) => const PermissionDashboardPage(),
+            routes: [
+              GoRoute(
+                path: 'apply',
+                builder: (_, _) => const ApplyPermissionPage(),
+              ),
+              GoRoute(
+                path: 'emergency',
+                builder: (_, state) {
+                  final extra = state.extra as Map<String, dynamic>?;
+                  return ApplyEmergencyPermissionPage(
+                    initialDate: extra?['date'] as DateTime?,
+                    initialFromTime: extra?['fromTime'] as TimeOfDay?,
+                    initialToTime: extra?['toTime'] as TimeOfDay?,
+                    initialType: extra?['type'] as PermissionType?,
+                  );
+                },
+              ),
+              GoRoute(
+                path: 'details',
+                builder: (_, state) {
+                  final req = state.extra as PermissionRequest;
+                  return PermissionDetailsPage(request: req);
+                },
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/permission-management',
+            builder: (_, _) => const AdminPermissionManagementPage(),
           ),
           GoRoute(
             path: '/on-duty-management',

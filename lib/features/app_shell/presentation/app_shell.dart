@@ -150,6 +150,18 @@ class AppShell extends ConsumerWidget {
       'Employee',
     ),
     SidebarDestination(
+      'Permission',
+      '/permission',
+      Icons.access_time_filled_outlined,
+      'Employee',
+    ),
+    SidebarDestination(
+      'Permission Management',
+      '/permission-management',
+      Icons.more_time_outlined,
+      'Employee',
+    ),
+    SidebarDestination(
       'Salary Settings',
       '/salary-settings',
       Icons.request_quote_outlined,
@@ -388,6 +400,9 @@ class _TopBar extends ConsumerWidget {
     if (cleanLoc == '/vendors/new') return 'New Vendors';
     if (cleanLoc == '/expenses/new') return 'New Expense';
     if (cleanLoc == '/inventory-adjustments/new') return 'New Inventory Adjustment';
+    if (cleanLoc == '/permission/apply') return 'Apply Permission';
+    if (cleanLoc == '/permission/emergency') return 'Emergency Exception Permission';
+    if (cleanLoc == '/permission/details') return 'Permission Details';
     for (final dest in AppShell.destinations) {
       if (dest.path == cleanLoc || (dest.path != '/home' && cleanLoc.startsWith(dest.path))) {
         return dest.label;
@@ -423,7 +438,9 @@ class _TopBar extends ConsumerWidget {
       headingText = _getHeading(currentLocation);
     }
 
-    final isFormPage = currentLocation.endsWith('/new') || currentLocation.contains('/edit');
+    final isFormPage = currentLocation.endsWith('/new') ||
+        currentLocation.contains('/edit') ||
+        currentLocation.startsWith('/permission/');
 
     final content = SafeArea(
       bottom: false,
@@ -437,10 +454,12 @@ class _TopBar extends ConsumerWidget {
                 icon: const Icon(Icons.arrow_back, color: Color(0xFF1E293B)),
                 tooltip: 'Back',
                 onPressed: () {
-                  if (Navigator.of(context).canPop()) {
+                  if (currentLocation.startsWith('/permission/')) {
+                    context.go('/permission');
+                  } else if (Navigator.of(context).canPop()) {
                     Navigator.of(context).pop();
                   } else {
-                    context.go('/purchase-orders');
+                    context.go('/home');
                   }
                 },
               )
