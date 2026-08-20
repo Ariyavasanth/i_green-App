@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'candidate_response.dart';
 import 'employee.dart';
 import 'registration_link.dart';
 import '../../organization/domain/column_preference.dart';
@@ -43,6 +44,10 @@ abstract class EmployeeRepository {
     required Employee employeeData,
     bool isSubmit = true,
   });
+  Future<CandidateResponse?> getCandidateResponseByLinkId(String linkId);
+  Future<CandidateResponse?> getCandidateResponseByCandidateId(String candidateId);
+  Future<List<CandidateResponse>> getCandidateResponses();
+  Future<void> clearAllData();
 
   Future<ColumnPreference?> getColumnPreference(String tableId);
   Future<void> saveColumnPreference(ColumnPreference preference);

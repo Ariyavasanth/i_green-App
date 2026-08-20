@@ -6,6 +6,7 @@ import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../../organization/domain/column_preference.dart';
+import '../domain/candidate_response.dart';
 import '../domain/employee.dart';
 import '../domain/employee_repository.dart';
 import '../domain/registration_link.dart';
@@ -196,6 +197,20 @@ class SqliteEmployeeRepository implements EmployeeRepository {
         column_order TEXT
       )
     ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS candidate_responses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        candidate_id TEXT UNIQUE,
+        link_id TEXT,
+        submitted_date TEXT,
+        status TEXT,
+        full_name TEXT,
+        email_address TEXT,
+        phone_number TEXT,
+        employee_data_json TEXT
+      )
+    ''');
   }
 
   Future<void> _ensureColumnsExist(Database db) async {
@@ -282,70 +297,7 @@ class SqliteEmployeeRepository implements EmployeeRepository {
   }
 
   Future<void> _seedSampleData(Database db) async {
-    final empCountRes = await db.rawQuery('SELECT COUNT(*) FROM employees');
-    final count = Sqflite.firstIntValue(empCountRes) ?? 0;
-    if (count == 0) {
-      final sampleEmployees = [
-        Employee(
-          id: 1,
-          employeeId: 'EMP-0001',
-          firstName: 'Ariyavasanth',
-          lastName: 'S',
-          emailAddress: 'ariya@example.com',
-          phoneNumber: '9876543210',
-          gender: 'Male',
-          dob: '1995-01-01',
-          organizationName: 'I-Green Technology',
-          department: 'Engineering',
-          designation: 'Senior Software Engineer',
-          employmentType: 'Full-time',
-          joiningDate: '2023-01-15',
-          status: 'Active',
-          isStaticEmployee: true,
-        ),
-        Employee(
-          id: 2,
-          employeeId: 'EMP-0002',
-          firstName: 'Saravanan',
-          lastName: 'G S',
-          emailAddress: 'saravanan@example.com',
-          phoneNumber: '9876543211',
-          gender: 'Male',
-          dob: '1994-05-15',
-          organizationName: 'I-Green Technology',
-          department: 'Operations',
-          designation: 'Project Manager',
-          employmentType: 'Full-time',
-          joiningDate: '2023-03-01',
-          status: 'Active',
-          isStaticEmployee: true,
-        ),
-        Employee(
-          id: 3,
-          employeeId: 'EMP-0003',
-          firstName: 'Guna',
-          lastName: 'S',
-          emailAddress: 'guna@example.com',
-          phoneNumber: '9876543212',
-          gender: 'Male',
-          dob: '1996-08-20',
-          organizationName: 'I-Green Technology',
-          department: 'Site Engineering',
-          designation: 'Site Supervisor',
-          employmentType: 'Full-time',
-          joiningDate: '2023-05-10',
-          status: 'Active',
-          isDynamicEmployee: true,
-          siteLatitude: 13.0827,
-          siteLongitude: 80.2707,
-          siteAllowedRadiusMeters: 100,
-        ),
-      ];
-
-      for (final emp in sampleEmployees) {
-        await db.insert('employees', emp.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-      }
-    }
+    // Sample data seeding disabled
   }
 
   Future<void> _migrateLegacyAttendanceFlags(Database db) async {
@@ -544,7 +496,38 @@ class SqliteEmployeeRepository implements EmployeeRepository {
   Future<List<RegistrationLink>> getRegistrationLinks() async {
     final db = await database;
     final maps = await db.query('registration_links', orderBy: 'id DESC');
-    return maps.map((map) => RegistrationLink.fromMap(map)).toList();
+    final links = maps.map((map) => RegistrationLink.fromMap(map)).toList();
+
+    try {
+      final responsesMaps = await db.query('candidate_responses');
+      final existingIds = links.map((l) => l.linkId).toSet();
+      final existingEmpIds = links.map((l) => l.employeeId).toSet();
+
+      for (final rMap in responsesMaps) {
+        final candResp = CandidateResponse.fromMap(rMap);
+        final s = candResp.status.toLowerCase();
+        if (s != 'converted' && s != 'registered') {
+          if (!existingIds.contains(candResp.linkId) && !existingEmpIds.contains(candResp.candidateId)) {
+            links.add(RegistrationLink(
+              id: candResp.id,
+              linkId: candResp.linkId.isNotEmpty ? candResp.linkId : candResp.candidateId,
+              generatedBy: 'Candidate',
+              generatedDate: candResp.submittedDate,
+              expiryDate: '',
+              linkStatus: candResp.status,
+              employeeName: candResp.employeeData.fullName,
+              employeeId: candResp.candidateId,
+              organizationName: candResp.employeeData.organizationName,
+              department: candResp.employeeData.department,
+              submittedDate: candResp.submittedDate,
+              submittedBy: candResp.employeeData.fullName,
+            ));
+          }
+        }
+      }
+    } catch (_) {}
+
+    return links;
   }
 
   @override
@@ -552,11 +535,35 @@ class SqliteEmployeeRepository implements EmployeeRepository {
     final db = await database;
     final maps = await db.query(
       'registration_links',
-      where: 'link_id = ?',
-      whereArgs: [linkId],
+      where: 'link_id = ? OR employee_id = ?',
+      whereArgs: [linkId, linkId],
     );
-    if (maps.isEmpty) return null;
-    return RegistrationLink.fromMap(maps.first);
+    if (maps.isNotEmpty) {
+      return RegistrationLink.fromMap(maps.first);
+    }
+    final respMaps = await db.query(
+      'candidate_responses',
+      where: 'link_id = ? OR candidate_id = ?',
+      whereArgs: [linkId, linkId],
+    );
+    if (respMaps.isNotEmpty) {
+      final resp = CandidateResponse.fromMap(respMaps.first);
+      return RegistrationLink(
+        id: resp.id,
+        linkId: resp.linkId.isNotEmpty ? resp.linkId : resp.candidateId,
+        generatedBy: 'Candidate',
+        generatedDate: resp.submittedDate,
+        expiryDate: '',
+        linkStatus: resp.status,
+        employeeName: resp.employeeData.fullName,
+        employeeId: resp.candidateId,
+        organizationName: resp.employeeData.organizationName,
+        department: resp.employeeData.department,
+        submittedDate: resp.submittedDate,
+        submittedBy: resp.employeeData.fullName,
+      );
+    }
+    return null;
   }
 
   @override
@@ -585,61 +592,57 @@ class SqliteEmployeeRepository implements EmployeeRepository {
     if (link == null) {
       throw Exception('Invalid registration link.');
     }
-    if (link.linkStatus != 'Pending') {
-      throw Exception('This registration link has already been used or expired.');
+    final statusLower = link.linkStatus.trim().toLowerCase();
+    if (statusLower == 'converted' || statusLower == 'registered') {
+      throw Exception('This candidate link has already been converted into an employee.');
     }
 
-    String newEmpId = employeeData.employeeId;
-    if (newEmpId.isEmpty || newEmpId.startsWith('pending_')) {
-      newEmpId = link.employeeId.isNotEmpty && link.employeeId.startsWith('EMP-')
+    String candidateId = employeeData.employeeId;
+    if (candidateId.isEmpty || candidateId.startsWith('pending_') || candidateId.startsWith('EMP-')) {
+      candidateId = link.employeeId.isNotEmpty && link.employeeId.startsWith('CAN-')
           ? link.employeeId
           : await _generateNextCandidateId();
     }
 
-    final tempPassword = employeeData.temporaryPassword.isNotEmpty
-        ? employeeData.temporaryPassword
-        : _generateRandomCode(10);
     final nowStr = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
 
-    final existing = await db.query(
-      'employees',
-      where: 'employee_id = ?',
-      whereArgs: [newEmpId],
+    final finalEmployee = employeeData.copyWith(
+      employeeId: candidateId,
+      status: isSubmit ? 'Submitted' : 'Draft',
     );
 
-    Employee createdEmployee;
-    if (existing.isNotEmpty) {
-      final existingId = existing.first['id'] as int;
-      final finalEmployee = employeeData.copyWith(
-        id: existingId,
-        employeeId: newEmpId,
-        status: isSubmit ? 'Submitted' : 'Draft',
-        temporaryPassword: tempPassword,
-      );
+    final candidateResponse = CandidateResponse(
+      candidateId: candidateId,
+      linkId: linkId,
+      employeeData: finalEmployee,
+      submittedDate: isSubmit ? nowStr : '',
+      status: isSubmit ? 'Submitted' : 'Draft',
+    );
+
+    final existingResponse = await db.query(
+      'candidate_responses',
+      where: 'candidate_id = ? OR link_id = ?',
+      whereArgs: [candidateId, linkId],
+    );
+
+    if (existingResponse.isNotEmpty) {
       await db.update(
-        'employees',
-        finalEmployee.toMap(),
-        where: 'id = ?',
-        whereArgs: [existingId],
+        'candidate_responses',
+        candidateResponse.toMap(),
+        where: 'candidate_id = ? OR link_id = ?',
+        whereArgs: [candidateId, linkId],
       );
-      createdEmployee = finalEmployee;
     } else {
-      final finalEmployee = employeeData.copyWith(
-        employeeId: newEmpId,
-        status: isSubmit ? 'Submitted' : 'Draft',
-        temporaryPassword: tempPassword,
-      );
-      final empDbId = await db.insert('employees', finalEmployee.toMap());
-      createdEmployee = finalEmployee.copyWith(id: empDbId);
+      await db.insert('candidate_responses', candidateResponse.toMap());
     }
 
     // Update Registration Link details
     final updatedLink = link.copyWith(
       linkStatus: 'Submitted',
-      employeeName: createdEmployee.fullName,
-      employeeId: newEmpId,
+      employeeName: finalEmployee.fullName,
+      employeeId: candidateId,
       submittedDate: isSubmit ? nowStr : '',
-      submittedBy: isSubmit ? createdEmployee.fullName : '',
+      submittedBy: isSubmit ? finalEmployee.fullName : '',
     );
 
     await db.update(
@@ -649,7 +652,40 @@ class SqliteEmployeeRepository implements EmployeeRepository {
       whereArgs: [link.linkId, link.id],
     );
 
-    return createdEmployee;
+    return finalEmployee;
+  }
+
+  @override
+  Future<CandidateResponse?> getCandidateResponseByLinkId(String linkId) async {
+    final db = await database;
+    final maps = await db.query(
+      'candidate_responses',
+      where: 'link_id = ?',
+      whereArgs: [linkId],
+      limit: 1,
+    );
+    if (maps.isEmpty) return null;
+    return CandidateResponse.fromMap(maps.first);
+  }
+
+  @override
+  Future<CandidateResponse?> getCandidateResponseByCandidateId(String candidateId) async {
+    final db = await database;
+    final maps = await db.query(
+      'candidate_responses',
+      where: 'candidate_id = ?',
+      whereArgs: [candidateId],
+      limit: 1,
+    );
+    if (maps.isEmpty) return null;
+    return CandidateResponse.fromMap(maps.first);
+  }
+
+  @override
+  Future<List<CandidateResponse>> getCandidateResponses() async {
+    final db = await database;
+    final maps = await db.query('candidate_responses');
+    return maps.map((map) => CandidateResponse.fromMap(map)).toList();
   }
 
   /// Generates the next CAN-XXXX candidate ID for registration form submissions.
@@ -657,13 +693,13 @@ class SqliteEmployeeRepository implements EmployeeRepository {
   Future<String> _generateNextCandidateId() async {
     final db = await database;
     final maps = await db.rawQuery(
-      'SELECT employee_id FROM employees WHERE employee_id LIKE ?',
+      'SELECT candidate_id FROM candidate_responses WHERE candidate_id LIKE ?',
       ['CAN-%'],
     );
 
     int maxNum = 0;
     for (final map in maps) {
-      final code = map['employee_id'] as String? ?? '';
+      final code = map['candidate_id'] as String? ?? '';
       final numPart = code.replaceAll(RegExp(r'[^0-9]'), '');
       if (numPart.isNotEmpty) {
         final val = int.tryParse(numPart) ?? 0;
@@ -702,6 +738,14 @@ class SqliteEmployeeRepository implements EmployeeRepository {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     final rand = Random();
     return List.generate(length, (_) => chars[rand.nextInt(chars.length)]).join();
+  }
+
+  @override
+  Future<void> clearAllData() async {
+    final db = await database;
+    await db.delete('employees');
+    await db.delete('registration_links');
+    await db.delete('candidate_responses');
   }
 
   @override

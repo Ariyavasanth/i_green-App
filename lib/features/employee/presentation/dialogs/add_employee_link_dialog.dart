@@ -128,10 +128,11 @@ class _AddEmployeeLinkDialogState
       child: Container(
         width: 480,
         padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             // Top Header: Icon + Title + Close Button
             Row(
               children: [
@@ -460,6 +461,7 @@ class _AddEmployeeLinkDialogState
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 }

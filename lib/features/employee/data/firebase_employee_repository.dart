@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../../organization/domain/column_preference.dart';
+import '../domain/candidate_response.dart';
 import '../domain/employee.dart';
 import '../domain/employee_repository.dart';
 import '../domain/registration_link.dart';
@@ -30,6 +31,9 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
   CollectionReference<Map<String, dynamic>> get _registrationLinksRef =>
       _firestore.collection('registration_links');
+
+  CollectionReference<Map<String, dynamic>> get _candidateResponsesRef =>
+      _firestore.collection('candidate_responses');
 
   CollectionReference<Map<String, dynamic>> get _columnPreferencesRef =>
       _firestore.collection('column_preferences');
@@ -120,18 +124,6 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       }
     } catch (_) {
       // Non-critical — ignore errors, will retry on next load
-    }
-  }
-
-  @override
-  Future<List<Employee>> getAllEmployees() async {
-    try {
-      final snapshot = await _employeesRef.get();
-      return snapshot.docs.map((doc) {
-        return _employeeFromFirestore(doc.data(), doc.id);
-      }).toList();
-    } catch (_) {
-      return [];
     }
   }
 
@@ -361,15 +353,87 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   }
 
   @override
+  Future<List<Employee>> getAllEmployees() async {
+    final result = <Employee>[];
+    final seenIds = <int>{};
+
+    try {
+      final snapshot = await _employeesRef.get();
+      for (final doc in snapshot.docs) {
+        final emp = _employeeFromFirestore(doc.data(), doc.id);
+        if (seenIds.add(emp.id)) {
+          result.add(emp);
+        }
+      }
+    } catch (e) {
+      debugPrint('Firebase getAllEmployees error: $e');
+    }
+
+    return result;
+  }
+
+  @override
   Future<List<RegistrationLink>> getRegistrationLinks() async {
+    final links = <RegistrationLink>[];
+
     try {
       final snapshot = await _registrationLinksRef.get();
-      return snapshot.docs
-          .map((doc) => RegistrationLink.fromMap(doc.data()))
-          .toList();
-    } catch (_) {
-      return [];
+      final candSnapshot = await _candidateResponsesRef.get();
+
+      final candMap = <String, CandidateResponse>{};
+      for (final doc in candSnapshot.docs) {
+        final resp = CandidateResponse.fromMap(doc.data());
+        candMap[resp.linkId] = resp;
+        candMap[resp.candidateId] = resp;
+      }
+
+      for (final doc in snapshot.docs) {
+        final data = Map<String, dynamic>.from(doc.data());
+        final linkId = (data['link_id']?.toString() ?? doc.id).trim();
+        data['link_id'] = linkId.isNotEmpty ? linkId : doc.id;
+
+        final cand = candMap[linkId] ?? candMap[data['employee_id']?.toString() ?? ''];
+        if (cand != null) {
+          if ((data['employee_name']?.toString() ?? '').isEmpty) {
+            data['employee_name'] = cand.employeeData.fullName;
+          }
+          if ((data['employee_id']?.toString() ?? '').isEmpty) {
+            data['employee_id'] = cand.candidateId;
+          }
+        }
+
+        final link = RegistrationLink.fromMap(data);
+        links.add(link);
+      }
+
+      for (final doc in candSnapshot.docs) {
+        final cand = CandidateResponse.fromMap(doc.data());
+        final s = cand.status.toLowerCase();
+        if (s != 'converted' && s != 'registered') {
+          final exists = links.any((l) => l.linkId == cand.linkId || l.employeeId == cand.candidateId);
+          if (!exists) {
+            links.add(RegistrationLink(
+              id: cand.id,
+              linkId: cand.linkId.isNotEmpty ? cand.linkId : cand.candidateId,
+              generatedBy: 'Candidate',
+              generatedDate: cand.submittedDate,
+              expiryDate: '',
+              linkStatus: cand.status,
+              employeeName: cand.employeeData.fullName,
+              employeeId: cand.candidateId,
+              organizationName: cand.employeeData.organizationName,
+              department: cand.employeeData.department,
+              submittedDate: cand.submittedDate,
+              submittedBy: cand.employeeData.fullName,
+            ));
+          }
+        }
+      }
+    } catch (e, st) {
+      debugPrint('Firebase getRegistrationLinks error: $e\n$st');
     }
+
+    return links;
   }
 
   @override
@@ -386,6 +450,28 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
           .get();
       if (query.docs.isNotEmpty) {
         return RegistrationLink.fromMap(query.docs.first.data());
+      }
+
+      final candQuery = await _candidateResponsesRef
+          .where('link_id', isEqualTo: linkId)
+          .limit(1)
+          .get();
+      if (candQuery.docs.isNotEmpty) {
+        final resp = CandidateResponse.fromMap(candQuery.docs.first.data());
+        return RegistrationLink(
+          id: resp.id,
+          linkId: resp.linkId.isNotEmpty ? resp.linkId : resp.candidateId,
+          generatedBy: 'Candidate',
+          generatedDate: resp.submittedDate,
+          expiryDate: '',
+          linkStatus: resp.status,
+          employeeName: resp.employeeData.fullName,
+          employeeId: resp.candidateId,
+          organizationName: resp.employeeData.organizationName,
+          department: resp.employeeData.department,
+          submittedDate: resp.submittedDate,
+          submittedBy: resp.employeeData.fullName,
+        );
       }
       return null;
     } catch (_) {
@@ -441,29 +527,31 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       }
     }
 
-    final existingEmpId = (linkDoc.exists && linkDoc.data() != null)
+    if (linkDoc.exists && linkDoc.data() != null) {
+      final currentStatus = (linkDoc.data()!['link_status'] as String? ?? 'Pending').trim().toLowerCase();
+      if (currentStatus == 'converted' || currentStatus == 'registered') {
+        throw Exception('This candidate link has already been converted into an employee.');
+      }
+    }
+
+    final existingCandidateId = (linkDoc.exists && linkDoc.data() != null)
         ? (linkDoc.data()!['employee_id'] as String? ?? '')
         : '';
 
-    String newEmpId = employeeData.employeeId;
-    if (newEmpId.isEmpty || newEmpId.startsWith('pending_')) {
-      newEmpId = existingEmpId.isNotEmpty && existingEmpId.startsWith('EMP-')
-          ? existingEmpId
+    String candidateId = employeeData.employeeId;
+    if (candidateId.isEmpty || candidateId.startsWith('pending_') || candidateId.startsWith('EMP-')) {
+      candidateId = existingCandidateId.isNotEmpty && existingCandidateId.startsWith('CAN-')
+          ? existingCandidateId
           : await _generateNextCandidateId();
     }
 
-    final tempPassword = employeeData.temporaryPassword.isNotEmpty
-        ? employeeData.temporaryPassword
-        : _generateRandomCode(10);
-
     var finalEmployee = employeeData.copyWith(
-      employeeId: newEmpId,
+      employeeId: candidateId,
       status: isSubmit ? 'Submitted' : 'Draft',
-      temporaryPassword: tempPassword,
     );
 
     if (finalEmployee.profileImageUrl.isNotEmpty) {
-      final storageUrl = await _uploadEmployeePhotoToStorage(newEmpId, finalEmployee.profileImageUrl);
+      final storageUrl = await _uploadEmployeePhotoToStorage(candidateId, finalEmployee.profileImageUrl);
       finalEmployee = finalEmployee.copyWith(profileImageUrl: storageUrl);
     }
 
@@ -475,36 +563,80 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       'submitted_date': isSubmit ? nowIso : '',
       'submitted_by': isSubmit ? finalEmployee.fullName : '',
       'employee_name': finalEmployee.fullName,
-      'employee_id': newEmpId,
+      'employee_id': candidateId,
       'updated_at': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
 
-    final empDocId = newEmpId;
+    final candidateResponse = CandidateResponse(
+      candidateId: candidateId,
+      linkId: linkId,
+      employeeData: finalEmployee,
+      submittedDate: isSubmit ? nowIso : '',
+      status: isSubmit ? 'Submitted' : 'Draft',
+    );
 
-    final empData = _employeeToFirestore(finalEmployee);
-    empData['created_at'] = FieldValue.serverTimestamp();
-    batch.set(_employeesRef.doc(empDocId), empData, SetOptions(merge: true));
+    batch.set(_candidateResponsesRef.doc(candidateId), candidateResponse.toMap(), SetOptions(merge: true));
 
     await batch.commit();
     return finalEmployee;
   }
 
+  @override
+  Future<CandidateResponse?> getCandidateResponseByLinkId(String linkId) async {
+    try {
+      final query = await _candidateResponsesRef.where('link_id', isEqualTo: linkId).limit(1).get();
+      if (query.docs.isNotEmpty) {
+        return CandidateResponse.fromMap(query.docs.first.data());
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<CandidateResponse?> getCandidateResponseByCandidateId(String candidateId) async {
+    try {
+      final doc = await _candidateResponsesRef.doc(candidateId).get();
+      if (doc.exists && doc.data() != null) {
+        return CandidateResponse.fromMap(doc.data()!);
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<List<CandidateResponse>> getCandidateResponses() async {
+    try {
+      final snapshot = await _candidateResponsesRef.get();
+      return snapshot.docs.map((doc) => CandidateResponse.fromMap(doc.data())).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   /// Generates the next CAN-XXXX candidate ID for registration form submissions.
   /// This sequence is independent from the EMP-XXXX employee ID sequence.
   Future<String> _generateNextCandidateId() async {
-    final snapshot = await _employeesRef.get();
-    int maxNum = 0;
-    for (final doc in snapshot.docs) {
-      final code = (doc.data()['employee_id'] as String?) ?? doc.id;
-      if (!code.startsWith('CAN-')) continue;
-      final numPart = code.replaceAll(RegExp(r'[^0-9]'), '');
-      if (numPart.isNotEmpty) {
-        final val = int.tryParse(numPart) ?? 0;
-        if (val > maxNum) maxNum = val;
+    try {
+      final snapshot = await _candidateResponsesRef.get();
+      int maxNum = 0;
+      for (final doc in snapshot.docs) {
+        final code = (doc.data()['candidate_id'] as String?) ?? doc.id;
+        if (!code.startsWith('CAN-')) continue;
+        final numPart = code.replaceAll(RegExp(r'[^0-9]'), '');
+        if (numPart.isNotEmpty) {
+          final val = int.tryParse(numPart) ?? 0;
+          if (val > maxNum) maxNum = val;
+        }
       }
+      final nextNum = maxNum + 1;
+      return 'CAN-${nextNum.toString().padLeft(4, '0')}';
+    } catch (_) {
+      return 'CAN-0001';
     }
-    final nextNum = maxNum + 1;
-    return 'CAN-${nextNum.toString().padLeft(4, '0')}';
   }
 
   /// Generates the next EMP-XXXX employee ID for active employees.
@@ -528,6 +660,24 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     final rand = Random();
     return List.generate(length, (_) => chars[rand.nextInt(chars.length)]).join();
+  }
+
+  @override
+  Future<void> clearAllData() async {
+    try {
+      final emps = await _employeesRef.get();
+      for (final doc in emps.docs) {
+        await doc.reference.delete();
+      }
+      final links = await _registrationLinksRef.get();
+      for (final doc in links.docs) {
+        await doc.reference.delete();
+      }
+      final responses = await _candidateResponsesRef.get();
+      for (final doc in responses.docs) {
+        await doc.reference.delete();
+      }
+    } catch (_) {}
   }
 
   @override

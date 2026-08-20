@@ -474,27 +474,39 @@ class _TopBar extends ConsumerWidget {
                               ),
                             ),
                             if (currentLocation.startsWith('/responses'))
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Container(
-                                    width: 6,
-                                    height: 6,
-                                    decoration: const BoxDecoration(
-                                      color: Color(0xFF2E7D32),
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  const Text(
-                                    '78 total responses',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                      color: AppColors.textSecondary,
-                                    ),
-                                  ),
-                                ],
+                              Consumer(
+                                builder: (context, ref, _) {
+                                  final linksAsync = ref.watch(registrationLinksProvider);
+                                  final count = linksAsync.maybeWhen(
+                                    data: (links) => links.where((l) {
+                                      final s = l.linkStatus.trim().toLowerCase();
+                                      return s != 'registered' && s != 'converted';
+                                    }).length,
+                                    orElse: () => 0,
+                                  );
+                                  return Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        width: 6,
+                                        height: 6,
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFF2E7D32),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '$count total responses',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w500,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
                               ),
                           ],
                         ),

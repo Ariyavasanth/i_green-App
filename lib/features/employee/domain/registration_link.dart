@@ -67,19 +67,28 @@ class RegistrationLink {
   }
 
   factory RegistrationLink.fromMap(Map<String, dynamic> map) {
+    int parsedId = 0;
+    if (map['id'] != null) {
+      if (map['id'] is int) {
+        parsedId = map['id'] as int;
+      } else {
+        parsedId = int.tryParse(map['id'].toString()) ?? 0;
+      }
+    }
+
     return RegistrationLink(
-      id: map['id'] as int? ?? 0,
-      linkId: map['link_id'] as String? ?? '',
-      generatedBy: map['generated_by'] as String? ?? '',
-      generatedDate: map['generated_date'] as String? ?? '',
-      expiryDate: map['expiry_date'] as String? ?? '',
-      linkStatus: map['link_status'] as String? ?? 'Pending',
-      employeeName: map['employee_name'] as String? ?? '',
-      employeeId: map['employee_id'] as String? ?? '',
-      organizationName: map['organization_name'] as String? ?? '',
-      department: map['department'] as String? ?? '',
-      submittedDate: map['submitted_date'] as String? ?? '',
-      submittedBy: map['submitted_by'] as String? ?? '',
+      id: parsedId,
+      linkId: map['link_id']?.toString() ?? '',
+      generatedBy: map['generated_by']?.toString() ?? '',
+      generatedDate: map['generated_date']?.toString() ?? '',
+      expiryDate: map['expiry_date']?.toString() ?? '',
+      linkStatus: map['link_status']?.toString() ?? 'Pending',
+      employeeName: map['employee_name']?.toString() ?? '',
+      employeeId: map['employee_id']?.toString() ?? '',
+      organizationName: map['organization_name']?.toString() ?? '',
+      department: map['department']?.toString() ?? '',
+      submittedDate: map['submitted_date']?.toString() ?? '',
+      submittedBy: map['submitted_by']?.toString() ?? '',
     );
   }
 

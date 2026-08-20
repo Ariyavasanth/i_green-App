@@ -80,7 +80,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             data: (links) {
               final employees = employeesAsync.valueOrNull ?? const <Employee>[];
 
-              // Filter out registered/converted candidates so they don't show on responses page
+              // Keep only active candidate links (exclude converted and registered employees)
               final activeLinks = links.where((link) {
                 final s = link.linkStatus.trim().toLowerCase();
                 return s != 'registered' && s != 'converted';
@@ -107,7 +107,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                     _phoneForLink(link, employee).toLowerCase().contains(q) ||
                     link.linkStatus.toLowerCase().contains(q);
 
-                final normStatus = _normalizeStatus(link.linkStatus);
+                final normStatus = _normalizeStatus(link.linkStatus, link);
                 final filter = statusFilter.trim().toLowerCase();
 
                 bool matchesStatus = false;
@@ -147,20 +147,30 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                       _buildStatusSummaryCards(context, links),
                       const SizedBox(height: 8),
                       Expanded(
-                        child: filtered.isEmpty
-                            ? const Center(
-                                child: Padding(
-                                  padding: EdgeInsets.all(32),
-                                  child: Text(
-                                    'No candidate responses found.',
-                                    style: TextStyle(
-                                      color: AppColors.textSecondary,
-                                      fontSize: 14,
+                        child: RefreshIndicator(
+                          onRefresh: () async {
+                            ref.invalidate(registrationLinksProvider);
+                            ref.invalidate(allEmployeesProvider);
+                            await ref.read(registrationLinksProvider.future);
+                          },
+                          child: filtered.isEmpty
+                              ? const SingleChildScrollView(
+                                  physics: AlwaysScrollableScrollPhysics(),
+                                  child: SizedBox(
+                                    height: 300,
+                                    child: Center(
+                                      child: Text(
+                                        'No candidate responses found.',
+                                        style: TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 14,
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                ),
-                              )
-                            : _buildMobileList(pageItems, employees),
+                                )
+                              : _buildMobileList(pageItems, employees),
+                        ),
                       ),
                     ],
                   ),
@@ -264,6 +274,22 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
       onPrimaryAction: () => _openAddLinkDialog(context),
       secondaryActions: [
         AdminToolbarAction(
+          label: 'Refresh',
+          icon: Icons.refresh_rounded,
+          tooltip: 'Refresh Responses',
+          onPressed: () {
+            ref.invalidate(registrationLinksProvider);
+            ref.invalidate(allEmployeesProvider);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Refreshing candidate responses...'),
+                duration: Duration(seconds: 1),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          },
+        ),
+        AdminToolbarAction(
           label: 'Export',
           icon: Icons.file_download_outlined,
           tooltip: 'Export (CSV/PDF)',
@@ -280,6 +306,44 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
           icon: Icons.view_column_outlined,
           tooltip: 'Columns',
           onPressed: () => _openColumnSelectionDialog(context),
+        ),
+        AdminToolbarAction(
+          label: 'Clear All',
+          icon: Icons.delete_sweep_outlined,
+          tooltip: 'Clear All Data',
+          onPressed: () async {
+            final confirm = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Clear All Data?'),
+                content: const Text('This will delete all employee records, candidate responses, and registration links.'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                  TextButton(
+                    style: TextButton.styleFrom(foregroundColor: Colors.red),
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Clear All'),
+                  ),
+                ],
+              ),
+            );
+            if (confirm == true) {
+              await ref.read(employeeRepositoryProvider).clearAllData();
+              ref.invalidate(registrationLinksProvider);
+              ref.invalidate(allEmployeesProvider);
+              ref.invalidate(employeesProvider);
+              ref.invalidate(candidateResponsesProvider);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('All candidate responses and employee data cleared.'),
+                    backgroundColor: Colors.redAccent,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            }
+          },
         ),
       ],
     );
@@ -344,7 +408,43 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
               ),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: () {
+              ref.invalidate(registrationLinksProvider);
+              ref.invalidate(allEmployeesProvider);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Refreshing candidate responses...'),
+                  duration: Duration(seconds: 1),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.divider, width: 0.8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.refresh_rounded,
+                size: 20,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
           InkWell(
             onTap: () => _openFilterBottomSheet(context, const ['All Statuses', 'Pending', 'Submitted', 'Accepted', 'Rejected']),
             borderRadius: BorderRadius.circular(16),
@@ -384,10 +484,10 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     final currentFilter = ref.watch(responseStatusFilterProvider);
 
     final allCount = activeLinks.length;
-    final pendingCount = activeLinks.where((l) => _normalizeStatus(l.linkStatus) == CandidateCardStatus.pending).length;
-    final submittedCount = activeLinks.where((l) => _normalizeStatus(l.linkStatus) == CandidateCardStatus.submitted).length;
-    final acceptedCount = activeLinks.where((l) => _normalizeStatus(l.linkStatus) == CandidateCardStatus.accepted).length;
-    final rejectedCount = activeLinks.where((l) => _normalizeStatus(l.linkStatus) == CandidateCardStatus.rejected).length;
+    final pendingCount = activeLinks.where((l) => _normalizeStatus(l.linkStatus, l) == CandidateCardStatus.pending).length;
+    final submittedCount = activeLinks.where((l) => _normalizeStatus(l.linkStatus, l) == CandidateCardStatus.submitted).length;
+    final acceptedCount = activeLinks.where((l) => _normalizeStatus(l.linkStatus, l) == CandidateCardStatus.accepted).length;
+    final rejectedCount = activeLinks.where((l) => _normalizeStatus(l.linkStatus, l) == CandidateCardStatus.rejected).length;
 
     return SizedBox(
       height: 64,
@@ -1394,19 +1494,28 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     );
   }
 
-  CandidateCardStatus _normalizeStatus(String rawStatus) {
+  CandidateCardStatus _normalizeStatus(String rawStatus, [RegistrationLink? link]) {
     final s = rawStatus.trim().toLowerCase();
-    if (s == 'submitted' || s == 'completed') {
-      return CandidateCardStatus.submitted;
-    }
-    if (s == 'accepted') {
-      return CandidateCardStatus.accepted;
-    }
     if (s == 'registered' || s == 'converted') {
       return CandidateCardStatus.registered;
     }
     if (s == 'rejected' || s == 'expired' || s == 'cancelled') {
       return CandidateCardStatus.rejected;
+    }
+    if (s == 'submitted' || s == 'completed' || s == 'used' || s.contains('submit')) {
+      return CandidateCardStatus.submitted;
+    }
+    if (s == 'accepted') {
+      return CandidateCardStatus.accepted;
+    }
+    if (link != null) {
+      final name = link.employeeName.trim();
+      if (name.isNotEmpty && name != '-' && name != 'Name not provided') {
+        return CandidateCardStatus.submitted;
+      }
+      if (link.submittedDate.isNotEmpty || link.submittedBy.isNotEmpty || link.employeeId.startsWith('CAN-') || link.employeeId.startsWith('EMP-')) {
+        return CandidateCardStatus.submitted;
+      }
     }
     return CandidateCardStatus.pending;
   }
@@ -1415,6 +1524,16 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     final raw = link.submittedDate.trim().isNotEmpty ? link.submittedDate.trim() : link.generatedDate.trim();
     if (raw.isEmpty) return 'N/A';
     try {
+      if (raw.contains('seconds=')) {
+        final match = RegExp(r'seconds=(\d+)').firstMatch(raw);
+        if (match != null) {
+          final secs = int.tryParse(match.group(1) ?? '');
+          if (secs != null) {
+            final dt = DateTime.fromMillisecondsSinceEpoch(secs * 1000);
+            return DateFormat('d MMM yyyy').format(dt);
+          }
+        }
+      }
       final parsed = DateTime.tryParse(raw) ?? DateTime.tryParse(raw.replaceAll(' ', 'T'));
       if (parsed != null) {
         return DateFormat('d MMM yyyy').format(parsed);
@@ -1443,7 +1562,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     final hasName = rawName.isNotEmpty && rawName != '-';
     final candidateName = hasName ? rawName : 'Unknown Applicant';
 
-    final normalizedStatus = _normalizeStatus(link.linkStatus);
+    final normalizedStatus = _normalizeStatus(link.linkStatus, link);
 
     final ({Color bg, Color color, IconData icon}) statusBadge = switch (normalizedStatus) {
       CandidateCardStatus.submitted => (
@@ -1964,8 +2083,10 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
   }
 
   Future<void> _openViewDialogAsync(BuildContext context, RegistrationLink link) async {
-    final employees = await ref.read(allEmployeesProvider.future);
-    final employee = _employeeForLink(link, employees);
+    final repo = ref.read(employeeRepositoryProvider);
+    final candidateResp = await repo.getCandidateResponseByLinkId(link.linkId) ??
+        (link.employeeId.isNotEmpty ? await repo.getCandidateResponseByCandidateId(link.employeeId) : null);
+    final employee = candidateResp?.employeeData ?? _employeeForLink(link, await ref.read(allEmployeesProvider.future));
     if (!context.mounted) return;
 
     final candidateName = _candidateName(link, employee);

@@ -3,9 +3,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../organization/domain/column_preference.dart';
 import '../data/firebase_employee_repository.dart';
+import '../domain/candidate_response.dart';
 import '../domain/employee.dart';
 import '../domain/employee_repository.dart';
 import '../domain/registration_link.dart';
+
+final candidateResponsesProvider = FutureProvider<List<CandidateResponse>>(
+  (ref) => ref.watch(employeeRepositoryProvider).getCandidateResponses(),
+);
+
+final candidateResponseByLinkIdProvider =
+    FutureProvider.family<CandidateResponse?, String>(
+  (ref, linkId) => ref.watch(employeeRepositoryProvider).getCandidateResponseByLinkId(linkId),
+);
+
+final candidateResponseByCandidateIdProvider =
+    FutureProvider.family<CandidateResponse?, String>(
+  (ref, candidateId) => ref.watch(employeeRepositoryProvider).getCandidateResponseByCandidateId(candidateId),
+);
 
 final employeeRepositoryProvider = Provider<EmployeeRepository>(
   (ref) => FirebaseEmployeeRepository(),

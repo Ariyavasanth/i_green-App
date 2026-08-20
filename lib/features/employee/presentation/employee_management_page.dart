@@ -140,20 +140,31 @@ class _EmployeeManagementPageState
                       _buildStatusSummaryCards(context, employees),
                       const SizedBox(height: 8),
                       Expanded(
-                        child: filtered.isEmpty
-                            ? const Center(
-                                child: Padding(
-                                  padding: EdgeInsets.all(32),
-                                  child: Text(
-                                    'No employees found.',
-                                    style: TextStyle(
-                                      color: AppColors.textSecondary,
-                                      fontSize: 14,
+                        child: RefreshIndicator(
+                          onRefresh: () async {
+                            ref.invalidate(employeesProvider);
+                            ref.invalidate(allEmployeesProvider);
+                            ref.invalidate(registrationLinksProvider);
+                            await ref.read(employeesProvider.future);
+                          },
+                          child: filtered.isEmpty
+                              ? const SingleChildScrollView(
+                                  physics: AlwaysScrollableScrollPhysics(),
+                                  child: SizedBox(
+                                    height: 300,
+                                    child: Center(
+                                      child: Text(
+                                        'No employees found.',
+                                        style: TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 14,
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                ),
-                              )
-                            : _buildMobileList(pageItems),
+                                )
+                              : _buildMobileList(pageItems),
+                        ),
                       ),
                       _buildPaginationBar(
                         totalItems: totalItems,
@@ -268,6 +279,23 @@ class _EmployeeManagementPageState
       onPrimaryAction: () => GoRouter.of(context).push('/employee/register/new'),
       secondaryActions: [
         AdminToolbarAction(
+          label: 'Refresh',
+          icon: Icons.refresh_rounded,
+          tooltip: 'Refresh Employees',
+          onPressed: () {
+            ref.invalidate(employeesProvider);
+            ref.invalidate(allEmployeesProvider);
+            ref.invalidate(registrationLinksProvider);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Refreshing employee list...'),
+                duration: Duration(seconds: 1),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          },
+        ),
+        AdminToolbarAction(
           label: 'Export',
           icon: Icons.file_download_outlined,
           tooltip: 'Export (CSV/PDF)',
@@ -284,6 +312,44 @@ class _EmployeeManagementPageState
           icon: Icons.view_column_outlined,
           tooltip: 'Columns',
           onPressed: () => _openColumnSelectionDialog(context),
+        ),
+        AdminToolbarAction(
+          label: 'Clear All',
+          icon: Icons.delete_sweep_outlined,
+          tooltip: 'Clear All Data',
+          onPressed: () async {
+            final confirm = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Clear All Data?'),
+                content: const Text('This will delete all employee records, candidate responses, and registration links.'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                  TextButton(
+                    style: TextButton.styleFrom(foregroundColor: Colors.red),
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Clear All'),
+                  ),
+                ],
+              ),
+            );
+            if (confirm == true) {
+              await ref.read(employeeRepositoryProvider).clearAllData();
+              ref.invalidate(registrationLinksProvider);
+              ref.invalidate(allEmployeesProvider);
+              ref.invalidate(employeesProvider);
+              ref.invalidate(candidateResponsesProvider);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('All candidate responses and employee data cleared.'),
+                    backgroundColor: Colors.redAccent,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            }
+          },
         ),
       ],
     );
@@ -825,7 +891,44 @@ class _EmployeeManagementPageState
               ),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: () {
+              ref.invalidate(employeesProvider);
+              ref.invalidate(allEmployeesProvider);
+              ref.invalidate(registrationLinksProvider);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Refreshing employee list...'),
+                  duration: Duration(seconds: 1),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.divider, width: 0.8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.refresh_rounded,
+                size: 20,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
           InkWell(
             onTap: () => _openFilterBottomSheet(context, depts, desigs, statuses),
             borderRadius: BorderRadius.circular(16),

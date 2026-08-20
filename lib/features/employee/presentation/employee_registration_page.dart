@@ -1328,6 +1328,7 @@ class _EmployeeRegistrationPageState
       ref.invalidate(employeesProvider);
       ref.invalidate(allEmployeesProvider);
       ref.invalidate(registrationLinksProvider);
+      ref.invalidate(candidateResponsesProvider);
       if (_selectedAcceptedLinkId != null && _selectedAcceptedLinkId!.isNotEmpty) {
         ref.invalidate(registrationLinkByIdProvider(_selectedAcceptedLinkId!));
       }
@@ -1454,7 +1455,7 @@ class _EmployeeRegistrationPageState
                     );
                   }
 
-                  if (link.linkStatus == 'Submitted' || link.linkStatus == 'Converted' || link.linkStatus == 'Completed' || _submittedEmployee != null) {
+                  if (link.linkStatus == 'Submitted' || link.linkStatus == 'Converted' || link.linkStatus == 'Completed' || link.linkStatus == 'Used' || _submittedEmployee != null) {
                     final emp = _submittedEmployee;
                     return _buildStatusCard(
                       icon: Icons.check_circle_outline,
@@ -1464,7 +1465,7 @@ class _EmployeeRegistrationPageState
                           : 'Registration Link Already Used',
                       message: _submittedEmployee != null
                           ? 'Thank you! Your employee registration has been submitted successfully.\n\n${emp != null && emp.employeeId.isNotEmpty ? "Candidate ID: ${emp.employeeId}" : "Status: Registration Submitted"}'
-                          : 'This candidate registration link has already been submitted and cannot be opened a second time.\n\nIf you need to make changes or require assistance, please contact HR Admin.',
+                          : 'This registration link has already been used and is no longer available.',
                     );
                   }
 
@@ -1482,17 +1483,24 @@ class _EmployeeRegistrationPageState
                     _draftLoaded = true;
                     WidgetsBinding.instance.addPostFrameCallback((_) async {
                       try {
-                        final emps = await ref.read(allEmployeesProvider.future);
-                        final matchedEmployee = _findMatchingEmployee(link, emps);
-                        if (matchedEmployee != null && mounted) {
-                          _selectedAcceptedEmpId = matchedEmployee.id;
-                          _populateFromEmployee(matchedEmployee);
-                        } else if (link.employeeName.isNotEmpty && mounted) {
-                          setState(() {
-                            if (_firstNameController.text.isEmpty) {
-                              _firstNameController.text = link.employeeName;
-                            }
-                          });
+                        final repo = ref.read(employeeRepositoryProvider);
+                        final candidateResponse = await repo.getCandidateResponseByLinkId(link.linkId) ??
+                            (link.employeeId.isNotEmpty ? await repo.getCandidateResponseByCandidateId(link.employeeId) : null);
+                        if (candidateResponse != null && mounted) {
+                          _populateFromEmployee(candidateResponse.employeeData);
+                        } else {
+                          final emps = await ref.read(allEmployeesProvider.future);
+                          final matchedEmployee = _findMatchingEmployee(link, emps);
+                          if (matchedEmployee != null && mounted) {
+                            _selectedAcceptedEmpId = matchedEmployee.id;
+                            _populateFromEmployee(matchedEmployee);
+                          } else if (link.employeeName.isNotEmpty && mounted) {
+                            setState(() {
+                              if (_firstNameController.text.isEmpty) {
+                                _firstNameController.text = link.employeeName;
+                              }
+                            });
+                          }
                         }
                       } catch (_) {}
                     });
@@ -2070,7 +2078,7 @@ class _EmployeeRegistrationPageState
         _buildRow2or3(
           isMobile: isMobile,
           children: [
-            _buildTextField('Email', _emailController, placeholder: 'Saravanan@igreentec.in'),
+            _buildTextField('Email', _emailController, placeholder: 'Saravanan@igreentec.in', isEmail: true),
             _buildTextField('PF Number', _pfNumberController, placeholder: '100338738050', isAlphanumeric: true, isUppercase: true, maxLength: 22),
             _buildTextField('ESI Number', _esiNumberController, placeholder: 'ESI Number', isNumber: true, maxLength: 17),
           ],
@@ -3772,6 +3780,7 @@ class _EmployeeRegistrationPageState
     bool isName = false,
     bool isAlphanumeric = false,
     bool isUppercase = false,
+    bool isEmail = false,
     int? maxLength,
     String countryCode = '+91',
     ValueChanged<String>? onCountryCodeChanged,
@@ -3797,7 +3806,7 @@ class _EmployeeRegistrationPageState
           ? TextInputType.numberWithOptions(decimal: allowDecimal)
           : (isPan || isIfsc || isPassport || isDrivingLicense || isAlphanumeric
             ? TextInputType.visiblePassword
-            : TextInputType.text))
+            : (isEmail ? TextInputType.emailAddress : TextInputType.text)))
     );
 
     final effectiveInputFormatters = inputFormatters ?? (
@@ -3915,6 +3924,11 @@ class _EmployeeRegistrationPageState
                 }
                 if (RegExp(r"[^a-zA-Z\s.\-']").hasMatch(trimmed)) {
                   return 'Special symbols are not allowed in name fields.';
+                }
+              } else if (isEmail) {
+                final emailRegExp = RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
+                if (!emailRegExp.hasMatch(trimmed)) {
+                  return 'Please enter a valid email address (e.g. user@gmail.com).';
                 }
               } else if (isNumber || isPhone) {
                 if (RegExp(r'[a-zA-Z]').hasMatch(trimmed)) {

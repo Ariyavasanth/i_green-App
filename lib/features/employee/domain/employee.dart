@@ -714,6 +714,11 @@ class Employee {
     };
   }
 
+  String toJson() => jsonEncode(toMap());
+
+  factory Employee.fromJson(String source) =>
+      Employee.fromMap(jsonDecode(source) as Map<String, dynamic>);
+
   factory Employee.fromMap(Map<String, dynamic> map) {
     return Employee(
       id: map['id'] as int? ?? 0,
