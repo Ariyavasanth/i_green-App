@@ -29,6 +29,12 @@ class _AdminPermissionManagementPageState extends ConsumerState<AdminPermissionM
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _tabController.addListener(() {
+      if (mounted) {
+        ref.read(adminPermissionActiveTabProvider.notifier).state = _tabController.index;
+        setState(() {});
+      }
+    });
   }
 
   @override
@@ -52,36 +58,6 @@ class _AdminPermissionManagementPageState extends ConsumerState<AdminPermissionM
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
-      appBar: AppBar(
-        title: const Text(
-          'Permission Management',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-        ),
-        backgroundColor: AdminPermissionManagementPage.darkNeutral,
-        iconTheme: const IconThemeData(color: Colors.white),
-        elevation: 0,
-        actions: [
-          IconButton(
-            onPressed: _refreshData,
-            icon: const Icon(Icons.refresh, color: Colors.white),
-            tooltip: 'Refresh Requests',
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: AdminPermissionManagementPage.primaryGreen,
-          indicatorWeight: 3,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-          tabs: const [
-            Tab(text: 'Requests'),
-            Tab(text: 'Emergency'),
-            Tab(text: 'Usage Tracker'),
-            Tab(text: 'Settings'),
-          ],
-        ),
-      ),
       body: TabBarView(
         controller: _tabController,
         children: [
@@ -97,6 +73,54 @@ class _AdminPermissionManagementPageState extends ConsumerState<AdminPermissionM
           // Tab 4: Policy Settings
           const AdminPermissionSettingsPage(),
         ],
+      ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: TabBar(
+              controller: _tabController,
+              indicatorColor: AdminPermissionManagementPage.primaryGreen,
+              indicatorWeight: 3,
+              labelColor: AdminPermissionManagementPage.primaryGreen,
+              unselectedLabelColor: Colors.grey.shade600,
+              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 11),
+              tabs: const [
+                Tab(
+                  icon: Icon(Icons.assignment_outlined, size: 22),
+                  text: 'Requests',
+                  iconMargin: EdgeInsets.only(bottom: 4),
+                ),
+                Tab(
+                  icon: Icon(Icons.warning_amber_rounded, size: 22),
+                  text: 'Emergency',
+                  iconMargin: EdgeInsets.only(bottom: 4),
+                ),
+                Tab(
+                  icon: Icon(Icons.bar_chart_outlined, size: 22),
+                  text: 'Usage',
+                  iconMargin: EdgeInsets.only(bottom: 4),
+                ),
+                Tab(
+                  icon: Icon(Icons.settings_outlined, size: 22),
+                  text: 'Settings',
+                  iconMargin: EdgeInsets.only(bottom: 4),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -289,84 +313,129 @@ class _AdminPermissionManagementPageState extends ConsumerState<AdminPermissionM
     }
 
     final dateStr = '${req.date.day} ${_getMonthAbbr(req.date.month)} ${req.date.year}';
+    final initials = req.employeeName.isNotEmpty
+        ? req.employeeName.trim().split(' ').map((e) => e[0]).take(2).join().toUpperCase()
+        : 'E';
 
     return Container(
-      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            backgroundColor: AdminPermissionManagementPage.primaryGreen,
-            child: Text(
-              req.employeeName.isNotEmpty ? req.employeeName[0].toUpperCase() : 'E',
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          // Top Section: Avatar, Name, ID, Status Badge
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: Row(
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: const Color(0xFFFFF3E0),
+                  child: Text(
+                    initials,
+                    style: const TextStyle(
+                      color: Color(0xFFE65100),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
                         req.employeeName,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AdminPermissionManagementPage.darkNeutral),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          color: AdminPermissionManagementPage.darkNeutral,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(12),
+                      const SizedBox(height: 2),
+                      Text(
+                        'ID: ${req.employeeCode}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                      child: Text(
-                        req.status == PermissionStatus.emergencyPending
-                            ? 'Emergency Pending'
-                            : (req.isEmergency ? 'Emergency' : req.status.label),
-                        style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold),
-                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: statusColor.withOpacity(0.3)),
+                  ),
+                  child: Text(
+                    req.status == PermissionStatus.emergencyPending
+                        ? 'Emergency Pending'
+                        : (req.isEmergency ? 'Emergency' : req.status.label),
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
                     ),
-                  ],
-                ),
-                Text(
-                  '${req.employeeCode} • ${req.department}',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(Icons.calendar_today, size: 14, color: Colors.grey.shade600),
-                    const SizedBox(width: 4),
-                    Text(dateStr, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-                    const SizedBox(width: 12),
-                    Icon(Icons.access_time, size: 14, color: Colors.grey.shade600),
-                    const SizedBox(width: 4),
-                    Text('${req.fromTime} - ${req.toTime} (${req.durationMinutes}m)', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Reason: ${req.reason}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700, fontStyle: FontStyle.italic),
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 10),
-          ElevatedButton(
-            onPressed: () async {
+
+          // Department & Category Chips
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                _buildTagChip(Icons.business_outlined, req.department),
+                _buildTagChip(Icons.category_outlined, req.permissionType.label),
+                _buildTagChip(Icons.calendar_today_outlined, dateStr),
+                _buildTagChip(Icons.access_time_outlined, '${req.fromTime} - ${req.toTime} (${req.durationMinutes}m)'),
+              ],
+            ),
+          ),
+
+          if (req.reason.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'Reason: ${req.reason}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade700,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 12),
+
+          // Bottom Action Banner: "Review Request Details >"
+          InkWell(
+            onTap: () async {
               final result = await showDialog<bool>(
                 context: context,
                 builder: (ctx) => AdminRequestReviewDialog(request: req),
@@ -375,12 +444,66 @@ class _AdminPermissionManagementPageState extends ConsumerState<AdminPermissionM
                 _refreshData();
               }
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AdminPermissionManagementPage.darkNeutral,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            borderRadius: const BorderRadius.only(
+              bottomLeft: Radius.circular(16),
+              bottomRight: Radius.circular(16),
             ),
-            child: const Text('Review', style: TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold)),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8F9FB),
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(16),
+                ),
+                border: Border(
+                  top: BorderSide(color: Colors.grey.shade200),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Review Request Details',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AdminPermissionManagementPage.darkNeutral,
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 20,
+                    color: Colors.grey.shade600,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTagChip(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: Colors.grey.shade700),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade800,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
       ),

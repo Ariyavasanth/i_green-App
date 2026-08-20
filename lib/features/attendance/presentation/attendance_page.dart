@@ -949,9 +949,12 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF9CC70A))),
       error: (e, _) => Center(child: Text('Error loading leave requests: $e')),
       data: (requests) {
-        final filteredRequests = _getFilteredRequests(requests);
+        final leaveOnlyRequests = requests
+            .where((r) => !r.leaveType.toLowerCase().startsWith('permission'))
+            .toList();
+        final filteredRequests = _getFilteredRequests(leaveOnlyRequests);
         final now = DateTime.now();
-        final thisMonthRequests = requests.where((r) {
+        final thisMonthRequests = leaveOnlyRequests.where((r) {
           final from = _parseKey(r.fromDate);
           final to = _parseKey(r.toDate) ?? from;
           if (from == null && to == null) return false;
@@ -2522,11 +2525,13 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Request Type Dropdown
-                      const Text('Request Type', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
+                      // Leave Type Dropdown
+                      const Text('Leave Type', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
                       const SizedBox(height: 6),
                       DropdownButtonFormField<String>(
-                        value: requestType,
+                        value: (activeLeaveTypes.isNotEmpty && activeLeaveTypes.any((t) => t.name == _selectedLeaveType))
+                            ? _selectedLeaveType
+                            : (activeLeaveTypes.isNotEmpty ? activeLeaveTypes.first.name : _selectedLeaveType),
                         decoration: InputDecoration(
                           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -2535,254 +2540,134 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                             borderSide: const BorderSide(color: Color(0xFF9CC70A), width: 2),
                           ),
                         ),
-                        items: ['Leave', 'Permission']
+                        items: (activeLeaveTypes.isNotEmpty
+                                ? activeLeaveTypes.map((type) => type.name).toList()
+                                : [
+                                    'Sick Leave',
+                                    'Casual Leave',
+                                    'Annual Leave',
+                                    'Optional Leave',
+                                    'Emergency Leave',
+                                    'Work From Home',
+                                    'Comp Off',
+                                  ])
                             .map((type) => DropdownMenuItem(value: type, child: Text(type)))
                             .toList(),
                         onChanged: (val) {
                           if (val != null) {
-                            setDialogState(() => requestType = val);
+                            setDialogState(() => _selectedLeaveType = val);
                           }
                         },
                       ),
                       const SizedBox(height: 16),
 
-                      if (requestType == 'Leave') ...[
-                        const Text('Leave Type', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
-                        const SizedBox(height: 6),
-                        DropdownButtonFormField<String>(
-                          value: (activeLeaveTypes.isNotEmpty && activeLeaveTypes.any((t) => t.name == _selectedLeaveType))
-                              ? _selectedLeaveType
-                              : (activeLeaveTypes.isNotEmpty ? activeLeaveTypes.first.name : _selectedLeaveType),
-                          decoration: InputDecoration(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(color: Color(0xFF9CC70A), width: 2),
-                            ),
-                          ),
-                          items: (activeLeaveTypes.isNotEmpty
-                                  ? activeLeaveTypes.map((type) => type.name).toList()
-                                  : [
-                                      'Sick Leave',
-                                      'Casual Leave',
-                                      'Annual Leave',
-                                      'Optional Leave',
-                                      'Emergency Leave',
-                                      'Work From Home',
-                                      'Comp Off',
-                                    ])
-                              .map((type) => DropdownMenuItem(value: type, child: Text(type)))
-                              .toList(),
-                          onChanged: (val) {
-                            if (val != null) {
-                              setDialogState(() => _selectedLeaveType = val);
-                            }
-                          },
-                        ),
-                        const SizedBox(height: 16),
-
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text('From Date', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
-                                  const SizedBox(height: 6),
-                                  InkWell(
-                                    onTap: () async {
-                                      final picked = await showDatePicker(
-                                        context: context,
-                                        initialDate: _fromDate ?? DateTime.now(),
-                                        firstDate: DateTime(2020),
-                                        lastDate: DateTime(2030),
-                                      );
-                                      if (picked != null) {
-                                        setDialogState(() {
-                                          _fromDate = picked;
-                                          if (_toDate != null && _toDate!.isBefore(picked)) {
-                                            _toDate = picked;
-                                          }
-                                        });
-                                      }
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                                      decoration: BoxDecoration(
-                                        border: Border.all(color: const Color(0xFFCBD5E1)),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              _fromDate != null ? DateFormat('dd MMM yyyy').format(_fromDate!) : 'Select Date',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(fontSize: 12, color: Color(0xFF414A51)),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 2),
-                                          const Icon(Icons.calendar_today, size: 14, color: Color(0xFF64748B)),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text('To Date', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
-                                  const SizedBox(height: 6),
-                                  InkWell(
-                                    onTap: () async {
-                                      final picked = await showDatePicker(
-                                        context: context,
-                                        initialDate: _toDate ?? DateTime.now(),
-                                        firstDate: _fromDate ?? DateTime(2020),
-                                        lastDate: DateTime(2030),
-                                      );
-                                      if (picked != null) {
-                                        setDialogState(() {
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('From Date', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                                const SizedBox(height: 6),
+                                InkWell(
+                                  onTap: () async {
+                                    final picked = await showDatePicker(
+                                      context: context,
+                                      initialDate: _fromDate ?? DateTime.now(),
+                                      firstDate: DateTime(2020),
+                                      lastDate: DateTime(2030),
+                                    );
+                                    if (picked != null) {
+                                      setDialogState(() {
+                                        _fromDate = picked;
+                                        if (_toDate != null && _toDate!.isBefore(picked)) {
                                           _toDate = picked;
-                                        });
-                                      }
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                                      decoration: BoxDecoration(
-                                        border: Border.all(color: const Color(0xFFCBD5E1)),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              _toDate != null ? DateFormat('dd MMM yyyy').format(_toDate!) : 'Select Date',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(fontSize: 12, color: Color(0xFF414A51)),
-                                            ),
+                                        }
+                                      });
+                                    }
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            _fromDate != null ? DateFormat('dd MMM yyyy').format(_fromDate!) : 'Select Date',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(fontSize: 12, color: Color(0xFF414A51)),
                                           ),
-                                          const SizedBox(width: 2),
-                                          const Icon(Icons.calendar_today, size: 14, color: Color(0xFF64748B)),
-                                        ],
-                                      ),
+                                        ),
+                                        const SizedBox(width: 2),
+                                        const Icon(Icons.calendar_today, size: 14, color: Color(0xFF64748B)),
+                                      ],
                                     ),
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Text(
-                            'Duration: ${days == 1 ? '1 Day' : '$days Days'}',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF65A30D)),
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                      ] else ...[
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text('From Time', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
-                                  const SizedBox(height: 6),
-                                  InkWell(
-                                    onTap: () async {
-                                      final picked = await showTimePicker(
-                                        context: context,
-                                        initialTime: fromTime,
-                                      );
-                                      if (picked != null) {
-                                        setDialogState(() {
-                                          fromTime = picked;
-                                        });
-                                      }
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                      decoration: BoxDecoration(
-                                        border: Border.all(color: const Color(0xFFCBD5E1)),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            formatTimeOfDay(fromTime),
-                                            style: const TextStyle(fontSize: 13, color: Color(0xFF414A51)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('To Date', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                                const SizedBox(height: 6),
+                                InkWell(
+                                  onTap: () async {
+                                    final picked = await showDatePicker(
+                                      context: context,
+                                      initialDate: _toDate ?? DateTime.now(),
+                                      firstDate: _fromDate ?? DateTime(2020),
+                                      lastDate: DateTime(2030),
+                                    );
+                                    if (picked != null) {
+                                      setDialogState(() {
+                                        _toDate = picked;
+                                      });
+                                    }
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            _toDate != null ? DateFormat('dd MMM yyyy').format(_toDate!) : 'Select Date',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(fontSize: 12, color: Color(0xFF414A51)),
                                           ),
-                                          const Icon(Icons.access_time, size: 16, color: Color(0xFF64748B)),
-                                        ],
-                                      ),
+                                        ),
+                                        const SizedBox(width: 2),
+                                        const Icon(Icons.calendar_today, size: 14, color: Color(0xFF64748B)),
+                                      ],
                                     ),
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text('To Time', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
-                                  const SizedBox(height: 6),
-                                  InkWell(
-                                    onTap: () async {
-                                      final picked = await showTimePicker(
-                                        context: context,
-                                        initialTime: toTime,
-                                      );
-                                      if (picked != null) {
-                                        setDialogState(() {
-                                          toTime = picked;
-                                        });
-                                      }
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                      decoration: BoxDecoration(
-                                        border: Border.all(color: const Color(0xFFCBD5E1)),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            formatTimeOfDay(toTime),
-                                            style: const TextStyle(fontSize: 13, color: Color(0xFF414A51)),
-                                          ),
-                                          const Icon(Icons.access_time, size: 16, color: Color(0xFF64748B)),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Text(
-                            'Duration: ${formatPermissionDuration(permHours)}',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF9CC70A)),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          'Duration: ${days == 1 ? '1 Day' : '$days Days'}',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF65A30D)),
                         ),
-                        const SizedBox(height: 16),
-                      ],
+                      ),
+                      const SizedBox(height: 16),
 
                       // Description
                       const Text('Description', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
@@ -2827,117 +2712,63 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                       return;
                     }
 
-                    if (requestType == 'Permission') {
-                      final permissionHours = calculatePermissionHours(fromTime, toTime);
-                      if (permissionHours <= 0 || permissionHours > 1.0001) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Permission must be between 1 minute and 1 hour per day.'),
-                            backgroundColor: Color(0xFFC62828),
-                          ),
-                        );
-                        return;
-                      }
-                      if (permissionHours > permissionAllowance.remainingHours + 0.0001) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('You have only ${formatPermissionDuration(permissionAllowance.remainingHours)} of permission remaining this month.'),
-                            backgroundColor: const Color(0xFFC62828),
-                          ),
-                        );
-                        return;
-                      }
-                    }
-
                     final messenger = ScaffoldMessenger.of(context);
                     final nav = Navigator.of(dialogCtx);
 
                     try {
-                      if (existingRequest != null) {
-                        final fromStr = requestType == 'Leave'
-                            ? DateFormat('dd-MM-yyyy').format(_fromDate!)
-                            : DateFormat('dd-MM-yyyy').format(DateTime.now());
-                        final toStr = requestType == 'Leave'
-                            ? DateFormat('dd-MM-yyyy').format(_toDate!)
-                            : DateFormat('dd-MM-yyyy').format(DateTime.now());
-                        final leaveTypeStr = requestType == 'Leave'
-                            ? _selectedLeaveType
-                            : 'Permission (${formatTimeOfDay(fromTime)} - ${formatTimeOfDay(toTime)})';
+                      final fromStr = DateFormat('dd-MM-yyyy').format(_fromDate!);
+                      final toStr = DateFormat('dd-MM-yyyy').format(_toDate!);
 
+                      if (existingRequest != null) {
                         final updatedReq = existingRequest.copyWith(
-                          leaveType: leaveTypeStr,
+                          leaveType: _selectedLeaveType,
                           fromDate: fromStr,
                           toDate: toStr,
-                          numDays: requestType == 'Leave' ? days : (calculatePermissionHours(fromTime, toTime) / 8.0),
+                          numDays: days,
                           reason: _reasonController.text.trim(),
                         );
 
                         await ref.read(leaveRepositoryProvider).updateLeaveRequest(updatedReq);
                       } else {
-                        LeaveRequest newReq;
-                        if (requestType == 'Leave') {
-                          final fromStr = DateFormat('dd-MM-yyyy').format(_fromDate!);
-                          final toStr = DateFormat('dd-MM-yyyy').format(_toDate!);
-
-                          newReq = LeaveRequest(
-                            id: 0,
-                            employeeId: currentEmp.id,
-                            employeeName: currentEmp.fullName,
-                            employeeCustomId: currentEmp.employeeId,
-                            leaveType: _selectedLeaveType,
-                            fromDate: fromStr,
-                            toDate: toStr,
-                            numDays: days,
-                            reason: _reasonController.text.trim(),
-                            status: 'Pending',
-                            createdAt: DateTime.now().toIso8601String(),
-                          );
-                        } else {
-                          final todayStr = DateFormat('dd-MM-yyyy').format(DateTime.now());
-                          final fromTimeStr = formatTimeOfDay(fromTime);
-                          final toTimeStr = formatTimeOfDay(toTime);
-
-                          newReq = LeaveRequest(
-                            id: 0,
-                            employeeId: currentEmp.id,
-                            employeeName: currentEmp.fullName,
-                            employeeCustomId: currentEmp.employeeId,
-                            leaveType: 'Permission ($fromTimeStr - $toTimeStr)',
-                            fromDate: todayStr,
-                            toDate: todayStr,
-                            numDays: permHours / 8.0,
-                            reason: _reasonController.text.trim(),
-                            status: 'Pending',
-                            createdAt: DateTime.now().toIso8601String(),
-                          );
-                        }
+                        final newReq = LeaveRequest(
+                          id: 0,
+                          employeeId: currentEmp.id,
+                          employeeName: currentEmp.fullName,
+                          employeeCustomId: currentEmp.employeeId,
+                          leaveType: _selectedLeaveType,
+                          fromDate: fromStr,
+                          toDate: toStr,
+                          numDays: days,
+                          reason: _reasonController.text.trim(),
+                          status: 'Pending',
+                          createdAt: DateTime.now().toIso8601String(),
+                        );
                         await ref.read(leaveRepositoryProvider).submitLeaveRequest(newReq);
                       }
 
                       ref.invalidate(leaveRequestsProvider(currentEmp.id));
                       ref.invalidate(allLeaveRequestsProvider);
-                      ref.invalidate(permissionAllowanceProvider(currentEmp.id));
 
                       nav.pop();
                       messenger.showSnackBar(
                         SnackBar(
                           content: Text(existingRequest != null
                               ? 'Leave request updated successfully!'
-                              : '${requestType == 'Permission' ? 'Permission' : 'Leave'} request submitted successfully!'),
+                              : 'Leave request submitted successfully!'),
                           backgroundColor: const Color(0xFF2E7D32),
                         ),
                       );
                     } catch (e) {
                       messenger.showSnackBar(
                         SnackBar(
-                          content: Text('Failed: $e'),
+                          content: Text('Failed to submit: $e'),
                           backgroundColor: const Color(0xFFC62828),
                         ),
                       );
                     }
                   },
-                  icon: const Icon(Icons.send, size: 16),
-                  label: Text(existingRequest != null ? 'Update Request' : 'Submit Request', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  icon: const Icon(Icons.check_circle, size: 18),
+                  label: const Text('Submit Request', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ],
             );

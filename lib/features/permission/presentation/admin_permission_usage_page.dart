@@ -31,35 +31,21 @@ class _AdminPermissionUsagePageState extends ConsumerState<AdminPermissionUsageP
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Permission Usage Tracker',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: AdminPermissionUsagePage.darkNeutral,
-                      ),
-                    ),
-                    Text(
-                      'Monitor monthly employee permission consumption and remaining balances.',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                  ],
-                ),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    setState(() {});
-                  },
-                  icon: const Icon(Icons.refresh, size: 16, color: Colors.white),
-                  label: const Text('Refresh', style: TextStyle(color: Colors.white)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AdminPermissionUsagePage.darkNeutral,
+                const Text(
+                  'Usage Tracker',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: AdminPermissionUsagePage.darkNeutral,
                   ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Monitor monthly employee permission consumption and remaining balances.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                 ),
               ],
             ),
@@ -73,22 +59,33 @@ class _AdminPermissionUsagePageState extends ConsumerState<AdminPermissionUsageP
                     return const Center(child: Text('No employees found'));
                   }
 
-                  return ListView.separated(
-                    itemCount: employees.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
+                  return RefreshIndicator(
+                    onRefresh: () async {
+                      ref.invalidate(employeesProvider);
+                      setState(() {});
+                    },
+                    child: ListView.separated(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      itemCount: employees.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
                       final emp = employees[index];
+                      final initials = emp.firstName.isNotEmpty
+                          ? '${emp.firstName[0]}${emp.lastName.isNotEmpty ? emp.lastName[0] : ''}'.toUpperCase()
+                          : 'E';
+
                       return FutureBuilder<PermissionBalance>(
                         future: repo.getPermissionBalance(emp.id, _selectedMonth),
                         builder: (context, snapshot) {
                           if (!snapshot.hasData) {
                             return Container(
-                              height: 70,
+                              height: 80,
                               decoration: BoxDecoration(
                                 color: Colors.white,
-                                borderRadius: BorderRadius.circular(10),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: Colors.grey.shade200),
                               ),
-                              child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                              child: const Center(child: CircularProgressIndicator()),
                             );
                           }
 
@@ -98,83 +95,119 @@ class _AdminPermissionUsagePageState extends ConsumerState<AdminPermissionUsageP
                               : 0.0;
 
                           return Container(
-                            padding: const EdgeInsets.all(14),
+                            padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
                               color: Colors.white,
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius: BorderRadius.circular(16),
                               border: Border.all(color: Colors.grey.shade200),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.02),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
                             ),
-                            child: Row(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                CircleAvatar(
-                                  backgroundColor: AdminPermissionUsagePage.primaryGreen.withOpacity(0.2),
-                                  child: Text(
-                                    emp.firstName.isNotEmpty ? emp.firstName[0].toUpperCase() : 'E',
-                                    style: const TextStyle(color: AdminPermissionUsagePage.darkNeutral, fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  flex: 3,
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        '${emp.firstName} ${emp.lastName}',
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                      ),
-                                      Text(
-                                        '${emp.employeeId} • ${emp.department}',
-                                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Expanded(
-                                  flex: 4,
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Text(
-                                        'Used: ${bal.monthlyUsedHours.toStringAsFixed(1)}h / ${bal.monthlyLimitHours.toStringAsFixed(1)}h',
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(6),
-                                        child: LinearProgressIndicator(
-                                          value: percent,
-                                          minHeight: 6,
-                                          backgroundColor: Colors.grey.shade200,
-                                          valueColor: AlwaysStoppedAnimation<Color>(
-                                            percent >= 1.0
-                                                ? Colors.red
-                                                : (percent > 0.7 ? Colors.orange : AdminPermissionUsagePage.primaryGreen),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade100,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Column(
-                                    children: [
-                                      const Text('Rem.', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                                      Text(
-                                        '${bal.monthlyRemainingHours.toStringAsFixed(1)}h',
+                                Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 20,
+                                      backgroundColor: const Color(0xFFE8F5E9),
+                                      child: Text(
+                                        initials,
                                         style: const TextStyle(
+                                          color: Color(0xFF2E7D32),
                                           fontWeight: FontWeight.bold,
                                           fontSize: 13,
-                                          color: AdminPermissionUsagePage.darkNeutral,
                                         ),
                                       ),
-                                    ],
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            '${emp.firstName} ${emp.lastName}',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 15,
+                                              color: AdminPermissionUsagePage.darkNeutral,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            'ID: ${emp.employeeId} • ${emp.department}',
+                                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: bal.monthlyRemainingMinutes <= 0
+                                            ? Colors.red.shade50
+                                            : Colors.grey.shade100,
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: bal.monthlyRemainingMinutes <= 0
+                                              ? Colors.red.shade200
+                                              : Colors.grey.shade300,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        'Rem. ${bal.monthlyRemainingHours.toStringAsFixed(1)}h',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: bal.monthlyRemainingMinutes <= 0
+                                              ? Colors.red.shade700
+                                              : AdminPermissionUsagePage.darkNeutral,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'Used: ${bal.monthlyUsedHours.toStringAsFixed(1)}h / ${bal.monthlyLimitHours.toStringAsFixed(1)}h',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey.shade800,
+                                      ),
+                                    ),
+                                    Text(
+                                      '${(percent * 100).toStringAsFixed(0)}%',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: percent >= 1.0 ? Colors.red : Colors.grey.shade700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: LinearProgressIndicator(
+                                    value: percent,
+                                    minHeight: 6,
+                                    backgroundColor: Colors.grey.shade200,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      percent >= 1.0
+                                          ? Colors.red
+                                          : (percent > 0.7 ? Colors.orange : AdminPermissionUsagePage.primaryGreen),
+                                    ),
                                   ),
                                 ),
                               ],
@@ -183,8 +216,9 @@ class _AdminPermissionUsagePageState extends ConsumerState<AdminPermissionUsageP
                         },
                       );
                     },
-                  );
-                },
+                  ),
+                );
+              },
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (err, stack) => Text('Error loading employees: $err'),
               ),

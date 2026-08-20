@@ -8,9 +8,12 @@ import '../domain/permission_policy.dart';
 import '../domain/permission_repository.dart';
 import '../domain/permission_request.dart';
 
+/// Active tab index in Admin Permission Management screen: 0: Requests, 1: Emergency, 2: Usage, 3: Settings
+final adminPermissionActiveTabProvider = StateProvider<int>((ref) => 0);
+
 /// Swap to FirebasePermissionRepository() to switch to Firebase — no screen changes needed.
 final permissionRepositoryProvider = Provider<PermissionRepository>(
-  (ref) => SqlitePermissionRepository(),
+  (ref) => FirebasePermissionRepository(),
 );
 
 final permissionPolicyProvider = FutureProvider<PermissionPolicy>((ref) {

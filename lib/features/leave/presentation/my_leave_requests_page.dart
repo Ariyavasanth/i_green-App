@@ -226,7 +226,10 @@ class _MyLeaveRequestsPageState extends ConsumerState<MyLeaveRequestsPage> {
         loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF9CC70A))),
         error: (e, _) => Center(child: Text('Error: $e')),
         data: (allRequests) {
-          final monthRequests = allRequests.where((r) => _isInMonth(r, _selectedMonth)).toList();
+          final leaveRequestsOnly = allRequests
+              .where((r) => !r.leaveType.toLowerCase().startsWith('permission'))
+              .toList();
+          final monthRequests = leaveRequestsOnly.where((r) => _isInMonth(r, _selectedMonth)).toList();
 
           final totalInMonth = monthRequests.length;
           final pendingInMonth = monthRequests.where((r) => r.status.toLowerCase() == 'pending').length;

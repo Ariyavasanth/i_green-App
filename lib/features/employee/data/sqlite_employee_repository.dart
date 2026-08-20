@@ -673,11 +673,11 @@ class SqliteEmployeeRepository implements EmployeeRepository {
 
     // Update Registration Link details
     final updatedLink = link.copyWith(
-      linkStatus: 'Submitted',
+      linkStatus: isSubmit ? 'Submitted' : link.linkStatus,
       employeeName: finalEmployee.fullName,
       employeeId: candidateId,
-      submittedDate: isSubmit ? nowStr : '',
-      submittedBy: isSubmit ? finalEmployee.fullName : '',
+      submittedDate: isSubmit ? nowStr : link.submittedDate,
+      submittedBy: isSubmit ? finalEmployee.fullName : link.submittedBy,
     );
 
     await db.update(

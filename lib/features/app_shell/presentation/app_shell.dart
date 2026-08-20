@@ -11,6 +11,7 @@ import '../../../widgets/navigation/sidebar_drawer.dart';
 import '../../authentication/providers/authentication_providers.dart';
 import '../../books/providers/books_providers.dart';
 import '../../employee/providers/employee_providers.dart';
+import '../../permission/providers/permission_providers.dart';
 
 final sidebarStateStorageProvider = Provider<SidebarStateStorage>(
   (_) => createSidebarStateStorage(),
@@ -433,6 +434,13 @@ class _TopBar extends ConsumerWidget {
           break;
         default:
           headingText = 'Attendance';
+      }
+    } else if (currentLocation == '/permission' || currentLocation == '/permission-management') {
+      final permTab = ref.watch(adminPermissionActiveTabProvider);
+      if (permTab == 2) {
+        headingText = 'Usage Tracker';
+      } else {
+        headingText = 'Permission';
       }
     } else {
       headingText = _getHeading(currentLocation);

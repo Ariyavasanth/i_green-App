@@ -30,11 +30,14 @@ final employeesProvider = FutureProvider<List<Employee>>(
   (ref) async {
     final employees = await ref.watch(employeeRepositoryProvider).getEmployees();
     final uniqueEmployees = <Employee>[];
-    final seenIds = <int>{};
+    final seenKeys = <String>{};
     for (final emp in employees) {
+      final key = emp.employeeId.trim().isNotEmpty
+          ? emp.employeeId.trim().toUpperCase()
+          : '${emp.id}_${emp.emailAddress.trim().toLowerCase()}';
       if (!emp.employeeId.startsWith('CAN-') &&
           emp.status.toLowerCase() != 'draft' &&
-          seenIds.add(emp.id)) {
+          seenKeys.add(key)) {
         uniqueEmployees.add(emp);
       }
     }
@@ -46,11 +49,14 @@ final allEmployeesProvider = FutureProvider<List<Employee>>(
   (ref) async {
     final employees = await ref.watch(employeeRepositoryProvider).getAllEmployees();
     final uniqueEmployees = <Employee>[];
-    final seenIds = <int>{};
+    final seenKeys = <String>{};
     for (final emp in employees) {
+      final key = emp.employeeId.trim().isNotEmpty
+          ? emp.employeeId.trim().toUpperCase()
+          : '${emp.id}_${emp.emailAddress.trim().toLowerCase()}';
       if (!emp.employeeId.startsWith('CAN-') &&
           emp.status.toLowerCase() != 'draft' &&
-          seenIds.add(emp.id)) {
+          seenKeys.add(key)) {
         uniqueEmployees.add(emp);
       }
     }

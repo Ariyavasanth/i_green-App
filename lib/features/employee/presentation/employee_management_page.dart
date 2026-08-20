@@ -79,10 +79,10 @@ class _EmployeeManagementPageState
               child: Text('Unable to load employees: $err'),
             ),
             data: (allEmployees) {
-              // Only active employees (imported and configured) come into Employee Management module table
+              // Include all registered, active, converted, submitted, and pending employees in Employee Management table
               final employees = allEmployees.where((emp) {
                 final s = emp.status.trim().toLowerCase();
-                return s == 'active' || s == 'converted' || s == 'submitted';
+                return s != 'archived' && s != 'deleted';
               }).toList();
 
               // Populate unique dropdown filter choices

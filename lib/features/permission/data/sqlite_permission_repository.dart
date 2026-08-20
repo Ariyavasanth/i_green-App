@@ -106,25 +106,9 @@ class SqlitePermissionRepository implements PermissionRepository {
     final db = await database;
     final policy = await getPermissionPolicy();
 
-    double dailyLimitHours = policy.dailyLimitHours;
-    double monthlyLimitHours = policy.monthlyLimitHours;
-
-    try {
-      final empRows = await db.query(
-        'employees',
-        columns: ['daily_permission_limit_hours', 'monthly_permission_limit_hours'],
-        where: 'id = ?',
-        whereArgs: [employeeId],
-      );
-      if (empRows.isNotEmpty) {
-        final empDaily = (empRows.first['daily_permission_limit_hours'] as num?)?.toDouble();
-        final empMonthly = (empRows.first['monthly_permission_limit_hours'] as num?)?.toDouble();
-        if (empDaily != null && empDaily > 0) dailyLimitHours = empDaily;
-        if (empMonthly != null && empMonthly > 0) monthlyLimitHours = empMonthly;
-      }
-    } catch (_) {
-      // Fallback to global policy if employees table is not populated
-    }
+    // Use global permission policy settings for all employees
+    final double dailyLimitHours = policy.dailyLimitHours;
+    final double monthlyLimitHours = policy.monthlyLimitHours;
 
     final dateStr = date.toIso8601String().split('T').first;
     final yearMonthStr = '${date.year}-${date.month.toString().padLeft(2, '0')}';

@@ -170,22 +170,26 @@ class _AdminRequestReviewDialogState extends ConsumerState<AdminRequestReviewDia
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Icon(
-                        isEmergency ? Icons.warning_amber_rounded : Icons.fact_check_outlined,
-                        color: isEmergency ? Colors.orange.shade800 : AdminRequestReviewDialog.darkNeutral,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        isEmergency ? 'Emergency Permission Review' : 'Permission Request Review',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: AdminRequestReviewDialog.darkNeutral,
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Icon(
+                          isEmergency ? Icons.warning_amber_rounded : Icons.fact_check_outlined,
+                          color: isEmergency ? Colors.orange.shade800 : AdminRequestReviewDialog.darkNeutral,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            isEmergency ? 'Emergency Permission Review' : 'Permission Request Review',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: AdminRequestReviewDialog.darkNeutral,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   IconButton(
                     onPressed: () => Navigator.pop(context, false),
@@ -239,7 +243,7 @@ class _AdminRequestReviewDialogState extends ConsumerState<AdminRequestReviewDia
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AdminRequestReviewDialog.darkNeutral),
               ),
               const SizedBox(height: 8),
-              _buildRow('Date', req.date.toIso8601String().split('T').first),
+              _buildRow('Date', '${req.date.year}-${req.date.month.toString().padLeft(2, '0')}-${req.date.day.toString().padLeft(2, '0')}'),
               _buildRow('Type', req.permissionType.label),
               _buildRow('Time Range', '${req.fromTime} – ${req.toTime}'),
               _buildRow('Duration', '${req.durationMinutes} minutes'),
@@ -248,7 +252,7 @@ class _AdminRequestReviewDialogState extends ConsumerState<AdminRequestReviewDia
                 _buildRow('Emergency Justification', req.emergencyReason!, isBold: true),
               const SizedBox(height: 16),
 
-              // Employee Policy & Usage Balance Context
+              // Employee Balance Context
               balanceAsync.maybeWhen(
                 data: (bal) => Container(
                   padding: const EdgeInsets.all(12),
@@ -262,7 +266,7 @@ class _AdminRequestReviewDialogState extends ConsumerState<AdminRequestReviewDia
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.info_outline, size: 16, color: Colors.blue.shade800),
+                          Icon(Icons.info_outline, size: 18, color: Colors.blue.shade900),
                           const SizedBox(width: 6),
                           Text(
                             'Employee Usage Context',
@@ -275,21 +279,23 @@ class _AdminRequestReviewDialogState extends ConsumerState<AdminRequestReviewDia
                         ],
                       ),
                       const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 4,
                         children: [
-                          Text('Daily Limit: ${bal.todayLimitHours.toStringAsFixed(1)}h', style: const TextStyle(fontSize: 12)),
-                          Text('Used Today: ${bal.todayUsedMinutes} mins', style: const TextStyle(fontSize: 12)),
-                          Text('Rem. Today: ${bal.todayRemainingMinutes} mins', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          Text('• Daily Limit: ${bal.todayLimitHours.toStringAsFixed(1)}h', style: const TextStyle(fontSize: 12)),
+                          Text('• Used Today: ${bal.todayUsedMinutes}m', style: const TextStyle(fontSize: 12)),
+                          Text('• Rem. Today: ${bal.todayRemainingMinutes}m', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 4,
                         children: [
-                          Text('Monthly Limit: ${bal.monthlyLimitHours.toStringAsFixed(1)}h', style: const TextStyle(fontSize: 12)),
-                          Text('Used Month: ${bal.monthlyUsedHours.toStringAsFixed(1)}h', style: const TextStyle(fontSize: 12)),
-                          Text('Rem. Month: ${bal.monthlyRemainingHours.toStringAsFixed(1)}h', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          Text('• Monthly Limit: ${bal.monthlyLimitHours.toStringAsFixed(1)}h', style: const TextStyle(fontSize: 12)),
+                          Text('• Used Month: ${bal.monthlyUsedHours.toStringAsFixed(1)}h', style: const TextStyle(fontSize: 12)),
+                          Text('• Rem. Month: ${bal.monthlyRemainingHours.toStringAsFixed(1)}h', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ],

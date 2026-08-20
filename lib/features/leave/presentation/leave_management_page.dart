@@ -328,331 +328,208 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
                     ),
                     const SizedBox(height: 14),
 
-                    // Request Type Dropdown
-                    const Text('Request Type', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF334155))),
+                    // Leave Type Dropdown
+                    const Text('Leave Type', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF334155))),
                     const SizedBox(height: 6),
-                    DropdownButtonFormField<String>(
-                      initialValue: requestType,
+                    DropdownButtonFormField<LeaveType>(
+                      initialValue: selectedLeaveType,
                       isExpanded: true,
                       decoration: InputDecoration(
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       ),
-                      items: ['Leave', 'Permission']
-                          .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                          .toList(),
-                      onChanged: (val) {
-                        if (val != null) {
-                          setDialogState(() => requestType = val);
-                        }
-                      },
+                      items: (activeLeaveTypes.isNotEmpty ? activeLeaveTypes : leaveTypes).map((t) {
+                        return DropdownMenuItem<LeaveType>(
+                          value: t,
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: _parseHexColor(t.colorHex),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(t.name, overflow: TextOverflow.ellipsis),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (val) => setDialogState(() => selectedLeaveType = val),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('From Date', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF334155))),
+                              const SizedBox(height: 6),
+                              InkWell(
+                                onTap: () async {
+                                  final picked = await showDatePicker(
+                                    context: ctx,
+                                    initialDate: fromDate,
+                                    firstDate: DateTime(2020),
+                                    lastDate: DateTime(2030),
+                                  );
+                                  if (picked != null) {
+                                    setDialogState(() {
+                                      fromDate = picked;
+                                      if (toDate.isBefore(fromDate)) toDate = fromDate;
+                                    });
+                                  }
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                  clipBehavior: Clip.antiAlias,
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          DateFormat('dd-MM-yyyy').format(fromDate),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(fontSize: 13),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      const Icon(Icons.calendar_today, size: 16, color: Color(0xFF64748B)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('To Date', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF334155))),
+                              const SizedBox(height: 6),
+                              InkWell(
+                                onTap: () async {
+                                  final picked = await showDatePicker(
+                                    context: ctx,
+                                    initialDate: toDate,
+                                    firstDate: fromDate,
+                                    lastDate: DateTime(2030),
+                                  );
+                                  if (picked != null) {
+                                    setDialogState(() => toDate = picked);
+                                  }
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                  clipBehavior: Clip.antiAlias,
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          DateFormat('dd-MM-yyyy').format(toDate),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(fontSize: 13),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      const Icon(Icons.calendar_today, size: 16, color: Color(0xFF64748B)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Total Duration: ${days > 0 ? days : 1} day(s)',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0D8A4E)),
                     ),
                     const SizedBox(height: 14),
 
-                    if (requestType == 'Leave') ...[
-                      const Text('Leave Type', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF334155))),
-                      const SizedBox(height: 6),
-                      DropdownButtonFormField<LeaveType>(
-                        initialValue: selectedLeaveType,
-                        isExpanded: true,
-                        decoration: InputDecoration(
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    // Employee Policy Warning Banner
+                    if (selectedEmployee != null && selectedEmployee!.leavePolicy == 'No Leave') ...[
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF2F2),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFFECACA)),
                         ),
-                        items: (activeLeaveTypes.isNotEmpty ? activeLeaveTypes : leaveTypes).map((t) {
-                          return DropdownMenuItem<LeaveType>(
-                            value: t,
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 10,
-                                  height: 10,
-                                  decoration: BoxDecoration(
-                                    color: _parseHexColor(t.colorHex),
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(t.name, overflow: TextOverflow.ellipsis),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (val) => setDialogState(() => selectedLeaveType = val),
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('From Date', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF334155))),
-                                const SizedBox(height: 6),
-                                InkWell(
-                                  onTap: () async {
-                                    final picked = await showDatePicker(
-                                      context: ctx,
-                                      initialDate: fromDate,
-                                      firstDate: DateTime(2020),
-                                      lastDate: DateTime(2030),
-                                    );
-                                    if (picked != null) {
-                                      setDialogState(() {
-                                        fromDate = picked;
-                                        if (toDate.isBefore(fromDate)) toDate = fromDate;
-                                      });
-                                    }
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                    clipBehavior: Clip.antiAlias,
-                                    decoration: BoxDecoration(
-                                      border: Border.all(color: const Color(0xFFCBD5E1)),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            DateFormat('dd-MM-yyyy').format(fromDate),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(fontSize: 13),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        const Icon(Icons.calendar_today, size: 16, color: Color(0xFF64748B)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('To Date', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF334155))),
-                                const SizedBox(height: 6),
-                                InkWell(
-                                  onTap: () async {
-                                    final picked = await showDatePicker(
-                                      context: ctx,
-                                      initialDate: toDate,
-                                      firstDate: fromDate,
-                                      lastDate: DateTime(2030),
-                                    );
-                                    if (picked != null) {
-                                      setDialogState(() => toDate = picked);
-                                    }
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                    clipBehavior: Clip.antiAlias,
-                                    decoration: BoxDecoration(
-                                      border: Border.all(color: const Color(0xFFCBD5E1)),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            DateFormat('dd-MM-yyyy').format(toDate),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(fontSize: 13),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        const Icon(Icons.calendar_today, size: 16, color: Color(0xFF64748B)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Total Duration: ${days > 0 ? days : 1} day(s)',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0D8A4E)),
-                      ),
-                      const SizedBox(height: 14),
-                    ] else ...[
-                      // Permission Time Fields
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('From Time', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF334155))),
-                                const SizedBox(height: 6),
-                                InkWell(
-                                  onTap: () async {
-                                    final picked = await showTimePicker(
-                                      context: ctx,
-                                      initialTime: fromTime,
-                                    );
-                                    if (picked != null) {
-                                      setDialogState(() {
-                                        fromTime = picked;
-                                        final fromMin = picked.hour * 60 + picked.minute;
-                                        final toMin = toTime.hour * 60 + toTime.minute;
-                                        if (toMin <= fromMin) {
-                                          toTime = TimeOfDay(hour: (picked.hour + 2) % 24, minute: picked.minute);
-                                        }
-                                      });
-                                    }
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                    decoration: BoxDecoration(
-                                      border: Border.all(color: const Color(0xFFCBD5E1)),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(formatTimeOfDay(fromTime), style: const TextStyle(fontSize: 13)),
-                                        const Icon(Icons.access_time, size: 16, color: Color(0xFF64748B)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('To Time', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF334155))),
-                                const SizedBox(height: 6),
-                                InkWell(
-                                  onTap: () async {
-                                    final picked = await showTimePicker(
-                                      context: ctx,
-                                      initialTime: toTime,
-                                    );
-                                    if (picked != null) {
-                                      setDialogState(() => toTime = picked);
-                                    }
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                    decoration: BoxDecoration(
-                                      border: Border.all(color: const Color(0xFFCBD5E1)),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(formatTimeOfDay(toTime), style: const TextStyle(fontSize: 13)),
-                                        const Icon(Icons.access_time, size: 16, color: Color(0xFF64748B)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Duration: ${formatPermissionDuration(permHours)}',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0D8A4E)),
-                      ),
-                      const SizedBox(height: 14),
-                    ],
-
-                    if (requestType == 'Leave') ...[
-                      // Employee Policy Warning Banner
-                      if (selectedEmployee != null && selectedEmployee!.leavePolicy == 'No Leave') ...[
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFEF2F2),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFFFECACA)),
-                          ),
-                          child: Row(
-                            children: const [
-                              Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 20),
-                              SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  '⚠️ You are currently configured with "No Leave". This request may be treated as LOP. The final decision will be made by the Super Admin.',
-                                  style: TextStyle(fontSize: 11, color: Color(0xFF991B1B), fontWeight: FontWeight.w600),
-                                ),
+                        child: Row(
+                          children: const [
+                            Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 20),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '⚠️ You are currently configured with "No Leave". This request may be treated as LOP. The final decision will be made by the Super Admin.',
+                                style: TextStyle(fontSize: 11, color: Color(0xFF991B1B), fontWeight: FontWeight.w600),
                               ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                      ] else if (selectedEmployee != null && selectedEmployee!.leavePolicy == 'Manual Allocation') ...[
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFFBEB),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFFFDE68A)),
-                          ),
-                          child: Row(
-                            children: const [
-                              Icon(Icons.info_outline, color: Color(0xFFD97706), size: 20),
-                              SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  '⚠️ Your leave quota for this month has been exhausted. The requested leave may be treated as LOP unless the Super Admin approves it as Paid Leave.',
-                                  style: TextStyle(fontSize: 11, color: Color(0xFF92400E), fontWeight: FontWeight.w600),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                      ],
-
-                      const Text('Reason / Description', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF334155))),
-                      const SizedBox(height: 6),
-                      TextField(
-                        controller: reasonController,
-                        maxLines: 2,
-                        decoration: InputDecoration(
-                          hintText: 'Enter reason / description...',
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 10),
-                      CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Emergency Leave Request', style: TextStyle(fontSize: 13, color: Color(0xFF334155))),
-                        value: isEmergency,
-                        activeColor: const Color(0xFF0D8A4E),
-                        onChanged: (v) => setDialogState(() => isEmergency = v ?? false),
-                      ),
-                    ] else ...[
-                      const Text('Reason / Description', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF334155))),
-                      const SizedBox(height: 6),
-                      TextField(
-                        controller: reasonController,
-                        maxLines: 2,
-                        decoration: InputDecoration(
-                          hintText: 'Enter reason / description...',
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ] else if (selectedEmployee != null && selectedEmployee!.leavePolicy == 'Manual Allocation') ...[
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFFBEB),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFFDE68A)),
+                        ),
+                        child: Row(
+                          children: const [
+                            Icon(Icons.info_outline, color: Color(0xFFD97706), size: 20),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '⚠️ Your leave quota for this month has been exhausted. The requested leave may be treated as LOP unless the Super Admin approves it as Paid Leave.',
+                                style: TextStyle(fontSize: 11, color: Color(0xFF92400E), fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
+                      const SizedBox(height: 10),
                     ],
+
+                    const Text('Reason / Description', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF334155))),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: reasonController,
+                      maxLines: 2,
+                      decoration: InputDecoration(
+                        hintText: 'Enter reason / description...',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Emergency Leave Request', style: TextStyle(fontSize: 13, color: Color(0xFF334155))),
+                      value: isEmergency,
+                      activeColor: const Color(0xFF0D8A4E),
+                      onChanged: (v) => setDialogState(() => isEmergency = v ?? false),
+                    ),
                   ],
                 ),
               ),
@@ -675,51 +552,27 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
                 ),
                 onPressed: () async {
                   if (selectedEmployee == null) return;
-                  if (requestType == 'Leave' && selectedLeaveType == null) return;
+                  if (selectedLeaveType == null) return;
 
-                  LeaveRequest newRequest;
-                  if (requestType == 'Leave') {
-                    final fromStr = DateFormat('dd-MM-yyyy').format(fromDate);
-                    final toStr = DateFormat('dd-MM-yyyy').format(toDate);
+                  final fromStr = DateFormat('dd-MM-yyyy').format(fromDate);
+                  final toStr = DateFormat('dd-MM-yyyy').format(toDate);
 
-                    newRequest = LeaveRequest(
-                      id: 0,
-                      employeeId: selectedEmployee!.id,
-                      employeeName: selectedEmployee!.fullName,
-                      employeeCustomId: selectedEmployee!.employeeId,
-                      leaveType: selectedLeaveType!.name,
-                      fromDate: fromStr,
-                      toDate: toStr,
-                      numDays: (days > 0 ? days : 1).toDouble(),
-                      reason: reasonController.text.trim(),
-                      status: 'Pending',
-                      createdAt: DateTime.now().toIso8601String(),
-                      approvedDates: [],
-                      lopDates: [],
-                      isEmergency: isEmergency,
-                    );
-                  } else {
-                    final todayStr = DateFormat('dd-MM-yyyy').format(DateTime.now());
-                    final fromTimeStr = formatTimeOfDay(fromTime);
-                    final toTimeStr = formatTimeOfDay(toTime);
-
-                    newRequest = LeaveRequest(
-                      id: 0,
-                      employeeId: selectedEmployee!.id,
-                      employeeName: selectedEmployee!.fullName,
-                      employeeCustomId: selectedEmployee!.employeeId,
-                      leaveType: 'Permission ($fromTimeStr - $toTimeStr)',
-                      fromDate: todayStr,
-                      toDate: todayStr,
-                      numDays: permHours / 8.0,
-                      reason: reasonController.text.trim(),
-                      status: 'Pending',
-                      createdAt: DateTime.now().toIso8601String(),
-                      approvedDates: [],
-                      lopDates: [],
-                      isEmergency: false,
-                    );
-                  }
+                  final newRequest = LeaveRequest(
+                    id: 0,
+                    employeeId: selectedEmployee!.id,
+                    employeeName: selectedEmployee!.fullName,
+                    employeeCustomId: selectedEmployee!.employeeId,
+                    leaveType: selectedLeaveType!.name,
+                    fromDate: fromStr,
+                    toDate: toStr,
+                    numDays: (days > 0 ? days : 1).toDouble(),
+                    reason: reasonController.text.trim(),
+                    status: 'Pending',
+                    createdAt: DateTime.now().toIso8601String(),
+                    approvedDates: [],
+                    lopDates: [],
+                    isEmergency: isEmergency,
+                  );
 
                   await ref.read(leaveRepositoryProvider).submitLeaveRequest(newRequest);
                   ref.invalidate(allLeaveRequestsProvider);
