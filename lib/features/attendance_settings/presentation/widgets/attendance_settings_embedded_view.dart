@@ -17,7 +17,6 @@ class _AttendanceSettingsEmbeddedViewState extends ConsumerState<AttendanceSetti
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _graceController;
   late final TextEditingController _lateController;
-  late final TextEditingController _absentController;
   late final TextEditingController _latitudeController;
   late final TextEditingController _longitudeController;
   late final TextEditingController _radiusController;
@@ -30,7 +29,6 @@ class _AttendanceSettingsEmbeddedViewState extends ConsumerState<AttendanceSetti
     super.initState();
     _graceController = TextEditingController();
     _lateController = TextEditingController();
-    _absentController = TextEditingController();
     _latitudeController = TextEditingController();
     _longitudeController = TextEditingController();
     _radiusController = TextEditingController();
@@ -40,7 +38,6 @@ class _AttendanceSettingsEmbeddedViewState extends ConsumerState<AttendanceSetti
   void dispose() {
     _graceController.dispose();
     _lateController.dispose();
-    _absentController.dispose();
     _latitudeController.dispose();
     _longitudeController.dispose();
     _radiusController.dispose();
@@ -52,7 +49,6 @@ class _AttendanceSettingsEmbeddedViewState extends ConsumerState<AttendanceSetti
     _initialized = true;
     _graceController.text = settings.gracePeriodMinutes.toString();
     _lateController.text = settings.lateLimitMinutes.toString();
-    _absentController.text = settings.absentThresholdMinutes.toString();
     _latitudeController.text = settings.officeLatitude.toStringAsFixed(6);
     _longitudeController.text = settings.officeLongitude.toStringAsFixed(6);
     _radiusController.text = settings.allowedAttendanceRadiusMeters.toString();
@@ -77,7 +73,6 @@ class _AttendanceSettingsEmbeddedViewState extends ConsumerState<AttendanceSetti
     final settings = AttendanceSettings(
       gracePeriodMinutes: int.parse(_graceController.text.trim()),
       lateLimitMinutes: int.parse(_lateController.text.trim()),
-      absentThresholdMinutes: int.parse(_absentController.text.trim()),
       officeLatitude: latitude,
       officeLongitude: longitude,
       allowedAttendanceRadiusMeters: int.parse(_radiusController.text.trim()),
@@ -156,8 +151,6 @@ class _AttendanceSettingsEmbeddedViewState extends ConsumerState<AttendanceSetti
                                   _buildNumberField(_graceController, 'Grace Period (Mins)', Icons.access_alarm),
                                   const SizedBox(height: 12),
                                   _buildNumberField(_lateController, 'Late Limit (Mins)', Icons.warning_amber),
-                                  const SizedBox(height: 12),
-                                  _buildNumberField(_absentController, 'Absent Threshold (Mins)', Icons.person_off),
                                 ],
                               )
                             : Row(
@@ -165,8 +158,6 @@ class _AttendanceSettingsEmbeddedViewState extends ConsumerState<AttendanceSetti
                                   Expanded(child: _buildNumberField(_graceController, 'Grace Period (Mins)', Icons.access_alarm)),
                                   const SizedBox(width: 12),
                                   Expanded(child: _buildNumberField(_lateController, 'Late Limit (Mins)', Icons.warning_amber)),
-                                  const SizedBox(width: 12),
-                                  Expanded(child: _buildNumberField(_absentController, 'Absent Threshold (Mins)', Icons.person_off)),
                                 ],
                               ),
                       ],

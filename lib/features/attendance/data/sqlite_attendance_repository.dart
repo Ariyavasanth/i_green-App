@@ -346,9 +346,6 @@ class SqliteAttendanceRepository implements AttendanceRepository {
           } else if (approvedPermissionMins > 0) {
             status = 'Late';
             notes = 'Late = $netUnauthorizedDelay mins unauthorized after $approvedPermissionMins mins permission';
-          } else if (netUnauthorizedDelay > settings.absentThresholdMinutes) {
-            status = 'Absent';
-            notes = 'Absent (Late by $rawDelay mins)';
           } else {
             status = 'Late';
             notes = 'Late = $netUnauthorizedDelay minutes';
