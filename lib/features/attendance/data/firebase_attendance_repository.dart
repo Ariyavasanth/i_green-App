@@ -164,24 +164,43 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
             ? employee!.inTime
             : (scheduledCheckInTime.isNotEmpty ? scheduledCheckInTime : '09:00');
 
-        final parts = schedIn.split(':');
-        final schedHours = parts.isNotEmpty ? (int.tryParse(parts[0]) ?? 9) : 9;
+        final isPm = schedIn.toUpperCase().contains('PM');
+        final isAm = schedIn.toUpperCase().contains('AM');
+        final digits = schedIn.replaceAll(RegExp(r'[^0-9:]'), '');
+        final parts = digits.split(':');
+        int schedHours = parts.isNotEmpty ? (int.tryParse(parts[0]) ?? 9) : 9;
         final schedMins = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
+        if (isPm && schedHours < 12) schedHours += 12;
+        if (isAm && schedHours == 12) schedHours = 0;
+
         final scheduledMinutes = schedHours * 60 + schedMins;
         final actualMinutes = now.hour * 60 + now.minute;
-        final delay = actualMinutes - scheduledMinutes;
+        final rawDelay = actualMinutes - scheduledMinutes;
 
-        if (delay > settings.gracePeriodMinutes) {
-          if (delay > settings.absentThresholdMinutes) {
-            status = 'Absent';
-            notes = 'Absent (Late by $delay mins)';
-          } else {
-            status = 'Late';
-            notes = 'Late = $delay minutes';
-          }
-        } else {
+        if (rawDelay <= settings.gracePeriodMinutes) {
           status = 'Present';
           notes = 'On time';
+        } else {
+          final approvedPermissionMins = await _getApprovedPermissionMinutes(employeeId, date);
+          final totalAuthorizedWindowMins = settings.gracePeriodMinutes + approvedPermissionMins;
+          final netUnauthorizedDelay = max(0, rawDelay - totalAuthorizedWindowMins);
+
+          if (netUnauthorizedDelay == 0) {
+            status = 'Present';
+            notes = approvedPermissionMins > 0
+                ? 'Authorized Late ($approvedPermissionMins mins permission approved)'
+                : 'On time';
+          } else if (netUnauthorizedDelay > settings.absentThresholdMinutes) {
+            status = 'Absent';
+            notes = approvedPermissionMins > 0
+                ? 'Absent (Late by $netUnauthorizedDelay mins unauthorized after $approvedPermissionMins mins permission)'
+                : 'Absent (Late by $netUnauthorizedDelay mins)';
+          } else {
+            status = 'Late';
+            notes = approvedPermissionMins > 0
+                ? 'Late = $netUnauthorizedDelay mins unauthorized ($approvedPermissionMins mins authorized permission)'
+                : 'Late = $netUnauthorizedDelay minutes';
+          }
         }
       }
 
@@ -392,5 +411,33 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
   Future<List<Map<String, dynamic>>> getAttendanceAttempts() async {
     final snap = await _attemptsRef.orderBy('created_at', descending: true).limit(100).get();
     return snap.docs.map((d) => d.data()).toList();
+  }
+
+  Future<int> _getApprovedPermissionMinutes(int employeeId, String date) async {
+    try {
+      final snap = await _firestore
+          .collection('permission_requests')
+          .get();
+
+      int approvedMins = 0;
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final reqDate = (data['date'] ?? '').toString();
+        final docEmpIdRaw = data['employee_id'];
+        final docEmpIdNum = docEmpIdRaw is int
+            ? docEmpIdRaw
+            : (int.tryParse(docEmpIdRaw?.toString() ?? '') ?? 0);
+        final statusStr = (data['status'] ?? '').toString().toLowerCase();
+
+        if ((reqDate == date || reqDate.contains(date)) &&
+            (docEmpIdNum == employeeId || data['employee_id']?.toString() == employeeId.toString() || employeeId == 0) &&
+            (statusStr == 'approved')) {
+          approvedMins += (data['duration_minutes'] as num?)?.toInt() ?? 0;
+        }
+      }
+      return approvedMins;
+    } catch (_) {
+      return 0;
+    }
   }
 }

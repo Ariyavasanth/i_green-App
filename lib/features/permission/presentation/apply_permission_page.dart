@@ -10,13 +10,21 @@ import '../providers/permission_providers.dart';
 import 'apply_emergency_permission_page.dart';
 
 class ApplyPermissionPage extends ConsumerStatefulWidget {
-  const ApplyPermissionPage({super.key});
+  const ApplyPermissionPage({
+    super.key,
+    this.initialFromTime,
+    this.initialToTime,
+  });
+
+  final TimeOfDay? initialFromTime;
+  final TimeOfDay? initialToTime;
 
   static const Color primaryGreen = Color(0xFF9CC70A);
   static const Color darkNeutral = Color(0xFF414A51);
 
   @override
-  ConsumerState<ApplyPermissionPage> createState() => _ApplyPermissionPageState();
+  ConsumerState<ApplyPermissionPage> createState() =>
+      _ApplyPermissionPageState();
 }
 
 class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
@@ -29,6 +37,54 @@ class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
   final _reasonController = TextEditingController();
 
   bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialFromTime != null) {
+      _fromTime = widget.initialFromTime!;
+    }
+    if (widget.initialToTime != null) {
+      _toTime = widget.initialToTime!;
+    }
+    if (widget.initialFromTime == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final emp = ref.read(currentEmployeeProvider);
+        if (emp != null && emp.inTime.isNotEmpty) {
+          final tod = _parseTimeOfDay(emp.inTime);
+          if (tod != null) {
+            setState(() {
+              _fromTime = tod;
+              _toTime = _addMinutes(tod, 30);
+            });
+          }
+        }
+      });
+    }
+  }
+
+  TimeOfDay? _parseTimeOfDay(String str) {
+    try {
+      final clean = str.trim();
+      final isPm = clean.toUpperCase().contains('PM');
+      final isAm = clean.toUpperCase().contains('AM');
+      final digits = clean.replaceAll(RegExp(r'[^0-9:]'), '');
+      final parts = digits.split(':');
+      if (parts.length == 2) {
+        int h = int.parse(parts[0]);
+        int m = int.parse(parts[1]);
+        if (isPm && h < 12) h += 12;
+        if (isAm && h == 12) h = 0;
+        return TimeOfDay(hour: h, minute: m);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  TimeOfDay _addMinutes(TimeOfDay tod, int mins) {
+    final total = tod.hour * 60 + tod.minute + mins;
+    return TimeOfDay(hour: (total ~/ 60) % 24, minute: total % 60);
+  }
 
   int get _durationMinutes {
     final startMinutes = _fromTime.hour * 60 + _fromTime.minute;
@@ -70,17 +126,17 @@ class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
         final toMins = _toTime.hour * 60 + _toTime.minute;
         if (toMins <= fromMins) {
           final newToMins = fromMins + 30;
-          _toTime = TimeOfDay(hour: (newToMins ~/ 60) % 24, minute: newToMins % 60);
+          _toTime = TimeOfDay(
+            hour: (newToMins ~/ 60) % 24,
+            minute: newToMins % 60,
+          );
         }
       });
     }
   }
 
   Future<void> _pickToTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _toTime,
-    );
+    final picked = await showTimePicker(context: context, initialTime: _toTime);
     if (picked != null) {
       setState(() {
         _toTime = picked;
@@ -163,6 +219,71 @@ class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
     }
   }
 
+  void _showCompanyRulesDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.info_outline, color: ApplyPermissionPage.primaryGreen, size: 24),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Company Permission Rules',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ruleItem('1. Daily Allowance', 'Maximum 1.0 Hour (60 minutes) per day.'),
+              _ruleItem('2. Monthly Allowance', 'Maximum 3.0 Hours (180 minutes) per month.'),
+              _ruleItem('3. Approval Required', 'All normal permissions require Manager / Admin approval.'),
+              _ruleItem('4. Emergency Exception', 'Requests exceeding standard allowances can be submitted as Emergency Requests for Admin review.'),
+              _ruleItem('5. Payroll Treatment', 'Management reviews emergency requests to decide Paid vs Loss of Pay (LOP) treatment.'),
+            ],
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: ApplyPermissionPage.primaryGreen,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Got It', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _ruleItem(String title, String description) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B)),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            description,
+            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.3),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showEmergencyExceededDialog(balance) {
     showDialog(
       context: context,
@@ -171,15 +292,20 @@ class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
         titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
         contentPadding: const EdgeInsets.symmetric(horizontal: 20),
         actionsPadding: const EdgeInsets.all(16),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 26),
-            SizedBox(width: 8),
-            Expanded(
+            const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 26),
+            const SizedBox(width: 8),
+            const Expanded(
               child: Text(
                 'Allowance Exceeded',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.info_outline, color: Colors.orange, size: 22),
+              tooltip: 'Company Permission Rules',
+              onPressed: () => _showCompanyRulesDialog(context),
             ),
           ],
         ),
@@ -201,18 +327,34 @@ class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('• Requested: $_durationMinutes mins', style: TextStyle(fontSize: 13, color: Colors.grey.shade800, fontWeight: FontWeight.w600)),
+                  Text(
+                    '• Requested: $_durationMinutes mins',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey.shade800,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text('• Today remaining: ${balance.todayRemainingMinutes} mins', style: TextStyle(fontSize: 13, color: Colors.grey.shade800)),
+                  Text(
+                    '• Today remaining: ${balance.todayRemainingMinutes} mins',
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade800),
+                  ),
                   const SizedBox(height: 2),
-                  Text('• Month remaining: ${balance.monthlyRemainingMinutes} mins', style: TextStyle(fontSize: 13, color: Colors.grey.shade800)),
+                  Text(
+                    '• Month remaining: ${balance.monthlyRemainingMinutes} mins',
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade800),
+                  ),
                 ],
               ),
             ),
             const SizedBox(height: 14),
             const Text(
               'If this is an emergency, you can submit an Emergency Exception Request for Admin review.',
-              style: TextStyle(fontSize: 13, color: ApplyPermissionPage.darkNeutral),
+              style: TextStyle(
+                fontSize: 13,
+                color: ApplyPermissionPage.darkNeutral,
+              ),
             ),
           ],
         ),
@@ -236,17 +378,25 @@ class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.orange.shade800,
                   padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
                 child: const Text(
                   'Request Emergency Exception',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               const SizedBox(height: 6),
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: Text('Cancel', style: TextStyle(color: Colors.grey.shade700)),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(color: Colors.grey.shade700),
+                ),
               ),
             ],
           ),
@@ -259,7 +409,9 @@ class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
   Widget build(BuildContext context) {
     final emp = ref.watch(currentEmployeeProvider);
     final employeeId = emp?.id ?? 1;
-    final balanceAsync = ref.watch(employeePermissionBalanceProvider(employeeId));
+    final balanceAsync = ref.watch(
+      employeePermissionBalanceProvider(employeeId),
+    );
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -281,7 +433,10 @@ class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.account_balance_wallet_outlined, color: ApplyPermissionPage.primaryGreen),
+                      const Icon(
+                        Icons.account_balance_wallet_outlined,
+                        color: ApplyPermissionPage.primaryGreen,
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -297,10 +452,21 @@ class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
                             ),
                             Text(
                               "Monthly Remaining: ${bal.monthlyRemainingMinutes} min (${bal.monthlyRemainingHours.toStringAsFixed(1)} hrs)",
-                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                              ),
                             ),
                           ],
                         ),
+                      ),
+                      IconButton(
+                        icon: const Icon(
+                          Icons.info_outline,
+                          color: ApplyPermissionPage.primaryGreen,
+                        ),
+                        tooltip: 'Company Permission Rules',
+                        onPressed: () => _showCompanyRulesDialog(context),
                       ),
                     ],
                   ),
@@ -312,14 +478,21 @@ class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
               // Date Selection
               const Text(
                 'Date',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: ApplyPermissionPage.darkNeutral),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: ApplyPermissionPage.darkNeutral,
+                ),
               ),
               const SizedBox(height: 8),
               InkWell(
                 onTap: _pickDate,
                 borderRadius: BorderRadius.circular(10),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 14,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(10),
@@ -330,9 +503,17 @@ class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
                     children: [
                       Text(
                         DateFormat('dd MMM yyyy (EEEE)').format(_selectedDate),
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: ApplyPermissionPage.darkNeutral),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: ApplyPermissionPage.darkNeutral,
+                        ),
                       ),
-                      const Icon(Icons.calendar_today, size: 18, color: ApplyPermissionPage.darkNeutral),
+                      const Icon(
+                        Icons.calendar_today,
+                        size: 18,
+                        color: ApplyPermissionPage.darkNeutral,
+                      ),
                     ],
                   ),
                 ),
@@ -342,7 +523,11 @@ class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
               // Permission Type Selection
               const Text(
                 'Permission Type',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: ApplyPermissionPage.darkNeutral),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: ApplyPermissionPage.darkNeutral,
+                ),
               ),
               const SizedBox(height: 8),
               Container(
@@ -383,14 +568,21 @@ class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
                       children: [
                         const Text(
                           'From Time',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: ApplyPermissionPage.darkNeutral),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: ApplyPermissionPage.darkNeutral,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         InkWell(
                           onTap: _pickFromTime,
                           borderRadius: BorderRadius.circular(10),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 14,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(10),
@@ -401,9 +593,17 @@ class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
                               children: [
                                 Text(
                                   _fromTime.format(context),
-                                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: ApplyPermissionPage.darkNeutral),
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: ApplyPermissionPage.darkNeutral,
+                                  ),
                                 ),
-                                const Icon(Icons.access_time, size: 18, color: ApplyPermissionPage.darkNeutral),
+                                const Icon(
+                                  Icons.access_time,
+                                  size: 18,
+                                  color: ApplyPermissionPage.darkNeutral,
+                                ),
                               ],
                             ),
                           ),
@@ -418,14 +618,21 @@ class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
                       children: [
                         const Text(
                           'To Time',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: ApplyPermissionPage.darkNeutral),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: ApplyPermissionPage.darkNeutral,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         InkWell(
                           onTap: _pickToTime,
                           borderRadius: BorderRadius.circular(10),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 14,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(10),
@@ -436,9 +643,17 @@ class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
                               children: [
                                 Text(
                                   _toTime.format(context),
-                                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: ApplyPermissionPage.darkNeutral),
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: ApplyPermissionPage.darkNeutral,
+                                  ),
                                 ),
-                                const Icon(Icons.access_time, size: 18, color: ApplyPermissionPage.darkNeutral),
+                                const Icon(
+                                  Icons.access_time,
+                                  size: 18,
+                                  color: ApplyPermissionPage.darkNeutral,
+                                ),
                               ],
                             ),
                           ),
@@ -452,14 +667,21 @@ class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
 
               // Duration Badge Display
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: ApplyPermissionPage.primaryGreen.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.timer_outlined, color: ApplyPermissionPage.darkNeutral, size: 18),
+                    const Icon(
+                      Icons.timer_outlined,
+                      color: ApplyPermissionPage.darkNeutral,
+                      size: 18,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       'Requested Duration: $_durationMinutes minutes',
@@ -477,7 +699,11 @@ class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
               // Reason Text Input
               const Text(
                 'Reason',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: ApplyPermissionPage.darkNeutral),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: ApplyPermissionPage.darkNeutral,
+                ),
               ),
               const SizedBox(height: 8),
               TextFormField(
@@ -513,7 +739,9 @@ class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: ApplyPermissionPage.primaryGreen,
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                   child: _isSubmitting
                       ? const CircularProgressIndicator(color: Colors.white)

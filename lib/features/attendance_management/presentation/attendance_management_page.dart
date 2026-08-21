@@ -144,27 +144,34 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
   void _openAuditLogsDialog() {
     showDialog(
       context: context,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Container(
-          width: 900,
-          height: 650,
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Audit Logs', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
-                ],
-              ),
-              const Divider(),
-              const Expanded(child: AttendanceAuditLogsEmbeddedView()),
-            ],
+      builder: (ctx) {
+        final screenSize = MediaQuery.of(ctx).size;
+        final dialogWidth = (screenSize.width * 0.95).clamp(300.0, 900.0);
+        final dialogHeight = (screenSize.height * 0.85).clamp(400.0, 700.0);
+
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Container(
+            width: dialogWidth,
+            height: dialogHeight,
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Audit Logs', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                  ],
+                ),
+                const Divider(),
+                const Expanded(child: AttendanceAuditLogsEmbeddedView()),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -432,21 +439,15 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     ];
 
     return Container(
-      height: 64,
+      height: 60,
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(top: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
       ),
-      child: isMobile
-          ? SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              physics: const ClampingScrollPhysics(),
-              child: SizedBox(
-                width: 550,
-                child: Row(children: navItems),
-              ),
-            )
-          : Row(children: navItems),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: navItems,
+      ),
     );
   }
 
@@ -458,7 +459,8 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     final isSelected = _activeTab == tab;
     const primaryColor = Color(0xFF9CC70A);
 
-    return Expanded(
+    return SizedBox(
+      width: 110,
       child: InkWell(
         onTap: () {
           setState(() {
@@ -480,7 +482,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
             border: Border(
               bottom: BorderSide(
                 color: isSelected ? primaryColor : Colors.transparent,
-                width: 2,
+                width: 3,
               ),
             ),
           ),
@@ -489,20 +491,18 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
             children: [
               Icon(
                 icon,
-                size: 20,
+                size: 22,
                 color: isSelected ? primaryColor : const Color(0xFF64748B),
               ),
               const SizedBox(height: 3),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                    color: isSelected ? primaryColor : const Color(0xFF64748B),
-                  ),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                  color: isSelected ? primaryColor : const Color(0xFF64748B),
                 ),
               ),
             ],
@@ -1019,108 +1019,101 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
         spacing: 12,
         runSpacing: 12,
         children: [
-          // Left Group: Month Selector & View Mode Switch
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Month Selector
-              Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFCBD5E1)),
+          // Month Selector
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFCBD5E1)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.chevron_left, size: 20),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  onPressed: () {
+                    setState(() {
+                      _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1, 1);
+                    });
+                  },
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.chevron_left, size: 20),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                      onPressed: () {
-                        setState(() {
-                          _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1, 1);
-                        });
-                      },
-                    ),
-                    Text(
-                      DateFormat('MMMM yyyy').format(_focusedMonth),
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.chevron_right, size: 20),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                      onPressed: () {
-                        setState(() {
-                          _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 1);
-                        });
-                      },
-                    ),
-                  ],
+                Text(
+                  DateFormat('MMMM yyyy').format(_focusedMonth),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
                 ),
-              ),
-              const SizedBox(width: 10),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right, size: 20),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  onPressed: () {
+                    setState(() {
+                      _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 1);
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
 
-              // View Mode Toggle Switch
-              Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: const EdgeInsets.all(3),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    InkWell(
-                      onTap: () => setState(() => _viewMode = AttendanceViewMode.matrix),
+          // View Mode Toggle Switch
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            padding: const EdgeInsets.all(3),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                InkWell(
+                  onTap: () => setState(() => _viewMode = AttendanceViewMode.matrix),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: _viewMode == AttendanceViewMode.matrix ? Colors.white : Colors.transparent,
                       borderRadius: BorderRadius.circular(6),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: _viewMode == AttendanceViewMode.matrix ? Colors.white : Colors.transparent,
-                          borderRadius: BorderRadius.circular(6),
-                          boxShadow: _viewMode == AttendanceViewMode.matrix
-                              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)]
-                              : null,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (_viewMode == AttendanceViewMode.matrix)
-                              const Icon(Icons.check, size: 14, color: Color(0xFF414A51)),
-                            if (_viewMode == AttendanceViewMode.matrix) const SizedBox(width: 4),
-                            const Text('Matrix', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                          ],
-                        ),
-                      ),
+                      boxShadow: _viewMode == AttendanceViewMode.matrix
+                          ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)]
+                          : null,
                     ),
-                    InkWell(
-                      onTap: () => setState(() => _viewMode = AttendanceViewMode.table),
-                      borderRadius: BorderRadius.circular(6),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: _viewMode == AttendanceViewMode.table ? Colors.white : Colors.transparent,
-                          borderRadius: BorderRadius.circular(6),
-                          boxShadow: _viewMode == AttendanceViewMode.table
-                              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)]
-                              : null,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (_viewMode == AttendanceViewMode.table)
-                              const Icon(Icons.check, size: 14, color: Color(0xFF414A51)),
-                            if (_viewMode == AttendanceViewMode.table) const SizedBox(width: 4),
-                            const Text('Table', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                          ],
-                        ),
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_viewMode == AttendanceViewMode.matrix)
+                          const Icon(Icons.check, size: 14, color: Color(0xFF414A51)),
+                        if (_viewMode == AttendanceViewMode.matrix) const SizedBox(width: 4),
+                        const Text('Matrix', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
+                InkWell(
+                  onTap: () => setState(() => _viewMode = AttendanceViewMode.table),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: _viewMode == AttendanceViewMode.table ? Colors.white : Colors.transparent,
+                      borderRadius: BorderRadius.circular(6),
+                      boxShadow: _viewMode == AttendanceViewMode.table
+                          ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)]
+                          : null,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_viewMode == AttendanceViewMode.table)
+                          const Icon(Icons.check, size: 14, color: Color(0xFF414A51)),
+                        if (_viewMode == AttendanceViewMode.table) const SizedBox(width: 4),
+                        const Text('Table', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
 
           // Right Group: Searchable Filters, Search Box & Export Button

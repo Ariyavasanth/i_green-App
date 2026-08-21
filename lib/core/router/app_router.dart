@@ -164,7 +164,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: 'apply',
-                builder: (_, _) => const ApplyPermissionPage(),
+                builder: (_, state) {
+                  final extra = state.extra as Map<String, dynamic>?;
+                  return ApplyPermissionPage(
+                    initialFromTime: extra?['fromTime'] as TimeOfDay?,
+                    initialToTime: extra?['toTime'] as TimeOfDay?,
+                  );
+                },
               ),
               GoRoute(
                 path: 'emergency',

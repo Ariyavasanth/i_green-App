@@ -180,7 +180,7 @@ class AttendanceMatrixView extends StatelessWidget {
                               backgroundImage: (emp.profileImageUrl.isNotEmpty && emp.profileImageUrl.startsWith('http'))
                                   ? NetworkImage(emp.profileImageUrl)
                                   : null,
-                              onForegroundImageError: (emp.profileImageUrl.isNotEmpty && emp.profileImageUrl.startsWith('http'))
+                              onBackgroundImageError: (emp.profileImageUrl.isNotEmpty && emp.profileImageUrl.startsWith('http'))
                                   ? (_, __) {}
                                   : null,
                               child: (emp.profileImageUrl.isEmpty || !emp.profileImageUrl.startsWith('http'))

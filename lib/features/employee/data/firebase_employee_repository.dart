@@ -92,15 +92,23 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     final all = await getAllEmployees();
     final result = <Employee>[];
     final toFix = <Employee>[]; // employees needing an EMP- ID assigned
+    final toFixStatus = <Employee>[]; // full EMP- employees whose status got set to Draft
 
     for (final emp in all) {
       final s = emp.status.trim().toLowerCase();
-      if (s == 'active' || s == 'converted' || s == 'submitted' || s.isEmpty) {
-        final empIdUpper = emp.employeeId.trim().toUpperCase();
-        if (empIdUpper.isEmpty || !empIdUpper.startsWith('EMP-')) {
+      final empIdUpper = emp.employeeId.trim().toUpperCase();
+      final isFullEmp = empIdUpper.startsWith('EMP-');
+
+      if (s == 'active' || s == 'converted' || s == 'submitted' || s.isEmpty || isFullEmp) {
+        if (!isFullEmp) {
           toFix.add(emp);
         } else {
-          result.add(emp);
+          var updated = emp;
+          if (s == 'draft' || s != 'active') {
+            updated = emp.copyWith(status: 'Active');
+            toFixStatus.add(updated);
+          }
+          result.add(updated);
         }
       }
     }
@@ -111,7 +119,24 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       result.addAll(toFix);
     }
 
-    return result.isNotEmpty ? result : all;
+    // Fix draft status for full EMP- employees in Firestore (non-blocking)
+    if (toFixStatus.isNotEmpty) {
+      _fixEmployeeStatuses(toFixStatus);
+    }
+
+    return result;
+  }
+
+  /// Restores status to Active for full EMP- employees in Firestore background task
+  Future<void> _fixEmployeeStatuses(List<Employee> employees) async {
+    try {
+      for (final emp in employees) {
+        final docId = emp.employeeId.isNotEmpty ? emp.employeeId : (emp.id != 0 ? emp.id.toString() : '');
+        if (docId.isNotEmpty) {
+          await _employeesRef.doc(docId).set({'status': 'Active', 'updated_at': FieldValue.serverTimestamp()}, SetOptions(merge: true));
+        }
+      }
+    } catch (_) {}
   }
 
   /// Assigns proper EMP- IDs to employees in the background without blocking the UI.

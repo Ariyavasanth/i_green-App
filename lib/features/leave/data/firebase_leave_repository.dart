@@ -722,19 +722,55 @@ class FirebaseLeaveRepository implements LeaveRepository {
     final double perDaySalary =
         workingDays > 0 ? (grossSalary / workingDays) : 0.0;
 
-    // 2. Count LOP records for this employee in the given month/year
+    // 2. Count LOP records + unauthorized Late attendance + Emergency LOP requests
+    double totalLopDays = 0;
+
+    // (a) Manual Loss of Pay records
     final lopSnap = await _lopRef
         .where('employee_id', isEqualTo: employeeId)
         .get();
 
     final monthStr = month.toString().padLeft(2, '0');
-    final suffix = '-$monthStr-$year';
 
-    double totalLopDays = 0;
     for (final doc in lopSnap.docs) {
       final date = doc.data()['date'] as String? ?? '';
-      if (date.endsWith(suffix)) totalLopDays++;
+      if (date.contains('-$monthStr-$year') || date.contains('$year-$monthStr')) {
+        totalLopDays += 1.0;
+      }
     }
+
+    // (b) Unauthorized Late Attendance records -> Half day salary deduction (0.5 LOP day)
+    try {
+      final attSnap = await _firestore
+          .collection('attendance_records')
+          .where('employee_id', isEqualTo: employeeId)
+          .where('status', isEqualTo: 'Late')
+          .get();
+      for (final doc in attSnap.docs) {
+        final d = doc.data()['date']?.toString() ?? '';
+        if (d.contains('-$monthStr-$year') || d.contains('$year-$monthStr')) {
+          totalLopDays += 0.5;
+        }
+      }
+    } catch (_) {}
+
+    // (c) Emergency Exception Permission Requests with LOP payroll treatment
+    try {
+      final permSnap = await _firestore
+          .collection('permission_requests')
+          .where('payroll_treatment', isEqualTo: 'lop')
+          .get();
+      for (final doc in permSnap.docs) {
+        final data = doc.data();
+        final empIdRaw = data['employee_id'];
+        final empIdNum = empIdRaw is int ? empIdRaw : (int.tryParse(empIdRaw?.toString() ?? '') ?? 0);
+        final d = data['date']?.toString() ?? '';
+        if ((empIdNum == employeeId || empIdRaw?.toString() == employeeId.toString()) &&
+            (d.contains('-$monthStr-$year') || d.contains('$year-$monthStr'))) {
+          totalLopDays += 1.0;
+        }
+      }
+    } catch (_) {}
 
     // 3. Count approved leave days in that month/year
     final leaveSnap = await _requestsRef
@@ -746,7 +782,7 @@ class FirebaseLeaveRepository implements LeaveRepository {
     for (final doc in leaveSnap.docs) {
       final req = _requestFromDoc(doc.data(), doc.id);
       for (final date in req.approvedDates) {
-        if (date.endsWith(suffix)) approvedDaysCount++;
+        if (date.contains('-$monthStr-$year') || date.contains('$year-$monthStr')) approvedDaysCount++;
       }
     }
 

@@ -1074,7 +1074,7 @@ class _EmployeeRegistrationPageState
   }
 
   Future<void> _submitForm(RegistrationLink? link, {bool isSubmit = true}) async {
-    final isEditMode = _isEditing;
+    final isEditMode = widget.employee != null || widget.linkId == 'edit' || (_currentEmployee != null && _currentEmployee!.employeeId.startsWith('EMP-'));
 
     if (isSubmit) {
       if (_firstNameController.text.trim().isEmpty) {
@@ -1178,9 +1178,9 @@ class _EmployeeRegistrationPageState
         designation: _designation,
         employmentType: 'Full-Time',
         joiningDate: _joiningDateController.text.trim(),
-        status: isSubmit
-            ? (_status.isEmpty || _status == 'PENDING' ? 'ACTIVE' : _status)
-            : 'Draft',
+        status: (isSubmit || isEditMode || resolvedEmployeeId.startsWith('EMP-'))
+            ? (_status.isEmpty || _status == 'PENDING' || _status.toLowerCase() == 'draft' ? 'ACTIVE' : _status)
+            : (_status.isNotEmpty && _status.toLowerCase() != 'draft' ? _status : 'Draft'),
         bloodGroup: _bloodGroup,
         bloodGroupReport: _bloodGroupDocFileName,
         userType: _userType,
@@ -2422,35 +2422,7 @@ class _EmployeeRegistrationPageState
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'Permission Allowance Settings',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF414A51),
-              ),
-            ),
-            const SizedBox(height: 8),
-            _buildRow2or3(
-              isMobile: isMobile,
-              children: [
-                _buildTextField(
-                  'Monthly Permission Limit (Hours)',
-                  _monthlyPermissionLimitController,
-                  placeholder: 'e.g. 3.0 (3 hours/month)',
-                  isNumber: true,
-                  allowDecimal: true,
-                ),
-                _buildTextField(
-                  'Daily Permission Limit (Hours)',
-                  _dailyPermissionLimitController,
-                  placeholder: 'e.g. 1.0 (1 hour/day)',
-                  isNumber: true,
-                  allowDecimal: true,
-                ),
-              ],
-            ),
+
 
             const SizedBox(height: 24),
             _buildSaveButtonsRow(link, 'Job & Admin Details'),
@@ -4390,8 +4362,7 @@ class _EmployeeRegistrationPageState
                               _buildPreviewField('Allowed Leaves', _allowedLeavesController.text),
                               _buildPreviewField('Leave Effective Date', _leaveEffectiveDateController.text),
                             ],
-                            _buildPreviewField('Monthly Permission Limit', '${_monthlyPermissionLimitController.text} Hours'),
-                            _buildPreviewField('Daily Permission Limit', '${_dailyPermissionLimitController.text} Hours'),
+
                           ]),
                           const SizedBox(height: 20),
 

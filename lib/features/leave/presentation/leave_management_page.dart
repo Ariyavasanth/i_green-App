@@ -602,94 +602,96 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
       (LeaveTab.permissions, isMobile ? 'Settings' : 'Permissions', Icons.tune_outlined, null),
     ];
 
+    final rowChildren = tabs.map((tabInfo) {
+      final tab = tabInfo.$1;
+      final label = tabInfo.$2;
+      final icon = tabInfo.$3;
+      final count = tabInfo.$4;
+      final isActive = _activeTab == tab;
+
+      return Expanded(
+        child: InkWell(
+          onTap: () => setState(() => _activeTab = tab),
+          hoverColor: const Color(0xFFF8FAFC),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: isActive ? primaryColor : Colors.transparent,
+                  width: 2,
+                ),
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Icon(
+                      icon,
+                      size: 20,
+                      color: isActive ? primaryColor : const Color(0xFF64748B),
+                    ),
+                    if (count != null && count > 0)
+                      Positioned(
+                        right: -10,
+                        top: -4,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFFEF3C7),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            '$count',
+                            style: const TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFFD97706),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
+                      color: isActive ? primaryColor : const Color(0xFF64748B),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }).toList();
+
     return Container(
       height: 64,
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(top: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        physics: const ClampingScrollPhysics(),
-        child: SizedBox(
-          width: isMobile ? 450 : null,
-          child: Row(
-            children: tabs.map((tabInfo) {
-              final tab = tabInfo.$1;
-              final label = tabInfo.$2;
-              final icon = tabInfo.$3;
-              final count = tabInfo.$4;
-              final isActive = _activeTab == tab;
-
-              return Expanded(
-                child: InkWell(
-                  onTap: () => setState(() => _activeTab = tab),
-                  hoverColor: const Color(0xFFF8FAFC),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: isActive ? primaryColor : Colors.transparent,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            Icon(
-                              icon,
-                              size: 20,
-                              color: isActive ? primaryColor : const Color(0xFF64748B),
-                            ),
-                            if (count != null && count > 0)
-                              Positioned(
-                                right: -10,
-                                top: -4,
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFFFEF3C7),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Text(
-                                    '$count',
-                                    style: const TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFFD97706),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 3),
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            label,
-                            maxLines: 1,
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-                              color: isActive ? primaryColor : const Color(0xFF64748B),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-      ),
+      child: isMobile
+          ? SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const ClampingScrollPhysics(),
+              child: SizedBox(
+                width: 450,
+                child: Row(children: rowChildren),
+              ),
+            )
+          : Row(children: rowChildren),
     );
   }
 

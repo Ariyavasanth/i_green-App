@@ -771,13 +771,35 @@ class SqliteLeaveRepository implements LeaveRepository {
     // Query LOP records in selected month/year
     final monthStr = month.toString().padLeft(2, '0');
     final suffix = '%-$monthStr-$year';
-    
+
+    double totalLopDays = 0;
+
     final lopMaps = await db.query(
       'loss_of_pay_records',
       where: 'employee_id = ? AND date LIKE ?',
       whereArgs: [employeeId, suffix],
     );
-    final double totalLopDays = lopMaps.length.toDouble();
+    totalLopDays += lopMaps.length.toDouble();
+
+    // Unauthorized Late Attendance records (0.5 LOP day each)
+    try {
+      final lateMaps = await db.query(
+        'attendance_records',
+        where: 'employee_id = ? AND status = ? AND date LIKE ?',
+        whereArgs: [employeeId, 'Late', suffix],
+      );
+      totalLopDays += (lateMaps.length * 0.5);
+    } catch (_) {}
+
+    // Emergency Exception Permission Requests with LOP decision
+    try {
+      final permMaps = await db.query(
+        'permission_requests',
+        where: '(employee_id = ? OR employee_id = 0) AND LOWER(payroll_treatment) = ? AND date LIKE ?',
+        whereArgs: [employeeId, 'lop', suffix],
+      );
+      totalLopDays += permMaps.length.toDouble();
+    } catch (_) {}
 
     // Query all approved leave requests and count approved dates in selected month/year
     final leaveMaps = await db.query(

@@ -106,6 +106,10 @@ class _ApplyEmergencyPermissionPageState extends ConsumerState<ApplyEmergencyPer
 
       await repo.submitEmergencyRequest(req);
 
+      ref.invalidate(myPermissionRequestsProvider(employeeId));
+      ref.invalidate(employeePermissionBalanceProvider(employeeId));
+      ref.invalidate(allPermissionRequestsProvider);
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -129,6 +133,71 @@ class _ApplyEmergencyPermissionPageState extends ConsumerState<ApplyEmergencyPer
         });
       }
     }
+  }
+
+  void _showCompanyRulesDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.orange, size: 24),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Company Permission Rules',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ruleItem('1. Daily Allowance', 'Maximum 1.0 Hour (60 minutes) per day.'),
+              _ruleItem('2. Monthly Allowance', 'Maximum 3.0 Hours (180 minutes) per month.'),
+              _ruleItem('3. Approval Required', 'All normal permissions require Manager / Admin approval.'),
+              _ruleItem('4. Emergency Exception', 'Requests exceeding standard allowances can be submitted as Emergency Requests for Admin review.'),
+              _ruleItem('5. Payroll Treatment', 'Management reviews emergency requests to decide Paid vs Loss of Pay (LOP) treatment.'),
+            ],
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange.shade800,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Got It', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _ruleItem(String title, String description) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B)),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            description,
+            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.3),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -174,6 +243,11 @@ class _ApplyEmergencyPermissionPageState extends ConsumerState<ApplyEmergencyPer
                           ),
                         ],
                       ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.info_outline, color: Colors.orange.shade900, size: 22),
+                      tooltip: 'Company Permission Rules',
+                      onPressed: () => _showCompanyRulesDialog(context),
                     ),
                   ],
                 ),

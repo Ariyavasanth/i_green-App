@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../domain/attendance_record.dart';
@@ -14,6 +15,9 @@ import '../../leave/domain/leave_balance.dart';
 import '../../leave/providers/leave_providers.dart';
 import '../../leave/presentation/my_leave_requests_page.dart';
 import '../domain/attendance_repository.dart';
+import '../../permission/domain/permission_enums.dart';
+import '../../permission/domain/permission_request.dart';
+import '../../permission/providers/permission_providers.dart';
 import '../providers/attendance_providers.dart';
 import '../../time_clocking/presentation/employee_clocking_widget.dart';
 
@@ -2821,6 +2825,34 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         final hasCheckedIn = todayRecord != null && todayRecord.effectiveCheckInTime.isNotEmpty;
         final hasCheckedOut = todayRecord != null && todayRecord.checkOutTime.isNotEmpty;
 
+        final now = DateTime.now();
+        final expectedInTimeOfDay = _getEmployeeInTime(employee);
+        final officialStartTime = DateTime(now.year, now.month, now.day, expectedInTimeOfDay.hour, expectedInTimeOfDay.minute);
+        final officialTimeStr = _formatTimeOfDayLabel(expectedInTimeOfDay);
+        final isLate = now.isAfter(officialStartTime) && !hasCheckedIn;
+
+        final myRequestsAsync = ref.watch(myPermissionRequestsProvider(employee.id));
+        PermissionRequest? todayApprovedPermission;
+        PermissionRequest? todayPendingPermission;
+
+        myRequestsAsync.whenData((requests) {
+          final todayStr = DateFormat('yyyy-MM-dd').format(now);
+          for (final req in requests) {
+            final reqDateStr = DateFormat('yyyy-MM-dd').format(req.date);
+            if (reqDateStr == todayStr || (req.date.day == now.day && req.date.month == now.month && req.date.year == now.year)) {
+              if (req.status == PermissionStatus.approved) {
+                todayApprovedPermission = req;
+                break;
+              } else if (req.status == PermissionStatus.pending) {
+                todayPendingPermission = req;
+              }
+            }
+          }
+        });
+
+        final hasApprovedPermission = todayApprovedPermission != null;
+        final hasPendingPermission = todayPendingPermission != null;
+
         return Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -2865,6 +2897,27 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                             fontWeight: FontWeight.w500,
                           ),
                         ),
+                        const SizedBox(height: 2),
+                        Text(
+                          hasApprovedPermission
+                              ? 'Approved Permission: ${todayApprovedPermission!.fromTime} – ${todayApprovedPermission!.toTime}'
+                              : hasPendingPermission
+                                  ? 'Permission Pending: ${todayPendingPermission!.fromTime} – ${todayPendingPermission!.toTime}'
+                                  : isLate
+                                      ? 'You are late today. Please apply for permission or check in directly.'
+                                      : 'Expected Check-in Time: $officialTimeStr',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: (isLate && !hasApprovedPermission && !hasPendingPermission) ? FontWeight.w600 : FontWeight.w500,
+                            color: hasApprovedPermission
+                                ? const Color(0xFF15803D)
+                                : hasPendingPermission
+                                    ? const Color(0xFFB45309)
+                                    : isLate
+                                        ? const Color(0xFFC2410C)
+                                        : AppColors.textSecondary,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -2873,6 +2926,154 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                 ],
               ),
               const SizedBox(height: 16),
+
+              // Render Approved / Pending Permission Card OR Late Arrival Warning Banner
+              if (!hasCheckedIn && hasApprovedPermission) ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0FDF4),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFBBF7D0)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 20),
+                          SizedBox(width: 8),
+                          Text(
+                            '✓ Permission Approved',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: Color(0xFF15803D),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${todayApprovedPermission!.permissionType.label} • ${todayApprovedPermission!.durationMinutes} minutes',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B)),
+                      ),
+                      Text(
+                        '${todayApprovedPermission!.fromTime} – ${todayApprovedPermission!.toTime}',
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'You have an approved permission. You can check in when you arrive.',
+                        style: TextStyle(fontSize: 12, color: Color(0xFF166534), fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else if (!hasCheckedIn && hasPendingPermission) ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFBEB),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFDE68A)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.hourglass_top_rounded, color: Color(0xFFD97706), size: 20),
+                          SizedBox(width: 8),
+                          Text(
+                            '⏳ Permission Pending',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: Color(0xFFB45309),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${todayPendingPermission!.permissionType.label} • ${todayPendingPermission!.durationMinutes} minutes',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B)),
+                      ),
+                      Text(
+                        '${todayPendingPermission!.fromTime} – ${todayPendingPermission!.toTime}',
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Your request is pending admin review. You can check in when you arrive.',
+                        style: TextStyle(fontSize: 12, color: Color(0xFF92400E), fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else if (!hasCheckedIn && isLate) ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF7ED),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFFFD8A8)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.warning_amber_rounded, size: 18, color: Color(0xFFE65100)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: RichText(
+                          text: TextSpan(
+                            style: const TextStyle(fontSize: 12, color: Color(0xFF9A3412)),
+                            children: [
+                              TextSpan(
+                                text: '⚠️ Late Arrival: Official time is $officialTimeStr. ',
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              WidgetSpan(
+                                alignment: PlaceholderAlignment.middle,
+                                child: GestureDetector(
+                                  onTap: () {
+                                    final nowTod = TimeOfDay.now();
+                                    final nowMins = nowTod.hour * 60 + nowTod.minute;
+                                    final expMins = expectedInTimeOfDay.hour * 60 + expectedInTimeOfDay.minute;
+                                    final toTod = nowMins > expMins
+                                        ? nowTod
+                                        : TimeOfDay(
+                                            hour: (expectedInTimeOfDay.hour + ((expectedInTimeOfDay.minute + 30) ~/ 60)) % 24,
+                                            minute: (expectedInTimeOfDay.minute + 30) % 60,
+                                          );
+                                    context.go('/permission/apply', extra: {
+                                      'fromTime': expectedInTimeOfDay,
+                                      'toTime': toTod,
+                                    });
+                                  },
+                                  child: const Text(
+                                    'Apply for Permission',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFFC2410C),
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const TextSpan(text: ' or tap Check In below.'),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
 
               // Primary Action Button
               if (!hasCheckedIn) ...[
@@ -2888,11 +3089,22 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    onPressed: () => _openVerificationDialog(
-                      date: today,
-                      isCheckOut: false,
-                      existingRecord: todayRecord,
-                    ),
+                    onPressed: () {
+                      if (hasApprovedPermission || hasPendingPermission || !isLate) {
+                        _openVerificationDialog(
+                          date: today,
+                          isCheckOut: false,
+                          existingRecord: todayRecord,
+                        );
+                      } else {
+                        _showLateCheckInDialog(
+                          today: today,
+                          todayRecord: todayRecord,
+                          officialTimeStr: officialTimeStr,
+                          expectedInTimeOfDay: expectedInTimeOfDay,
+                        );
+                      }
+                    },
                     icon: const Icon(Icons.fingerprint, size: 22),
                     label: const Text(
                       'Check In Attendance',
@@ -3369,6 +3581,117 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
           ),
         ],
       );
+
+  TimeOfDay _getEmployeeInTime(Employee emp) {
+    final inTimeStr = emp.inTime.trim();
+    if (inTimeStr.isNotEmpty) {
+      try {
+        final isPm = inTimeStr.toUpperCase().contains('PM');
+        final isAm = inTimeStr.toUpperCase().contains('AM');
+        final digits = inTimeStr.replaceAll(RegExp(r'[^0-9:]'), '');
+        final parts = digits.split(':');
+        if (parts.length == 2) {
+          int h = int.parse(parts[0]);
+          int m = int.parse(parts[1]);
+          if (isPm && h < 12) h += 12;
+          if (isAm && h == 12) h = 0;
+          return TimeOfDay(hour: h, minute: m);
+        }
+      } catch (_) {}
+    }
+    return const TimeOfDay(hour: 9, minute: 30);
+  }
+
+  String _formatTimeOfDayLabel(TimeOfDay tod) {
+    final now = DateTime.now();
+    final dt = DateTime(now.year, now.month, now.day, tod.hour, tod.minute);
+    return DateFormat('hh:mm a').format(dt);
+  }
+
+  Future<void> _showLateCheckInDialog({
+    required DateTime today,
+    required AttendanceRecord? todayRecord,
+    required String officialTimeStr,
+    required TimeOfDay expectedInTimeOfDay,
+  }) async {
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Color(0xFFE65100), size: 24),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Late Check-in Alert',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E293B),
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'You are checking in after the official start time ($officialTimeStr). Would you like to request permission or proceed with check-in?',
+          style: const TextStyle(fontSize: 14, color: Color(0xFF475569), height: 1.4),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF414A51),
+              side: const BorderSide(color: Color(0xFFCBD5E1)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              final nowTod = TimeOfDay.now();
+              final nowMins = nowTod.hour * 60 + nowTod.minute;
+              final expMins = expectedInTimeOfDay.hour * 60 + expectedInTimeOfDay.minute;
+              final toTod = nowMins > expMins
+                  ? nowTod
+                  : TimeOfDay(
+                      hour: (expectedInTimeOfDay.hour + ((expectedInTimeOfDay.minute + 30) ~/ 60)) % 24,
+                      minute: (expectedInTimeOfDay.minute + 30) % 60,
+                    );
+              context.go('/permission/apply', extra: {
+                'fromTime': expectedInTimeOfDay,
+                'toTime': toTod,
+              });
+            },
+            child: const Text(
+              'Apply Permission',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF9CC70A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _openVerificationDialog(
+                date: today,
+                isCheckOut: false,
+                existingRecord: todayRecord,
+              );
+            },
+            child: const Text(
+              'Check In Anyway',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _openVerificationDialog({
     required DateTime date,

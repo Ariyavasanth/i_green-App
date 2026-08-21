@@ -309,32 +309,41 @@ class SqliteAttendanceRepository implements AttendanceRepository {
 
       final isDynamic = employee?.isDynamicEmployee ?? false;
       if (isDynamic) {
-        // Flexible employee:
-        // Employee starts, no "Late" calculation
         status = 'Present';
         notes = 'Flexible schedule';
       } else {
-        // Fixed employee:
-        // Schedule e.g. 09:00 -> 18:00
         final schedIn = (employee?.inTime.isNotEmpty == true)
             ? employee!.inTime
             : (scheduledCheckInTime.isNotEmpty ? scheduledCheckInTime : '09:00');
 
         final scheduledMinutes = _parseMinutes(schedIn);
         final actualMinutes = now.hour * 60 + now.minute;
-        final delay = actualMinutes - scheduledMinutes;
+        final rawDelay = actualMinutes - scheduledMinutes;
 
-        if (delay > settings.gracePeriodMinutes) {
-          if (delay > settings.absentThresholdMinutes) {
-            status = 'Absent';
-            notes = 'Absent (Late by $delay mins)';
-          } else {
-            status = 'Late';
-            notes = 'Late = $delay minutes';
-          }
-        } else {
+        if (rawDelay <= settings.gracePeriodMinutes) {
           status = 'Present';
           notes = 'On time';
+        } else {
+          final approvedPermissionMins = await _getApprovedPermissionMinutes(db, employeeId, date);
+          final totalAuthorizedWindowMins = settings.gracePeriodMinutes + approvedPermissionMins;
+          final netUnauthorizedDelay = max(0, rawDelay - totalAuthorizedWindowMins);
+
+          if (netUnauthorizedDelay == 0) {
+            status = 'Present';
+            notes = approvedPermissionMins > 0
+                ? 'Authorized Late ($approvedPermissionMins mins permission approved)'
+                : 'On time';
+          } else if (netUnauthorizedDelay > settings.absentThresholdMinutes) {
+            status = 'Absent';
+            notes = approvedPermissionMins > 0
+                ? 'Absent (Late by $netUnauthorizedDelay mins unauthorized after $approvedPermissionMins mins permission)'
+                : 'Absent (Late by $netUnauthorizedDelay mins)';
+          } else {
+            status = 'Late';
+            notes = approvedPermissionMins > 0
+                ? 'Late = $netUnauthorizedDelay mins unauthorized ($approvedPermissionMins mins authorized permission)'
+                : 'Late = $netUnauthorizedDelay minutes';
+          }
         }
       }
 
@@ -581,6 +590,28 @@ class SqliteAttendanceRepository implements AttendanceRepository {
   @override
   Future<List<Map<String, dynamic>>> getAttendanceAttempts() async {
     final db = await database;
-    return await db.query('attendance_attempts', orderBy: 'created_at DESC', limit: 100);
+    return await db.query(
+      'attendance_attempts',
+      orderBy: 'created_at DESC',
+      limit: 100,
+    );
+  }
+
+  Future<int> _getApprovedPermissionMinutes(Database db, int employeeId, String date) async {
+    try {
+      final maps = await db.query(
+        'permission_requests',
+        where: '(employee_id = ? OR employee_id = 0) AND date = ? AND LOWER(status) = ?',
+        whereArgs: [employeeId, date, 'approved'],
+      );
+
+      int totalMins = 0;
+      for (final m in maps) {
+        totalMins += (m['duration_minutes'] as num?)?.toInt() ?? 0;
+      }
+      return totalMins;
+    } catch (_) {
+      return 0;
+    }
   }
 }

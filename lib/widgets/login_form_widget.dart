@@ -51,8 +51,10 @@ class _LoginFormWidgetState extends ConsumerState<LoginFormWidget> {
       final valid = await repository.verifyOtp(email: _email.text.trim(), otp: _otp.text);
       if (!mounted) return;
       if (valid) {
-        ref.read(currentUserEmailProvider.notifier).state = _email.text.trim();
-        context.go('/home');
+        final userEmail = _email.text.trim();
+        ref.read(currentUserEmailProvider.notifier).state = userEmail;
+        await ref.read(authSessionStorageProvider).writeUserEmail(userEmail);
+        if (mounted) context.go('/home');
       } else {
         setState(() {
           _error = true;

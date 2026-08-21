@@ -339,14 +339,15 @@ class SqliteEmployeeRepository implements EmployeeRepository {
     final result = <Employee>[];
     for (final emp in allEmps) {
       final s = emp.status.trim().toLowerCase();
-      if (s == 'active' || s == 'converted' || s == 'submitted') {
+      final empIdUpper = emp.employeeId.trim().toUpperCase();
+      final isFullEmployee = empIdUpper.startsWith('EMP-');
+      if (s == 'active' || s == 'converted' || s == 'submitted' || isFullEmployee) {
         var updatedEmp = emp;
-        final empIdUpper = emp.employeeId.trim().toUpperCase();
-        if (empIdUpper.isEmpty || !empIdUpper.startsWith('EMP-')) {
+        if (!isFullEmployee) {
           final newEmpId = await _generateNextEmployeeId();
           updatedEmp = emp.copyWith(employeeId: newEmpId, status: 'Active');
           await db.update('employees', updatedEmp.toMap(), where: 'id = ?', whereArgs: [emp.id]);
-        } else if (emp.status != 'Active') {
+        } else if (emp.status.trim().toLowerCase() == 'draft' || (emp.status != 'Active' && emp.status != 'ACTIVE')) {
           updatedEmp = emp.copyWith(status: 'Active');
           await db.update('employees', updatedEmp.toMap(), where: 'id = ?', whereArgs: [emp.id]);
         }

@@ -49,17 +49,32 @@ final userDestinationsProvider = Provider<List<SidebarDestination>>((ref) {
       }
 
       // ── EMPLOYEE / standard roles:
-      //    Always include 'Home' and 'My Exit'. If accessPermissions is empty, show all.
-      final allowed = emp.accessPermissions.toSet();
-      if (allowed.isEmpty) return AppShell.destinations;
+      final allowed = emp.accessPermissions.map((p) => p.trim()).toSet();
+
+      // Default basic employee modules when no explicit permissions are specified
+      const defaultEmployeeModules = {
+        'Home',
+        'Attendance',
+        'My Tasks',
+        'Site Visit Attendance',
+        'Permission',
+        'Loan',
+        'My Asset',
+        'My Exit',
+        'Incentive Request',
+      };
+
+      if (allowed.isEmpty) {
+        return AppShell.destinations
+            .where((d) => defaultEmployeeModules.contains(d.label))
+            .toList();
+      }
 
       return AppShell.destinations
           .where((d) =>
               d.label == 'Home' ||
-              d.label == 'My Exit' ||
-              d.label == 'My Asset' ||
               allowed.contains(d.label) ||
-              (d.label == 'Tasks and Clocking Management' && allowed.contains('Task Management')))
+              (d.label == 'Leave Management' && allowed.contains('Leave')))
           .toList();
     },
     orElse: () => AppShell.destinations,
@@ -328,6 +343,7 @@ class AppShell extends ConsumerWidget {
           },
           onLogout: () async {
             ref.read(currentUserEmailProvider.notifier).state = null;
+            await ref.read(authSessionStorageProvider).writeUserEmail(null);
             await ref.read(authenticationRepositoryProvider).signOut();
             if (context.mounted) context.go('/login');
           },
