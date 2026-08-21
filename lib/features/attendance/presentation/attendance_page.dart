@@ -3963,7 +3963,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
   static const double _maxAllowedGpsAccuracyMeters = 200;
 
   String _formatKey(DateTime date) =>
-      '${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}';
+      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
   @override
   void initState() {

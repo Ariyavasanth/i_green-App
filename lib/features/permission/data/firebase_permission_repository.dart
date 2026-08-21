@@ -289,4 +289,15 @@ class FirebasePermissionRepository implements PermissionRepository {
       );
     }).toList();
   }
+
+  @override
+  Future<void> clearAllRequests() async {
+    try {
+      final snap = await _requestsRef.get();
+      for (final doc in snap.docs) {
+        await doc.reference.delete();
+      }
+    } catch (_) {}
+    await _sqliteRepo.clearAllRequests();
+  }
 }

@@ -22,7 +22,7 @@ final allAttendanceRecordsProvider = FutureProvider<List<AttendanceRecord>>(
 
 final todayAttendanceRecordProvider = FutureProvider.family<AttendanceRecord?, int>(
   (ref, employeeId) {
-    final today = DateFormat('dd-MM-yyyy').format(DateTime.now());
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
     return ref.watch(attendanceRepositoryProvider).getAttendanceRecordForDate(employeeId, today);
   },
 );

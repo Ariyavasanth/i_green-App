@@ -35,4 +35,5 @@ abstract class PermissionRepository {
 
   // Reporting & Usage
   Future<List<PermissionBalance>> getAllEmployeeUsage(DateTime month);
+  Future<void> clearAllRequests();
 }
