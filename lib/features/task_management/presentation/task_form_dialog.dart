@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../employee/providers/employee_providers.dart';
 import '../domain/task_item.dart';
 import '../providers/task_providers.dart';
+import '../../attendance/providers/attendance_providers.dart';
 
 class TaskFormDialog extends ConsumerStatefulWidget {
   const TaskFormDialog({
@@ -51,6 +52,132 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
 
   Future<void> _saveTask() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (_status == 'IN_PROGRESS') {
+      final attendanceRepo = ref.read(attendanceRepositoryProvider);
+      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final empIdStr = _selectedAssignedTo ?? 'EMP-001';
+      final digits = empIdStr.replaceAll(RegExp(r'[^0-9]'), '');
+      final empIdInt = int.tryParse(digits) ?? 1;
+      final attendanceRecord = await attendanceRepo.getAttendanceRecordForDate(empIdInt, today);
+
+      if (attendanceRecord == null || attendanceRecord.effectiveCheckInTime.trim().isEmpty) {
+        if (mounted) {
+          await showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 24),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Check In Required',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                    ),
+                  ),
+                ],
+              ),
+              content: const Text(
+                'The assigned employee must check in before setting task status to In Progress.',
+                style: TextStyle(fontSize: 14, color: Color(0xFF334155)),
+              ),
+              actions: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF9CC70A),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+
+      if (attendanceRecord.status == 'Absent') {
+        if (mounted) {
+          await showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 24),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Attendance Marked Absent',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                    ),
+                  ),
+                ],
+              ),
+              content: const Text(
+                'The assigned employee is marked Absent for today. Task status cannot be set to In Progress.',
+                style: TextStyle(fontSize: 14, color: Color(0xFF334155)),
+              ),
+              actions: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF9CC70A),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+
+      if (attendanceRecord.checkOutTime.trim().isNotEmpty || attendanceRecord.status == 'Checked Out') {
+        if (mounted) {
+          await showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 24),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Already Checked Out',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                    ),
+                  ),
+                ],
+              ),
+              content: const Text(
+                'The assigned employee has already checked out for today. Task status cannot be set to In Progress.',
+                style: TextStyle(fontSize: 14, color: Color(0xFF334155)),
+              ),
+              actions: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF9CC70A),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+    }
 
     final repo = ref.read(taskRepositoryProvider);
     final taskId = widget.existingTask?.id ?? DateTime.now().millisecondsSinceEpoch.toString();

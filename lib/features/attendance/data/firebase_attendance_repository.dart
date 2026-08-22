@@ -145,7 +145,8 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
             docEmpCode == 'EMP-1140';
 
         final docDate = (data['date'] ?? '').toString();
-        final matchesDate = docDate == date || docDate.replaceAll('-', '') == date.replaceAll('-', '');
+        final normDocDate = _normalizeDateKey(docDate);
+        final matchesDate = docDate == date || docDate.replaceAll('-', '') == date.replaceAll('-', '') || normDocDate == normDate;
 
         if (matchesEmp && matchesDate) {
           return AttendanceRecord.fromMap(data);

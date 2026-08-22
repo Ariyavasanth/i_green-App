@@ -290,8 +290,12 @@ class SqliteAttendanceRepository implements AttendanceRepository {
   @override
   Future<AttendanceRecord?> getAttendanceRecordForDate(int employeeId, String date) async {
     final records = await getAttendanceRecords(employeeId);
+    final normInputDate = _normalizeDateKey(date);
     for (final r in records) {
-      if (r.date == date || r.date.replaceAll('-', '') == date.replaceAll('-', '')) {
+      final normRecDate = _normalizeDateKey(r.date);
+      if (r.date == date ||
+          r.date.replaceAll('-', '') == date.replaceAll('-', '') ||
+          normRecDate == normInputDate) {
         return r;
       }
     }
