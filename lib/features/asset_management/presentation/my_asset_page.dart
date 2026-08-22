@@ -59,83 +59,7 @@ class _MyAssetPageState extends ConsumerState<MyAssetPage> {
     }
   }
 
-  Future<void> _showEmployeePickerDialog(List<Employee> employees, Employee? currentSelected) async {
-    final selected = await showDialog<Employee>(
-      context: context,
-      builder: (pickerContext) {
-        String search = '';
-        return StatefulBuilder(
-          builder: (context, setPickerState) {
-            final filtered = employees.where((emp) {
-              if (search.trim().isEmpty) return true;
-              final q = search.toLowerCase().trim();
-              return emp.fullName.toLowerCase().contains(q) ||
-                  emp.employeeId.toLowerCase().contains(q) ||
-                  emp.emailAddress.toLowerCase().contains(q);
-            }).toList();
 
-            return AlertDialog(
-              title: const Row(
-                children: [
-                  Icon(Icons.person_search_outlined, color: Color(0xFF9CC70A)),
-                  SizedBox(width: 8),
-                  Text('Select Employee', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                ],
-              ),
-              content: SizedBox(
-                width: 400,
-                height: 400,
-                child: Column(
-                  children: [
-                    TextField(
-                      onChanged: (val) => setPickerState(() => search = val),
-                      decoration: InputDecoration(
-                        hintText: 'Search by name, ID, or email...',
-                        prefixIcon: const Icon(Icons.search, size: 20),
-                        isDense: true,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Expanded(
-                      child: filtered.isEmpty
-                          ? const Center(child: Text('No employees found'))
-                          : ListView.separated(
-                              itemCount: filtered.length,
-                              separatorBuilder: (_, __) => const Divider(height: 1),
-                              itemBuilder: (context, index) {
-                                final emp = filtered[index];
-                                final isSel = currentSelected?.id == emp.id;
-                                return ListTile(
-                                  dense: true,
-                                  selected: isSel,
-                                  selectedTileColor: const Color(0xFF9CC70A).withOpacity(0.1),
-                                  title: Text(emp.fullName, style: const TextStyle(fontWeight: FontWeight.w600)),
-                                  subtitle: Text('${emp.employeeId} • ${emp.department}'),
-                                  onTap: () => Navigator.pop(context, emp),
-                                );
-                              },
-                            ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, null),
-                  child: const Text('Clear Selection'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    if (mounted) {
-      ref.read(myAssetSelectedEmployeeProvider.notifier).state = selected;
-    }
-  }
 
   // ── Maintenance Dialog (Matching Exact Reference Screenshot Layout) ─────────────────────
   Future<void> _showMaintenanceDialog(AssetAssignment asset) async {
@@ -812,36 +736,19 @@ class _MyAssetPageState extends ConsumerState<MyAssetPage> {
   @override
   Widget build(BuildContext context) {
     final myAssetsAsync = ref.watch(myAssetAssignmentsProvider);
-    final currentEmp = ref.watch(currentEmployeeProvider);
-    final overrideEmp = ref.watch(myAssetSelectedEmployeeProvider);
     final employeesAsync = ref.watch(employeesProvider);
     final searchQ = ref.watch(myAssetSearchQueryProvider);
     final statusFilter = ref.watch(myAssetStatusFilterProvider);
-
-    final activeEmp = overrideEmp ?? currentEmp;
 
     return DefaultTabController(
       length: 2,
       child: Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        title: Row(
-          children: const [
-            Icon(Icons.devices_outlined, color: Color(0xFF9CC70A), size: 26),
-            SizedBox(width: 10),
-            Text('My Assets', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
-          ],
-        ),
+        automaticallyImplyLeading: false,
         backgroundColor: Colors.white,
-        foregroundColor: AppColors.textPrimary,
         elevation: 0.5,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh Assets',
-            onPressed: () => ref.refresh(assetAssignmentsProvider),
-          ),
-        ],
+        toolbarHeight: 0,
         bottom: const TabBar(
           labelColor: Color(0xFF9CC70A),
           unselectedLabelColor: Color(0xFF414A51),
@@ -881,72 +788,7 @@ class _MyAssetPageState extends ConsumerState<MyAssetPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Top Employee & Role Banner
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF414A51), Color(0xFF2C3238)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 24,
-                        backgroundColor: const Color(0xFF9CC70A),
-                        child: Text(
-                          activeEmp != null && activeEmp.fullName.isNotEmpty
-                              ? activeEmp.fullName[0].toUpperCase()
-                              : 'A',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              activeEmp != null ? activeEmp.fullName : 'All Employee View',
-                              style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              activeEmp != null
-                                  ? '${activeEmp.employeeId} • ${activeEmp.department.isNotEmpty ? activeEmp.department : "Asset Recipient"}'
-                                  : 'Showing assigned assets',
-                              style: const TextStyle(color: Color(0xFFD1D5DB), fontSize: 13),
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Employee picker button for Admins
-                      if (allEmployees.isNotEmpty)
-                        TextButton.icon(
-                          style: TextButton.styleFrom(
-                            backgroundColor: Colors.white.withOpacity(0.15),
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          onPressed: () => _showEmployeePickerDialog(allEmployees, activeEmp),
-                          icon: const Icon(Icons.swap_horiz, size: 18),
-                          label: Text(overrideEmp != null ? 'Change Emp' : 'Select Emp'),
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
+
 
                 // Metrics Summary Cards
                 LayoutBuilder(
@@ -1192,7 +1034,7 @@ class _MyAssetPageState extends ConsumerState<MyAssetPage> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(color: const Color(0xFF9CC70A).withOpacity(.12), borderRadius: BorderRadius.circular(10)),
-              child: Icon(_getAssetIcon(request.assetTypeName), color: const Color(0xFF414A51)),
+              child: Icon(_getAssetIcon(request.assetTypeName), color: const Color(0xFF9CC70A)),
             ),
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1319,7 +1161,7 @@ class _MyAssetPageState extends ConsumerState<MyAssetPage> {
                     color: const Color(0xFF9CC70A).withOpacity(0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(iconData, color: const Color(0xFF414A51), size: 24),
+                  child: Icon(iconData, color: const Color(0xFF9CC70A), size: 24),
                 ),
                 const SizedBox(width: 10),
                 Expanded(

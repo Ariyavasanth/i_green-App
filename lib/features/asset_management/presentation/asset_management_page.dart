@@ -1884,16 +1884,6 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.devices_other_outlined, size: 24, color: AppColors.active),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Assets',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
                       const Spacer(),
                       IconButton(
                         icon: Icon(

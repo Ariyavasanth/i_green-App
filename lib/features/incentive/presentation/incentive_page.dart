@@ -461,21 +461,7 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Page Header
-              Row(
-                children: [
-                  const Icon(Icons.request_quote_outlined, color: AppColors.active, size: 28),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Incentive Request',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                        ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
+
 
               // Navigation Tabs
               Container(
