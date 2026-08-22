@@ -266,6 +266,66 @@ class MaterialDraft {
   final String minimumStock, maximumStock, reorderLevel;
 }
 
+class MaterialItem {
+  const MaterialItem({
+    required this.id,
+    required this.sourceType,
+    required this.code,
+    required this.description,
+    required this.materialType,
+    required this.grade,
+    required this.make,
+    required this.model,
+    required this.size,
+    required this.unit,
+    required this.density,
+    required this.supplier,
+    required this.heatNumber,
+    required this.batchNumber,
+    required this.warehouseLocation,
+    required this.rackLocation,
+    required this.minimumStock,
+    required this.maximumStock,
+    required this.reorderLevel,
+    required this.createdAt,
+  });
+
+  final int id;
+  final String sourceType, code, description, materialType, grade, make, model;
+  final String size, unit, density, supplier, heatNumber, batchNumber;
+  final String warehouseLocation, rackLocation;
+  final String minimumStock, maximumStock, reorderLevel;
+  final DateTime createdAt;
+}
+
+class StockEntry {
+  const StockEntry({
+    required this.id,
+    required this.grnNumber,
+    required this.supplier,
+    required this.poNumber,
+    required this.poDate,
+    required this.invoiceNumber,
+    required this.invoiceDate,
+    required this.materialCode,
+    required this.description,
+    required this.heatNumber,
+    required this.batchNumber,
+    required this.quantity,
+    required this.weight,
+    required this.inspectionStatus,
+    required this.storeLocation,
+    required this.createdAt,
+  });
+
+  final int id;
+  final String grnNumber, supplier, poNumber, invoiceNumber, materialCode;
+  final String description;
+  final String heatNumber, batchNumber, inspectionStatus, storeLocation;
+  final DateTime poDate, invoiceDate, createdAt;
+  final double quantity, weight;
+}
+
 class MoveStockDraft {
   const MoveStockDraft({
     required this.workOrder,
@@ -306,6 +366,26 @@ class MaterialRequestDraft {
   final double quantityIssued, weightIssued;
 }
 
+class MaterialRequest {
+  const MaterialRequest({
+    required this.id,
+    required this.date,
+    required this.machine,
+    required this.operatorName,
+    required this.workOrder,
+    required this.material,
+    required this.quantityIssued,
+    required this.weightIssued,
+    required this.createdAt,
+  });
+
+  final int id;
+  final DateTime date;
+  final String machine, operatorName, workOrder, material;
+  final double quantityIssued, weightIssued;
+  final DateTime createdAt;
+}
+
 class MaterialReturnDraft {
   const MaterialReturnDraft({
     required this.workOrder,
@@ -317,6 +397,23 @@ class MaterialReturnDraft {
 
   final String workOrder, material, reason;
   final double quantityReturned, weight;
+}
+
+class MaterialReturn {
+  const MaterialReturn({
+    required this.id,
+    required this.workOrder,
+    required this.material,
+    required this.quantityReturned,
+    required this.weight,
+    required this.reason,
+    required this.createdAt,
+  });
+
+  final int id;
+  final String workOrder, material, reason;
+  final double quantityReturned, weight;
+  final DateTime createdAt;
 }
 
 class DashboardMetrics {
@@ -399,6 +496,10 @@ abstract interface class BooksRepository {
   Future<void> addTransaction(TransactionDraft draft);
   Future<List<InventoryAdjustment>> getAdjustments();
   Future<void> addAdjustment(AdjustmentDraft draft);
+  Future<List<MaterialItem>> getMaterials({String? sourceType});
+  Future<List<StockEntry>> getStockEntries();
+  Future<List<MaterialRequest>> getMaterialRequests();
+  Future<List<MaterialReturn>> getMaterialReturns();
   Future<void> addStock(StockEntryDraft draft);
   Future<void> addMaterial(MaterialDraft draft);
   Future<void> moveStock(MoveStockDraft draft);

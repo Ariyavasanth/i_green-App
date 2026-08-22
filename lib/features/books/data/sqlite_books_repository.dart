@@ -253,6 +253,71 @@ class SqliteBooksRepository implements BooksRepository {
         });
       }
     }
+
+    // Seed sample Raw Materials and Outsource Materials
+    await db.insert('materials', {
+      'source_type': 'RAW',
+      'code': 'RM-001',
+      'description': 'Mild Steel Sheet',
+      'material_type': 'Sheet Metal',
+      'grade': 'MS-350',
+      'make': 'Tata Steel',
+      'model': 'MS-10',
+      'size': '10mm x 1200mm x 2400mm',
+      'unit': 'kg',
+      'density': '7.85',
+      'supplier': 'NEXORA INFRATECH',
+      'heat_number': 'HT-9821',
+      'batch_number': 'B-101',
+      'warehouse_location': 'WH-A',
+      'rack_location': 'R-01',
+      'minimum_stock': '50',
+      'maximum_stock': '500',
+      'reorder_level': '100',
+      'created_at': DateTime.now().toIso8601String(),
+    });
+    await db.insert('materials', {
+      'source_type': 'RAW',
+      'code': 'RM-002',
+      'description': 'Aluminium Round Bar',
+      'material_type': 'Bar',
+      'grade': 'AL-6061',
+      'make': 'Hindalco',
+      'model': 'AL-50',
+      'size': '50mm Dia',
+      'unit': 'kg',
+      'density': '2.70',
+      'supplier': 'Poomari Engineering',
+      'heat_number': 'HT-4432',
+      'batch_number': 'B-102',
+      'warehouse_location': 'WH-A',
+      'rack_location': 'R-04',
+      'minimum_stock': '20',
+      'maximum_stock': '200',
+      'reorder_level': '40',
+      'created_at': DateTime.now().toIso8601String(),
+    });
+    await db.insert('materials', {
+      'source_type': 'OUTSOURCE',
+      'code': 'OS-001',
+      'description': 'Powder Coating',
+      'material_type': 'Coating',
+      'grade': 'Standard',
+      'make': 'AkzoNobel',
+      'model': 'PC-500',
+      'size': 'Standard',
+      'unit': 'pcs',
+      'density': '1.20',
+      'supplier': 'Indwel Precision Gears Pvt Ltd',
+      'heat_number': 'N/A',
+      'batch_number': 'OS-B1',
+      'warehouse_location': 'SH-01',
+      'rack_location': 'R-02',
+      'minimum_stock': '10',
+      'maximum_stock': '100',
+      'reorder_level': '20',
+      'created_at': DateTime.now().toIso8601String(),
+    });
   }
 
   static Future<void> _insertPullingSwivel(Database db) async {
@@ -891,6 +956,92 @@ class SqliteBooksRepository implements BooksRepository {
       'weight_issued': d.weightIssued,
       'created_at': DateTime.now().toIso8601String(),
     });
+  }
+
+  @override
+  Future<List<MaterialItem>> getMaterials({String? sourceType}) async {
+    final db = await _db;
+    final rows = sourceType != null && sourceType.isNotEmpty
+        ? await db.query('materials', where: 'LOWER(source_type) = ?', whereArgs: [sourceType.toLowerCase()], orderBy: 'id DESC')
+        : await db.query('materials', orderBy: 'id DESC');
+    return rows.map((r) => MaterialItem(
+      id: r['id'] as int,
+      sourceType: (r['source_type'] as String?) ?? 'RAW',
+      code: (r['code'] as String?) ?? '',
+      description: (r['description'] as String?) ?? '',
+      materialType: (r['material_type'] as String?) ?? '',
+      grade: (r['grade'] as String?) ?? '',
+      make: (r['make'] as String?) ?? '',
+      model: (r['model'] as String?) ?? '',
+      size: (r['size'] as String?) ?? '',
+      unit: (r['unit'] as String?) ?? '',
+      density: (r['density'] as String?) ?? '',
+      supplier: (r['supplier'] as String?) ?? '',
+      heatNumber: (r['heat_number'] as String?) ?? '',
+      batchNumber: (r['batch_number'] as String?) ?? '',
+      warehouseLocation: (r['warehouse_location'] as String?) ?? '',
+      rackLocation: (r['rack_location'] as String?) ?? '',
+      minimumStock: (r['minimum_stock'] as String?) ?? '',
+      maximumStock: (r['maximum_stock'] as String?) ?? '',
+      reorderLevel: (r['reorder_level'] as String?) ?? '',
+      createdAt: DateTime.tryParse((r['created_at'] as String?) ?? '') ?? DateTime.now(),
+    )).toList();
+  }
+
+  @override
+  Future<List<StockEntry>> getStockEntries() async {
+    final db = await _db;
+    final rows = await db.query('stock_entries', orderBy: 'id DESC');
+    return rows.map((r) => StockEntry(
+      id: r['id'] as int,
+      grnNumber: (r['grn_number'] as String?) ?? '',
+      supplier: (r['supplier'] as String?) ?? '',
+      poNumber: (r['po_number'] as String?) ?? '',
+      poDate: DateTime.tryParse((r['po_date'] as String?) ?? '') ?? DateTime.now(),
+      invoiceNumber: (r['invoice_number'] as String?) ?? '',
+      invoiceDate: DateTime.tryParse((r['invoice_date'] as String?) ?? '') ?? DateTime.now(),
+      materialCode: (r['material_code'] as String?) ?? '',
+      description: (r['description'] as String?) ?? '',
+      heatNumber: (r['heat_number'] as String?) ?? '',
+      batchNumber: (r['batch_number'] as String?) ?? '',
+      quantity: ((r['quantity'] as num?) ?? 0).toDouble(),
+      weight: ((r['weight'] as num?) ?? 0).toDouble(),
+      inspectionStatus: (r['inspection_status'] as String?) ?? '',
+      storeLocation: (r['store_location'] as String?) ?? '',
+      createdAt: DateTime.tryParse((r['created_at'] as String?) ?? '') ?? DateTime.now(),
+    )).toList();
+  }
+
+  @override
+  Future<List<MaterialRequest>> getMaterialRequests() async {
+    final db = await _db;
+    final rows = await db.query('material_requests', orderBy: 'id DESC');
+    return rows.map((r) => MaterialRequest(
+      id: r['id'] as int,
+      date: DateTime.tryParse((r['date'] as String?) ?? '') ?? DateTime.now(),
+      machine: (r['machine'] as String?) ?? '',
+      operatorName: (r['operator_name'] as String?) ?? '',
+      workOrder: (r['work_order'] as String?) ?? '',
+      material: (r['material'] as String?) ?? '',
+      quantityIssued: ((r['quantity_issued'] as num?) ?? 0).toDouble(),
+      weightIssued: ((r['weight_issued'] as num?) ?? 0).toDouble(),
+      createdAt: DateTime.tryParse((r['created_at'] as String?) ?? '') ?? DateTime.now(),
+    )).toList();
+  }
+
+  @override
+  Future<List<MaterialReturn>> getMaterialReturns() async {
+    final db = await _db;
+    final rows = await db.query('material_returns', orderBy: 'id DESC');
+    return rows.map((r) => MaterialReturn(
+      id: r['id'] as int,
+      workOrder: (r['work_order'] as String?) ?? '',
+      material: (r['material'] as String?) ?? '',
+      quantityReturned: ((r['quantity_returned'] as num?) ?? 0).toDouble(),
+      weight: ((r['weight'] as num?) ?? 0).toDouble(),
+      reason: (r['reason'] as String?) ?? '',
+      createdAt: DateTime.tryParse((r['created_at'] as String?) ?? '') ?? DateTime.now(),
+    )).toList();
   }
 
   @override

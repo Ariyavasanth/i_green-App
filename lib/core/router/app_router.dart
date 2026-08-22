@@ -454,11 +454,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: 'add-stock',
-                builder: (_, _) => const AddStockPage(),
+                builder: (context, state) {
+                  final extraMap = state.extra as Map<String, dynamic>?;
+                  final stockEntry = extraMap?['stockEntry'] as StockEntry?;
+                  final readOnly = extraMap?['readOnly'] as bool? ?? (stockEntry != null);
+                  return AddStockPage(stockEntry: stockEntry, readOnly: readOnly);
+                },
               ),
               GoRoute(
                 path: 'add-material',
-                builder: (_, _) => const AddMaterialPage(),
+                builder: (context, state) {
+                  final extraMap = state.extra as Map<String, dynamic>?;
+                  final material = extraMap?['material'] as MaterialItem?;
+                  final readOnly = extraMap?['readOnly'] as bool? ?? (material != null);
+                  return AddMaterialPage(material: material, readOnly: readOnly);
+                },
               ),
               GoRoute(
                 path: 'move-stock',

@@ -407,6 +407,9 @@ class _TopBar extends ConsumerWidget {
 
   String _getHeading(String location) {
     final cleanLoc = location.split('?').first;
+    if (cleanLoc == '/inventory-adjustments/add-stock') return 'Add Stock';
+    if (cleanLoc == '/inventory-adjustments/add-material') return 'Add Material';
+    if (cleanLoc == '/inventory-adjustments/move-stock') return 'Move Stock';
     if (cleanLoc == '/items/new') return 'New Item';
     if (cleanLoc == '/customers/new') return 'New Customer';
     if (cleanLoc == '/quotes/new') return 'New Quote';
@@ -464,7 +467,8 @@ class _TopBar extends ConsumerWidget {
 
     final isFormPage = currentLocation.endsWith('/new') ||
         currentLocation.contains('/edit') ||
-        currentLocation.startsWith('/permission/');
+        currentLocation.startsWith('/permission/') ||
+        currentLocation.startsWith('/inventory-adjustments/');
 
     final content = SafeArea(
       bottom: false,
@@ -478,7 +482,9 @@ class _TopBar extends ConsumerWidget {
                 icon: const Icon(Icons.arrow_back, color: Color(0xFF1E293B)),
                 tooltip: 'Back',
                 onPressed: () {
-                  if (currentLocation.startsWith('/permission/')) {
+                  if (currentLocation.startsWith('/inventory-adjustments/')) {
+                    context.go('/inventory-adjustments');
+                  } else if (currentLocation.startsWith('/permission/')) {
                     context.go('/permission');
                   } else if (Navigator.of(context).canPop()) {
                     Navigator.of(context).pop();

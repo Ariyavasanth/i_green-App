@@ -8,7 +8,14 @@ import '../providers/books_providers.dart';
 import 'books_forms.dart';
 
 class AddStockPage extends ConsumerStatefulWidget {
-  const AddStockPage({super.key});
+  const AddStockPage({
+    this.stockEntry,
+    this.readOnly = false,
+    super.key,
+  });
+
+  final StockEntry? stockEntry;
+  final bool readOnly;
 
   @override
   ConsumerState<AddStockPage> createState() => _AddStockPageState();
@@ -33,6 +40,28 @@ class _AddStockPageState extends ConsumerState<AddStockPage> {
   bool saving = false;
 
   @override
+  void initState() {
+    super.initState();
+    final entry = widget.stockEntry;
+    if (entry != null) {
+      grnNumber.text = entry.grnNumber;
+      supplier.text = entry.supplier;
+      poNumber.text = entry.poNumber;
+      invoiceNumber.text = entry.invoiceNumber;
+      materialCode.text = entry.materialCode;
+      description.text = entry.description;
+      heatNumber.text = entry.heatNumber;
+      batchNumber.text = entry.batchNumber;
+      quantity.text = entry.quantity > 0 ? entry.quantity.toString() : '';
+      weight.text = entry.weight > 0 ? entry.weight.toString() : '';
+      inspectionStatus.text = entry.inspectionStatus;
+      storeLocation.text = entry.storeLocation;
+      poDate = entry.poDate;
+      invoiceDate = entry.invoiceDate;
+    }
+  }
+
+  @override
   void dispose() {
     for (final controller in [
       grnNumber,
@@ -55,11 +84,12 @@ class _AddStockPageState extends ConsumerState<AddStockPage> {
 
   @override
   Widget build(BuildContext context) => FormPage(
-    title: 'ADD STOCK',
+    title: 'Add Stock',
     saving: saving,
-    saveLabel: 'Add Stock',
+    saveLabel: widget.readOnly ? 'Close' : 'Add Stock',
     showLeading: false,
-    onSave: _save,
+    showAppBar: false,
+    onSave: widget.readOnly ? () => context.go('/inventory-adjustments') : _save,
     children: [
       Form(
         key: formKey,
@@ -105,6 +135,7 @@ class _AddStockPageState extends ConsumerState<AddStockPage> {
   }) =>
       TextFormField(
         controller: controller,
+        readOnly: widget.readOnly,
         maxLines: maxLines,
         decoration: InputDecoration(labelText: '$label*'),
         validator: (value) => value == null || value.trim().isEmpty
@@ -118,15 +149,17 @@ class _AddStockPageState extends ConsumerState<AddStockPage> {
     ValueChanged<DateTime> onChanged,
   ) => InkWell(
     borderRadius: BorderRadius.circular(10),
-    onTap: () async {
-      final date = await showDatePicker(
-        context: context,
-        initialDate: value,
-        firstDate: DateTime(2000),
-        lastDate: DateTime(2100),
-      );
-      if (date != null) onChanged(date);
-    },
+    onTap: widget.readOnly
+        ? null
+        : () async {
+            final date = await showDatePicker(
+              context: context,
+              initialDate: value,
+              firstDate: DateTime(2000),
+              lastDate: DateTime(2100),
+            );
+            if (date != null) onChanged(date);
+          },
     child: InputDecorator(
       decoration: InputDecoration(
         labelText: '$label*',
@@ -139,6 +172,7 @@ class _AddStockPageState extends ConsumerState<AddStockPage> {
   Widget _numberField(TextEditingController controller, String label) =>
       TextFormField(
         controller: controller,
+        readOnly: widget.readOnly,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         decoration: InputDecoration(labelText: '$label*'),
         validator: (value) {
@@ -172,8 +206,9 @@ class _AddStockPageState extends ConsumerState<AddStockPage> {
         ),
       );
       ref.invalidate(itemsProvider);
+      ref.invalidate(stockEntriesProvider);
       ref.invalidate(dashboardMetricsProvider);
-      if (mounted) context.pop();
+      if (mounted) context.go('/inventory-adjustments');
     } finally {
       if (mounted) setState(() => saving = false);
     }

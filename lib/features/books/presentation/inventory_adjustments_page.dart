@@ -24,63 +24,6 @@ class _InventoryAdjustmentDashboardPageState
   String _query = '';
   _InventoryCategory? _selectedCategory;
 
-  static const _rawMaterialItems = <BookItem>[
-    BookItem(
-      id: -1,
-      name: 'Mild Steel Sheet',
-      sku: 'RM-001',
-      unit: 'kg',
-      type: 'Goods',
-      trackInventory: true,
-      stockOnHand: 240,
-    ),
-    BookItem(
-      id: -2,
-      name: 'Aluminium Round Bar',
-      sku: 'RM-002',
-      unit: 'kg',
-      type: 'Goods',
-      trackInventory: true,
-      stockOnHand: 125,
-    ),
-    BookItem(
-      id: -3,
-      name: 'Stainless Steel Coil',
-      sku: 'RM-003',
-      unit: 'kg',
-      type: 'Goods',
-      trackInventory: true,
-      stockOnHand: 86,
-    ),
-  ];
-
-  static const _outsourceItems = <BookItem>[
-    BookItem(
-      id: -11,
-      name: 'Powder Coating',
-      sku: 'OS-001',
-      unit: 'pcs',
-      type: 'Service',
-      stockOnHand: 48,
-    ),
-    BookItem(
-      id: -12,
-      name: 'CNC Machining',
-      sku: 'OS-002',
-      unit: 'pcs',
-      type: 'Service',
-      stockOnHand: 32,
-    ),
-    BookItem(
-      id: -13,
-      name: 'Heat Treatment',
-      sku: 'OS-003',
-      unit: 'lots',
-      type: 'Service',
-      stockOnHand: 12,
-    ),
-  ];
-
   @override
   void dispose() {
     _searchController.dispose();
@@ -90,6 +33,7 @@ class _InventoryAdjustmentDashboardPageState
   @override
   Widget build(BuildContext context) {
     final itemsState = ref.watch(itemsProvider);
+    final materialsState = ref.watch(materialsProvider(null));
     final metricsState = ref.watch(dashboardMetricsProvider);
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -106,9 +50,13 @@ class _InventoryAdjustmentDashboardPageState
               itemsState: itemsState,
               dashboard: _buildDashboard(
                 itemsState.valueOrNull ?? const <BookItem>[],
+                materialsState.valueOrNull ?? const <MaterialItem>[],
                 metricsState.valueOrNull,
               ),
-              onRetry: () => ref.invalidate(itemsProvider),
+              onRetry: () {
+                ref.invalidate(itemsProvider);
+                ref.invalidate(materialsProvider(null));
+              },
             ),
           ),
         );
@@ -116,20 +64,39 @@ class _InventoryAdjustmentDashboardPageState
     );
   }
 
-  Widget _buildDashboard(List<BookItem> allItems, DashboardMetrics? metrics) {
+  Widget _buildDashboard(
+    List<BookItem> allItems,
+    List<MaterialItem> allMaterials,
+    DashboardMetrics? metrics,
+  ) {
     final normalizedQuery = _query.trim().toLowerCase();
-    final categoryItems = switch (_selectedCategory) {
-      _InventoryCategory.rawMaterial => _rawMaterialItems,
-      _InventoryCategory.outsource => _outsourceItems,
-      null => allItems,
-    };
-    final visibleItems = categoryItems
-        .where((item) {
-          final searchable = '${item.name} ${item.sku} ${item.type}'
-              .toLowerCase();
-          return searchable.contains(normalizedQuery);
-        })
-        .toList(growable: false);
+
+    final filteredMaterials = allMaterials.where((m) {
+      if (_selectedCategory == _InventoryCategory.rawMaterial && m.sourceType.toUpperCase() != 'RAW') {
+        return false;
+      }
+      if (_selectedCategory == _InventoryCategory.outsource && m.sourceType.toUpperCase() != 'OUTSOURCE') {
+        return false;
+      }
+      if (normalizedQuery.isEmpty) return true;
+      final searchable = '${m.description} ${m.code} ${m.grade} ${m.supplier}'.toLowerCase();
+      return searchable.contains(normalizedQuery);
+    }).toList();
+
+    final filteredItems = allItems.where((item) {
+      if (_selectedCategory == _InventoryCategory.rawMaterial && item.type != 'Goods') {
+        return false;
+      }
+      if (_selectedCategory == _InventoryCategory.outsource && item.type != 'Service') {
+        return false;
+      }
+      if (normalizedQuery.isEmpty) return true;
+      final searchable = '${item.name} ${item.sku} ${item.type}'.toLowerCase();
+      return searchable.contains(normalizedQuery);
+    }).toList();
+
+    final totalCount = filteredMaterials.length + filteredItems.length;
+
     final inventoryValue = allItems.fold<double>(
       0,
       (sum, item) => sum + (item.costPrice * item.stockOnHand),
@@ -140,6 +107,7 @@ class _InventoryAdjustmentDashboardPageState
       color: AppColors.primary,
       onRefresh: () async {
         ref.invalidate(itemsProvider);
+        ref.invalidate(materialsProvider(null));
         ref.invalidate(dashboardMetricsProvider);
         await ref.read(itemsProvider.future);
       },
@@ -151,15 +119,14 @@ class _InventoryAdjustmentDashboardPageState
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
             sliver: SliverList.list(
               children: [
-                const _DashboardHeading(),
-                const SizedBox(height: 16),
                 _SummaryGrid(
                   purchaseAmount: purchaseAmount,
                   outstanding: inventoryValue,
                   items: allItems,
+                  materials: allMaterials,
                   selectedCategory: _selectedCategory,
                   onCategorySelected: (category) => setState(() {
-                    _selectedCategory = category;
+                    _selectedCategory = _selectedCategory == category ? null : category;
                     _query = '';
                     _searchController.clear();
                   }),
@@ -181,10 +148,10 @@ class _InventoryAdjustmentDashboardPageState
                   title: 'Inventory',
                   subtitle: switch (_selectedCategory) {
                     _InventoryCategory.rawMaterial =>
-                      '${visibleItems.length} raw materials',
+                      '$totalCount raw materials',
                     _InventoryCategory.outsource =>
-                      '${visibleItems.length} outsource parts',
-                    null => '${visibleItems.length} items',
+                      '$totalCount outsource parts',
+                    null => '$totalCount items',
                   },
                 ),
                 const SizedBox(height: 8),
@@ -207,7 +174,7 @@ class _InventoryAdjustmentDashboardPageState
               ),
             ),
           ),
-          if (visibleItems.isEmpty)
+          if (totalCount == 0)
             SliverFillRemaining(
               hasScrollBody: false,
               child: _EmptyState(
@@ -217,18 +184,32 @@ class _InventoryAdjustmentDashboardPageState
                         _searchController.clear();
                         setState(() => _query = '');
                       }
-                    : () => context.push('/items/new'),
+                    : () => context.push('/inventory-adjustments/add-material'),
               ),
             )
           else
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 104),
-              sliver: SliverList.builder(
-                itemCount: visibleItems.length,
-                itemBuilder: (context, index) => _AnimatedInventoryCard(
-                  key: ValueKey(visibleItems[index].id),
-                  item: visibleItems[index],
-                  index: index,
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    if (index < filteredMaterials.length) {
+                      final mat = filteredMaterials[index];
+                      return _AnimatedMaterialCard(
+                        key: ValueKey('mat-${mat.id}'),
+                        material: mat,
+                        index: index,
+                      );
+                    }
+                    final itemIndex = index - filteredMaterials.length;
+                    final item = filteredItems[itemIndex];
+                    return _AnimatedInventoryCard(
+                      key: ValueKey('item-${item.id}'),
+                      item: item,
+                      index: index,
+                    );
+                  },
+                  childCount: totalCount,
                 ),
               ),
             ),
@@ -321,28 +302,12 @@ class _InventoryDashboardBody extends StatelessWidget {
   }
 }
 
-class _DashboardHeading extends StatelessWidget {
-  const _DashboardHeading();
-
-  @override
-  Widget build(BuildContext context) => const Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text('Inventory overview', style: AppTextStyles.pageTitle),
-      SizedBox(height: 4),
-      Text(
-        'Monitor stock, materials and purchasing at a glance',
-        style: AppTextStyles.caption,
-      ),
-    ],
-  );
-}
-
 class _SummaryGrid extends StatelessWidget {
   const _SummaryGrid({
     required this.purchaseAmount,
     required this.outstanding,
     required this.items,
+    required this.materials,
     required this.selectedCategory,
     required this.onCategorySelected,
   });
@@ -350,13 +315,16 @@ class _SummaryGrid extends StatelessWidget {
   final double purchaseAmount;
   final double outstanding;
   final List<BookItem> items;
+  final List<MaterialItem> materials;
   final _InventoryCategory? selectedCategory;
   final ValueChanged<_InventoryCategory> onCategorySelected;
 
   @override
   Widget build(BuildContext context) {
-    final rawMaterials = items.where((item) => item.type == 'Goods').length;
-    final outsource = items.where((item) => item.type == 'Service').length;
+    final rawCount = materials.where((m) => m.sourceType.toUpperCase() == 'RAW').length +
+        items.where((item) => item.type == 'Goods').length;
+    final outsourceCount = materials.where((m) => m.sourceType.toUpperCase() == 'OUTSOURCE').length +
+        items.where((item) => item.type == 'Service').length;
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -380,7 +348,7 @@ class _SummaryGrid extends StatelessWidget {
         _StatCard(
           icon: Icons.precision_manufacturing_outlined,
           title: 'Raw material',
-          value: '$rawMaterials Items',
+          value: '$rawCount Items',
           subtitle: 'Production inventory',
           backgroundColor: const Color(0xFFF4EFEB),
           borderColor: const Color(0xFFD1BC97),
@@ -390,7 +358,7 @@ class _SummaryGrid extends StatelessWidget {
         _StatCard(
           icon: Icons.handyman_outlined,
           title: 'Outsource',
-          value: '$outsource Items',
+          value: '$outsourceCount Items',
           subtitle: 'External services',
           backgroundColor: const Color(0xFFE8F5FF),
           borderColor: const Color(0xFFC8DAE6),
@@ -705,7 +673,36 @@ class _AnimatedInventoryCardState extends State<_AnimatedInventoryCard> {
             ),
             clipBehavior: Clip.antiAlias,
             child: InkWell(
-              onTap: () {},
+              onTap: () {
+                context.push(
+                  '/inventory-adjustments/add-material',
+                  extra: {
+                    'material': MaterialItem(
+                      id: widget.item.id,
+                      sourceType: widget.item.type == 'Service' ? 'OUTSOURCE' : 'RAW',
+                      code: widget.item.sku.isNotEmpty ? widget.item.sku : 'MAT-${widget.item.id}',
+                      description: widget.item.name,
+                      materialType: widget.item.type,
+                      grade: 'MS-350',
+                      make: 'Standard',
+                      model: 'Model-A',
+                      size: widget.item.unit,
+                      unit: widget.item.unit,
+                      density: '7.85',
+                      supplier: widget.item.preferredVendor.isNotEmpty ? widget.item.preferredVendor : 'Primary Supplier',
+                      heatNumber: 'HT-${widget.item.id}01',
+                      batchNumber: 'BATCH-${widget.item.id}',
+                      warehouseLocation: 'Warehouse A',
+                      rackLocation: 'Rack R-01',
+                      minimumStock: '10',
+                      maximumStock: '100',
+                      reorderLevel: '20',
+                      createdAt: DateTime.now(),
+                    ),
+                    'readOnly': true,
+                  },
+                );
+              },
               onLongPress: () {},
               onHighlightChanged: (value) => setState(() => _pressed = value),
               child: Padding(
@@ -765,6 +762,136 @@ class _AnimatedInventoryCardState extends State<_AnimatedInventoryCard> {
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         Text(widget.item.unit, style: AppTextStyles.caption),
+                      ],
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.chevron_right_rounded, size: 22),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _AnimatedMaterialCard extends StatefulWidget {
+  const _AnimatedMaterialCard({
+    required this.material,
+    required this.index,
+    super.key,
+  });
+  final MaterialItem material;
+  final int index;
+
+  @override
+  State<_AnimatedMaterialCard> createState() => _AnimatedMaterialCardState();
+}
+
+class _AnimatedMaterialCardState extends State<_AnimatedMaterialCard> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+    duration: Duration(milliseconds: 220 + (widget.index.clamp(0, 5) * 35)),
+    curve: Curves.easeOutCubic,
+    tween: Tween(begin: 0, end: 1),
+    builder: (context, value, child) => Opacity(
+      opacity: value,
+      child: Transform.translate(
+        offset: Offset(0, 10 * (1 - value)),
+        child: child,
+      ),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 120),
+        scale: _pressed ? .985 : 1,
+        child: Semantics(
+          button: true,
+          label: '${widget.material.description}, ${widget.material.code}',
+          child: Card(
+            elevation: _pressed ? 0 : 1.5,
+            shadowColor: AppColors.active.withValues(alpha: .11),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () {
+                context.push(
+                  '/inventory-adjustments/add-material',
+                  extra: {
+                    'material': widget.material,
+                    'readOnly': true,
+                  },
+                );
+              },
+              onHighlightChanged: (value) => setState(() => _pressed = value),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: .12),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        widget.material.sourceType.toUpperCase() == 'OUTSOURCE'
+                            ? Icons.handyman_outlined
+                            : Icons.precision_manufacturing_outlined,
+                        color: AppColors.active,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.material.description,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            widget.material.code.isEmpty
+                                ? 'Code not assigned'
+                                : '${widget.material.code} · ${widget.material.supplier}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.caption,
+                          ),
+                          const SizedBox(height: 6),
+                          _CategoryChip(
+                            label: widget.material.sourceType.toUpperCase() == 'OUTSOURCE'
+                                ? 'Outsource'
+                                : 'Raw Material',
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          widget.material.size.isNotEmpty ? widget.material.size : 'Standard',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700, fontSize: 13),
+                        ),
+                        Text(
+                          widget.material.unit.isNotEmpty ? widget.material.unit : 'pcs',
+                          style: AppTextStyles.caption,
+                        ),
                       ],
                     ),
                     const SizedBox(width: 4),

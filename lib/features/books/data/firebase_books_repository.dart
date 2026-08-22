@@ -433,6 +433,10 @@ class FirebaseBooksRepository implements BooksRepository {
   @override Future<void> returnMaterial(MaterialReturnDraft draft) async {}
   @override Future<void> convertQuote(int quoteId, TransactionType targetType) async {}
   @override Future<List<InventoryAdjustment>> getAdjustments() async => [];
+  @override Future<List<MaterialItem>> getMaterials({String? sourceType}) async => [];
+  @override Future<List<StockEntry>> getStockEntries() async => [];
+  @override Future<List<MaterialRequest>> getMaterialRequests() async => [];
+  @override Future<List<MaterialReturn>> getMaterialReturns() async => [];
   @override Future<DashboardMetrics> getDashboardMetrics() async => const DashboardMetrics(receivables: 0, payables: 0, revenue: 0, netProfit: 0, inventoryAtRisk: 0);
   @override Future<void> recordInvoicePaid(int invoiceId) async {}
   @override

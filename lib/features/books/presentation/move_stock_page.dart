@@ -39,9 +39,10 @@ class _MoveStockPageState extends ConsumerState<MoveStockPage> {
 
   @override
   Widget build(BuildContext context) => FormPage(
-    title: 'MOVE STOCK',
+    title: 'Move Stock',
     saving: _saving,
     saveLabel: 'Move Stock',
+    showAppBar: false,
     onSave: _save,
     children: [Form(
       key: _formKey,

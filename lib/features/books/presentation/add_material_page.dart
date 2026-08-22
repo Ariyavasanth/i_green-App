@@ -7,7 +7,14 @@ import '../providers/books_providers.dart';
 import 'books_forms.dart';
 
 class AddMaterialPage extends ConsumerStatefulWidget {
-  const AddMaterialPage({super.key});
+  const AddMaterialPage({
+    this.material,
+    this.readOnly = false,
+    super.key,
+  });
+
+  final MaterialItem? material;
+  final bool readOnly;
 
   @override
   ConsumerState<AddMaterialPage> createState() => _AddMaterialPageState();
@@ -55,6 +62,44 @@ class _AddMaterialPageState extends ConsumerState<AddMaterialPage> {
       controllers.putIfAbsent(label, TextEditingController.new);
 
   @override
+  void initState() {
+    super.initState();
+    final item = widget.material;
+    if (item != null) {
+      sourceType = item.sourceType.toUpperCase();
+      if (sourceType == 'RAW') {
+        _controller('Material Code').text = item.code;
+        _controller('Material Description').text = item.description;
+        _controller('Material Type').text = item.materialType;
+        _controller('Grade').text = item.grade;
+        _controller('Size').text = item.size;
+        _controller('Unit').text = item.unit;
+        _controller('Density').text = item.density;
+        _controller('Supplier').text = item.supplier;
+        _controller('Heat No').text = item.heatNumber;
+        _controller('Batch No').text = item.batchNumber;
+        _controller('Warehouse Location').text = item.warehouseLocation;
+        _controller('Rack Location').text = item.rackLocation;
+        _controller('Minimum Stock').text = item.minimumStock;
+        _controller('Maximum Stock').text = item.maximumStock;
+        _controller('Reorder Level').text = item.reorderLevel;
+      } else {
+        _controller('Item Code').text = item.code;
+        _controller('Description').text = item.description;
+        _controller('Make').text = item.make;
+        _controller('Model').text = item.model;
+        _controller('Size').text = item.size;
+        _controller('Unit').text = item.unit;
+        _controller('Vendor').text = item.supplier;
+        _controller('Shelf Location').text = item.warehouseLocation;
+        _controller('Minimum Stock').text = item.minimumStock;
+        _controller('Maximum Stock').text = item.maximumStock;
+        _controller('Reorder Quantity').text = item.reorderLevel;
+      }
+    }
+  }
+
+  @override
   void dispose() {
     for (final controller in controllers.values) {
       controller.dispose();
@@ -66,10 +111,11 @@ class _AddMaterialPageState extends ConsumerState<AddMaterialPage> {
   Widget build(BuildContext context) {
     final fields = sourceType == 'RAW' ? rawFields : outsourceFields;
     return FormPage(
-      title: 'ADD MATERIAL',
+      title: 'Add Material',
       saving: saving,
-      saveLabel: 'Add Material',
-      onSave: _save,
+      saveLabel: widget.readOnly ? 'Close' : 'Add Material',
+      showAppBar: false,
+      onSave: widget.readOnly ? () => context.go('/inventory-adjustments') : _save,
       children: [
         Form(
           key: formKey,
@@ -83,9 +129,11 @@ class _AddMaterialPageState extends ConsumerState<AddMaterialPage> {
                   DropdownMenuItem(value: 'RAW', child: Text('Raw Materials')),
                   DropdownMenuItem(value: 'OUTSOURCE', child: Text('Outsource')),
                 ],
-                onChanged: (value) {
-                  if (value != null) setState(() => sourceType = value);
-                },
+                onChanged: widget.readOnly
+                    ? null
+                    : (value) {
+                        if (value != null) setState(() => sourceType = value);
+                      },
               ),
               const SizedBox(height: 14),
               for (var index = 0; index < fields.length; index++) ...[
@@ -101,6 +149,7 @@ class _AddMaterialPageState extends ConsumerState<AddMaterialPage> {
 
   Widget _requiredField(String label) => TextFormField(
         controller: _controller(label),
+        readOnly: widget.readOnly,
         keyboardType: _isNumberField(label)
             ? const TextInputType.numberWithOptions(decimal: true)
             : TextInputType.text,
@@ -143,7 +192,10 @@ class _AddMaterialPageState extends ConsumerState<AddMaterialPage> {
               sourceType == 'RAW' ? 'Reorder Level' : 'Reorder Quantity',
             ),
           ));
-      if (mounted) context.pop();
+      ref.invalidate(materialsProvider(null));
+      ref.invalidate(materialsProvider('RAW'));
+      ref.invalidate(materialsProvider('OUTSOURCE'));
+      if (mounted) context.go('/inventory-adjustments');
     } finally {
       if (mounted) setState(() => saving = false);
     }
