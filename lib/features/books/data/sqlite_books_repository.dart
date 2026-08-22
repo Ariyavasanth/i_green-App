@@ -1,16 +1,26 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 import '../domain/books_repository.dart';
 
 class SqliteBooksRepository implements BooksRepository {
   Database? _database;
-  Future<Database> get _db async => _database ??= await openDatabase(
-    p.join(await getDatabasesPath(), 'igreen_books.db'),
-    version: 13,
-    onCreate: (db, _) async {
-      // SQL is isolated in this repository so UI code remains backend-agnostic.
+  Future<Database> get _db async {
+    if (_database != null) return _database!;
+    _database = await openDatabase(
+      p.join(await getDatabasesPath(), 'igreen_books.db'),
+      version: 15,
+      onCreate: (db, _) async {
+        // SQL is isolated in this repository so UI code remains backend-agnostic.
+        await db.execute(
+          'CREATE TABLE items(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT "Goods", unit TEXT NOT NULL DEFAULT "pcs", sku TEXT NOT NULL, hsn_code TEXT NOT NULL DEFAULT "", rate REAL NOT NULL, cost_price REAL NOT NULL DEFAULT 0, tax_rate REAL NOT NULL DEFAULT 18, track_inventory INTEGER NOT NULL DEFAULT 0, stock_on_hand REAL NOT NULL DEFAULT 0, intra_state_tax_rate TEXT NOT NULL DEFAULT "", inter_state_tax_rate TEXT NOT NULL DEFAULT "", tax_preference TEXT NOT NULL DEFAULT "Taxable", purchase_account TEXT NOT NULL DEFAULT "Cost of Goods Sold", sales_account TEXT NOT NULL DEFAULT "Sales", reporting_tags TEXT NOT NULL DEFAULT "", product TEXT NOT NULL DEFAULT "", product_name TEXT NOT NULL DEFAULT "", master_serial_no TEXT NOT NULL DEFAULT "", part_no TEXT NOT NULL DEFAULT "", drawing_file TEXT NOT NULL DEFAULT "", assembly_image TEXT NOT NULL DEFAULT "")',
+        );
+        await db.execute(
+          'CREATE TABLE item_parts(id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER NOT NULL, sl_no INTEGER NOT NULL, part_name TEXT NOT NULL, part_no TEXT NOT NULL, part_image TEXT NOT NULL DEFAULT "", part_pdf TEXT NOT NULL DEFAULT "", rm_grade TEXT NOT NULL DEFAULT "", rm_size TEXT NOT NULL DEFAULT "", rm_weight REAL NOT NULL DEFAULT 0, fg_weight REAL NOT NULL DEFAULT 0, quantity REAL NOT NULL DEFAULT 1, has_process_flow INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(item_id) REFERENCES items(id))',
+        );
       await db.execute(
-        'CREATE TABLE items(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT "Goods", unit TEXT NOT NULL DEFAULT "pcs", sku TEXT NOT NULL, hsn_code TEXT NOT NULL DEFAULT "", rate REAL NOT NULL, cost_price REAL NOT NULL DEFAULT 0, tax_rate REAL NOT NULL DEFAULT 18, track_inventory INTEGER NOT NULL DEFAULT 0, stock_on_hand REAL NOT NULL DEFAULT 0)',
+        'CREATE TABLE part_operations(id INTEGER PRIMARY KEY AUTOINCREMENT, part_id INTEGER NOT NULL, operation_number INTEGER NOT NULL, operation_name TEXT NOT NULL, machine TEXT NOT NULL, duration TEXT NOT NULL, remarks TEXT NOT NULL, vendor TEXT NOT NULL DEFAULT "", FOREIGN KEY(part_id) REFERENCES item_parts(id))',
       );
       await db.execute(
         'CREATE TABLE customers(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, company TEXT NOT NULL, email TEXT NOT NULL DEFAULT "", phone TEXT NOT NULL, gst_treatment TEXT NOT NULL, receivables REAL NOT NULL DEFAULT 0)',
@@ -149,8 +159,42 @@ class SqliteBooksRepository implements BooksRepository {
           'CREATE TABLE material_returns(id INTEGER PRIMARY KEY AUTOINCREMENT, work_order TEXT NOT NULL, material TEXT NOT NULL, quantity_returned REAL NOT NULL, weight REAL NOT NULL, reason TEXT NOT NULL, created_at TEXT NOT NULL)',
         );
       }
+      if (oldVersion < 14) {
+        for (final sql in [
+          'ALTER TABLE items ADD COLUMN intra_state_tax_rate TEXT NOT NULL DEFAULT ""',
+          'ALTER TABLE items ADD COLUMN inter_state_tax_rate TEXT NOT NULL DEFAULT ""',
+          'ALTER TABLE items ADD COLUMN tax_preference TEXT NOT NULL DEFAULT "Taxable"',
+          'ALTER TABLE items ADD COLUMN purchase_account TEXT NOT NULL DEFAULT "Cost of Goods Sold"',
+          'ALTER TABLE items ADD COLUMN sales_account TEXT NOT NULL DEFAULT "Sales"',
+          'ALTER TABLE items ADD COLUMN reporting_tags TEXT NOT NULL DEFAULT ""',
+          'ALTER TABLE items ADD COLUMN product TEXT NOT NULL DEFAULT ""',
+          'ALTER TABLE items ADD COLUMN product_name TEXT NOT NULL DEFAULT ""',
+          'ALTER TABLE items ADD COLUMN master_serial_no TEXT NOT NULL DEFAULT ""',
+          'ALTER TABLE items ADD COLUMN part_no TEXT NOT NULL DEFAULT ""',
+          'ALTER TABLE items ADD COLUMN drawing_file TEXT NOT NULL DEFAULT ""',
+          'ALTER TABLE items ADD COLUMN assembly_image TEXT NOT NULL DEFAULT ""',
+        ]) {
+          await db.execute(sql);
+        }
+        await db.execute(
+          'CREATE TABLE item_parts(id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER NOT NULL, sl_no INTEGER NOT NULL, part_name TEXT NOT NULL, part_no TEXT NOT NULL, part_image TEXT NOT NULL DEFAULT "", part_pdf TEXT NOT NULL DEFAULT "", rm_grade TEXT NOT NULL DEFAULT "", rm_size TEXT NOT NULL DEFAULT "", rm_weight REAL NOT NULL DEFAULT 0, fg_weight REAL NOT NULL DEFAULT 0, quantity REAL NOT NULL DEFAULT 1, has_process_flow INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(item_id) REFERENCES items(id))',
+        );
+        await db.execute(
+          'CREATE TABLE part_operations(id INTEGER PRIMARY KEY AUTOINCREMENT, part_id INTEGER NOT NULL, operation_number INTEGER NOT NULL, operation_name TEXT NOT NULL, machine TEXT NOT NULL, duration TEXT NOT NULL, remarks TEXT NOT NULL, vendor TEXT NOT NULL DEFAULT "", FOREIGN KEY(part_id) REFERENCES item_parts(id))',
+        );
+      }
+      if (oldVersion < 15) {
+        try {
+          await db.execute('ALTER TABLE item_parts ADD COLUMN part_pdf TEXT NOT NULL DEFAULT ""');
+        } catch (_) {}
+      }
     },
   );
+  try {
+    await _database!.execute('ALTER TABLE item_parts ADD COLUMN part_pdf TEXT NOT NULL DEFAULT ""');
+  } catch (_) {}
+  return _database!;
+}
 
   static Future<void> _seed(Database db) async {
     for (final name in [
@@ -236,24 +280,71 @@ class SqliteBooksRepository implements BooksRepository {
   }
 
   @override
-  Future<List<BookItem>> getItems() async =>
-      (await (await _db).query('items', orderBy: 'id DESC'))
-          .map(
-            (r) => BookItem(
-              id: r['id'] as int,
-              name: r['name'] as String,
-              sku: r['sku'] as String,
-              rate: (r['rate'] as num).toDouble(),
-              type: r['type'] as String,
-              unit: r['unit'] as String,
-              hsnCode: r['hsn_code'] as String,
-              costPrice: (r['cost_price'] as num).toDouble(),
-              taxRate: (r['tax_rate'] as num).toDouble(),
-              trackInventory: r['track_inventory'] == 1,
-              stockOnHand: (r['stock_on_hand'] as num).toDouble(),
-            ),
-          )
-          .toList();
+  Future<List<BookItem>> getItems() async {
+    final db = await _db;
+    final itemRows = await db.query('items', orderBy: 'id DESC');
+    final items = <BookItem>[];
+    for (final r in itemRows) {
+      final itemId = r['id'] as int;
+      final partRows = await db.query('item_parts', where: 'item_id = ?', whereArgs: [itemId], orderBy: 'sl_no ASC');
+      final parts = <ItemPart>[];
+      for (final pr in partRows) {
+        final partId = pr['id'] as int;
+        final opRows = await db.query('part_operations', where: 'part_id = ?', whereArgs: [partId], orderBy: 'operation_number ASC');
+        final ops = opRows.map((op) => ItemPartOperation(
+          operationNumber: op['operation_number'] as int,
+          operationName: op['operation_name'] as String,
+          machine: op['machine'] as String,
+          duration: op['duration'] as String,
+          remarks: op['remarks'] as String,
+          vendor: (op['vendor'] as String?).toString().isEmpty ? null : op['vendor'] as String,
+        )).toList();
+        parts.add(ItemPart(
+          slNo: pr['sl_no'] as int,
+          partName: pr['part_name'] as String,
+          partNo: pr['part_no'] as String,
+          partImage: pr['part_image'] as String? ?? '',
+          partPdf: pr['part_pdf'] as String? ?? '',
+          rmGrade: pr['rm_grade'] as String? ?? '',
+          rmSize: pr['rm_size'] as String? ?? '',
+          rmWeight: (pr['rm_weight'] as num?)?.toDouble() ?? 0,
+          fgWeight: (pr['fg_weight'] as num?)?.toDouble() ?? 0,
+          quantity: (pr['quantity'] as num?)?.toDouble() ?? 1,
+          hasProcessFlow: pr['has_process_flow'] == 1,
+          operations: ops,
+        ));
+      }
+      items.add(BookItem(
+        id: itemId,
+        name: r['name'] as String,
+        sku: r['sku'] as String? ?? '',
+        rate: (r['rate'] as num?)?.toDouble() ?? 0,
+        type: r['type'] as String? ?? 'Goods',
+        unit: r['unit'] as String? ?? 'pcs',
+        hsnCode: r['hsn_code'] as String? ?? '',
+        taxPreference: r['tax_preference'] as String? ?? 'Taxable',
+        taxRate: (r['tax_rate'] as num?)?.toDouble() ?? 18,
+        intraStateTaxRate: r['intra_state_tax_rate'] as String? ?? '',
+        interStateTaxRate: r['inter_state_tax_rate'] as String? ?? '',
+        costPrice: (r['cost_price'] as num?)?.toDouble() ?? 0,
+        purchaseAccount: r['purchase_account'] as String? ?? 'Cost of Goods Sold',
+        salesAccount: r['sales_account'] as String? ?? 'Sales',
+        cogsAccount: r['cogs_account'] as String? ?? 'Cost of Goods Sold',
+        reportingTags: r['reporting_tags'] as String? ?? '',
+        preferredVendor: r['preferred_vendor'] as String? ?? '',
+        trackInventory: r['track_inventory'] == 1,
+        stockOnHand: (r['stock_on_hand'] as num?)?.toDouble() ?? 0,
+        product: r['product'] as String? ?? '',
+        productName: r['product_name'] as String? ?? '',
+        masterSerialNo: r['master_serial_no'] as String? ?? '',
+        partNo: r['part_no'] as String? ?? '',
+        drawingFileName: r['drawing_file'] as String? ?? '',
+        assemblyImagePath: r['assembly_image'] as String? ?? '',
+        parts: parts,
+      ));
+    }
+    return items;
+  }
   @override
   Future<List<ItemHistoryEntry>> getItemHistory(int itemId) async =>
       (await (await _db).query(
@@ -271,7 +362,7 @@ class SqliteBooksRepository implements BooksRepository {
           .toList();
 
   @override
-  Future<void> addItem({
+  Future<BookItem> addItem({
     required String name,
     String sku = '',
     double rate = 0,
@@ -280,25 +371,269 @@ class SqliteBooksRepository implements BooksRepository {
     String hsnCode = '',
     String taxPreference = 'Taxable',
     double taxRate = 18,
+    String intraStateTaxRate = '',
+    String interStateTaxRate = '',
     double costPrice = 0,
+    String purchaseAccount = 'Cost of Goods Sold',
     String salesAccount = 'Sales',
     String cogsAccount = 'Cost of Goods Sold',
+    String reportingTags = '',
     String preferredVendor = '',
+    String product = '',
+    String productName = '',
+    String masterSerialNo = '',
+    String partNo = '',
+    String drawingFileName = '',
+    String assemblyImagePath = '',
+    List<ItemPart> parts = const [],
   }) async {
     final db = await _db;
+    late BookItem newItem;
     await db.transaction((txn) async {
       final itemId = await txn.insert('items', {
         'name': name,
         'sku': sku,
         'rate': rate,
         'type': type,
+        'unit': unit,
+        'hsn_code': hsnCode,
+        'tax_preference': taxPreference,
+        'tax_rate': taxRate,
+        'intra_state_tax_rate': intraStateTaxRate,
+        'inter_state_tax_rate': interStateTaxRate,
+        'cost_price': costPrice,
+        'purchase_account': purchaseAccount,
+        'sales_account': salesAccount,
+        'cogs_account': cogsAccount,
+        'reporting_tags': reportingTags,
+        'preferred_vendor': preferredVendor,
+        'product': product,
+        'product_name': productName,
+        'master_serial_no': masterSerialNo,
+        'part_no': partNo,
+        'drawing_file': drawingFileName,
+        'assembly_image': assemblyImagePath,
+        'track_inventory': 1,
+        'stock_on_hand': 0,
       });
-      // Keep item creation and its audit event atomic.
+
+      // 1. Automatically create initial History record
       await txn.insert('item_history', {
         'item_id': itemId,
         'occurred_at': DateTime.now().toIso8601String(),
         'details': 'created by - iGreenTec Engineering india Pvt.Ltd.',
       });
+
+      // 2. Automatically create initial Transactions record
+      final txnNo = 'SO-${DateTime.now().millisecondsSinceEpoch % 100000}';
+      final txnId = await txn.insert('transactions', {
+        'type': TransactionType.salesOrder.name,
+        'number': txnNo,
+        'customer': 'iGreen Technologies',
+        'date': DateTime.now().toIso8601String(),
+        'amount': rate > 0 ? rate : costPrice,
+        'status': 'DRAFT',
+        'reference_number': partNo.isNotEmpty ? partNo : name,
+        'notes': 'Initial transaction for created item: $name',
+        'terms': 'Net 30',
+      });
+      await txn.insert('invoice_items', {
+        'transaction_id': txnId,
+        'name': name,
+        'description': productName.isNotEmpty ? productName : name,
+        'quantity': 1.0,
+        'rate': rate,
+        'tax': taxPreference,
+      });
+
+      // 3. Save Raw Materials & Parts and their process flows
+      final savedParts = <ItemPart>[];
+      for (var i = 0; i < parts.length; i++) {
+        final part = parts[i];
+        final partId = await txn.insert('item_parts', {
+          'item_id': itemId,
+          'sl_no': part.slNo > 0 ? part.slNo : (i + 1),
+          'part_name': part.partName,
+          'part_no': part.partNo,
+          'part_image': part.partImage,
+          'part_pdf': part.partPdf,
+          'rm_grade': part.rmGrade,
+          'rm_size': part.rmSize,
+          'rm_weight': part.rmWeight,
+          'fg_weight': part.fgWeight,
+          'quantity': part.quantity,
+          'has_process_flow': part.hasProcessFlow ? 1 : 0,
+        });
+
+        final savedOps = <ItemPartOperation>[];
+        if (part.hasProcessFlow) {
+          for (var j = 0; j < part.operations.length; j++) {
+            final op = part.operations[j];
+            await txn.insert('part_operations', {
+              'part_id': partId,
+              'operation_number': op.operationNumber > 0 ? op.operationNumber : (j + 1),
+              'operation_name': op.operationName,
+              'machine': op.machine,
+              'duration': op.duration,
+              'remarks': op.remarks,
+              'vendor': op.vendor ?? '',
+            });
+            savedOps.add(op);
+          }
+        }
+
+        savedParts.add(ItemPart(
+          slNo: part.slNo > 0 ? part.slNo : (i + 1),
+          partName: part.partName,
+          partNo: part.partNo,
+          partImage: part.partImage,
+          partPdf: part.partPdf,
+          rmGrade: part.rmGrade,
+          rmSize: part.rmSize,
+          rmWeight: part.rmWeight,
+          fgWeight: part.fgWeight,
+          quantity: part.quantity,
+          hasProcessFlow: part.hasProcessFlow,
+          operations: savedOps,
+        ));
+      }
+
+      newItem = BookItem(
+        id: itemId,
+        name: name,
+        sku: sku,
+        rate: rate,
+        type: type,
+        unit: unit,
+        hsnCode: hsnCode,
+        taxPreference: taxPreference,
+        taxRate: taxRate,
+        intraStateTaxRate: intraStateTaxRate,
+        interStateTaxRate: interStateTaxRate,
+        costPrice: costPrice,
+        purchaseAccount: purchaseAccount,
+        salesAccount: salesAccount,
+        cogsAccount: cogsAccount,
+        reportingTags: reportingTags,
+        preferredVendor: preferredVendor,
+        product: product,
+        productName: productName,
+        masterSerialNo: masterSerialNo,
+        partNo: partNo,
+        drawingFileName: drawingFileName,
+        assemblyImagePath: assemblyImagePath,
+        parts: savedParts,
+        trackInventory: true,
+        stockOnHand: 0,
+      );
+    });
+    return newItem;
+  }
+
+  @override
+  Future<void> updateItem({
+    required int id,
+    required String name,
+    String sku = '',
+    double rate = 0,
+    String type = 'Goods',
+    String unit = 'pcs',
+    String hsnCode = '',
+    String taxPreference = 'Taxable',
+    double taxRate = 18,
+    String intraStateTaxRate = '',
+    String interStateTaxRate = '',
+    double costPrice = 0,
+    String purchaseAccount = 'Cost of Goods Sold',
+    String salesAccount = 'Sales',
+    String cogsAccount = 'Cost of Goods Sold',
+    String reportingTags = '',
+    String preferredVendor = '',
+    String product = '',
+    String productName = '',
+    String masterSerialNo = '',
+    String partNo = '',
+    String drawingFileName = '',
+    String assemblyImagePath = '',
+    List<ItemPart> parts = const [],
+  }) async {
+    final db = await _db;
+    await db.transaction((txn) async {
+      await txn.update(
+        'items',
+        {
+          'name': name,
+          'sku': sku,
+          'rate': rate,
+          'type': type,
+          'unit': unit,
+          'hsn_code': hsnCode,
+          'tax_preference': taxPreference,
+          'tax_rate': taxRate,
+          'intra_state_tax_rate': intraStateTaxRate,
+          'inter_state_tax_rate': interStateTaxRate,
+          'cost_price': costPrice,
+          'purchase_account': purchaseAccount,
+          'sales_account': salesAccount,
+          'cogs_account': cogsAccount,
+          'reporting_tags': reportingTags,
+          'preferred_vendor': preferredVendor,
+          'product': product,
+          'product_name': productName,
+          'master_serial_no': masterSerialNo,
+          'part_no': partNo,
+          'drawing_file': drawingFileName,
+          'assembly_image': assemblyImagePath,
+        },
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+
+      await txn.insert('item_history', {
+        'item_id': id,
+        'occurred_at': DateTime.now().toIso8601String(),
+        'details': 'updated by - iGreenTec Engineering india Pvt.Ltd.',
+      });
+
+      final existingPartRows = await txn.query('item_parts', where: 'item_id = ?', whereArgs: [id]);
+      for (final pr in existingPartRows) {
+        final partId = pr['id'] as int;
+        await txn.delete('part_operations', where: 'part_id = ?', whereArgs: [partId]);
+      }
+      await txn.delete('item_parts', where: 'item_id = ?', whereArgs: [id]);
+
+      for (var i = 0; i < parts.length; i++) {
+        final part = parts[i];
+        final partId = await txn.insert('item_parts', {
+          'item_id': id,
+          'sl_no': part.slNo > 0 ? part.slNo : (i + 1),
+          'part_name': part.partName,
+          'part_no': part.partNo,
+          'part_image': part.partImage,
+          'part_pdf': part.partPdf,
+          'rm_grade': part.rmGrade,
+          'rm_size': part.rmSize,
+          'rm_weight': part.rmWeight,
+          'fg_weight': part.fgWeight,
+          'quantity': part.quantity,
+          'has_process_flow': part.hasProcessFlow ? 1 : 0,
+        });
+
+        if (part.hasProcessFlow) {
+          for (var j = 0; j < part.operations.length; j++) {
+            final op = part.operations[j];
+            await txn.insert('part_operations', {
+              'part_id': partId,
+              'operation_number': op.operationNumber > 0 ? op.operationNumber : (j + 1),
+              'operation_name': op.operationName,
+              'machine': op.machine,
+              'duration': op.duration,
+              'remarks': op.remarks,
+              'vendor': op.vendor ?? '',
+            });
+          }
+        }
+      }
     });
   }
 
@@ -668,5 +1003,16 @@ class SqliteBooksRepository implements BooksRepository {
       copy['status'] = 'Draft';
       await txn.insert('transactions', copy);
     });
+  }
+
+  @override
+  Future<String> uploadItemImage({
+    required Uint8List bytes,
+    required String fileName,
+    String folderName = 'Item Images',
+  }) async {
+    final mimeType = fileName.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+    final base64Str = base64Encode(bytes);
+    return 'data:$mimeType;base64,$base64Str';
   }
 }

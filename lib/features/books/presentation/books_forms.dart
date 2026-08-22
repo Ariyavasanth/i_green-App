@@ -17,60 +17,162 @@ import '../invoice_voice/providers/invoice_voice_providers.dart';
 import '../providers/books_providers.dart';
 import 'widgets/sales_order_form.dart';
 
+import 'item_details_screen.dart';
+
 class NewItemPage extends ConsumerStatefulWidget {
-  const NewItemPage({super.key});
+  const NewItemPage({this.initialItem, super.key});
+  final BookItem? initialItem;
   @override
   ConsumerState<NewItemPage> createState() => _NewItemState();
 }
 
-class _NewItemState extends ConsumerState<NewItemPage> {
-  final name = TextEditingController(),
-      sku = TextEditingController(),
-      rate = TextEditingController(),
-      hsnCode = TextEditingController(),
-      salesDescription = TextEditingController(),
-      costPrice = TextEditingController(),
-      purchaseDescription = TextEditingController();
-  bool saving = false;
-  bool trackInventory = false;
-  String itemType = 'Goods';
-  String unit = 'pcs';
-  String taxPreference = 'Taxable';
-  String taxRate = '18%';
-  String salesAccount = 'Sales';
-  String cogsAccount = 'Cost of Goods Sold';
-  String? preferredVendor;
+class _PartFormState {
+  _PartFormState({int slNo = 1}) : slNo = slNo;
 
-  static const _unitOptions = [
-    'pcs',
-    'kg',
-    'g',
-    'ltr',
-    'ml',
-    'm',
-    'cm',
-    'box',
-    'pack',
-    'carton',
-    'bag',
-    'pair',
-    'set',
-    'dozen',
+  int slNo;
+  final partName = TextEditingController();
+  final partNo = TextEditingController();
+  final partImage = TextEditingController();
+  final partPdf = TextEditingController();
+  final rmGrade = TextEditingController();
+  final rmSize = TextEditingController();
+  final rmWeight = TextEditingController();
+  final fgWeight = TextEditingController();
+  final quantity = TextEditingController(text: '1');
+  bool hasProcessFlow = false;
+  final List<_OperationFormState> operations = [];
+
+  void dispose() {
+    partName.dispose();
+    partNo.dispose();
+    partImage.dispose();
+    partPdf.dispose();
+    rmGrade.dispose();
+    rmSize.dispose();
+    rmWeight.dispose();
+    fgWeight.dispose();
+    quantity.dispose();
+    for (final op in operations) {
+      op.dispose();
+    }
+  }
+}
+
+class _OperationFormState {
+  _OperationFormState({int operationNumber = 1}) : operationNumber = operationNumber;
+
+  int operationNumber;
+  final operationName = TextEditingController();
+  final machine = TextEditingController();
+  final duration = TextEditingController();
+  String remarks = 'Inhouse';
+  final vendor = TextEditingController();
+
+  void dispose() {
+    operationName.dispose();
+    machine.dispose();
+    duration.dispose();
+    vendor.dispose();
+  }
+}
+
+class _NewItemState extends ConsumerState<NewItemPage> {
+  final name = TextEditingController();
+  final hsnCode = TextEditingController();
+  final costPrice = TextEditingController();
+  final rate = TextEditingController();
+  final reportingTags = TextEditingController();
+  final product = TextEditingController();
+  final productName = TextEditingController();
+  final masterSerialNo = TextEditingController();
+  final partNo = TextEditingController();
+  final drawingFile = TextEditingController();
+  final assemblyImage = TextEditingController();
+
+  bool saving = false;
+  String itemType = 'Sales and Purchase Items';
+  String taxPreference = 'Taxable';
+  String intraStateTaxRate = 'GST18 (18 %)';
+  String interStateTaxRate = 'IGST18 (18 %)';
+  String purchaseAccount = 'Cost of Goods Sold';
+  String salesAccount = 'Sales';
+
+  final List<_PartFormState> parts = [];
+
+  @override
+  void initState() {
+    super.initState();
+    final item = widget.initialItem;
+    if (item != null) {
+      name.text = item.name;
+      hsnCode.text = item.hsnCode;
+      costPrice.text = item.costPrice > 0 ? item.costPrice.toString() : '';
+      rate.text = item.rate > 0 ? item.rate.toString() : '';
+      if (_itemTypeOptions.contains(item.type)) itemType = item.type;
+      if (_taxPreferenceOptions.contains(item.taxPreference)) taxPreference = item.taxPreference;
+      if (_intraStateTaxOptions.contains(item.intraStateTaxRate)) intraStateTaxRate = item.intraStateTaxRate;
+      if (_interStateTaxOptions.contains(item.interStateTaxRate)) interStateTaxRate = item.interStateTaxRate;
+      if (item.purchaseAccount.isNotEmpty) purchaseAccount = item.purchaseAccount;
+      if (item.salesAccount.isNotEmpty) salesAccount = item.salesAccount;
+      reportingTags.text = item.reportingTags;
+      product.text = item.product;
+      productName.text = item.productName;
+      masterSerialNo.text = item.masterSerialNo;
+      partNo.text = item.partNo;
+      drawingFile.text = item.drawingFileName;
+      assemblyImage.text = item.assemblyImagePath;
+
+      for (final p in item.parts) {
+        final pf = _PartFormState(slNo: p.slNo);
+        pf.partName.text = p.partName;
+        pf.partNo.text = p.partNo;
+        pf.partImage.text = p.partImage;
+        pf.partPdf.text = p.partPdf;
+        pf.rmGrade.text = p.rmGrade;
+        pf.rmSize.text = p.rmSize;
+        pf.rmWeight.text = p.rmWeight > 0 ? p.rmWeight.toString() : '';
+        pf.fgWeight.text = p.fgWeight > 0 ? p.fgWeight.toString() : '';
+        pf.quantity.text = p.quantity.toString();
+        pf.hasProcessFlow = p.hasProcessFlow;
+        for (final op in p.operations) {
+          final of = _OperationFormState(operationNumber: op.operationNumber);
+          of.operationName.text = op.operationName;
+          of.machine.text = op.machine;
+          of.duration.text = op.duration;
+          of.remarks = op.remarks;
+          of.vendor.text = op.vendor ?? '';
+          pf.operations.add(of);
+        }
+        parts.add(pf);
+      }
+    }
+  }
+
+  static const _itemTypeOptions = [
+    'Sales and Purchase Items',
+    'Goods',
+    'Service',
   ];
 
   static const _taxPreferenceOptions = [
     'Taxable',
-    'Exempt',
-    'Zero Rated',
     'Non-Taxable',
   ];
 
-  static const _taxRateOptions = [
-    '0%',
-    '5%',
-    '12%',
-    '18%',
-    '28%',
+  static const _intraStateTaxOptions = [
+    'GST0 (0 %)',
+    'GST5 (5 %)',
+    'GST12 (12 %)',
+    'GST18 (18 %)',
+    'GST28 (28 %)',
+  ];
+
+  static const _interStateTaxOptions = [
+    'IGST0 (0 %)',
+    'IGST5 (5 %)',
+    'IGST12 (12 %)',
+    'IGST18 (18 %)',
+    'IGST28 (28 %)',
   ];
 
   static const _salesAccountOptions = [
@@ -83,7 +185,7 @@ class _NewItemState extends ConsumerState<NewItemPage> {
     'Other Sales',
   ];
 
-  static const _cogsAccountOptions = [
+  static const _purchaseAccountOptions = [
     'Cost of Goods Sold',
     'Material Cost',
     'Product Cost',
@@ -93,223 +195,944 @@ class _NewItemState extends ConsumerState<NewItemPage> {
     'Other Direct Cost',
   ];
 
+  static const _operationRemarksOptions = [
+    'Inhouse',
+    'Outsourcing',
+  ];
+
   @override
   void dispose() {
     name.dispose();
-    sku.dispose();
-    rate.dispose();
     hsnCode.dispose();
-    salesDescription.dispose();
     costPrice.dispose();
-    purchaseDescription.dispose();
+    rate.dispose();
+    reportingTags.dispose();
+    product.dispose();
+    productName.dispose();
+    masterSerialNo.dispose();
+    partNo.dispose();
+    drawingFile.dispose();
+    assemblyImage.dispose();
+    for (final p in parts) {
+      p.dispose();
+    }
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final vendors = ref.watch(activeVendorsProvider).valueOrNull ?? const <Vendor>[];
+  void _addPart() {
+    setState(() {
+      parts.add(_PartFormState(slNo: parts.length + 1));
+    });
+  }
 
-    return FormPage(
-      title: 'New Item',
-      saveLabel: 'Save',
-      saving: saving,
-      onSave: save,
-      maxWidth: 1120,
+  void _removePart(int index) {
+    setState(() {
+      final removed = parts.removeAt(index);
+      removed.dispose();
+      for (var i = 0; i < parts.length; i++) {
+        parts[i].slNo = i + 1;
+      }
+    });
+  }
+
+  void _addOperation(_PartFormState partState) {
+    setState(() {
+      partState.operations.add(
+        _OperationFormState(operationNumber: partState.operations.length + 1),
+      );
+    });
+  }
+
+  void _removeOperation(_PartFormState partState, int opIndex) {
+    setState(() {
+      final removed = partState.operations.removeAt(opIndex);
+      removed.dispose();
+      for (var i = 0; i < partState.operations.length; i++) {
+        partState.operations[i].operationNumber = i + 1;
+      }
+    });
+  }
+
+  Widget _buildImageUploadField({
+    required TextEditingController controller,
+    required String label,
+    required String folderName,
+  }) {
+    final hasImage = controller.text.trim().isNotEmpty;
+    final isNetworkUrl = controller.text.startsWith('http://') || controller.text.startsWith('https://');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SectionTitle('Basic Information'),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final details = Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                field(name, 'Name*'),
-                const SizedBox(height: 14),
-                const Text('Type'),
-                const SizedBox(height: 8),
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'Goods', label: Text('Goods')),
-                    ButtonSegment(value: 'Service', label: Text('Service')),
-                  ],
-                  selected: {itemType},
-                  onSelectionChanged: (values) =>
-                      setState(() => itemType = values.first),
-                ),
-                const SizedBox(height: 14),
-                field(sku, 'SKU'),
-                const SizedBox(height: 14),
-                DropdownButtonFormField<String>(
-                  initialValue: unit,
-                  decoration: const InputDecoration(labelText: 'Unit*'),
-                  items: _unitOptions
-                      .map((u) => DropdownMenuItem(value: u, child: Text(u)))
-                      .toList(),
-                  onChanged: (val) => setState(() => unit = val ?? 'pcs'),
-                ),
-                const SizedBox(height: 14),
-                field(hsnCode, 'HSN Code'),
-                const SizedBox(height: 14),
-                DropdownButtonFormField<String>(
-                  initialValue: taxPreference,
-                  decoration: const InputDecoration(labelText: 'Tax Preference*'),
-                  items: _taxPreferenceOptions
-                      .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                      .toList(),
-                  onChanged: (val) => setState(() => taxPreference = val ?? 'Taxable'),
-                ),
-                const SizedBox(height: 14),
-                DropdownButtonFormField<String>(
-                  initialValue: taxRate,
-                  decoration: const InputDecoration(labelText: 'Tax Rate'),
-                  items: _taxRateOptions
-                      .map((r) => DropdownMenuItem(value: r, child: Text(r)))
-                      .toList(),
-                  onChanged: (val) => setState(() => taxRate = val ?? '18%'),
-                ),
-              ],
-            );
-            if (constraints.maxWidth < AppBreakpoints.laptop) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  details,
-                  const SizedBox(height: 18),
-                  const ItemImageUpload(),
-                ],
-              );
-            }
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(flex: 3, child: details),
-                const SizedBox(width: 32),
-                const Expanded(flex: 2, child: ItemImageUpload()),
-              ],
-            );
-          },
+        TextFormField(
+          controller: controller,
+          decoration: InputDecoration(
+            labelText: label,
+            prefixIcon: hasImage
+                ? const Icon(Icons.check_circle_rounded, color: Color(0xFF9CC70A), size: 20)
+                : null,
+            suffixIcon: hasImage
+                ? IconButton(
+                    icon: const Icon(Icons.clear, size: 18),
+                    onPressed: () => setState(() => controller.clear()),
+                    tooltip: 'Clear image',
+                  )
+                : null,
+          ),
         ),
-        const SizedBox(height: 28),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final sales = _ItemInfoSection(
-              title: 'Sales Information',
-              children: [
-                field(rate, 'Selling Price*', prefix: 'INR', number: true),
-                const SizedBox(height: 14),
-                field(salesDescription, 'Description', lines: 3),
-                const SizedBox(height: 14),
-                DropdownButtonFormField<String>(
-                  initialValue: salesAccount,
-                  decoration: const InputDecoration(labelText: 'Account*'),
-                  items: _salesAccountOptions
-                      .map((a) => DropdownMenuItem(value: a, child: Text(a)))
-                      .toList(),
-                  onChanged: (val) => setState(() => salesAccount = val ?? 'Sales'),
-                ),
-              ],
-            );
-            final purchase = _ItemInfoSection(
-              title: 'Purchase Information',
-              children: [
-                field(costPrice, 'Cost Price', prefix: 'INR', number: true),
-                const SizedBox(height: 14),
-                field(purchaseDescription, 'Description', lines: 3),
-                const SizedBox(height: 14),
-                DropdownButtonFormField<String>(
-                  initialValue: cogsAccount,
-                  decoration: const InputDecoration(labelText: 'COGS Account*'),
-                  items: _cogsAccountOptions
-                      .map((a) => DropdownMenuItem(value: a, child: Text(a)))
-                      .toList(),
-                  onChanged: (val) => setState(() => cogsAccount = val ?? 'Cost of Goods Sold'),
-                ),
-                const SizedBox(height: 14),
-                DropdownButtonFormField<String>(
-                  initialValue: preferredVendor,
-                  decoration: const InputDecoration(labelText: 'Preferred Vendor'),
-                  hint: const Text('Select Vendor'),
-                  items: vendors.map((v) {
-                    final nameStr = v.companyName.isEmpty ? v.name : v.companyName;
-                    return DropdownMenuItem(value: nameStr, child: Text(nameStr));
-                  }).toList(),
-                  onChanged: (val) => setState(() => preferredVendor = val),
-                ),
-              ],
-            );
-            if (constraints.maxWidth < AppBreakpoints.tablet) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [sales, const SizedBox(height: 28), purchase],
-              );
-            }
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: sales),
-                const SizedBox(width: 28),
-                Expanded(child: purchase),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: 28),
-        const SectionTitle('Default Tax Rates'),
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Intra State Tax Rate'),
-          trailing: Text('GST ($taxRate)'),
-        ),
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Inter State Tax Rate'),
-          trailing: Text('IGST ($taxRate)'),
-        ),
-        const SizedBox(height: 18),
-        const SectionTitle('Inventory'),
-        CheckboxListTile(
-          contentPadding: EdgeInsets.zero,
-          controlAffinity: ListTileControlAffinity.leading,
-          value: trackInventory,
-          onChanged: (value) => setState(() => trackInventory = value ?? false),
-          title: const Text('Track Inventory for this item'),
-          subtitle: const Padding(
-            padding: EdgeInsets.only(top: 6),
-            child: Text(
-              'You cannot enable/disable inventory tracking once you\'ve created transactions for this item.',
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () async {
+              try {
+                final result = await FilePicker.pickFiles(type: FileType.image, withData: true);
+                if (result != null && result.files.isNotEmpty) {
+                  final file = result.files.first;
+                  if (file.bytes != null) {
+                    final uploadedUrl = await ref.read(booksRepositoryProvider).uploadItemImage(
+                      bytes: file.bytes!,
+                      fileName: file.name,
+                      folderName: folderName,
+                    );
+                    setState(() => controller.text = uploadedUrl);
+                  } else {
+                    setState(() => controller.text = file.name);
+                  }
+                }
+              } catch (_) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Image picker not supported in this environment.')),
+                  );
+                }
+              }
+            },
+            icon: const Icon(Icons.image),
+            label: const Text('Browse Image'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 12),
             ),
           ),
         ),
+        if (hasImage) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.canvas,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.divider),
+            ),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border.all(color: AppColors.divider),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: controller.text.startsWith('data:')
+                        ? (Uri.parse(controller.text).data != null
+                            ? Image.memory(
+                                Uri.parse(controller.text).data!.contentAsBytes(),
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, size: 22, color: Colors.grey),
+                              )
+                            : const Icon(Icons.image_outlined, size: 22, color: Colors.grey))
+                        : (isNetworkUrl
+                            ? Image.network(
+                                controller.text,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, size: 22, color: Colors.grey),
+                              )
+                            : (controller.text.startsWith('assets/')
+                                ? Image.asset(controller.text, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.image_outlined, size: 22, color: Colors.grey))
+                                : const Icon(Icons.image_outlined, size: 22, color: Colors.grey))),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.cloud_done, size: 16, color: Color(0xFF9CC70A)),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              'Uploaded to Firebase Storage ($folderName)',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF9CC70A)),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        controller.text,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
 
+  Widget _buildPdfUploadField({
+    required TextEditingController controller,
+    required String label,
+    String folderName = 'Drawing Images',
+  }) {
+    final hasFile = controller.text.trim().isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextFormField(
+          controller: controller,
+          decoration: InputDecoration(
+            labelText: label,
+            prefixIcon: hasFile
+                ? const Icon(Icons.picture_as_pdf, color: Colors.redAccent, size: 20)
+                : null,
+            suffixIcon: hasFile
+                ? IconButton(
+                    icon: const Icon(Icons.clear, size: 18),
+                    onPressed: () => setState(() => controller.clear()),
+                    tooltip: 'Clear file',
+                  )
+                : null,
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () async {
+              try {
+                final result = await FilePicker.pickFiles(
+                  type: FileType.custom,
+                  allowedExtensions: ['pdf'],
+                  withData: true,
+                );
+                if (result != null && result.files.isNotEmpty) {
+                  final file = result.files.first;
+                  if (file.bytes != null) {
+                    final uploadedUrl = await ref.read(booksRepositoryProvider).uploadItemImage(
+                      bytes: file.bytes!,
+                      fileName: file.name,
+                      folderName: folderName,
+                    );
+                    setState(() => controller.text = uploadedUrl);
+                  } else {
+                    setState(() => controller.text = file.name);
+                  }
+                }
+              } catch (_) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('File picker not supported in this environment.')),
+                  );
+                }
+              }
+            },
+            icon: const Icon(Icons.upload_file),
+            label: const Text('Browse PDF'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+        ),
+        if (hasFile) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.canvas,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.divider),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFDEBEB),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red.withOpacity(0.3)),
+                  ),
+                  child: const Icon(Icons.picture_as_pdf, color: Colors.redAccent, size: 26),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.check_circle, size: 16, color: Color(0xFF9CC70A)),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              'Uploaded to Firebase Storage ($folderName)',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF9CC70A)),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        controller.text,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FormPage(
+      title: widget.initialItem != null ? 'Edit Item' : 'New Item',
+      saveLabel: 'Save',
+      saving: saving,
+      onSave: save,
+      showAppBar: false,
+      maxWidth: 1120,
+      children: [
+        // Section A — Basic & Tax Details
+        const SectionTitle('Section A — Basic & Tax Details'),
+        Card(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final cardPadding = constraints.maxWidth < 600 ? 12.0 : 20.0;
+              return Padding(
+                padding: EdgeInsets.all(cardPadding),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    field(name, 'Item Name / Assembly Name*'),
+                    const SizedBox(height: 14),
+                    DropdownButtonFormField<String>(
+                      initialValue: itemType,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Item Type*'),
+                      items: _itemTypeOptions
+                          .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                          .toList(),
+                      onChanged: (val) => setState(() => itemType = val ?? _itemTypeOptions.first),
+                    ),
+                    const SizedBox(height: 14),
+                    field(hsnCode, 'HSN Code'),
+                    const SizedBox(height: 14),
+                    DropdownButtonFormField<String>(
+                      initialValue: taxPreference,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Tax Preference*'),
+                      items: _taxPreferenceOptions
+                          .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                          .toList(),
+                      onChanged: (val) => setState(() => taxPreference = val ?? 'Taxable'),
+                    ),
+                    const SizedBox(height: 14),
+                    DropdownButtonFormField<String>(
+                      initialValue: intraStateTaxRate,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Intra-State Tax Rate*'),
+                      items: _intraStateTaxOptions
+                          .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+                          .toList(),
+                      onChanged: (val) => setState(() => intraStateTaxRate = val ?? _intraStateTaxOptions[3]),
+                    ),
+                    const SizedBox(height: 14),
+                    DropdownButtonFormField<String>(
+                      initialValue: interStateTaxRate,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Inter-State Tax Rate*'),
+                      items: _interStateTaxOptions
+                          .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+                          .toList(),
+                      onChanged: (val) => setState(() => interStateTaxRate = val ?? _interStateTaxOptions[3]),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // Section B — Pricing & Accounts
+        const SectionTitle('Section B — Pricing & Accounts'),
+        Card(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final cardPadding = constraints.maxWidth < 600 ? 12.0 : 20.0;
+              return Padding(
+                padding: EdgeInsets.all(cardPadding),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    field(costPrice, 'Cost Price*', prefix: 'INR', number: true),
+                    const SizedBox(height: 14),
+                    DropdownButtonFormField<String>(
+                      initialValue: purchaseAccount,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Purchase Account*'),
+                      items: _purchaseAccountOptions
+                          .map((a) => DropdownMenuItem(value: a, child: Text(a)))
+                          .toList(),
+                      onChanged: (val) => setState(() => purchaseAccount = val ?? 'Cost of Goods Sold'),
+                    ),
+                    const SizedBox(height: 14),
+                    field(rate, 'Selling Price*', prefix: 'INR', number: true),
+                    const SizedBox(height: 14),
+                    DropdownButtonFormField<String>(
+                      initialValue: salesAccount,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Sales Account*'),
+                      items: _salesAccountOptions
+                          .map((a) => DropdownMenuItem(value: a, child: Text(a)))
+                          .toList(),
+                      onChanged: (val) => setState(() => salesAccount = val ?? 'Sales'),
+                    ),
+                    const SizedBox(height: 14),
+                    field(reportingTags, 'Reporting Tags'),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // Section C — Product & Engineering Details
+        const SectionTitle('Section C — Product & Engineering Details'),
+        Card(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final cardPadding = constraints.maxWidth < 600 ? 12.0 : 20.0;
+              return Padding(
+                padding: EdgeInsets.all(cardPadding),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    field(product, 'Product*'),
+                    const SizedBox(height: 14),
+                    field(productName, 'Product Name*'),
+                    const SizedBox(height: 14),
+                    field(masterSerialNo, 'Master Serial No.*'),
+                    const SizedBox(height: 14),
+                    field(partNo, 'Part No.*'),
+                    const SizedBox(height: 14),
+                    _buildPdfUploadField(
+                      controller: drawingFile,
+                      label: 'Drawing File Upload (PDF)',
+                    ),
+                    const SizedBox(height: 14),
+                    _buildImageUploadField(
+                      controller: assemblyImage,
+                      label: 'Assembly Diagram Image',
+                      folderName: 'Drawing Images',
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // Section D — Raw Materials & Parts (BOM Builder)
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 12,
+          runSpacing: 8,
+          children: [
+            const SectionTitle('Raw Materials & Parts — BOM Builder'),
+            FilledButton.icon(
+              onPressed: _addPart,
+              icon: const Icon(Icons.add),
+              label: const Text('Add Raw Material / Part'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (parts.isEmpty)
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(
+                child: Text(
+                  'No parts added yet. Click "+ Add Raw Material / Part" to add parts for BOM.',
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
+              ),
+            ),
+          ),
+        for (var i = 0; i < parts.length; i++) ...[
+          _buildPartCard(parts[i], i),
+          const SizedBox(height: 16),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildPartCard(_PartFormState partState, int index) {
+    return Card(
+      elevation: 2,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isMobile = constraints.maxWidth < 600;
+          final cardPadding = isMobile ? 12.0 : 20.0;
+          return Padding(
+            padding: EdgeInsets.all(cardPadding),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Part #${partState.slNo}',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => _removePart(index),
+                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                      tooltip: 'Remove Part',
+                    ),
+                  ],
+                ),
+                const Divider(height: 16),
+                if (isMobile) ...[
+                  TextFormField(
+                    initialValue: '${partState.slNo}',
+                    enabled: false,
+                    decoration: const InputDecoration(labelText: 'Sl. No.'),
+                  ),
+                  const SizedBox(height: 14),
+                  field(partState.partName, 'Part Name*'),
+                  const SizedBox(height: 14),
+                  field(partState.partNo, 'Part No.*'),
+                ] else ...[
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 80,
+                        child: TextFormField(
+                          initialValue: '${partState.slNo}',
+                          enabled: false,
+                          decoration: const InputDecoration(labelText: 'Sl. No.'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(child: field(partState.partName, 'Part Name*')),
+                      const SizedBox(width: 12),
+                      Expanded(child: field(partState.partNo, 'Part No.*')),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 14),
+                _buildImageUploadField(
+                  controller: partState.partImage,
+                  label: 'Part Image',
+                  folderName: 'Raw Material Images',
+                ),
+                const SizedBox(height: 14),
+                _buildPdfUploadField(
+                  controller: partState.partPdf,
+                  label: 'Choose Part Drawing / Spec (PDF)',
+                  folderName: 'Raw Material Drawings',
+                ),
+                const SizedBox(height: 14),
+                if (isMobile) ...[
+                  field(partState.rmGrade, 'RM Grade'),
+                  const SizedBox(height: 14),
+                  field(partState.rmSize, 'RM Size'),
+                ] else ...[
+                  Row(
+                    children: [
+                      Expanded(child: field(partState.rmGrade, 'RM Grade')),
+                      const SizedBox(width: 12),
+                      Expanded(child: field(partState.rmSize, 'RM Size')),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 14),
+                if (isMobile) ...[
+                  field(partState.rmWeight, 'RM Weight (kg)', number: true),
+                  const SizedBox(height: 14),
+                  field(partState.fgWeight, 'FG Weight (kg)', number: true),
+                  const SizedBox(height: 14),
+                  field(partState.quantity, 'Quantity*', number: true),
+                ] else ...[
+                  Row(
+                    children: [
+                      Expanded(child: field(partState.rmWeight, 'RM Weight (kg)', number: true)),
+                      const SizedBox(width: 12),
+                      Expanded(child: field(partState.fgWeight, 'FG Weight (kg)', number: true)),
+                      const SizedBox(width: 12),
+                      Expanded(child: field(partState.quantity, 'Quantity*', number: true)),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 16),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text(
+                    'Has Process Flow?',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: const Text('Enable to add process-flow manufacturing operations'),
+                  value: partState.hasProcessFlow,
+                  onChanged: (val) {
+                    setState(() {
+                      partState.hasProcessFlow = val;
+                      if (val && partState.operations.isEmpty) {
+                        partState.operations.add(_OperationFormState(operationNumber: 1));
+                      }
+                    });
+                  },
+                ),
+                if (partState.hasProcessFlow) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      Text(
+                        'Process Flow Operations for ${partState.partName.text.isEmpty ? 'Part #${partState.slNo}' : partState.partName.text}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () => _addOperation(partState),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Add Operation'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  for (var j = 0; j < partState.operations.length; j++)
+                    _buildOperationCard(partState, partState.operations[j], j),
+                ],
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildOperationCard(_PartFormState partState, _OperationFormState opState, int opIndex) {
+    final isOutsourcing = opState.remarks == 'Outsourcing';
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.canvas,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Operation #${opState.operationNumber}',
+                style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.primary),
+              ),
+              IconButton(
+                onPressed: () => _removeOperation(partState, opIndex),
+                icon: const Icon(Icons.close, size: 20, color: Colors.red),
+                tooltip: 'Remove Operation',
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          LayoutBuilder(
+            builder: (context, opConstraints) {
+              final isMobile = opConstraints.maxWidth < 500;
+              if (isMobile) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    field(opState.operationName, 'Operation Name*'),
+                    const SizedBox(height: 12),
+                    field(opState.machine, 'Machine*'),
+                    const SizedBox(height: 12),
+                    field(opState.duration, 'Duration* (e.g. 45 mins)'),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: opState.remarks,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Type / Remarks*'),
+                      items: _operationRemarksOptions
+                          .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+                          .toList(),
+                      onChanged: (val) {
+                        setState(() {
+                          opState.remarks = val ?? 'Inhouse';
+                        });
+                      },
+                    ),
+                  ],
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(child: field(opState.operationName, 'Operation Name*')),
+                      const SizedBox(width: 12),
+                      Expanded(child: field(opState.machine, 'Machine*')),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(child: field(opState.duration, 'Duration* (e.g. 45 mins)')),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: opState.remarks,
+                          isExpanded: true,
+                          decoration: const InputDecoration(labelText: 'Type / Remarks*'),
+                          items: _operationRemarksOptions
+                              .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+                              .toList(),
+                          onChanged: (val) {
+                            setState(() {
+                              opState.remarks = val ?? 'Inhouse';
+                            });
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          field(
+            opState.vendor,
+            'Vendor${isOutsourcing ? '*' : ' (Optional for Inhouse)'}',
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> save() async {
-    final nameText = name.text.trim();
-    if (nameText.isEmpty) {
+    if (name.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter an item name.')),
+        const SnackBar(content: Text('Please enter Item Name / Assembly Name.')),
       );
       return;
     }
+    if (costPrice.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter Cost Price.')),
+      );
+      return;
+    }
+    if (rate.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter Selling Price.')),
+      );
+      return;
+    }
+    if (product.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter Product.')),
+      );
+      return;
+    }
+    if (productName.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter Product Name.')),
+      );
+      return;
+    }
+    if (masterSerialNo.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter Master Serial No.')),
+      );
+      return;
+    }
+    if (partNo.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter Part No.')),
+      );
+      return;
+    }
+
+    for (var i = 0; i < parts.length; i++) {
+      final p = parts[i];
+      if (p.partName.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Please enter Part Name for Part #${i + 1}.')),
+        );
+        return;
+      }
+      if (p.partNo.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Please enter Part No. for Part #${i + 1}.')),
+        );
+        return;
+      }
+      if (p.hasProcessFlow) {
+        for (var j = 0; j < p.operations.length; j++) {
+          final op = p.operations[j];
+          if (op.operationName.text.trim().isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Please enter Operation Name for Part #${i + 1}, Operation #${j + 1}.')),
+            );
+            return;
+          }
+          if (op.machine.text.trim().isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Please enter Machine for Part #${i + 1}, Operation #${j + 1}.')),
+            );
+            return;
+          }
+          if (op.duration.text.trim().isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Please enter Duration for Part #${i + 1}, Operation #${j + 1}.')),
+            );
+            return;
+          }
+          if (op.remarks == 'Outsourcing' && op.vendor.text.trim().isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Please enter Vendor for Outsourcing Operation #${j + 1} on Part #${i + 1}.')),
+            );
+            return;
+          }
+        }
+      }
+    }
+
     setState(() => saving = true);
     try {
-      final taxVal = double.tryParse(taxRate.replaceAll('%', '')) ?? 18;
-      await ref.read(booksRepositoryProvider).addItem(
-            name: nameText,
-            sku: sku.text.trim(),
-            rate: double.tryParse(rate.text) ?? 0,
-            type: itemType,
-            unit: unit,
-            hsnCode: hsnCode.text.trim(),
-            taxPreference: taxPreference,
-            taxRate: taxVal,
-            costPrice: double.tryParse(costPrice.text) ?? 0,
-            salesAccount: salesAccount,
-            cogsAccount: cogsAccount,
-            preferredVendor: preferredVendor ?? '',
+      final itemParts = parts.map((p) => ItemPart(
+        slNo: p.slNo,
+        partName: p.partName.text.trim(),
+        partNo: p.partNo.text.trim(),
+        partImage: p.partImage.text.trim(),
+        partPdf: p.partPdf.text.trim(),
+        rmGrade: p.rmGrade.text.trim(),
+        rmSize: p.rmSize.text.trim(),
+        rmWeight: double.tryParse(p.rmWeight.text.trim()) ?? 0,
+        fgWeight: double.tryParse(p.fgWeight.text.trim()) ?? 0,
+        quantity: double.tryParse(p.quantity.text.trim()) ?? 1,
+        hasProcessFlow: p.hasProcessFlow,
+        operations: p.hasProcessFlow ? p.operations.map((op) => ItemPartOperation(
+          operationNumber: op.operationNumber,
+          operationName: op.operationName.text.trim(),
+          machine: op.machine.text.trim(),
+          duration: op.duration.text.trim(),
+          remarks: op.remarks,
+          vendor: op.remarks == 'Outsourcing' ? op.vendor.text.trim() : null,
+        )).toList() : const [],
+      )).toList();
+
+      if (widget.initialItem != null) {
+        await ref.read(booksRepositoryProvider).updateItem(
+          id: widget.initialItem!.id,
+          name: name.text.trim(),
+          type: itemType,
+          hsnCode: hsnCode.text.trim(),
+          taxPreference: taxPreference,
+          intraStateTaxRate: intraStateTaxRate,
+          interStateTaxRate: interStateTaxRate,
+          costPrice: double.tryParse(costPrice.text.trim()) ?? 0,
+          purchaseAccount: purchaseAccount,
+          rate: double.tryParse(rate.text.trim()) ?? 0,
+          salesAccount: salesAccount,
+          reportingTags: reportingTags.text.trim(),
+          product: product.text.trim(),
+          productName: productName.text.trim(),
+          masterSerialNo: masterSerialNo.text.trim(),
+          partNo: partNo.text.trim(),
+          drawingFileName: drawingFile.text.trim(),
+          assemblyImagePath: assemblyImage.text.trim(),
+          parts: itemParts,
+        );
+        ref.invalidate(itemsProvider);
+        if (mounted) {
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Item updated successfully.')),
           );
-      ref.invalidate(itemsProvider);
-      if (mounted) context.pop();
+        }
+      } else {
+        final newItem = await ref.read(booksRepositoryProvider).addItem(
+          name: name.text.trim(),
+          type: itemType,
+          hsnCode: hsnCode.text.trim(),
+          taxPreference: taxPreference,
+          intraStateTaxRate: intraStateTaxRate,
+          interStateTaxRate: interStateTaxRate,
+          costPrice: double.tryParse(costPrice.text.trim()) ?? 0,
+          purchaseAccount: purchaseAccount,
+          rate: double.tryParse(rate.text.trim()) ?? 0,
+          salesAccount: salesAccount,
+          reportingTags: reportingTags.text.trim(),
+          product: product.text.trim(),
+          productName: productName.text.trim(),
+          masterSerialNo: masterSerialNo.text.trim(),
+          partNo: partNo.text.trim(),
+          drawingFileName: drawingFile.text.trim(),
+          assemblyImagePath: assemblyImage.text.trim(),
+          parts: itemParts,
+        );
+        ref.invalidate(itemsProvider);
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute<void>(
+              builder: (_) => ItemDetailsScreen(item: newItem),
+            ),
+          );
+        }
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -922,7 +1745,7 @@ class FormPage extends StatelessWidget {
     this.maxWidth = AppLayout.maxFormWidth,
     this.saveLabel = 'Save as Draft',
     this.showLeading = true,
-    this.showAppBar = false,
+    this.showAppBar = true,
     super.key,
   });
   final String title;
@@ -942,71 +1765,116 @@ class FormPage extends StatelessWidget {
         colors: [AppColors.canvas, AppColors.canvas],
       ),
     ),
-    child: Column(
-      children: [
-        if (showAppBar) AppBar(automaticallyImplyLeading: showLeading, title: Text(title)),
-        Expanded(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final gutter = AppLayout.gutter(constraints.maxWidth);
-              return FadeSlideIn(
-                child: ResponsiveContent(
-                  maxWidth: maxWidth,
-                  child: ListView(
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
-                    padding: EdgeInsets.fromLTRB(gutter, 12, gutter, 20),
-                    children: [
-                      GlassPanel(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: children,
-                        ),
-                      ),
-                    ],
-                  ),
+    child: Scaffold(
+      backgroundColor: Colors.transparent,
+      body: SafeArea(
+        child: Column(
+          children: [
+            if (showAppBar)
+              Container(
+                height: 56,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  border: Border(bottom: BorderSide(color: AppColors.divider)),
                 ),
-              );
-            },
-          ),
-        ),
-        SafeArea(
-          top: false,
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(top: BorderSide(color: AppColors.divider)),
-            ),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final save = ElevatedButton(
-                  onPressed: saving ? null : onSave,
-                  child: Text(saving ? 'Saving...' : saveLabel),
-                );
-                final cancel = OutlinedButton(
-                  onPressed: saving ? null : () => context.pop(),
-                  child: const Text('Cancel'),
-                );
-                if (constraints.maxWidth < 380) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [save, const SizedBox(height: 8), cancel],
-                  );
-                }
-                return Row(
+                child: Row(
                   children: [
-                    Expanded(child: save),
-                    const SizedBox(width: 10),
-                    cancel,
+                    if (showLeading)
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back, color: Colors.black87),
+                        onPressed: () => Navigator.of(context).maybePop(),
+                        tooltip: 'Back',
+                      ),
+                    const SizedBox(width: 4),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
                   ],
-                );
-              },
+                ),
+              ),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final isMobile = constraints.maxWidth < 600;
+                  final gutter = isMobile ? 12.0 : AppLayout.gutter(constraints.maxWidth);
+                  final cardPadding = isMobile ? 12.0 : 20.0;
+                  return FadeSlideIn(
+                    child: ResponsiveContent(
+                      maxWidth: maxWidth,
+                      child: ListView(
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        padding: EdgeInsets.fromLTRB(gutter, 12, gutter, 20),
+                        children: [
+                          GlassPanel(
+                            padding: EdgeInsets.all(cardPadding),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: children,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
-          ),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(top: BorderSide(color: AppColors.divider)),
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final save = ElevatedButton(
+                    onPressed: saving ? null : onSave,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      minimumSize: const Size.fromHeight(48),
+                    ),
+                    child: Text(
+                      saving ? 'Saving...' : saveLabel,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                  );
+                  final cancel = OutlinedButton(
+                    onPressed: saving ? null : () => context.pop(),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      minimumSize: const Size.fromHeight(48),
+                    ),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                  );
+                  if (constraints.maxWidth < 600) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [save, const SizedBox(height: 8), cancel],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Expanded(child: save),
+                      const SizedBox(width: 10),
+                      Expanded(child: cancel),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     ),
   );
 }

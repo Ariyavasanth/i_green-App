@@ -7,6 +7,7 @@ Future<void> saveAndDownloadOfferLetter({
   required BuildContext context,
   required List<int> bytes,
   required String fileName,
+  String? docTitle,
 }) async {
   Directory dir;
   String locationLabel = '';
@@ -37,12 +38,28 @@ Future<void> saveAndDownloadOfferLetter({
   final file = File('${dir.path}/$fileName');
   await file.writeAsBytes(bytes);
 
+  final titleStr = docTitle ?? (fileName.startsWith('BOM') ? 'BOM Details' : 'File');
+
   if (context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Offer Letter saved to $locationLabel: $fileName'),
-        backgroundColor: Colors.green,
+        content: Row(
+          children: [
+            const Icon(Icons.download_done_rounded, color: Colors.white, size: 22),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '$titleStr saved to $locationLabel: $fileName',
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF2E7D32),
         duration: const Duration(seconds: 5),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         action: SnackBarAction(
           label: 'Open',
           textColor: Colors.white,
@@ -55,7 +72,7 @@ Future<void> saveAndDownloadOfferLetter({
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('File location: ${file.path}'),
+                      content: Text('File saved: ${file.path}'),
                     ),
                   );
                 }

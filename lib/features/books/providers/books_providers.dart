@@ -1,8 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/firebase_books_repository.dart';
+import '../data/sqlite_books_repository.dart';
 import '../domain/books_repository.dart';
 
-// Firestore implementation active.
+// Firebase implementation active.
 final booksRepositoryProvider = Provider<BooksRepository>(
   (ref) => FirebaseBooksRepository(),
 );

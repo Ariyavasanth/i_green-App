@@ -1,3 +1,53 @@
+import 'dart:typed_data';
+
+class ItemPartOperation {
+  const ItemPartOperation({
+    required this.operationNumber,
+    required this.operationName,
+    required this.machine,
+    required this.duration,
+    required this.remarks,
+    this.vendor,
+  });
+
+  final int operationNumber;
+  final String operationName;
+  final String machine;
+  final String duration;
+  final String remarks;
+  final String? vendor;
+}
+
+class ItemPart {
+  const ItemPart({
+    required this.slNo,
+    required this.partName,
+    required this.partNo,
+    this.partImage = '',
+    this.partPdf = '',
+    this.rmGrade = '',
+    this.rmSize = '',
+    this.rmWeight = 0,
+    this.fgWeight = 0,
+    this.quantity = 1,
+    this.hasProcessFlow = false,
+    this.operations = const [],
+  });
+
+  final int slNo;
+  final String partName;
+  final String partNo;
+  final String partImage;
+  final String partPdf;
+  final String rmGrade;
+  final String rmSize;
+  final double rmWeight;
+  final double fgWeight;
+  final double quantity;
+  final bool hasProcessFlow;
+  final List<ItemPartOperation> operations;
+}
+
 class BookItem {
   const BookItem({
     required this.id,
@@ -9,20 +59,35 @@ class BookItem {
     this.hsnCode = '',
     this.taxPreference = 'Taxable',
     this.taxRate = 18,
+    this.intraStateTaxRate = '',
+    this.interStateTaxRate = '',
     this.costPrice = 0,
+    this.purchaseAccount = 'Cost of Goods Sold',
     this.salesAccount = 'Sales',
     this.cogsAccount = 'Cost of Goods Sold',
+    this.reportingTags = '',
     this.preferredVendor = '',
     this.trackInventory = false,
     this.stockOnHand = 0,
+    this.product = '',
+    this.productName = '',
+    this.masterSerialNo = '',
+    this.partNo = '',
+    this.drawingFileName = '',
+    this.assemblyImagePath = '',
+    this.parts = const [],
   });
+
   final int id;
   final String name;
   final String sku;
   final double rate;
   final String type, unit, hsnCode, taxPreference, salesAccount, cogsAccount, preferredVendor;
+  final String intraStateTaxRate, interStateTaxRate, purchaseAccount, reportingTags;
+  final String product, productName, masterSerialNo, partNo, drawingFileName, assemblyImagePath;
   final double taxRate, costPrice, stockOnHand;
   final bool trackInventory;
+  final List<ItemPart> parts;
 }
 
 class ItemHistoryEntry {
@@ -273,7 +338,7 @@ class DashboardMetrics {
 abstract interface class BooksRepository {
   Future<List<BookItem>> getItems();
   Future<List<ItemHistoryEntry>> getItemHistory(int itemId);
-  Future<void> addItem({
+  Future<BookItem> addItem({
     required String name,
     String sku = '',
     double rate = 0,
@@ -282,10 +347,47 @@ abstract interface class BooksRepository {
     String hsnCode = '',
     String taxPreference = 'Taxable',
     double taxRate = 18,
+    String intraStateTaxRate = '',
+    String interStateTaxRate = '',
     double costPrice = 0,
+    String purchaseAccount = 'Cost of Goods Sold',
     String salesAccount = 'Sales',
     String cogsAccount = 'Cost of Goods Sold',
+    String reportingTags = '',
     String preferredVendor = '',
+    String product = '',
+    String productName = '',
+    String masterSerialNo = '',
+    String partNo = '',
+    String drawingFileName = '',
+    String assemblyImagePath = '',
+    List<ItemPart> parts = const [],
+  });
+  Future<void> updateItem({
+    required int id,
+    required String name,
+    String sku = '',
+    double rate = 0,
+    String type = 'Goods',
+    String unit = 'pcs',
+    String hsnCode = '',
+    String taxPreference = 'Taxable',
+    double taxRate = 18,
+    String intraStateTaxRate = '',
+    String interStateTaxRate = '',
+    double costPrice = 0,
+    String purchaseAccount = 'Cost of Goods Sold',
+    String salesAccount = 'Sales',
+    String cogsAccount = 'Cost of Goods Sold',
+    String reportingTags = '',
+    String preferredVendor = '',
+    String product = '',
+    String productName = '',
+    String masterSerialNo = '',
+    String partNo = '',
+    String drawingFileName = '',
+    String assemblyImagePath = '',
+    List<ItemPart> parts = const [],
   });
   Future<List<Customer>> getCustomers();
   Future<void> addCustomer({
@@ -305,4 +407,9 @@ abstract interface class BooksRepository {
   Future<DashboardMetrics> getDashboardMetrics();
   Future<void> recordInvoicePaid(int invoiceId);
   Future<void> convertQuote(int quoteId, TransactionType targetType);
+  Future<String> uploadItemImage({
+    required Uint8List bytes,
+    required String fileName,
+    String folderName = 'Item Images',
+  });
 }

@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/layout/responsive_layout.dart';
+import '../../../core/theme/app_colors.dart';
 import '../domain/books_repository.dart';
 import '../providers/books_providers.dart';
+import 'books_forms.dart';
 import 'item_details_widgets.dart';
 
 /// Item Details screen — reached by tapping a row on the Items list.
@@ -18,9 +21,33 @@ class ItemDetailsScreen extends ConsumerWidget {
     length: 4,
     child: Scaffold(
       appBar: AppBar(
-        title: Text(item.name),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: Text(
+          item.name,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+        ),
+        centerTitle: false,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            tooltip: 'Edit Item',
+            onPressed: () => Navigator.of(context, rootNavigator: true).push(
+              MaterialPageRoute<void>(
+                builder: (_) => NewItemPage(initialItem: item),
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+        ],
         bottom: const TabBar(
           isScrollable: true,
+          tabAlignment: TabAlignment.start,
           tabs: [
             Tab(text: 'Overview'),
             Tab(text: 'Transactions'),
@@ -29,13 +56,19 @@ class ItemDetailsScreen extends ConsumerWidget {
           ],
         ),
       ),
-      body: TabBarView(
-        children: [
-          ItemOverviewTab(item: item),
-          const ItemTransactionsTab(),
-          _ItemHistoryTab(itemId: item.id),
-          ItemProductDetailsTab(item: item),
-        ],
+      body: RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(itemsProvider);
+          await ref.read(itemsProvider.future);
+        },
+        child: TabBarView(
+          children: [
+            ItemOverviewTab(item: item),
+            const ItemTransactionsTab(),
+            _ItemHistoryTab(itemId: item.id),
+            ItemProductDetailsTab(item: item),
+          ],
+        ),
       ),
     ),
   );
@@ -54,39 +87,102 @@ class _ItemHistoryTab extends ConsumerWidget {
         error: (error, _) => Center(child: Text(error.toString())),
         data: (history) {
           if (history.isEmpty) {
-            return const ItemEmptyTab(message: 'No history to display');
-          }
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Table(
-              columnWidths: const {
-                0: FixedColumnWidth(210),
-                1: FlexColumnWidth(),
-              },
-              border: const TableBorder(
-                horizontalInside: BorderSide(color: Color(0xFFE2E5EA)),
-                bottom: BorderSide(color: Color(0xFFE2E5EA)),
+            return const SingleChildScrollView(
+              physics: AlwaysScrollableScrollPhysics(),
+              child: SizedBox(
+                height: 300,
+                child: ItemEmptyTab(message: 'No history to display'),
               ),
-              children: [
-                const TableRow(
+            );
+          }
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final isMobile = constraints.maxWidth < 600;
+              final gutter = AppLayout.gutter(constraints.maxWidth);
+
+              if (isMobile) {
+                return ListView.builder(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.all(gutter),
+                  itemCount: history.length,
+                  itemBuilder: (context, index) {
+                    final entry = history[index];
+                    return Card(
+                      elevation: 0,
+                      margin: const EdgeInsets.only(bottom: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        side: const BorderSide(color: Color(0xFFE2E5EA)),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              entry.details,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                const Icon(Icons.access_time_rounded, size: 14, color: AppColors.textSecondary),
+                                const SizedBox(width: 4),
+                                Text(
+                                  DateFormat('dd/MM/yyyy hh:mm a').format(entry.date),
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              }
+
+              return SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.all(gutter),
+                child: Table(
+                  columnWidths: const {
+                    0: FixedColumnWidth(210),
+                    1: FlexColumnWidth(),
+                  },
+                  border: const TableBorder(
+                    horizontalInside: BorderSide(color: Color(0xFFE2E5EA)),
+                    bottom: BorderSide(color: Color(0xFFE2E5EA)),
+                  ),
                   children: [
-                    _HistoryCell(text: 'DATE', isHeader: true),
-                    _HistoryCell(text: 'DETAILS', isHeader: true),
+                    const TableRow(
+                      children: [
+                        _HistoryCell(text: 'DATE', isHeader: true),
+                        _HistoryCell(text: 'DETAILS', isHeader: true),
+                      ],
+                    ),
+                    for (final entry in history)
+                      TableRow(
+                        children: [
+                          _HistoryCell(
+                            text: DateFormat(
+                              'dd/MM/yyyy hh:mm a',
+                            ).format(entry.date),
+                          ),
+                          _HistoryCell(text: entry.details),
+                        ],
+                      ),
                   ],
                 ),
-                for (final entry in history)
-                  TableRow(
-                    children: [
-                      _HistoryCell(
-                        text: DateFormat(
-                          'dd/MM/yyyy hh:mm a',
-                        ).format(entry.date),
-                      ),
-                      _HistoryCell(text: entry.details),
-                    ],
-                  ),
-              ],
-            ),
+              );
+            },
           );
         },
       );

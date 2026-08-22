@@ -130,7 +130,7 @@ class ItemsPage extends ConsumerWidget {
             onAdd: () => context.push('/items/new'),
             onRequestMaterial: () => context.push('/items/request-material'),
             onReturn: () => context.push('/items/return'),
-            onOpen: (item) => Navigator.of(context).push(
+            onOpen: (item) => Navigator.of(context, rootNavigator: true).push(
               MaterialPageRoute(builder: (_) => ItemDetailsScreen(item: item)),
             ),
           ),
@@ -170,44 +170,54 @@ class ItemsPage extends ConsumerWidget {
               final rows = all
                   .where((r) => '${r.name} ${r.sku}'.toLowerCase().contains(q))
                   .toList();
-              return ListView.separated(
-                itemCount: rows.length,
-                separatorBuilder: (_, _) => const Divider(height: 1),
-                itemBuilder: (_, i) {
-                  final r = rows[i];
-                  return ListTile(
-                    minVerticalPadding: 14,
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => ItemDetailsScreen(item: r),
-                      ),
-                    ),
-                    leading: Container(
-                      width: 48,
-                      height: 48,
-                      color: AppColors.canvas,
-                      child: const Icon(Icons.image_outlined),
-                    ),
-                    title: Text(
-                      r.name,
-                      style: const TextStyle(
-                        color: AppColors.active,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    subtitle: Text(
-                      '${r.type} · Stock ${r.stockOnHand.toStringAsFixed(0)}',
-                    ),
-                    trailing: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 120),
-                      child: Text(
-                        money.format(r.rate),
-                        textAlign: TextAlign.end,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  );
+              return RefreshIndicator(
+                onRefresh: () async {
+                  ref.invalidate(itemsProvider);
+                  await ref.read(itemsProvider.future);
                 },
+                child: ListView.separated(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  itemCount: rows.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (_, i) {
+                    final r = rows[i];
+                    return Material(
+                      color: Colors.transparent,
+                      child: ListTile(
+                        minVerticalPadding: 14,
+                        onTap: () => Navigator.of(context, rootNavigator: true).push(
+                          MaterialPageRoute(
+                            builder: (_) => ItemDetailsScreen(item: r),
+                          ),
+                        ),
+                        leading: Container(
+                          width: 48,
+                          height: 48,
+                          color: AppColors.canvas,
+                          child: const Icon(Icons.image_outlined),
+                        ),
+                        title: Text(
+                          r.name,
+                          style: const TextStyle(
+                            color: AppColors.active,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        subtitle: Text(
+                          '${r.type} · Stock ${r.stockOnHand.toStringAsFixed(0)}',
+                        ),
+                        trailing: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 120),
+                          child: Text(
+                            money.format(r.rate),
+                            textAlign: TextAlign.end,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
               );
             },
           ),
@@ -241,27 +251,30 @@ class CustomersPage extends ConsumerWidget {
               separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (_, i) {
                 final r = rows[i];
-                return ListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  leading: CircleAvatar(child: Text(r.name[0])),
-                  title: Text(
-                    r.name,
-                    style: const TextStyle(
-                      color: AppColors.active,
-                      fontWeight: FontWeight.w600,
+                return Material(
+                  color: Colors.transparent,
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
                     ),
-                  ),
-                  subtitle: Text('${r.company}\n${r.gstTreatment}'),
-                  isThreeLine: true,
-                  trailing: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 120),
-                    child: Text(
-                      money.format(r.receivables),
-                      textAlign: TextAlign.end,
-                      overflow: TextOverflow.ellipsis,
+                    leading: CircleAvatar(child: Text(r.name[0])),
+                    title: Text(
+                      r.name,
+                      style: const TextStyle(
+                        color: AppColors.active,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text('${r.company}\n${r.gstTreatment}'),
+                    isThreeLine: true,
+                    trailing: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 120),
+                      child: Text(
+                        money.format(r.receivables),
+                        textAlign: TextAlign.end,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ),
                 );
@@ -352,11 +365,13 @@ class TransactionsPage extends ConsumerWidget {
               separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (_, i) {
                 final r = rows[i];
-                return ListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
+                return Material(
+                  color: Colors.transparent,
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                   title: Text(
                     r.number,
                     style: const TextStyle(
@@ -409,7 +424,8 @@ class TransactionsPage extends ConsumerWidget {
                       ],
                     ],
                   ),
-                );
+                ),
+              );
               },
             );
           },

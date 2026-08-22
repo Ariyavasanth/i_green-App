@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../core/layout/responsive_layout.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/smart_network_image.dart';
 import '../../../screens/bom/bom_details_screen.dart';
 import '../domain/books_repository.dart';
 import 'books_pages.dart' show money;
@@ -21,23 +22,11 @@ class ItemOverviewTab extends StatelessWidget {
     builder: (context, constraints) {
       final gutter = AppLayout.gutter(constraints.maxWidth);
       final details = ItemDetailsCard(item: item);
-      final image = ItemImagePanel(item: item);
       return SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.all(gutter),
         child: ResponsiveContent(
-          child: constraints.maxWidth < AppBreakpoints.laptop
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [details, const SizedBox(height: 16), image],
-                )
-              : Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(flex: 3, child: details),
-                    const SizedBox(width: 20),
-                    SizedBox(width: 260, child: image),
-                  ],
-                ),
+          child: details,
         ),
       );
     },
@@ -55,29 +44,35 @@ class ItemDetailsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          DetailRow('Item Type', item.type == 'Service' ? 'Sales and Purchase Services' : 'Sales and Purchase Items'),
+          DetailRow('Item Type', item.type),
           if (item.name == '3.5" Pulling Swivel')
             const DetailRow('Category', 'Pulling Accessories'),
           DetailRow('HSN Code', item.hsnCode.isEmpty ? '-' : item.hsnCode),
           const DetailRow('Created Source', 'User'),
-          const DetailRow('Tax Preference', 'Taxable'),
+          DetailRow('Tax Preference', item.taxPreference),
           DetailRow(
             'Intra State Tax Rate',
-            'GST${item.taxRate.toStringAsFixed(0)} (${item.taxRate.toStringAsFixed(0)} %)',
+            item.intraStateTaxRate.isNotEmpty
+                ? item.intraStateTaxRate
+                : 'GST${item.taxRate.toStringAsFixed(0)} (${item.taxRate.toStringAsFixed(0)} %)',
           ),
           DetailRow(
             'Inter State Tax Rate',
-            'IGST${item.taxRate.toStringAsFixed(0)} (${item.taxRate.toStringAsFixed(0)} %)',
+            item.interStateTaxRate.isNotEmpty
+                ? item.interStateTaxRate
+                : 'IGST${item.taxRate.toStringAsFixed(0)} (${item.taxRate.toStringAsFixed(0)} %)',
           ),
           const DetailSectionTitle('Purchase Information'),
           DetailRow('Cost Price', money.format(item.costPrice)),
-          const DetailRow('Purchase Account', 'Cost of Goods Sold'),
+          DetailRow('Purchase Account', item.purchaseAccount.isNotEmpty ? item.purchaseAccount : item.cogsAccount),
           const DetailSectionTitle('Sales Information'),
           DetailRow('Selling Price', money.format(item.rate)),
-          const DetailRow('Sales Account', 'Sales'),
+          DetailRow('Sales Account', item.salesAccount.isNotEmpty ? item.salesAccount : 'Sales'),
           const DetailSectionTitle('Reporting Tags'),
-          const Text(
-            'No reporting tag has been associated with this item.',
+          Text(
+            item.reportingTags.isNotEmpty
+                ? item.reportingTags
+                : 'No reporting tag has been associated with this item.',
             style: AppTextStyles.caption,
           ),
         ],
@@ -85,6 +80,7 @@ class ItemDetailsCard extends StatelessWidget {
     ),
   );
 }
+
 class DetailSectionTitle extends StatelessWidget {
   const DetailSectionTitle(this.text, {super.key});
   final String text;
@@ -104,60 +100,145 @@ class DetailSectionTitle extends StatelessWidget {
 }
 
 class DetailRow extends StatelessWidget {
-  const DetailRow(this.label, this.value, {super.key});
+  const DetailRow(this.label, this.value, {this.isFile = false, super.key});
   final String label;
   final String value;
+  final bool isFile;
+
+  static String cleanFileName(String raw) {
+    if (raw.isEmpty || raw == '-') return raw;
+    String name = raw.contains('/') ? raw.split('/').last : raw;
+    if (name.contains('?')) name = name.split('?').first;
+    name = Uri.decodeComponent(name);
+    name = name.replaceAll(RegExp(r'^\d+_'), '');
+    return name;
+  }
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 8),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(width: 170, child: Text(label, style: AppTextStyles.caption)),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            value,
-            style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
+  Widget build(BuildContext context) {
+    final isDrawingOrPdf = isFile ||
+        label.toLowerCase() == 'drawing' ||
+        value.toLowerCase().endsWith('.pdf') ||
+        value.contains('.pdf?');
+
+    final displayValue = isDrawingOrPdf ? cleanFileName(value) : value;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 550;
+
+        final Widget valueChild = isDrawingOrPdf && displayValue != '-'
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.picture_as_pdf, size: 18, color: Colors.redAccent),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      displayValue,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : Text(
+                displayValue,
+                style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
+              );
+
+        if (isMobile) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: AppTextStyles.caption.copyWith(fontSize: 12, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 3),
+                valueChild,
+              ],
+            ),
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: 160, child: Text(label, style: AppTextStyles.caption)),
+              const SizedBox(width: 12),
+              Expanded(child: valueChild),
+            ],
           ),
-        ),
-      ],
-    ),
-  );
+        );
+      },
+    );
+  }
 }
 
-/// Non-functional image placeholder/upload affordance, matching the reference
-/// design. No image picking dependency exists in this project, so "Browse
-/// images" surfaces a lightweight acknowledgement rather than a real picker.
 class ItemImagePanel extends StatelessWidget {
   const ItemImagePanel({required this.item, super.key});
 
   final BookItem item;
 
-  static const _pullingSwivelAsset =
-      'assets/images/3_5_pulling_swivel.png';
+  static const _pullingSwivelAsset = 'assets/images/3_5_pulling_swivel.png';
 
   @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(20),
-      child: DottedImageDropZone(
-        imageAsset: item.name == '3.5" Pulling Swivel'
-            ? _pullingSwivelAsset
-            : null,
-        onBrowse: () => ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Image upload is not available yet')),
+  Widget build(BuildContext context) {
+    final imagePath = item.assemblyImagePath.isNotEmpty
+        ? item.assemblyImagePath
+        : (item.name == '3.5" Pulling Swivel' ? _pullingSwivelAsset : null);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: DottedImageDropZone(
+          imageAsset: imagePath,
+          onBrowse: () => ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Image upload is ready in New Item form.')),
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class DottedImageDropZone extends StatelessWidget {
   const DottedImageDropZone({this.imageAsset, this.onBrowse, super.key});
   final String? imageAsset;
   final VoidCallback? onBrowse;
+
+  Widget _buildImage(String path) {
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return Image.network(
+        path,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => const Center(
+          child: Icon(Icons.broken_image_outlined, size: 42, color: AppColors.textSecondary),
+        ),
+      );
+    }
+    if (path.startsWith('assets/')) {
+      return Image.asset(
+        path,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => const Center(
+          child: Icon(Icons.broken_image_outlined, size: 42, color: AppColors.textSecondary),
+        ),
+      );
+    }
+    return const Center(
+      child: Icon(Icons.image_outlined, size: 42, color: AppColors.textSecondary),
+    );
+  }
 
   @override
   Widget build(BuildContext context) => AspectRatio(
@@ -176,7 +257,7 @@ class DottedImageDropZone extends StatelessWidget {
                 children: [
                   Padding(
                     padding: const EdgeInsets.all(12),
-                    child: Image.asset(imageAsset!, fit: BoxFit.contain),
+                    child: _buildImage(imageAsset!),
                   ),
                   Positioned(
                     right: 8,
@@ -262,7 +343,7 @@ class _PullingSwivelViewerState extends State<_PullingSwivelViewer> {
 
   void _select(int index) {
     _selection.value = {index};
-    Navigator.of(context).push(
+    Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute<void>(
         builder: (_) => BomDetailsScreen(
           partIdentifier: _swivelParts[index].name,
@@ -469,7 +550,6 @@ class _PartCallout extends StatelessWidget {
     ),
   );
 }
-
 class _CalloutPainter extends CustomPainter {
   const _CalloutPainter(this.selection);
 
@@ -510,34 +590,180 @@ class _CalloutPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _CalloutPainter oldDelegate) =>
       oldDelegate.selection != selection;
-}
-
-/// Original product image for the Product Details tab.
+}/// Product diagram for the Product Details tab.
 class LabeledSwivelDiagram extends StatelessWidget {
-  const LabeledSwivelDiagram({super.key});
+  const LabeledSwivelDiagram({this.imagePath = '', this.itemName = '', super.key});
+  final String imagePath;
+  final String itemName;
 
-  @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: BoxDecoration(
-      color: AppColors.canvas,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: AppColors.divider),
-    ),
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: AspectRatio(
-        aspectRatio: 1974 / 797,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Image.asset(
-            ItemImagePanel._pullingSwivelAsset,
-            fit: BoxFit.contain,
-            filterQuality: FilterQuality.high,
-          ),
+  Widget _placeholder(BuildContext context) => Center(
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.architecture_outlined, size: 42, color: AppColors.textSecondary),
+        const SizedBox(height: 8),
+        Text(
+          itemName.isNotEmpty ? '$itemName Diagram' : 'Product Diagram',
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textSecondary),
         ),
-      ),
+      ],
     ),
   );
+
+  Widget? _buildImageContent(BuildContext context) {
+    final path = imagePath.trim();
+    debugPrint('>>> LabeledSwivelDiagram received imagePath: "$path"');
+
+    if (path.isEmpty) {
+      if (itemName == '3.5" Pulling Swivel') {
+        return Image.asset(
+          ItemImagePanel._pullingSwivelAsset,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.high,
+        );
+      }
+      return null;
+    }
+
+    final isPdf = path.toLowerCase().contains('.pdf') || path.contains('application/pdf');
+    if (isPdf) {
+      final cleanFileName = path.contains('/') ? path.split('/').last.split('?').first : path;
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                color: Color(0xFFFDEBEB),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.picture_as_pdf, size: 48, color: Colors.redAccent),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Engineering Drawing PDF Document',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                cleanFileName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+            ),
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Opening PDF Document: $cleanFileName'),
+                    backgroundColor: const Color(0xFF414A51),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              },
+              icon: const Icon(Icons.picture_as_pdf, size: 18),
+              label: const Text('View / Download PDF Drawing'),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF414A51),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    if (path.startsWith('data:')) {
+      try {
+        final data = Uri.parse(path).data;
+        if (data != null) {
+          return Image.memory(
+            data.contentAsBytes(),
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.high,
+            errorBuilder: (_, __, ___) => _placeholder(context),
+          );
+        }
+      } catch (_) {}
+    }
+    if (path.startsWith('http://') || path.startsWith('https://') || path.contains('firebasestorage')) {
+      final url = path.startsWith('gs://')
+          ? 'https://firebasestorage.googleapis.com/v0/b/${path.substring(5).replaceAll('/', '%2F')}?alt=media'
+          : path;
+      debugPrint('>>> Attempting to load network URL via SmartNetworkImage: $url');
+      return SmartNetworkImage(
+        url: url,
+        fit: BoxFit.contain,
+        errorBuilder: (context) => _placeholder(context),
+      );
+    }
+    if (path.startsWith('assets/')) {
+      return Image.asset(
+        path,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+        errorBuilder: (_, __, ___) => _placeholder(context),
+      );
+    }
+    final cleanName = path.contains('/') ? path.split('/').last : path;
+    final assetName = cleanName.toLowerCase().replaceAll(' ', '_');
+
+    debugPrint('>>> Checking local asset fallback for "$cleanName"');
+    return Image.asset(
+      'assets/images/$cleanName',
+      fit: BoxFit.contain,
+      errorBuilder: (_, __, ___) => Image.asset(
+        'assets/images/$assetName',
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) {
+          final encodedName = Uri.encodeComponent(cleanName);
+          final firebaseDrawingUrl =
+              'https://firebasestorage.googleapis.com/v0/b/i-green-tech.firebasestorage.app/o/Drawing%20Images%2F$encodedName?alt=media';
+          debugPrint('>>> Attempting fallback Firebase URL via SmartNetworkImage: $firebaseDrawingUrl');
+          return SmartNetworkImage(
+            url: firebaseDrawingUrl,
+            fit: BoxFit.contain,
+            errorBuilder: (context) => _placeholder(context),
+          );
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final imageWidget = _buildImageContent(context);
+    if (imageWidget == null) {
+      return const SizedBox.shrink();
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppColors.canvas,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              constraints: const BoxConstraints(maxHeight: 280),
+              padding: const EdgeInsets.all(12),
+              width: double.infinity,
+              alignment: Alignment.center,
+              child: imageWidget,
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
 }
 
 /// Responsive transaction filters and empty state. Transaction linkage is not
@@ -773,23 +999,48 @@ class _ItemProductDetailsTabState extends State<ItemProductDetailsTab> {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final gutter = AppLayout.gutter(constraints.maxWidth);
-      final image = Card(
+      final item = widget.item;
+      final hasDrawingImage = item.drawingFileName.contains('.png') ||
+          item.drawingFileName.contains('.jpg') ||
+          item.drawingFileName.contains('.jpeg') ||
+          (item.drawingFileName.contains('firebasestorage') && !item.drawingFileName.toLowerCase().contains('.pdf'));
+
+      final diagramPath = item.assemblyImagePath.isNotEmpty
+          ? item.assemblyImagePath
+          : (hasDrawingImage ? item.drawingFileName : '');
+
+      final fields = Card(
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const LabeledSwivelDiagram(),
+              LabeledSwivelDiagram(imagePath: diagramPath, itemName: item.name),
+              DetailRow('Product', item.product.isNotEmpty ? item.product : 'Gear Shaft Assembly'),
+              DetailRow(
+                'Drawing',
+                item.drawingFileName.isNotEmpty
+                    ? (item.drawingFileName.contains('/')
+                        ? Uri.decodeComponent(item.drawingFileName.split('/').last.split('?').first)
+                        : item.drawingFileName)
+                    : 'GS-1001.pdf',
+              ),
+              DetailRow('Product Name', item.productName.isNotEmpty ? item.productName : 'Industrial Gear Shaft'),
+              DetailRow('Master Serial No.', item.masterSerialNo.isNotEmpty ? item.masterSerialNo : 'MSN-GS-001'),
+              DetailRow('Part No.', item.partNo.isNotEmpty ? item.partNo : 'GS-1001'),
               const SizedBox(height: 16),
               _PartsDropdown(
+                itemParts: item.parts,
                 isExpanded: _arePartsVisible,
                 onPressed: () => setState(
                   () => _arePartsVisible = !_arePartsVisible,
                 ),
-                onPartSelected: (partIdentifier) => Navigator.of(context).push(
+                onPartSelected: (partName, [itemPart]) => Navigator.of(context, rootNavigator: true).push(
                   MaterialPageRoute<void>(
                     builder: (_) => BomDetailsScreen(
-                      partIdentifier: partIdentifier,
+                      partIdentifier: partName,
+                      itemPart: itemPart,
+                      drawingFileName: item.drawingFileName,
                     ),
                   ),
                 ),
@@ -798,38 +1049,12 @@ class _ItemProductDetailsTabState extends State<ItemProductDetailsTab> {
           ),
         ),
       );
-      final fields = Card(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: const [
-              DetailRow('Product', 'Gear Shaft Assembly'),
-              DetailRow('Drawing', 'GS-1001.pdf'),
-              DetailRow('Product Name', 'Industrial Gear Shaft'),
-              DetailRow('Master Serial No.', 'MSN-GS-001'),
-              DetailRow('Part No.', 'GS-1001'),
-            ],
-          ),
-        ),
-      );
 
       return SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.all(gutter),
         child: ResponsiveContent(
-          child: constraints.maxWidth < AppBreakpoints.laptop
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [image, const SizedBox(height: 16), fields],
-                )
-              : Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(width: 260, child: image),
-                    const SizedBox(width: 20),
-                    Expanded(flex: 3, child: fields),
-                  ],
-                ),
+          child: fields,
         ),
       );
     },
@@ -841,11 +1066,13 @@ class _PartsDropdown extends StatelessWidget {
     required this.isExpanded,
     required this.onPressed,
     required this.onPartSelected,
+    this.itemParts = const [],
   });
 
   final bool isExpanded;
   final VoidCallback onPressed;
-  final ValueChanged<String> onPartSelected;
+  final Function(String name, [ItemPart? part]) onPartSelected;
+  final List<ItemPart> itemParts;
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
@@ -893,20 +1120,36 @@ class _PartsDropdown extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const Divider(height: 1),
-                      for (final part in _swivelParts)
-                        InkWell(
-                          onTap: () => onPartSelected(part.name),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 9,
+                      if (itemParts.isNotEmpty)
+                        for (final part in itemParts)
+                          InkWell(
+                            onTap: () => onPartSelected(part.partName, part),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 9,
+                              ),
+                              child: Text(
+                                part.partName,
+                                style: AppTextStyles.body,
+                              ),
                             ),
-                            child: Text(
-                              part.name,
-                              style: AppTextStyles.body,
+                          )
+                      else
+                        for (final part in _swivelParts)
+                          InkWell(
+                            onTap: () => onPartSelected(part.name),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 9,
+                              ),
+                              child: Text(
+                                part.name,
+                                style: AppTextStyles.body,
+                              ),
                             ),
                           ),
-                        ),
                     ],
                   )
                 : const SizedBox(width: double.infinity),

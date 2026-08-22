@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/layout/responsive_layout.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../features/books/domain/books_repository.dart';
 
 /// Whether an operation is performed in-house or sent to a vendor.
 enum ProcessRemarks {
@@ -206,15 +207,34 @@ class ProcessFlowScreen extends StatelessWidget {
   const ProcessFlowScreen({
     required this.partIdentifier,
     required this.partName,
+    this.customOperations,
     super.key,
   });
 
   final String partIdentifier;
   final String partName;
+  final List<ItemPartOperation>? customOperations;
 
   @override
   Widget build(BuildContext context) {
-    final operations = processFlowByPart[partIdentifier] ?? const [];
+    final List<ProcessFlowOperation> operations;
+    if (customOperations != null) {
+      operations = customOperations!
+          .map((op) => ProcessFlowOperation(
+                operationNumber: op.operationNumber,
+                operationName: op.operationName,
+                machine: op.machine,
+                remarks: op.remarks.toLowerCase().contains('out')
+                    ? ProcessRemarks.outsourcing
+                    : ProcessRemarks.inhouse,
+                duration: op.duration,
+                vendor: op.vendor,
+              ))
+          .toList();
+    } else {
+      operations = processFlowByPart[partIdentifier] ?? const [];
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Process Flow'),

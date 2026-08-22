@@ -14,20 +14,17 @@ class GlassPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ClipRRect(
     borderRadius: BorderRadius.circular(radius),
-    child: BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-      child: Container(
-        padding: padding,
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(radius),
-          border: Border.all(color: AppColors.glassBorder),
-          boxShadow: const [
-            BoxShadow(color: Color(0x14000000), blurRadius: 24, offset: Offset(0, 10)),
-          ],
-        ),
-        child: child,
+    child: Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: AppColors.glassBorder),
+        boxShadow: const [
+          BoxShadow(color: Color(0x14000000), blurRadius: 24, offset: Offset(0, 10)),
+        ],
       ),
+      child: child,
     ),
   );
 }
