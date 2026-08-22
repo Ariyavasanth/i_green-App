@@ -42,6 +42,10 @@ class AttendanceRecord {
       checkInVerificationStatus.isNotEmpty ? checkInVerificationStatus : verificationStatus;
   double get effectiveCheckInSimilarity =>
       checkInSimilarityScore > 0 ? checkInSimilarityScore : similarityScore;
+  bool get isMissingCheckOut => status == 'Missing Check-Out';
+  bool get requiresCorrection =>
+      isMissingCheckOut || (effectiveCheckInTime.isNotEmpty && checkOutTime.isEmpty && status != 'Absent' && status != 'On Leave');
+
 
   AttendanceRecord copyWith({
     int? id,

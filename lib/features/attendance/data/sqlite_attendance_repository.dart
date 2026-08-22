@@ -134,19 +134,6 @@ class SqliteAttendanceRepository implements AttendanceRepository {
     return 0.0;
   }
 
-  String _attendanceStatus({
-    required String scheduledCheckInTime,
-    required DateTime actualCheckIn,
-    required AttendanceSettings settings,
-  }) {
-    final scheduledMinutes = _parseMinutes(scheduledCheckInTime);
-    final actualMinutes = actualCheckIn.hour * 60 + actualCheckIn.minute;
-    final delay = actualMinutes - scheduledMinutes;
-    if (delay <= settings.gracePeriodMinutes) return 'Present';
-    if (delay > settings.absentThresholdMinutes) return 'Absent';
-    return 'Late';
-  }
-
   double _degreesToRadians(double degrees) => degrees * (pi / 180.0);
 
   double _distanceInMeters({
@@ -213,8 +200,75 @@ class SqliteAttendanceRepository implements AttendanceRepository {
     return distance <= allowedRadiusMeters;
   }
 
+  String _normalizeDateKey(String dateStr) {
+    final parts = dateStr.trim().split(RegExp(r'[-/]'));
+    if (parts.length == 3) {
+      if (parts[0].length == 4) {
+        return '${parts[0]}-${parts[1].padLeft(2, '0')}-${parts[2].padLeft(2, '0')}';
+      } else if (parts[2].length == 4) {
+        return '${parts[2]}-${parts[1].padLeft(2, '0')}-${parts[0].padLeft(2, '0')}';
+      }
+    }
+    return dateStr;
+  }
+
+  @override
+  Future<void> autoResolveMissingCheckOuts({int? employeeId}) async {
+    try {
+      final db = await database;
+      final now = DateTime.now();
+      final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final currentMinutes = now.hour * 60 + now.minute;
+      const shiftEndMinutes = 18 * 60; // 6:00 PM shift end threshold
+
+      String whereClause = "(check_out_time IS NULL OR check_out_time = '') AND status != 'Missing Check-Out' AND status != 'Absent' AND status != 'On Leave'";
+      List<dynamic> whereArgs = [];
+      if (employeeId != null && employeeId > 0) {
+        whereClause += ' AND employee_id = ?';
+        whereArgs.add(employeeId);
+      }
+
+      final maps = await db.query(
+        'attendance_records',
+        where: whereClause,
+        whereArgs: whereArgs,
+      );
+
+      for (final map in maps) {
+        final recDateStr = (map['date'] as String? ?? '').trim();
+        if (recDateStr.isEmpty) continue;
+        final normDate = _normalizeDateKey(recDateStr);
+        final inTimeStr = (map['check_in_time'] as String? ?? map['time'] as String? ?? '').trim();
+        if (inTimeStr.isEmpty) continue;
+
+        bool isPastDate = normDate.compareTo(todayStr) < 0;
+        bool isShiftEndedToday = normDate == todayStr && currentMinutes >= shiftEndMinutes;
+
+        if (isPastDate || isShiftEndedToday) {
+          final id = map['id'] as int? ?? 0;
+          final existingNotes = map['notes'] as String? ?? '';
+          final newNotes = existingNotes.isNotEmpty
+              ? (existingNotes.contains('Missing Check-Out') ? existingNotes : '$existingNotes | Missing Check-Out (Requires Correction)')
+              : 'Missing Check-Out (Requires Correction)';
+
+          await db.update(
+            'attendance_records',
+            {
+              'status': 'Missing Check-Out',
+              'total_hours': 0.0,
+              'notes': newNotes,
+            },
+            where: 'id = ?',
+            whereArgs: [id],
+          );
+        }
+      }
+    } catch (_) {}
+  }
+
   @override
   Future<List<AttendanceRecord>> getAttendanceRecords(int employeeId) async {
+    await autoResolveMissingCheckOuts(employeeId: employeeId);
     final db = await database;
     final maps = await db.query(
       'attendance_records',
@@ -227,6 +281,7 @@ class SqliteAttendanceRepository implements AttendanceRepository {
 
   @override
   Future<List<AttendanceRecord>> getAllAttendanceRecords() async {
+    await autoResolveMissingCheckOuts();
     final db = await database;
     final maps = await db.query('attendance_records', orderBy: 'date DESC, time DESC');
     return maps.map(AttendanceRecord.fromMap).toList();
@@ -261,6 +316,7 @@ class SqliteAttendanceRepository implements AttendanceRepository {
     bool faceMatched = true,
     double similarityScore = 1.0,
   }) async {
+    await autoResolveMissingCheckOuts(employeeId: employeeId);
     final now = DateTime.now();
     final time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
     final score = similarityScore;
@@ -330,25 +386,27 @@ class SqliteAttendanceRepository implements AttendanceRepository {
         final actualMinutes = now.hour * 60 + now.minute;
         final rawDelay = actualMinutes - scheduledMinutes;
 
-        if (rawDelay <= settings.gracePeriodMinutes) {
+        if (rawDelay > settings.lateLimitMinutes) {
+          status = 'Absent';
+          notes = 'Absent (Exceeds late limit cutoff of ${settings.lateLimitMinutes} mins)';
+        } else if (rawDelay <= settings.gracePeriodMinutes) {
           status = 'Present';
           notes = 'On time';
         } else {
           final approvedPermissionMins = await _getApprovedPermissionMinutes(db, employeeId, date);
           final totalAuthorizedWindowMins = settings.gracePeriodMinutes + approvedPermissionMins;
-          final netUnauthorizedDelay = max(0, rawDelay - totalAuthorizedWindowMins);
 
-          if (netUnauthorizedDelay == 0) {
+          if (rawDelay <= totalAuthorizedWindowMins) {
             status = 'Present';
             notes = approvedPermissionMins > 0
                 ? 'Present (Authorized Permission)'
                 : 'On time';
-          } else if (approvedPermissionMins > 0) {
-            status = 'Late';
-            notes = 'Late = $netUnauthorizedDelay mins unauthorized after $approvedPermissionMins mins permission';
           } else {
+            final netUnauthorizedDelay = rawDelay - totalAuthorizedWindowMins;
             status = 'Late';
-            notes = 'Late = $netUnauthorizedDelay minutes';
+            notes = approvedPermissionMins > 0
+                ? 'Late = $netUnauthorizedDelay mins unauthorized after $approvedPermissionMins mins permission'
+                : 'Late = $netUnauthorizedDelay minutes';
           }
         }
       }
@@ -543,9 +601,14 @@ class SqliteAttendanceRepository implements AttendanceRepository {
     if (inTime.isNotEmpty && outTime.isNotEmpty) {
       hours = _calculateTotalHours(inTime, outTime);
     }
+    String status = record.status;
+    if (status == 'Missing Check-Out' && outTime.isNotEmpty) {
+      status = 'Present';
+    }
     final toSave = record.copyWith(
       time: inTime,
       checkInTime: inTime,
+      status: status,
       totalHours: hours,
       markedAt: record.markedAt.isNotEmpty ? record.markedAt : DateTime.now().toIso8601String(),
     );

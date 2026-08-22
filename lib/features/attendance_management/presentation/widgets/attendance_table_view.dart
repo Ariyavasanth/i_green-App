@@ -87,7 +87,8 @@ class AttendanceTableView extends StatelessWidget {
         break;
       case 'Late':
       case 'Insufficient hours':
-        statusColor = const Color(0xFFE65100);
+      case 'Missing Check-Out':
+        statusColor = const Color(0xFFD84315);
         break;
       case 'Checked Out':
         statusColor = const Color(0xFF414A51);

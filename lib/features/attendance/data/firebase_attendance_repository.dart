@@ -30,7 +30,58 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
   }
 
   @override
+  Future<void> autoResolveMissingCheckOuts({int? employeeId}) async {
+    await _sqliteRepo.autoResolveMissingCheckOuts(employeeId: employeeId);
+    try {
+      final now = DateTime.now();
+      final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final currentMinutes = now.hour * 60 + now.minute;
+      const shiftEndMinutes = 18 * 60;
+
+      final snap = await _recordsRef.get();
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final docEmpIdRaw = data['employee_id'];
+        final docEmpIdNum = docEmpIdRaw is int
+            ? docEmpIdRaw
+            : (int.tryParse(docEmpIdRaw?.toString() ?? '') ?? 0);
+
+        if (employeeId != null && employeeId > 0 && docEmpIdNum != employeeId) continue;
+
+        final checkOutTime = (data['check_out_time'] ?? '').toString().trim();
+        final status = (data['status'] ?? '').toString();
+        if (checkOutTime.isNotEmpty || status == 'Missing Check-Out' || status == 'Absent' || status == 'On Leave') {
+          continue;
+        }
+
+        final recDateStr = (data['date'] ?? '').toString().trim();
+        if (recDateStr.isEmpty) continue;
+        final normDate = _normalizeDateKey(recDateStr);
+        final inTimeStr = (data['check_in_time'] ?? data['time'] ?? '').toString().trim();
+        if (inTimeStr.isEmpty) continue;
+
+        bool isPastDate = normDate.compareTo(todayStr) < 0;
+        bool isShiftEndedToday = normDate == todayStr && currentMinutes >= shiftEndMinutes;
+
+        if (isPastDate || isShiftEndedToday) {
+          final existingNotes = (data['notes'] ?? '').toString();
+          final newNotes = existingNotes.isNotEmpty
+              ? (existingNotes.contains('Missing Check-Out') ? existingNotes : '$existingNotes | Missing Check-Out (Requires Correction)')
+              : 'Missing Check-Out (Requires Correction)';
+
+          await doc.reference.set({
+            'status': 'Missing Check-Out',
+            'total_hours': 0.0,
+            'notes': newNotes,
+          }, SetOptions(merge: true));
+        }
+      }
+    } catch (_) {}
+  }
+
+  @override
   Future<List<AttendanceRecord>> getAttendanceRecords(int employeeId) async {
+    await autoResolveMissingCheckOuts(employeeId: employeeId);
     try {
       final snap = await _recordsRef.get();
       final list = <AttendanceRecord>[];
@@ -61,12 +112,14 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
   @override
   Future<List<AttendanceRecord>> getAllAttendanceRecords() async {
+    await autoResolveMissingCheckOuts();
     final snap = await _recordsRef.get();
     return snap.docs.map((d) => AttendanceRecord.fromMap(d.data())).toList();
   }
 
   @override
   Future<AttendanceRecord?> getAttendanceRecordForDate(int employeeId, String date) async {
+    await autoResolveMissingCheckOuts(employeeId: employeeId);
     try {
       final normDate = _normalizeDateKey(date);
       final docId = '${employeeId}_${normDate.replaceAll('-', '')}';
@@ -167,6 +220,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     bool faceMatched = true,
     double similarityScore = 1.0,
   }) async {
+    await autoResolveMissingCheckOuts(employeeId: employeeId);
     final score = similarityScore;
     final allowedFace = faceMatched && score >= 0.92;
     final now = DateTime.now();
@@ -232,25 +286,27 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         final actualMinutes = now.hour * 60 + now.minute;
         final rawDelay = actualMinutes - scheduledMinutes;
 
-        if (rawDelay <= settings.gracePeriodMinutes) {
+        if (rawDelay > settings.lateLimitMinutes) {
+          status = 'Absent';
+          notes = 'Absent (Exceeds late limit cutoff of ${settings.lateLimitMinutes} mins)';
+        } else if (rawDelay <= settings.gracePeriodMinutes) {
           status = 'Present';
           notes = 'On time';
         } else {
           final approvedPermissionMins = await _getApprovedPermissionMinutes(employeeId, date);
           final totalAuthorizedWindowMins = settings.gracePeriodMinutes + approvedPermissionMins;
-          final netUnauthorizedDelay = max(0, rawDelay - totalAuthorizedWindowMins);
 
-          if (netUnauthorizedDelay == 0) {
+          if (rawDelay <= totalAuthorizedWindowMins) {
             status = 'Present';
             notes = approvedPermissionMins > 0
                 ? 'Present (Authorized Permission)'
                 : 'On time';
-          } else if (approvedPermissionMins > 0) {
-            status = 'Late';
-            notes = 'Late = $netUnauthorizedDelay mins unauthorized after $approvedPermissionMins mins permission';
           } else {
+            final netUnauthorizedDelay = rawDelay - totalAuthorizedWindowMins;
             status = 'Late';
-            notes = 'Late = $netUnauthorizedDelay minutes';
+            notes = approvedPermissionMins > 0
+                ? 'Late = $netUnauthorizedDelay mins unauthorized after $approvedPermissionMins mins permission'
+                : 'Late = $netUnauthorizedDelay minutes';
           }
         }
       }
@@ -449,10 +505,39 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
   @override
   Future<void> adminSaveAttendance(AttendanceRecord record) async {
+    final inTime = record.effectiveCheckInTime;
+    final outTime = record.checkOutTime;
+    double hours = record.totalHours;
+    if (inTime.isNotEmpty && outTime.isNotEmpty) {
+      try {
+        final inParts = inTime.split(':');
+        final outParts = outTime.split(':');
+        if (inParts.length >= 2 && outParts.length >= 2) {
+          final inMin = int.parse(inParts[0]) * 60 + int.parse(inParts[1]);
+          final outMin = int.parse(outParts[0]) * 60 + int.parse(outParts[1]);
+          if (outMin > inMin) {
+            hours = double.parse(((outMin - inMin) / 60.0).toStringAsFixed(2));
+          }
+        }
+      } catch (_) {}
+    }
+    String status = record.status;
+    if (status == 'Missing Check-Out' && outTime.isNotEmpty) {
+      status = 'Present';
+    }
+    final toSave = record.copyWith(
+      time: inTime,
+      checkInTime: inTime,
+      status: status,
+      totalHours: hours,
+      markedAt: record.markedAt.isNotEmpty ? record.markedAt : DateTime.now().toIso8601String(),
+    );
+
     await _recordsRef.doc('${record.employeeId}_${record.date.replaceAll('-', '')}').set(
-      record.toMap(),
+      toSave.toMap(),
       SetOptions(merge: true),
     );
+    await _sqliteRepo.adminSaveAttendance(toSave);
   }
 
   @override

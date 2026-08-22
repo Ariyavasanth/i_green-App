@@ -132,9 +132,15 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
       } catch (_) {}
     }
 
+    String status = record.status;
+    if (status == 'Missing Check-Out' && record.checkOutTime.isNotEmpty) {
+      status = 'Present';
+    }
+
     final toSave = record.copyWith(
       time: record.effectiveCheckInTime,
       checkInTime: record.effectiveCheckInTime,
+      status: status,
       totalHours: totalHours,
       markedAt: record.markedAt.isNotEmpty ? record.markedAt : DateTime.now().toIso8601String(),
     );

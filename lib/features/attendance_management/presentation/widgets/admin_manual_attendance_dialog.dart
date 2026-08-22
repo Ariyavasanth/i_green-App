@@ -251,6 +251,7 @@ class _AdminManualAttendanceDialogState extends ConsumerState<AdminManualAttenda
                     DropdownMenuItem(value: 'Present', child: Text('Present', overflow: TextOverflow.ellipsis)),
                     DropdownMenuItem(value: 'Late', child: Text('Late', overflow: TextOverflow.ellipsis)),
                     DropdownMenuItem(value: 'Checked Out', child: Text('Checked Out', overflow: TextOverflow.ellipsis)),
+                    DropdownMenuItem(value: 'Missing Check-Out', child: Text('Missing Check-Out', overflow: TextOverflow.ellipsis)),
                     DropdownMenuItem(value: 'Absent', child: Text('Absent', overflow: TextOverflow.ellipsis)),
                   ],
                   onChanged: (val) {
