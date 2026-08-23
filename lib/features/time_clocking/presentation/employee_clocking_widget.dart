@@ -7,6 +7,7 @@ import '../providers/clocking_providers.dart';
 import '../../task_management/domain/task_item.dart';
 import '../../task_management/providers/task_providers.dart';
 import '../../attendance/providers/attendance_providers.dart';
+import '../../on_duty/domain/on_duty_assignment.dart';
 import '../../on_duty/providers/on_duty_providers.dart';
 import '../../on_duty/presentation/employee_on_duty_card.dart';
 
@@ -605,6 +606,7 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
         _buildCombinedActivitiesList(
           entriesAsync: entriesAsync,
           tasksAsync: ref.watch(tasksProvider((assignedTo: widget.employeeId == 'EMP-0001' ? 'EMP-001' : widget.employeeId, projectOrOfficeCode: null, status: null))),
+          odAsync: ref.watch(allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: null))),
           empId: widget.employeeId == 'EMP-0001' ? 'EMP-001' : widget.employeeId,
           primaryColor: primaryColor,
           secondaryColor: secondaryColor,
@@ -616,11 +618,12 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
   Widget _buildCombinedActivitiesList({
     required AsyncValue<List<ClockEntry>> entriesAsync,
     required AsyncValue<List<TaskItem>> tasksAsync,
+    required AsyncValue<List<OnDutyAssignment>> odAsync,
     required String empId,
     required Color primaryColor,
     required Color secondaryColor,
   }) {
-    if (entriesAsync.isLoading || tasksAsync.isLoading) {
+    if (entriesAsync.isLoading || tasksAsync.isLoading || odAsync.isLoading) {
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(20),
@@ -652,10 +655,20 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
 
     final clockEntries = entriesAsync.valueOrNull ?? [];
     final allTasks = tasksAsync.valueOrNull ?? [];
+    final allOd = odAsync.valueOrNull ?? [];
+    final todayStr = DateFormat('dd-MM-yyyy').format(DateTime.now());
+
     final empTasks = allTasks.where((t) {
       final taskEmp = t.assignedTo == 'EMP-0001' ? 'EMP-001' : t.assignedTo;
       return (taskEmp == empId || taskEmp == 'EMP-001' || taskEmp == 'EMP-0001') &&
           (t.status == 'COMPLETED' || t.status == 'IN_PROGRESS');
+    }).toList();
+
+    final empInt = int.tryParse(empId.replaceAll(RegExp(r'[^0-9]'), '')) ?? 1;
+    final empOdAssignments = allOd.where((od) {
+      final isEmpMatch = (od.employeeId == empInt) || (empInt == 1 && (od.employeeId == 0 || od.employeeId == 1));
+      final isCompleted = od.status.toUpperCase() == 'COMPLETED';
+      return isEmpMatch && isCompleted;
     }).toList();
 
     final List<CombinedActivityItem> combinedList = [];
@@ -690,6 +703,47 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
       ));
     }
 
+    for (final od in empOdAssignments) {
+      DateTime startDt;
+      try {
+        final d = DateFormat('dd-MM-yyyy').parse(od.date);
+        final tStr = od.actualStartTime ?? od.plannedStartTime;
+        if (tStr.isNotEmpty) {
+          final t = DateFormat('hh:mm a').parse(tStr);
+          startDt = DateTime(d.year, d.month, d.day, t.hour, t.minute);
+        } else {
+          startDt = d;
+        }
+      } catch (_) {
+        startDt = DateTime.now();
+      }
+
+      DateTime? endDt;
+      if (od.actualEndTime != null && od.actualEndTime!.isNotEmpty) {
+        try {
+          final d = DateFormat('dd-MM-yyyy').parse(od.date);
+          final t = DateFormat('hh:mm a').parse(od.actualEndTime!);
+          endDt = DateTime(d.year, d.month, d.day, t.hour, t.minute);
+        } catch (_) {}
+      }
+
+      final startDisplay = od.actualStartTime ?? od.plannedStartTime;
+      final endDisplay = od.actualEndTime ?? (od.status == 'COMPLETED' ? 'Completed' : 'Running');
+      final durMins = od.durationMinutes;
+      final durDisplay = durMins > 0 ? '${durMins ~/ 60}h ${durMins % 60}m' : '--';
+
+      combinedList.add(CombinedActivityItem(
+        title: 'On-Duty: ${od.odType}',
+        subtitle: '${od.destination} • $startDisplay → $endDisplay',
+        type: 'ON_DUTY',
+        startTime: startDt,
+        endTime: endDt,
+        durationText: durDisplay,
+        isRunning: od.status == 'IN_PROGRESS',
+        icon: Icons.business_center_rounded,
+      ));
+    }
+
     combinedList.sort((a, b) => b.startTime.compareTo(a.startTime));
 
     if (combinedList.isEmpty) {
@@ -713,13 +767,26 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
     return Column(
       children: combinedList.map((item) {
         final isTask = item.type == 'TASK';
+        final isOd = item.type == 'ON_DUTY';
         final isRunning = item.isRunning;
 
-        final badgeBg = isTask ? const Color(0xFFF1F5F9) : const Color(0xFFF7FBE6);
-        final badgeBorder = isTask ? const Color(0xFF414A51) : const Color(0xFF9CC70A);
-        final badgeText = isTask ? const Color(0xFF414A51) : const Color(0xFF5C7700);
-        final iconBg = isTask ? const Color(0xFF414A51).withValues(alpha: 0.12) : const Color(0xFF9CC70A).withValues(alpha: 0.15);
-        final iconColor = isTask ? const Color(0xFF414A51) : const Color(0xFF5C7700);
+        final badgeBg = isOd
+            ? const Color(0xFFFEF3C7)
+            : (isTask ? const Color(0xFFF1F5F9) : const Color(0xFFF7FBE6));
+        final badgeBorder = isOd
+            ? const Color(0xFFFCD34D)
+            : (isTask ? const Color(0xFF414A51) : const Color(0xFF9CC70A));
+        final badgeText = isOd
+            ? const Color(0xFF92400E)
+            : (isTask ? const Color(0xFF414A51) : const Color(0xFF5C7700));
+        final badgeLabel = isOd ? 'ON-DUTY' : (isTask ? 'TASK' : 'CLOCKING');
+
+        final iconBg = isOd
+            ? const Color(0xFFD97706).withValues(alpha: 0.15)
+            : (isTask ? const Color(0xFF414A51).withValues(alpha: 0.12) : const Color(0xFF9CC70A).withValues(alpha: 0.15));
+        final iconColor = isOd
+            ? const Color(0xFFD97706)
+            : (isTask ? const Color(0xFF414A51) : const Color(0xFF5C7700));
 
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
@@ -728,7 +795,7 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: isRunning ? (isTask ? const Color(0xFF414A51) : primaryColor) : const Color(0xFFE2E8F0),
+              color: isRunning ? (isOd ? const Color(0xFFD97706) : (isTask ? const Color(0xFF414A51) : primaryColor)) : const Color(0xFFE2E8F0),
               width: isRunning ? 1.5 : 1,
             ),
           ),
@@ -758,7 +825,7 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
                             border: Border.all(color: badgeBorder.withValues(alpha: 0.5), width: 0.8),
                           ),
                           child: Text(
-                            isTask ? 'TASK' : 'CLOCKING',
+                            badgeLabel,
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,

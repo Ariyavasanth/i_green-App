@@ -58,6 +58,7 @@ class SqliteOnDutyRepository implements OnDutyRepository {
         notes TEXT NOT NULL DEFAULT '',
         assigned_by TEXT NOT NULL DEFAULT 'Admin',
         duration_minutes INTEGER NOT NULL DEFAULT 0,
+        after_completion_option TEXT NOT NULL DEFAULT 'RETURN_TO_OFFICE',
         created_at TEXT NOT NULL
       )
     ''');
@@ -77,6 +78,7 @@ class SqliteOnDutyRepository implements OnDutyRepository {
       'start_photo TEXT',
       'end_photo TEXT',
       'notes TEXT NOT NULL DEFAULT ""',
+      'after_completion_option TEXT NOT NULL DEFAULT "RETURN_TO_OFFICE"',
     ];
 
     for (final col in columnsToEnsure) {
@@ -118,6 +120,7 @@ class SqliteOnDutyRepository implements OnDutyRepository {
         notes TEXT NOT NULL DEFAULT '',
         assigned_by TEXT NOT NULL DEFAULT 'Admin',
         duration_minutes INTEGER NOT NULL DEFAULT 0,
+        after_completion_option TEXT NOT NULL DEFAULT 'RETURN_TO_OFFICE',
         created_at TEXT NOT NULL
       )
     ''');
@@ -153,6 +156,7 @@ class SqliteOnDutyRepository implements OnDutyRepository {
     final notesCol = selectCol('notes', ['instructions'], '');
     final assignedByCol = oldCols.contains('assigned_by') ? 'assigned_by' : "'Admin'";
     final durationCol = oldCols.contains('duration_minutes') ? 'duration_minutes' : '0';
+    final afterOptCol = oldCols.contains('after_completion_option') ? 'after_completion_option' : "'RETURN_TO_OFFICE'";
     final createdAtCol = oldCols.contains('created_at') ? 'created_at' : "''";
 
     try {
@@ -162,14 +166,14 @@ class SqliteOnDutyRepository implements OnDutyRepository {
           employee_id, employee_name, od_type, purpose, destination, date,
           planned_start_time, planned_end_time, actual_start_time, actual_end_time,
           start_latitude, start_longitude, end_latitude, end_longitude,
-          start_photo, end_photo, status, notes, assigned_by, duration_minutes, created_at
+          start_photo, end_photo, status, notes, assigned_by, duration_minutes, after_completion_option, created_at
         )
         SELECT
           ${idCol != 'NULL' ? '$idCol,' : ''}
           $empIdCol, $empNameCol, $odTypeCol, $purposeCol, $destCol, $dateCol,
           $plannedStartCol, $plannedEndCol, $actualStartCol, $actualEndCol,
           $startLatCol, $startLngCol, $endLatCol, $endLngCol,
-          $startPhotoCol, $endPhotoCol, $statusCol, $notesCol, $assignedByCol, $durationCol, $createdAtCol
+          $startPhotoCol, $endPhotoCol, $statusCol, $notesCol, $assignedByCol, $durationCol, $afterOptCol, $createdAtCol
         FROM on_duty_assignments_old
       ''');
     } catch (_) {}

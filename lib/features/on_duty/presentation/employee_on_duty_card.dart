@@ -519,6 +519,14 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
         : _elapsed.inMinutes;
 
     final durationStr = _formatDurationSummary(durationMin);
+    final isReturnToOffice = widget.assignment.afterCompletionOption == 'RETURN_TO_OFFICE';
+
+    final empIdInt = widget.assignment.employeeId > 0 ? widget.assignment.employeeId : 1;
+    final todayAttendanceAsync = ref.watch(todayAttendanceRecordProvider(empIdInt));
+    final todayAttendance = todayAttendanceAsync.valueOrNull;
+    final isCheckedOut = todayAttendance != null &&
+        todayAttendance.checkOutTime.trim().isNotEmpty &&
+        todayAttendance.checkOutTime != '--:--';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -579,6 +587,90 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                 ),
               ],
             ),
+            const SizedBox(height: 12),
+
+            if (isReturnToOffice) ...[
+              // Option 1: Return to Office Instruction
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFFCD34D)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.location_city_rounded, color: Color(0xFFD97706), size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'OD Completed — Please return to the office to check out.',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF92400E),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else ...[
+              // Option 2: Checkout from OD Location Action
+              if (isCheckedOut) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDCFCE7),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF86EFAC)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.verified_rounded, color: Color(0xFF16A34A), size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Attendance Completed ✓ (Checked out at ${todayAttendance.checkOutTime})',
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF14532D),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _isActionLoading ? null : _handleCheckoutFromOdLocation,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF9CC70A),
+                      foregroundColor: const Color(0xFF414A51),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      elevation: 1,
+                    ),
+                    icon: _isActionLoading
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF414A51)),
+                          )
+                        : const Icon(Icons.output_rounded, size: 18),
+                    label: const Text(
+                      'Check Out from OD Location',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ],
         ),
       ),
@@ -608,8 +700,6 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
       ],
     );
   }
-
-
 
   Future<void> _handleCompleteOd() async {
     setState(() => _isActionLoading = true);
@@ -647,6 +737,45 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to complete On-Duty: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isActionLoading = false);
+    }
+  }
+
+  Future<void> _handleCheckoutFromOdLocation() async {
+    setState(() => _isActionLoading = true);
+    try {
+      final empIdInt = widget.assignment.employeeId > 0 ? widget.assignment.employeeId : 1;
+      final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final nowTimeStr = DateFormat('hh:mm a').format(DateTime.now());
+
+      final attendanceRepo = ref.read(attendanceRepositoryProvider);
+      await attendanceRepo.checkOut(
+        employeeId: empIdInt,
+        date: todayStr,
+        checkOutTime: nowTimeStr,
+        verificationStatus: 'OD Location Verified',
+        similarityScore: 1.0,
+      );
+
+      ref.invalidate(attendanceRecordsProvider(empIdInt));
+      ref.invalidate(todayAttendanceRecordProvider(empIdInt));
+      ref.invalidate(allAttendanceRecordsProvider);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Attendance Completed — Checked out from OD Location!'),
+            backgroundColor: Color(0xFF2E7D32),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to check out from OD Location: $e')),
         );
       }
     } finally {

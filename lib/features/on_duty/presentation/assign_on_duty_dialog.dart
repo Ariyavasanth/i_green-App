@@ -32,6 +32,7 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
   TimeOfDay _startTime = const TimeOfDay(hour: 10, minute: 0);
   TimeOfDay? _endTime = const TimeOfDay(hour: 16, minute: 0);
   final _notesController = TextEditingController();
+  String _afterCompletionOption = 'RETURN_TO_OFFICE';
 
   bool _isSubmitting = false;
 
@@ -55,6 +56,7 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
       _purposeController.text = existing.purpose;
       _destinationController.text = existing.destination;
       _notesController.text = existing.notes;
+      _afterCompletionOption = existing.afterCompletionOption;
       _selectedEmployee = Employee.fromMap({
         'id': existing.employeeId,
         'employee_id': existing.employeeId > 0 ? 'EMP-${existing.employeeId.toString().padLeft(3, '0')}' : 'EMP-001',
@@ -494,7 +496,63 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
                 ),
                 const SizedBox(height: 16),
 
-                // 7. Notes
+                // 7. After OD Completion Option
+                const Text(
+                  'After OD Completion',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: darkTextColor),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Column(
+                    children: [
+                      RadioListTile<String>(
+                        title: const Text(
+                          'Return to Office',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: darkTextColor),
+                        ),
+                        subtitle: const Text(
+                          'Must return to office GPS location to check out',
+                          style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                        ),
+                        value: 'RETURN_TO_OFFICE',
+                        groupValue: _afterCompletionOption,
+                        activeColor: primaryColor,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                        dense: true,
+                        onChanged: (val) {
+                          if (val != null) setState(() => _afterCompletionOption = val);
+                        },
+                      ),
+                      const Divider(height: 1, indent: 10, endIndent: 10, color: Color(0xFFE2E8F0)),
+                      RadioListTile<String>(
+                        title: const Text(
+                          'Checkout from OD Location',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: darkTextColor),
+                        ),
+                        subtitle: const Text(
+                          'Can check out directly from the OD site',
+                          style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                        ),
+                        value: 'CHECKOUT_FROM_OD',
+                        groupValue: _afterCompletionOption,
+                        activeColor: primaryColor,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                        dense: true,
+                        onChanged: (val) {
+                          if (val != null) setState(() => _afterCompletionOption = val);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 8. Notes
                 const Text(
                   'Notes',
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: darkTextColor),
@@ -516,7 +574,7 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
                 ),
                 const SizedBox(height: 24),
 
-                // 8. Balanced Action Buttons
+                // 9. Balanced Action Buttons
                 Row(
                   children: [
                     Expanded(
@@ -590,6 +648,7 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
           plannedStartTime: startTimeStr,
           plannedEndTime: endTimeStr,
           notes: _notesController.text.trim(),
+          afterCompletionOption: _afterCompletionOption,
         );
         await repo.updateAssignment(updated);
       } else {
@@ -607,6 +666,7 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
           plannedEndTime: endTimeStr,
           status: 'ASSIGNED',
           notes: _notesController.text.trim(),
+          afterCompletionOption: _afterCompletionOption,
           assignedBy: widget.preSelectedEmployee != null ? 'Self' : 'Admin',
           createdAt: DateTime.now().toIso8601String(),
         );

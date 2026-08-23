@@ -21,6 +21,7 @@ class OnDutyAssignment {
     this.notes = '',
     required this.assignedBy,
     this.durationMinutes = 0,
+    this.afterCompletionOption = 'RETURN_TO_OFFICE',
     required this.createdAt,
   });
 
@@ -45,6 +46,7 @@ class OnDutyAssignment {
   final String notes;
   final String assignedBy;
   final int durationMinutes;
+  final String afterCompletionOption; // 'RETURN_TO_OFFICE', 'CHECKOUT_FROM_OD'
   final String createdAt;
 
   Map<String, dynamic> toMap() => {
@@ -69,6 +71,7 @@ class OnDutyAssignment {
         'notes': notes,
         'assigned_by': assignedBy,
         'duration_minutes': durationMinutes,
+        'after_completion_option': afterCompletionOption,
         'created_at': createdAt,
       };
 
@@ -81,6 +84,13 @@ class OnDutyAssignment {
       if (val is num) return val.toInt();
       if (val != null) return int.tryParse(val.toString()) ?? 0;
       return 0;
+    }
+
+    var opt = map['after_completion_option']?.toString() ?? 'RETURN_TO_OFFICE';
+    if (opt.contains('Checkout') || opt.contains('CHECKOUT')) {
+      opt = 'CHECKOUT_FROM_OD';
+    } else {
+      opt = 'RETURN_TO_OFFICE';
     }
 
     return OnDutyAssignment(
@@ -105,6 +115,7 @@ class OnDutyAssignment {
       notes: map['notes']?.toString() ?? map['instructions']?.toString() ?? '',
       assignedBy: map['assigned_by']?.toString() ?? 'Admin',
       durationMinutes: parseId(map['duration_minutes']),
+      afterCompletionOption: opt,
       createdAt: map['created_at']?.toString() ?? map['createdAt']?.toString() ?? '',
     );
   }
@@ -131,6 +142,7 @@ class OnDutyAssignment {
     String? notes,
     String? assignedBy,
     int? durationMinutes,
+    String? afterCompletionOption,
     String? createdAt,
   }) {
     return OnDutyAssignment(
@@ -155,6 +167,7 @@ class OnDutyAssignment {
       notes: notes ?? this.notes,
       assignedBy: assignedBy ?? this.assignedBy,
       durationMinutes: durationMinutes ?? this.durationMinutes,
+      afterCompletionOption: afterCompletionOption ?? this.afterCompletionOption,
       createdAt: createdAt ?? this.createdAt,
     );
   }
