@@ -329,6 +329,9 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
+          if (toDate.isAfter(fromDate)) {
+            durationOption = 'full_day';
+          }
           final isHalfDay = durationOption != 'full_day';
           final halfDayPeriod = isHalfDay ? durationOption : null;
 

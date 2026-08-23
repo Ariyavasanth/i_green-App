@@ -302,10 +302,10 @@ class _AdminLeaveReviewDialogState extends ConsumerState<AdminLeaveReviewDialog>
                           Expanded(
                             child: Text(
                               policy == 'As Needed'
-                                  ? '💡 System Recommendation: ${reqDays % 1 == 0 ? reqDays.toInt() : reqDays} Days Paid (As Needed Policy)'
+                                  ? 'System Recommendation: ${reqDays % 1 == 0 ? reqDays.toInt() : reqDays} Days Paid (As Needed Policy)'
                                   : policy == 'No Leave'
-                                      ? '💡 System Recommendation: ${reqDays % 1 == 0 ? reqDays.toInt() : reqDays} Days LOP (No Leave Policy)'
-                                      : '💡 System Recommendation: ${paidRec % 1 == 0 ? paidRec.toInt() : paidRec} Days Paid${lopRec > 0 ? " + ${lopRec % 1 == 0 ? lopRec.toInt() : lopRec} Day LOP" : ""}',
+                                      ? 'System Recommendation: ${reqDays % 1 == 0 ? reqDays.toInt() : reqDays} Days LOP (No Leave Policy)'
+                                      : 'System Recommendation: ${paidRec % 1 == 0 ? paidRec.toInt() : paidRec} Days Paid${lopRec > 0 ? " + ${lopRec % 1 == 0 ? lopRec.toInt() : lopRec} Day LOP" : ""}',
                               style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue.shade900),
                             ),
                           ),

@@ -171,6 +171,9 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
       builder: (dialogCtx) {
         return StatefulBuilder(
           builder: (ctx, setDialogState) {
+            if (_fromDate != null && _toDate != null && _toDate!.isAfter(_fromDate!)) {
+              durationOption = 'full_day';
+            }
             final isHalfDay = durationOption != 'full_day';
             final halfDayPeriod = isHalfDay ? durationOption : null;
 
