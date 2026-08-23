@@ -486,12 +486,25 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
       bodyContent = _buildLeaveTab(currentEmp, leaveAsync);
     }
 
+    Future<void> refreshSiteVisitData() async {
+      ref.invalidate(siteVisitRecordsProvider((employeeId: currentEmp.id, visitDate: todayKey)));
+      ref.invalidate(siteVisitRecordsProvider((employeeId: currentEmp.id, visitDate: selectedKey)));
+      ref.invalidate(allSiteVisitRecordsProvider(null));
+      ref.invalidate(leaveRequestsProvider(currentEmp.id));
+      ref.invalidate(allLeaveRequestsProvider);
+      await Future.delayed(const Duration(milliseconds: 300));
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       body: SafeArea(
         top: false,
         bottom: true,
-        child: bodyContent,
+        child: RefreshIndicator(
+          color: const Color(0xFF9CC70A),
+          onRefresh: refreshSiteVisitData,
+          child: bodyContent,
+        ),
       ),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(

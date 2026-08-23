@@ -3,10 +3,19 @@ import 'leave_balance.dart';
 import 'leave_type.dart';
 import 'salary_calculation.dart';
 import 'permission_allowance.dart';
+import 'leave_overlap_validator.dart';
 
 abstract class LeaveRepository {
   Future<List<LeaveRequest>> getLeaveRequests(int employeeId);
   Future<List<LeaveRequest>> getAllLeaveRequests();
+  Future<LeaveOverlapResult> checkLeaveOverlap({
+    required int employeeId,
+    required String fromDate,
+    required String toDate,
+    required bool isHalfDay,
+    String? halfDayPeriod,
+    int? excludeRequestId,
+  });
   Future<void> submitLeaveRequest(LeaveRequest request);
   Future<void> updateLeaveRequest(LeaveRequest request);
   Future<void> approveLeaveRequest(
@@ -31,3 +40,4 @@ abstract class LeaveRepository {
   Future<List<Map<String, dynamic>>> getAuditLogs(int leaveRequestId);
   Future<PermissionAllowance> getPermissionAllowance(int employeeId, DateTime month);
 }
+

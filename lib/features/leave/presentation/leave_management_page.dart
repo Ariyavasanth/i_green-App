@@ -6,6 +6,7 @@ import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
 import '../domain/leave_request.dart';
 import '../domain/leave_type.dart';
+import '../domain/leave_overlap_validator.dart';
 import '../providers/leave_providers.dart';
 import 'dialogs/admin_leave_review_dialog.dart';
 
@@ -136,40 +137,69 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
             builder: (context, constraints) {
               final isMobile = constraints.maxWidth < 600;
 
-              return Column(
+              return Stack(
                 children: [
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: EdgeInsets.all(isMobile ? 16.0 : 24.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Top Header: Compact title & Apply Leave Action
-                          _buildTopHeader(context, employees, leaveTypes, currentEmp, isMobile),
-                          const SizedBox(height: 20),
-
-                          // Animated Active Tab Switcher
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 250),
-                            transitionBuilder: (child, animation) => FadeTransition(
-                              opacity: animation,
-                              child: child,
-                            ),
-                            child: KeyedSubtree(
-                              key: ValueKey(_activeTab),
-                              child: switch (_activeTab) {
-                                LeaveTab.dashboard => _buildDashboardTab(allRequests, employees, leaveTypes, isMobile),
-                                LeaveTab.requests => _buildRequestsTab(allRequests, employees, leaveTypes, isMobile),
-                                LeaveTab.calendar => _buildCalendarTab(allRequests, employees, leaveTypes, isMobile),
-                                LeaveTab.permissions => _buildPermissionsTab(employees, leaveTypes, isMobile),
-                              },
-                            ),
+                  Column(
+                    children: [
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: EdgeInsets.only(
+                            left: isMobile ? 12.0 : 24.0,
+                            right: isMobile ? 12.0 : 24.0,
+                            top: isMobile ? 12.0 : 24.0,
+                            bottom: 80.0,
                           ),
-                        ],
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Top Header: Only show on desktop (!isMobile)
+                              if (!isMobile) ...[
+                                _buildTopHeader(context, employees, leaveTypes, currentEmp, isMobile),
+                                const SizedBox(height: 20),
+                              ],
+
+                              // Animated Active Tab Switcher
+                              AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 250),
+                                transitionBuilder: (child, animation) => FadeTransition(
+                                  opacity: animation,
+                                  child: child,
+                                ),
+                                child: KeyedSubtree(
+                                  key: ValueKey(_activeTab),
+                                  child: switch (_activeTab) {
+                                    LeaveTab.dashboard => _buildDashboardTab(allRequests, employees, leaveTypes, isMobile),
+                                    LeaveTab.requests => _buildRequestsTab(allRequests, employees, leaveTypes, isMobile),
+                                    LeaveTab.calendar => _buildCalendarTab(allRequests, employees, leaveTypes, isMobile),
+                                    LeaveTab.permissions => _buildPermissionsTab(employees, leaveTypes, isMobile),
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      _buildBottomNavBar(pendingRequestsCount, isMobile),
+                    ],
+                  ),
+                  if (isMobile)
+                    Positioned(
+                      right: 16,
+                      bottom: 72,
+                      child: FloatingActionButton(
+                        shape: const CircleBorder(),
+                        elevation: 4,
+                        backgroundColor: const Color(0xFF9CC70A),
+                        onPressed: () {
+                          if (_activeTab == LeaveTab.permissions) {
+                            _showAddLeaveTypeDialog(context);
+                          } else {
+                            _showApplyLeaveDialog(context, employees, leaveTypes, currentEmp);
+                          }
+                        },
+                        child: const Icon(Icons.add, color: Colors.white, size: 28),
                       ),
                     ),
-                  ),
-                  _buildBottomNavBar(pendingRequestsCount, isMobile),
                 ],
               );
             },
@@ -293,12 +323,37 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
       }
     }
 
+    String durationOption = 'full_day';
+
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
+          final isHalfDay = durationOption != 'full_day';
+          final halfDayPeriod = isHalfDay ? durationOption : null;
+
           final days = toDate.difference(fromDate).inDays + 1;
+          final calcDays = isHalfDay ? 0.5 : (days > 0 ? days : 1).toDouble();
           final permHours = calculatePermissionHours(fromTime, toTime);
+
+          final allRequests = ref.watch(allLeaveRequestsProvider).value ?? [];
+          final empRequests = selectedEmployee != null
+              ? allRequests.where((r) => r.employeeId == selectedEmployee!.id).toList()
+              : <LeaveRequest>[];
+
+          final fromStr = DateFormat('dd-MM-yyyy').format(fromDate);
+          final toStr = DateFormat('dd-MM-yyyy').format(toDate);
+
+          final overlapResult = selectedEmployee != null
+              ? LeaveOverlapValidator.checkOverlap(
+                  newFromDate: fromStr,
+                  newToDate: toStr,
+                  isHalfDay: isHalfDay,
+                  halfDayPeriod: halfDayPeriod,
+                  existingRequests: empRequests,
+                  employeeId: selectedEmployee!.id,
+                )
+              : const LeaveOverlapResult(hasOverlap: false);
 
           return AlertDialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -459,12 +514,154 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 14),
+
+                    // Leave Duration Radio Tiles
+                    const Text('Leave Duration', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: RadioListTile<String>(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            activeColor: const Color(0xFF9CC70A),
+                            title: const Text('Full Day', style: TextStyle(fontSize: 12, color: Color(0xFF414A51))),
+                            value: 'full_day',
+                            groupValue: durationOption,
+                            onChanged: (val) {
+                              if (val != null) {
+                                setDialogState(() => durationOption = val);
+                              }
+                            },
+                          ),
+                        ),
+                        Expanded(
+                          child: RadioListTile<String>(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            activeColor: const Color(0xFF9CC70A),
+                            title: const Text('First Half', style: TextStyle(fontSize: 12, color: Color(0xFF414A51))),
+                            value: 'first_half',
+                            groupValue: durationOption,
+                            onChanged: (val) {
+                              if (val != null) {
+                                setDialogState(() {
+                                  durationOption = val;
+                                  toDate = fromDate;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                        Expanded(
+                          child: RadioListTile<String>(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            activeColor: const Color(0xFF9CC70A),
+                            title: const Text('Second Half', style: TextStyle(fontSize: 12, color: Color(0xFF414A51))),
+                            value: 'second_half',
+                            groupValue: durationOption,
+                            onChanged: (val) {
+                              if (val != null) {
+                                setDialogState(() {
+                                  durationOption = val;
+                                  toDate = fromDate;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // Shift breakdown banner for half-day
+                    if (durationOption == 'first_half') ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text('First Half Leave: 9:00 AM – 1:30 PM', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
+                            SizedBox(height: 2),
+                            Text('Remaining Work: 1:30 PM – 6:00 PM', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                            SizedBox(height: 2),
+                            Text('Duration: 0.5 Day', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF9CC70A))),
+                          ],
+                        ),
+                      ),
+                    ] else if (durationOption == 'second_half') ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text('Second Half Leave: 1:30 PM – 6:00 PM', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
+                            SizedBox(height: 2),
+                            Text('Remaining Work: 9:00 AM – 1:30 PM', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                            SizedBox(height: 2),
+                            Text('Duration: 0.5 Day', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF9CC70A))),
+                          ],
+                        ),
+                      ),
+                    ],
+
                     const SizedBox(height: 8),
                     Text(
-                      'Total Duration: ${days > 0 ? days : 1} day(s)',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0D8A4E)),
+                      'Total Duration: ${calcDays.toStringAsFixed(1)} day(s)',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF9CC70A)),
                     ),
                     const SizedBox(height: 14),
+
+                    // Real-Time Overlap Conflict Banner
+                    if (overlapResult.hasOverlap) ...[
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF2F2),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFFECACA)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    '⚠️ Leave Already Requested',
+                                    style: TextStyle(fontSize: 12, color: Color(0xFF991B1B), fontWeight: FontWeight.bold),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    overlapResult.message ?? 'An overlapping leave request already exists for the selected date/period.',
+                                    style: const TextStyle(fontSize: 11, color: Color(0xFF7F1D1D), height: 1.3),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
 
                     // Employee Policy Warning Banner
                     if (selectedEmployee != null && selectedEmployee!.leavePolicy == 'No Leave') ...[
@@ -546,41 +743,57 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0D8A4E),
+                  backgroundColor: const Color(0xFF9CC70A),
+                  foregroundColor: const Color(0xFF414A51),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   elevation: 0,
                 ),
-                onPressed: () async {
-                  if (selectedEmployee == null) return;
-                  if (selectedLeaveType == null) return;
+                onPressed: overlapResult.hasOverlap
+                    ? null
+                    : () async {
+                        if (selectedEmployee == null) return;
+                        if (selectedLeaveType == null) return;
 
-                  final fromStr = DateFormat('dd-MM-yyyy').format(fromDate);
-                  final toStr = DateFormat('dd-MM-yyyy').format(toDate);
+                        final fromStr = DateFormat('dd-MM-yyyy').format(fromDate);
+                        final toStr = DateFormat('dd-MM-yyyy').format(toDate);
 
-                  final newRequest = LeaveRequest(
-                    id: 0,
-                    employeeId: selectedEmployee!.id,
-                    employeeName: selectedEmployee!.fullName,
-                    employeeCustomId: selectedEmployee!.employeeId,
-                    leaveType: selectedLeaveType!.name,
-                    fromDate: fromStr,
-                    toDate: toStr,
-                    numDays: (days > 0 ? days : 1).toDouble(),
-                    reason: reasonController.text.trim(),
-                    status: 'Pending',
-                    createdAt: DateTime.now().toIso8601String(),
-                    approvedDates: [],
-                    lopDates: [],
-                    isEmergency: isEmergency,
-                  );
+                        final newRequest = LeaveRequest(
+                          id: 0,
+                          employeeId: selectedEmployee!.id,
+                          employeeName: selectedEmployee!.fullName,
+                          employeeCustomId: selectedEmployee!.employeeId,
+                          leaveType: selectedLeaveType!.name,
+                          fromDate: fromStr,
+                          toDate: toStr,
+                          numDays: calcDays,
+                          reason: reasonController.text.trim(),
+                          status: 'Pending',
+                          createdAt: DateTime.now().toIso8601String(),
+                          approvedDates: [],
+                          lopDates: [],
+                          isEmergency: isEmergency,
+                          isHalfDay: isHalfDay,
+                          halfDayPeriod: halfDayPeriod,
+                        );
 
-                  await ref.read(leaveRepositoryProvider).submitLeaveRequest(newRequest);
-                  ref.invalidate(allLeaveRequestsProvider);
-                  ref.invalidate(leaveRequestsProvider);
-                  if (ctx.mounted) Navigator.pop(ctx);
-                },
-                child: const Text('Submit Request', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        try {
+                          await ref.read(leaveRepositoryProvider).submitLeaveRequest(newRequest);
+                          ref.invalidate(allLeaveRequestsProvider);
+                          ref.invalidate(leaveRequestsProvider);
+                          if (ctx.mounted) Navigator.pop(ctx);
+                        } catch (e) {
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              SnackBar(
+                                content: Text('Failed to submit: $e'),
+                                backgroundColor: const Color(0xFFC62828),
+                              ),
+                            );
+                          }
+                        }
+                      },
+                child: const Text('Submit Request', style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],
           );
@@ -593,106 +806,73 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
   // 2. BOTTOM DOCKED NAVIGATION BAR (64px Icon-on-Top & Label-Underneath Bar)
   // ---------------------------------------------------------------------------
   Widget _buildBottomNavBar(int pendingCount, bool isMobile) {
-    final displayPendingBadge = pendingCount > 0 ? pendingCount : 2;
-    const primaryColor = Color(0xFF9CC70A);
-
-    final tabs = [
-      (LeaveTab.dashboard, 'Dashboard', Icons.dashboard_outlined, null),
-      (LeaveTab.requests, 'Requests', Icons.assignment_outlined, displayPendingBadge),
-      (LeaveTab.calendar, 'Calendar', Icons.calendar_today_outlined, null),
-      (LeaveTab.permissions, isMobile ? 'Settings' : 'Permissions', Icons.tune_outlined, null),
-    ];
-
-    final rowChildren = tabs.map((tabInfo) {
-      final tab = tabInfo.$1;
-      final label = tabInfo.$2;
-      final icon = tabInfo.$3;
-      final count = tabInfo.$4;
-      final isActive = _activeTab == tab;
-
-      return Expanded(
-        child: InkWell(
-          onTap: () => setState(() => _activeTab = tab),
-          hoverColor: const Color(0xFFF8FAFC),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: isActive ? primaryColor : Colors.transparent,
-                  width: 2,
+    Widget buildBadgeIcon(IconData iconData, bool isActive) {
+      return Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Icon(iconData, size: 22, color: isActive ? const Color(0xFF9CC70A) : const Color(0xFF64748B)),
+          if (pendingCount > 0)
+            Positioned(
+              right: -8,
+              top: -4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$pendingCount',
+                  style: const TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFFD97706),
+                  ),
                 ),
               ),
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Icon(
-                      icon,
-                      size: 20,
-                      color: isActive ? primaryColor : const Color(0xFF64748B),
-                    ),
-                    if (count != null && count > 0)
-                      Positioned(
-                        right: -10,
-                        top: -4,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFFEF3C7),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Text(
-                            '$count',
-                            style: const TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFFD97706),
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 3),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-                      color: isActive ? primaryColor : const Color(0xFF64748B),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+        ],
       );
-    }).toList();
+    }
 
     return Container(
-      height: 64,
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(top: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
       ),
-      child: isMobile
-          ? SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              physics: const ClampingScrollPhysics(),
-              child: SizedBox(
-                width: 450,
-                child: Row(children: rowChildren),
-              ),
-            )
-          : Row(children: rowChildren),
+      child: BottomNavigationBar(
+        currentIndex: _activeTab.index,
+        onTap: (index) => setState(() => _activeTab = LeaveTab.values[index]),
+        selectedItemColor: const Color(0xFF9CC70A),
+        unselectedItemColor: const Color(0xFF64748B),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        type: BottomNavigationBarType.fixed,
+        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+        unselectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+        items: [
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.dashboard_outlined, size: 22),
+            activeIcon: Icon(Icons.dashboard, size: 22),
+            label: 'Dashboard',
+          ),
+          BottomNavigationBarItem(
+            icon: buildBadgeIcon(Icons.assignment_outlined, false),
+            activeIcon: buildBadgeIcon(Icons.assignment, true),
+            label: 'Requests',
+          ),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.calendar_today_outlined, size: 22),
+            activeIcon: Icon(Icons.calendar_today, size: 22),
+            label: 'Calendar',
+          ),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.tune_outlined, size: 22),
+            activeIcon: Icon(Icons.tune, size: 22),
+            label: 'Permission',
+          ),
+        ],
+      ),
     );
   }
 
@@ -934,9 +1114,15 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
 
   Widget _buildRecentRequestRow(LeaveRequest req, bool isMobile) {
     final initials = _getInitials(req.employeeName);
+    String dateSubtitle;
+    if (req.leaveType.toLowerCase().startsWith('permission') || req.fromDate == req.toDate) {
+      dateSubtitle = '${req.leaveType} · ${_formatDateDisplay(req.fromDate)}';
+    } else {
+      dateSubtitle = '${req.leaveType} · ${_formatDateDisplay(req.fromDate)} — ${_formatDateDisplay(req.toDate)}';
+    }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -962,7 +1148,7 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
                       style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
                     ),
                     Text(
-                      '${req.leaveType} · ${_formatDateDisplay(req.fromDate)} · ${_formatDurationDisplay(req)}',
+                      dateSubtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
@@ -1523,17 +1709,29 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
     final color = _parseHexColor(leaveTypeObj.colorHex);
     final isPending = req.status == 'Pending';
 
+    String dateDisplay;
+    if (req.leaveType.toLowerCase().startsWith('permission') || req.fromDate == req.toDate) {
+      dateDisplay = _formatDateDisplay(req.fromDate);
+    } else {
+      dateDisplay = '${_formatDateDisplay(req.fromDate)} — ${_formatDateDisplay(req.toDate)} · ${_formatDurationDisplay(req)}';
+    }
+
+    final primaryTitle = emp.designation.isNotEmpty ? emp.designation : emp.department;
+    final empSub = req.employeeCustomId.isNotEmpty
+        ? '${req.employeeCustomId} · $primaryTitle'
+        : primaryTitle;
+
     final cardContent = Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 6,
+            blurRadius: 4,
             offset: const Offset(0, 2),
           ),
         ],
@@ -1545,25 +1743,29 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
           Row(
             children: [
               CircleAvatar(
-                radius: 18,
+                radius: 16,
                 backgroundColor: const Color(0xFFE2E8F0),
                 child: Text(
                   _getInitials(req.employeeName),
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       req.employeeName,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                     ),
                     Text(
-                      '${req.employeeCustomId.isNotEmpty ? req.employeeCustomId : 'EMP'} · ${emp.department}${emp.designation.isNotEmpty ? ' • ${emp.designation}' : ''}',
-                      style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                      empSub,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B)),
                     ),
                   ],
                 ),
@@ -1571,9 +1773,9 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
               _buildStatusBadge(req.status),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 6),
           const Divider(height: 1, color: Color(0xFFF1F5F9)),
-          const SizedBox(height: 12),
+          const SizedBox(height: 6),
 
           // Leave Info Pill & Date Range
           Row(
@@ -1592,89 +1794,89 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '${_formatDateDisplay(req.fromDate)} — ${_formatDateDisplay(req.toDate)} · ${_formatDurationDisplay(req)}',
+                  dateDisplay,
                   style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
                 ),
               ),
             ],
           ),
           if (req.reason.isNotEmpty) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             Text(
               'Reason: "${req.reason}"',
-              style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Color(0xFF475569)),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 10.5, fontStyle: FontStyle.italic, color: Color(0xFF475569)),
             ),
           ],
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
+
+          // Full-width Bottom Action Row: Audit History on bottom-left, Actions / Change Decision on bottom-right
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text(
-                emp.leaveType == 'No Leave'
-                    ? 'Leave Policy: No Leave allocated'
-                    : (emp.leaveType == 'Once a Month' || emp.leaveType == 'Manual Allocation')
-                        ? 'Allowed quota: ${emp.allowedLeaves == emp.allowedLeaves.toInt() ? emp.allowedLeaves.toInt() : emp.allowedLeaves} days (${emp.leaveType})'
-                        : 'Leave Policy: ${emp.leaveType.isNotEmpty ? emp.leaveType : "As Needed"}',
-                style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8)),
-              ),
               InkWell(
                 onTap: () => _showAuditHistoryDialog(req),
-                child: const Text(
-                  'Audit history',
-                  style: TextStyle(fontSize: 10, color: Color(0xFF2563EB), fontWeight: FontWeight.w600, decoration: TextDecoration.underline),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 2),
+                  child: Text(
+                    'Audit history',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF2563EB),
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
                 ),
               ),
+              if (isPending)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        foregroundColor: const Color(0xFFDC2626),
+                        side: const BorderSide(color: Color(0xFFFCA5A5)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      ),
+                      onPressed: () => _handleDenyRequest(req),
+                      child: const Text('Deny', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(width: 6),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        backgroundColor: const Color(0xFF0D8A4E),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        elevation: 0,
+                      ),
+                      onPressed: () => _handleApproveRequest(req),
+                      child: const Text('Approve', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                    ),
+                  ],
+                )
+              else
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    side: const BorderSide(color: Color(0xFFCBD5E1)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  ),
+                  onPressed: () => _showSuperAdminApprovalDialog(req),
+                  icon: const Icon(Icons.edit_note_rounded, size: 14, color: Color(0xFF0D8A4E)),
+                  label: const Text('Change Decision', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0D8A4E))),
+                ),
             ],
           ),
-
-          // Full-width Bottom Action Buttons for Requests
-          if (isPending) ...[
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(0, 40),
-                      foregroundColor: const Color(0xFFDC2626),
-                      side: const BorderSide(color: Color(0xFFFCA5A5)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    onPressed: () => _handleDenyRequest(req),
-                    child: const Text('Deny', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(0, 40),
-                      backgroundColor: const Color(0xFF0D8A4E),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      elevation: 0,
-                    ),
-                    onPressed: () => _handleApproveRequest(req),
-                    child: const Text('Approve', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
-                  ),
-                ),
-              ],
-            ),
-          ] else ...[
-            const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerRight,
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  side: const BorderSide(color: Color(0xFFCBD5E1)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                onPressed: () => _showSuperAdminApprovalDialog(req),
-                icon: const Icon(Icons.edit_note_rounded, size: 16, color: Color(0xFF0D8A4E)),
-                label: const Text('Change Decision', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0D8A4E))),
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -1732,43 +1934,69 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
     showDialog(
       context: context,
       builder: (ctx) {
-        final logsAsync = ref.watch(leaveAuditLogsProvider(req.id));
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text('Audit History - ${req.employeeName}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 450),
-            child: logsAsync.when(
-              loading: () => const SizedBox(height: 100, child: Center(child: CircularProgressIndicator(color: Color(0xFF0D8A4E)))),
-              error: (e, _) => Text('Error: $e'),
-              data: (logs) {
-                if (logs.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Text('No audit logs available for this request.'),
-                  );
-                }
-                return ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: logs.length,
-                  itemBuilder: (context, index) {
-                    final log = logs[index];
-                    return ListTile(
-                      leading: const Icon(Icons.history, size: 20, color: Color(0xFF64748B)),
-                      title: Text(log['action'] as String? ?? 'Action', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                      subtitle: Text(
-                        'By: ${log['performed_by'] ?? 'System'} · ${log['timestamp'] ?? ''}\n${log['details'] ?? ''}',
-                        style: const TextStyle(fontSize: 11),
+        return Consumer(
+          builder: (context, ref, child) {
+            final logsAsync = ref.watch(leaveAuditLogsProvider(req.id));
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Text('Audit History - ${req.employeeName}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              content: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 450),
+                child: logsAsync.when(
+                  loading: () => const SizedBox(
+                    height: 100,
+                    child: Center(child: CircularProgressIndicator(color: Color(0xFF0D8A4E))),
+                  ),
+                  error: (e, _) => Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text('Error loading audit logs: $e', style: const TextStyle(color: Colors.red)),
+                  ),
+                  data: (logs) {
+                    if (logs.isEmpty) {
+                      return const Padding(
+                        padding: EdgeInsets.all(20),
+                        child: Text('No audit logs available for this request.', style: TextStyle(color: Color(0xFF64748B))),
+                      );
+                    }
+                    return SizedBox(
+                      width: double.maxFinite,
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: logs.length,
+                        separatorBuilder: (ctx, index) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                        itemBuilder: (context, index) {
+                          final log = logs[index];
+                          return ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                            leading: const CircleAvatar(
+                              radius: 14,
+                              backgroundColor: Color(0xFFF1F5F9),
+                              child: Icon(Icons.history, size: 16, color: Color(0xFF64748B)),
+                            ),
+                            title: Text(
+                              log['action'] as String? ?? 'Action',
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                            ),
+                            subtitle: Text(
+                              'By: ${log['performed_by'] ?? 'System'} · ${log['timestamp'] ?? ''}\n${log['details'] ?? ''}',
+                              style: const TextStyle(fontSize: 11, color: Color(0xFF475569)),
+                            ),
+                          );
+                        },
                       ),
                     );
                   },
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
-          ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Close', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -2172,16 +2400,45 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
   }
 
   Widget _buildLeaveTypesSection(List<LeaveType> leaveTypes, bool isMobile) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(left: 2, bottom: 8),
+          child: Text(
+            'Leave Types',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+          ),
+        ),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: leaveTypes.length,
+          itemBuilder: (context, index) {
+            final lt = leaveTypes[index];
+            return _buildLeaveTypeCard(lt);
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLeaveTypeCard(LeaveType lt) {
+    final color = _parseHexColor(lt.colorHex);
+    final daysStr = '${lt.annualAllocation.toStringAsFixed(0)} days / year';
+    final carryStr = 'Carry over: ${lt.carryForward}';
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 6,
+            blurRadius: 4,
             offset: const Offset(0, 2),
           ),
         ],
@@ -2189,77 +2446,14 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Leave Types',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Types shown on employee requests.',
-                      style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                    ),
-                  ],
-                ),
-              ),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0D8A4E),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  elevation: 0,
-                ),
-                onPressed: () => _showAddLeaveTypeDialog(context),
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('Add Type', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // Render Cards list instead of overflowing DataTables
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: leaveTypes.length,
-            itemBuilder: (context, index) {
-              final lt = leaveTypes[index];
-              return _buildLeaveTypeCard(lt);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLeaveTypeCard(LeaveType lt) {
-    final color = _parseHexColor(lt.colorHex);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+          // Top Row: Colored Dot, Leave Name, Toggle Switch
           Row(
             children: [
               InkWell(
                 onTap: () => _showEditColorDialog(context, lt),
                 child: Container(
-                  width: 14,
-                  height: 14,
+                  width: 12,
+                  height: 12,
                   decoration: BoxDecoration(color: color, shape: BoxShape.circle),
                 ),
               ),
@@ -2271,10 +2465,10 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
                 ),
               ),
               Transform.scale(
-                scale: 0.75,
+                scale: 0.8,
                 child: Switch(
                   value: lt.isActive,
-                  activeTrackColor: const Color(0xFF0D8A4E),
+                  activeTrackColor: const Color(0xFF9CC70A),
                   onChanged: (val) async {
                     final updated = lt.copyWith(isActive: val);
                     await ref.read(leaveRepositoryProvider).updateLeaveType(updated);
@@ -2284,39 +2478,39 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Annual: ${lt.annualAllocation.toStringAsFixed(0)} days/yr',
-                  style: const TextStyle(fontSize: 11, color: Color(0xFF475569)),
-                ),
-              ),
-              Expanded(
-                child: Text(
-                  'Carry Fwd: ${lt.carryForward}',
-                  style: const TextStyle(fontSize: 11, color: Color(0xFF475569)),
-                ),
-              ),
-            ],
+
+          // Middle Row: Display rules cleanly
+          Padding(
+            padding: const EdgeInsets.only(top: 2, bottom: 4),
+            child: Text(
+              '$daysStr  •  $carryStr',
+              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+            ),
           ),
-          const SizedBox(height: 8),
+
+          // Bottom-Right Actions: Edit & Delete Icons in lighter gray
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              IconButton(
-                icon: Icon(Icons.palette_outlined, size: 18, color: color),
-                tooltip: 'Edit Color',
-                onPressed: () => _showEditColorDialog(context, lt),
+              InkWell(
+                onTap: () => _showEditColorDialog(context, lt),
+                borderRadius: BorderRadius.circular(4),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.palette_outlined, size: 18, color: Color(0xFF94A3B8)),
+                ),
               ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFDC2626)),
-                tooltip: 'Delete',
-                onPressed: () async {
+              const SizedBox(width: 12),
+              InkWell(
+                onTap: () async {
                   await ref.read(leaveRepositoryProvider).deleteLeaveType(lt.id);
                   ref.invalidate(leaveTypesProvider);
                 },
+                borderRadius: BorderRadius.circular(4),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.delete_outline, size: 18, color: Color(0xFF94A3B8)),
+                ),
               ),
             ],
           ),

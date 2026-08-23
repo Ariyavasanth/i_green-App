@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../attendance/domain/attendance_record.dart';
+import '../../attendance/providers/attendance_providers.dart';
 import '../../attendance_settings/presentation/widgets/attendance_settings_embedded_view.dart';
 import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
@@ -205,8 +206,20 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
       child: Column(
         children: [
           Expanded(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.all(isMobile ? 12 : 20),
+            child: RefreshIndicator(
+              color: const Color(0xFF9CC70A),
+              onRefresh: () async {
+                ref.invalidate(allAttendanceRecordsProvider);
+                ref.invalidate(employeesProvider);
+                ref.invalidate(allEmployeesProvider);
+                ref.invalidate(attendanceManagementStatsProvider);
+                ref.invalidate(attendanceManagementRecordsProvider);
+                ref.invalidate(attendanceManagementAuditProvider);
+                await Future.delayed(const Duration(milliseconds: 300));
+              },
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.all(isMobile ? 12 : 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -226,6 +239,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
               ),
             ),
           ),
+        ),
           _buildBottomNavBar(isMobile),
         ],
       ),

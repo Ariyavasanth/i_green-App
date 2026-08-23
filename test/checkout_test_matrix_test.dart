@@ -21,6 +21,7 @@ void main() {
     await db.delete('permission_requests');
     await db.execute('CREATE TABLE IF NOT EXISTS leave_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_id INTEGER, employee_name TEXT, employee_custom_id TEXT, leave_type TEXT, from_date TEXT, to_date TEXT, num_days REAL, reason TEXT, status TEXT, created_at TEXT, approved_dates TEXT, lop_dates TEXT, is_emergency INTEGER DEFAULT 0, attachment_url TEXT, rejection_reason TEXT, is_half_day INTEGER DEFAULT 0, half_day_period TEXT)');
     await db.delete('leave_requests');
+    await db.execute('DROP TABLE IF EXISTS employees');
     await db.execute('CREATE TABLE IF NOT EXISTS employees (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_code TEXT, required_working_hours REAL, is_dynamic_employee INTEGER)');
     await db.delete('employees');
 

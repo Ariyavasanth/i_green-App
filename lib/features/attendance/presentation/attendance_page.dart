@@ -12,6 +12,7 @@ import '../../employee/domain/employee.dart';
 import '../../leave/domain/leave_request.dart';
 import '../../leave/domain/leave_type.dart';
 import '../../leave/domain/leave_balance.dart';
+import '../../leave/domain/leave_overlap_validator.dart';
 import '../../leave/providers/leave_providers.dart';
 import '../../leave/presentation/my_leave_requests_page.dart';
 import '../domain/attendance_repository.dart';
@@ -286,6 +287,17 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     );
   }
 
+  Future<void> _refreshAllData(int employeeId) async {
+    ref.invalidate(attendanceRecordsProvider(employeeId));
+    ref.invalidate(allAttendanceRecordsProvider);
+    ref.invalidate(todayAttendanceRecordProvider(employeeId));
+    ref.invalidate(attendanceLeaveRequestsProvider(employeeId));
+    ref.invalidate(leaveRequestsProvider(employeeId));
+    ref.invalidate(allLeaveRequestsProvider);
+    ref.invalidate(myPermissionRequestsProvider(employeeId));
+    await Future.delayed(const Duration(milliseconds: 300));
+  }
+
   // ==========================================
   // TAB 0: HOME OVERVIEW TAB
   // ==========================================
@@ -295,70 +307,75 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     AsyncValue<List<AttendanceRecord>> attendanceAsync,
     AsyncValue<List<LeaveRequest>> leaveAsync,
   ) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Today's Status Banner Card
-          _buildTodayBannerCard(currentEmp, todayAttendanceAsync),
-          const SizedBox(height: 20),
+    return RefreshIndicator(
+      color: const Color(0xFF9CC70A),
+      onRefresh: () => _refreshAllData(currentEmp.id),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Today's Status Banner Card
+            _buildTodayBannerCard(currentEmp, todayAttendanceAsync),
+            const SizedBox(height: 20),
 
-          // Work Activity / Clocking Section
-          EmployeeClockingWidget(employeeId: currentEmp.employeeId.isNotEmpty ? currentEmp.employeeId : currentEmp.id.toString()),
-          const SizedBox(height: 24),
+            // Work Activity / Clocking Section
+            EmployeeClockingWidget(employeeId: currentEmp.employeeId.isNotEmpty ? currentEmp.employeeId : currentEmp.id.toString()),
+            const SizedBox(height: 24),
 
-          // This Month Overview Card
-          attendanceAsync.when(
-            loading: () => const SizedBox.shrink(),
-            error: (_, __) => const SizedBox.shrink(),
-            data: (records) => leaveAsync.when(
+            // This Month Overview Card
+            attendanceAsync.when(
               loading: () => const SizedBox.shrink(),
               error: (_, __) => const SizedBox.shrink(),
-              data: (leaves) => _buildMonthOverviewCard(records, leaves.cast<LeaveRequest>()),
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // Recent Records Header & List
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Recent Records',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E293B),
-                ),
+              data: (records) => leaveAsync.when(
+                loading: () => const SizedBox.shrink(),
+                error: (_, __) => const SizedBox.shrink(),
+                data: (leaves) => _buildMonthOverviewCard(records, leaves.cast<LeaveRequest>()),
               ),
-              TextButton(
-                onPressed: () {
-                  ref.read(attendanceActiveTabProvider.notifier).state = 1;
-                  setState(() {
-                    _currentTabIndex = 1; // Switch to Calendar
-                  });
-                },
-                child: const Text(
-                  'View all',
+            ),
+            const SizedBox(height: 24),
+
+            // Recent Records Header & List
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Recent Records',
                   style: TextStyle(
-                    color: Color(0xFF2E7D32),
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    fontSize: 13,
+                    color: Color(0xFF1E293B),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () {
+                    ref.read(attendanceActiveTabProvider.notifier).state = 1;
+                    setState(() {
+                      _currentTabIndex = 1; // Switch to Calendar
+                    });
+                  },
+                  child: const Text(
+                    'View all',
+                    style: TextStyle(
+                      color: Color(0xFF2E7D32),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
 
-          // Recent Records List
-          attendanceAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Text('Error: $e'),
-            data: (records) => _buildRecentRecordsList(records),
-          ),
-        ],
+            // Recent Records List
+            attendanceAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Text('Error: $e'),
+              data: (records) => _buildRecentRecordsList(records),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -578,35 +595,40 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     AsyncValue<List<AttendanceRecord>> attendanceAsync,
     AsyncValue<List<LeaveRequest>> leaveAsync,
   ) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Monthly Calendar Section
-          attendanceAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF9CC70A))),
-            error: (e, _) => Text('Error loading attendance: $e'),
-            data: (attendanceRecords) => leaveAsync.when(
+    return RefreshIndicator(
+      color: const Color(0xFF9CC70A),
+      onRefresh: () => _refreshAllData(currentEmp.id),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Monthly Calendar Section
+            attendanceAsync.when(
               loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF9CC70A))),
-              error: (e, _) => Text('Error loading leaves: $e'),
-              data: (leaveRequests) => Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildCalendar(
-                    attendanceRecords,
-                    leaveRequests.cast<LeaveRequest>(),
-                  ),
-                  const SizedBox(height: 20),
-                  _buildMonthlyAttendanceHistory(
-                    attendanceRecords,
-                    leaveRequests.cast<LeaveRequest>(),
-                  ),
-                ],
+              error: (e, _) => Text('Error loading attendance: $e'),
+              data: (attendanceRecords) => leaveAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF9CC70A))),
+                error: (e, _) => Text('Error loading leaves: $e'),
+                data: (leaveRequests) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildCalendar(
+                      attendanceRecords,
+                      leaveRequests.cast<LeaveRequest>(),
+                    ),
+                    const SizedBox(height: 20),
+                    _buildMonthlyAttendanceHistory(
+                      attendanceRecords,
+                      leaveRequests.cast<LeaveRequest>(),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -650,7 +672,14 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
 
     List<_DailyHistoryItem> items = [];
 
-    final lastDayToDisplay = (year == now.year && month == now.month) ? math.min(now.day, daysInMonth) : daysInMonth;
+    int lastDayToDisplay;
+    if (year < now.year || (year == now.year && month < now.month)) {
+      lastDayToDisplay = daysInMonth;
+    } else if (year == now.year && month == now.month) {
+      lastDayToDisplay = now.day;
+    } else {
+      lastDayToDisplay = 0;
+    }
 
     for (int day = lastDayToDisplay; day >= 1; day--) {
       final dt = DateTime(year, month, day);
@@ -2493,18 +2522,40 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       }
     }
 
+    String durationOption = existingRequest != null && existingRequest.isHalfDay
+        ? (existingRequest.halfDayPeriod ?? 'first_half')
+        : 'full_day';
+    String? submitError;
+
     showDialog(
       context: context,
       builder: (dialogCtx) {
         return StatefulBuilder(
           builder: (ctx, setDialogState) {
+            final isHalfDay = durationOption != 'full_day';
+            final halfDayPeriod = isHalfDay ? durationOption : null;
+
             double days = 1.0;
-            if (_fromDate != null && _toDate != null) {
+            if (isHalfDay) {
+              days = 0.5;
+            } else if (_fromDate != null && _toDate != null) {
               final diff = _toDate!.difference(_fromDate!).inDays + 1;
               days = math.max(1.0, diff.toDouble());
             }
 
-            final permHours = calculatePermissionHours(fromTime, toTime);
+            final fromStr = DateFormat('dd-MM-yyyy').format(_fromDate!);
+            final toStr = DateFormat('dd-MM-yyyy').format(_toDate!);
+
+            final existingRequests = ref.watch(leaveRequestsProvider(currentEmp.id)).value ?? [];
+            final overlapResult = LeaveOverlapValidator.checkOverlap(
+              newFromDate: fromStr,
+              newToDate: toStr,
+              isHalfDay: isHalfDay,
+              halfDayPeriod: halfDayPeriod,
+              existingRequests: existingRequests,
+              excludeRequestId: existingRequest?.id,
+              employeeId: currentEmp.id,
+            );
 
             return AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -2559,7 +2610,10 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                             .toList(),
                         onChanged: (val) {
                           if (val != null) {
-                            setDialogState(() => _selectedLeaveType = val);
+                            setDialogState(() {
+                              _selectedLeaveType = val;
+                              submitError = null;
+                            });
                           }
                         },
                       ),
@@ -2584,7 +2638,8 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                                     if (picked != null) {
                                       setDialogState(() {
                                         _fromDate = picked;
-                                        if (_toDate != null && _toDate!.isBefore(picked)) {
+                                        submitError = null;
+                                        if (isHalfDay || _toDate == null || _toDate!.isBefore(picked)) {
                                           _toDate = picked;
                                         }
                                       });
@@ -2623,7 +2678,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                                 const Text('To Date', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
                                 const SizedBox(height: 6),
                                 InkWell(
-                                  onTap: () async {
+                                  onTap: isHalfDay ? null : () async {
                                     final picked = await showDatePicker(
                                       context: context,
                                       initialDate: _toDate ?? DateTime.now(),
@@ -2633,12 +2688,14 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                                     if (picked != null) {
                                       setDialogState(() {
                                         _toDate = picked;
+                                        submitError = null;
                                       });
                                     }
                                   },
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                                     decoration: BoxDecoration(
+                                      color: isHalfDay ? const Color(0xFFF1F5F9) : Colors.white,
                                       border: Border.all(color: const Color(0xFFCBD5E1)),
                                       borderRadius: BorderRadius.circular(10),
                                     ),
@@ -2649,11 +2706,11 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                                             _toDate != null ? DateFormat('dd MMM yyyy').format(_toDate!) : 'Select Date',
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(fontSize: 12, color: Color(0xFF414A51)),
+                                            style: TextStyle(fontSize: 12, color: isHalfDay ? const Color(0xFF94A3B8) : const Color(0xFF414A51)),
                                           ),
                                         ),
                                         const SizedBox(width: 2),
-                                        const Icon(Icons.calendar_today, size: 14, color: Color(0xFF64748B)),
+                                        Icon(Icons.calendar_today, size: 14, color: isHalfDay ? const Color(0xFFCBD5E1) : const Color(0xFF64748B)),
                                       ],
                                     ),
                                   ),
@@ -2663,15 +2720,187 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 14),
+
+                      // Leave Duration Radio Tiles
+                      const Text('Leave Duration', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: RadioListTile<String>(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              activeColor: const Color(0xFF9CC70A),
+                              title: const Text('Full Day', style: TextStyle(fontSize: 11, color: Color(0xFF414A51))),
+                              value: 'full_day',
+                              groupValue: durationOption,
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setDialogState(() {
+                                    durationOption = val;
+                                    submitError = null;
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                          Expanded(
+                            child: RadioListTile<String>(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              activeColor: const Color(0xFF9CC70A),
+                              title: const Text('First Half', style: TextStyle(fontSize: 11, color: Color(0xFF414A51))),
+                              value: 'first_half',
+                              groupValue: durationOption,
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setDialogState(() {
+                                    durationOption = val;
+                                    _toDate = _fromDate;
+                                    submitError = null;
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                          Expanded(
+                            child: RadioListTile<String>(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              activeColor: const Color(0xFF9CC70A),
+                              title: const Text('Second Half', style: TextStyle(fontSize: 11, color: Color(0xFF414A51))),
+                              value: 'second_half',
+                              groupValue: durationOption,
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setDialogState(() {
+                                    durationOption = val;
+                                    _toDate = _fromDate;
+                                    submitError = null;
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      // Shift breakdown banner for half-day
+                      if (durationOption == 'first_half') ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(10),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text('First Half Leave: 9:00 AM – 1:30 PM', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
+                              SizedBox(height: 2),
+                              Text('Remaining Work: 1:30 PM – 6:00 PM', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                              SizedBox(height: 2),
+                              Text('Duration: 0.5 Day', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF9CC70A))),
+                            ],
+                          ),
+                        ),
+                      ] else if (durationOption == 'second_half') ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(10),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text('Second Half Leave: 1:30 PM – 6:00 PM', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
+                              SizedBox(height: 2),
+                              Text('Remaining Work: 9:00 AM – 1:30 PM', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                              SizedBox(height: 2),
+                              Text('Duration: 0.5 Day', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF9CC70A))),
+                            ],
+                          ),
+                        ),
+                      ],
+
                       Align(
                         alignment: Alignment.centerRight,
                         child: Text(
-                          'Duration: ${days == 1 ? '1 Day' : '$days Days'}',
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF65A30D)),
+                          'Duration: ${days.toStringAsFixed(1)} Day(s)',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF9CC70A)),
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
+
+                      // Real-Time Overlap Conflict Banner inside Dialog Box
+                      if (overlapResult.hasOverlap) ...[
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF2F2),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFFECACA)),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      '⚠️ Leave Already Requested',
+                                      style: TextStyle(fontSize: 12, color: Color(0xFF991B1B), fontWeight: FontWeight.bold),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      overlapResult.message ?? 'An overlapping leave request already exists for the selected date/period.',
+                                      style: const TextStyle(fontSize: 11, color: Color(0xFF7F1D1D), height: 1.3),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      // In-Dialog Submission Error Box
+                      if (submitError != null) ...[
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF2F2),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFFECACA)),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(Icons.error_outline, color: Color(0xFFDC2626), size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  submitError!,
+                                  style: const TextStyle(fontSize: 11, color: Color(0xFF7F1D1D), fontWeight: FontWeight.w600, height: 1.3),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
 
                       // Description
                       const Text('Description', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
@@ -2705,72 +2934,74 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   ),
-                  onPressed: () async {
-                    if (_reasonController.text.trim().isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Please enter a description / reason'),
-                          backgroundColor: Color(0xFFC62828),
-                        ),
-                      );
-                      return;
-                    }
+                  onPressed: overlapResult.hasOverlap
+                      ? null
+                      : () async {
+                          if (_reasonController.text.trim().isEmpty) {
+                            setDialogState(() {
+                              submitError = 'Please enter a description / reason';
+                            });
+                            return;
+                          }
 
-                    final messenger = ScaffoldMessenger.of(context);
-                    final nav = Navigator.of(dialogCtx);
+                          final messenger = ScaffoldMessenger.of(context);
+                          final nav = Navigator.of(dialogCtx);
 
-                    try {
-                      final fromStr = DateFormat('dd-MM-yyyy').format(_fromDate!);
-                      final toStr = DateFormat('dd-MM-yyyy').format(_toDate!);
+                          try {
+                            setDialogState(() {
+                              submitError = null;
+                            });
 
-                      if (existingRequest != null) {
-                        final updatedReq = existingRequest.copyWith(
-                          leaveType: _selectedLeaveType,
-                          fromDate: fromStr,
-                          toDate: toStr,
-                          numDays: days,
-                          reason: _reasonController.text.trim(),
-                        );
+                            if (existingRequest != null) {
+                              final updatedReq = existingRequest.copyWith(
+                                leaveType: _selectedLeaveType,
+                                fromDate: fromStr,
+                                toDate: toStr,
+                                numDays: days,
+                                reason: _reasonController.text.trim(),
+                                isHalfDay: isHalfDay,
+                                halfDayPeriod: halfDayPeriod,
+                              );
 
-                        await ref.read(leaveRepositoryProvider).updateLeaveRequest(updatedReq);
-                      } else {
-                        final newReq = LeaveRequest(
-                          id: 0,
-                          employeeId: currentEmp.id,
-                          employeeName: currentEmp.fullName,
-                          employeeCustomId: currentEmp.employeeId,
-                          leaveType: _selectedLeaveType,
-                          fromDate: fromStr,
-                          toDate: toStr,
-                          numDays: days,
-                          reason: _reasonController.text.trim(),
-                          status: 'Pending',
-                          createdAt: DateTime.now().toIso8601String(),
-                        );
-                        await ref.read(leaveRepositoryProvider).submitLeaveRequest(newReq);
-                      }
+                              await ref.read(leaveRepositoryProvider).updateLeaveRequest(updatedReq);
+                            } else {
+                              final newReq = LeaveRequest(
+                                id: 0,
+                                employeeId: currentEmp.id,
+                                employeeName: currentEmp.fullName,
+                                employeeCustomId: currentEmp.employeeId,
+                                leaveType: _selectedLeaveType,
+                                fromDate: fromStr,
+                                toDate: toStr,
+                                numDays: days,
+                                reason: _reasonController.text.trim(),
+                                status: 'Pending',
+                                createdAt: DateTime.now().toIso8601String(),
+                                isHalfDay: isHalfDay,
+                                halfDayPeriod: halfDayPeriod,
+                              );
+                              await ref.read(leaveRepositoryProvider).submitLeaveRequest(newReq);
+                            }
 
-                      ref.invalidate(leaveRequestsProvider(currentEmp.id));
-                      ref.invalidate(allLeaveRequestsProvider);
+                            ref.invalidate(leaveRequestsProvider(currentEmp.id));
+                            ref.invalidate(allLeaveRequestsProvider);
 
-                      nav.pop();
-                      messenger.showSnackBar(
-                        SnackBar(
-                          content: Text(existingRequest != null
-                              ? 'Leave request updated successfully!'
-                              : 'Leave request submitted successfully!'),
-                          backgroundColor: const Color(0xFF2E7D32),
-                        ),
-                      );
-                    } catch (e) {
-                      messenger.showSnackBar(
-                        SnackBar(
-                          content: Text('Failed to submit: $e'),
-                          backgroundColor: const Color(0xFFC62828),
-                        ),
-                      );
-                    }
-                  },
+                            nav.pop();
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Text(existingRequest != null
+                                    ? 'Leave request updated successfully!'
+                                    : 'Leave request submitted successfully!'),
+                                backgroundColor: const Color(0xFF2E7D32),
+                              ),
+                            );
+                          } catch (e) {
+                            final errText = e.toString().replaceAll('Exception: ', '');
+                            setDialogState(() {
+                              submitError = errText;
+                            });
+                          }
+                        },
                   icon: const Icon(Icons.check_circle, size: 18),
                   label: const Text('Submit Request', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),

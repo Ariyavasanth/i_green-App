@@ -6,11 +6,9 @@ import '../domain/attendance_record.dart';
 import '../domain/attendance_settings.dart';
 import '../domain/attendance_repository.dart';
 import '../../employee/domain/employee.dart';
-import 'sqlite_attendance_repository.dart';
 
 class FirebaseAttendanceRepository implements AttendanceRepository {
   final FirebaseFirestore _firestore;
-  final SqliteAttendanceRepository _sqliteRepo = SqliteAttendanceRepository();
   FirebaseAttendanceRepository({FirebaseFirestore? firestore}) : _firestore = firestore ?? FirebaseFirestore.instance;
 
   CollectionReference<Map<String, dynamic>> get _recordsRef => _firestore.collection('attendance_records');
@@ -31,7 +29,6 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
   @override
   Future<void> autoResolveMissingCheckOuts({int? employeeId}) async {
-    await _sqliteRepo.autoResolveMissingCheckOuts(employeeId: employeeId);
     try {
       final now = DateTime.now();
       final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
@@ -106,7 +103,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       }
       return list;
     } catch (_) {
-      return _sqliteRepo.getAttendanceRecords(employeeId);
+      return [];
     }
   }
 
@@ -153,7 +150,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         }
       }
     } catch (_) {}
-    return _sqliteRepo.getAttendanceRecordForDate(employeeId, date);
+    return null;
 
   }
 
@@ -414,16 +411,6 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         'marked_at': DateTime.now().toIso8601String(),
       }, SetOptions(merge: true));
     } catch (_) {}
-    await _sqliteRepo.markAttendance(
-      employeeId: employeeId,
-      employeeName: employeeName,
-      date: normDate,
-      time: time,
-      verificationStatus: verificationStatus,
-      similarityScore: similarityScore,
-      status: status,
-      notes: notes,
-    );
   }
 
   @override
@@ -434,22 +421,34 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     required String verificationStatus,
     required double similarityScore,
   }) async {
-    final docRef = _recordsRef.doc('${employeeId}_${date.replaceAll('-', '')}');
+    final normDate = _normalizeDateKey(date);
+    final docId = '${employeeId}_${normDate.replaceAll('-', '')}';
+    final docRef = _recordsRef.doc(docId);
     final snap = await docRef.get();
-    if (!snap.exists || snap.data() == null) return;
-    final record = AttendanceRecord.fromMap(snap.data()!);
-    final inTime = record.effectiveCheckInTime;
+    AttendanceRecord? record;
+    if (snap.exists && snap.data() != null) {
+      record = AttendanceRecord.fromMap(snap.data()!);
+    } else {
+      record = await getAttendanceRecordForDate(employeeId, date);
+    }
+
+    if (record == null) return;
 
     double hours = 0.0;
-    try {
-      final inParts = inTime.split(':');
-      final outParts = checkOutTime.split(':');
-      if (inParts.length >= 2 && outParts.length >= 2) {
-        final inMin = int.parse(inParts[0]) * 60 + int.parse(inParts[1]);
-        final outMin = int.parse(outParts[0]) * 60 + int.parse(outParts[1]);
-        if (outMin > inMin) hours = double.parse(((outMin - inMin) / 60.0).toStringAsFixed(2));
-      }
-    } catch (_) {}
+    final inTime = record.effectiveCheckInTime;
+    if (inTime.isNotEmpty && checkOutTime.isNotEmpty) {
+      try {
+        final inParts = inTime.split(':');
+        final outParts = checkOutTime.split(':');
+        if (inParts.length >= 2 && outParts.length >= 2) {
+          final inMin = int.parse(inParts[0]) * 60 + int.parse(inParts[1]);
+          final outMin = int.parse(outParts[0]) * 60 + int.parse(outParts[1]);
+          if (outMin > inMin) {
+            hours = double.parse(((outMin - inMin) / 60.0).toStringAsFixed(2));
+          }
+        }
+      } catch (_) {}
+    }
 
     Employee? employee;
     try {
@@ -464,51 +463,32 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         ? employee!.requiredWorkingHours
         : 9.0;
 
-    String finalStatus;
-    String updatedNotes;
-
-    // Calculate shortfall and approved permission minutes
     final shortfallHours = (requiredHours - hours).clamp(0, requiredHours);
     final shortfallMins = (shortfallHours * 60).ceil();
     final approvedPermissionMins = await _getApprovedPermissionMinutes(employeeId, date);
 
-    int outMin = 0;
-    try {
-      final parts = checkOutTime.split(':');
-      if (parts.length >= 2) outMin = int.parse(parts[0]) * 60 + int.parse(parts[1]);
-    } catch (_) {}
-    final isLateCheckout = outMin > 1080;
+    String finalStatus = record.status;
+    String updatedNotes = record.notes;
 
     if (shortfallMins == 0) {
-      // No shortfall, normal handling
       if (isDynamic) {
         finalStatus = 'Completed';
-        updatedNotes = record.notes.isNotEmpty
-            ? '${record.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Completed ${requiredHours.toStringAsFixed(0)} hrs target)${isLateCheckout ? ' | Late Checkout' : ''}'
-            : 'Worked ${hours.toStringAsFixed(1)} hrs (Completed ${requiredHours.toStringAsFixed(0)} hrs target)${isLateCheckout ? ' | Late Checkout' : ''}';
+        updatedNotes = 'Worked ${hours.toStringAsFixed(1)} hrs (Completed ${requiredHours.toStringAsFixed(0)} hrs target)';
       } else {
         finalStatus = record.status == 'Late' ? 'Late' : 'Completed';
-        updatedNotes = record.notes.isNotEmpty
-            ? '${record.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Completed shift)${isLateCheckout ? ' | Late Checkout' : ''}'
-            : 'Worked ${hours.toStringAsFixed(1)} hrs (Completed shift)${isLateCheckout ? ' | Late Checkout' : ''}';
+        updatedNotes = 'Worked ${hours.toStringAsFixed(1)} hrs (Completed shift)';
       }
     } else {
-      // Shortfall exists, check permission coverage
       if (approvedPermissionMins >= shortfallMins) {
-        // Fully authorized early checkout
         finalStatus = isDynamic ? 'Completed' : (record.status == 'Late' ? 'Late' : 'Completed');
-        updatedNotes = record.notes.isNotEmpty
-            ? '${record.notes} | Authorized early checkout (covers ${shortfallMins} mins)'
-            : 'Authorized early checkout (covers ${shortfallMins} mins)';
+        updatedNotes = 'Authorized early checkout (covers ${shortfallMins} mins)';
       } else if (approvedPermissionMins > 0) {
-        // Partial permission coverage
         final unauthorizedMins = shortfallMins - approvedPermissionMins;
         finalStatus = 'Insufficient hours';
         updatedNotes = record.notes.isNotEmpty
             ? '${record.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Partially authorized: ${approvedPermissionMins} mins authorized, ${unauthorizedMins} mins unauthorized)'
             : 'Worked ${hours.toStringAsFixed(1)} hrs (Partially authorized: ${approvedPermissionMins} mins authorized, ${unauthorizedMins} mins unauthorized)';
       } else {
-        // No permission coverage
         final unauthorizedMins = shortfallMins - approvedPermissionMins;
         finalStatus = 'Insufficient hours';
         updatedNotes = record.notes.isNotEmpty
@@ -525,14 +505,6 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       'status': finalStatus,
       'notes': updatedNotes,
     }, SetOptions(merge: true));
-
-    await _sqliteRepo.checkOut(
-      employeeId: employeeId,
-      date: date,
-      checkOutTime: checkOutTime,
-      verificationStatus: verificationStatus,
-      similarityScore: similarityScore,
-    );
   }
 
   @override
@@ -616,7 +588,6 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       toSave.toMap(),
       SetOptions(merge: true),
     );
-    await _sqliteRepo.adminSaveAttendance(toSave);
   }
 
   @override
@@ -632,7 +603,6 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     for (final doc in snap.docs) {
       await doc.reference.delete();
     }
-    await _sqliteRepo.unmarkAttendance(employeeId: employeeId, date: date);
   }
 
   @override
@@ -723,5 +693,19 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       }
     } catch (_) {}
     return 540;
+  }
+
+  @override
+  Future<void> clearAllAttendanceRecords() async {
+    try {
+      final recordsSnap = await _recordsRef.get();
+      for (final doc in recordsSnap.docs) {
+        await doc.reference.delete();
+      }
+      final attemptsSnap = await _attemptsRef.get();
+      for (final doc in attemptsSnap.docs) {
+        await doc.reference.delete();
+      }
+    } catch (_) {}
   }
 }

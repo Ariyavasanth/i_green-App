@@ -9,6 +9,7 @@ import '../domain/leave_balance.dart';
 import '../domain/leave_monthly_balance.dart';
 import '../domain/leave_type.dart';
 import '../domain/salary_calculation.dart';
+import '../domain/leave_overlap_validator.dart';
 import '../../employee/domain/employee.dart';
 
 class SqliteLeaveRepository implements LeaveRepository {
@@ -285,9 +286,40 @@ class SqliteLeaveRepository implements LeaveRepository {
   }
 
   @override
+  Future<LeaveOverlapResult> checkLeaveOverlap({
+    required int employeeId,
+    required String fromDate,
+    required String toDate,
+    required bool isHalfDay,
+    String? halfDayPeriod,
+    int? excludeRequestId,
+  }) async {
+    final existing = await getLeaveRequests(employeeId);
+    return LeaveOverlapValidator.checkOverlap(
+      newFromDate: fromDate,
+      newToDate: toDate,
+      isHalfDay: isHalfDay,
+      halfDayPeriod: halfDayPeriod,
+      existingRequests: existing,
+      excludeRequestId: excludeRequestId,
+      employeeId: employeeId,
+    );
+  }
+
+  @override
   Future<void> submitLeaveRequest(LeaveRequest request) async {
     if (request.id != 0) {
       throw StateError('Leave dates cannot be changed after submission.');
+    }
+    final overlap = await checkLeaveOverlap(
+      employeeId: request.employeeId,
+      fromDate: request.fromDate,
+      toDate: request.toDate,
+      isHalfDay: request.isHalfDay,
+      halfDayPeriod: request.halfDayPeriod,
+    );
+    if (overlap.hasOverlap) {
+      throw Exception(overlap.message);
     }
     if (request.leaveType.toLowerCase().startsWith('permission')) {
       await _validatePermissionRequest(request);
@@ -547,8 +579,8 @@ class SqliteLeaveRepository implements LeaveRepository {
       }
     }
 
-    // Create/update attendance records for approved leave dates with status 'On Leave'
-    for (final d in approvedDates) {
+    // Create/update attendance records for all approved leave dates (paid + LOP) with status 'On Leave'
+    for (final d in allDates) {
       batch.insert(
         'attendance_records',
         {

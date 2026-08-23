@@ -270,12 +270,14 @@ class _PermissionDashboardPageState extends ConsumerState<PermissionDashboardPag
                     return true;
                   }).toList();
 
+                  final displayList = filtered.take(5).toList();
+
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Subtext ("Showing X requests")
                       Text(
-                        'Showing ${filtered.length} ${filtered.length == 1 ? 'request' : 'requests'}',
+                        'Showing ${displayList.length} ${displayList.length == 1 ? 'request' : 'requests'}',
                         style: TextStyle(
                           fontSize: 13,
                           color: Colors.grey.shade600,
@@ -284,7 +286,7 @@ class _PermissionDashboardPageState extends ConsumerState<PermissionDashboardPag
                       ),
                       const SizedBox(height: 8),
 
-                      if (filtered.isEmpty)
+                      if (displayList.isEmpty)
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(32),
@@ -312,10 +314,10 @@ class _PermissionDashboardPageState extends ConsumerState<PermissionDashboardPag
                           padding: EdgeInsets.zero,
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
-                          itemCount: filtered.length,
+                          itemCount: displayList.length,
                           separatorBuilder: (_, __) => const SizedBox(height: 14),
                           itemBuilder: (context, index) {
-                            final req = filtered[index];
+                            final req = displayList[index];
                             return _buildRequestCard(context, req, ref);
                           },
                         ),

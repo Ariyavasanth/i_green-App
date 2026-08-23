@@ -211,5 +211,122 @@ void main() {
       expect(checkBal.lopDays, 4.0);
       expect(checkBal.remainingDays, 3.0); // VERIFIED: Paid quota remains 3.0 days untouched!
     });
+
+    test('Test 3 — End-to-End Workflow Verification (4 Days Request, 3 Allowance -> 3 Paid / 1 LOP -> Attendance On Leave -> Payroll 1 LOP)', () async {
+      // 1. Create Employee with Monthly Allocation & 3 days Allowance
+      await db.execute('DROP TABLE IF EXISTS leave_balances');
+      await db.execute('''
+        CREATE TABLE leave_balances (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          employee_id INTEGER,
+          leave_type TEXT,
+          allowed_leaves REAL,
+          used_leaves REAL,
+          available_leaves REAL
+        )
+      ''');
+      await db.execute('DROP TABLE IF EXISTS loss_of_pay_records');
+      await db.execute('''
+        CREATE TABLE loss_of_pay_records (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          employee_id INTEGER,
+          leave_request_id INTEGER,
+          date TEXT,
+          amount REAL,
+          created_at TEXT
+        )
+      ''');
+      await db.execute('DROP TABLE IF EXISTS attendance_records');
+      await db.execute('''
+        CREATE TABLE attendance_records (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          employee_id INTEGER,
+          employee_name TEXT,
+          date TEXT,
+          time TEXT,
+          status TEXT,
+          verification_status TEXT,
+          similarity_score REAL,
+          check_in_time TEXT,
+          check_out_time TEXT,
+          check_in_verification_status TEXT,
+          check_out_verification_status TEXT,
+          check_in_similarity_score REAL,
+          check_out_similarity_score REAL,
+          total_hours REAL,
+          notes TEXT,
+          marked_at TEXT
+        )
+      ''');
+      await db.execute('DROP TABLE IF EXISTS leave_audit_logs');
+      await db.execute('''
+        CREATE TABLE leave_audit_logs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          leave_request_id INTEGER,
+          action TEXT,
+          performed_by TEXT,
+          timestamp TEXT,
+          details TEXT
+        )
+      ''');
+
+      await db.insert('leave_balances', {
+        'id': 1,
+        'employee_id': 1,
+        'leave_type': 'Casual Leave',
+        'allowed_leaves': 3.0,
+        'used_leaves': 0.0,
+        'available_leaves': 3.0,
+      });
+
+      // 2. Submit Leave Request for 4 Days (10-09-2026 to 13-09-2026)
+      const requestedDays = 4.0;
+      final req = LeaveRequest(
+        id: 10,
+        employeeId: 1,
+        employeeName: 'John Doe',
+        employeeCustomId: 'EMP-001',
+        leaveType: 'Casual Leave',
+        fromDate: '10-09-2026',
+        toDate: '13-09-2026',
+        numDays: requestedDays,
+        requestedDays: requestedDays,
+        calculatedPaidDays: 3.0,
+        calculatedLopDays: 1.0,
+        paidDays: 3.0,
+        lopDays: 1.0,
+        approvalMode: 'as_calculated',
+        leavePolicySnapshot: 'Monthly Allocation',
+        monthlyAllowanceSnapshot: 3.0,
+        reason: 'Family Trip',
+        status: 'Pending',
+        createdAt: DateTime.now().toIso8601String(),
+      );
+
+      await db.insert('leave_requests', req.toMap());
+
+      // 3. Admin approves as calculated
+      await repository.approveLeaveRequest(10, 'Admin Manager', approvalMode: 'as_calculated');
+
+      // 4. Verify Leave Status: 4 Days Approved (3 Paid, 1 LOP)
+      final updatedReqMap = await db.query('leave_requests', where: 'id = ?', whereArgs: [10]);
+      final updatedReq = LeaveRequest.fromMap(updatedReqMap.first);
+
+      expect(updatedReq.status, 'Approved');
+      expect(updatedReq.approvedDates.length, 3); // 3 Paid Dates
+      expect(updatedReq.lopDates.length, 1);       // 1 LOP Date
+
+      // 5. Verify Attendance: ALL 4 Days marked 'On Leave'
+      final attRecords = await db.query('attendance_records', where: 'employee_id = ?', whereArgs: [1]);
+      expect(attRecords.length, 4);
+      for (final att in attRecords) {
+        expect(att['status'], 'On Leave');
+      }
+
+      // 6. Verify Payroll: 1 LOP Day recorded
+      final lopRecords = await db.query('loss_of_pay_records', where: 'employee_id = ?', whereArgs: [1]);
+      expect(lopRecords.length, 1);
+      expect(lopRecords.first['date'], '13-09-2026');
+    });
   });
 }

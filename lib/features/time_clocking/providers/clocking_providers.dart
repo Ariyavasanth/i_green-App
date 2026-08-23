@@ -1,10 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/clock_entry.dart';
 import '../domain/clocking_repository.dart';
-import '../data/sqlite_clocking_repository.dart';
+import '../data/firebase_clocking_repository.dart';
 
 final clockingRepositoryProvider = Provider<ClockingRepository>((ref) {
-  return SqliteClockingRepository();
+  return FirebaseClockingRepository();
 });
 
 typedef ClockFilter = ({String? employeeId, DateTime? date});

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../employee/domain/employee.dart';
+import '../../../employee/providers/employee_providers.dart';
 import '../../domain/leave_request.dart';
 import '../../providers/leave_providers.dart';
 
@@ -54,6 +56,7 @@ class _AdminLeaveReviewDialogState extends ConsumerState<AdminLeaveReviewDialog>
 
       ref.invalidate(allLeaveRequestsProvider);
       ref.invalidate(leaveRequestsProvider);
+      ref.invalidate(employeesProvider);
 
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -70,13 +73,35 @@ class _AdminLeaveReviewDialogState extends ConsumerState<AdminLeaveReviewDialog>
   @override
   Widget build(BuildContext context) {
     final req = widget.request;
-    final policy = req.leavePolicySnapshot.isNotEmpty
-        ? req.leavePolicySnapshot
-        : 'Monthly Allocation';
+    final employeesAsync = ref.watch(employeesProvider);
+    final employees = employeesAsync.value ?? [];
+    final matchingEmp = employees.where((e) => e.id == req.employeeId).toList();
+    final emp = matchingEmp.isNotEmpty ? matchingEmp.first : null;
 
+    final policy = emp != null && emp.leaveType.isNotEmpty
+        ? emp.leaveType
+        : (req.leavePolicySnapshot.isNotEmpty ? req.leavePolicySnapshot : 'Monthly Allocation');
+
+    final allowance = emp != null
+        ? emp.monthlyLeaveAllowanceVal
+        : (req.monthlyAllowanceSnapshot > 0 ? req.monthlyAllowanceSnapshot : 3.0);
+
+    final availLeaves = emp != null ? emp.allowedLeaves : allowance;
     final reqDays = req.requestedDays > 0 ? req.requestedDays : req.numDays;
-    final paidRec = req.calculatedPaidDays;
-    final lopRec = req.calculatedLopDays;
+
+    double paidRec = 0.0;
+    double lopRec = 0.0;
+
+    if (policy == 'As Needed') {
+      paidRec = reqDays;
+      lopRec = 0.0;
+    } else if (policy == 'No Leave') {
+      paidRec = 0.0;
+      lopRec = reqDays;
+    } else {
+      paidRec = reqDays.clamp(0.0, availLeaves).toDouble();
+      lopRec = (reqDays - paidRec).clamp(0.0, 999.0).toDouble();
+    }
 
     final String buttonLabel;
     final Color buttonColor;
@@ -256,8 +281,8 @@ class _AdminLeaveReviewDialogState extends ConsumerState<AdminLeaveReviewDialog>
                         spacing: 14,
                         runSpacing: 4,
                         children: [
-                          Text('• Allowance: ${req.monthlyAllowanceSnapshot % 1 == 0 ? req.monthlyAllowanceSnapshot.toInt() : req.monthlyAllowanceSnapshot} Days', style: const TextStyle(fontSize: 12)),
-                          Text('• Available: ${paidRec % 1 == 0 ? paidRec.toInt() : paidRec} Days', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          Text('• Allowance: ${allowance % 1 == 0 ? allowance.toInt() : allowance} Days', style: const TextStyle(fontSize: 12)),
+                          Text('• Available: ${availLeaves % 1 == 0 ? availLeaves.toInt() : availLeaves} Days', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                           Text('• Requested: ${reqDays % 1 == 0 ? reqDays.toInt() : reqDays} Days', style: const TextStyle(fontSize: 12)),
                         ],
                       ),

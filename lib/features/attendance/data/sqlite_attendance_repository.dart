@@ -838,4 +838,13 @@ class SqliteAttendanceRepository implements AttendanceRepository {
       return 0;
     }
   }
+
+  @override
+  Future<void> clearAllAttendanceRecords() async {
+    try {
+      final db = await database;
+      await db.delete('attendance_records');
+      await db.delete('attendance_attempts');
+    } catch (_) {}
+  }
 }

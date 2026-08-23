@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../employee/domain/employee.dart';
 import '../domain/leave_balance.dart';
 import '../domain/leave_request.dart';
+import '../domain/leave_overlap_validator.dart';
 import '../providers/leave_providers.dart';
 
 enum EmployeeLeaveTab {
@@ -162,16 +163,37 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
     _toDate = DateTime.now();
     _reasonController.clear();
 
+    String durationOption = 'full_day';
+    String? submitError;
+
     showDialog(
       context: context,
       builder: (dialogCtx) {
         return StatefulBuilder(
           builder: (ctx, setDialogState) {
+            final isHalfDay = durationOption != 'full_day';
+            final halfDayPeriod = isHalfDay ? durationOption : null;
+
             double days = 1.0;
-            if (_fromDate != null && _toDate != null) {
+            if (isHalfDay) {
+              days = 0.5;
+            } else if (_fromDate != null && _toDate != null) {
               final diff = _toDate!.difference(_fromDate!).inDays + 1;
               days = math.max(1.0, diff.toDouble());
             }
+
+            final fromStr = DateFormat('dd-MM-yyyy').format(_fromDate!);
+            final toStr = DateFormat('dd-MM-yyyy').format(_toDate!);
+
+            final existingRequests = ref.watch(leaveRequestsProvider(currentEmp.id)).value ?? [];
+            final overlapResult = LeaveOverlapValidator.checkOverlap(
+              newFromDate: fromStr,
+              newToDate: toStr,
+              isHalfDay: isHalfDay,
+              halfDayPeriod: halfDayPeriod,
+              existingRequests: existingRequests,
+              employeeId: currentEmp.id,
+            );
 
             return AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -249,7 +271,9 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                                     if (picked != null) {
                                       setDialogState(() {
                                         _fromDate = picked;
-                                        _toDate = picked;
+                                        if (isHalfDay || _toDate == null || _toDate!.isBefore(picked)) {
+                                          _toDate = picked;
+                                        }
                                       });
                                     }
                                   },
@@ -290,7 +314,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                                 const Text('To Date', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
                                 const SizedBox(height: 6),
                                 InkWell(
-                                  onTap: () async {
+                                  onTap: isHalfDay ? null : () async {
                                     final picked = await showDatePicker(
                                       context: context,
                                       initialDate: _toDate ?? _fromDate ?? DateTime.now(),
@@ -307,6 +331,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                                     clipBehavior: Clip.antiAlias,
                                     decoration: BoxDecoration(
+                                      color: isHalfDay ? const Color(0xFFF1F5F9) : Colors.white,
                                       border: Border.all(color: const Color(0xFFCBD5E1)),
                                       borderRadius: BorderRadius.circular(10),
                                     ),
@@ -318,11 +343,11 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                                             _toDate != null ? DateFormat('dd MMM yyyy').format(_toDate!) : 'Select',
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(fontSize: 13, color: Color(0xFF414A51)),
+                                            style: TextStyle(fontSize: 13, color: isHalfDay ? const Color(0xFF94A3B8) : const Color(0xFF414A51)),
                                           ),
                                         ),
                                         const SizedBox(width: 4),
-                                        const Icon(Icons.calendar_today, size: 16, color: Color(0xFF64748B)),
+                                        Icon(Icons.calendar_today, size: 16, color: isHalfDay ? const Color(0xFFCBD5E1) : const Color(0xFF64748B)),
                                       ],
                                     ),
                                   ),
@@ -332,7 +357,112 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 14),
+
+                      // Leave Duration Radio Tiles
+                      const Text('Leave Duration', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: RadioListTile<String>(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              activeColor: const Color(0xFF9CC70A),
+                              title: const Text('Full Day', style: TextStyle(fontSize: 12, color: Color(0xFF414A51))),
+                              value: 'full_day',
+                              groupValue: durationOption,
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setDialogState(() => durationOption = val);
+                                }
+                              },
+                            ),
+                          ),
+                          Expanded(
+                            child: RadioListTile<String>(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              activeColor: const Color(0xFF9CC70A),
+                              title: const Text('First Half', style: TextStyle(fontSize: 12, color: Color(0xFF414A51))),
+                              value: 'first_half',
+                              groupValue: durationOption,
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setDialogState(() {
+                                    durationOption = val;
+                                    _toDate = _fromDate;
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                          Expanded(
+                            child: RadioListTile<String>(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              activeColor: const Color(0xFF9CC70A),
+                              title: const Text('Second Half', style: TextStyle(fontSize: 12, color: Color(0xFF414A51))),
+                              value: 'second_half',
+                              groupValue: durationOption,
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setDialogState(() {
+                                    durationOption = val;
+                                    _toDate = _fromDate;
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      // Shift breakdown banner for half-day
+                      if (durationOption == 'first_half') ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(10),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text('First Half Leave: 9:00 AM – 1:30 PM', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
+                              SizedBox(height: 2),
+                              Text('Remaining Work: 1:30 PM – 6:00 PM', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                              SizedBox(height: 2),
+                              Text('Duration: 0.5 Day', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF9CC70A))),
+                            ],
+                          ),
+                        ),
+                      ] else if (durationOption == 'second_half') ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(10),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text('Second Half Leave: 1:30 PM – 6:00 PM', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
+                              SizedBox(height: 2),
+                              Text('Remaining Work: 9:00 AM – 1:30 PM', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                              SizedBox(height: 2),
+                              Text('Duration: 0.5 Day', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF9CC70A))),
+                            ],
+                          ),
+                        ),
+                      ],
+
                       Align(
                         alignment: Alignment.centerRight,
                         child: Text(
@@ -341,6 +471,42 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                         ),
                       ),
                       const SizedBox(height: 12),
+
+                      // Real-Time Overlap Conflict Banner
+                      if (overlapResult.hasOverlap) ...[
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF2F2),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFFECACA)),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      '⚠️ Leave Already Requested',
+                                      style: TextStyle(fontSize: 12, color: Color(0xFF991B1B), fontWeight: FontWeight.bold),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      overlapResult.message ?? 'An overlapping leave request already exists for the selected date/period.',
+                                      style: const TextStyle(fontSize: 11, color: Color(0xFF7F1D1D), height: 1.3),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
 
                       // Employee Policy Warning Banner
                       if (currentEmp.leavePolicy == 'No Leave') ...[
@@ -389,6 +555,32 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                         const SizedBox(height: 12),
                       ],
 
+                      // In-Dialog Submission Error Box
+                      if (submitError != null) ...[
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF2F2),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFFECACA)),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(Icons.error_outline, color: Color(0xFFDC2626), size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  submitError!,
+                                  style: const TextStyle(fontSize: 11, color: Color(0xFF7F1D1D), fontWeight: FontWeight.w600, height: 1.3),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
                       // Description
                       const Text('Description', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
                       const SizedBox(height: 6),
@@ -421,58 +613,58 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   ),
-                  onPressed: () async {
-                    if (_reasonController.text.trim().isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Please enter a description / reason'),
-                          backgroundColor: Color(0xFFC62828),
-                        ),
-                      );
-                      return;
-                    }
+                  onPressed: overlapResult.hasOverlap
+                      ? null
+                      : () async {
+                          if (_reasonController.text.trim().isEmpty) {
+                            setDialogState(() {
+                              submitError = 'Please enter a description / reason';
+                            });
+                            return;
+                          }
 
-                    final messenger = ScaffoldMessenger.of(context);
-                    final nav = Navigator.of(dialogCtx);
+                          final messenger = ScaffoldMessenger.of(context);
+                          final nav = Navigator.of(dialogCtx);
 
-                    final fromStr = DateFormat('dd-MM-yyyy').format(_fromDate!);
-                    final toStr = DateFormat('dd-MM-yyyy').format(_toDate!);
+                          final newReq = LeaveRequest(
+                            id: 0,
+                            employeeId: currentEmp.id,
+                            employeeName: currentEmp.fullName,
+                            employeeCustomId: currentEmp.employeeId,
+                            leaveType: _selectedLeaveType,
+                            fromDate: fromStr,
+                            toDate: toStr,
+                            numDays: days,
+                            reason: _reasonController.text.trim(),
+                            status: 'Pending',
+                            createdAt: DateTime.now().toIso8601String(),
+                            isHalfDay: isHalfDay,
+                            halfDayPeriod: halfDayPeriod,
+                          );
 
-                    final newReq = LeaveRequest(
-                      id: 0,
-                      employeeId: currentEmp.id,
-                      employeeName: currentEmp.fullName,
-                      employeeCustomId: currentEmp.employeeId,
-                      leaveType: _selectedLeaveType,
-                      fromDate: fromStr,
-                      toDate: toStr,
-                      numDays: days,
-                      reason: _reasonController.text.trim(),
-                      status: 'Pending',
-                      createdAt: DateTime.now().toIso8601String(),
-                    );
+                          try {
+                            setDialogState(() {
+                              submitError = null;
+                            });
 
-                    try {
-                      await ref.read(leaveRepositoryProvider).submitLeaveRequest(newReq);
-                      ref.invalidate(leaveRequestsProvider(currentEmp.id));
-                      ref.invalidate(allLeaveRequestsProvider);
+                            await ref.read(leaveRepositoryProvider).submitLeaveRequest(newReq);
+                            ref.invalidate(leaveRequestsProvider(currentEmp.id));
+                            ref.invalidate(allLeaveRequestsProvider);
 
-                      nav.pop();
-                      messenger.showSnackBar(
-                        const SnackBar(
-                          content: Text('Leave request submitted successfully!'),
-                          backgroundColor: Color(0xFF2E7D32),
-                        ),
-                      );
-                    } catch (e) {
-                      messenger.showSnackBar(
-                        SnackBar(
-                          content: Text('Failed to submit: $e'),
-                          backgroundColor: const Color(0xFFC62828),
-                        ),
-                      );
-                    }
-                  },
+                            nav.pop();
+                            messenger.showSnackBar(
+                              const SnackBar(
+                                content: Text('Leave request submitted successfully!'),
+                                backgroundColor: Color(0xFF2E7D32),
+                              ),
+                            );
+                          } catch (e) {
+                            final errText = e.toString().replaceAll('Exception: ', '');
+                            setDialogState(() {
+                              submitError = errText;
+                            });
+                          }
+                        },
                   icon: const Icon(Icons.check_circle, size: 18),
                   label: const Text('Submit Request', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),

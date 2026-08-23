@@ -78,4 +78,5 @@ abstract class AttendanceRepository {
   });
   Future<List<Map<String, dynamic>>> getAttendanceAttempts();
   Future<void> autoResolveMissingCheckOuts({int? employeeId});
+  Future<void> clearAllAttendanceRecords();
 }

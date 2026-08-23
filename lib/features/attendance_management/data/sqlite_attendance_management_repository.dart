@@ -67,46 +67,7 @@ class SqliteAttendanceManagementRepository implements AttendanceManagementReposi
   }
 
   Future<void> _seedSampleAttendanceData(Database db) async {
-    final countRes = await db.rawQuery('SELECT COUNT(*) FROM attendance_records');
-    final count = Sqflite.firstIntValue(countRes) ?? 0;
-    if (count == 0) {
-      final now = DateTime.now();
-      final todayStr = '${now.day.toString().padLeft(2, '0')}-${now.month.toString().padLeft(2, '0')}-${now.year}';
-      final sampleRecords = [
-        AttendanceRecord(
-          id: 1,
-          employeeId: 1,
-          employeeName: 'Ariyavasanth S',
-          date: todayStr,
-          time: '09:00:00',
-          status: 'Present',
-          verificationStatus: 'Verified',
-          similarityScore: 0.98,
-          checkInTime: '09:00',
-          checkOutTime: '17:30',
-          totalHours: 8.5,
-          markedAt: now.toIso8601String(),
-        ),
-        AttendanceRecord(
-          id: 2,
-          employeeId: 2,
-          employeeName: 'Saravanan G S',
-          date: todayStr,
-          time: '09:25:00',
-          status: 'Late',
-          verificationStatus: 'Verified',
-          similarityScore: 0.95,
-          checkInTime: '09:25',
-          checkOutTime: '18:00',
-          totalHours: 8.58,
-          markedAt: now.toIso8601String(),
-        ),
-      ];
-
-      for (final r in sampleRecords) {
-        await db.insert('attendance_records', r.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-      }
-    }
+    // Sample data seeding disabled
   }
 
   @override

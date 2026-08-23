@@ -410,6 +410,35 @@ class SqliteEmployeeRepository implements EmployeeRepository {
       where: 'id = ?',
       whereArgs: [emp.id],
     );
+
+    // Sync leave_balances for updated employee
+    if (emp.id != null) {
+      final balMaps = await db.query('leave_balances', where: 'employee_id = ?', whereArgs: [emp.id]);
+      if (balMaps.isNotEmpty) {
+        for (final b in balMaps) {
+          final used = (b['used_leaves'] as num?)?.toDouble() ?? 0.0;
+          final newAllowed = emp.allowedLeaves;
+          final newAvailable = (newAllowed - used).clamp(0.0, 999.0);
+          await db.update(
+            'leave_balances',
+            {
+              'allowed_leaves': newAllowed,
+              'available_leaves': newAvailable,
+            },
+            where: 'id = ?',
+            whereArgs: [b['id']],
+          );
+        }
+      } else {
+        await db.insert('leave_balances', {
+          'employee_id': emp.id,
+          'leave_type': 'Casual Leave',
+          'allowed_leaves': emp.allowedLeaves,
+          'used_leaves': 0.0,
+          'available_leaves': emp.allowedLeaves,
+        });
+      }
+    }
   }
 
   @override
@@ -438,6 +467,15 @@ class SqliteEmployeeRepository implements EmployeeRepository {
         'employees',
         updateData,
         where: 'id = ?',
+        whereArgs: [id],
+      );
+      batch.update(
+        'leave_balances',
+        {
+          'allowed_leaves': allowedLeaves,
+          'available_leaves': allowedLeaves,
+        },
+        where: 'employee_id = ?',
         whereArgs: [id],
       );
     }

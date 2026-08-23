@@ -244,7 +244,7 @@ class _DashboardTab extends StatelessWidget {
                     DataColumn(label: Text('Last Working Day', style: TextStyle(fontWeight: FontWeight.bold))),
                     DataColumn(label: Text('Status', style: TextStyle(fontWeight: FontWeight.bold))),
                   ],
-                  rows: requests.take(10).map((r) {
+                  rows: requests.take(5).map((r) {
                     return DataRow(cells: [
                       DataCell(
                         Row(

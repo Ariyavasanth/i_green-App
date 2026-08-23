@@ -7,7 +7,7 @@ import '../domain/loan_repository.dart';
 
 // Change only this line to FirebaseLoanRepository() when its stub is implemented.
 final loanRepositoryProvider = Provider<LoanRepository>(
-  (ref) => SqliteLoanRepository(),
+  (ref) => FirebaseLoanRepository(),
 );
 
 final allLoansProvider = FutureProvider<List<EmployeeLoan>>((ref) {
