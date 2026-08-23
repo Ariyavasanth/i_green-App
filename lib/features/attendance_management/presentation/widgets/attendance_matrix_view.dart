@@ -3,7 +3,10 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../attendance/domain/attendance_record.dart';
+import '../../../attendance/domain/attendance_status_helper.dart';
 import '../../../employee/domain/employee.dart';
+import '../../../leave/domain/leave_request.dart';
+import '../../../on_duty/domain/on_duty_assignment.dart';
 
 class AttendanceMatrixView extends StatelessWidget {
   const AttendanceMatrixView({
@@ -11,13 +14,22 @@ class AttendanceMatrixView extends StatelessWidget {
     required this.focusedMonth,
     required this.employees,
     required this.records,
+    this.leaves,
+    this.onDutyAssignments,
     required this.onCellTap,
   });
 
   final DateTime focusedMonth;
   final List<Employee> employees;
   final List<AttendanceRecord> records;
-  final void Function(Employee employee, String dateStr, AttendanceRecord? record) onCellTap;
+  final List<LeaveRequest>? leaves;
+  final List<OnDutyAssignment>? onDutyAssignments;
+  final void Function(
+    Employee employee,
+    DateTime date,
+    AttendanceRecord? record,
+    AttendanceStatusInfo? statusInfo,
+  ) onCellTap;
 
   @override
   Widget build(BuildContext context) {
@@ -25,12 +37,18 @@ class AttendanceMatrixView extends StatelessWidget {
     final month = focusedMonth.month;
     final daysInMonth = DateTime(year, month + 1, 0).day;
 
-    final isMobile = MediaQuery.of(context).size.width < 650;
-
     // Index records by employeeId + date string "DD-MM-YYYY"
     final recordMap = <String, AttendanceRecord>{};
     for (final r in records) {
-      recordMap['${r.employeeId}_${r.date}'] = r;
+      final dt = _parseKey(r.date);
+      if (dt != null) {
+        final dateKey = '${dt.day.toString().padLeft(2, '0')}-${dt.month.toString().padLeft(2, '0')}-${dt.year}';
+        recordMap['${r.employeeId}_$dateKey'] = r;
+        if (r.employeeName.isNotEmpty) recordMap['${r.employeeName}_$dateKey'] = r;
+      } else {
+        recordMap['${r.employeeId}_${r.date}'] = r;
+        if (r.employeeName.isNotEmpty) recordMap['${r.employeeName}_${r.date}'] = r;
+      }
     }
 
     if (employees.isEmpty) {
@@ -77,62 +95,36 @@ class AttendanceMatrixView extends StatelessWidget {
           // Header with Title & Legend
           Padding(
             padding: const EdgeInsets.all(16),
-            child: isMobile
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.calendar_today_outlined, size: 18, color: AppColors.primary),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Monthly Attendance Matrix (${DateFormat('MMMM yyyy').format(focusedMonth)})',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF1E293B),
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 6,
-                        children: [
-                          _legendPill('Present', const Color(0xFF22C55E)),
-                          _legendPill('Late', const Color(0xFFF97316)),
-                          _legendPill('On Leave', const Color(0xFFEAB308)),
-                          _legendPill('Absent', const Color(0xFFEF4444)),
-                        ],
-                      ),
-                    ],
-                  )
-                : Row(
-                    children: [
-                      const Icon(Icons.calendar_today_outlined, size: 18, color: AppColors.primary),
-                      const SizedBox(width: 8),
-                      Text(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.calendar_today_outlined, size: 18, color: AppColors.primary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
                         'Monthly Attendance Matrix (${DateFormat('MMMM yyyy').format(focusedMonth)})',
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
                           color: Color(0xFF1E293B),
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      const Spacer(),
-                      _legendPill('Present', const Color(0xFF22C55E)),
-                      const SizedBox(width: 12),
-                      _legendPill('Late', const Color(0xFFF97316)),
-                      const SizedBox(width: 12),
-                      _legendPill('On Leave', const Color(0xFFEAB308)),
-                      const SizedBox(width: 12),
-                      _legendPill('Absent', const Color(0xFFEF4444)),
-                    ],
-                  ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 6,
+                  children: AttendanceStatusInfo.values
+                      .map((s) => _legendPill('${s.code}: ${s.label}', s.textColor, s.bgColor))
+                      .toList(),
+                ),
+              ],
+            ),
           ),
           const Divider(height: 1, color: Color(0xFFE2E8F0)),
 
@@ -299,26 +291,40 @@ class AttendanceMatrixView extends StatelessWidget {
     );
   }
 
-  Widget _legendPill(String text, Color color) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+  Widget _legendPill(String text, Color textColor, Color bgColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: textColor.withValues(alpha: 0.3)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+          color: textColor,
         ),
-        const SizedBox(width: 5),
-        Text(
-          text,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF64748B),
-          ),
-        ),
-      ],
+      ),
     );
+  }
+
+  DateTime? _parseKey(String value) {
+    if (value.isEmpty) return null;
+    try {
+      final isoDate = DateTime.tryParse(value);
+      if (isoDate != null) return isoDate;
+      final parts = value.split('-');
+      if (parts.length == 3) {
+        if (parts[0].length == 4) {
+          return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+        } else {
+          return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+        }
+      }
+    } catch (_) {}
+    return null;
   }
 
   Widget _buildDayCell(
@@ -328,65 +334,50 @@ class AttendanceMatrixView extends StatelessWidget {
     int year,
     Map<String, AttendanceRecord> recordMap,
   ) {
+    final date = DateTime(year, month, day);
     final dateStr = '${day.toString().padLeft(2, '0')}-${month.toString().padLeft(2, '0')}-$year';
-    final key = '${emp.id}_$dateStr';
-    final record = recordMap[key];
+    final record = recordMap['${emp.id}_$dateStr'] ?? recordMap['${emp.employeeId}_$dateStr'] ?? recordMap['${emp.fullName}_$dateStr'];
 
-    Color bgColor;
-    Widget iconWidget;
+    final statusInfo = AttendanceStatusHelper.resolveStatus(
+      employee: emp,
+      date: date,
+      record: record,
+      leaves: leaves,
+      onDutyAssignments: onDutyAssignments,
+    );
 
-    if (record == null) {
-      bgColor = const Color(0xFFF8FAFC);
-      iconWidget = const Text('-', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)));
-    } else {
-      switch (record.status) {
-        case 'Present':
-        case 'Completed':
-        case 'Checked Out':
-          bgColor = const Color(0xFFDCFCE7);
-          iconWidget = const Icon(Icons.check, size: 13, color: Color(0xFF16A34A));
-          break;
-        case 'Late':
-          bgColor = const Color(0xFFFFEDD5);
-          iconWidget = const Text('L', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFEA580C)));
-          break;
-        case 'Insufficient hours':
-          bgColor = const Color(0xFFFFEDD5);
-          iconWidget = const Text('I', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFEA580C)));
-          break;
-        case 'On Leave':
-        case 'Half Day':
-          bgColor = const Color(0xFFFEF9C3);
-          iconWidget = const Text('L', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFFCA8A04)));
-          break;
-        case 'Absent':
-          bgColor = const Color(0xFFFEE2E2);
-          iconWidget = const Icon(Icons.close, size: 13, color: Color(0xFFDC2626));
-          break;
-        default:
-          bgColor = const Color(0xFFDCFCE7);
-          iconWidget = const Icon(Icons.check, size: 13, color: Color(0xFF16A34A));
-      }
-    }
+    Color bgColor = statusInfo?.bgColor ?? const Color(0xFFF8FAFC);
+    Color textColor = statusInfo?.textColor ?? const Color(0xFF94A3B8);
+    String codeStr = statusInfo?.code ?? '-';
 
     final tooltipMsg = record != null
-        ? '${emp.fullName} (${emp.employeeId.isNotEmpty ? emp.employeeId : "EMP${emp.id}"})\nDate: $dateStr\nStatus: ${record.status}\nIn: ${record.effectiveCheckInTime}\nOut: ${record.checkOutTime.isNotEmpty ? record.checkOutTime : "--:--"}\nHours: ${record.totalHours} hrs'
-        : '${emp.fullName}\nDate: $dateStr\nStatus: Not Marked';
+        ? '${emp.fullName} (${emp.employeeId.isNotEmpty ? emp.employeeId : "EMP${emp.id}"})\nDate: $dateStr\nStatus: ${statusInfo?.label ?? record.status}\nIn: ${record.effectiveCheckInTime}\nOut: ${record.checkOutTime.isNotEmpty ? record.checkOutTime : "--:--"}\nHours: ${record.totalHours} hrs'
+        : '${emp.fullName}\nDate: $dateStr\nStatus: ${statusInfo?.label ?? "Not Marked"}';
 
     return Tooltip(
       message: tooltipMsg,
       child: InkWell(
-        onTap: () => onCellTap(emp, dateStr, record),
+        onTap: () => onCellTap(emp, date, record, statusInfo),
         borderRadius: BorderRadius.circular(6),
         child: Container(
-          width: 26,
-          height: 26,
+          width: 28,
+          height: 28,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: bgColor,
             borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: statusInfo != null ? textColor.withValues(alpha: 0.3) : const Color(0xFFE2E8F0),
+            ),
           ),
-          child: iconWidget,
+          child: Text(
+            codeStr,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
+          ),
         ),
       ),
     );

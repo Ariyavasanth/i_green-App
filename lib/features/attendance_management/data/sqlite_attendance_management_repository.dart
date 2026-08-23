@@ -95,12 +95,24 @@ class SqliteAttendanceManagementRepository implements AttendanceManagementReposi
 
     if (monthYear != null && monthYear.isNotEmpty) {
       list = list.where((r) {
-        if (r.date.length >= 10) {
-          final parts = r.date.split('-');
-          if (parts.length == 3) {
-            final recordMonthYear = '${parts[1]}-${parts[2]}';
-            return recordMonthYear == monthYear;
-          }
+        if (r.date.trim().isNotEmpty) {
+          try {
+            final isoDate = DateTime.tryParse(r.date);
+            if (isoDate != null) {
+              final mStr = '${isoDate.month.toString().padLeft(2, '0')}-${isoDate.year}';
+              return mStr == monthYear;
+            }
+            final parts = r.date.split('-');
+            if (parts.length == 3) {
+              if (parts[0].length == 4) {
+                final mStr = '${parts[1].padLeft(2, '0')}-${parts[0]}';
+                return mStr == monthYear;
+              } else {
+                final mStr = '${parts[1].padLeft(2, '0')}-${parts[2]}';
+                return mStr == monthYear;
+              }
+            }
+          } catch (_) {}
         }
         return true;
       }).toList();

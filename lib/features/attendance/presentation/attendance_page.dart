@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../domain/attendance_record.dart';
+import '../domain/attendance_status_helper.dart';
+import 'widgets/attendance_details_dialog.dart';
 import '../../employee/domain/employee.dart';
 import '../../leave/domain/leave_request.dart';
 import '../../leave/domain/leave_type.dart';
@@ -20,6 +22,7 @@ import '../../on_duty/on_duty.dart';
 import '../../permission/domain/permission_enums.dart';
 import '../../permission/domain/permission_request.dart';
 import '../../permission/providers/permission_providers.dart';
+import '../../attendance_settings/providers/attendance_settings_providers.dart';
 import '../providers/attendance_providers.dart';
 import '../../time_clocking/presentation/employee_clocking_widget.dart';
 
@@ -3060,7 +3063,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         final now = DateTime.now();
         final expectedInTimeOfDay = _getEmployeeInTime(employee);
         final officialStartTime = DateTime(now.year, now.month, now.day, expectedInTimeOfDay.hour, expectedInTimeOfDay.minute);
-        final lateCutoffTime = officialStartTime.add(const Duration(minutes: 15));
+        final lateCutoffTime = officialStartTime;
         final officialTimeStr = _formatTimeOfDayLabel(expectedInTimeOfDay);
         final isLate = now.isAfter(lateCutoffTime) && !hasCheckedIn;
 
@@ -3873,61 +3876,74 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
               final date = DateTime(year, month, dayNumber);
               final key = _formatKey(date);
               final isToday = key == todayKey;
-              final isLeave = leaveDates.contains(key);
               final record = attendanceMap[key];
-              final isAttendance = record != null;
+              final currentEmp = ref.watch(currentEmployeeProvider);
 
-              Color? bg;
-              if (isLeave) {
-                bg = const Color(0xFFE53935);
-              } else if (isAttendance) {
-                bg = record.status == 'Late'
-                    ? const Color(0xFFE65100)
-                    : const Color(0xFF2E7D32);
-              } else if (isToday) {
-                bg = const Color(0xFFD6ECFF);
-              }
+              final statusInfo = currentEmp != null
+                  ? AttendanceStatusHelper.resolveStatus(
+                      employee: currentEmp,
+                      date: date,
+                      record: record,
+                      leaves: leaveRequests,
+                    )
+                  : null;
+
+              Color bg = statusInfo?.bgColor ?? (isToday ? const Color(0xFFD6ECFF) : const Color(0xFFF8FAFC));
+              Color textColor = statusInfo?.textColor ?? (isToday ? AppColors.active : Colors.black87);
 
               return MouseRegion(
-                cursor: isToday ? SystemMouseCursors.click : SystemMouseCursors.basic,
+                cursor: SystemMouseCursors.click,
                 child: GestureDetector(
-                  onTap: isToday
-                      ? () => _openVerificationDialog(
-                            date: date,
-                            isCheckOut: record != null && record.checkOutTime.isEmpty,
-                            existingRecord: record,
-                          )
-                      : null,
+                  onTap: () {
+                    if (currentEmp != null) {
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => AttendanceDetailsDialog(
+                          employee: currentEmp,
+                          date: date,
+                          record: record,
+                          statusInfo: statusInfo,
+                        ),
+                      );
+                    }
+                  },
                   child: Container(
                     decoration: BoxDecoration(
                       color: bg,
                       borderRadius: BorderRadius.circular(8),
-                      border: isToday && bg == null
+                      border: isToday
                           ? Border.all(color: AppColors.active, width: 1.5)
-                          : isLeave
-                              ? Border.all(color: const Color(0xFF9CC70A), width: 1.2)
-                              : null,
+                          : Border.all(color: statusInfo != null ? textColor.withValues(alpha: 0.3) : const Color(0xFFE2E8F0)),
                     ),
-                    child: Stack(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Center(
-                          child: Text(
-                            '$dayNumber',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: isLeave || isAttendance || isToday
-                                  ? FontWeight.bold
-                                  : FontWeight.w500,
-                              color: isAttendance || isLeave ? Colors.white : Colors.black,
-                            ),
+                        Text(
+                          '$dayNumber',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: textColor,
                           ),
                         ),
-                        if (isLeave)
-                          const Positioned(
-                            right: 3,
-                            top: 3,
-                            child: Icon(Icons.event_busy, size: 9, color: Colors.white),
+                        if (statusInfo != null) ...[
+                          const SizedBox(height: 2),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: statusInfo.textColor.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              statusInfo.code,
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: statusInfo.textColor,
+                              ),
+                            ),
                           ),
+                        ],
                       ],
                     ),
                   ),
@@ -3937,41 +3953,42 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
           ),
           const SizedBox(height: 16),
 
-          // Legend using Wrap for zero overflow on mobile
+          // Legend displaying status codes
           Center(
             child: Wrap(
               alignment: WrapAlignment.center,
-              spacing: 12,
-              runSpacing: 8,
-              children: [
-                _legend(const Color(0xFFD6ECFF), 'Today'),
-                _legend(const Color(0xFFE53935), 'Leave'),
-                _legend(const Color(0xFF2E7D32), 'Present'),
-                _legend(const Color(0xFFE65100), 'Late'),
-                _legend(const Color(0xFF9C27B0), 'Holiday'),
-              ],
+              spacing: 8,
+              runSpacing: 6,
+              children: AttendanceStatusInfo.values
+                  .map((s) => Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: s.bgColor,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: s.textColor.withValues(alpha: 0.3)),
+                            ),
+                            child: Text(
+                              s.code,
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: s.textColor),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            s.label,
+                            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ))
+                  .toList(),
             ),
           ),
         ],
       ),
     );
   }
-
-  Widget _legend(Color color, String label) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3)),
-          ),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-          ),
-        ],
-      );
 
   TimeOfDay _getEmployeeInTime(Employee emp) {
     final inTimeStr = emp.inTime.trim();

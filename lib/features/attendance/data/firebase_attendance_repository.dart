@@ -6,9 +6,12 @@ import '../domain/attendance_record.dart';
 import '../domain/attendance_settings.dart';
 import '../domain/attendance_repository.dart';
 import '../../employee/domain/employee.dart';
+import 'sqlite_attendance_repository.dart';
 
 class FirebaseAttendanceRepository implements AttendanceRepository {
   final FirebaseFirestore _firestore;
+  final SqliteAttendanceRepository _sqliteRepo = SqliteAttendanceRepository();
+
   FirebaseAttendanceRepository({FirebaseFirestore? firestore}) : _firestore = firestore ?? FirebaseFirestore.instance;
 
   CollectionReference<Map<String, dynamic>> get _recordsRef => _firestore.collection('attendance_records');
@@ -80,42 +83,67 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
   @override
   Future<List<AttendanceRecord>> getAttendanceRecords(int employeeId) async {
-    final snap = await _recordsRef.get();
-    final list = <AttendanceRecord>[];
-    for (final doc in snap.docs) {
-      final data = doc.data();
-      final docEmpIdRaw = data['employee_id'];
-      final docEmpIdNum = docEmpIdRaw is int
-          ? docEmpIdRaw
-          : (int.tryParse(docEmpIdRaw?.toString() ?? '') ?? 0);
-      final docEmpCode = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
+    final sqliteList = await _sqliteRepo.getAttendanceRecords(employeeId);
+    List<AttendanceRecord> firestoreList = [];
+    try {
+      final snap = await _recordsRef.get();
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final docEmpIdRaw = data['employee_id'];
+        final docEmpIdNum = docEmpIdRaw is int
+            ? docEmpIdRaw
+            : (int.tryParse(docEmpIdRaw?.toString() ?? '') ?? 0);
+        final docEmpCode = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
 
-      final matchesEmp = employeeId == 0 ||
-          employeeId == 1 ||
-          docEmpIdNum == employeeId ||
-          data['employee_id']?.toString() == employeeId.toString() ||
-          docEmpCode == 'EMP-0001' ||
-          docEmpCode == 'EMP-1140';
+        final matchesEmp = employeeId == 0 ||
+            employeeId == 1 ||
+            docEmpIdNum == employeeId ||
+            data['employee_id']?.toString() == employeeId.toString() ||
+            docEmpCode == 'EMP-0001' ||
+            docEmpCode == 'EMP-1140';
 
-      if (matchesEmp) {
-        list.add(AttendanceRecord.fromMap(data));
+        if (matchesEmp) {
+          firestoreList.add(AttendanceRecord.fromMap(data));
+        }
       }
+    } catch (_) {}
+
+    final combinedMap = <String, AttendanceRecord>{};
+    for (final r in sqliteList) {
+      combinedMap['${r.employeeId}_${r.date}'] = r;
     }
-    return list;
+    for (final r in firestoreList) {
+      combinedMap['${r.employeeId}_${r.date}'] = r;
+    }
+    return combinedMap.values.toList();
   }
 
   @override
   Future<List<AttendanceRecord>> getAllAttendanceRecords() async {
-    await autoResolveMissingCheckOuts();
-    final snap = await _recordsRef.get();
-    return snap.docs.map((d) => AttendanceRecord.fromMap(d.data())).toList();
+    final sqliteList = await _sqliteRepo.getAllAttendanceRecords();
+    List<AttendanceRecord> firestoreList = [];
+    try {
+      await autoResolveMissingCheckOuts();
+      final snap = await _recordsRef.get();
+      firestoreList = snap.docs.map((d) => AttendanceRecord.fromMap(d.data())).toList();
+    } catch (_) {}
+
+    final combinedMap = <String, AttendanceRecord>{};
+    for (final r in sqliteList) {
+      combinedMap['${r.employeeId}_${r.date}'] = r;
+    }
+    for (final r in firestoreList) {
+      combinedMap['${r.employeeId}_${r.date}'] = r;
+    }
+    return combinedMap.values.toList();
   }
 
   @override
   Future<AttendanceRecord?> getAttendanceRecordForDate(int employeeId, String date) async {
-    await autoResolveMissingCheckOuts(employeeId: employeeId);
-    final todayNormDate = _normalizeDateKey('${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}');
+    final sqliteRec = await _sqliteRepo.getAttendanceRecordForDate(employeeId, date);
     try {
+      await autoResolveMissingCheckOuts(employeeId: employeeId);
+      final todayNormDate = _normalizeDateKey('${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}');
       final normDate = _normalizeDateKey(date);
       final docId = '${employeeId}_${normDate.replaceAll('-', '')}';
       final recordSnap = await _recordsRef.doc(docId).get();
@@ -152,8 +180,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         }
       }
     } catch (_) {}
-    return null;
-
+    return sqliteRec;
   }
 
   @override
@@ -395,6 +422,16 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     required String status,
     String notes = '',
   }) async {
+    await _sqliteRepo.markAttendance(
+      employeeId: employeeId,
+      employeeName: employeeName,
+      date: date,
+      time: time,
+      verificationStatus: verificationStatus,
+      similarityScore: similarityScore,
+      status: status,
+      notes: notes,
+    );
     final normDate = _normalizeDateKey(date);
     final docId = '${employeeId}_${normDate.replaceAll('-', '')}';
     try {
@@ -423,6 +460,15 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     required String verificationStatus,
     required double similarityScore,
   }) async {
+    try {
+      await _sqliteRepo.checkOut(
+        employeeId: employeeId,
+        date: date,
+        checkOutTime: checkOutTime,
+        verificationStatus: verificationStatus,
+        similarityScore: similarityScore,
+      );
+    } catch (_) {}
     final normDate = _normalizeDateKey(date);
     final docId = '${employeeId}_${normDate.replaceAll('-', '')}';
     final docRef = _recordsRef.doc(docId);

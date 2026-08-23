@@ -6,7 +6,10 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../attendance/domain/attendance_record.dart';
+import '../../attendance/domain/attendance_status_helper.dart';
+import '../../attendance/presentation/widgets/attendance_details_dialog.dart';
 import '../../attendance/providers/attendance_providers.dart';
+import '../../leave/providers/leave_providers.dart';
 import '../../attendance_settings/presentation/widgets/attendance_settings_embedded_view.dart';
 import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
@@ -603,6 +606,9 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                 final filteredEmp = _filterEmployees(employees);
                 final paginatedEmp = _getPaginatedEmployees(filteredEmp);
 
+                final allLeaves = ref.watch(allLeaveRequestsProvider).valueOrNull;
+                final allOnDuty = ref.watch(allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: null))).valueOrNull;
+
                 if (_viewMode == AttendanceViewMode.matrix) {
                   return Column(
                     children: [
@@ -610,11 +616,25 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                         focusedMonth: _focusedMonth,
                         employees: paginatedEmp,
                         records: filteredRecords,
-                        onCellTap: (emp, dateStr, record) {
-                          _openAdminStaticEntryDialog(
-                            record,
-                            emp.id,
-                            dateStr,
+                        leaves: allLeaves,
+                        onDutyAssignments: allOnDuty,
+                        onCellTap: (emp, date, record, statusInfo) {
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => AttendanceDetailsDialog(
+                              employee: emp,
+                              date: date,
+                              record: record,
+                              statusInfo: statusInfo,
+                              onEdit: () {
+                                final dateStr = '${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}';
+                                _openAdminStaticEntryDialog(
+                                  record,
+                                  emp.id,
+                                  dateStr,
+                                );
+                              },
+                            ),
                           );
                         },
                       ),
