@@ -472,18 +472,25 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     final shortfallMins = (shortfallHours * 60).ceil();
     final approvedPermissionMins = await _getApprovedPermissionMinutes(employeeId, date);
 
+    int outMin = 0;
+    try {
+      final parts = checkOutTime.split(':');
+      if (parts.length >= 2) outMin = int.parse(parts[0]) * 60 + int.parse(parts[1]);
+    } catch (_) {}
+    final isLateCheckout = outMin > 1080;
+
     if (shortfallMins == 0) {
       // No shortfall, normal handling
       if (isDynamic) {
         finalStatus = 'Completed';
         updatedNotes = record.notes.isNotEmpty
-            ? '${record.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Completed ${requiredHours.toStringAsFixed(0)} hrs target)'
-            : 'Worked ${hours.toStringAsFixed(1)} hrs (Completed ${requiredHours.toStringAsFixed(0)} hrs target)';
+            ? '${record.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Completed ${requiredHours.toStringAsFixed(0)} hrs target)${isLateCheckout ? ' | Late Checkout' : ''}'
+            : 'Worked ${hours.toStringAsFixed(1)} hrs (Completed ${requiredHours.toStringAsFixed(0)} hrs target)${isLateCheckout ? ' | Late Checkout' : ''}';
       } else {
         finalStatus = record.status == 'Late' ? 'Late' : 'Completed';
         updatedNotes = record.notes.isNotEmpty
-            ? '${record.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Completed shift)'
-            : 'Worked ${hours.toStringAsFixed(1)} hrs (Completed shift)';
+            ? '${record.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Completed shift)${isLateCheckout ? ' | Late Checkout' : ''}'
+            : 'Worked ${hours.toStringAsFixed(1)} hrs (Completed shift)${isLateCheckout ? ' | Late Checkout' : ''}';
       }
     } else {
       // Shortfall exists, check permission coverage
@@ -493,8 +500,15 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         updatedNotes = record.notes.isNotEmpty
             ? '${record.notes} | Authorized early checkout (covers ${shortfallMins} mins)'
             : 'Authorized early checkout (covers ${shortfallMins} mins)';
+      } else if (approvedPermissionMins > 0) {
+        // Partial permission coverage
+        final unauthorizedMins = shortfallMins - approvedPermissionMins;
+        finalStatus = 'Insufficient hours';
+        updatedNotes = record.notes.isNotEmpty
+            ? '${record.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Partially authorized: ${approvedPermissionMins} mins authorized, ${unauthorizedMins} mins unauthorized)'
+            : 'Worked ${hours.toStringAsFixed(1)} hrs (Partially authorized: ${approvedPermissionMins} mins authorized, ${unauthorizedMins} mins unauthorized)';
       } else {
-        // Partial or no permission coverage
+        // No permission coverage
         final unauthorizedMins = shortfallMins - approvedPermissionMins;
         finalStatus = 'Insufficient hours';
         updatedNotes = record.notes.isNotEmpty
@@ -526,6 +540,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     final inTime = record.effectiveCheckInTime;
     final outTime = record.checkOutTime;
     double hours = record.totalHours;
+    String status = record.status;
+    String notes = record.notes;
+
     if (inTime.isNotEmpty && outTime.isNotEmpty) {
       try {
         final inParts = inTime.split(':');
@@ -538,15 +555,59 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
           }
         }
       } catch (_) {}
+
+      Employee? employee;
+      try {
+        final empSnap = await _firestore.collection('employees').where('id', isEqualTo: record.employeeId).limit(1).get();
+        if (empSnap.docs.isNotEmpty) {
+          employee = Employee.fromMap(empSnap.docs.first.data());
+        }
+      } catch (_) {}
+
+      final isDynamic = employee?.isDynamicEmployee ?? false;
+      final requiredHours = (employee?.requiredWorkingHours ?? 0) > 0
+          ? employee!.requiredWorkingHours
+          : 9.0;
+
+      final shortfallHours = (requiredHours - hours).clamp(0, requiredHours);
+      final shortfallMins = (shortfallHours * 60).ceil();
+      final approvedPermissionMins = await _getApprovedPermissionMinutes(record.employeeId, record.date);
+
+      int outMin = 0;
+      try {
+        final parts = outTime.split(':');
+        if (parts.length >= 2) outMin = int.parse(parts[0]) * 60 + int.parse(parts[1]);
+      } catch (_) {}
+      final isLateCheckout = outMin > 1080;
+
+      if (shortfallMins == 0) {
+        if (isDynamic) {
+          status = 'Completed';
+          notes = 'Worked ${hours.toStringAsFixed(1)} hrs (Completed ${requiredHours.toStringAsFixed(0)} hrs target)${isLateCheckout ? ' | Late Checkout' : ''}';
+        } else {
+          status = record.status == 'Late' ? 'Late' : 'Completed';
+          notes = 'Worked ${hours.toStringAsFixed(1)} hrs (Completed shift)${isLateCheckout ? ' | Late Checkout' : ''}';
+        }
+      } else {
+        if (approvedPermissionMins >= shortfallMins) {
+          status = isDynamic ? 'Completed' : (record.status == 'Late' ? 'Late' : 'Completed');
+          notes = 'Authorized early checkout (covers ${shortfallMins} mins)';
+        } else if (approvedPermissionMins > 0) {
+          final unauthorizedMins = shortfallMins - approvedPermissionMins;
+          status = 'Insufficient hours';
+          notes = 'Worked ${hours.toStringAsFixed(1)} hrs (Partially authorized: ${approvedPermissionMins} mins authorized, ${unauthorizedMins} mins unauthorized)';
+        } else {
+          status = 'Insufficient hours';
+          notes = 'Worked ${hours.toStringAsFixed(1)} hrs (Insufficient hours, ${shortfallMins} mins unauthorized)';
+        }
+      }
     }
-    String status = record.status;
-    if (status == 'Missing Check-Out' && outTime.isNotEmpty) {
-      status = 'Present';
-    }
+
     final toSave = record.copyWith(
       time: inTime,
       checkInTime: inTime,
       status: status,
+      notes: notes,
       totalHours: hours,
       markedAt: record.markedAt.isNotEmpty ? record.markedAt : DateTime.now().toIso8601String(),
     );

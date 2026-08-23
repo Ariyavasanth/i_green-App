@@ -531,6 +531,32 @@ class SqliteLeaveRepository implements LeaveRepository {
       }
     }
 
+    // Create/update attendance records for approved leave dates with status 'On Leave'
+    for (final d in approvedDates) {
+      batch.insert(
+        'attendance_records',
+        {
+          'employee_id': req.employeeId,
+          'employee_name': req.employeeName,
+          'date': d,
+          'time': '',
+          'status': 'On Leave',
+          'verification_status': 'Approved Leave',
+          'similarity_score': 1.0,
+          'check_in_time': '',
+          'check_out_time': '',
+          'check_in_verification_status': 'Approved Leave',
+          'check_out_verification_status': '',
+          'check_in_similarity_score': 1.0,
+          'check_out_similarity_score': 0.0,
+          'total_hours': 0.0,
+          'notes': 'Approved Leave (${req.leaveType})',
+          'marked_at': DateTime.now().toIso8601String(),
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+
     // Update Leave Request Status
     batch.update(
       'leave_requests',

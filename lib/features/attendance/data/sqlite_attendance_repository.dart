@@ -8,10 +8,10 @@ import '../domain/attendance_settings.dart';
 import '../domain/attendance_repository.dart';
 import '../../attendance_settings/data/firebase_attendance_settings_repository.dart';
 import '../../employee/domain/employee.dart';
+import '../../leave/domain/leave_request.dart';
 
 class SqliteAttendanceRepository implements AttendanceRepository {
   static Database? _database;
-  final FirebaseAttendanceSettingsRepository _settingsRepository = FirebaseAttendanceSettingsRepository();
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -21,8 +21,13 @@ class SqliteAttendanceRepository implements AttendanceRepository {
   }
 
   Future<Database> _initDatabase() async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'app_database.db');
+    String path;
+    try {
+      final dbPath = await getDatabasesPath();
+      path = join(dbPath, 'app_database.db');
+    } catch (_) {
+      path = inMemoryDatabasePath;
+    }
     return openDatabase(
       path,
       version: 3,
@@ -94,10 +99,20 @@ class SqliteAttendanceRepository implements AttendanceRepository {
   }
 
   @override
-  Future<AttendanceSettings> getAttendanceSettings() => _settingsRepository.getAttendanceSettings();
+  Future<AttendanceSettings> getAttendanceSettings() async {
+    try {
+      return await FirebaseAttendanceSettingsRepository().getAttendanceSettings();
+    } catch (_) {
+      return AttendanceSettings.defaults();
+    }
+  }
 
   @override
-  Future<void> saveAttendanceSettings(AttendanceSettings settings) => _settingsRepository.saveAttendanceSettings(settings);
+  Future<void> saveAttendanceSettings(AttendanceSettings settings) async {
+    try {
+      await FirebaseAttendanceSettingsRepository().saveAttendanceSettings(settings);
+    } catch (_) {}
+  }
 
   int _parseMinutes(String timeStr) {
     if (timeStr.trim().isEmpty) return 540;
@@ -299,6 +314,45 @@ class SqliteAttendanceRepository implements AttendanceRepository {
         return r;
       }
     }
+
+    // Fallback: Check if an approved leave request exists for this employee and date
+    try {
+      final db = await database;
+      final leaveMaps = await db.query(
+        'leave_requests',
+        where: 'employee_id = ? AND status = ?',
+        whereArgs: [employeeId, 'Approved'],
+      );
+      for (final map in leaveMaps) {
+        final req = LeaveRequest.fromMap(map);
+        final approvedNormDates = req.approvedDates.map(_normalizeDateKey).toSet();
+        if (approvedNormDates.contains(normInputDate) ||
+            req.approvedDates.contains(date) ||
+            req.fromDate == date ||
+            req.toDate == date) {
+          return AttendanceRecord(
+            id: 0,
+            employeeId: employeeId,
+            employeeName: req.employeeName,
+            date: date,
+            time: '',
+            status: 'On Leave',
+            verificationStatus: 'Approved Leave',
+            similarityScore: 1.0,
+            checkInTime: '',
+            checkOutTime: '',
+            checkInVerificationStatus: 'Approved Leave',
+            checkOutVerificationStatus: '',
+            checkInSimilarityScore: 1.0,
+            checkOutSimilarityScore: 0.0,
+            totalHours: 0.0,
+            notes: 'Approved Leave (${req.leaveType})',
+            markedAt: req.createdAt,
+          );
+        }
+      }
+    } catch (_) {}
+
     return null;
   }
 
@@ -558,18 +612,21 @@ class SqliteAttendanceRepository implements AttendanceRepository {
     String finalStatus;
     String updatedNotes;
 
+    final outMin = _parseMinutes(checkOutTime);
+    final isLateCheckout = outMin > 1080; // After 6:00 PM (18:00)
+
     if (shortfallMins == 0) {
       // No shortfall, normal handling
       if (isDynamic) {
         finalStatus = 'Completed';
         updatedNotes = existing.notes.isNotEmpty
-            ? '${existing.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Completed ${requiredHours.toStringAsFixed(0)} hrs target)'
-            : 'Worked ${hours.toStringAsFixed(1)} hrs (Completed ${requiredHours.toStringAsFixed(0)} hrs target)';
+            ? '${existing.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Completed ${requiredHours.toStringAsFixed(0)} hrs target)${isLateCheckout ? ' | Late Checkout' : ''}'
+            : 'Worked ${hours.toStringAsFixed(1)} hrs (Completed ${requiredHours.toStringAsFixed(0)} hrs target)${isLateCheckout ? ' | Late Checkout' : ''}';
       } else {
         finalStatus = existing.status == 'Late' ? 'Late' : 'Completed';
         updatedNotes = existing.notes.isNotEmpty
-            ? '${existing.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Completed shift)'
-            : 'Worked ${hours.toStringAsFixed(1)} hrs (Completed shift)';
+            ? '${existing.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Completed shift)${isLateCheckout ? ' | Late Checkout' : ''}'
+            : 'Worked ${hours.toStringAsFixed(1)} hrs (Completed shift)${isLateCheckout ? ' | Late Checkout' : ''}';
       }
     } else {
       // Shortfall exists, check permission coverage
@@ -583,13 +640,19 @@ class SqliteAttendanceRepository implements AttendanceRepository {
         updatedNotes = existing.notes.isNotEmpty
             ? '${existing.notes} | Authorized early checkout (covers ${shortfallMins} mins)'
             : 'Authorized early checkout (covers ${shortfallMins} mins)';
-      } else {
-        // Partial or no permission coverage
+      } else if (approvedPermissionMins > 0) {
+        // Partial permission coverage
         final unauthorizedMins = shortfallMins - approvedPermissionMins;
         finalStatus = 'Insufficient hours';
         updatedNotes = existing.notes.isNotEmpty
-            ? '${existing.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Insufficient hours, $unauthorizedMins mins unauthorized)'
-            : 'Worked ${hours.toStringAsFixed(1)} hrs (Insufficient hours, $unauthorizedMins mins unauthorized)';
+            ? '${existing.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Partially authorized: ${approvedPermissionMins} mins authorized, ${unauthorizedMins} mins unauthorized)'
+            : 'Worked ${hours.toStringAsFixed(1)} hrs (Partially authorized: ${approvedPermissionMins} mins authorized, ${unauthorizedMins} mins unauthorized)';
+      } else {
+        // No permission coverage
+        finalStatus = 'Insufficient hours';
+        updatedNotes = existing.notes.isNotEmpty
+            ? '${existing.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Insufficient hours, $shortfallMins mins unauthorized)'
+            : 'Worked ${hours.toStringAsFixed(1)} hrs (Insufficient hours, $shortfallMins mins unauthorized)';
       }
     }
 
@@ -616,17 +679,60 @@ class SqliteAttendanceRepository implements AttendanceRepository {
     final inTime = record.effectiveCheckInTime;
     final outTime = record.checkOutTime;
     double hours = record.totalHours;
+    String status = record.status;
+    String notes = record.notes;
+
     if (inTime.isNotEmpty && outTime.isNotEmpty) {
       hours = _calculateTotalHours(inTime, outTime);
+
+      Employee? employee;
+      try {
+        final maps = await db.query('employees', where: 'id = ?', whereArgs: [record.employeeId], limit: 1);
+        if (maps.isNotEmpty) {
+          employee = Employee.fromMap(maps.first);
+        }
+      } catch (_) {}
+
+      final isDynamic = employee?.isDynamicEmployee ?? false;
+      final requiredHours = (employee?.requiredWorkingHours ?? 0) > 0
+          ? employee!.requiredWorkingHours
+          : 9.0;
+
+      final shortfallHours = (requiredHours - hours).clamp(0, requiredHours);
+      final shortfallMins = (shortfallHours * 60).ceil();
+      final approvedPermissionMins = await _getApprovedPermissionMinutes(db, record.employeeId, record.date);
+
+      final outMin = _parseMinutes(outTime);
+      final isLateCheckout = outMin > 1080;
+
+      if (shortfallMins == 0) {
+        if (isDynamic) {
+          status = 'Completed';
+          notes = 'Worked ${hours.toStringAsFixed(1)} hrs (Completed ${requiredHours.toStringAsFixed(0)} hrs target)${isLateCheckout ? ' | Late Checkout' : ''}';
+        } else {
+          status = record.status == 'Late' ? 'Late' : 'Completed';
+          notes = 'Worked ${hours.toStringAsFixed(1)} hrs (Completed shift)${isLateCheckout ? ' | Late Checkout' : ''}';
+        }
+      } else {
+        if (approvedPermissionMins >= shortfallMins) {
+          status = isDynamic ? 'Completed' : (record.status == 'Late' ? 'Late' : 'Completed');
+          notes = 'Authorized early checkout (covers ${shortfallMins} mins)';
+        } else if (approvedPermissionMins > 0) {
+          final unauthorizedMins = shortfallMins - approvedPermissionMins;
+          status = 'Insufficient hours';
+          notes = 'Worked ${hours.toStringAsFixed(1)} hrs (Partially authorized: ${approvedPermissionMins} mins authorized, ${unauthorizedMins} mins unauthorized)';
+        } else {
+          status = 'Insufficient hours';
+          notes = 'Worked ${hours.toStringAsFixed(1)} hrs (Insufficient hours, ${shortfallMins} mins unauthorized)';
+        }
+      }
     }
-    String status = record.status;
-    if (status == 'Missing Check-Out' && outTime.isNotEmpty) {
-      status = 'Present';
-    }
+
     final toSave = record.copyWith(
       time: inTime,
       checkInTime: inTime,
       status: status,
+      notes: notes,
       totalHours: hours,
       markedAt: record.markedAt.isNotEmpty ? record.markedAt : DateTime.now().toIso8601String(),
     );
