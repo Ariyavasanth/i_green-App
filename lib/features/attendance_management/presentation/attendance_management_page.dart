@@ -24,6 +24,7 @@ import '../../time_clocking/presentation/clocking_timeline_view.dart';
 import '../domain/attendance_management_stats.dart';
 import '../providers/attendance_management_providers.dart';
 import 'widgets/admin_manual_attendance_dialog.dart';
+import 'widgets/attendance_correction_dialog.dart';
 import 'widgets/attendance_audit_logs_embedded_view.dart';
 import 'widgets/attendance_matrix_view.dart';
 import 'widgets/attendance_table_view.dart';
@@ -92,6 +93,39 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
         onSaved: () {
           ref.invalidate(attendanceManagementRecordsProvider);
           ref.invalidate(attendanceManagementStatsProvider);
+        },
+      ),
+    );
+  }
+
+  void _openAttendanceCorrectionDialog(
+    Employee emp,
+    DateTime date,
+    AttendanceRecord? record,
+    AttendanceStatusInfo? statusInfo,
+  ) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AttendanceCorrectionDialog(
+        employee: emp,
+        date: date,
+        record: record,
+        statusInfo: statusInfo,
+        onSubmitted: ({
+          required String correctedCheckIn,
+          required String correctedCheckOut,
+          required String correctedStatus,
+          required String reason,
+        }) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Step #3A Correction Form Validated!\nReason: "$reason" | Check-in: $correctedCheckIn | Check-out: $correctedCheckOut | Status: $correctedStatus',
+              ),
+              backgroundColor: const Color(0xFF414A51),
+              duration: const Duration(seconds: 4),
+            ),
+          );
         },
       ),
     );
@@ -627,12 +661,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                               record: record,
                               statusInfo: statusInfo,
                               onEdit: () {
-                                final dateStr = '${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}';
-                                _openAdminStaticEntryDialog(
-                                  record,
-                                  emp.id,
-                                  dateStr,
-                                );
+                                _openAttendanceCorrectionDialog(emp, date, record, statusInfo);
                               },
                             ),
                           );
