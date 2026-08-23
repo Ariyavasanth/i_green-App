@@ -390,28 +390,25 @@ class SqliteAttendanceRepository implements AttendanceRepository {
         final actualMinutes = now.hour * 60 + now.minute;
         final rawDelay = actualMinutes - scheduledMinutes;
 
-        if (rawDelay > settings.lateLimitMinutes) {
-          status = 'Absent';
-          notes = 'Absent (Exceeds late limit cutoff of ${settings.lateLimitMinutes} mins)';
-        } else if (rawDelay <= settings.gracePeriodMinutes) {
-          status = 'Present';
-          notes = 'On time';
-        } else {
-          final approvedPermissionMins = await _getApprovedPermissionMinutes(db, employeeId, date);
-          final totalAuthorizedWindowMins = settings.gracePeriodMinutes + approvedPermissionMins;
+        final approvedPermissionMins = await _getApprovedPermissionMinutes(db, employeeId, date);
+        final totalAuthorizedWindowMins = settings.gracePeriodMinutes + approvedPermissionMins;
+        final netUnauthorizedDelay = rawDelay - totalAuthorizedWindowMins;
 
-          if (rawDelay <= totalAuthorizedWindowMins) {
-            status = 'Present';
-            notes = approvedPermissionMins > 0
-                ? 'Present (Authorized Permission)'
-                : 'On time';
-          } else {
-            final netUnauthorizedDelay = rawDelay - totalAuthorizedWindowMins;
-            status = 'Late';
-            notes = approvedPermissionMins > 0
-                ? 'Late = $netUnauthorizedDelay mins unauthorized after $approvedPermissionMins mins permission'
-                : 'Late = $netUnauthorizedDelay minutes';
-          }
+        if (netUnauthorizedDelay <= 0) {
+          status = 'Present';
+          notes = approvedPermissionMins > 0
+              ? 'Present (Authorized Permission)'
+              : 'On time';
+        } else if (netUnauthorizedDelay <= settings.lateLimitMinutes) {
+          status = 'Late';
+          notes = approvedPermissionMins > 0
+              ? 'Late = $netUnauthorizedDelay mins unauthorized after $approvedPermissionMins mins permission'
+              : 'Late = $netUnauthorizedDelay minutes';
+        } else {
+          status = 'Absent';
+          notes = approvedPermissionMins > 0
+              ? 'Absent (Exceeds late limit cutoff after $approvedPermissionMins mins permission)'
+              : 'Absent (Exceeds late limit cutoff of ${settings.lateLimitMinutes} mins)';
         }
       }
 
@@ -539,6 +536,7 @@ class SqliteAttendanceRepository implements AttendanceRepository {
     final inTime = existing.effectiveCheckInTime;
     final hours = _calculateTotalHours(inTime, checkOutTime);
 
+    // Load employee details for required hours and dynamic flag
     Employee? employee;
     try {
       final maps = await db.query('employees', where: 'id = ?', whereArgs: [employeeId], limit: 1);
@@ -552,30 +550,46 @@ class SqliteAttendanceRepository implements AttendanceRepository {
         ? employee!.requiredWorkingHours
         : 9.0;
 
+    // Calculate shortfall and approved permission minutes
+    final shortfallHours = (requiredHours - hours).clamp(0, requiredHours);
+    final shortfallMins = (shortfallHours * 60).ceil();
+    final approvedPermissionMins = await _getApprovedPermissionMinutes(db, employeeId, date);
+
     String finalStatus;
     String updatedNotes;
 
-    final hasCompletedRequiredHours = hours >= requiredHours;
-
-    if (isDynamic) {
-      if (hasCompletedRequiredHours) {
+    if (shortfallMins == 0) {
+      // No shortfall, normal handling
+      if (isDynamic) {
         finalStatus = 'Completed';
-        updatedNotes = 'Worked ${hours.toStringAsFixed(1)} hrs (Completed ${requiredHours.toStringAsFixed(0)} hrs target)';
+        updatedNotes = existing.notes.isNotEmpty
+            ? '${existing.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Completed ${requiredHours.toStringAsFixed(0)} hrs target)'
+            : 'Worked ${hours.toStringAsFixed(1)} hrs (Completed ${requiredHours.toStringAsFixed(0)} hrs target)';
       } else {
-        finalStatus = 'Insufficient hours';
-        updatedNotes = 'Worked ${hours.toStringAsFixed(1)} hrs (Insufficient hours - target ${requiredHours.toStringAsFixed(0)} hrs)';
-      }
-    } else {
-      if (hasCompletedRequiredHours) {
         finalStatus = existing.status == 'Late' ? 'Late' : 'Completed';
         updatedNotes = existing.notes.isNotEmpty
             ? '${existing.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Completed shift)'
             : 'Worked ${hours.toStringAsFixed(1)} hrs (Completed shift)';
+      }
+    } else {
+      // Shortfall exists, check permission coverage
+      if (approvedPermissionMins >= shortfallMins) {
+        // Fully authorized early checkout
+        if (isDynamic) {
+          finalStatus = 'Completed';
+        } else {
+          finalStatus = existing.status == 'Late' ? 'Late' : 'Completed';
+        }
+        updatedNotes = existing.notes.isNotEmpty
+            ? '${existing.notes} | Authorized early checkout (covers ${shortfallMins} mins)'
+            : 'Authorized early checkout (covers ${shortfallMins} mins)';
       } else {
+        // Partial or no permission coverage
+        final unauthorizedMins = shortfallMins - approvedPermissionMins;
         finalStatus = 'Insufficient hours';
         updatedNotes = existing.notes.isNotEmpty
-            ? '${existing.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Insufficient hours)'
-            : 'Worked ${hours.toStringAsFixed(1)} hrs (Insufficient hours)';
+            ? '${existing.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Insufficient hours, $unauthorizedMins mins unauthorized)'
+            : 'Worked ${hours.toStringAsFixed(1)} hrs (Insufficient hours, $unauthorizedMins mins unauthorized)';
       }
     }
 

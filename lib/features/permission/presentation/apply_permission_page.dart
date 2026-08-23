@@ -451,7 +451,7 @@ class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
                               ),
                             ),
                             Text(
-                              "Monthly Remaining: ${bal.monthlyRemainingMinutes} min (${bal.monthlyRemainingHours.toStringAsFixed(1)} hrs)",
+                              "Monthly Remaining: ${bal.monthlyRemainingFormatted}",
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.grey.shade600,

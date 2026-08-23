@@ -162,7 +162,7 @@ class _AdminPermissionUsagePageState extends ConsumerState<AdminPermissionUsageP
                                         ),
                                       ),
                                       child: Text(
-                                        'Rem. ${bal.monthlyRemainingHours.toStringAsFixed(1)}h',
+                                        'Rem. ${bal.monthlyRemainingFormatted}',
                                         style: TextStyle(
                                           fontSize: 11,
                                           fontWeight: FontWeight.bold,
@@ -179,7 +179,7 @@ class _AdminPermissionUsagePageState extends ConsumerState<AdminPermissionUsageP
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
-                                      'Used: ${bal.monthlyUsedHours.toStringAsFixed(1)}h / ${bal.monthlyLimitHours.toStringAsFixed(1)}h',
+                                      'Used: ${bal.monthlyUsedFormatted} / ${bal.monthlyLimitFormatted}',
                                       style: TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w600,

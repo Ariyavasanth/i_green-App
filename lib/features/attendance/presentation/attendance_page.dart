@@ -2835,20 +2835,19 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         PermissionRequest? todayApprovedPermission;
         PermissionRequest? todayPendingPermission;
 
-        myRequestsAsync.whenData((requests) {
-          final todayStr = DateFormat('yyyy-MM-dd').format(now);
-          for (final req in requests) {
-            final reqDateStr = DateFormat('yyyy-MM-dd').format(req.date);
-            if (reqDateStr == todayStr || (req.date.day == now.day && req.date.month == now.month && req.date.year == now.year)) {
-              if (req.status == PermissionStatus.approved) {
-                todayApprovedPermission = req;
-                break;
-              } else if (req.status == PermissionStatus.pending) {
-                todayPendingPermission = req;
-              }
+        final requests = myRequestsAsync.valueOrNull ?? [];
+        final today = DateTime.now();
+        for (final req in requests) {
+          final isSameDay = (req.date.year == today.year && req.date.month == today.month && req.date.day == today.day);
+          if (isSameDay) {
+            if (req.status == PermissionStatus.approved) {
+              todayApprovedPermission = req;
+              break;
+            } else if (req.status == PermissionStatus.pending || req.status == PermissionStatus.emergencyPending) {
+              todayPendingPermission = req;
             }
           }
-        });
+        }
 
         final hasApprovedPermission = todayApprovedPermission != null;
         final hasPendingPermission = todayPendingPermission != null;
@@ -3255,18 +3254,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
 
   Widget _buildStatusChip(AttendanceRecord? record) {
     if (record == null) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade300),
-        ),
-        child: const Text(
-          'Not Marked',
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
-        ),
-      );
+      return const SizedBox.shrink();
     }
     Color color;
     switch (record.status) {

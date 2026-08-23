@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../authentication/providers/authentication_providers.dart';
 import '../../employee/domain/employee.dart';
 import '../../leave/providers/leave_providers.dart';
+import '../domain/permission_balance.dart';
 import '../domain/permission_enums.dart';
 import '../domain/permission_request.dart';
 import '../providers/permission_providers.dart';
@@ -94,10 +95,10 @@ class _PermissionDashboardPageState extends ConsumerState<PermissionDashboardPag
                                   style: TextStyle(color: Colors.white60, fontSize: 12),
                                 ),
                                 Text(
-                                  '${balance.monthlyUsedHours.toStringAsFixed(1)}h',
+                                  balance.monthlyUsedFormatted,
                                   style: const TextStyle(
                                     color: Colors.white,
-                                    fontSize: 22,
+                                    fontSize: 20,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -116,10 +117,10 @@ class _PermissionDashboardPageState extends ConsumerState<PermissionDashboardPag
                                   style: TextStyle(color: Colors.white60, fontSize: 12),
                                 ),
                                 Text(
-                                  '${balance.monthlyRemainingHours.toStringAsFixed(1)}h',
+                                  balance.monthlyRemainingFormatted,
                                   style: TextStyle(
                                     color: PermissionDashboardPage.primaryGreen,
-                                    fontSize: 22,
+                                    fontSize: 20,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -138,10 +139,10 @@ class _PermissionDashboardPageState extends ConsumerState<PermissionDashboardPag
                                   style: TextStyle(color: Colors.white60, fontSize: 12),
                                 ),
                                 Text(
-                                  '${balance.monthlyLimitHours.toStringAsFixed(1)}h',
+                                  balance.monthlyLimitFormatted,
                                   style: const TextStyle(
                                     color: Colors.white,
-                                    fontSize: 22,
+                                    fontSize: 20,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -168,11 +169,11 @@ class _PermissionDashboardPageState extends ConsumerState<PermissionDashboardPag
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              "Today's Used: ${balance.todayUsedHours.toStringAsFixed(1)}h",
+                              "Today's Used: ${balance.todayUsedFormatted}",
                               style: const TextStyle(color: Colors.white70, fontSize: 13),
                             ),
                             Text(
-                              "Remaining: ${balance.todayRemainingHours.toStringAsFixed(1)}h",
+                              "Remaining: ${balance.todayRemainingFormatted}",
                               style: TextStyle(color: PermissionDashboardPage.primaryGreen, fontSize: 13, fontWeight: FontWeight.bold),
                             ),
                           ],
@@ -498,7 +499,7 @@ class _PermissionDashboardPageState extends ConsumerState<PermissionDashboardPag
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    '${req.durationMinutes} min',
+                    PermissionBalance.formatMinutes(req.durationMinutes),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,

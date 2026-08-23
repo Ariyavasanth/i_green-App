@@ -50,6 +50,9 @@ class _AdminRequestReviewDialogState extends ConsumerState<AdminRequestReviewDia
             : 'Approved as Normal Paid Permission',
       );
 
+      ref.invalidate(myPermissionRequestsProvider(widget.request.employeeId));
+      ref.invalidate(employeePermissionBalanceProvider(widget.request.employeeId));
+
       if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
@@ -83,6 +86,9 @@ class _AdminRequestReviewDialogState extends ConsumerState<AdminRequestReviewDia
         adminName,
         _rejectionReasonController.text.trim(),
       );
+
+      ref.invalidate(myPermissionRequestsProvider(widget.request.employeeId));
+      ref.invalidate(employeePermissionBalanceProvider(widget.request.employeeId));
 
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -136,6 +142,8 @@ class _AdminRequestReviewDialogState extends ConsumerState<AdminRequestReviewDia
       }
 
       if (!mounted) return;
+      ref.invalidate(myPermissionRequestsProvider(widget.request.employeeId));
+      ref.invalidate(employeePermissionBalanceProvider(widget.request.employeeId));
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
@@ -283,9 +291,9 @@ class _AdminRequestReviewDialogState extends ConsumerState<AdminRequestReviewDia
                         spacing: 12,
                         runSpacing: 4,
                         children: [
-                          Text('• Daily Limit: ${bal.todayLimitHours.toStringAsFixed(1)}h', style: const TextStyle(fontSize: 12)),
-                          Text('• Used Today: ${bal.todayUsedMinutes}m', style: const TextStyle(fontSize: 12)),
-                          Text('• Rem. Today: ${bal.todayRemainingMinutes}m', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          Text('• Daily Limit: ${bal.todayLimitFormatted}', style: const TextStyle(fontSize: 12)),
+                          Text('• Used Today: ${bal.todayUsedFormatted}', style: const TextStyle(fontSize: 12)),
+                          Text('• Rem. Today: ${bal.todayRemainingFormatted}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                         ],
                       ),
                       const SizedBox(height: 4),
@@ -293,9 +301,9 @@ class _AdminRequestReviewDialogState extends ConsumerState<AdminRequestReviewDia
                         spacing: 12,
                         runSpacing: 4,
                         children: [
-                          Text('• Monthly Limit: ${bal.monthlyLimitHours.toStringAsFixed(1)}h', style: const TextStyle(fontSize: 12)),
-                          Text('• Used Month: ${bal.monthlyUsedHours.toStringAsFixed(1)}h', style: const TextStyle(fontSize: 12)),
-                          Text('• Rem. Month: ${bal.monthlyRemainingHours.toStringAsFixed(1)}h', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          Text('• Monthly Limit: ${bal.monthlyLimitFormatted}', style: const TextStyle(fontSize: 12)),
+                          Text('• Used Month: ${bal.monthlyUsedFormatted}', style: const TextStyle(fontSize: 12)),
+                          Text('• Rem. Month: ${bal.monthlyRemainingFormatted}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ],

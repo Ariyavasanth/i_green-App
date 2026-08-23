@@ -28,4 +28,25 @@ class PermissionBalance {
   double get todayUsedHours => todayUsedMinutes / 60.0;
   double get todayRemainingHours => todayRemainingMinutes / 60.0;
   double get todayLimitHours => todayLimitMinutes / 60.0;
+
+  static String formatMinutes(int totalMinutes) {
+    if (totalMinutes <= 0) return '0m';
+    final hours = totalMinutes ~/ 60;
+    final mins = totalMinutes % 60;
+    if (hours > 0 && mins > 0) {
+      return '${hours}h ${mins}m';
+    } else if (hours > 0) {
+      return '${hours}h';
+    } else {
+      return '${mins}m';
+    }
+  }
+
+  String get monthlyUsedFormatted => formatMinutes(monthlyUsedMinutes);
+  String get monthlyRemainingFormatted => formatMinutes(monthlyRemainingMinutes);
+  String get monthlyLimitFormatted => formatMinutes(monthlyLimitMinutes);
+
+  String get todayUsedFormatted => formatMinutes(todayUsedMinutes);
+  String get todayRemainingFormatted => formatMinutes(todayRemainingMinutes);
+  String get todayLimitFormatted => formatMinutes(todayLimitMinutes);
 }

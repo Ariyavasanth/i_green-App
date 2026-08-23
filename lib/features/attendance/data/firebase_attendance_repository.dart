@@ -287,28 +287,25 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         final actualMinutes = now.hour * 60 + now.minute;
         final rawDelay = actualMinutes - scheduledMinutes;
 
-        if (rawDelay > settings.lateLimitMinutes) {
-          status = 'Absent';
-          notes = 'Absent (Exceeds late limit cutoff of ${settings.lateLimitMinutes} mins)';
-        } else if (rawDelay <= settings.gracePeriodMinutes) {
-          status = 'Present';
-          notes = 'On time';
-        } else {
-          final approvedPermissionMins = await _getApprovedPermissionMinutes(employeeId, date);
-          final totalAuthorizedWindowMins = settings.gracePeriodMinutes + approvedPermissionMins;
+        final approvedPermissionMins = await _getApprovedPermissionMinutes(employeeId, date);
+        final totalAuthorizedWindowMins = settings.gracePeriodMinutes + approvedPermissionMins;
+        final netUnauthorizedDelay = rawDelay - totalAuthorizedWindowMins;
 
-          if (rawDelay <= totalAuthorizedWindowMins) {
-            status = 'Present';
-            notes = approvedPermissionMins > 0
-                ? 'Present (Authorized Permission)'
-                : 'On time';
-          } else {
-            final netUnauthorizedDelay = rawDelay - totalAuthorizedWindowMins;
-            status = 'Late';
-            notes = approvedPermissionMins > 0
-                ? 'Late = $netUnauthorizedDelay mins unauthorized after $approvedPermissionMins mins permission'
-                : 'Late = $netUnauthorizedDelay minutes';
-          }
+        if (netUnauthorizedDelay <= 0) {
+          status = 'Present';
+          notes = approvedPermissionMins > 0
+              ? 'Present (Authorized Permission)'
+              : 'On time';
+        } else if (netUnauthorizedDelay <= settings.lateLimitMinutes) {
+          status = 'Late';
+          notes = approvedPermissionMins > 0
+              ? 'Late = $netUnauthorizedDelay mins unauthorized after $approvedPermissionMins mins permission'
+              : 'Late = $netUnauthorizedDelay minutes';
+        } else {
+          status = 'Absent';
+          notes = approvedPermissionMins > 0
+              ? 'Absent (Exceeds late limit cutoff after $approvedPermissionMins mins permission)'
+              : 'Absent (Exceeds late limit cutoff of ${settings.lateLimitMinutes} mins)';
         }
       }
 
@@ -470,27 +467,39 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     String finalStatus;
     String updatedNotes;
 
-    final hasCompletedRequiredHours = hours >= requiredHours;
+    // Calculate shortfall and approved permission minutes
+    final shortfallHours = (requiredHours - hours).clamp(0, requiredHours);
+    final shortfallMins = (shortfallHours * 60).ceil();
+    final approvedPermissionMins = await _getApprovedPermissionMinutes(employeeId, date);
 
-    if (isDynamic) {
-      if (hasCompletedRequiredHours) {
+    if (shortfallMins == 0) {
+      // No shortfall, normal handling
+      if (isDynamic) {
         finalStatus = 'Completed';
-        updatedNotes = 'Worked ${hours.toStringAsFixed(1)} hrs (Completed ${requiredHours.toStringAsFixed(0)} hrs target)';
+        updatedNotes = record.notes.isNotEmpty
+            ? '${record.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Completed ${requiredHours.toStringAsFixed(0)} hrs target)'
+            : 'Worked ${hours.toStringAsFixed(1)} hrs (Completed ${requiredHours.toStringAsFixed(0)} hrs target)';
       } else {
-        finalStatus = 'Insufficient hours';
-        updatedNotes = 'Worked ${hours.toStringAsFixed(1)} hrs (Insufficient hours - target ${requiredHours.toStringAsFixed(0)} hrs)';
-      }
-    } else {
-      if (hasCompletedRequiredHours) {
         finalStatus = record.status == 'Late' ? 'Late' : 'Completed';
         updatedNotes = record.notes.isNotEmpty
             ? '${record.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Completed shift)'
             : 'Worked ${hours.toStringAsFixed(1)} hrs (Completed shift)';
+      }
+    } else {
+      // Shortfall exists, check permission coverage
+      if (approvedPermissionMins >= shortfallMins) {
+        // Fully authorized early checkout
+        finalStatus = isDynamic ? 'Completed' : (record.status == 'Late' ? 'Late' : 'Completed');
+        updatedNotes = record.notes.isNotEmpty
+            ? '${record.notes} | Authorized early checkout (covers ${shortfallMins} mins)'
+            : 'Authorized early checkout (covers ${shortfallMins} mins)';
       } else {
+        // Partial or no permission coverage
+        final unauthorizedMins = shortfallMins - approvedPermissionMins;
         finalStatus = 'Insufficient hours';
         updatedNotes = record.notes.isNotEmpty
-            ? '${record.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Insufficient hours)'
-            : 'Worked ${hours.toStringAsFixed(1)} hrs (Insufficient hours)';
+            ? '${record.notes} | Worked ${hours.toStringAsFixed(1)} hrs (Insufficient hours, $unauthorizedMins mins unauthorized)'
+            : 'Worked ${hours.toStringAsFixed(1)} hrs (Insufficient hours, $unauthorizedMins mins unauthorized)';
       }
     }
 
@@ -502,6 +511,14 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       'status': finalStatus,
       'notes': updatedNotes,
     }, SetOptions(merge: true));
+
+    await _sqliteRepo.checkOut(
+      employeeId: employeeId,
+      date: date,
+      checkOutTime: checkOutTime,
+      verificationStatus: verificationStatus,
+      similarityScore: similarityScore,
+    );
   }
 
   @override
@@ -554,6 +571,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     for (final doc in snap.docs) {
       await doc.reference.delete();
     }
+    await _sqliteRepo.unmarkAttendance(employeeId: employeeId, date: date);
   }
 
   @override

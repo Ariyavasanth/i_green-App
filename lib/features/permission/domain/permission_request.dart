@@ -126,14 +126,50 @@ class PermissionRequest {
     };
   }
 
+  static int _parseEmployeeId(dynamic val) {
+    if (val is int) return val;
+    if (val != null) {
+      final str = val.toString().trim();
+      final parsed = int.tryParse(str);
+      if (parsed != null) return parsed;
+      final digits = str.replaceAll(RegExp(r'\D'), '');
+      if (digits.isNotEmpty) {
+        return int.tryParse(digits) ?? 0;
+      }
+    }
+    return 0;
+  }
+
+  static DateTime _parseDate(dynamic val) {
+    if (val == null) return DateTime.now();
+    if (val is DateTime) return DateTime(val.year, val.month, val.day);
+    final str = val.toString().trim();
+    if (str.isEmpty) return DateTime.now();
+    final parsedIso = DateTime.tryParse(str);
+    if (parsedIso != null) {
+      return DateTime(parsedIso.year, parsedIso.month, parsedIso.day);
+    }
+    try {
+      final parts = str.split('-');
+      if (parts.length == 3) {
+        if (parts[0].length == 4) {
+          return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+        } else {
+          return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+        }
+      }
+    } catch (_) {}
+    return DateTime.now();
+  }
+
   factory PermissionRequest.fromMap(Map<String, dynamic> map) {
     return PermissionRequest(
       id: map['id'] as int?,
-      employeeId: map['employee_id'] as int? ?? 0,
+      employeeId: _parseEmployeeId(map['employee_id']),
       employeeName: map['employee_name'] as String? ?? '',
       employeeCode: map['employee_code'] as String? ?? '',
       department: map['department'] as String? ?? '',
-      date: DateTime.tryParse(map['date']?.toString() ?? '') ?? DateTime.now(),
+      date: _parseDate(map['date']),
       fromTime: map['from_time'] as String? ?? '',
       toTime: map['to_time'] as String? ?? '',
       durationMinutes: map['duration_minutes'] as int? ?? 0,
