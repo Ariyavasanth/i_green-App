@@ -481,7 +481,7 @@ class FirebaseLeaveRepository implements LeaveRepository {
   }
 
   @override
-  Future<void> denyLeaveRequest(int id, String adminName) async {
+  Future<void> denyLeaveRequest(int id, String adminName, {String? reason}) async {
     final doc = await _findRequestDoc(id);
     if (doc == null || !doc.exists || doc.data() == null) {
       throw Exception('Leave request document not found for ID: $id');
@@ -497,6 +497,7 @@ class FirebaseLeaveRepository implements LeaveRepository {
       'status': 'Denied',
       'approved_dates': [],
       'lop_dates': [],
+      if (reason != null && reason.isNotEmpty) 'rejection_reason': reason,
       'updated_at': FieldValue.serverTimestamp(),
     });
 
@@ -506,7 +507,7 @@ class FirebaseLeaveRepository implements LeaveRepository {
       'action': 'Denied',
       'performed_by': adminName,
       'timestamp': DateTime.now().toIso8601String(),
-      'details': 'Leave request denied.',
+      'details': reason != null && reason.isNotEmpty ? 'Denied: $reason' : 'Leave request denied.',
     });
 
     await batch.commit();

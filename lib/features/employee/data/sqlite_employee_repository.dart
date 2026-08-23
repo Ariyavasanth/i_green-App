@@ -272,6 +272,7 @@ class SqliteEmployeeRepository implements EmployeeRepository {
       'leave_type': 'TEXT',
       'leave_allocation_frequency': 'TEXT',
       'allowed_leaves': 'REAL',
+      'monthly_leave_allowance': 'REAL DEFAULT 3.0',
       'monthly_permission_limit_hours': 'REAL DEFAULT 3.0',
       'daily_permission_limit_hours': 'REAL DEFAULT 1.0',
       'effective_date': 'TEXT',

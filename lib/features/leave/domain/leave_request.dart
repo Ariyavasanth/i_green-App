@@ -23,6 +23,14 @@ class LeaveRequest {
     this.isOverride = false,
     this.overrideReason,
     this.approvedBy,
+    this.requestedDays = 0.0,
+    this.calculatedPaidDays = 0.0,
+    this.calculatedLopDays = 0.0,
+    this.paidDays = 0.0,
+    this.lopDays = 0.0,
+    this.approvalMode = 'calculated',
+    this.leavePolicySnapshot = '',
+    this.monthlyAllowanceSnapshot = 3.0,
   });
 
   final int id;
@@ -46,6 +54,14 @@ class LeaveRequest {
   final bool isOverride;
   final String? overrideReason;
   final String? approvedBy;
+  final double requestedDays;
+  final double calculatedPaidDays;
+  final double calculatedLopDays;
+  final double paidDays;
+  final double lopDays;
+  final String approvalMode;
+  final String leavePolicySnapshot;
+  final double monthlyAllowanceSnapshot;
 
   Map<String, dynamic> toMap() {
     return {
@@ -70,6 +86,14 @@ class LeaveRequest {
       'is_override': isOverride ? 1 : 0,
       'override_reason': overrideReason,
       'approved_by': approvedBy,
+      'requested_days': requestedDays > 0 ? requestedDays : numDays,
+      'calculated_paid_days': calculatedPaidDays,
+      'calculated_lop_days': calculatedLopDays,
+      'paid_days': paidDays,
+      'lop_days': lopDays,
+      'approval_mode': approvalMode,
+      'leave_policy_snapshot': leavePolicySnapshot,
+      'monthly_allowance_snapshot': monthlyAllowanceSnapshot,
     };
   }
 
@@ -144,6 +168,14 @@ class LeaveRequest {
       isOverride: parseBool(map['is_override']),
       overrideReason: map['override_reason'] != null ? parseString(map['override_reason']) : null,
       approvedBy: map['approved_by'] != null ? parseString(map['approved_by']) : null,
+      requestedDays: (map['requested_days'] as num?)?.toDouble() ?? ((map['num_days'] as num?)?.toDouble() ?? 0.0),
+      calculatedPaidDays: (map['calculated_paid_days'] as num?)?.toDouble() ?? 0.0,
+      calculatedLopDays: (map['calculated_lop_days'] as num?)?.toDouble() ?? 0.0,
+      paidDays: (map['paid_days'] as num?)?.toDouble() ?? 0.0,
+      lopDays: (map['lop_days'] as num?)?.toDouble() ?? 0.0,
+      approvalMode: parseString(map['approval_mode']).isEmpty ? 'calculated' : parseString(map['approval_mode']),
+      leavePolicySnapshot: parseString(map['leave_policy_snapshot']),
+      monthlyAllowanceSnapshot: (map['monthly_allowance_snapshot'] as num?)?.toDouble() ?? 3.0,
     );
   }
 
@@ -169,6 +201,14 @@ class LeaveRequest {
     bool? isOverride,
     String? overrideReason,
     String? approvedBy,
+    double? requestedDays,
+    double? calculatedPaidDays,
+    double? calculatedLopDays,
+    double? paidDays,
+    double? lopDays,
+    String? approvalMode,
+    String? leavePolicySnapshot,
+    double? monthlyAllowanceSnapshot,
   }) {
     return LeaveRequest(
       id: id ?? this.id,
@@ -192,6 +232,14 @@ class LeaveRequest {
       isOverride: isOverride ?? this.isOverride,
       overrideReason: overrideReason ?? this.overrideReason,
       approvedBy: approvedBy ?? this.approvedBy,
+      requestedDays: requestedDays ?? this.requestedDays,
+      calculatedPaidDays: calculatedPaidDays ?? this.calculatedPaidDays,
+      calculatedLopDays: calculatedLopDays ?? this.calculatedLopDays,
+      paidDays: paidDays ?? this.paidDays,
+      lopDays: lopDays ?? this.lopDays,
+      approvalMode: approvalMode ?? this.approvalMode,
+      leavePolicySnapshot: leavePolicySnapshot ?? this.leavePolicySnapshot,
+      monthlyAllowanceSnapshot: monthlyAllowanceSnapshot ?? this.monthlyAllowanceSnapshot,
     );
   }
 }

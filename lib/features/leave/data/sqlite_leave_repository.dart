@@ -6,6 +6,7 @@ import '../domain/leave_request.dart';
 import '../domain/permission_allowance.dart';
 import '../domain/leave_repository.dart';
 import '../domain/leave_balance.dart';
+import '../domain/leave_monthly_balance.dart';
 import '../domain/leave_type.dart';
 import '../domain/salary_calculation.dart';
 import '../../employee/domain/employee.dart';
@@ -75,6 +76,21 @@ class SqliteLeaveRepository implements LeaveRepository {
         effective_date TEXT,
         allocation_frequency TEXT,
         UNIQUE(employee_id, leave_type)
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS leave_monthly_balances (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        employee_id INTEGER,
+        leave_type TEXT,
+        period_year INTEGER,
+        period_month INTEGER,
+        allowed_days REAL,
+        used_paid_days REAL,
+        lop_days REAL,
+        remaining_days REAL,
+        UNIQUE(employee_id, leave_type, period_year, period_month)
       )
     ''');
 
@@ -589,7 +605,7 @@ class SqliteLeaveRepository implements LeaveRepository {
   }
 
   @override
-  Future<void> denyLeaveRequest(int id, String adminName) async {
+  Future<void> denyLeaveRequest(int id, String adminName, {String? reason}) async {
     final db = await database;
 
     final reqMaps = await db.query('leave_requests', where: 'id = ?', whereArgs: [id]);
@@ -605,6 +621,7 @@ class SqliteLeaveRepository implements LeaveRepository {
         'status': 'Denied',
         'approved_dates': jsonEncode([]),
         'lop_dates': jsonEncode([]),
+        if (reason != null && reason.isNotEmpty) 'rejection_reason': reason,
       },
       where: 'id = ?',
       whereArgs: [id],
@@ -615,7 +632,7 @@ class SqliteLeaveRepository implements LeaveRepository {
       'action': 'Denied',
       'performed_by': adminName,
       'timestamp': DateTime.now().toIso8601String(),
-      'details': 'Leave request denied.',
+      'details': reason != null && reason.isNotEmpty ? 'Denied: $reason' : 'Leave request denied.',
     });
 
     await batch.commit(noResult: true);
@@ -660,6 +677,60 @@ class SqliteLeaveRepository implements LeaveRepository {
       whereArgs: [employeeId],
     );
     return maps.map((map) => LeaveBalance.fromMap(map)).toList();
+  }
+
+  Future<LeaveMonthlyBalance> getMonthlyLeaveBalance(
+    int employeeId,
+    String leaveType,
+    int year,
+    int month,
+  ) async {
+    final db = await database;
+    final maps = await db.query(
+      'leave_monthly_balances',
+      where: 'employee_id = ? AND leave_type = ? AND period_year = ? AND period_month = ?',
+      whereArgs: [employeeId, leaveType, year, month],
+    );
+
+    if (maps.isNotEmpty) {
+      return LeaveMonthlyBalance.fromMap(maps.first);
+    }
+
+    double allowedDays = 3.0;
+    try {
+      final empMaps = await db.query('employees', where: 'id = ?', whereArgs: [employeeId]);
+      if (empMaps.isNotEmpty) {
+        final emp = Employee.fromMap(empMaps.first);
+        final pol = emp.leavePolicy;
+        if (pol == 'As Needed') {
+          allowedDays = 999.0;
+        } else if (pol == 'No Leave') {
+          allowedDays = 0.0;
+        } else {
+          allowedDays = emp.monthlyLeaveAllowanceVal;
+        }
+      }
+    } catch (_) {}
+
+    final monthlyBal = LeaveMonthlyBalance(
+      id: 0,
+      employeeId: employeeId,
+      leaveType: leaveType,
+      periodYear: year,
+      periodMonth: month,
+      allowedDays: allowedDays,
+      usedPaidDays: 0.0,
+      lopDays: 0.0,
+      remainingDays: allowedDays,
+    );
+
+    final id = await db.insert(
+      'leave_monthly_balances',
+      monthlyBal.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+
+    return monthlyBal.copyWith(id: id);
   }
 
   @override

@@ -216,6 +216,7 @@ class Employee {
     this.leaveType = 'As Needed',
     this.leaveAllocationFrequency = 'Monthly',
     this.allowedLeaves = 1.0,
+    this.monthlyLeaveAllowance = 3.0,
     this.monthlyPermissionLimitHours = 3.0,
     this.dailyPermissionLimitHours = 1.0,
     this.effectiveDate = '',
@@ -540,6 +541,7 @@ class Employee {
   final String leaveType;
   final String leaveAllocationFrequency;
   final double allowedLeaves;
+  final double monthlyLeaveAllowance;
   final double monthlyPermissionLimitHours;
   final double dailyPermissionLimitHours;
   final String effectiveDate;
@@ -570,6 +572,7 @@ class Employee {
   String get name => fullName;
 
   String get leavePolicy => leaveType.isNotEmpty ? leaveType : 'As Needed';
+  double get monthlyLeaveAllowanceVal => monthlyLeaveAllowance > 0 ? monthlyLeaveAllowance : (allowedLeaves > 0 ? allowedLeaves : 3.0);
 
   List<EducationItem> get educationItems {
     if (educationListJson.isEmpty) return [];
@@ -705,6 +708,7 @@ class Employee {
       'leave_type': leaveType,
       'leave_allocation_frequency': leaveAllocationFrequency,
       'allowed_leaves': allowedLeaves,
+      'monthly_leave_allowance': monthlyLeaveAllowance,
       'monthly_permission_limit_hours': monthlyPermissionLimitHours,
       'daily_permission_limit_hours': dailyPermissionLimitHours,
       'effective_date': effectiveDate,
@@ -839,6 +843,7 @@ class Employee {
       leaveType: map['leave_type'] as String? ?? 'As Needed',
       leaveAllocationFrequency: map['leave_allocation_frequency'] as String? ?? 'Monthly',
       allowedLeaves: (map['allowed_leaves'] as num?)?.toDouble() ?? 1.0,
+      monthlyLeaveAllowance: (map['monthly_leave_allowance'] as num?)?.toDouble() ?? 3.0,
       monthlyPermissionLimitHours: (map['monthly_permission_limit_hours'] as num?)?.toDouble() ?? 3.0,
       dailyPermissionLimitHours: (map['daily_permission_limit_hours'] as num?)?.toDouble() ?? 1.0,
       effectiveDate: map['effective_date'] as String? ?? '',
@@ -1184,6 +1189,7 @@ class Employee {
       leaveType: leaveType ?? this.leaveType,
       leaveAllocationFrequency: leaveAllocationFrequency ?? this.leaveAllocationFrequency,
       allowedLeaves: allowedLeaves ?? this.allowedLeaves,
+      monthlyLeaveAllowance: monthlyLeaveAllowance ?? this.monthlyLeaveAllowance,
       effectiveDate: effectiveDate ?? this.effectiveDate,
       requiresLeaveApproval: requiresLeaveApproval ?? this.requiresLeaveApproval,
       companyAssets: companyAssets ?? this.companyAssets,

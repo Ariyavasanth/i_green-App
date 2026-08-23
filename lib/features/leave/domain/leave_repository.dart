@@ -15,7 +15,7 @@ abstract class LeaveRepository {
     String approvalMode = 'as_calculated', // 'as_calculated', 'all_paid', 'all_lop'
     String? overrideReason,
   });
-  Future<void> denyLeaveRequest(int id, String adminName);
+  Future<void> denyLeaveRequest(int id, String adminName, {String? reason});
   Future<void> cancelLeaveRequest(int id, String employeeName);
   Future<List<LeaveRequest>> getLeaveRequestsForCalendar();
   Future<List<LeaveBalance>> getLeaveBalances(int employeeId);
