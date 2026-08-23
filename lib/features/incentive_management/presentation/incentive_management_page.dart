@@ -410,103 +410,99 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
       body: SafeArea(
         child: Column(
           children: [
-            // Top App Header
+            // Header Bar - Search and Action Bar
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               color: Colors.white,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.assignment_turned_in_outlined, size: 24, color: AppColors.active),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Incentives',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                        ),
+                  // Visible Search Box
+                  Expanded(
+                    child: Container(
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
-                      const Spacer(),
-                      IconButton(
-                        icon: Icon(_showSearchBar ? Icons.search_off : Icons.search, color: AppColors.active),
-                        tooltip: 'Search incentives',
-                        onPressed: () {
+                      child: TextField(
+                        controller: _searchController,
+                        style: const TextStyle(fontSize: 13.5, color: AppColors.textPrimary),
+                        decoration: InputDecoration(
+                          hintText: 'Search by employee, designation, or site...',
+                          hintStyle: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                          prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
+                          suffixIcon: _searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 18, color: AppColors.textSecondary),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() {
+                                      _searchQuery = '';
+                                    });
+                                  },
+                                )
+                              : null,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 11),
+                        ),
+                        onChanged: (val) {
                           setState(() {
-                            _showSearchBar = !_showSearchBar;
+                            _searchQuery = val;
                           });
                         },
                       ),
-                      PopupMenuButton<String>(
-                        icon: const Icon(Icons.more_vert, color: AppColors.active),
-                        onSelected: (val) {
-                          if (val == 'columns') {
-                            showDialog<void>(
-                              context: context,
-                              builder: (_) => const IncentiveColumnSelectionDialog(),
-                            );
-                          } else if (val == 'lock') {
-                            _showSubmissionLockSettingsDialog();
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
-                            value: 'columns',
-                            child: Row(
-                              children: [
-                                Icon(Icons.view_column_outlined, size: 18),
-                                SizedBox(width: 8),
-                                Text('Columns'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'lock',
-                            child: Row(
-                              children: [
-                                Icon(Icons.lock_clock_outlined, size: 18),
-                                SizedBox(width: 8),
-                                Text('Submission restriction'),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-
-                  // Collapsible Search Field
-                  if (_showSearchBar) ...[
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _searchController,
-                      autofocus: true,
-                      decoration: InputDecoration(
-                        hintText: 'Search by employee, ID, site...',
-                        prefixIcon: const Icon(Icons.search, size: 20),
-                        suffixIcon: (_searchQuery.isNotEmpty)
-                            ? IconButton(
-                                icon: const Icon(Icons.clear, size: 18),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  setState(() {
-                                    _searchQuery = '';
-                                  });
-                                },
-                              )
-                            : null,
-                        border: const OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      onChanged: (val) {
-                        setState(() {
-                          _searchQuery = val;
-                        });
-                      },
                     ),
-                  ],
+                  ),
+                  const SizedBox(width: 10),
+
+                  // Actions Menu Button
+                  Container(
+                    height: 44,
+                    width: 44,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert, size: 20, color: AppColors.active),
+                      onSelected: (val) {
+                        if (val == 'columns') {
+                          showDialog<void>(
+                            context: context,
+                            builder: (_) => const IncentiveColumnSelectionDialog(),
+                          );
+                        } else if (val == 'lock') {
+                          _showSubmissionLockSettingsDialog();
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'columns',
+                          child: Row(
+                            children: [
+                              Icon(Icons.view_column_outlined, size: 18),
+                              SizedBox(width: 8),
+                              Text('Columns'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'lock',
+                          child: Row(
+                            children: [
+                              Icon(Icons.lock_clock_outlined, size: 18),
+                              SizedBox(width: 8),
+                              Text('Submission restriction'),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),

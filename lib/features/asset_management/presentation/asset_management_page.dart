@@ -1875,72 +1875,77 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
       body: SafeArea(
         child: Column(
           children: [
-            // Header Bar
+            // Header Bar - Search and Action Bar
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               color: Colors.white,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      const Spacer(),
-                      IconButton(
-                        icon: Icon(
-                          _showSearchBar ? Icons.search_off : Icons.search,
-                          color: AppColors.active,
+                  // Visible Search Box
+                  Expanded(
+                    child: Container(
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: TextField(
+                        controller: _searchController,
+                        style: const TextStyle(fontSize: 13.5, color: AppColors.textPrimary),
+                        decoration: InputDecoration(
+                          hintText: 'Search by asset, employee, or serial no...',
+                          hintStyle: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                          prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
+                          suffixIcon: searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 18, color: AppColors.textSecondary),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    ref.read(assignmentSearchQueryProvider.notifier).state = '';
+                                  },
+                                )
+                              : null,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 11),
                         ),
-                        tooltip: 'Search assets',
-                        onPressed: () {
-                          setState(() {
-                            _showSearchBar = !_showSearchBar;
-                          });
+                        onChanged: (val) {
+                          ref.read(assignmentSearchQueryProvider.notifier).state = val;
                         },
                       ),
-                      IconButton(
-                        icon: Icon(
-                          Icons.tune_outlined,
-                          color: (empFilter != null || assetTypeFilter != null || dateRangeFilter != null)
-                              ? AppColors.primary
-                              : AppColors.active,
-                        ),
-                        tooltip: 'Filter assets',
-                        onPressed: () => _showFilterSheet(employees, assetTypes),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.settings_outlined, color: AppColors.active),
-                        tooltip: 'Asset Settings',
-                        onPressed: () => context.push('/asset-settings'),
-                      ),
-                    ],
-                  ),
-
-                  // Collapsible Search Field
-                  if (_showSearchBar) ...[
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _searchController,
-                      autofocus: true,
-                      decoration: InputDecoration(
-                        hintText: 'Search by employee, asset, serial or reason...',
-                        prefixIcon: const Icon(Icons.search, size: 20),
-                        suffixIcon: searchQuery.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear, size: 18),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  ref.read(assignmentSearchQueryProvider.notifier).state = '';
-                                },
-                              )
-                            : null,
-                        border: const OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      onChanged: (val) {
-                        ref.read(assignmentSearchQueryProvider.notifier).state = val;
-                      },
                     ),
-                  ],
+                  ),
+                  const SizedBox(width: 10),
+
+                  // Filter Icon
+                  Container(
+                    height: 44,
+                    width: 44,
+                    decoration: BoxDecoration(
+                      color: (empFilter != null || assetTypeFilter != null || dateRangeFilter != null)
+                          ? AppColors.primary.withOpacity(0.12)
+                          : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: (empFilter != null || assetTypeFilter != null || dateRangeFilter != null)
+                            ? AppColors.primary
+                            : const Color(0xFFE2E8F0),
+                      ),
+                    ),
+                    child: IconButton(
+                      icon: Icon(
+                        Icons.tune_outlined,
+                        size: 20,
+                        color: (empFilter != null || assetTypeFilter != null || dateRangeFilter != null)
+                            ? AppColors.primary
+                            : AppColors.active,
+                      ),
+                      tooltip: 'Filter assets',
+                      onPressed: () => _showFilterSheet(employees, assetTypes),
+                    ),
+                  ),
                 ],
               ),
             ),
