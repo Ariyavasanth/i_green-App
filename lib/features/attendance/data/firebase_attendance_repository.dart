@@ -32,8 +32,6 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     try {
       final now = DateTime.now();
       final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-      final currentMinutes = now.hour * 60 + now.minute;
-      const shiftEndMinutes = 18 * 60;
 
       final snap = await _recordsRef.get();
       for (final doc in snap.docs) {
@@ -47,20 +45,24 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
         final checkOutTime = (data['check_out_time'] ?? '').toString().trim();
         final status = (data['status'] ?? '').toString();
-        if (checkOutTime.isNotEmpty || status == 'Missing Check-Out' || status == 'Absent' || status == 'On Leave') {
-          continue;
-        }
-
         final recDateStr = (data['date'] ?? '').toString().trim();
         if (recDateStr.isEmpty) continue;
         final normDate = _normalizeDateKey(recDateStr);
         final inTimeStr = (data['check_in_time'] ?? data['time'] ?? '').toString().trim();
-        if (inTimeStr.isEmpty) continue;
+
+        // 1. Restore today's records that were wrongly flagged as Missing Check-Out due to 6:00 PM cutoff bug
+        if (normDate == todayStr && checkOutTime.isEmpty && status == 'Missing Check-Out') {
+          await doc.reference.set({'status': 'Present'}, SetOptions(merge: true));
+          continue;
+        }
+
+        if (checkOutTime.isNotEmpty || status == 'Missing Check-Out' || status == 'Absent' || status == 'On Leave' || inTimeStr.isEmpty) {
+          continue;
+        }
 
         bool isPastDate = normDate.compareTo(todayStr) < 0;
-        bool isShiftEndedToday = normDate == todayStr && currentMinutes >= shiftEndMinutes;
 
-        if (isPastDate || isShiftEndedToday) {
+        if (isPastDate) {
           final existingNotes = (data['notes'] ?? '').toString();
           final newNotes = existingNotes.isNotEmpty
               ? (existingNotes.contains('Missing Check-Out') ? existingNotes : '$existingNotes | Missing Check-Out (Requires Correction)')
@@ -78,33 +80,28 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
   @override
   Future<List<AttendanceRecord>> getAttendanceRecords(int employeeId) async {
-    await autoResolveMissingCheckOuts(employeeId: employeeId);
-    try {
-      final snap = await _recordsRef.get();
-      final list = <AttendanceRecord>[];
-      for (final doc in snap.docs) {
-        final data = doc.data();
-        final docEmpIdRaw = data['employee_id'];
-        final docEmpIdNum = docEmpIdRaw is int
-            ? docEmpIdRaw
-            : (int.tryParse(docEmpIdRaw?.toString() ?? '') ?? 0);
-        final docEmpCode = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
+    final snap = await _recordsRef.get();
+    final list = <AttendanceRecord>[];
+    for (final doc in snap.docs) {
+      final data = doc.data();
+      final docEmpIdRaw = data['employee_id'];
+      final docEmpIdNum = docEmpIdRaw is int
+          ? docEmpIdRaw
+          : (int.tryParse(docEmpIdRaw?.toString() ?? '') ?? 0);
+      final docEmpCode = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
 
-        final matchesEmp = employeeId == 0 ||
-            employeeId == 1 ||
-            docEmpIdNum == employeeId ||
-            data['employee_id']?.toString() == employeeId.toString() ||
-            docEmpCode == 'EMP-0001' ||
-            docEmpCode == 'EMP-1140';
+      final matchesEmp = employeeId == 0 ||
+          employeeId == 1 ||
+          docEmpIdNum == employeeId ||
+          data['employee_id']?.toString() == employeeId.toString() ||
+          docEmpCode == 'EMP-0001' ||
+          docEmpCode == 'EMP-1140';
 
-        if (matchesEmp) {
-          list.add(AttendanceRecord.fromMap(data));
-        }
+      if (matchesEmp) {
+        list.add(AttendanceRecord.fromMap(data));
       }
-      return list;
-    } catch (_) {
-      return [];
     }
+    return list;
   }
 
   @override
@@ -117,12 +114,17 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
   @override
   Future<AttendanceRecord?> getAttendanceRecordForDate(int employeeId, String date) async {
     await autoResolveMissingCheckOuts(employeeId: employeeId);
+    final todayNormDate = _normalizeDateKey('${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}');
     try {
       final normDate = _normalizeDateKey(date);
       final docId = '${employeeId}_${normDate.replaceAll('-', '')}';
       final recordSnap = await _recordsRef.doc(docId).get();
       if (recordSnap.exists && recordSnap.data() != null) {
-        return AttendanceRecord.fromMap(recordSnap.data()!);
+        final rec = AttendanceRecord.fromMap(recordSnap.data()!);
+        if (rec.status == 'Missing Check-Out' && rec.checkOutTime.trim().isEmpty && _normalizeDateKey(rec.date) == todayNormDate) {
+          return rec.copyWith(status: 'Present');
+        }
+        return rec;
       }
 
       final snap = await _recordsRef.get();
@@ -550,7 +552,13 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         final parts = outTime.split(':');
         if (parts.length >= 2) outMin = int.parse(parts[0]) * 60 + int.parse(parts[1]);
       } catch (_) {}
-      final isLateCheckout = outMin > 1080;
+      int empOutMin = 1080;
+      if (employee != null && employee.outTime.trim().isNotEmpty) {
+        empOutMin = _parseMinutes(employee.outTime);
+      } else if (employee != null && employee.inTime.trim().isNotEmpty) {
+        empOutMin = (_parseMinutes(employee.inTime) + (requiredHours * 60).toInt()) % 1440;
+      }
+      final isLateCheckout = empOutMin > 0 && outMin > empOutMin;
 
       if (shortfallMins == 0) {
         if (isDynamic) {

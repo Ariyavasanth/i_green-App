@@ -1212,4 +1212,14 @@ class Employee {
       siteRequireGpsVerification: siteRequireGpsVerification ?? this.siteRequireGpsVerification,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is Employee &&
+        (id != 0 && other.id != 0 ? id == other.id : employeeId.trim().toUpperCase() == other.employeeId.trim().toUpperCase());
+  }
+
+  @override
+  int get hashCode => id != 0 ? id.hashCode : employeeId.trim().toUpperCase().hashCode;
 }

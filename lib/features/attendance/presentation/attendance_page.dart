@@ -16,6 +16,7 @@ import '../../leave/domain/leave_overlap_validator.dart';
 import '../../leave/providers/leave_providers.dart';
 import '../../leave/presentation/my_leave_requests_page.dart';
 import '../domain/attendance_repository.dart';
+import '../../on_duty/on_duty.dart';
 import '../../permission/domain/permission_enums.dart';
 import '../../permission/domain/permission_request.dart';
 import '../../permission/providers/permission_providers.dart';
@@ -295,6 +296,8 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     ref.invalidate(leaveRequestsProvider(employeeId));
     ref.invalidate(allLeaveRequestsProvider);
     ref.invalidate(myPermissionRequestsProvider(employeeId));
+    ref.invalidate(activeOnDutyAssignmentProvider(employeeId));
+    ref.invalidate(allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: null)));
     await Future.delayed(const Duration(milliseconds: 300));
   }
 
@@ -307,6 +310,8 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     AsyncValue<List<AttendanceRecord>> attendanceAsync,
     AsyncValue<List<LeaveRequest>> leaveAsync,
   ) {
+    final activeOnDutyAsync = ref.watch(activeOnDutyAssignmentProvider(currentEmp.id));
+
     return RefreshIndicator(
       color: const Color(0xFF9CC70A),
       onRefresh: () => _refreshAllData(currentEmp.id),
@@ -318,9 +323,9 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
           children: [
             // Today's Status Banner Card
             _buildTodayBannerCard(currentEmp, todayAttendanceAsync),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
-            // Work Activity / Clocking Section
+            // Work Activity / Clocking Section (Includes Active On-Duty)
             EmployeeClockingWidget(employeeId: currentEmp.employeeId.isNotEmpty ? currentEmp.employeeId : currentEmp.id.toString()),
             const SizedBox(height: 24),
 
@@ -379,6 +384,8 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       ),
     );
   }
+
+
 
   Widget _buildMonthOverviewCard(List<AttendanceRecord> records, List<LeaveRequest> leaves) {
     final now = DateTime.now();
@@ -3053,8 +3060,9 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         final now = DateTime.now();
         final expectedInTimeOfDay = _getEmployeeInTime(employee);
         final officialStartTime = DateTime(now.year, now.month, now.day, expectedInTimeOfDay.hour, expectedInTimeOfDay.minute);
+        final lateCutoffTime = officialStartTime.add(const Duration(minutes: 15));
         final officialTimeStr = _formatTimeOfDayLabel(expectedInTimeOfDay);
-        final isLate = now.isAfter(officialStartTime) && !hasCheckedIn;
+        final isLate = now.isAfter(lateCutoffTime) && !hasCheckedIn;
 
         final myRequestsAsync = ref.watch(myPermissionRequestsProvider(employee.id));
         PermissionRequest? todayApprovedPermission;
@@ -4499,7 +4507,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
       final int targetRadius = isSite ? emp.siteAllowedRadiusMeters : settings.allowedAttendanceRadiusMeters;
       final bool requireGps = isSite ? emp.siteRequireGpsVerification : settings.requireGpsVerification;
 
-      if (!requireGps) {
+      if (!requireGps || (targetLat == 0 && targetLng == 0)) {
         if (!mounted) return;
         setState(() {
           _withinAllowedRadius = true;
@@ -4548,7 +4556,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
         position.latitude,
         position.longitude,
       );
-      final withinRadius = !(targetLat == 0 && targetLng == 0) &&
+      final withinRadius = (targetLat == 0 && targetLng == 0) ||
           distance <= targetRadius;
       if (!mounted) return;
       setState(() {

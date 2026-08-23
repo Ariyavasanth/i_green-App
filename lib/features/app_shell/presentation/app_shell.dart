@@ -587,6 +587,7 @@ class _TopBar extends ConsumerWidget {
                 ),
               ),
             ),
+
             if (compact) ...[
               Stack(
                 children: [

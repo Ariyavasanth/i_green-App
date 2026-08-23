@@ -233,34 +233,35 @@ class SqliteAttendanceRepository implements AttendanceRepository {
       final db = await database;
       final now = DateTime.now();
       final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-      final currentMinutes = now.hour * 60 + now.minute;
-      const shiftEndMinutes = 18 * 60; // 6:00 PM shift end threshold
 
-      String whereClause = "(check_out_time IS NULL OR check_out_time = '') AND status != 'Missing Check-Out' AND status != 'Absent' AND status != 'On Leave'";
-      List<dynamic> whereArgs = [];
-      if (employeeId != null && employeeId > 0) {
-        whereClause += ' AND employee_id = ?';
-        whereArgs.add(employeeId);
-      }
-
-      final maps = await db.query(
-        'attendance_records',
-        where: whereClause,
-        whereArgs: whereArgs,
-      );
-
-      for (final map in maps) {
+      final allMaps = await db.query('attendance_records');
+      for (final map in allMaps) {
         final recDateStr = (map['date'] as String? ?? '').trim();
         if (recDateStr.isEmpty) continue;
         final normDate = _normalizeDateKey(recDateStr);
+        final id = map['id'] as int? ?? 0;
+        final checkOutTime = (map['check_out_time'] as String? ?? '').trim();
         final inTimeStr = (map['check_in_time'] as String? ?? map['time'] as String? ?? '').trim();
-        if (inTimeStr.isEmpty) continue;
+        final status = (map['status'] as String? ?? '').trim();
 
-        bool isPastDate = normDate.compareTo(todayStr) < 0;
-        bool isShiftEndedToday = normDate == todayStr && currentMinutes >= shiftEndMinutes;
+        // 1. Restore today's records that were wrongly flagged as Missing Check-Out due to 6:00 PM cutoff bug
+        if (normDate == todayStr && checkOutTime.isEmpty && status == 'Missing Check-Out') {
+          await db.update(
+            'attendance_records',
+            {'status': 'Present'},
+            where: 'id = ?',
+            whereArgs: [id],
+          );
+          continue;
+        }
 
-        if (isPastDate || isShiftEndedToday) {
-          final id = map['id'] as int? ?? 0;
+        // 2. Only flag past dates (normDate < todayStr) if check_out_time is missing and not already resolved
+        if (normDate.compareTo(todayStr) < 0 &&
+            inTimeStr.isNotEmpty &&
+            checkOutTime.isEmpty &&
+            status != 'Missing Check-Out' &&
+            status != 'Absent' &&
+            status != 'On Leave') {
           final existingNotes = map['notes'] as String? ?? '';
           final newNotes = existingNotes.isNotEmpty
               ? (existingNotes.contains('Missing Check-Out') ? existingNotes : '$existingNotes | Missing Check-Out (Requires Correction)')
@@ -304,13 +305,19 @@ class SqliteAttendanceRepository implements AttendanceRepository {
 
   @override
   Future<AttendanceRecord?> getAttendanceRecordForDate(int employeeId, String date) async {
+    await autoResolveMissingCheckOuts(employeeId: employeeId);
     final records = await getAttendanceRecords(employeeId);
     final normInputDate = _normalizeDateKey(date);
+    final todayNormDate = _normalizeDateKey('${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}');
+
     for (final r in records) {
       final normRecDate = _normalizeDateKey(r.date);
       if (r.date == date ||
           r.date.replaceAll('-', '') == date.replaceAll('-', '') ||
           normRecDate == normInputDate) {
+        if (r.status == 'Missing Check-Out' && r.checkOutTime.trim().isEmpty && normRecDate == todayNormDate) {
+          return r.copyWith(status: 'Present');
+        }
         return r;
       }
     }
@@ -703,7 +710,13 @@ class SqliteAttendanceRepository implements AttendanceRepository {
       final approvedPermissionMins = await _getApprovedPermissionMinutes(db, record.employeeId, record.date);
 
       final outMin = _parseMinutes(outTime);
-      final isLateCheckout = outMin > 1080;
+      int empOutMin = 1080;
+      if (employee != null && employee.outTime.trim().isNotEmpty) {
+        empOutMin = _parseMinutes(employee.outTime);
+      } else if (employee != null && employee.inTime.trim().isNotEmpty) {
+        empOutMin = (_parseMinutes(employee.inTime) + (requiredHours * 60).toInt()) % 1440;
+      }
+      final isLateCheckout = empOutMin > 0 && outMin > empOutMin;
 
       if (shortfallMins == 0) {
         if (isDynamic) {

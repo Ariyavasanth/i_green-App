@@ -7,6 +7,8 @@ import '../providers/clocking_providers.dart';
 import '../../task_management/domain/task_item.dart';
 import '../../task_management/providers/task_providers.dart';
 import '../../attendance/providers/attendance_providers.dart';
+import '../../on_duty/providers/on_duty_providers.dart';
+import '../../on_duty/presentation/employee_on_duty_card.dart';
 
 class CombinedActivityItem {
   final String title;
@@ -172,6 +174,48 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
             content: const Text(
               'You have already checked out for today. You cannot start a clocking activity after checking out.',
               style: TextStyle(fontSize: 14, color: Color(0xFF334155)),
+            ),
+            actions: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF9CC70A),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
+
+    // Mutual Exclusion Check: If On-Duty is IN_PROGRESS, prevent starting clocking activity
+    final onDutyRepo = ref.read(onDutyRepositoryProvider);
+    final activeOD = await onDutyRepo.getActiveAssignmentForEmployee(empIdInt);
+    if (activeOD != null && (activeOD.status == 'IN_PROGRESS' || activeOD.status == 'ACTIVE')) {
+      if (context.mounted) {
+        await showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 24),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'On-Duty Currently Running',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              'On-Duty task "${activeOD.odType}" (${activeOD.destination}) is currently in progress.\n\nPlease complete On-Duty before starting a new activity.',
+              style: const TextStyle(fontSize: 14, color: Color(0xFF334155)),
             ),
             actions: [
               ElevatedButton(
@@ -471,6 +515,12 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
     final activeTaskAsync = ref.watch(activeTaskProvider(widget.employeeId));
     final entriesAsync = ref.watch(clockEntriesProvider((employeeId: widget.employeeId, date: today)));
 
+    final empInt = int.tryParse(widget.employeeId.replaceAll(RegExp(r'[^0-9]'), '')) ?? 1;
+    final activeODAsync = ref.watch(activeOnDutyAssignmentProvider(empInt));
+    final fallbackODAsync1 = empInt != 1 ? ref.watch(activeOnDutyAssignmentProvider(1)) : null;
+    final fallbackODAsync0 = empInt != 0 ? ref.watch(activeOnDutyAssignmentProvider(0)) : null;
+    final activeOD = activeODAsync.valueOrNull ?? fallbackODAsync1?.valueOrNull ?? fallbackODAsync0?.valueOrNull;
+
     final activeEntry = activeEntryAsync.valueOrNull;
     final activeTask = activeTaskAsync.valueOrNull;
 
@@ -496,8 +546,8 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: (activeEntry != null || activeTask != null) ? primaryColor.withValues(alpha: 0.5) : const Color(0xFFE2E8F0),
-              width: (activeEntry != null || activeTask != null) ? 1.5 : 1,
+              color: (activeEntry != null || activeTask != null || activeOD != null) ? primaryColor.withValues(alpha: 0.5) : const Color(0xFFE2E8F0),
+              width: (activeEntry != null || activeTask != null || activeOD != null) ? 1.5 : 1,
             ),
             boxShadow: [
               BoxShadow(
@@ -511,7 +561,9 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
               ? _buildActiveEntryContent(context, activeEntry, primaryColor, secondaryColor)
               : (activeTask != null
                   ? _buildActiveTaskContent(context, activeTask, primaryColor, secondaryColor)
-                  : _buildNoActivityContent(context, primaryColor)),
+                  : (activeOD != null
+                      ? EmployeeOnDutyCard(assignment: activeOD)
+                      : _buildNoActivityContent(context, primaryColor))),
         ),
 
         const SizedBox(height: 24),

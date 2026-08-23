@@ -6,6 +6,9 @@ import 'package:intl/intl.dart';
 
 import '../domain/on_duty_assignment.dart';
 import '../providers/on_duty_providers.dart';
+import '../../task_management/providers/task_providers.dart';
+import '../../time_clocking/providers/clocking_providers.dart';
+import '../../attendance/providers/attendance_providers.dart';
 
 class EmployeeOnDutyCard extends ConsumerStatefulWidget {
   const EmployeeOnDutyCard({
@@ -101,6 +104,143 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
       return await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
     } catch (_) {
       return null;
+    }
+  }
+
+  Future<void> _handleStartOd() async {
+    // 1. Check-In Validation: Ensure employee has checked in for attendance today
+    final attendanceRepo = ref.read(attendanceRepositoryProvider);
+    final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final empIdInt = widget.assignment.employeeId > 0 ? widget.assignment.employeeId : 1;
+    final todayRecord = await attendanceRepo.getAttendanceRecordForDate(empIdInt, todayStr) ??
+        await attendanceRepo.getAttendanceRecordForDate(1, todayStr);
+
+    final isCheckedIn = todayRecord != null &&
+        todayRecord.checkInTime.trim().isNotEmpty &&
+        todayRecord.checkInTime != '--:--';
+
+    if (!isCheckedIn) {
+      if (mounted) {
+        await showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 24),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Check-In Required',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                  ),
+                ),
+              ],
+            ),
+            content: const Text(
+              'Please Check In your attendance first before starting On-Duty work.',
+              style: TextStyle(fontSize: 14, color: Color(0xFF334155)),
+            ),
+            actions: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF9CC70A),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
+
+    // 2. Mutual Exclusion: Check if any Task or Clocking activity is currently IN_PROGRESS
+    final empIdStr = widget.assignment.employeeId > 0
+        ? 'EMP-${widget.assignment.employeeId.toString().padLeft(3, '0')}'
+        : 'EMP-001';
+    final taskRepo = ref.read(taskRepositoryProvider);
+    final runningTasks = await taskRepo.getTasks(assignedTo: empIdStr, status: 'IN_PROGRESS');
+    final runningTasksAlt1 = await taskRepo.getTasks(assignedTo: 'EMP-001', status: 'IN_PROGRESS');
+    final runningTasksAlt2 = await taskRepo.getTasks(assignedTo: 'EMP-0001', status: 'IN_PROGRESS');
+    final activeTask = [...runningTasks, ...runningTasksAlt1, ...runningTasksAlt2].firstOrNull;
+
+    final clockRepo = ref.read(clockingRepositoryProvider);
+    final activeClockEntry = await clockRepo.getActiveEntry(empIdStr) ??
+        await clockRepo.getActiveEntry('EMP-001') ??
+        await clockRepo.getActiveEntry('EMP-0001');
+
+    if (activeTask != null || activeClockEntry != null) {
+      final runningName = activeTask != null ? 'Task "${activeTask.title}"' : 'Activity "${activeClockEntry?.entryType}"';
+      if (mounted) {
+        await showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 24),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Task Currently Running',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              '$runningName is currently running.\n\nPlease finish the active task before starting On-Duty.',
+              style: const TextStyle(fontSize: 14, color: Color(0xFF334155)),
+            ),
+            actions: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF9CC70A),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() => _isActionLoading = true);
+    try {
+      final position = await _getGpsPosition();
+      final nowStr = DateFormat('hh:mm a').format(DateTime.now());
+
+      final updated = widget.assignment.copyWith(
+        status: 'IN_PROGRESS',
+        actualStartTime: nowStr,
+        startLatitude: position?.latitude,
+        startLongitude: position?.longitude,
+      );
+
+      final repo = ref.read(onDutyRepositoryProvider);
+      await repo.updateAssignment(updated);
+
+      ref.invalidate(activeOnDutyAssignmentProvider(widget.assignment.employeeId));
+      ref.invalidate(activeOnDutyAssignmentProvider(1));
+      ref.invalidate(activeOnDutyAssignmentProvider(0));
+      ref.invalidate(allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: null)));
+      _startLiveTimer();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to start On-Duty: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isActionLoading = false);
     }
   }
 
@@ -469,35 +609,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
     );
   }
 
-  Future<void> _handleStartOd() async {
-    setState(() => _isActionLoading = true);
-    try {
-      final position = await _getGpsPosition();
-      final nowStr = DateFormat('hh:mm a').format(DateTime.now());
 
-      final updated = widget.assignment.copyWith(
-        status: 'IN_PROGRESS',
-        actualStartTime: nowStr,
-        startLatitude: position?.latitude,
-        startLongitude: position?.longitude,
-      );
-
-      final repo = ref.read(onDutyRepositoryProvider);
-      await repo.updateAssignment(updated);
-
-      ref.invalidate(activeOnDutyAssignmentProvider(widget.assignment.employeeId));
-      ref.invalidate(allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: null)));
-      _startLiveTimer();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to start On-Duty: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isActionLoading = false);
-    }
-  }
 
   Future<void> _handleCompleteOd() async {
     setState(() => _isActionLoading = true);
@@ -528,6 +640,8 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
       await repo.updateAssignment(updated);
 
       ref.invalidate(activeOnDutyAssignmentProvider(widget.assignment.employeeId));
+      ref.invalidate(activeOnDutyAssignmentProvider(1));
+      ref.invalidate(activeOnDutyAssignmentProvider(0));
       ref.invalidate(allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: null)));
     } catch (e) {
       if (mounted) {

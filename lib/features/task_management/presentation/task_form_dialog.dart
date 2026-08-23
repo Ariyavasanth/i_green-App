@@ -5,6 +5,7 @@ import '../../employee/providers/employee_providers.dart';
 import '../domain/task_item.dart';
 import '../providers/task_providers.dart';
 import '../../attendance/providers/attendance_providers.dart';
+import '../../on_duty/providers/on_duty_providers.dart';
 
 class TaskFormDialog extends ConsumerStatefulWidget {
   const TaskFormDialog({
@@ -54,11 +55,53 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
     if (!_formKey.currentState!.validate()) return;
 
     if (_status == 'IN_PROGRESS') {
-      final attendanceRepo = ref.read(attendanceRepositoryProvider);
-      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
       final empIdStr = _selectedAssignedTo ?? 'EMP-001';
       final digits = empIdStr.replaceAll(RegExp(r'[^0-9]'), '');
       final empIdInt = int.tryParse(digits) ?? 1;
+
+      final onDutyRepo = ref.read(onDutyRepositoryProvider);
+      final activeOD = await onDutyRepo.getActiveAssignmentForEmployee(empIdInt);
+      if (activeOD != null && (activeOD.status == 'IN_PROGRESS' || activeOD.status == 'ACTIVE')) {
+        _status = 'TODO';
+        if (mounted) {
+          await showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.info_outline, color: Color(0xFF1D4ED8), size: 24),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Employee Currently On-Duty',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                    ),
+                  ),
+                ],
+              ),
+              content: Text(
+                'The assigned employee is currently doing On-Duty (${activeOD.odType} - ${activeOD.destination}).\n\nThis task will be saved as TODO so the employee can start it after completing On-Duty.',
+                style: const TextStyle(fontSize: 14, color: Color(0xFF334155)),
+              ),
+              actions: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF9CC70A),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+
+      final attendanceRepo = ref.read(attendanceRepositoryProvider);
+      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
       final attendanceRecord = await attendanceRepo.getAttendanceRecordForDate(empIdInt, today);
 
       if (attendanceRecord == null || attendanceRecord.effectiveCheckInTime.trim().isEmpty) {
@@ -224,6 +267,13 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
     final employees = employeesAsync.valueOrNull ?? [];
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
+
+    final empIdStr = _selectedAssignedTo ?? 'EMP-001';
+    final digits = empIdStr.replaceAll(RegExp(r'[^0-9]'), '');
+    final empIdInt = int.tryParse(digits) ?? 1;
+    final activeODAsync = ref.watch(activeOnDutyAssignmentProvider(empIdInt));
+    final activeOD = activeODAsync.valueOrNull;
+    final isOnDutyRunning = activeOD != null && (activeOD.status == 'IN_PROGRESS' || activeOD.status == 'ACTIVE');
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -430,6 +480,29 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
                       ),
                     ],
                   ),
+                  if (isOnDutyRunning) ...[
+                    const SizedBox(height: 14),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF93C5FD)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.info_outline, color: Color(0xFF1D4ED8), size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'ℹ️ Notice: Selected employee is currently on On-Duty (${activeOD.odType} - ${activeOD.destination}). This task will be added as TODO so they can start it after completing OD.',
+                              style: const TextStyle(fontSize: 12.5, color: Color(0xFF1E40AF), fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
                 const SizedBox(height: 24),
                 Wrap(

@@ -7,6 +7,7 @@ import '../providers/task_providers.dart';
 import '../../employee/providers/employee_providers.dart';
 import '../../time_clocking/providers/clocking_providers.dart';
 import '../../attendance/providers/attendance_providers.dart';
+import '../../on_duty/providers/on_duty_providers.dart';
 
 class MyTasksPage extends ConsumerStatefulWidget {
   const MyTasksPage({
@@ -155,6 +156,48 @@ class _MyTasksPageState extends ConsumerState<MyTasksPage> {
             content: const Text(
               'You have already checked out for today. You cannot start work on a task after checking out.',
               style: TextStyle(fontSize: 14, color: Color(0xFF334155)),
+            ),
+            actions: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF9CC70A),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
+
+    // Check if On-Duty is IN_PROGRESS
+    final onDutyRepo = ref.read(onDutyRepositoryProvider);
+    final activeOD = await onDutyRepo.getActiveAssignmentForEmployee(empIdInt);
+    if (activeOD != null && (activeOD.status == 'IN_PROGRESS' || activeOD.status == 'ACTIVE')) {
+      if (mounted) {
+        await showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 24),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'On-Duty Currently Running',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              'On-Duty task "${activeOD.odType}" (${activeOD.destination}) is currently in progress.\n\nPlease complete On-Duty before starting a task.',
+              style: const TextStyle(fontSize: 14, color: Color(0xFF334155)),
             ),
             actions: [
               ElevatedButton(

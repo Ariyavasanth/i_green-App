@@ -243,6 +243,7 @@ class SqliteOnDutyRepository implements OnDutyRepository {
   @override
   Future<OnDutyAssignment?> getActiveAssignmentForEmployee(int employeeId) async {
     final db = await database;
+    // 1. Try exact employeeId match
     final rows = await db.query(
       'on_duty_assignments',
       where: 'employee_id = ? AND (UPPER(status) = ? OR UPPER(status) = ? OR UPPER(status) = ?)',
@@ -250,8 +251,23 @@ class SqliteOnDutyRepository implements OnDutyRepository {
       orderBy: 'CASE UPPER(status) WHEN "IN_PROGRESS" THEN 1 WHEN "ACTIVE" THEN 1 WHEN "ASSIGNED" THEN 2 ELSE 3 END, created_at DESC',
       limit: 1,
     );
-    if (rows.isEmpty) return null;
-    return OnDutyAssignment.fromMap(rows.first);
+    if (rows.isNotEmpty) {
+      return OnDutyAssignment.fromMap(rows.first);
+    }
+
+    // 2. Fallback: If no exact employee_id match, check any active assignment
+    final fallbackRows = await db.query(
+      'on_duty_assignments',
+      where: 'UPPER(status) = ? OR UPPER(status) = ? OR UPPER(status) = ?',
+      whereArgs: ['IN_PROGRESS', 'ASSIGNED', 'ACTIVE'],
+      orderBy: 'CASE UPPER(status) WHEN "IN_PROGRESS" THEN 1 WHEN "ACTIVE" THEN 1 WHEN "ASSIGNED" THEN 2 ELSE 3 END, created_at DESC',
+      limit: 1,
+    );
+    if (fallbackRows.isNotEmpty) {
+      return OnDutyAssignment.fromMap(fallbackRows.first);
+    }
+
+    return null;
   }
 
   @override

@@ -4,8 +4,8 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../on_duty/domain/on_duty_assignment.dart';
-import '../../../on_duty/presentation/assign_on_duty_dialog.dart';
 import '../../../on_duty/providers/on_duty_providers.dart';
+import '../../../on_duty/presentation/assign_on_duty_dialog.dart';
 
 class OnDutyManagementView extends ConsumerStatefulWidget {
   const OnDutyManagementView({super.key});
@@ -52,215 +52,174 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
       allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: null)),
     );
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header & Controls
-          Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'ON-DUTY MANAGEMENT',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF414A51),
-                      letterSpacing: 0.5,
+    return RefreshIndicator(
+      color: const Color(0xFF9CC70A),
+      onRefresh: () async {
+        ref.invalidate(allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: null)));
+        await Future.delayed(const Duration(milliseconds: 300));
+      },
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Streamlined Filters Bar
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Full-width Search Input
+                TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search Employee / Purpose...',
+                    hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Manage official employee work outside normal workplace',
-                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-                  ),
-                ],
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      showDialog<void>(
-                        context: context,
-                        builder: (ctx) => const AssignOnDutyDialog(),
-                      );
-                    },
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('+ Assign On-Duty'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF9CC70A),
-                      foregroundColor: const Color(0xFF414A51),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      elevation: 1,
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      ref.invalidate(allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: null)));
-                    },
-                    icon: const Icon(Icons.refresh, size: 18),
-                    label: const Text('Refresh'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF414A51),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFF9CC70A), width: 1.5),
                     ),
+                    filled: true,
+                    fillColor: Colors.white,
                   ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
+                  onChanged: (val) => setState(() => _searchQuery = val),
+                ),
+                const SizedBox(height: 10),
 
-          // Filters Bar
-          Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: Colors.grey.shade200),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  // Search Box
-                  SizedBox(
-                    width: 240,
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: 'Search Employee / Purpose...',
-                        prefixIcon: const Icon(Icons.search, size: 20),
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        filled: true,
-                        fillColor: Colors.white,
+                // Status & Date Selectors Side-by-Side
+                Row(
+                  children: [
+                    // Status Dropdown
+                    Expanded(
+                      child: Container(
+                        height: 44,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _selectedStatus,
+                            isExpanded: true,
+                            style: const TextStyle(fontSize: 13, color: Color(0xFF414A51), fontWeight: FontWeight.w500),
+                            items: const [
+                              DropdownMenuItem(value: 'All', child: Text('Status: All')),
+                              DropdownMenuItem(value: 'ASSIGNED', child: Text('🟡 Assigned')),
+                              DropdownMenuItem(value: 'IN_PROGRESS', child: Text('🔵 Running')),
+                              DropdownMenuItem(value: 'COMPLETED', child: Text('🟢 Completed')),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) setState(() => _selectedStatus = val);
+                            },
+                          ),
+                        ),
                       ),
-                      onChanged: (val) => setState(() => _searchQuery = val),
                     ),
-                  ),
+                    const SizedBox(width: 10),
 
-                  // Status Dropdown
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey.shade300),
+                    // Date Selector Button
+                    Expanded(
+                      child: SizedBox(
+                        height: 44,
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: _selectedDate,
+                              firstDate: DateTime(2025),
+                              lastDate: DateTime(2030),
+                            );
+                            if (picked != null) {
+                              setState(() => _selectedDate = picked);
+                            }
+                          },
+                          icon: const Icon(Icons.calendar_today, size: 16, color: Color(0xFF414A51)),
+                          label: Text(
+                            dateStr,
+                            style: const TextStyle(color: Color(0xFF414A51), fontSize: 13, fontWeight: FontWeight.w500),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            side: BorderSide(color: Colors.grey.shade300),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ),
                     ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _selectedStatus,
-                        items: const [
-                          DropdownMenuItem(value: 'All', child: Text('Status: All')),
-                          DropdownMenuItem(value: 'ASSIGNED', child: Text('🟡 Assigned')),
-                          DropdownMenuItem(value: 'IN_PROGRESS', child: Text('🔵 Running')),
-                          DropdownMenuItem(value: 'COMPLETED', child: Text('🟢 Completed')),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Assignments Table
+            assignmentsAsync.when(
+              loading: () => const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: CircularProgressIndicator(color: Color(0xFF9CC70A)),
+                ),
+              ),
+              error: (e, _) => Center(child: Text('Error loading On-Duty assignments: $e')),
+              data: (allAssignments) {
+                final filtered = allAssignments.where((item) {
+                  final matchSearch = _searchQuery.isEmpty ||
+                      item.employeeName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                      item.purpose.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                      item.odType.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                      item.destination.toLowerCase().contains(_searchQuery.toLowerCase());
+
+                  final statusUpper = item.status.toUpperCase();
+                  final matchStatus = _selectedStatus == 'All' ||
+                      statusUpper == _selectedStatus ||
+                      (_selectedStatus == 'IN_PROGRESS' && statusUpper == 'ACTIVE');
+
+                  return matchSearch && matchStatus;
+                }).toList();
+
+                if (filtered.isEmpty) {
+                  return Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: Colors.grey.shade200),
+                    ),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 36.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.assignment_outlined, size: 48, color: Colors.grey.shade400),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'No On-Duty records found',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF414A51)),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'No on-duty records found for this date',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                          ),
                         ],
-                        onChanged: (val) {
-                          if (val != null) setState(() => _selectedStatus = val);
-                        },
                       ),
                     ),
-                  ),
-
-                  // Date Picker Button
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: _selectedDate,
-                        firstDate: DateTime(2025),
-                        lastDate: DateTime(2030),
-                      );
-                      if (picked != null) {
-                        setState(() => _selectedDate = picked);
-                      }
-                    },
-                    icon: const Icon(Icons.calendar_today, size: 16, color: Color(0xFF414A51)),
-                    label: Text(
-                      dateStr,
-                      style: const TextStyle(color: Color(0xFF414A51)),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Assignments Table
-          assignmentsAsync.when(
-            loading: () => const Center(
-              child: Padding(
-                padding: EdgeInsets.all(32),
-                child: CircularProgressIndicator(color: Color(0xFF9CC70A)),
-              ),
-            ),
-            error: (e, _) => Center(child: Text('Error loading On-Duty assignments: $e')),
-            data: (allAssignments) {
-              final filtered = allAssignments.where((item) {
-                final matchSearch = _searchQuery.isEmpty ||
-                    item.employeeName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-                    item.purpose.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-                    item.odType.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-                    item.destination.toLowerCase().contains(_searchQuery.toLowerCase());
-
-                final statusUpper = item.status.toUpperCase();
-                final matchStatus = _selectedStatus == 'All' ||
-                    statusUpper == _selectedStatus ||
-                    (_selectedStatus == 'IN_PROGRESS' && statusUpper == 'ACTIVE');
-
-                return matchSearch && matchStatus;
-              }).toList();
-
-              if (filtered.isEmpty) {
-                return Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: Colors.grey.shade200),
-                  ),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(40.0),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.assignment_outlined, size: 48, color: Colors.grey.shade400),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'No On-Duty records found',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF414A51)),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Click "+ Assign On-Duty" above to assign an employee.',
-                          style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }
+                  );
+                }
 
               return LayoutBuilder(
                 builder: (context, constraints) {
@@ -346,10 +305,25 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                                 ),
                                 DataCell(_buildStatusBadge(item.status)),
                                 DataCell(
-                                  IconButton(
-                                    icon: const Icon(Icons.info_outline, color: Color(0xFF414A51)),
-                                    tooltip: 'View OD Details',
-                                    onPressed: () => _showDetailsDialog(context, item),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.edit_outlined, color: Color(0xFF2563EB), size: 18),
+                                        tooltip: 'Edit OD',
+                                        onPressed: () {
+                                          showDialog(
+                                            context: context,
+                                            builder: (ctx) => AssignOnDutyDialog(existingAssignment: item),
+                                          );
+                                        },
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.info_outline, color: Color(0xFF414A51), size: 18),
+                                        tooltip: 'View OD Details',
+                                        onPressed: () => _showDetailsDialog(context, item),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
@@ -365,8 +339,9 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildMobileCard(OnDutyAssignment item) {
     final durationStr = item.durationMinutes > 0
@@ -404,7 +379,20 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 4),
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined, color: Color(0xFF2563EB), size: 18),
+                    tooltip: 'Edit OD',
+                    constraints: const BoxConstraints(),
+                    padding: const EdgeInsets.all(4),
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => AssignOnDutyDialog(existingAssignment: item),
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 4),
                   _buildStatusBadge(item.status),
                 ],
               ),
@@ -693,16 +681,29 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                     ],
                   ),
                   const SizedBox(height: 20),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.of(ctx).pop(),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF9CC70A),
-                        foregroundColor: const Color(0xFF414A51),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.of(ctx).pop();
+                          showDialog(
+                            context: context,
+                            builder: (dialogCtx) => AssignOnDutyDialog(existingAssignment: assignment),
+                          );
+                        },
+                        icon: const Icon(Icons.edit_outlined, size: 16, color: Color(0xFF2563EB)),
+                        label: const Text('Edit OD', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
                       ),
-                      child: const Text('Close', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
+                      ElevatedButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF9CC70A),
+                          foregroundColor: const Color(0xFF414A51),
+                        ),
+                        child: const Text('Close', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ],
                   ),
                 ],
               ),
