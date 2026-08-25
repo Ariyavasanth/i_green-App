@@ -5,12 +5,10 @@ import '../domain/permission_enums.dart';
 import '../domain/permission_policy.dart';
 import '../domain/permission_repository.dart';
 import '../domain/permission_request.dart';
-import 'sqlite_permission_repository.dart';
 
-/// Full Firebase implementation for PermissionRepository with SQLite fallback.
+/// Full Firebase implementation for PermissionRepository.
 class FirebasePermissionRepository implements PermissionRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final SqlitePermissionRepository _sqliteRepo = SqlitePermissionRepository();
 
   CollectionReference<Map<String, dynamic>> get _requestsRef =>
       _firestore.collection('permission_requests');
@@ -26,7 +24,7 @@ class FirebasePermissionRepository implements PermissionRepository {
         return PermissionPolicy.fromMap(doc.data()!);
       }
     } catch (_) {}
-    return _sqliteRepo.getPermissionPolicy();
+    return const PermissionPolicy();
   }
 
   @override
@@ -34,7 +32,6 @@ class FirebasePermissionRepository implements PermissionRepository {
     try {
       await _settingsRef.doc('policy').set(policy.toMap(), SetOptions(merge: true));
     } catch (_) {}
-    await _sqliteRepo.updatePermissionPolicy(policy);
   }
 
   @override
@@ -105,7 +102,7 @@ class FirebasePermissionRepository implements PermissionRepository {
       list.sort((a, b) => b.submittedAt.compareTo(a.submittedAt));
       return list;
     } catch (_) {
-      return _sqliteRepo.getEmployeeRequests(employeeId);
+      return [];
     }
   }
 
@@ -121,7 +118,7 @@ class FirebasePermissionRepository implements PermissionRepository {
         return PermissionRequest.fromMap(query.docs.first.data());
       }
     } catch (_) {}
-    return _sqliteRepo.getRequestById(id);
+    return null;
   }
 
   @override
@@ -131,7 +128,6 @@ class FirebasePermissionRepository implements PermissionRepository {
     try {
       await _requestsRef.doc(newId.toString()).set(reqWithId.toMap(), SetOptions(merge: true));
     } catch (_) {}
-    await _sqliteRepo.submitRequest(reqWithId);
   }
 
   @override
@@ -141,7 +137,6 @@ class FirebasePermissionRepository implements PermissionRepository {
     try {
       await _requestsRef.doc(newId.toString()).set(reqWithId.toMap(), SetOptions(merge: true));
     } catch (_) {}
-    await _sqliteRepo.submitEmergencyRequest(reqWithId);
   }
 
   @override
@@ -153,7 +148,6 @@ class FirebasePermissionRepository implements PermissionRepository {
         'reviewed_at': DateTime.now().toIso8601String(),
       }, SetOptions(merge: true));
     } catch (_) {}
-    await _sqliteRepo.cancelRequest(id, cancelledBy);
   }
 
   @override
@@ -194,13 +188,7 @@ class FirebasePermissionRepository implements PermissionRepository {
       list.sort((a, b) => b.submittedAt.compareTo(a.submittedAt));
       return list;
     } catch (_) {
-      return _sqliteRepo.getAllRequests(
-        employeeId: employeeId,
-        department: department,
-        status: status,
-        startDate: startDate,
-        endDate: endDate,
-      );
+      return [];
     }
   }
 
@@ -214,7 +202,6 @@ class FirebasePermissionRepository implements PermissionRepository {
         if (comment != null) 'admin_comment': comment,
       }, SetOptions(merge: true));
     } catch (_) {}
-    await _sqliteRepo.approveNormalRequest(id, adminName, comment: comment);
   }
 
   @override
@@ -227,7 +214,6 @@ class FirebasePermissionRepository implements PermissionRepository {
         'admin_comment': reason,
       }, SetOptions(merge: true));
     } catch (_) {}
-    await _sqliteRepo.rejectRequest(id, adminName, reason);
   }
 
   @override
@@ -250,12 +236,6 @@ class FirebasePermissionRepository implements PermissionRepository {
         if (comment != null) 'admin_comment': comment,
       }, SetOptions(merge: true));
     } catch (_) {}
-    await _sqliteRepo.reviewEmergencyRequest(
-      id,
-      adminName,
-      decision: decision,
-      comment: comment,
-    );
   }
 
   @override
@@ -298,6 +278,5 @@ class FirebasePermissionRepository implements PermissionRepository {
         await doc.reference.delete();
       }
     } catch (_) {}
-    await _sqliteRepo.clearAllRequests();
   }
 }

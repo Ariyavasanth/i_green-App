@@ -13,7 +13,6 @@ import '../../employee/domain/employee.dart';
 /// Collections used:
 ///   leave_requests, leave_balances, leave_types,
 ///   loss_of_pay_records, leave_audit_logs
-/// To switch back to SQLite: change one line in leave_providers.dart only.
 class FirebaseLeaveRepository implements LeaveRepository {
   final FirebaseFirestore _firestore;
   bool _seeded = false; // guard so seeding only runs once per instance

@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/firebase_permission_repository.dart';
-import '../data/sqlite_permission_repository.dart';
 import '../domain/permission_balance.dart';
 import '../domain/permission_enums.dart';
 import '../domain/permission_policy.dart';

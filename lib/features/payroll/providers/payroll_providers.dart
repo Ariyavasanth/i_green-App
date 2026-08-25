@@ -4,7 +4,6 @@ import '../data/firebase_payroll_repository.dart';
 import '../domain/payroll.dart';
 import '../domain/payroll_repository.dart';
 
-// Swap to SqlitePayrollRepository() here to toggle implementation
 final payrollRepositoryProvider = Provider<PayrollRepository>(
   (ref) => FirebasePayrollRepository(),
 );
