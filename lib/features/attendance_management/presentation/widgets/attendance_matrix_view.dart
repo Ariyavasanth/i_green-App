@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -130,26 +131,7 @@ class AttendanceMatrixView extends StatelessWidget {
                         alignment: Alignment.centerLeft,
                         child: Row(
                           children: [
-                            CircleAvatar(
-                              radius: 15,
-                              backgroundColor: AppColors.primary.withValues(alpha: 0.15),
-                              backgroundImage: (emp.profileImageUrl.isNotEmpty && emp.profileImageUrl.startsWith('http'))
-                                  ? NetworkImage(emp.profileImageUrl)
-                                  : null,
-                              onBackgroundImageError: (emp.profileImageUrl.isNotEmpty && emp.profileImageUrl.startsWith('http'))
-                                  ? (_, __) {}
-                                  : null,
-                              child: (emp.profileImageUrl.isEmpty || !emp.profileImageUrl.startsWith('http'))
-                                  ? Text(
-                                      emp.fullName.isNotEmpty ? emp.fullName[0].toUpperCase() : 'E',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF22282D),
-                                      ),
-                                    )
-                                  : null,
-                            ),
+                             _buildEmployeeAvatar(emp),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Column(
@@ -360,6 +342,77 @@ class AttendanceMatrixView extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildEmployeeAvatar(Employee emp) {
+    final imgUrl = emp.profileImageUrl.trim();
+    final hasHttp = imgUrl.startsWith('http://') || imgUrl.startsWith('https://');
+    final hasBase64 = imgUrl.startsWith('data:image/');
+    final initials = emp.fullName.trim().isNotEmpty
+        ? emp.fullName.trim().split(' ').map((e) => e.isNotEmpty ? e[0] : '').take(2).join('').toUpperCase()
+        : 'E';
+
+    Widget? imageWidget;
+    if (hasHttp) {
+      imageWidget = Image.network(
+        imgUrl,
+        width: 30,
+        height: 30,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Center(
+          child: Text(
+            initials,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF414A51),
+            ),
+          ),
+        ),
+      );
+    } else if (hasBase64) {
+      try {
+        final base64Str = imgUrl.split(',').last;
+        final bytes = base64Decode(base64Str);
+        imageWidget = Image.memory(
+          bytes,
+          width: 30,
+          height: 30,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Center(
+            child: Text(
+              initials,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF414A51),
+              ),
+            ),
+          ),
+        );
+      } catch (_) {}
+    }
+
+    return Container(
+      width: 30,
+      height: 30,
+      decoration: BoxDecoration(
+        color: const Color(0xFF9CC70A).withValues(alpha: 0.2),
+        shape: BoxShape.circle,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: imageWidget ??
+          Center(
+            child: Text(
+              initials,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF414A51),
+              ),
+            ),
+          ),
     );
   }
 }

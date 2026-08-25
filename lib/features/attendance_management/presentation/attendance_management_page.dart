@@ -260,10 +260,6 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Modern Top Bar (Drawer, Title, Live Sync, Notification)
-                    _buildTopAppBar(context),
-                    const SizedBox(height: 16),
-
                     // Green Header Quick Action Banner Card
                     _buildGreenQuickActionBanner(),
                     const SizedBox(height: 12),
@@ -272,13 +268,15 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                     _buildCategoryTabBar(),
                     const SizedBox(height: 16),
 
-                    // Controls Toolbar (Month Selector, Search Box, Status Filter Chips)
-                    _buildSearchAndFilterControls(employeesAsync, isMobile),
-                    const SizedBox(height: 16),
+                    if (_activeTab == AttendanceCategoryTab.staticAttendance) ...[
+                      // Controls Toolbar (Month Selector, Search Box, Status Filter Chips)
+                      _buildSearchAndFilterControls(employeesAsync, isMobile),
+                      const SizedBox(height: 16),
 
-                    // Section Title: Monthly Attendance Matrix + View Table ->
-                    _buildSectionHeader(),
-                    const SizedBox(height: 12),
+                      // Section Title: Monthly Attendance Matrix + View Table ->
+                      _buildSectionHeader(),
+                      const SizedBox(height: 12),
+                    ],
 
                     // Active Tab Content
                     _buildActiveTabContent(
@@ -306,6 +304,12 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                 onLeaveToday: 0,
                 averageWorkHours: 0.0,
               )),
+              error: (_, __) => const SizedBox.shrink(),
+            )
+          else if (_activeTab == AttendanceCategoryTab.siteVisitAttendance)
+            siteVisitsAsync.when(
+              data: (visits) => _buildSiteVisitBottomSummaryBar(visits),
+              loading: () => _buildSiteVisitBottomSummaryBar([]),
               error: (_, __) => const SizedBox.shrink(),
             )
           else
@@ -367,14 +371,14 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.sensors, size: 13, color: Color(0xFF1B7A38)),
+                  Icon(Icons.sensors, size: 13, color: Color(0xFF414A51)),
                   SizedBox(width: 4),
                   Text(
                     'Live Sync',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF1B7A38),
+                      color: Color(0xFF414A51),
                     ),
                   ),
                 ],
@@ -435,11 +439,11 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1B7A38),
+        color: const Color(0xFF9CC70A),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1B7A38).withValues(alpha: 0.25),
+            color: const Color(0xFF9CC70A).withValues(alpha: 0.3),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -449,14 +453,9 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _buildHeaderQuickActionItem(
-            icon: Icons.calendar_today_outlined,
-            label: 'Matrix',
-            onTap: () {
-              setState(() {
-                _activeTab = AttendanceCategoryTab.staticAttendance;
-                _viewMode = AttendanceViewMode.matrix;
-              });
-            },
+            icon: Icons.how_to_reg_outlined,
+            label: 'Office Entry',
+            onTap: () => _openAdminStaticEntryDialog(),
           ),
           _buildHeaderQuickActionItem(
             icon: Icons.domain_outlined,
@@ -522,10 +521,10 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: const Color(0xFF1B7A38).withValues(alpha: 0.1),
+                color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.calendar_today_outlined, size: 16, color: Color(0xFF1B7A38)),
+              child: const Icon(Icons.calendar_today_outlined, size: 16, color: Color(0xFF9CC70A)),
             ),
             const SizedBox(width: 8),
             const Text(
@@ -967,10 +966,10 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSiteVisitKpiBanner(filteredVisits, isMobile),
-            const SizedBox(height: 16),
             _buildSiteVisitControlToolbar(visits, allEmployees, isMobile),
             const SizedBox(height: 16),
+            _buildSiteVisitSectionHeader(),
+            const SizedBox(height: 12),
             if (_viewMode == AttendanceViewMode.matrix)
               _buildSiteVisitMatrixView(filteredVisits)
             else
@@ -1060,58 +1059,132 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     final uniqueSites = visits.map((v) => v.siteName.toLowerCase().trim()).toSet().length;
     final checkedInToday = visits.where((v) => v.visitDate == DateFormat('dd-MM-yyyy').format(DateTime.now())).length;
 
-    final items = [
-      _KpiData(
-        label: 'Total Visits',
-        value: totalVisits.toString(),
-        subtext: 'Site visits',
-        iconColor: const Color(0xFF9CC70A),
-        bgColor: const Color(0xFFF7FEE7),
-        icon: Icons.location_on_outlined,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      _KpiData(
-        label: 'Active Staff',
-        value: uniqueEmployees.toString(),
-        subtext: 'Visited sites',
-        iconColor: const Color(0xFF2563EB),
-        bgColor: const Color(0xFFEFF6FF),
-        icon: Icons.people_outline,
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildSummaryStatItem(
+              icon: Icons.location_on_outlined,
+              iconColor: const Color(0xFF16A34A),
+              value: '$totalVisits',
+              title: 'Total Visits',
+              subtitle: 'Selected Month',
+            ),
+          ),
+          Container(width: 1, height: 36, color: const Color(0xFFE2E8F0)),
+          Expanded(
+            child: _buildSummaryStatItem(
+              icon: Icons.people_outline,
+              iconColor: const Color(0xFF2563EB),
+              value: '$uniqueEmployees',
+              title: 'Active Staff',
+              subtitle: 'Visited Sites',
+            ),
+          ),
+          Container(width: 1, height: 36, color: const Color(0xFFE2E8F0)),
+          Expanded(
+            child: _buildSummaryStatItem(
+              icon: Icons.business_outlined,
+              iconColor: const Color(0xFF0D9488),
+              value: '$uniqueSites',
+              title: 'Unique Sites',
+              subtitle: 'Locations',
+            ),
+          ),
+          Container(width: 1, height: 36, color: const Color(0xFFE2E8F0)),
+          Expanded(
+            child: _buildSummaryStatItem(
+              icon: Icons.today_outlined,
+              iconColor: const Color(0xFF4F46E5),
+              value: '$checkedInToday',
+              title: 'Visits Today',
+              subtitle: 'Today\'s Logs',
+            ),
+          ),
+        ],
       ),
-      _KpiData(
-        label: 'Unique Sites',
-        value: uniqueSites.toString(),
-        subtext: 'Locations covered',
-        iconColor: const Color(0xFF0D9488),
-        bgColor: const Color(0xFFCCFBF1),
-        icon: Icons.business_outlined,
-      ),
-      _KpiData(
-        label: 'Visits Today',
-        value: checkedInToday.toString(),
-        subtext: 'Today\'s logs',
-        iconColor: const Color(0xFF4F46E5),
-        bgColor: const Color(0xFFEEF2FF),
-        icon: Icons.today_outlined,
-      ),
-    ];
+    );
+  }
 
-    if (isMobile) {
-      return GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          childAspectRatio: 1.25,
-          crossAxisSpacing: 8,
-          mainAxisSpacing: 8,
-        ),
-        itemCount: items.length,
-        itemBuilder: (context, index) => _buildKpiCard(items[index]),
-      );
-    }
+  Widget _buildSiteVisitBottomSummaryBar(List<SiteVisitRecord> allVisits) {
+    final todayStr = DateFormat('dd-MM-yyyy').format(DateTime.now());
+    final todayVisits = allVisits.where((v) => v.visitDate == todayStr).toList();
 
-    return Row(
-      children: items.map((kpi) => Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: _buildKpiCard(kpi)))).toList(),
+    final totalVisitsToday = todayVisits.length;
+    final activeStaffToday = todayVisits.map((v) => v.employeeId).toSet().length;
+    final uniqueSitesToday = todayVisits.map((v) => v.siteName.toLowerCase().trim()).where((s) => s.isNotEmpty).toSet().length;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: const Border(top: BorderSide(color: Color(0xFFF1F5F9), width: 1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, -3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildSummaryStatItem(
+              icon: Icons.location_on_outlined,
+              iconColor: const Color(0xFF16A34A),
+              value: '$totalVisitsToday',
+              title: 'Total Visits',
+              subtitle: 'Today',
+            ),
+          ),
+          Container(width: 1, height: 32, color: const Color(0xFFE2E8F0)),
+          Expanded(
+            child: _buildSummaryStatItem(
+              icon: Icons.people_outline,
+              iconColor: const Color(0xFF2563EB),
+              value: '$activeStaffToday',
+              title: 'Active Staff',
+              subtitle: 'Today',
+            ),
+          ),
+          Container(width: 1, height: 32, color: const Color(0xFFE2E8F0)),
+          Expanded(
+            child: _buildSummaryStatItem(
+              icon: Icons.business_outlined,
+              iconColor: const Color(0xFF0D9488),
+              value: '$uniqueSitesToday',
+              title: 'Unique Sites',
+              subtitle: 'Today',
+            ),
+          ),
+          Container(width: 1, height: 32, color: const Color(0xFFE2E8F0)),
+          Expanded(
+            child: _buildSummaryStatItem(
+              icon: Icons.today_outlined,
+              iconColor: const Color(0xFF4F46E5),
+              value: '$totalVisitsToday',
+              title: 'Visits Today',
+              subtitle: 'Today\'s Logs',
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1225,19 +1298,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
             children: [
               // Month Selector button
               InkWell(
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: _focusedMonth,
-                    firstDate: DateTime(2020),
-                    lastDate: DateTime(2030),
-                  );
-                  if (picked != null) {
-                    setState(() {
-                      _focusedMonth = DateTime(picked.year, picked.month, 1);
-                    });
-                  }
-                },
+                onTap: () => _openMonthYearPicker(context),
                 borderRadius: BorderRadius.circular(20),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1603,7 +1664,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                     width: double.infinity,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1B7A38),
+                        backgroundColor: const Color(0xFF9CC70A),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1621,6 +1682,127 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     );
   }
 
+  void _openMonthYearPicker(BuildContext context) {
+    int tempYear = _focusedMonth.year;
+    int tempMonth = _focusedMonth.month;
+
+    final months = [
+      'Jan', 'Feb', 'Mar', 'Apr',
+      'May', 'Jun', 'Jul', 'Aug',
+      'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: Container(
+                width: 320,
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Title Header
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Select Month & Year',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 16),
+
+                    // Year Selector Row
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.chevron_left, color: Color(0xFF475569)),
+                          onPressed: () {
+                            setDialogState(() {
+                              tempYear--;
+                            });
+                          },
+                        ),
+                        Text(
+                          '$tempYear',
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.chevron_right, color: Color(0xFF475569)),
+                          onPressed: () {
+                            setDialogState(() {
+                              tempYear++;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // 12 Months Grid
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        childAspectRatio: 2.2,
+                        crossAxisSpacing: 8,
+                        mainAxisSpacing: 8,
+                      ),
+                      itemCount: 12,
+                      itemBuilder: (context, index) {
+                        final monthNum = index + 1;
+                        final isSelected = monthNum == tempMonth;
+
+                        return InkWell(
+                          onTap: () {
+                            setState(() {
+                              _focusedMonth = DateTime(tempYear, monthNum, 1);
+                            });
+                            Navigator.pop(ctx);
+                          },
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: isSelected ? const Color(0xFF9CC70A) : const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isSelected ? const Color(0xFF9CC70A) : const Color(0xFFE2E8F0),
+                              ),
+                            ),
+                            child: Text(
+                              months[index],
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                color: isSelected ? Colors.white : const Color(0xFF475569),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildSiteVisitControlToolbar(
     List<SiteVisitRecord> visits,
     List<Employee> employees,
@@ -1629,97 +1811,321 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     final siteNames = visits.map((v) => v.siteName.trim()).where((s) => s.isNotEmpty).toSet().toList();
     siteNames.sort();
 
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            // Month Selector
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.chevron_left),
-                  onPressed: () {
-                    setState(() {
-                      _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1, 1);
-                    });
-                  },
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Month Selector & View Mode Switcher Row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Month Selector button with Previous / Next Arrows
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.02),
+                      blurRadius: 4,
+                    ),
+                  ],
                 ),
-                Text(
-                  DateFormat('MMMM yyyy').format(_focusedMonth),
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.chevron_left, size: 18, color: Color(0xFF64748B)),
+                      padding: const EdgeInsets.all(4),
+                      constraints: const BoxConstraints(),
+                      onPressed: () {
+                        setState(() {
+                          _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1, 1);
+                        });
+                      },
+                    ),
+                    InkWell(
+                      onTap: () => _openMonthYearPicker(context),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        child: Text(
+                          DateFormat('MMMM yyyy').format(_focusedMonth),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1E293B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.chevron_right, size: 18, color: Color(0xFF64748B)),
+                      padding: const EdgeInsets.all(4),
+                      constraints: const BoxConstraints(),
+                      onPressed: () {
+                        setState(() {
+                          _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 1);
+                        });
+                      },
+                    ),
+                  ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.chevron_right),
-                  onPressed: () {
-                    setState(() {
-                      _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 1);
-                    });
-                  },
-                ),
-              ],
-            ),
+              ),
 
-            // View Mode
-            SegmentedButton<AttendanceViewMode>(
-              segments: const [
-                ButtonSegment(
-                  value: AttendanceViewMode.matrix,
-                  icon: Icon(Icons.grid_on, size: 16),
-                  label: Text('Matrix', style: TextStyle(fontSize: 12)),
+              // Filter Tune Button
+              IconButton(
+                style: IconButton.styleFrom(
+                  backgroundColor: const Color(0xFFF8FAFC),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
                 ),
-                ButtonSegment(
-                  value: AttendanceViewMode.table,
-                  icon: Icon(Icons.table_rows, size: 16),
-                  label: Text('Log Table', style: TextStyle(fontSize: 12)),
-                ),
-              ],
-              selected: {_viewMode},
-              onSelectionChanged: (set) => setState(() => _viewMode = set.first),
-            ),
+                icon: const Icon(Icons.tune_rounded, color: Color(0xFF475569), size: 20),
+                onPressed: () => _openSiteVisitFilterBottomSheet(context, visits, employees),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
 
-            // Site Name Filter
-            SizedBox(
-              width: isMobile ? double.infinity : 200,
-              child: DropdownButtonFormField<String>(
-                initialValue: _selectedSite,
-                decoration: InputDecoration(
-                  labelText: 'Filter Site',
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                items: [
-                  const DropdownMenuItem(value: 'All', child: Text('All Sites')),
-                  ...siteNames.map((s) => DropdownMenuItem(value: s, child: Text(s))),
+          // Search Box
+          _buildSiteSearchField(),
+        ],
+      ),
+    );
+  }
+
+  void _openSiteVisitFilterBottomSheet(
+    BuildContext context,
+    List<SiteVisitRecord> visits,
+    List<Employee> employees,
+  ) {
+    final departmentList = ['All Departments', ...Employee.departmentOptions];
+    final designationList = ['All Designations', ...Employee.designationOptions];
+    final siteNames = ['All', ...visits.map((v) => v.siteName.trim()).where((s) => s.isNotEmpty).toSet().toList()..sort()];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Filter Site Visits', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _selectedDepartment = 'All Departments';
+                            _selectedDesignation = 'All Designations';
+                            _selectedSite = 'All';
+                            _selectedEmployeeId = null;
+                          });
+                          Navigator.pop(ctx);
+                        },
+                        child: const Text('Reset', style: TextStyle(color: Color(0xFFEF4444))),
+                      ),
+                    ],
+                  ),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  SearchableFilterDropdown<String>(
+                    width: double.infinity,
+                    label: 'Department',
+                    value: _selectedDepartment == 'All Departments' ? null : _selectedDepartment,
+                    items: departmentList,
+                    itemLabel: (item) => item,
+                    searchHint: 'Search department...',
+                    onChanged: (val) {
+                      setState(() {
+                        _selectedDepartment = val ?? 'All Departments';
+                      });
+                      setModalState(() {});
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  SearchableFilterDropdown<String>(
+                    width: double.infinity,
+                    label: 'Designation',
+                    value: _selectedDesignation == 'All Designations' ? null : _selectedDesignation,
+                    items: designationList,
+                    itemLabel: (item) => item,
+                    searchHint: 'Search designation...',
+                    onChanged: (val) {
+                      setState(() {
+                        _selectedDesignation = val ?? 'All Designations';
+                      });
+                      setModalState(() {});
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF9CC70A),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Apply Filters', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    ),
+                  ),
                 ],
-                onChanged: (val) {
-                  if (val != null) setState(() => _selectedSite = val);
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildSiteSearchField() {
+    return TextField(
+      controller: _searchController,
+      style: const TextStyle(fontSize: 13),
+      decoration: InputDecoration(
+        hintText: 'Search site logs...',
+        hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+        prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF94A3B8)),
+        suffixIcon: _searchController.text.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.clear, size: 18, color: Color(0xFF94A3B8)),
+                onPressed: () {
+                  _searchController.clear();
+                  setState(() => _searchQuery = '');
                 },
+              )
+            : null,
+        filled: true,
+        fillColor: const Color(0xFFFAFAFA),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF9CC70A)),
+        ),
+      ),
+      onChanged: (val) => setState(() => _searchQuery = val.trim().toLowerCase()),
+    );
+  }
+
+  Widget _buildSiteFilterDropdown(List<String> siteNames) {
+    return DropdownButtonFormField<String>(
+      initialValue: _selectedSite,
+      isExpanded: true,
+      style: const TextStyle(fontSize: 13, color: Color(0xFF0F172A), fontWeight: FontWeight.w600),
+      decoration: InputDecoration(
+        prefixIcon: const Icon(Icons.business_outlined, size: 18, color: Color(0xFF9CC70A)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        filled: true,
+        fillColor: const Color(0xFFFAFAFA),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF9CC70A)),
+        ),
+      ),
+      items: [
+        const DropdownMenuItem(value: 'All', child: Text('All Sites', overflow: TextOverflow.ellipsis)),
+        ...siteNames.map((s) => DropdownMenuItem(value: s, child: Text(s, overflow: TextOverflow.ellipsis))),
+      ],
+      onChanged: (val) {
+        if (val != null) setState(() => _selectedSite = val);
+      },
+    );
+  }
+
+  Widget _buildSiteVisitSectionHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                _viewMode == AttendanceViewMode.matrix ? Icons.grid_on : Icons.table_rows,
+                size: 16,
+                color: const Color(0xFF9CC70A),
               ),
             ),
-
-            // Search
-            SizedBox(
-              width: isMobile ? double.infinity : 200,
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Search site logs...',
-                  prefixIcon: const Icon(Icons.search, size: 18),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                onChanged: (val) => setState(() => _searchQuery = val.trim().toLowerCase()),
+            const SizedBox(width: 8),
+            Text(
+              _viewMode == AttendanceViewMode.matrix ? 'Site Visit Matrix' : 'Site Visit Logs',
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1E293B),
               ),
             ),
           ],
         ),
-      ),
+        InkWell(
+          onTap: () {
+            setState(() {
+              _viewMode = _viewMode == AttendanceViewMode.matrix
+                  ? AttendanceViewMode.table
+                  : AttendanceViewMode.matrix;
+            });
+          },
+          child: Row(
+            children: [
+              Text(
+                _viewMode == AttendanceViewMode.matrix ? 'View Log Table' : 'View Matrix',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF475569),
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Icon(Icons.arrow_forward, size: 14, color: Color(0xFF475569)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -1752,9 +2158,27 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
   }
 
   List<SiteVisitRecord> _filterSiteVisits(List<SiteVisitRecord> visits, List<Employee> employees) {
+    final empMap = {for (final e in employees) e.id: e};
+
     return visits.where((v) {
+      final emp = empMap[v.employeeId];
       if (_selectedEmployeeId != null && v.employeeId != _selectedEmployeeId) return false;
-      if (_selectedSite != 'All' && v.siteName.toLowerCase() != _selectedSite.toLowerCase()) return false;
+      if (_selectedDepartment != 'All Departments' && emp?.department != _selectedDepartment) return false;
+      if (_selectedDesignation != 'All Designations' && emp?.designation != _selectedDesignation) return false;
+      if (_selectedSite != 'All' && v.siteName.toLowerCase().trim() != _selectedSite.toLowerCase().trim()) return false;
+      
+      // Month & Year Filter
+      try {
+        final parts = v.visitDate.split('-');
+        if (parts.length == 3) {
+          final month = int.tryParse(parts[1]);
+          final year = int.tryParse(parts[2]);
+          if (month != null && year != null) {
+            if (month != _focusedMonth.month || year != _focusedMonth.year) return false;
+          }
+        }
+      } catch (_) {}
+
       if (_searchQuery.isNotEmpty) {
         final name = v.employeeName.toLowerCase();
         final site = v.siteName.toLowerCase();
@@ -1791,6 +2215,144 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
       ref.invalidate(attendanceManagementRecordsProvider);
       ref.invalidate(attendanceManagementStatsProvider);
     }
+  }
+
+  void _openSiteVisitDetailsDialog(SiteVisitRecord v) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: 480,
+          padding: const EdgeInsets.all(20),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.location_on, color: Color(0xFF9CC70A), size: 22),
+                        ),
+                        const SizedBox(width: 10),
+                        const Text(
+                          'Site Visit Details',
+                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 20),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const Divider(height: 20),
+                if (v.photoUrl.isNotEmpty) ...[
+                  GestureDetector(
+                    onTap: () => _openFullImagePreview(v.photoUrl, v.siteName),
+                    child: Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: _buildSiteVisitImageWidget(v.photoUrl, width: double.infinity, height: 180),
+                        ),
+                        Positioned(
+                          right: 8,
+                          bottom: 8,
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.6),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.zoom_in, color: Colors.white, size: 14),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Tap to view full image',
+                                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                _buildDetailRowItem(Icons.person_outline, 'Employee', v.employeeName),
+                _buildDetailRowItem(Icons.business_outlined, 'Site Name', v.siteName),
+                _buildDetailRowItem(Icons.calendar_today_outlined, 'Date & Time', '${v.visitDate}  ${v.visitTime}'),
+                _buildDetailRowItem(Icons.map_outlined, 'Location / Address', v.address.isNotEmpty ? v.address : 'N/A'),
+                _buildDetailRowItem(
+                  Icons.my_location,
+                  'GPS Coordinates',
+                  '${v.latitude.toStringAsFixed(6)}, ${v.longitude.toStringAsFixed(6)}',
+                ),
+                if (v.notes.isNotEmpty)
+                  _buildDetailRowItem(Icons.notes_outlined, 'Purpose / Notes', v.notes),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF9CC70A),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Close', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRowItem(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: const Color(0xFF64748B)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // --- Site Visit Specific Sub-Views ---
@@ -1905,15 +2467,28 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
   Widget _buildSiteVisitTable(List<SiteVisitRecord> visits) {
     if (visits.isEmpty) {
       return Card(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFFE2E8F0)),
+        ),
         child: const Padding(
-          padding: EdgeInsets.all(32),
+          padding: EdgeInsets.all(36),
           child: Center(
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.location_off, size: 48, color: Colors.grey),
+                Icon(Icons.location_off_outlined, size: 48, color: Color(0xFF94A3B8)),
                 SizedBox(height: 12),
-                Text('No site visit logs found.', style: TextStyle(color: Colors.grey)),
+                Text(
+                  'No site visit logs found.',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Try selecting a different month or clearing search filters.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                ),
               ],
             ),
           ),
@@ -1923,52 +2498,127 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
 
     return Card(
       elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: DataTable(
-            headingRowColor: WidgetStateProperty.all(const Color(0xFFF1F5F9)),
+            headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+            dataRowMinHeight: 56,
+            dataRowMaxHeight: 64,
             columns: const [
-              DataColumn(label: Text('Employee', style: TextStyle(fontWeight: FontWeight.bold))),
-              DataColumn(label: Text('Site Name', style: TextStyle(fontWeight: FontWeight.bold))),
-              DataColumn(label: Text('Date & Time', style: TextStyle(fontWeight: FontWeight.bold))),
-              DataColumn(label: Text('Address / Geo Coordinates', style: TextStyle(fontWeight: FontWeight.bold))),
-              DataColumn(label: Text('Notes', style: TextStyle(fontWeight: FontWeight.bold))),
-              DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold))),
+              DataColumn(label: Text('Employee', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1E293B)))),
+              DataColumn(label: Text('Site Name', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1E293B)))),
+              DataColumn(label: Text('Date & Time', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1E293B)))),
+              DataColumn(label: Text('Address / GPS', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1E293B)))),
+              DataColumn(label: Text('Photo', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1E293B)))),
+              DataColumn(label: Text('Notes', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1E293B)))),
+              DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1E293B)))),
             ],
             rows: visits.map((v) {
               return DataRow(
                 cells: [
-                  DataCell(Text(v.employeeName, style: const TextStyle(fontWeight: FontWeight.w600))),
                   DataCell(
-                    Row(
-                      children: [
-                        const Icon(Icons.location_on, size: 16, color: Color(0xFF9CC70A)),
-                        const SizedBox(width: 4),
-                        Text(v.siteName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      ],
+                    InkWell(
+                      onTap: () => _openSiteVisitDetailsDialog(v),
+                      child: Row(
+                        children: [
+                            CircleAvatar(
+                              radius: 14,
+                              backgroundColor: const Color(0xFF9CC70A).withValues(alpha: 0.2),
+                              child: Text(
+                                v.employeeName.trim().isNotEmpty
+                                    ? v.employeeName.trim().split(' ').map((e) => e.isNotEmpty ? e[0] : '').take(2).join('').toUpperCase()
+                                    : 'E',
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                              ),
+                            ),
+                          const SizedBox(width: 8),
+                          Text(v.employeeName, style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
+                        ],
+                      ),
                     ),
                   ),
-                  DataCell(Text('${v.visitDate} ${v.visitTime}')),
                   DataCell(
-                    Text(
-                      v.address.isNotEmpty ? v.address : '${v.latitude.toStringAsFixed(4)}, ${v.longitude.toStringAsFixed(4)}',
-                      style: const TextStyle(color: Color(0xFF414A51)),
+                    InkWell(
+                      onTap: () => _openSiteVisitDetailsDialog(v),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF7FEE7),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.location_on, size: 14, color: Color(0xFF414A51)),
+                            const SizedBox(width: 4),
+                            Text(v.siteName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF414A51))),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                  DataCell(Text(v.notes.isEmpty ? '-' : v.notes)),
+                  DataCell(
+                    InkWell(
+                      onTap: () => _openSiteVisitDetailsDialog(v),
+                      child: Text('${v.visitDate}\n${v.visitTime}', style: const TextStyle(fontSize: 12, color: Color(0xFF475569))),
+                    ),
+                  ),
+                  DataCell(
+                    InkWell(
+                      onTap: () => _openSiteVisitDetailsDialog(v),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            v.address.isNotEmpty ? v.address : 'GPS Recorded',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF0F172A)),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            '${v.latitude.toStringAsFixed(4)}, ${v.longitude.toStringAsFixed(4)}',
+                            style: const TextStyle(fontSize: 10, color: Color(0xFF64748B)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  DataCell(
+                    v.photoUrl.isNotEmpty
+                        ? GestureDetector(
+                            onTap: () => _openFullImagePreview(v.photoUrl, v.siteName),
+                            child: _buildSiteVisitImageWidget(v.photoUrl, width: 40, height: 40),
+                          )
+                        : const Text('-', style: TextStyle(color: Colors.grey)),
+                  ),
+                  DataCell(
+                    InkWell(
+                      onTap: () => _openSiteVisitDetailsDialog(v),
+                      child: Text(
+                        v.notes.isEmpty ? '-' : v.notes,
+                        style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Color(0xFF475569)),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
                   DataCell(
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.edit_outlined, size: 18, color: Color(0xFF414A51)),
+                          icon: const Icon(Icons.edit_outlined, size: 18, color: Color(0xFF475569)),
+                          tooltip: 'Edit Site Visit',
                           onPressed: () => _openAdminSiteEntryDialog(v),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                          icon: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFEF4444)),
+                          tooltip: 'Delete Site Visit',
                           onPressed: () async {
                             final confirm = await showDialog<bool>(
                               context: context,
@@ -1978,7 +2628,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                                 actions: [
                                   TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
                                   ElevatedButton(
-                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444), foregroundColor: Colors.white),
                                     onPressed: () => Navigator.pop(ctx, true),
                                     child: const Text('Delete'),
                                   ),

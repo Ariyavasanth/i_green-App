@@ -126,7 +126,7 @@ class _AdminManualSiteVisitDialogState extends ConsumerState<AdminManualSiteVisi
     final isMobile = MediaQuery.of(context).size.width < 500;
 
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Container(
         width: 540,
         padding: const EdgeInsets.all(24),
@@ -140,20 +140,27 @@ class _AdminManualSiteVisitDialogState extends ConsumerState<AdminManualSiteVisi
                 // Dialog Header
                 Row(
                   children: [
-                    const Icon(Icons.add_location_alt_outlined, color: Color(0xFF9CC70A), size: 28),
-                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.add_location_alt_outlined, color: Color(0xFF9CC70A), size: 24),
+                    ),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         widget.existingVisit != null ? 'Edit Site Visit' : 'Manual Site Visit Entry',
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
+                          color: Color(0xFF0F172A),
                         ),
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close),
+                      icon: const Icon(Icons.close, color: Color(0xFF64748B)),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ],
@@ -162,7 +169,7 @@ class _AdminManualSiteVisitDialogState extends ConsumerState<AdminManualSiteVisi
 
                 // Employee Selection
                 employeesAsync.when(
-                  loading: () => const LinearProgressIndicator(),
+                  loading: () => const LinearProgressIndicator(color: Color(0xFF9CC70A)),
                   error: (e, _) => Text('Error loading employees: $e'),
                   data: (employees) {
                     if (_selectedEmployeeId != null && _selectedEmployeeName.isEmpty) {
@@ -171,10 +178,20 @@ class _AdminManualSiteVisitDialogState extends ConsumerState<AdminManualSiteVisi
                     }
                     return DropdownButtonFormField<int>(
                       value: _selectedEmployeeId,
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF0F172A), fontWeight: FontWeight.w600),
                       decoration: InputDecoration(
                         labelText: 'Select Employee *',
-                        prefixIcon: const Icon(Icons.person_outline, size: 20),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        prefixIcon: const Icon(Icons.person_outline, size: 20, color: Color(0xFF9CC70A)),
+                        filled: true,
+                        fillColor: const Color(0xFFFAFAFA),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFF9CC70A)),
+                        ),
                       ),
                       items: employees.map((emp) {
                         return DropdownMenuItem<int>(
@@ -200,10 +217,20 @@ class _AdminManualSiteVisitDialogState extends ConsumerState<AdminManualSiteVisi
                 // Site Name
                 TextFormField(
                   controller: _siteNameController,
+                  style: const TextStyle(fontSize: 13),
                   decoration: InputDecoration(
                     labelText: 'Site Name / Project Location *',
-                    prefixIcon: const Icon(Icons.location_city_outlined, size: 20),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    prefixIcon: const Icon(Icons.location_city_outlined, size: 20, color: Color(0xFF9CC70A)),
+                    filled: true,
+                    fillColor: const Color(0xFFFAFAFA),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFF9CC70A)),
+                    ),
                   ),
                   validator: (val) => val == null || val.trim().isEmpty ? 'Site name is required' : null,
                 ),
@@ -230,10 +257,20 @@ class _AdminManualSiteVisitDialogState extends ConsumerState<AdminManualSiteVisi
                 // Address
                 TextFormField(
                   controller: _addressController,
+                  style: const TextStyle(fontSize: 13),
                   decoration: InputDecoration(
                     labelText: 'Full Address / Location Landmark',
-                    prefixIcon: const Icon(Icons.map_outlined, size: 20),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    prefixIcon: const Icon(Icons.map_outlined, size: 20, color: Color(0xFF9CC70A)),
+                    filled: true,
+                    fillColor: const Color(0xFFFAFAFA),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFF9CC70A)),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -244,11 +281,21 @@ class _AdminManualSiteVisitDialogState extends ConsumerState<AdminManualSiteVisi
                     Expanded(
                       child: TextFormField(
                         controller: _latController,
+                        style: const TextStyle(fontSize: 13),
                         keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
                         decoration: InputDecoration(
                           labelText: 'Latitude',
-                          prefixIcon: const Icon(Icons.my_location, size: 18),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          prefixIcon: const Icon(Icons.my_location, size: 18, color: Color(0xFF9CC70A)),
+                          filled: true,
+                          fillColor: const Color(0xFFFAFAFA),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Color(0xFF9CC70A)),
+                          ),
                         ),
                       ),
                     ),
@@ -256,11 +303,21 @@ class _AdminManualSiteVisitDialogState extends ConsumerState<AdminManualSiteVisi
                     Expanded(
                       child: TextFormField(
                         controller: _lngController,
+                        style: const TextStyle(fontSize: 13),
                         keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
                         decoration: InputDecoration(
                           labelText: 'Longitude',
-                          prefixIcon: const Icon(Icons.my_location, size: 18),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          prefixIcon: const Icon(Icons.my_location, size: 18, color: Color(0xFF9CC70A)),
+                          filled: true,
+                          fillColor: const Color(0xFFFAFAFA),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Color(0xFF9CC70A)),
+                          ),
                         ),
                       ),
                     ),
@@ -271,11 +328,21 @@ class _AdminManualSiteVisitDialogState extends ConsumerState<AdminManualSiteVisi
                 // Notes
                 TextFormField(
                   controller: _notesController,
+                  style: const TextStyle(fontSize: 13),
                   maxLines: 2,
                   decoration: InputDecoration(
                     labelText: 'Visit Purpose / Notes',
-                    prefixIcon: const Icon(Icons.notes, size: 20),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    prefixIcon: const Icon(Icons.notes, size: 20, color: Color(0xFF9CC70A)),
+                    filled: true,
+                    fillColor: const Color(0xFFFAFAFA),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFF9CC70A)),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -286,12 +353,13 @@ class _AdminManualSiteVisitDialogState extends ConsumerState<AdminManualSiteVisi
                   children: [
                     OutlinedButton(
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF414A51),
-                        side: const BorderSide(color: Color(0xFF414A51)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        foregroundColor: const Color(0xFF475569),
+                        side: const BorderSide(color: Color(0xFFCBD5E1)),
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel'),
+                      child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                     const SizedBox(width: 12),
                     ElevatedButton.icon(
@@ -299,7 +367,7 @@ class _AdminManualSiteVisitDialogState extends ConsumerState<AdminManualSiteVisi
                         backgroundColor: const Color(0xFF9CC70A),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       onPressed: _saving ? null : _save,
                       icon: _saving
@@ -309,7 +377,7 @@ class _AdminManualSiteVisitDialogState extends ConsumerState<AdminManualSiteVisi
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                             )
                           : const Icon(Icons.check, size: 18),
-                      label: Text(_saving ? 'Saving...' : 'Save Site Visit'),
+                      label: Text(_saving ? 'Saving...' : 'Save Site Visit', style: const TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -325,10 +393,20 @@ class _AdminManualSiteVisitDialogState extends ConsumerState<AdminManualSiteVisi
     return TextFormField(
       controller: _dateController,
       readOnly: true,
+      style: const TextStyle(fontSize: 13),
       decoration: InputDecoration(
         labelText: 'Visit Date (dd-MM-yyyy) *',
-        prefixIcon: const Icon(Icons.calendar_today, size: 20),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        prefixIcon: const Icon(Icons.calendar_today, size: 18, color: Color(0xFF9CC70A)),
+        filled: true,
+        fillColor: const Color(0xFFFAFAFA),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF9CC70A)),
+        ),
       ),
       onTap: () async {
         final parsed = DateFormat('dd-MM-yyyy').tryParse(_dateController.text) ?? DateTime.now();
@@ -349,10 +427,20 @@ class _AdminManualSiteVisitDialogState extends ConsumerState<AdminManualSiteVisi
   Widget _buildTimeField() {
     return TextFormField(
       controller: _timeController,
+      style: const TextStyle(fontSize: 13),
       decoration: InputDecoration(
         labelText: 'Visit Time (HH:mm:ss) *',
-        prefixIcon: const Icon(Icons.access_time, size: 20),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        prefixIcon: const Icon(Icons.access_time, size: 18, color: Color(0xFF9CC70A)),
+        filled: true,
+        fillColor: const Color(0xFFFAFAFA),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF9CC70A)),
+        ),
       ),
       onTap: () async {
         final now = TimeOfDay.now();

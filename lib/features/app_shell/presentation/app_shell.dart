@@ -512,16 +512,36 @@ class _TopBar extends ConsumerWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              headingText,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF1E293B),
+                            if (isAttendanceManagement) ...[
+                              const Text(
+                                'Attendance',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF1E293B),
+                                  height: 1.1,
+                                ),
                               ),
-                            ),
+                              const Text(
+                                'Management',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF64748B),
+                                  height: 1.1,
+                                ),
+                              ),
+                            ] else
+                              Text(
+                                headingText,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF1E293B),
+                                ),
+                              ),
                             if (currentLocation.startsWith('/responses'))
                               Consumer(
                                 builder: (context, ref, _) {
