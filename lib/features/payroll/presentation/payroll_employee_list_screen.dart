@@ -18,11 +18,6 @@ class PayrollEmployeeListScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final employee = ref.watch(currentEmployeeProvider);
-    if (employee != null && employee.userType.toUpperCase() == 'EMPLOYEE') {
-      return const AccessDeniedView();
-    }
-
     final selectedMonth = ref.watch(selectedPayrollMonthProvider);
     final employeesAsync = ref.watch(employeesProvider);
     final payrollRecordsAsync = ref.watch(payrollRecordsForMonthProvider);

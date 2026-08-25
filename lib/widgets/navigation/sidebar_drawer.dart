@@ -20,7 +20,7 @@ class SidebarDestination {
   final int? badgeCount;
 }
 
-class SidebarDrawer extends StatelessWidget {
+class SidebarDrawer extends StatefulWidget {
   const SidebarDrawer({
     required this.destinations,
     required this.currentLocation,
@@ -37,99 +37,187 @@ class SidebarDrawer extends StatelessWidget {
   final VoidCallback onLogout;
 
   @override
-  Widget build(BuildContext context) => AnimatedContainer(
-    duration: const Duration(milliseconds: 180),
-    curve: Curves.easeInOutCubic,
-    width: expanded ? 250 : 72,
-    decoration: const BoxDecoration(color: Colors.white),
-    child: SafeArea(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 46),
-            child: Row(
-              mainAxisAlignment: expanded
-                  ? MainAxisAlignment.start
-                  : MainAxisAlignment.center,
-              children: [
-                if (expanded) const SizedBox(width: 16),
-                const Icon(Icons.auto_stories, color: Colors.black, size: 20),
-                if (expanded) ...[
-                  const SizedBox(width: 9),
-                  const Text(
-                    'BOOKS',
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.6,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const Divider(height: 1, color: Color(0x1F000000)),
-          const SizedBox(height: 4),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
-              children: [
-                for (var index = 0; index < destinations.length; index++) ...[
-                  // Group labels keep the longer navigation list easy to scan.
-                  if (index == 0 ||
-                      destinations[index - 1].section !=
-                          destinations[index].section) ...[
-                    if (index != 0)
-                      Padding(
-                        padding: EdgeInsets.only(
-                          top: 6,
-                          left: expanded ? 4 : 0,
-                          right: expanded ? 4 : 0,
-                        ),
-                        child: const Divider(
-                          height: 1,
-                          color: Color(0x1A000000),
-                        ),
+  State<SidebarDrawer> createState() => _SidebarDrawerState();
+}
+
+class _SidebarDrawerState extends State<SidebarDrawer> {
+  final GlobalKey _selectedKey = GlobalKey();
+  late final ScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController(
+      initialScrollOffset: _calculateInitialOffset(),
+    );
+    _scrollToSelectedItem();
+  }
+
+  @override
+  void didUpdateWidget(covariant SidebarDrawer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentLocation != widget.currentLocation) {
+      _scrollToSelectedItem();
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  double _calculateInitialOffset() {
+    final selectedIndex = _findSelectedIndex();
+    if (selectedIndex <= 0) return 0.0;
+
+    double offset = 0.0;
+    for (int i = 0; i < selectedIndex; i++) {
+      if (i == 0 || widget.destinations[i - 1].section != widget.destinations[i].section) {
+        offset += (i == 0) ? 26.0 : 33.0;
+      }
+      offset += 36.0;
+    }
+    return (offset - 100.0).clamp(0.0, 5000.0);
+  }
+
+  void _scrollToSelectedItem() {
+    void performScroll() {
+      if (!mounted) return;
+      final currentCtx = _selectedKey.currentContext;
+      if (currentCtx != null) {
+        Scrollable.ensureVisible(
+          currentCtx,
+          duration: Duration.zero,
+          alignment: 0.3,
+        );
+      } else if (_scrollController.hasClients) {
+        final calcOffset = _calculateInitialOffset();
+        _scrollController.jumpTo(calcOffset);
+      }
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) => performScroll());
+    Future.delayed(const Duration(milliseconds: 50), () => performScroll());
+    Future.delayed(const Duration(milliseconds: 150), () => performScroll());
+  }
+
+  int _findSelectedIndex() {
+    final cur = widget.currentLocation.trim();
+    for (int i = 0; i < widget.destinations.length; i++) {
+      if (cur == widget.destinations[i].path.trim()) {
+        return i;
+      }
+    }
+    for (int i = 0; i < widget.destinations.length; i++) {
+      final path = widget.destinations[i].path.trim();
+      if (path != '/' && path.isNotEmpty && cur.startsWith(path)) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedIndex = _findSelectedIndex();
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeInOutCubic,
+      width: widget.expanded ? 250 : 72,
+      decoration: const BoxDecoration(color: Colors.white),
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 46),
+              child: Row(
+                mainAxisAlignment: widget.expanded
+                    ? MainAxisAlignment.start
+                    : MainAxisAlignment.center,
+                children: [
+                  if (widget.expanded) const SizedBox(width: 16),
+                  const Icon(Icons.auto_stories, color: Colors.black, size: 20),
+                  if (widget.expanded) ...[
+                    const SizedBox(width: 9),
+                    const Text(
+                      'BOOKS',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.6,
                       ),
-                    _SectionHeader(
-                      label: destinations[index].section,
-                      expanded: expanded,
                     ),
                   ],
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 2),
-                    child: _SidebarItem(
-                      destination: destinations[index],
-                      selected: currentLocation == destinations[index].path,
-                      expanded: expanded,
-                      onTap: () => onSelected(destinations[index].path),
-                    ),
-                  ),
                 ],
-              ],
-            ),
-          ),
-          const Divider(height: 1, color: Color(0x1F000000)),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-            child: _SidebarItem(
-              destination: const SidebarDestination(
-                'Logout',
-                '/login',
-                Icons.logout,
-                'Account',
               ),
-              selected: false,
-              expanded: expanded,
-              onTap: onLogout,
             ),
-          ),
-        ],
+            const Divider(height: 1, color: Color(0x1F000000)),
+            const SizedBox(height: 4),
+            Expanded(
+              child: ListView(
+                controller: _scrollController,
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+                children: [
+                  for (var index = 0; index < widget.destinations.length; index++) ...[
+                    // Group labels keep the longer navigation list easy to scan.
+                    if (index == 0 ||
+                        widget.destinations[index - 1].section !=
+                            widget.destinations[index].section) ...[
+                      if (index != 0)
+                        Padding(
+                          padding: EdgeInsets.only(
+                            top: 6,
+                            left: widget.expanded ? 4 : 0,
+                            right: widget.expanded ? 4 : 0,
+                          ),
+                          child: const Divider(
+                            height: 1,
+                            color: Color(0x1A000000),
+                          ),
+                        ),
+                      _SectionHeader(
+                        label: widget.destinations[index].section,
+                        expanded: widget.expanded,
+                      ),
+                    ],
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: _SidebarItem(
+                        key: index == selectedIndex ? _selectedKey : null,
+                        destination: widget.destinations[index],
+                        selected: index == selectedIndex,
+                        expanded: widget.expanded,
+                        onTap: () => widget.onSelected(widget.destinations[index].path),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: Color(0x1F000000)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+              child: _SidebarItem(
+                destination: const SidebarDestination(
+                  'Logout',
+                  '/login',
+                  Icons.logout,
+                  'Account',
+                ),
+                selected: false,
+                expanded: widget.expanded,
+                onTap: widget.onLogout,
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _SectionHeader extends StatelessWidget {
@@ -168,6 +256,7 @@ class _SidebarItem extends StatelessWidget {
     required this.selected,
     required this.expanded,
     required this.onTap,
+    super.key,
   });
 
   final SidebarDestination destination;

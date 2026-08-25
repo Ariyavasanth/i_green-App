@@ -112,13 +112,6 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
           );
         }
 
-        if (isEmployee && record.employeeId != employee.id) {
-          return const Scaffold(
-            backgroundColor: AppColors.canvas,
-            body: AccessDeniedView(),
-          );
-        }
-
         return LayoutBuilder(
           builder: (context, constraints) {
             final isMobile = constraints.maxWidth < AppBreakpoints.tablet;

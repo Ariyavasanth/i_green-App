@@ -98,11 +98,6 @@ class _PayrollSettingsScreenState extends ConsumerState<PayrollSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final employee = ref.watch(currentEmployeeProvider);
-    if (employee != null && employee.userType.toUpperCase() == 'EMPLOYEE') {
-      return const AccessDeniedView();
-    }
-
     final settingsAsync = ref.watch(payrollSettingsProvider);
 
     return Scaffold(
