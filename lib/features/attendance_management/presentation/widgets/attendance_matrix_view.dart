@@ -71,63 +71,27 @@ class AttendanceMatrixView extends StatelessWidget {
       );
     }
 
-    const double leftColWidth = 180.0;
-    const double dayColWidth = 36.0;
-    const double rowHeight = 52.0;
-    const double headerHeight = 44.0;
+    const double leftColWidth = 160.0;
+    const double dayColWidth = 44.0;
+    const double rowHeight = 56.0;
+    const double headerHeight = 48.0;
 
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Header with Title & Legend
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.calendar_today_outlined, size: 18, color: AppColors.primary),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Monthly Attendance Matrix (${DateFormat('MMMM yyyy').format(focusedMonth)})',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1E293B),
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 6,
-                  children: AttendanceStatusInfo.values
-                      .map((s) => _legendPill('${s.code}: ${s.label}', s.textColor, s.bgColor))
-                      .toList(),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1, color: Color(0xFFE2E8F0)),
-
           // Sticky Column Grid Layout
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -136,7 +100,7 @@ class AttendanceMatrixView extends StatelessWidget {
               Container(
                 width: leftColWidth,
                 decoration: const BoxDecoration(
-                  border: Border(right: BorderSide(color: Color(0xFFE2E8F0), width: 1.5)),
+                  border: Border(right: BorderSide(color: Color(0xFFF1F5F9), width: 1.5)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -145,7 +109,7 @@ class AttendanceMatrixView extends StatelessWidget {
                     Container(
                       height: headerHeight,
                       padding: const EdgeInsets.symmetric(horizontal: 12),
-                      color: const Color(0xFFF8FAFC),
+                      color: const Color(0xFFFAFAFA),
                       alignment: Alignment.centerLeft,
                       child: const Text(
                         'Employee',
@@ -157,7 +121,7 @@ class AttendanceMatrixView extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                    const Divider(height: 1, color: Color(0xFFF1F5F9)),
                     // Rows
                     for (final emp in employees) ...[
                       Container(
@@ -167,8 +131,8 @@ class AttendanceMatrixView extends StatelessWidget {
                         child: Row(
                           children: [
                             CircleAvatar(
-                              radius: 14,
-                              backgroundColor: AppColors.active.withValues(alpha: 0.15),
+                              radius: 15,
+                              backgroundColor: AppColors.primary.withValues(alpha: 0.15),
                               backgroundImage: (emp.profileImageUrl.isNotEmpty && emp.profileImageUrl.startsWith('http'))
                                   ? NetworkImage(emp.profileImageUrl)
                                   : null,
@@ -179,9 +143,9 @@ class AttendanceMatrixView extends StatelessWidget {
                                   ? Text(
                                       emp.fullName.isNotEmpty ? emp.fullName[0].toUpperCase() : 'E',
                                       style: const TextStyle(
-                                        fontSize: 11,
+                                        fontSize: 12,
                                         fontWeight: FontWeight.bold,
-                                        color: AppColors.active,
+                                        color: Color(0xFF22282D),
                                       ),
                                     )
                                   : null,
@@ -198,7 +162,7 @@ class AttendanceMatrixView extends StatelessWidget {
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       fontSize: 12,
-                                      fontWeight: FontWeight.w600,
+                                      fontWeight: FontWeight.bold,
                                       color: Color(0xFF1E293B),
                                     ),
                                   ),
@@ -206,13 +170,13 @@ class AttendanceMatrixView extends StatelessWidget {
                                   Text(
                                     emp.employeeId.isNotEmpty
                                         ? emp.employeeId
-                                        : 'EMP${emp.id.toString().padLeft(3, '0')}',
+                                        : 'EMP-${emp.id.toString().padLeft(4, '0')}',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       fontSize: 10,
                                       fontWeight: FontWeight.w500,
-                                      color: Color(0xFF64748B),
+                                      color: Color(0xFF94A3B8),
                                     ),
                                   ),
                                 ],
@@ -237,30 +201,46 @@ class AttendanceMatrixView extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Header row for days 1..daysInMonth
+                        // Header row for days 1..daysInMonth with Day + DayOfWeek
                         Container(
                           height: headerHeight,
-                          color: const Color(0xFFF8FAFC),
+                          color: const Color(0xFFFAFAFA),
                           child: Row(
                             children: [
-                              for (int day = 1; day <= daysInMonth; day++)
-                                SizedBox(
-                                  width: dayColWidth,
-                                  child: Center(
-                                    child: Text(
-                                      '$day',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 11,
-                                        color: Color(0xFF64748B),
-                                      ),
+                              for (int day = 1; day <= daysInMonth; day++) ...[
+                                () {
+                                  final dt = DateTime(year, month, day);
+                                  final dayOfWeek = DateFormat('EEE').format(dt);
+                                  return SizedBox(
+                                    width: dayColWidth,
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          '$day',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                            color: Color(0xFF1E293B),
+                                          ),
+                                        ),
+                                        Text(
+                                          dayOfWeek,
+                                          style: const TextStyle(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w500,
+                                            color: Color(0xFF94A3B8),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ),
-                                ),
+                                  );
+                                }(),
+                              ],
                             ],
                           ),
                         ),
-                        const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                        const Divider(height: 1, color: Color(0xFFF1F5F9)),
                         // Data rows
                         for (final emp in employees) ...[
                           SizedBox(
@@ -297,7 +277,7 @@ class AttendanceMatrixView extends StatelessWidget {
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: textColor.withValues(alpha: 0.3)),
+        border: Border.all(color: textColor.withValues(alpha: 0.2)),
       ),
       child: Text(
         text,
@@ -351,23 +331,23 @@ class AttendanceMatrixView extends StatelessWidget {
     String codeStr = statusInfo?.code ?? '-';
 
     final tooltipMsg = record != null
-        ? '${emp.fullName} (${emp.employeeId.isNotEmpty ? emp.employeeId : "EMP${emp.id}"})\nDate: $dateStr\nStatus: ${statusInfo?.label ?? record.status}\nIn: ${record.effectiveCheckInTime}\nOut: ${record.checkOutTime.isNotEmpty ? record.checkOutTime : "--:--"}\nHours: ${record.totalHours} hrs'
+        ? '${emp.fullName} (${emp.employeeId.isNotEmpty ? emp.employeeId : "EMP-${emp.id}"})\nDate: $dateStr\nStatus: ${statusInfo?.label ?? record.status}\nIn: ${record.effectiveCheckInTime}\nOut: ${record.checkOutTime.isNotEmpty ? record.checkOutTime : "--:--"}\nHours: ${record.totalHours} hrs'
         : '${emp.fullName}\nDate: $dateStr\nStatus: ${statusInfo?.label ?? "Not Marked"}';
 
     return Tooltip(
       message: tooltipMsg,
       child: InkWell(
         onTap: () => onCellTap(emp, date, record, statusInfo),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
         child: Container(
-          width: 28,
-          height: 28,
+          width: 32,
+          height: 30,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: bgColor,
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: statusInfo != null ? textColor.withValues(alpha: 0.3) : const Color(0xFFE2E8F0),
+              color: statusInfo != null ? textColor.withValues(alpha: 0.25) : const Color(0xFFE2E8F0),
             ),
           ),
           child: Text(
@@ -383,3 +363,4 @@ class AttendanceMatrixView extends StatelessWidget {
     );
   }
 }
+

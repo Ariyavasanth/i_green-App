@@ -2,11 +2,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../attendance/domain/attendance_record.dart';
 import '../domain/attendance_management_repository.dart';
 import '../domain/attendance_management_stats.dart';
-import 'sqlite_attendance_management_repository.dart';
 
 class FirebaseAttendanceManagementRepository implements AttendanceManagementRepository {
   final FirebaseFirestore? _customFirestore;
-  final SqliteAttendanceManagementRepository _sqliteRepo = SqliteAttendanceManagementRepository();
+  final Map<String, AttendanceRecord> _localMemoryCache = {};
 
   FirebaseAttendanceManagementRepository({FirebaseFirestore? firestore})
       : _customFirestore = firestore;
@@ -26,12 +25,6 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
     String? monthYear,
     String? statusFilter,
   }) async {
-    final sqliteRecords = await _sqliteRepo.getAllAttendanceRecords(
-      employeeId: employeeId,
-      monthYear: monthYear,
-      statusFilter: statusFilter,
-    );
-
     List<AttendanceRecord> firestoreRecords = [];
     try {
       Query<Map<String, dynamic>> query = _recordsRef;
@@ -40,65 +33,77 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
       }
       final snap = await query.get();
       firestoreRecords = snap.docs.map((d) => AttendanceRecord.fromMap(d.data())).toList();
-
-      if (monthYear != null && monthYear.isNotEmpty) {
-        firestoreRecords = firestoreRecords.where((r) {
-          if (r.date.trim().isNotEmpty) {
-            try {
-              final isoDate = DateTime.tryParse(r.date);
-              if (isoDate != null) {
-                final mStr = '${isoDate.month.toString().padLeft(2, '0')}-${isoDate.year}';
-                return mStr == monthYear;
-              }
-              final parts = r.date.split('-');
-              if (parts.length == 3) {
-                if (parts[0].length == 4) {
-                  final mStr = '${parts[1].padLeft(2, '0')}-${parts[0]}';
-                  return mStr == monthYear;
-                } else {
-                  final mStr = '${parts[1].padLeft(2, '0')}-${parts[2]}';
-                  return mStr == monthYear;
-                }
-              }
-            } catch (_) {}
-          }
-          return true;
-        }).toList();
-      }
-
-      if (statusFilter != null && statusFilter.isNotEmpty && statusFilter != 'All') {
-        firestoreRecords = firestoreRecords.where((r) => r.status == statusFilter).toList();
-      }
     } catch (_) {}
 
     final combinedMap = <String, AttendanceRecord>{};
-    for (final r in sqliteRecords) {
-      combinedMap['${r.employeeId}_${r.date}'] = r;
+    for (final r in _localMemoryCache.values) {
+      if (employeeId == null || r.employeeId == employeeId) {
+        combinedMap['${r.employeeId}_${r.date}'] = r;
+      }
     }
     for (final r in firestoreRecords) {
       combinedMap['${r.employeeId}_${r.date}'] = r;
     }
 
-    final list = combinedMap.values.toList();
+    var list = combinedMap.values.toList();
+
+    if (monthYear != null && monthYear.isNotEmpty) {
+      list = list.where((r) {
+        if (r.date.trim().isNotEmpty) {
+          try {
+            final isoDate = DateTime.tryParse(r.date);
+            if (isoDate != null) {
+              final mStr = '${isoDate.month.toString().padLeft(2, '0')}-${isoDate.year}';
+              return mStr == monthYear;
+            }
+            final parts = r.date.split('-');
+            if (parts.length == 3) {
+              if (parts[0].length == 4) {
+                final mStr = '${parts[1].padLeft(2, '0')}-${parts[0]}';
+                return mStr == monthYear;
+              } else {
+                final mStr = '${parts[1].padLeft(2, '0')}-${parts[2]}';
+                return mStr == monthYear;
+              }
+            }
+          } catch (_) {}
+        }
+        return true;
+      }).toList();
+    }
+
+    if (statusFilter != null && statusFilter.isNotEmpty && statusFilter != 'All') {
+      list = list.where((r) => r.status == statusFilter).toList();
+    }
+
     list.sort((a, b) => b.date.compareTo(a.date));
     return list;
   }
 
   @override
   Future<AttendanceManagementStats> getAttendanceStats({String? date}) async {
-    final sqliteStats = await _sqliteRepo.getAttendanceStats(date: date);
     try {
       final targetDate = date ??
           '${DateTime.now().day.toString().padLeft(2, '0')}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().year}';
 
-      final empSnap = await _employeesRef.get();
-      final totalEmployees = empSnap.docs.length;
+      int totalEmployees = 0;
+      try {
+        final empSnap = await _employeesRef.get();
+        totalEmployees = empSnap.docs.length;
+      } catch (_) {}
 
-      final recordsSnap = await _recordsRef.where('date', isEqualTo: targetDate).get();
-      final todayRecords = recordsSnap.docs.map((d) => AttendanceRecord.fromMap(d.data())).toList();
+      List<AttendanceRecord> todayRecords = [];
+      try {
+        final recordsSnap = await _recordsRef.where('date', isEqualTo: targetDate).get();
+        todayRecords = recordsSnap.docs.map((d) => AttendanceRecord.fromMap(d.data())).toList();
+      } catch (_) {}
 
-      if (todayRecords.isEmpty && sqliteStats.totalEmployees > 0) {
-        return sqliteStats;
+      for (final r in _localMemoryCache.values) {
+        if (r.date == targetDate) {
+          if (!todayRecords.any((tr) => tr.employeeId == r.employeeId)) {
+            todayRecords.add(r);
+          }
+        }
       }
 
       int present = 0;
@@ -131,13 +136,21 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
         averageWorkHours: avgHours,
       );
     } catch (_) {
-      return sqliteStats;
+      return const AttendanceManagementStats(
+        totalEmployees: 0,
+        presentToday: 0,
+        lateToday: 0,
+        checkedOutToday: 0,
+        absentToday: 0,
+        onLeaveToday: 0,
+        averageWorkHours: 0.0,
+      );
     }
   }
 
   @override
   Future<void> saveOrOverrideAttendance(AttendanceRecord record) async {
-    await _sqliteRepo.saveOrOverrideAttendance(record);
+    _localMemoryCache['${record.employeeId}_${record.date}'] = record;
     try {
       final docId = '${record.employeeId}_${record.date.replaceAll('-', '')}';
 
@@ -175,7 +188,7 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
 
   @override
   Future<void> deleteAttendanceRecord(int employeeId, String date) async {
-    await _sqliteRepo.deleteAttendanceRecord(employeeId, date);
+    _localMemoryCache.remove('${employeeId}_$date');
     try {
       final docId = '${employeeId}_${date.replaceAll('-', '')}';
       await _recordsRef.doc(docId).delete();
@@ -184,17 +197,15 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
 
   @override
   Future<List<Map<String, dynamic>>> getAuditAttempts({int? employeeId, int limit = 100}) async {
-    final sqliteAttempts = await _sqliteRepo.getAuditAttempts(employeeId: employeeId, limit: limit);
     try {
       Query<Map<String, dynamic>> query = _attemptsRef.orderBy('created_at', descending: true).limit(limit);
       if (employeeId != null) {
         query = _attemptsRef.where('employee_id', isEqualTo: employeeId).limit(limit);
       }
       final snap = await query.get();
-      final firestoreAttempts = snap.docs.map((d) => d.data()).toList();
-      return firestoreAttempts.isNotEmpty ? firestoreAttempts : sqliteAttempts;
+      return snap.docs.map((d) => d.data()).toList();
     } catch (_) {
-      return sqliteAttempts;
+      return [];
     }
   }
 
@@ -205,12 +216,22 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
     required String status,
     required String checkInTime,
   }) async {
-    await _sqliteRepo.bulkMarkAttendance(
-      employeeIds: employeeIds,
-      date: date,
-      status: status,
-      checkInTime: checkInTime,
-    );
+    for (final empId in employeeIds) {
+      final rec = AttendanceRecord(
+        id: empId * 10000 + DateTime.now().millisecondsSinceEpoch % 10000,
+        employeeId: empId,
+        employeeName: '',
+        date: date,
+        time: checkInTime,
+        checkInTime: checkInTime,
+        checkOutTime: '',
+        status: status,
+        verificationStatus: 'Admin Bulk Mark',
+        similarityScore: 1.0,
+        markedAt: DateTime.now().toIso8601String(),
+      );
+      _localMemoryCache['${empId}_$date'] = rec;
+    }
     try {
       final batch = _firestore.batch();
       for (final empId in employeeIds) {
@@ -235,3 +256,4 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
     } catch (_) {}
   }
 }
+

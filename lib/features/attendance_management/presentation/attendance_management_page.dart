@@ -239,7 +239,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     final allEmployeesList = employeesAsync.valueOrNull ?? [];
 
     return Container(
-      color: const Color(0xFFEFF3F6),
+      color: const Color(0xFFF8FAFC),
       child: Column(
         children: [
           Expanded(
@@ -257,249 +257,408 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: EdgeInsets.all(isMobile ? 12 : 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Responsive Page Header with Quick Actions
-                  _buildPageHeader(context, isMobile),
-                  const SizedBox(height: 16),
-
-                  // Tab View Body
-                  _buildActiveTabContent(
-                    isMobile: isMobile,
-                    allEmployees: allEmployeesList,
-                    staticStatsAsync: staticStatsAsync,
-                    staticRecordsAsync: staticRecordsAsync,
-                    siteVisitsAsync: siteVisitsAsync,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-          _buildBottomNavBar(isMobile),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPageHeader(BuildContext context, bool isMobile) {
-    if (isMobile) {
-      return _buildMobileHeaderCard();
-    }
-
-    const primaryColor = Color(0xFF9CC70A);
-    const secondaryColor = Color(0xFF414A51);
-
-    final actionButtons = Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: [
-        ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: primaryColor,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            elevation: 0,
-          ),
-          onPressed: () => _openAdminStaticEntryDialog(),
-          icon: const Icon(Icons.add, size: 18),
-          label: const Text('Manual Static Entry', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-        ),
-        OutlinedButton.icon(
-          style: OutlinedButton.styleFrom(
-            foregroundColor: secondaryColor,
-            side: const BorderSide(color: Color(0xFFCBD5E1)),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-          onPressed: () => _openAdminSiteEntryDialog(),
-          icon: const Icon(Icons.grid_view_outlined, size: 18),
-          label: const Text('Manual Site Entry', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-        ),
-        OutlinedButton.icon(
-          style: OutlinedButton.styleFrom(
-            foregroundColor: secondaryColor,
-            side: const BorderSide(color: Color(0xFFCBD5E1)),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-          onPressed: () => _openAssignOnDutyDialog(),
-          icon: const Icon(Icons.assignment_ind_outlined, size: 18),
-          label: const Text('Assign On-Duty', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-        ),
-      ],
-    );
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Attendance Management',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-              ),
-              SizedBox(height: 4),
-              Text(
-                'Track and manage office attendance, site visits, and on-duty assignments',
-                style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 16),
-        actionButtons,
-      ],
-    );
-  }
-
-  Widget _buildMobileHeaderCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF414A51),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.people_outline, color: Colors.white, size: 20),
-              ),
-              const SizedBox(width: 10),
-              const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Attendance Management',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Manage and track team attendance',
-                      style: TextStyle(fontSize: 11, color: Colors.white70),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    // Modern Top Bar (Drawer, Title, Live Sync, Notification)
+                    _buildTopAppBar(context),
+                    const SizedBox(height: 16),
+
+                    // Green Header Quick Action Banner Card
+                    _buildGreenQuickActionBanner(),
+                    const SizedBox(height: 12),
+
+                    // Category Tab Switcher ("Office / Site" | "Site Visits")
+                    _buildCategoryTabBar(),
+                    const SizedBox(height: 16),
+
+                    // Controls Toolbar (Month Selector, Search Box, Status Filter Chips)
+                    _buildSearchAndFilterControls(employeesAsync, isMobile),
+                    const SizedBox(height: 16),
+
+                    // Section Title: Monthly Attendance Matrix + View Table ->
+                    _buildSectionHeader(),
+                    const SizedBox(height: 12),
+
+                    // Active Tab Content
+                    _buildActiveTabContent(
+                      isMobile: isMobile,
+                      allEmployees: allEmployeesList,
+                      staticStatsAsync: staticStatsAsync,
+                      staticRecordsAsync: staticRecordsAsync,
+                      siteVisitsAsync: siteVisitsAsync,
                     ),
                   ],
                 ),
               ),
-            ],
+            ),
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: Colors.white38),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                  ),
-                  onPressed: () => _openAdminStaticEntryDialog(),
-                  child: const Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.add, size: 16),
-                      SizedBox(height: 2),
-                      Text('Manual', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                    ],
+          // Bottom Summary Bar
+          if (_activeTab == AttendanceCategoryTab.staticAttendance)
+            staticStatsAsync.when(
+              data: (stats) => _buildBottomSummaryBar(stats),
+              loading: () => _buildBottomSummaryBar(const AttendanceManagementStats(
+                totalEmployees: 0,
+                presentToday: 0,
+                lateToday: 0,
+                checkedOutToday: 0,
+                absentToday: 0,
+                onLeaveToday: 0,
+                averageWorkHours: 0.0,
+              )),
+              error: (_, __) => const SizedBox.shrink(),
+            )
+          else
+            _buildBottomNavBar(isMobile),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTopAppBar(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          children: [
+            Builder(
+              builder: (ctx) => IconButton(
+                icon: const Icon(Icons.menu, color: Color(0xFF1E293B), size: 24),
+                onPressed: () {
+                  Scaffold.maybeOf(ctx)?.openDrawer();
+                },
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Attendance',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E293B),
+                    height: 1.1,
                   ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: Colors.white38),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                  ),
-                  onPressed: () => _openAdminSiteEntryDialog(),
-                  child: const Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.grid_view_outlined, size: 16),
-                      SizedBox(height: 2),
-                      Text('Site Entry', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                    ],
+                Text(
+                  'Management',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF64748B),
+                    height: 1.1,
                   ),
                 ),
+              ],
+            ),
+          ],
+        ),
+        Row(
+          children: [
+            // Live Sync Pill Badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFF9CC70A).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.3)),
               ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: Colors.white38),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.sensors, size: 13, color: Color(0xFF1B7A38)),
+                  SizedBox(width: 4),
+                  Text(
+                    'Live Sync',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1B7A38),
+                    ),
                   ),
-                  onPressed: () => _openAssignOnDutyDialog(),
-                  child: const Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.assignment_ind_outlined, size: 16),
-                      SizedBox(height: 2),
-                      Text('On-Duty', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            // Notification Bell with Badge Count '3'
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
                     ],
                   ),
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(Icons.notifications_none_outlined, color: Color(0xFF1E293B), size: 20),
+                    onPressed: _openAuditLogsDialog,
+                  ),
                 ),
-              ),
-            ],
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFEF4444),
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                    child: const Text(
+                      '3',
+                      style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGreenQuickActionBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1B7A38),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF1B7A38).withValues(alpha: 0.25),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildHeaderQuickActionItem(
+            icon: Icons.calendar_today_outlined,
+            label: 'Matrix',
+            onTap: () {
+              setState(() {
+                _activeTab = AttendanceCategoryTab.staticAttendance;
+                _viewMode = AttendanceViewMode.matrix;
+              });
+            },
+          ),
+          _buildHeaderQuickActionItem(
+            icon: Icons.domain_outlined,
+            label: 'Site Entry',
+            onTap: () => _openAdminSiteEntryDialog(),
+          ),
+          _buildHeaderQuickActionItem(
+            icon: Icons.badge_outlined,
+            label: 'On-Duty',
+            onTap: () => _openAssignOnDutyDialog(),
+          ),
+          _buildHeaderQuickActionItem(
+            icon: Icons.access_time_rounded,
+            label: 'Reports',
+            onTap: () => _openAuditLogsDialog(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderQuickActionItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+            ),
+            child: Icon(icon, color: Colors.white, size: 26),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1B7A38).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.calendar_today_outlined, size: 16, color: Color(0xFF1B7A38)),
+            ),
+            const SizedBox(width: 8),
+            const Text(
+              'Monthly Attendance Matrix',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1E293B),
+              ),
+            ),
+          ],
+        ),
+        InkWell(
+          onTap: () {
+            setState(() {
+              _viewMode = _viewMode == AttendanceViewMode.matrix
+                  ? AttendanceViewMode.table
+                  : AttendanceViewMode.matrix;
+            });
+          },
+          child: Row(
+            children: [
+              Text(
+                _viewMode == AttendanceViewMode.matrix ? 'View Table' : 'View Matrix',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF475569),
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Icon(Icons.arrow_forward, size: 14, color: Color(0xFF475569)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+
+  Widget _buildCategoryTabBar() {
+    return Container(
+      width: double.infinity,
+      height: 56,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _buildCategoryTabItem(
+            tab: AttendanceCategoryTab.staticAttendance,
+            icon: Icons.storefront_outlined,
+            label: 'Office / Site',
+          ),
+          _buildCategoryTabItem(
+            tab: AttendanceCategoryTab.siteVisitAttendance,
+            icon: Icons.location_on_outlined,
+            label: 'Site Visits',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryTabItem({
+    required AttendanceCategoryTab tab,
+    required IconData icon,
+    required String label,
+  }) {
+    final isSelected = _activeTab == tab;
+    const primaryColor = Color(0xFF9CC70A);
+
+    return Expanded(
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            _activeTab = tab;
+            _selectedEmployeeId = null;
+            _selectedDepartment = 'All Departments';
+            _selectedDesignation = 'All Designations';
+            _selectedStatus = 'All';
+            _selectedSite = 'All';
+            _searchQuery = '';
+            _searchController.clear();
+            _currentPage = 1;
+          });
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: isSelected ? primaryColor : Colors.transparent,
+                width: 3,
+              ),
+            ),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 22,
+                color: isSelected ? primaryColor : const Color(0xFF64748B),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                  color: isSelected ? primaryColor : const Color(0xFF64748B),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildBottomNavBar(bool isMobile) {
-    final navItems = [
-      _buildBottomNavItem(
-        tab: AttendanceCategoryTab.staticAttendance,
-        icon: Icons.storefront_outlined,
-        label: 'Office / Site',
-      ),
-      _buildBottomNavItem(
-        tab: AttendanceCategoryTab.siteVisitAttendance,
-        icon: Icons.location_on_outlined,
-        label: 'Site Visits',
-      ),
-    ];
-
-    return Container(
-      height: 60,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: navItems,
-      ),
-    );
+    return _buildCategoryTabBar();
   }
 
   Widget _buildBottomNavItem({
@@ -614,18 +773,6 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
       children: [
         // Active On-Duty Employee Mobile Banner (If assigned)
         _buildActiveOnDutyBanner(),
-
-        // KPI Banner
-        statsAsync.when(
-          loading: () => const SizedBox.shrink(),
-          error: (err, stack) => const SizedBox.shrink(),
-          data: (stats) => _buildStaticKpiBanner(stats, isMobile),
-        ),
-        const SizedBox(height: 16),
-
-        // Controls Toolbar
-        _buildStaticControlToolbar(employeesAsync, isMobile),
-        const SizedBox(height: 16),
 
         // Matrix / Table Content
         employeesAsync.when(
@@ -1053,266 +1200,424 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     );
   }
 
-  Widget _buildStaticControlToolbar(AsyncValue<List<Employee>> employeesAsync, bool isMobile) {
-    final employees = employeesAsync.valueOrNull ?? [];
-
-    final departmentList = ['All Departments', ...Employee.departmentOptions];
-    final designationList = ['All Designations', ...Employee.designationOptions];
-    final statusList = ['All', 'Present', 'Late', 'Half Day', 'Absent', 'On Duty'];
-    final employeeItemList = <Employee?>[null, ...employees];
-
+  Widget _buildSearchAndFilterControls(AsyncValue<List<Employee>> employeesAsync, bool isMobile) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 6,
+            blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Wrap(
-        alignment: WrapAlignment.spaceBetween,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: 12,
-        runSpacing: 12,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Month Selector
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFCBD5E1)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.chevron_left, size: 20),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                  onPressed: () {
-                    setState(() {
-                      _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1, 1);
-                    });
-                  },
-                ),
-                Text(
-                  DateFormat('MMMM yyyy').format(_focusedMonth),
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.chevron_right, size: 20),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                  onPressed: () {
-                    setState(() {
-                      _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 1);
-                    });
-                  },
-                ),
-              ],
-            ),
-          ),
-
-          // View Mode Toggle Switch
-          Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            padding: const EdgeInsets.all(3),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                InkWell(
-                  onTap: () => setState(() => _viewMode = AttendanceViewMode.matrix),
-                  borderRadius: BorderRadius.circular(6),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: _viewMode == AttendanceViewMode.matrix ? Colors.white : Colors.transparent,
-                      borderRadius: BorderRadius.circular(6),
-                      boxShadow: _viewMode == AttendanceViewMode.matrix
-                          ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)]
-                          : null,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (_viewMode == AttendanceViewMode.matrix)
-                          const Icon(Icons.check, size: 14, color: Color(0xFF414A51)),
-                        if (_viewMode == AttendanceViewMode.matrix) const SizedBox(width: 4),
-                        const Text('Matrix', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                      ],
-                    ),
-                  ),
-                ),
-                InkWell(
-                  onTap: () => setState(() => _viewMode = AttendanceViewMode.table),
-                  borderRadius: BorderRadius.circular(6),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: _viewMode == AttendanceViewMode.table ? Colors.white : Colors.transparent,
-                      borderRadius: BorderRadius.circular(6),
-                      boxShadow: _viewMode == AttendanceViewMode.table
-                          ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)]
-                          : null,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (_viewMode == AttendanceViewMode.table)
-                          const Icon(Icons.check, size: 14, color: Color(0xFF414A51)),
-                        if (_viewMode == AttendanceViewMode.table) const SizedBox(width: 4),
-                        const Text('Table', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Right Group: Searchable Filters, Search Box & Export Button
-          Wrap(
-            alignment: WrapAlignment.end,
-            spacing: 10,
-            runSpacing: 10,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          // Month Selector & Filter Button Row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Department Filter (Searchable)
-              SearchableFilterDropdown<String>(
-                width: isMobile ? double.infinity : 155,
-                label: 'Department',
-                value: _selectedDepartment == 'All Departments' ? null : _selectedDepartment,
-                items: departmentList,
-                itemLabel: (item) => item,
-                searchHint: 'Search department...',
-                onChanged: (val) {
-                  setState(() {
-                    _selectedDepartment = val ?? 'All Departments';
-                  });
-                },
-              ),
-
-              // Designation Filter (Searchable)
-              SearchableFilterDropdown<String>(
-                width: isMobile ? double.infinity : 155,
-                label: 'Designation',
-                value: _selectedDesignation == 'All Designations' ? null : _selectedDesignation,
-                items: designationList,
-                itemLabel: (item) => item,
-                searchHint: 'Search designation...',
-                onChanged: (val) {
-                  setState(() {
-                    _selectedDesignation = val ?? 'All Designations';
-                  });
-                },
-              ),
-
-              // Employee Filter (Searchable)
-              SearchableFilterDropdown<Employee?>(
-                width: isMobile ? double.infinity : 165,
-                label: 'Employees',
-                value: employeeItemList.firstWhere((e) => e?.id == _selectedEmployeeId, orElse: () => null),
-                items: employeeItemList,
-                itemLabel: (e) => e == null ? 'All Employees' : '${e.name} (${e.employeeId.isNotEmpty ? e.employeeId : "EMP${e.id}"})',
-                searchHint: 'Search employee...',
-                onChanged: (emp) {
-                  setState(() {
-                    _selectedEmployeeId = emp?.id;
-                  });
-                },
-              ),
-
-              // Status Filter (Searchable)
-              SearchableFilterDropdown<String>(
-                width: isMobile ? double.infinity : 135,
-                label: 'Status',
-                value: _selectedStatus == 'All' ? null : _selectedStatus,
-                items: statusList,
-                itemLabel: (item) => item == 'All' ? 'All Statuses' : item,
-                searchHint: 'Search status...',
-                onChanged: (val) {
-                  setState(() {
-                    _selectedStatus = val ?? 'All';
-                  });
-                },
-              ),
-
-              // Search Employee Box
-              SizedBox(
-                width: isMobile ? double.infinity : 175,
-                child: TextField(
-                  controller: _searchController,
-                  style: const TextStyle(fontSize: 12),
-                  decoration: InputDecoration(
-                    hintText: 'Search employee...',
-                    hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
-                    prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFF94A3B8)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
-                    ),
-                  ),
-                  onChanged: (val) => setState(() => _searchQuery = val.trim().toLowerCase()),
-                ),
-              ),
-
-              // Export Report Button
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF414A51),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  elevation: 0,
-                ),
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Exporting attendance report...')),
+              // Month Selector button
+              InkWell(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _focusedMonth,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2030),
                   );
+                  if (picked != null) {
+                    setState(() {
+                      _focusedMonth = DateTime(picked.year, picked.month, 1);
+                    });
+                  }
                 },
-                icon: const Icon(Icons.file_upload_outlined, size: 16),
-                label: const Text('Export Report', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-              ),
-
-              // Settings Button
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF414A51),
-                  side: const BorderSide(color: Color(0xFFCBD5E1)),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.02),
+                        blurRadius: 4,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.calendar_today_outlined, size: 16, color: Color(0xFF64748B)),
+                      const SizedBox(width: 8),
+                      Text(
+                        DateFormat('MMM yyyy').format(_focusedMonth),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(Icons.keyboard_arrow_down, size: 18, color: Color(0xFF64748B)),
+                    ],
+                  ),
                 ),
-                onPressed: _openAttendanceSettingsDialog,
-                icon: const Icon(Icons.tune, size: 16),
-                label: const Text('Settings', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
               ),
-
-              // Audit Logs Button
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF414A51),
-                  side: const BorderSide(color: Color(0xFFCBD5E1)),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              // Filter tune button
+              IconButton(
+                style: IconButton.styleFrom(
+                  backgroundColor: const Color(0xFFF8FAFC),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
                 ),
-                onPressed: _openAuditLogsDialog,
-                icon: const Icon(Icons.description_outlined, size: 16),
-                label: const Text('Logs', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                icon: const Icon(Icons.tune_rounded, color: Color(0xFF475569), size: 20),
+                onPressed: () => _openFilterBottomSheet(context, employeesAsync),
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          // Search input field
+          TextField(
+            controller: _searchController,
+            style: const TextStyle(fontSize: 13),
+            decoration: InputDecoration(
+              hintText: 'Search employee...',
+              hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+              prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF94A3B8)),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear, size: 18, color: Color(0xFF94A3B8)),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                    )
+                  : null,
+              filled: true,
+              fillColor: const Color(0xFFFAFAFA),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFF9CC70A)),
+              ),
+            ),
+            onChanged: (val) => setState(() => _searchQuery = val.trim().toLowerCase()),
+          ),
+          const SizedBox(height: 12),
+          // Status Filter Chips Row
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            child: Row(
+              children: [
+                _buildStatusFilterChip('P', 'Present', const Color(0xFFE6F4EA), const Color(0xFF1E88E5)),
+                _buildStatusFilterChip('A', 'Late', const Color(0xFFFFF3E0), const Color(0xFFE65100)),
+                _buildStatusFilterChip('A', 'Absent', const Color(0xFFFFEBEE), const Color(0xFFC62828)),
+                _buildStatusFilterChip('OL', 'On Leave', const Color(0xFFFEF9C3), const Color(0xFF854D0E)),
+                _buildStatusFilterChip('OD', 'On Duty', const Color(0xFFE0F2FE), const Color(0xFF0369A1)),
+                _buildStatusFilterChip('MC', 'Missing', const Color(0xFFF3E8FF), const Color(0xFF7E22CE)),
+                _buildStatusFilterChip('IH', 'Ins. Hours', const Color(0xFFFFEDD5), const Color(0xFFC2410C)),
+                _buildStatusFilterChip('WO', 'Weekly Off', const Color(0xFFF1F5F9), const Color(0xFF64748B)),
+                _buildStatusFilterChip('H', 'Holiday', const Color(0xFFFCE7F3), const Color(0xFFBE185D)),
+              ],
+            ),
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildStatusFilterChip(String code, String label, Color bgColor, Color textColor) {
+    final isSelected = _selectedStatus == label || _selectedStatus == code;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            if (isSelected) {
+              _selectedStatus = 'All';
+            } else {
+              _selectedStatus = label;
+            }
+          });
+        },
+        borderRadius: BorderRadius.circular(10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? textColor : textColor.withValues(alpha: 0.25),
+              width: isSelected ? 1.5 : 1.0,
+            ),
+            boxShadow: isSelected
+                ? [BoxShadow(color: textColor.withValues(alpha: 0.2), blurRadius: 4, offset: const Offset(0, 2))]
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
+                  color: textColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  code,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: textColor,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                  color: textColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomSummaryBar(AttendanceManagementStats stats) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: const Border(top: BorderSide(color: Color(0xFFF1F5F9), width: 1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, -3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildSummaryStatItem(
+              icon: Icons.check_circle_outline,
+              iconColor: const Color(0xFF16A34A),
+              value: '${stats.presentToday}',
+              title: 'Present',
+              subtitle: 'Today',
+            ),
+          ),
+          Container(width: 1, height: 32, color: const Color(0xFFE2E8F0)),
+          Expanded(
+            child: _buildSummaryStatItem(
+              icon: Icons.access_time,
+              iconColor: const Color(0xFFEA580C),
+              value: '${stats.lateToday}',
+              title: 'Late',
+              subtitle: 'Today',
+            ),
+          ),
+          Container(width: 1, height: 32, color: const Color(0xFFE2E8F0)),
+          Expanded(
+            child: _buildSummaryStatItem(
+              icon: Icons.person_outline,
+              iconColor: const Color(0xFFDC2626),
+              value: '${stats.absentToday}',
+              title: 'Absent',
+              subtitle: 'Today',
+            ),
+          ),
+          Container(width: 1, height: 32, color: const Color(0xFFE2E8F0)),
+          Expanded(
+            child: _buildSummaryStatItem(
+              icon: Icons.work_outline,
+              iconColor: const Color(0xFFCA8A04),
+              value: '${stats.onLeaveToday}',
+              title: 'On Leave',
+              subtitle: 'Today',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryStatItem({
+    required IconData icon,
+    required Color iconColor,
+    required String value,
+    required String title,
+    required String subtitle,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: iconColor, size: 20),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF1E293B),
+            height: 1.1,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF475569),
+            height: 1.1,
+          ),
+        ),
+        Text(
+          subtitle,
+          style: const TextStyle(
+            fontSize: 10,
+            color: Color(0xFF94A3B8),
+            height: 1.1,
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _openFilterBottomSheet(BuildContext context, AsyncValue<List<Employee>> employeesAsync) {
+    final employees = employeesAsync.valueOrNull ?? [];
+    final departmentList = ['All Departments', ...Employee.departmentOptions];
+    final designationList = ['All Designations', ...Employee.designationOptions];
+    final statusList = ['All', 'Present', 'Late', 'Half Day', 'Absent', 'On Duty'];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Filter Attendance', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _selectedDepartment = 'All Departments';
+                            _selectedDesignation = 'All Designations';
+                            _selectedStatus = 'All';
+                            _selectedEmployeeId = null;
+                          });
+                          Navigator.pop(ctx);
+                        },
+                        child: const Text('Reset', style: TextStyle(color: Color(0xFFEF4444))),
+                      ),
+                    ],
+                  ),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  SearchableFilterDropdown<String>(
+                    width: double.infinity,
+                    label: 'Department',
+                    value: _selectedDepartment == 'All Departments' ? null : _selectedDepartment,
+                    items: departmentList,
+                    itemLabel: (item) => item,
+                    searchHint: 'Search department...',
+                    onChanged: (val) {
+                      setState(() {
+                        _selectedDepartment = val ?? 'All Departments';
+                      });
+                      setModalState(() {});
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  SearchableFilterDropdown<String>(
+                    width: double.infinity,
+                    label: 'Designation',
+                    value: _selectedDesignation == 'All Designations' ? null : _selectedDesignation,
+                    items: designationList,
+                    itemLabel: (item) => item,
+                    searchHint: 'Search designation...',
+                    onChanged: (val) {
+                      setState(() {
+                        _selectedDesignation = val ?? 'All Designations';
+                      });
+                      setModalState(() {});
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  SearchableFilterDropdown<String>(
+                    width: double.infinity,
+                    label: 'Status',
+                    value: _selectedStatus == 'All' ? null : _selectedStatus,
+                    items: statusList,
+                    itemLabel: (item) => item == 'All' ? 'All Statuses' : item,
+                    searchHint: 'Search status...',
+                    onChanged: (val) {
+                      setState(() {
+                        _selectedStatus = val ?? 'All';
+                      });
+                      setModalState(() {});
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1B7A38),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Apply Filters', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 

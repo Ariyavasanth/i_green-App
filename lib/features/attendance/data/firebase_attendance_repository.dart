@@ -6,11 +6,10 @@ import '../domain/attendance_record.dart';
 import '../domain/attendance_settings.dart';
 import '../domain/attendance_repository.dart';
 import '../../employee/domain/employee.dart';
-import 'sqlite_attendance_repository.dart';
 
 class FirebaseAttendanceRepository implements AttendanceRepository {
   final FirebaseFirestore _firestore;
-  final SqliteAttendanceRepository _sqliteRepo = SqliteAttendanceRepository();
+  final Map<String, AttendanceRecord> _localMemoryCache = {};
 
   FirebaseAttendanceRepository({FirebaseFirestore? firestore}) : _firestore = firestore ?? FirebaseFirestore.instance;
 
@@ -20,14 +19,20 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
   @override
   Future<AttendanceSettings> getAttendanceSettings() async {
-    final snap = await _settingsRef.get();
-    if (!snap.exists || snap.data() == null) return AttendanceSettings.defaults();
-    return AttendanceSettings.fromMap(snap.data()!);
+    try {
+      final snap = await _settingsRef.get();
+      if (!snap.exists || snap.data() == null) return AttendanceSettings.defaults();
+      return AttendanceSettings.fromMap(snap.data()!);
+    } catch (_) {
+      return AttendanceSettings.defaults();
+    }
   }
 
   @override
   Future<void> saveAttendanceSettings(AttendanceSettings settings) async {
-    await _settingsRef.set(settings.toMap(), SetOptions(merge: true));
+    try {
+      await _settingsRef.set(settings.toMap(), SetOptions(merge: true));
+    } catch (_) {}
   }
 
   @override
@@ -53,7 +58,6 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         final normDate = _normalizeDateKey(recDateStr);
         final inTimeStr = (data['check_in_time'] ?? data['time'] ?? '').toString().trim();
 
-        // 1. Restore today's records that were wrongly flagged as Missing Check-Out due to 6:00 PM cutoff bug
         if (normDate == todayStr && checkOutTime.isEmpty && status == 'Missing Check-Out') {
           await doc.reference.set({'status': 'Present'}, SetOptions(merge: true));
           continue;
@@ -83,7 +87,6 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
   @override
   Future<List<AttendanceRecord>> getAttendanceRecords(int employeeId) async {
-    final sqliteList = await _sqliteRepo.getAttendanceRecords(employeeId);
     List<AttendanceRecord> firestoreList = [];
     try {
       final snap = await _recordsRef.get();
@@ -109,8 +112,10 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     } catch (_) {}
 
     final combinedMap = <String, AttendanceRecord>{};
-    for (final r in sqliteList) {
-      combinedMap['${r.employeeId}_${r.date}'] = r;
+    for (final r in _localMemoryCache.values) {
+      if (r.employeeId == employeeId || employeeId == 0) {
+        combinedMap['${r.employeeId}_${r.date}'] = r;
+      }
     }
     for (final r in firestoreList) {
       combinedMap['${r.employeeId}_${r.date}'] = r;
@@ -120,7 +125,6 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
   @override
   Future<List<AttendanceRecord>> getAllAttendanceRecords() async {
-    final sqliteList = await _sqliteRepo.getAllAttendanceRecords();
     List<AttendanceRecord> firestoreList = [];
     try {
       await autoResolveMissingCheckOuts();
@@ -129,7 +133,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     } catch (_) {}
 
     final combinedMap = <String, AttendanceRecord>{};
-    for (final r in sqliteList) {
+    for (final r in _localMemoryCache.values) {
       combinedMap['${r.employeeId}_${r.date}'] = r;
     }
     for (final r in firestoreList) {
@@ -140,7 +144,6 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
   @override
   Future<AttendanceRecord?> getAttendanceRecordForDate(int employeeId, String date) async {
-    final sqliteRec = await _sqliteRepo.getAttendanceRecordForDate(employeeId, date);
     try {
       await autoResolveMissingCheckOuts(employeeId: employeeId);
       final todayNormDate = _normalizeDateKey('${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}');
@@ -180,7 +183,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         }
       }
     } catch (_) {}
-    return sqliteRec;
+    return _localMemoryCache['${employeeId}_$date'];
   }
 
   @override
@@ -416,18 +419,25 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     required String status,
     String notes = '',
   }) async {
-    await _sqliteRepo.markAttendance(
-      employeeId: employeeId,
-      employeeName: employeeName,
-      date: date,
-      time: time,
-      verificationStatus: verificationStatus,
-      similarityScore: similarityScore,
-      status: status,
-      notes: notes,
-    );
     final normDate = _normalizeDateKey(date);
     final docId = '${employeeId}_${normDate.replaceAll('-', '')}';
+
+    final rec = AttendanceRecord(
+      id: employeeId * 10000 + DateTime.now().millisecondsSinceEpoch % 10000,
+      employeeId: employeeId,
+      employeeName: employeeName,
+      date: normDate,
+      time: time,
+      checkInTime: time,
+      checkOutTime: '',
+      status: status,
+      verificationStatus: verificationStatus,
+      similarityScore: similarityScore,
+      notes: notes,
+      markedAt: DateTime.now().toIso8601String(),
+    );
+    _localMemoryCache['${employeeId}_$date'] = rec;
+
     try {
       await _recordsRef.doc(docId).set({
         'employee_id': employeeId,
@@ -454,26 +464,19 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     required String verificationStatus,
     required double similarityScore,
   }) async {
-    try {
-      await _sqliteRepo.checkOut(
-        employeeId: employeeId,
-        date: date,
-        checkOutTime: checkOutTime,
-        verificationStatus: verificationStatus,
-        similarityScore: similarityScore,
-      );
-    } catch (_) {}
     final normDate = _normalizeDateKey(date);
     final docId = '${employeeId}_${normDate.replaceAll('-', '')}';
     final docRef = _recordsRef.doc(docId);
-    final snap = await docRef.get();
-    AttendanceRecord? record;
-    if (snap.exists && snap.data() != null) {
-      record = AttendanceRecord.fromMap(snap.data()!);
-    } else {
-      record = await getAttendanceRecordForDate(employeeId, date);
-    }
 
+    AttendanceRecord? record;
+    try {
+      final snap = await docRef.get();
+      if (snap.exists && snap.data() != null) {
+        record = AttendanceRecord.fromMap(snap.data()!);
+      }
+    } catch (_) {}
+
+    record ??= await getAttendanceRecordForDate(employeeId, date);
     if (record == null) return;
 
     double hours = 0.0;
@@ -539,14 +542,24 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       }
     }
 
-    await docRef.set({
-      'check_out_time': checkOutTime,
-      'check_out_verification_status': verificationStatus,
-      'check_out_similarity_score': similarityScore,
-      'total_hours': hours,
-      'status': finalStatus,
-      'notes': updatedNotes,
-    }, SetOptions(merge: true));
+    final updatedRec = record.copyWith(
+      checkOutTime: checkOutTime,
+      totalHours: hours,
+      status: finalStatus,
+      notes: updatedNotes,
+    );
+    _localMemoryCache['${employeeId}_$date'] = updatedRec;
+
+    try {
+      await docRef.set({
+        'check_out_time': checkOutTime,
+        'check_out_verification_status': verificationStatus,
+        'check_out_similarity_score': similarityScore,
+        'total_hours': hours,
+        'status': finalStatus,
+        'notes': updatedNotes,
+      }, SetOptions(merge: true));
+    } catch (_) {}
   }
 
   @override
@@ -632,10 +645,14 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       markedAt: record.markedAt.isNotEmpty ? record.markedAt : DateTime.now().toIso8601String(),
     );
 
-    await _recordsRef.doc('${record.employeeId}_${record.date.replaceAll('-', '')}').set(
-      toSave.toMap(),
-      SetOptions(merge: true),
-    );
+    _localMemoryCache['${record.employeeId}_${record.date}'] = toSave;
+
+    try {
+      await _recordsRef.doc('${record.employeeId}_${record.date.replaceAll('-', '')}').set(
+        toSave.toMap(),
+        SetOptions(merge: true),
+      );
+    } catch (_) {}
   }
 
   @override
@@ -643,34 +660,43 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     required int employeeId,
     required String date,
   }) async {
-    await _recordsRef.doc('${employeeId}_${date.replaceAll('-', '')}').delete();
-    final snap = await _recordsRef
-        .where('employee_id', isEqualTo: employeeId)
-        .where('date', isEqualTo: date)
-        .get();
-    for (final doc in snap.docs) {
-      await doc.reference.delete();
-    }
+    _localMemoryCache.remove('${employeeId}_$date');
+    try {
+      await _recordsRef.doc('${employeeId}_${date.replaceAll('-', '')}').delete();
+      final snap = await _recordsRef
+          .where('employee_id', isEqualTo: employeeId)
+          .where('date', isEqualTo: date)
+          .get();
+      for (final doc in snap.docs) {
+        await doc.reference.delete();
+      }
+    } catch (_) {}
   }
 
   @override
   Future<void> logAttendanceAttempt({required int employeeId, required String employeeName, required String date, required String time, required String verificationStatus, required double similarityScore, required String message}) async {
-    await _attemptsRef.add({
-      'employee_id': employeeId,
-      'employee_name': employeeName,
-      'date': date,
-      'time': time,
-      'verification_status': verificationStatus,
-      'similarity_score': similarityScore,
-      'message': message,
-      'created_at': DateTime.now().toIso8601String(),
-    });
+    try {
+      await _attemptsRef.add({
+        'employee_id': employeeId,
+        'employee_name': employeeName,
+        'date': date,
+        'time': time,
+        'verification_status': verificationStatus,
+        'similarity_score': similarityScore,
+        'message': message,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+    } catch (_) {}
   }
 
   @override
   Future<List<Map<String, dynamic>>> getAttendanceAttempts() async {
-    final snap = await _attemptsRef.orderBy('created_at', descending: true).limit(100).get();
-    return snap.docs.map((d) => d.data()).toList();
+    try {
+      final snap = await _attemptsRef.orderBy('created_at', descending: true).limit(100).get();
+      return snap.docs.map((d) => d.data()).toList();
+    } catch (_) {
+      return [];
+    }
   }
 
   Future<int> _getApprovedPermissionMinutes(int employeeId, String date) async {
@@ -745,6 +771,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
   @override
   Future<void> clearAllAttendanceRecords() async {
+    _localMemoryCache.clear();
     try {
       final recordsSnap = await _recordsRef.get();
       for (final doc in recordsSnap.docs) {
@@ -757,3 +784,4 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     } catch (_) {}
   }
 }
+
