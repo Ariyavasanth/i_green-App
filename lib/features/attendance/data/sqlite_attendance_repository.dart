@@ -385,7 +385,6 @@ class SqliteAttendanceRepository implements AttendanceRepository {
     final now = DateTime.now();
     final time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
     final score = similarityScore;
-    final allowedFace = faceMatched && score >= 0.92;
     final settings = await getAttendanceSettings();
     final loc = await _resolveEffectiveLocation(employeeId: employeeId, globalSettings: settings);
     final isSite = loc['isSite'] as bool;
@@ -397,17 +396,15 @@ class SqliteAttendanceRepository implements AttendanceRepository {
       currentLatitude: currentLatitude,
       currentLongitude: currentLongitude,
     );
-    final message = !allowedFace
-        ? 'Face not recognized. Attendance not marked.'
-        : !withinRadius
-            ? (isSite
-                ? 'You are not at your site location. Please go to your site location to check in.'
-                : 'You are not at the office. Please go to the office location to check in.')
-            : 'Check in successful.';
+    final message = !withinRadius
+        ? (isSite
+            ? 'You are not at your site location. Please go to your site location to check in.'
+            : 'You are not at the office. Please go to the office location to check in.')
+        : 'Check in successful.';
     final result = AttendanceVerificationResult(
-      allowed: allowedFace && withinRadius,
+      allowed: withinRadius,
       similarityScore: score,
-      verificationStatus: !allowedFace ? 'Face Mismatch' : (!withinRadius ? 'Outside Radius' : 'Verified'),
+      verificationStatus: !withinRadius ? 'Outside Radius' : 'Verified',
       message: message,
       capturedImagePath: '',
     );
@@ -501,7 +498,6 @@ class SqliteAttendanceRepository implements AttendanceRepository {
     final now = DateTime.now();
     final time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
     final score = similarityScore;
-    final allowedFace = faceMatched && score >= 0.92;
     final settings = await getAttendanceSettings();
     final loc = await _resolveEffectiveLocation(employeeId: employeeId, globalSettings: settings);
     final isSite = loc['isSite'] as bool;
@@ -513,17 +509,15 @@ class SqliteAttendanceRepository implements AttendanceRepository {
       currentLatitude: currentLatitude,
       currentLongitude: currentLongitude,
     );
-    final message = !allowedFace
-        ? 'Face not recognized. Attendance not marked.'
-        : !withinRadius
-            ? (isSite
-                ? 'You are not at your site location. Please go to your site location to check out.'
-                : 'You are not at the office. Please go to the office location to check out.')
-            : 'Check out successful.';
+    final message = !withinRadius
+        ? (isSite
+            ? 'You are not at your site location. Please go to your site location to check out.'
+            : 'You are not at the office. Please go to the office location to check out.')
+        : 'Check out successful.';
     final result = AttendanceVerificationResult(
-      allowed: allowedFace && withinRadius,
+      allowed: withinRadius,
       similarityScore: score,
-      verificationStatus: !allowedFace ? 'Face Mismatch' : (!withinRadius ? 'Outside Radius' : 'Verified'),
+      verificationStatus: !withinRadius ? 'Outside Radius' : 'Verified',
       message: message,
       capturedImagePath: '',
     );
