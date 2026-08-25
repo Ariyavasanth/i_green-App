@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -8,6 +9,50 @@ class EmployeeDetailsDialog extends StatelessWidget {
 
   final Employee employee;
 
+  Widget _buildAvatar() {
+    final imgUrl = employee.profileImageUrl.trim();
+    final initials = employee.firstName.isNotEmpty ? employee.firstName[0].toUpperCase() : 'E';
+    ImageProvider? provider;
+
+    if (imgUrl.isNotEmpty) {
+      if (imgUrl.startsWith('http://') || imgUrl.startsWith('https://')) {
+        provider = NetworkImage(imgUrl);
+      } else if (imgUrl.startsWith('data:image') || imgUrl.contains(';base64,')) {
+        try {
+          final base64Str = imgUrl.contains(',') ? imgUrl.split(',').last : imgUrl;
+          final cleaned = base64Str.replaceAll(RegExp(r'\s+'), '');
+          final bytes = base64Decode(cleaned);
+          if (bytes.isNotEmpty) provider = MemoryImage(bytes);
+        } catch (_) {}
+      } else if (imgUrl.length > 50) {
+        try {
+          final cleaned = imgUrl.replaceAll(RegExp(r'\s+'), '');
+          final bytes = base64Decode(cleaned);
+          if (bytes.isNotEmpty) provider = MemoryImage(bytes);
+        } catch (_) {}
+      }
+    }
+
+    if (provider != null) {
+      return CircleAvatar(
+        radius: 20,
+        backgroundColor: AppColors.active,
+        backgroundImage: provider,
+        onBackgroundImageError: (exception, stackTrace) {},
+        child: null,
+      );
+    }
+
+    return CircleAvatar(
+      radius: 20,
+      backgroundColor: AppColors.active,
+      child: Text(
+        initials,
+        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -15,13 +60,7 @@ class EmployeeDetailsDialog extends StatelessWidget {
     return AlertDialog(
       title: Row(
         children: [
-          CircleAvatar(
-            backgroundColor: AppColors.active,
-            child: Text(
-              employee.firstName.isNotEmpty ? employee.firstName[0].toUpperCase() : 'E',
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-          ),
+          _buildAvatar(),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

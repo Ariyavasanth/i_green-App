@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -1252,6 +1253,53 @@ class _EmployeeManagementPageState
     return colors[name.hashCode.abs() % colors.length];
   }
 
+  Widget _buildEmployeeCardAvatar(Employee emp, Color avatarBg, String initials) {
+    final imgUrl = emp.profileImageUrl.trim();
+    ImageProvider? provider;
+
+    if (imgUrl.isNotEmpty) {
+      if (imgUrl.startsWith('http://') || imgUrl.startsWith('https://')) {
+        provider = NetworkImage(imgUrl);
+      } else if (imgUrl.startsWith('data:image') || imgUrl.contains(';base64,')) {
+        try {
+          final base64Str = imgUrl.contains(',') ? imgUrl.split(',').last : imgUrl;
+          final cleaned = base64Str.replaceAll(RegExp(r'\s+'), '');
+          final bytes = base64Decode(cleaned);
+          if (bytes.isNotEmpty) provider = MemoryImage(bytes);
+        } catch (_) {}
+      } else if (imgUrl.length > 50) {
+        try {
+          final cleaned = imgUrl.replaceAll(RegExp(r'\s+'), '');
+          final bytes = base64Decode(cleaned);
+          if (bytes.isNotEmpty) provider = MemoryImage(bytes);
+        } catch (_) {}
+      }
+    }
+
+    if (provider != null) {
+      return CircleAvatar(
+        radius: 20,
+        backgroundColor: avatarBg,
+        backgroundImage: provider,
+        onBackgroundImageError: (exception, stackTrace) {},
+        child: null,
+      );
+    }
+
+    return CircleAvatar(
+      radius: 20,
+      backgroundColor: avatarBg,
+      child: Text(
+        initials,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.bold,
+          color: AppColors.textPrimary,
+        ),
+      ),
+    );
+  }
+
   Widget _buildCompactEmployeeCard(BuildContext context, Employee emp) {
     final statusColor = _getStatusColor(emp.status);
     final empName = emp.fullName.trim().isEmpty ? 'Employee Name' : emp.fullName.trim();
@@ -1280,18 +1328,7 @@ class _EmployeeManagementPageState
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: avatarBg,
-                  child: Text(
-                    initials,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ),
+                _buildEmployeeCardAvatar(emp, avatarBg, initials),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(

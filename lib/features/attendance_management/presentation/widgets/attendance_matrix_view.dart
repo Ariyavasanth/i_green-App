@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../core/theme/app_colors.dart';
 import '../../../attendance/domain/attendance_record.dart';
 import '../../../attendance/domain/attendance_status_helper.dart';
 import '../../../employee/domain/employee.dart';
@@ -347,40 +346,49 @@ class AttendanceMatrixView extends StatelessWidget {
 
   Widget _buildEmployeeAvatar(Employee emp) {
     final imgUrl = emp.profileImageUrl.trim();
-    final hasHttp = imgUrl.startsWith('http://') || imgUrl.startsWith('https://');
-    final hasBase64 = imgUrl.startsWith('data:image/');
     final initials = emp.fullName.trim().isNotEmpty
         ? emp.fullName.trim().split(' ').map((e) => e.isNotEmpty ? e[0] : '').take(2).join('').toUpperCase()
         : 'E';
 
-    Widget? imageWidget;
-    if (hasHttp) {
-      imageWidget = Image.network(
-        imgUrl,
+    ImageProvider? imageProvider;
+    if (imgUrl.isNotEmpty) {
+      if (imgUrl.startsWith('http://') || imgUrl.startsWith('https://')) {
+        imageProvider = NetworkImage(imgUrl);
+      } else if (imgUrl.startsWith('data:image') || imgUrl.contains(';base64,')) {
+        try {
+          final base64Str = imgUrl.contains(',') ? imgUrl.split(',').last : imgUrl;
+          final cleaned = base64Str.replaceAll(RegExp(r'\s+'), '');
+          final bytes = base64Decode(cleaned);
+          if (bytes.isNotEmpty) {
+            imageProvider = MemoryImage(bytes);
+          }
+        } catch (_) {}
+      } else if (imgUrl.length > 50) {
+        try {
+          final cleaned = imgUrl.replaceAll(RegExp(r'\s+'), '');
+          final bytes = base64Decode(cleaned);
+          if (bytes.isNotEmpty) {
+            imageProvider = MemoryImage(bytes);
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (imageProvider != null) {
+      return Container(
         width: 30,
         height: 30,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => Center(
-          child: Text(
-            initials,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF414A51),
-            ),
-          ),
+        decoration: BoxDecoration(
+          color: const Color(0xFF9CC70A).withValues(alpha: 0.2),
+          shape: BoxShape.circle,
         ),
-      );
-    } else if (hasBase64) {
-      try {
-        final base64Str = imgUrl.split(',').last;
-        final bytes = base64Decode(base64Str);
-        imageWidget = Image.memory(
-          bytes,
+        clipBehavior: Clip.antiAlias,
+        child: Image(
+          image: imageProvider,
           width: 30,
           height: 30,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Center(
+          errorBuilder: (context, error, stackTrace) => Center(
             child: Text(
               initials,
               style: const TextStyle(
@@ -390,8 +398,8 @@ class AttendanceMatrixView extends StatelessWidget {
               ),
             ),
           ),
-        );
-      } catch (_) {}
+        ),
+      );
     }
 
     return Container(
@@ -401,18 +409,16 @@ class AttendanceMatrixView extends StatelessWidget {
         color: const Color(0xFF9CC70A).withValues(alpha: 0.2),
         shape: BoxShape.circle,
       ),
-      clipBehavior: Clip.antiAlias,
-      child: imageWidget ??
-          Center(
-            child: Text(
-              initials,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF414A51),
-              ),
-            ),
+      child: Center(
+        child: Text(
+          initials,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF414A51),
           ),
+        ),
+      ),
     );
   }
 }
