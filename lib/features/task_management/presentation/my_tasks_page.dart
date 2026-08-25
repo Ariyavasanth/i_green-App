@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../domain/task_item.dart';
 import '../providers/task_providers.dart';
-import '../../employee/providers/employee_providers.dart';
 import '../../time_clocking/providers/clocking_providers.dart';
 import '../../attendance/providers/attendance_providers.dart';
 import '../../on_duty/providers/on_duty_providers.dart';
@@ -323,9 +322,6 @@ class _MyTasksPageState extends ConsumerState<MyTasksPage> {
     const primaryColor = Color(0xFF9CC70A);
     const secondaryColor = Color(0xFF414A51);
 
-    final employeesAsync = ref.watch(employeesProvider);
-    final employees = employeesAsync.valueOrNull ?? [];
-
     final tasksAsync = ref.watch(
       tasksProvider((
         assignedTo: _selectedEmployeeId == 'All' ? null : _selectedEmployeeId,
@@ -340,47 +336,6 @@ class _MyTasksPageState extends ConsumerState<MyTasksPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Employee Filter Selector
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.grey.shade300),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _selectedEmployeeId,
-                isExpanded: true,
-                style: const TextStyle(color: Color(0xFF1E293B), fontSize: 13, fontWeight: FontWeight.w500),
-                icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF64748B)),
-                items: [
-                  const DropdownMenuItem(
-                    value: 'EMP-001',
-                    child: Text('EMP-001 (Current Employee)'),
-                  ),
-                  const DropdownMenuItem(
-                    value: 'All',
-                    child: Text('All Employees / All Tasks'),
-                  ),
-                  ...employees.map(
-                    (emp) => DropdownMenuItem(
-                      value: emp.employeeId,
-                      child: Text('${emp.employeeId} - ${emp.fullName}'),
-                    ),
-                  ),
-                ],
-                onChanged: (val) {
-                  if (val != null) {
-                    setState(() => _selectedEmployeeId = val);
-                  }
-                },
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-
           // Quick Status Filter Chips
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
