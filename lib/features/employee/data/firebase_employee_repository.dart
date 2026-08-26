@@ -91,37 +91,16 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   Future<List<Employee>> getEmployees() async {
     final all = await getAllEmployees();
     final result = <Employee>[];
-    final toFix = <Employee>[]; // employees needing an EMP- ID assigned
-    final toFixStatus = <Employee>[]; // full EMP- employees whose status got set to Draft
 
     for (final emp in all) {
       final s = emp.status.trim().toLowerCase();
-      final empIdUpper = emp.employeeId.trim().toUpperCase();
-      final isFullEmp = empIdUpper.startsWith('EMP-');
-
-      if (s == 'active' || s == 'converted' || s == 'submitted' || s.isEmpty || isFullEmp) {
-        if (!isFullEmp) {
-          toFix.add(emp);
-        } else {
-          var updated = emp;
-          if (s == 'draft' || s != 'active') {
-            updated = emp.copyWith(status: 'Active');
-            toFixStatus.add(updated);
-          }
-          result.add(updated);
+      if (s != 'archived' && s != 'deleted') {
+        var updated = emp;
+        if (s.isEmpty || s == 'draft' || s == 'submitted') {
+          updated = emp.copyWith(status: 'Active');
         }
+        result.add(updated);
       }
-    }
-
-    // Fix employees without EMP- IDs in the background (non-blocking)
-    if (toFix.isNotEmpty) {
-      _fixEmployeeIds(toFix);
-      result.addAll(toFix);
-    }
-
-    // Fix draft status for full EMP- employees in Firestore (non-blocking)
-    if (toFixStatus.isNotEmpty) {
-      _fixEmployeeStatuses(toFixStatus);
     }
 
     return result;
@@ -380,13 +359,14 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   @override
   Future<List<Employee>> getAllEmployees() async {
     final result = <Employee>[];
-    final seenIds = <int>{};
+    final seenKeys = <String>{};
 
     try {
       final snapshot = await _employeesRef.get();
       for (final doc in snapshot.docs) {
         final emp = _employeeFromFirestore(doc.data(), doc.id);
-        if (seenIds.add(emp.id)) {
+        final key = doc.id.isNotEmpty ? doc.id : (emp.employeeId.isNotEmpty ? emp.employeeId : emp.id.toString());
+        if (seenKeys.add(key)) {
           result.add(emp);
         }
       }

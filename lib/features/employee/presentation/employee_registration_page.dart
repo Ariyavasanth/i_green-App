@@ -354,9 +354,396 @@ class _EmployeeRegistrationPageState
   int? _selectedAcceptedEmpId;
   String? _selectedAcceptedLinkId;
   bool _draftLoaded = false;
+  bool _hasSubmittedAtLeastOnce = false;
   final Set<String> _savedTabs = {};
   bool _isPopulating = false;
   final Map<TextEditingController, String> _savedControllerTexts = {};
+
+  List<String> _validatePersonalInfoTab() {
+    final errors = <String>[];
+    final hasPhoto = _profileImageBytes != null ||
+        (_profileImageDataUrl.isNotEmpty && !_isProfileImageRemoved);
+    if (!hasPhoto) {
+      errors.add('Candidate Photo is mandatory');
+    }
+    if (_firstNameController.text.trim().isEmpty) {
+      errors.add('First Name is required');
+    }
+    if (_lastNameController.text.trim().isEmpty) {
+      errors.add('Last Name is required');
+    }
+    if (_gender.trim().isEmpty) {
+      errors.add('Gender is required');
+    }
+    if (_dobController.text.trim().isEmpty) {
+      errors.add('Official Date of Birth is required');
+    }
+    final aadhaar = _aadhaarController.text.trim();
+    if (aadhaar.isEmpty) {
+      errors.add('Aadhaar Number is required');
+    } else if (aadhaar.length != 12) {
+      errors.add('Aadhaar Number must be exactly 12 digits');
+    }
+    final phone = _phoneController.text.trim();
+    if (phone.isEmpty) {
+      errors.add('Primary Mobile Number is required');
+    } else if (phone.length != 10) {
+      errors.add('Primary Mobile Number must be exactly 10 digits');
+    }
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      errors.add('Email Address is required');
+    } else if (!email.contains('@')) {
+      errors.add('Invalid Email Address format');
+    }
+    final pfText = _pfNumberController.text.trim();
+    if (pfText.isNotEmpty && pfText.length != 12 && pfText.length != 22) {
+      errors.add('PF Number / UAN must be 12 digits or 22 characters');
+    }
+    final esiText = _esiNumberController.text.trim();
+    if (esiText.isNotEmpty && esiText.length != 17) {
+      errors.add('ESI Number must be exactly 17 digits');
+    }
+    return errors;
+  }
+
+  List<String> _validateAddressTab() {
+    final errors = <String>[];
+    if (_permAddressController.text.trim().isEmpty) {
+      errors.add('Permanent Address is required');
+    }
+    if (_permCityController.text.trim().isEmpty) {
+      errors.add('Permanent City is required');
+    }
+    if (_permCountryController.text.trim().isEmpty) {
+      errors.add('Permanent Country is required');
+    }
+    if (!_sameAsPermanent) {
+      if (_presAddressController.text.trim().isEmpty) {
+        errors.add('Present Address is required');
+      }
+      if (_presCityController.text.trim().isEmpty) {
+        errors.add('Present City is required');
+      }
+      if (_presCountryController.text.trim().isEmpty) {
+        errors.add('Present Country is required');
+      }
+    }
+    return errors;
+  }
+
+  List<String> _validateEducationTab() {
+    final errors = <String>[];
+    bool hasEduInList = _educationList.any((e) => e.degreeName.trim().isNotEmpty && e.instituteName.trim().isNotEmpty);
+    bool hasEduInControllers = _eduDegreeController.text.trim().isNotEmpty && _eduInstController.text.trim().isNotEmpty;
+
+    if (!hasEduInList && !hasEduInControllers) {
+      errors.add('Highest Degree / Course Name and Institute Name are required');
+    }
+
+    bool hasCertDoc = _documentList.any((doc) =>
+        doc.documentType.toLowerCase().contains('degree') ||
+        doc.documentType.toLowerCase().contains('education') ||
+        doc.documentType.toLowerCase().contains('mark') ||
+        doc.documentType.toLowerCase().contains('certificate')) ||
+        _educationList.any((e) => e.certificateName.isNotEmpty && e.certificateName != 'No file chosen');
+    if (!hasCertDoc && !hasEduInList) {
+      errors.add('Highest Degree Certificate file upload is required');
+    }
+    return errors;
+  }
+
+  List<String> _validateExperienceTab() {
+    final errors = <String>[];
+    // Work Experience is optional for freshers!
+    for (int i = 0; i < _experienceList.length; i++) {
+      final exp = _experienceList[i];
+      if (exp.companyName.trim().isEmpty) {
+        errors.add('Experience #${i + 1}: Previous Company Name is required');
+      }
+      if (exp.position.trim().isEmpty) {
+        errors.add('Experience #${i + 1}: Designation is required');
+      }
+    }
+    return errors;
+  }
+
+  List<String> _validateHistoryTab() {
+    final errors = <String>[];
+    final pan = _panController.text.trim().toUpperCase();
+    if (pan.isEmpty) {
+      errors.add('PAN Number is required');
+    } else if (pan.length != 10) {
+      errors.add('PAN Number must be exactly 10 characters');
+    }
+    if (_emergencyNameController.text.trim().isEmpty) {
+      errors.add('Emergency Contact Person Name is required');
+    }
+    final emergencyPhone = _emergencyMobileController.text.trim();
+    if (emergencyPhone.isEmpty) {
+      errors.add('Emergency Contact Mobile Number is required');
+    } else if (emergencyPhone.length != 10) {
+      errors.add('Emergency Contact Mobile Number must be exactly 10 digits');
+    }
+    if (_hasCriminalCases && _criminalCaseDetailsController.text.trim().isEmpty) {
+      errors.add('Criminal Case Details are required when declaration is Yes');
+    }
+    return errors;
+  }
+
+  List<String> _validateBankAccountTab() {
+    final errors = <String>[];
+    if (_bankHolderController.text.trim().isEmpty) {
+      errors.add('Account Holder Name is required');
+    }
+    if (_bankNameController.text.trim().isEmpty) {
+      errors.add('Bank Name is required');
+    }
+    if (_bankAccNumController.text.trim().isEmpty) {
+      errors.add('Account Number is required');
+    }
+    final ifsc = _bankIfscController.text.trim().toUpperCase();
+    if (ifsc.isEmpty) {
+      errors.add('IFSC Code is required');
+    } else if (ifsc.length != 11) {
+      errors.add('IFSC Code must be exactly 11 characters');
+    }
+    if (_bankAccountType.trim().isEmpty) {
+      errors.add('Account Type is required');
+    }
+    return errors;
+  }
+
+  List<String> _validateDocumentTab() {
+    final errors = <String>[];
+    bool hasAadhaarDoc = _documentList.any((d) =>
+        d.documentType.toLowerCase().contains('aadhaar') ||
+        d.documentType.toLowerCase().contains('government id') ||
+        d.documentType.toLowerCase().contains('gov') ||
+        d.documentType.toLowerCase().contains('aadhar')) ||
+        _aadhaarController.text.trim().isNotEmpty;
+
+    if (!hasAadhaarDoc) {
+      errors.add('Aadhaar Card / Government ID copy upload is required');
+    }
+    return errors;
+  }
+
+  List<String> _validateSocialMediaTab() {
+    return [];
+  }
+
+  List<String> _validateTabByName(String tabName) {
+    switch (tabName) {
+      case 'Personal Info':
+        return _validatePersonalInfoTab();
+      case 'Address':
+        return _validateAddressTab();
+      case 'Education':
+        return _validateEducationTab();
+      case 'Experience':
+        return _validateExperienceTab();
+      case 'History':
+        return _validateHistoryTab();
+      case 'Bank Account':
+        return _validateBankAccountTab();
+      case 'Document':
+        return _validateDocumentTab();
+      case 'Social Media':
+        return _validateSocialMediaTab();
+      default:
+        return [];
+    }
+  }
+
+  Map<String, List<String>> _getAllCandidateFormErrors() {
+    final result = <String, List<String>>{};
+    final candidateTabs = [
+      'Personal Info',
+      'Address',
+      'Education',
+      'Experience',
+      'History',
+      'Bank Account',
+      'Document',
+      'Social Media',
+    ];
+    for (final tab in candidateTabs) {
+      final errs = _validateTabByName(tab);
+      if (errs.isNotEmpty) {
+        result[tab] = errs;
+      }
+    }
+    return result;
+  }
+
+  void _showSubmissionErrorSummaryDialog(Map<String, List<String>> errorsByTab) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        final isMobile = MediaQuery.of(context).size.width < 600;
+        final totalErrors = errorsByTab.values.fold(0, (prev, element) => prev + element.length);
+
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          child: Container(
+            width: isMobile ? double.infinity : 600,
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.8,
+            ),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFEF3F2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.warning_amber_rounded, color: Color(0xFFD92D20), size: 28),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Action Required: Complete Registration Details',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF101828),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '$totalErrors required item${totalErrors > 1 ? "s" : ""} across ${errorsByTab.length} tab${errorsByTab.length > 1 ? "s" : ""} must be completed before submission.',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF667085),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 20, color: Colors.grey),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                const Divider(height: 1),
+                const SizedBox(height: 12),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: errorsByTab.entries.map((entry) {
+                        final tabName = entry.key;
+                        final errorList = entry.value;
+                        final tabIndex = _tabs.indexOf(tabName);
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF5F5),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFFDA29B)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.tab, size: 16, color: Color(0xFFD92D20)),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        tabName,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFFB42318),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (tabIndex >= 0)
+                                    InkWell(
+                                      onTap: () {
+                                        Navigator.of(context).pop();
+                                        _tabController.animateTo(tabIndex);
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.active,
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: const Text(
+                                          'Go to Tab',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              ...errorList.map((err) => Padding(
+                                padding: const EdgeInsets.only(left: 4, top: 3),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('• ', style: TextStyle(color: Color(0xFFD92D20), fontWeight: FontWeight.bold)),
+                                    Expanded(
+                                      child: Text(
+                                        err,
+                                        style: const TextStyle(fontSize: 12, color: Color(0xFF475467)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        side: const BorderSide(color: Color(0xFFD0D5DD)),
+                      ),
+                      child: const Text('Review and Correct', style: TextStyle(color: Color(0xFF344054), fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   void _snapshotSavedTexts() {
     final controllers = [
@@ -817,26 +1204,49 @@ class _EmployeeRegistrationPageState
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         ref.invalidate(allEmployeesProvider);
         ref.invalidate(registrationLinksProvider);
-        final links = await ref.read(registrationLinksProvider.future);
-        final allEmps = await ref.read(allEmployeesProvider.future);
-        final matchingLinks = links.where((l) => l.linkId == widget.acceptedLinkId).toList();
-        if (matchingLinks.isNotEmpty && mounted) {
-          final link = matchingLinks.first;
-          final matchedEmployee = _findMatchingEmployee(link, allEmps);
-          if (matchedEmployee != null) {
-            _selectedAcceptedEmpId = matchedEmployee.id;
-            _populateFromEmployee(matchedEmployee);
-          } else if (link.employeeName.isNotEmpty) {
-            _firstNameController.text = link.employeeName;
-            _status = 'ACTIVE';
-          }
+        ref.invalidate(candidateResponsesProvider);
+        final repo = ref.read(employeeRepositoryProvider);
+
+        final candidateResponse = await repo.getCandidateResponseByLinkId(widget.acceptedLinkId!) ??
+            await repo.getCandidateResponseByCandidateId(widget.acceptedLinkId!);
+
+        if (candidateResponse != null && mounted) {
+          _populateFromEmployee(candidateResponse.employeeData);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Auto-fetched candidate details for ${matchedEmployee?.fullName.isNotEmpty == true ? matchedEmployee!.fullName : (link.employeeName.isNotEmpty ? link.employeeName : link.linkId)}. Complete details to finalize registration.'),
+              content: Text('Auto-fetched candidate details for ${candidateResponse.employeeData.fullName}. Complete details to finalize registration.'),
               behavior: SnackBarBehavior.floating,
               duration: const Duration(seconds: 3),
             ),
           );
+        } else {
+          final links = await ref.read(registrationLinksProvider.future);
+          final allEmps = await ref.read(allEmployeesProvider.future);
+          final matchingLinks = links.where((l) => l.linkId == widget.acceptedLinkId).toList();
+          if (matchingLinks.isNotEmpty && mounted) {
+            final link = matchingLinks.first;
+            final matchedEmployee = _findMatchingEmployee(link, allEmps);
+            if (matchedEmployee != null) {
+              _selectedAcceptedEmpId = matchedEmployee.id;
+              _populateFromEmployee(matchedEmployee);
+            } else if (link.employeeName.isNotEmpty) {
+              final nameParts = link.employeeName.trim().split(RegExp(r'\s+'));
+              if (nameParts.length > 1) {
+                _firstNameController.text = nameParts.first;
+                _lastNameController.text = nameParts.sublist(1).join(' ');
+              } else {
+                _firstNameController.text = link.employeeName;
+              }
+              _status = 'ACTIVE';
+            }
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Auto-fetched candidate details for ${matchedEmployee?.fullName.isNotEmpty == true ? matchedEmployee!.fullName : (link.employeeName.isNotEmpty ? link.employeeName : link.linkId)}. Complete details to finalize registration.'),
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
         }
       });
     } else if (widget.acceptedEmpId != null) {
@@ -865,28 +1275,51 @@ class _EmployeeRegistrationPageState
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         ref.invalidate(allEmployeesProvider);
         ref.invalidate(registrationLinksProvider);
-        final links = await ref.read(registrationLinksProvider.future);
-        final allEmps = await ref.read(allEmployeesProvider.future);
-        final matchingLinks = links.where((l) => l.linkId == widget.linkId).toList();
-        if (matchingLinks.isNotEmpty && mounted) {
-          final link = matchingLinks.first;
-          final matchedEmployee = _findMatchingEmployee(link, allEmps);
-          if (matchedEmployee != null) {
-            _selectedAcceptedEmpId = matchedEmployee.id;
-            _populateFromEmployee(matchedEmployee);
-          } else if (link.employeeName.isNotEmpty) {
-            if (_firstNameController.text.isEmpty) {
-              _firstNameController.text = link.employeeName;
-            }
-            _status = 'ACTIVE';
-          }
+        ref.invalidate(candidateResponsesProvider);
+        final repo = ref.read(employeeRepositoryProvider);
+
+        final candidateResponse = await repo.getCandidateResponseByLinkId(widget.linkId) ??
+            await repo.getCandidateResponseByCandidateId(widget.linkId);
+
+        if (candidateResponse != null && mounted) {
+          _populateFromEmployee(candidateResponse.employeeData);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Auto-fetched candidate details for ${matchedEmployee?.fullName.isNotEmpty == true ? matchedEmployee!.fullName : (link.employeeName.isNotEmpty ? link.employeeName : link.linkId)}. Complete details to finalize registration.'),
+              content: Text('Auto-fetched candidate details for ${candidateResponse.employeeData.fullName}. Complete details to finalize registration.'),
               behavior: SnackBarBehavior.floating,
               duration: const Duration(seconds: 3),
             ),
           );
+        } else {
+          final links = await ref.read(registrationLinksProvider.future);
+          final allEmps = await ref.read(allEmployeesProvider.future);
+          final matchingLinks = links.where((l) => l.linkId == widget.linkId).toList();
+          if (matchingLinks.isNotEmpty && mounted) {
+            final link = matchingLinks.first;
+            final matchedEmployee = _findMatchingEmployee(link, allEmps);
+            if (matchedEmployee != null) {
+              _selectedAcceptedEmpId = matchedEmployee.id;
+              _populateFromEmployee(matchedEmployee);
+            } else if (link.employeeName.isNotEmpty) {
+              if (_firstNameController.text.isEmpty) {
+                final nameParts = link.employeeName.trim().split(RegExp(r'\s+'));
+                if (nameParts.length > 1) {
+                  _firstNameController.text = nameParts.first;
+                  _lastNameController.text = nameParts.sublist(1).join(' ');
+                } else {
+                  _firstNameController.text = link.employeeName;
+                }
+              }
+              _status = 'ACTIVE';
+            }
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Auto-fetched candidate details for ${matchedEmployee?.fullName.isNotEmpty == true ? matchedEmployee!.fullName : (link.employeeName.isNotEmpty ? link.employeeName : link.linkId)}. Complete details to finalize registration.'),
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
         }
       });
     }
@@ -1376,11 +1809,11 @@ class _EmployeeRegistrationPageState
           ),
         );
 
-        // Redirect to /employee only for management/admin additions or edits; candidate link submissions remain on confirmation screen
-        if (isSubmit && _isManagementAdd) {
+        // Redirect to /employee-management only for management/admin additions, edits, or candidate conversions
+        if (isSubmit && (_isManagementAdd || _selectedAcceptedLinkId != null || widget.acceptedLinkId != null)) {
           Future.delayed(const Duration(milliseconds: 600), () {
             if (mounted) {
-              GoRouter.of(context).go('/employee');
+              GoRouter.of(context).go('/employee-management');
             }
           });
         }
@@ -1509,7 +1942,13 @@ class _EmployeeRegistrationPageState
                           } else if (link.employeeName.isNotEmpty && mounted) {
                             setState(() {
                               if (_firstNameController.text.isEmpty) {
-                                _firstNameController.text = link.employeeName;
+                                final nameParts = link.employeeName.trim().split(RegExp(r'\s+'));
+                                if (nameParts.length > 1) {
+                                  _firstNameController.text = nameParts.first;
+                                  _lastNameController.text = nameParts.sublist(1).join(' ');
+                                } else {
+                                  _firstNameController.text = link.employeeName;
+                                }
                               }
                             });
                           }
@@ -1691,6 +2130,32 @@ class _EmployeeRegistrationPageState
     );
   }
 
+  bool _isTabHasData(String tab) {
+    switch (tab) {
+      case 'Personal Info':
+        return _firstNameController.text.trim().isNotEmpty || _lastNameController.text.trim().isNotEmpty;
+      case 'Address':
+        return _permAddressController.text.trim().isNotEmpty;
+      case 'Education':
+        return _educationList.isNotEmpty || _eduDegreeController.text.trim().isNotEmpty;
+      case 'Experience':
+        return _experienceList.isNotEmpty || _expCompanyController.text.trim().isNotEmpty;
+      case 'History':
+        return _fatherNameController.text.trim().isNotEmpty || _panController.text.trim().isNotEmpty;
+      case 'Bank Account':
+        return _bankHolderController.text.trim().isNotEmpty || _bankAccNumController.text.trim().isNotEmpty;
+      case 'Document':
+        return _documentList.isNotEmpty;
+      case 'Social Media':
+        return _facebookController.text.trim().isNotEmpty ||
+            _twitterController.text.trim().isNotEmpty ||
+            _linkedinController.text.trim().isNotEmpty ||
+            _googleController.text.trim().isNotEmpty;
+      default:
+        return false;
+    }
+  }
+
   Widget _buildTabBar() {
     return Container(
       color: Colors.white,
@@ -1706,15 +2171,27 @@ class _EmployeeRegistrationPageState
         unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.normal),
         tabAlignment: TabAlignment.start,
         tabs: _tabs.map((tab) {
+          final isCandidateTab = [
+            'Personal Info', 'Address', 'Education', 'Experience',
+            'History', 'Bank Account', 'Document', 'Social Media'
+          ].contains(tab);
+          final tabErrors = isCandidateTab ? _validateTabByName(tab) : <String>[];
           final isSaved = _isTabSaved(tab);
+          final hasData = _isTabHasData(tab);
+          final showGreenCheck = isCandidateTab && tabErrors.isEmpty && (isSaved || (_hasSubmittedAtLeastOnce && hasData));
+          final showRedAlert = isCandidateTab && tabErrors.isNotEmpty && (_hasSubmittedAtLeastOnce || isSaved);
+
           return Tab(
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(tab),
-                if (isSaved) ...[
+                if (showGreenCheck) ...[
                   const SizedBox(width: 5),
                   const Icon(Icons.check_circle, size: 14, color: Color(0xFF2E7D32)),
+                ] else if (showRedAlert) ...[
+                  const SizedBox(width: 5),
+                  const Icon(Icons.error_outline, size: 14, color: Color(0xFFD32F2F)),
                 ],
               ],
             ),
@@ -1984,8 +2461,8 @@ class _EmployeeRegistrationPageState
         _buildRow2or3(
           isMobile: isMobile,
           children: [
-            _buildTextField('First Name', _firstNameController, placeholder: 'First Name', isName: true),
-            _buildTextField('Last Name', _lastNameController, placeholder: 'Last Name', isName: true),
+            _buildTextField('First Name *', _firstNameController, placeholder: 'First Name', isName: true),
+            _buildTextField('Last Name *', _lastNameController, placeholder: 'Last Name', isName: true),
           ],
         ),
         const SizedBox(height: 12),
@@ -2063,7 +2540,7 @@ class _EmployeeRegistrationPageState
               ],
             ),
             _buildDropdown(
-              'Gender',
+              'Gender *',
               _gender,
               ['Male', 'Female', 'Other'],
               (val) { if (val != null) { setState(() => _gender = val); _markTabUnsaved('Personal Info'); } },
@@ -2074,10 +2551,10 @@ class _EmployeeRegistrationPageState
         _buildRow2or3(
           isMobile: isMobile,
           children: [
-            _buildDateField('Date Of Birth', _dobController, placeholder: '13-05-1982'),
-            _buildTextField('Aadhar Number', _aadhaarController, placeholder: '833750993144', isNumber: true, maxLength: 12),
+            _buildDateField('Date Of Birth (Official) *', _dobController, placeholder: '13-05-1982'),
+            _buildTextField('Aadhaar Number *', _aadhaarController, placeholder: '833750993144', isAadhaar: true, maxLength: 12),
             _buildTextField(
-              'Contact Number',
+              'Primary Mobile Number *',
               _phoneController,
               placeholder: '8760098789',
               isPhone: true,
@@ -2090,9 +2567,9 @@ class _EmployeeRegistrationPageState
         _buildRow2or3(
           isMobile: isMobile,
           children: [
-            _buildTextField('Email', _emailController, placeholder: 'Saravanan@igreentec.in', isEmail: true),
-            _buildTextField('PF Number', _pfNumberController, placeholder: '100338738050', isAlphanumeric: true, isUppercase: true, maxLength: 22),
-            _buildTextField('ESI Number', _esiNumberController, placeholder: 'ESI Number', isNumber: true, maxLength: 17),
+            _buildTextField('Email Address *', _emailController, placeholder: 'Saravanan@igreentec.in', isEmail: true),
+            _buildTextField('PF Number', _pfNumberController, placeholder: '100338738050 or 22 chars', isPf: true, maxLength: 22),
+            _buildTextField('ESI Number', _esiNumberController, placeholder: 'ESI Number', isEsi: true, maxLength: 17),
           ],
         ),
         const SizedBox(height: 20),
@@ -2116,7 +2593,7 @@ class _EmployeeRegistrationPageState
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Image', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                _buildLabelWithRequiredStar('Candidate Photo *'),
                 const SizedBox(height: 4),
                 Row(
                   children: [
@@ -2452,13 +2929,13 @@ class _EmployeeRegistrationPageState
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
             ),
             const SizedBox(height: 14),
-            _buildTextField('Address', _permAddressController, placeholder: 'Address Details', maxLines: 2),
+            _buildTextField('Address *', _permAddressController, placeholder: 'Address Details', maxLines: 2),
             const SizedBox(height: 12),
             _buildRow2or3(
               isMobile: isMobile,
               children: [
-                _buildTextField('City', _permCityController, placeholder: 'City', isName: true),
-                _buildTextField('Country', _permCountryController, placeholder: 'Country', isName: true),
+                _buildTextField('City *', _permCityController, placeholder: 'City', isName: true),
+                _buildTextField('Country *', _permCountryController, placeholder: 'Country', isName: true),
               ],
             ),
             const SizedBox(height: 16),
@@ -2486,13 +2963,13 @@ class _EmployeeRegistrationPageState
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
             ),
             const SizedBox(height: 14),
-            _buildTextField('Address', _presAddressController, placeholder: 'Address Details', maxLines: 2),
+            _buildTextField(_sameAsPermanent ? 'Address' : 'Address *', _presAddressController, placeholder: 'Address Details', maxLines: 2),
             const SizedBox(height: 12),
             _buildRow2or3(
               isMobile: isMobile,
               children: [
-                _buildTextField('City', _presCityController, placeholder: 'City', isName: true),
-                _buildTextField('Country', _presCountryController, placeholder: 'Country', isName: true),
+                _buildTextField(_sameAsPermanent ? 'City' : 'City *', _presCityController, placeholder: 'City', isName: true),
+                _buildTextField(_sameAsPermanent ? 'Country' : 'Country *', _presCountryController, placeholder: 'Country', isName: true),
               ],
             ),
             const SizedBox(height: 24),
@@ -2642,16 +3119,16 @@ class _EmployeeRegistrationPageState
             _buildRow2or3(
               isMobile: isMobile,
               children: [
-                _buildTextField('Degree Name', _eduDegreeController, placeholder: 'Degree Name'),
-                _buildTextField('Institute name', _eduInstController, placeholder: 'Institute name'),
+                _buildTextField('Highest Degree / Course Name *', _eduDegreeController, placeholder: 'Degree Name'),
+                _buildTextField('Institute / University Name *', _eduInstController, placeholder: 'Institute name'),
               ],
             ),
             const SizedBox(height: 12),
             _buildRow2or3(
               isMobile: isMobile,
               children: [
-                _buildTextField('Result', _eduResultController, placeholder: 'Result (e.g. 85% / Pass)'),
-                _buildTextField('Year', _eduYearController, placeholder: 'Year (e.g. 2024)', isNumber: true, maxLength: 4),
+                _buildTextField('Percentage / CGPA *', _eduResultController, placeholder: 'Result (e.g. 85% / Pass)'),
+                _buildTextField('Passing Year *', _eduYearController, placeholder: 'Year (e.g. 2024)', isNumber: true, maxLength: 4),
               ],
             ),
             const SizedBox(height: 12),
@@ -2740,6 +3217,20 @@ class _EmployeeRegistrationPageState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Row(
+              children: const [
+                Text(
+                  'Work Experience History',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
+                ),
+                SizedBox(width: 8),
+                Text(
+                  '(Optional for Freshers)',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey, fontStyle: FontStyle.italic),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
             Container(
               width: double.infinity,
               decoration: BoxDecoration(
@@ -2929,7 +3420,7 @@ class _EmployeeRegistrationPageState
                   countryCode: _personalMobileCountryCode,
                   onCountryCodeChanged: (val) { setState(() => _personalMobileCountryCode = val); _markTabUnsaved('History'); },
                 ),
-                _buildTextField('PAN No', _panController, placeholder: 'PAN (e.g. ABCDE1234F)', isPan: true),
+                _buildTextField('PAN Number *', _panController, placeholder: 'PAN (e.g. ABCDE1234F)', isPan: true),
               ],
             ),
             const SizedBox(height: 12),
@@ -2948,9 +3439,9 @@ class _EmployeeRegistrationPageState
             _buildRow2or3(
               isMobile: isMobile,
               children: [
-                _buildTextField('Name', _emergencyNameController, placeholder: 'Emergency Name', isName: true),
+                _buildTextField('Emergency Contact Name *', _emergencyNameController, placeholder: 'Emergency Name', isName: true),
                 _buildTextField(
-                  'Mobile Number',
+                  'Emergency Mobile Number *',
                   _emergencyMobileController,
                   placeholder: 'Emergency Contact',
                   isPhone: true,
@@ -2987,7 +3478,7 @@ class _EmployeeRegistrationPageState
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Marital Status :', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                    Text('Marital Status', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textSecondary)),
                     const SizedBox(height: 4),
                     Row(
                       children: [
@@ -3088,16 +3579,16 @@ class _EmployeeRegistrationPageState
             _buildRow2or3(
               isMobile: isMobile,
               children: [
-                _buildTextField('Account Holder Name', _bankHolderController, placeholder: 'Holder Name', isName: true),
-                _buildTextField('Bank Name', _bankNameController, placeholder: 'Bank Name', isName: true),
+                _buildTextField('Account Holder Name *', _bankHolderController, placeholder: 'Holder Name', isName: true),
+                _buildTextField('Bank Name *', _bankNameController, placeholder: 'Bank Name', isName: true),
               ],
             ),
             const SizedBox(height: 12),
             _buildRow2or3(
               isMobile: isMobile,
               children: [
-                _buildTextField('Account Number', _bankAccNumController, placeholder: 'Account Number', isNumber: true, maxLength: 18),
-                _buildTextField('IFSC Code', _bankIfscController, placeholder: 'IFSC Code (e.g. SBIN0001234)', isIfsc: true),
+                _buildTextField('Account Number *', _bankAccNumController, placeholder: 'Account Number', isNumber: true, maxLength: 18),
+                _buildTextField('IFSC Code *', _bankIfscController, placeholder: 'IFSC Code (e.g. SBIN0001234)', isIfsc: true),
               ],
             ),
             const SizedBox(height: 12),
@@ -3106,7 +3597,7 @@ class _EmployeeRegistrationPageState
               children: [
                 _buildTextField('Branch Name', _bankBranchController, placeholder: 'Branch Name', isName: true),
                 _buildDropdown(
-                  'Account Type',
+                  'Account Type *',
                   _bankAccountType,
                   ['Savings', 'Current', 'Salary'],
                   (val) { if (val != null) { setState(() => _bankAccountType = val); _markTabUnsaved('Bank Account'); } },
@@ -3159,6 +3650,17 @@ class _EmployeeRegistrationPageState
             const Text(
               'Document Management & Attachments',
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
+            ),
+            const SizedBox(height: 4),
+            RichText(
+              text: const TextSpan(
+                text: 'Mandatory Upload Copy: ',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+                children: [
+                  TextSpan(text: 'Aadhaar Card / Gov ID', style: TextStyle(color: Colors.black87)),
+                  TextSpan(text: ' *', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                ],
+              ),
             ),
             const SizedBox(height: 14),
             Container(
@@ -3238,7 +3740,7 @@ class _EmployeeRegistrationPageState
               isMobile: isMobile,
               children: [
                 _buildDropdown(
-                  'Document Type',
+                  'Document Type *',
                   _docType,
                   ['Aadhaar Card', 'PAN Card', 'Educational Certificate', 'Passport', 'Relieving Letter', 'Blood Group Certificate', 'Test Report', 'Other'],
                   (val) { if (val != null) { setState(() => _docType = val); _markTabUnsaved('Document'); } },
@@ -3346,9 +3848,18 @@ class _EmployeeRegistrationPageState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Social Media Links & Handles',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
+            Row(
+              children: const [
+                Text(
+                  'Social Media Links & Handles',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
+                ),
+                SizedBox(width: 8),
+                Text(
+                  '(All Optional)',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey, fontStyle: FontStyle.italic),
+                ),
+              ],
             ),
             const SizedBox(height: 14),
             _buildRow2or3(
@@ -3778,6 +4289,36 @@ class _EmployeeRegistrationPageState
     );
   }
 
+  Widget _buildLabelWithRequiredStar(String label) {
+    if (!label.contains('*')) {
+      return Text(
+        label,
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
+      );
+    }
+    final parts = label.split('*');
+    final cleanLabel = parts[0].trim();
+    final suffix = parts.length > 1 ? parts.sublist(1).join('*').trim() : '';
+
+    return RichText(
+      text: TextSpan(
+        text: cleanLabel,
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
+        children: [
+          const TextSpan(
+            text: ' *',
+            style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
+          ),
+          if (suffix.isNotEmpty)
+            TextSpan(
+              text: ' $suffix',
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTextField(
     String label,
     TextEditingController controller, {
@@ -3794,6 +4335,9 @@ class _EmployeeRegistrationPageState
     bool isAlphanumeric = false,
     bool isUppercase = false,
     bool isEmail = false,
+    bool isPf = false,
+    bool isAadhaar = false,
+    bool isEsi = false,
     int? maxLength,
     String countryCode = '+91',
     ValueChanged<String>? onCountryCodeChanged,
@@ -3808,7 +4352,7 @@ class _EmployeeRegistrationPageState
         ? (placeholder ?? phoneDetails!['placeholder'] as String)
         : placeholder;
 
-    final TextCapitalization textCapitalization = (isPan || isIfsc || isPassport || isDrivingLicense || isUppercase)
+    final TextCapitalization textCapitalization = (isPan || isIfsc || isPassport || isDrivingLicense || isPf || isUppercase)
         ? TextCapitalization.characters
         : (isName ? TextCapitalization.words : TextCapitalization.none);
 
@@ -3817,7 +4361,7 @@ class _EmployeeRegistrationPageState
         ? TextInputType.phone
         : (isNumber
           ? TextInputType.numberWithOptions(decimal: allowDecimal)
-          : (isPan || isIfsc || isPassport || isDrivingLicense || isAlphanumeric
+          : (isPan || isIfsc || isPassport || isDrivingLicense || isPf || isAlphanumeric
             ? TextInputType.visiblePassword
             : (isEmail ? TextInputType.emailAddress : TextInputType.text)))
     );
@@ -3825,6 +4369,16 @@ class _EmployeeRegistrationPageState
     final effectiveInputFormatters = inputFormatters ?? (
       isPan ? [
         LengthLimitingTextInputFormatter(10),
+        FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
+        _UpperCaseTextFormatter(),
+      ] : isAadhaar ? [
+        LengthLimitingTextInputFormatter(12),
+        FilteringTextInputFormatter.digitsOnly,
+      ] : isEsi ? [
+        LengthLimitingTextInputFormatter(17),
+        FilteringTextInputFormatter.digitsOnly,
+      ] : isPf ? [
+        LengthLimitingTextInputFormatter(22),
         FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
         _UpperCaseTextFormatter(),
       ] : isIfsc ? [
@@ -3865,10 +4419,7 @@ class _EmployeeRegistrationPageState
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
-        ),
+        _buildLabelWithRequiredStar(label),
         const SizedBox(height: 5),
         TextFormField(
           controller: controller,
@@ -3905,31 +4456,38 @@ class _EmployeeRegistrationPageState
           autovalidateMode: AutovalidateMode.onUserInteraction,
           validator: (value) {
             final trimmed = (value ?? '').trim();
+            if (trimmed.isEmpty && label.contains('*') && _hasSubmittedAtLeastOnce) {
+              final cleanLabel = label.replaceAll('*', '').trim();
+              return '$cleanLabel is required.';
+            }
             if (trimmed.isNotEmpty) {
               if (isPan) {
                 if (trimmed.length != 10) {
-                  return 'PAN Number must be exactly 10 characters (e.g. ABCDE1234F).';
-                }
-                if (!RegExp(r'^[A-Z]{5}[0-9]{4}[A-Z]{1}$').hasMatch(trimmed)) {
-                  return 'Invalid PAN format. Example: ABCDE1234F.';
+                  return 'PAN Number must be exactly 10 characters.';
                 }
               } else if (isIfsc) {
                 if (trimmed.length != 11) {
-                  return 'IFSC Code must be exactly 11 characters (e.g. SBIN0001234).';
-                }
-                if (!RegExp(r'^[A-Z]{4}0[A-Z0-9]{6}$').hasMatch(trimmed)) {
-                  return 'Invalid IFSC format. 5th character must be 0. Example: SBIN0001234.';
+                  return 'IFSC Code must be exactly 11 characters.';
                 }
               } else if (isPassport) {
                 if (trimmed.length < 8 || trimmed.length > 9) {
-                  return 'Passport Number must be 8 or 9 alphanumeric characters.';
-                }
-                if (RegExp(r'[^A-Z0-9]').hasMatch(trimmed)) {
-                  return 'Passport Number cannot contain symbols or spaces.';
+                  return 'Passport Number must be 8 or 9 characters.';
                 }
               } else if (isDrivingLicense) {
-                if (RegExp(r'[^A-Z0-9 \-]').hasMatch(trimmed)) {
-                  return r'Driving License cannot contain special symbols (e.g. $, #, /).';
+                if (trimmed.length < 10 || trimmed.length > 16) {
+                  return 'Driving License must be 10 to 16 characters.';
+                }
+              } else if (isAadhaar) {
+                if (trimmed.length != 12) {
+                  return 'Aadhaar Number must be exactly 12 digits.';
+                }
+              } else if (isEsi) {
+                if (trimmed.length != 17) {
+                  return 'ESI Number must be exactly 17 digits.';
+                }
+              } else if (isPf) {
+                if (trimmed.length != 12 && trimmed.length != 22) {
+                  return 'PF Number / UAN must be 12 digits or 22 characters.';
                 }
               } else if (isName) {
                 if (RegExp(r'[0-9]').hasMatch(trimmed)) {
@@ -4013,10 +4571,7 @@ class _EmployeeRegistrationPageState
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
-        ),
+        _buildLabelWithRequiredStar(label),
         const SizedBox(height: 5),
         TextFormField(
           controller: controller,
@@ -4058,10 +4613,7 @@ class _EmployeeRegistrationPageState
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
-        ),
+        _buildLabelWithRequiredStar(label),
         const SizedBox(height: 5),
         DropdownButtonFormField<String>(
           initialValue: items.contains(value) ? value : items.first,
@@ -4113,6 +4665,15 @@ class _EmployeeRegistrationPageState
   }
 
   void _showRegistrationPreviewDialog(RegistrationLink? link) {
+    final candidateErrors = _getAllCandidateFormErrors();
+    if (candidateErrors.isNotEmpty) {
+      setState(() {
+        _hasSubmittedAtLeastOnce = true;
+      });
+      _showSubmissionErrorSummaryDialog(candidateErrors);
+      return;
+    }
+
     if (_totalSalaryController.text.trim().isNotEmpty) {
       _recalculateSalaryAmountsFromPercentages();
     }
@@ -4594,7 +5155,7 @@ class _EmployeeRegistrationPageState
                 if (GoRouter.of(context).canPop()) {
                   GoRouter.of(context).pop();
                 } else {
-                  GoRouter.of(context).go('/employee');
+                  GoRouter.of(context).go('/employee-management');
                 }
               },
               child: const Text('Cancel', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),

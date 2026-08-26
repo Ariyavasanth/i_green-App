@@ -436,6 +436,7 @@ class _TopBar extends ConsumerWidget {
         return dest.label;
       }
     }
+    if (cleanLoc == '/employee' || cleanLoc == '/employee-management') return 'Employee Management';
     if (cleanLoc.startsWith('/employee/register')) return 'Employee Registration';
     return 'Green Technology';
   }
