@@ -480,6 +480,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 builder: (_, _) => const MoveStockPage(),
               ),
               GoRoute(
+                path: 'history',
+                builder: (_, _) => const FullInventoryHistoryPage(),
+              ),
+              GoRoute(
+                path: 'requests',
+                builder: (_, _) => const MaterialRequestsPage(),
+              ),
+              GoRoute(
+                path: 'request-material',
+                builder: (_, _) => const RequestMaterialPage(),
+              ),
+              GoRoute(
                 path: 'new',
                 builder: (_, _) => const NewAdjustmentPage(),
               ),

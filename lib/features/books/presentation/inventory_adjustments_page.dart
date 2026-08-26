@@ -108,8 +108,15 @@ class _InventoryAdjustmentDashboardPageState
       onRefresh: () async {
         ref.invalidate(itemsProvider);
         ref.invalidate(materialsProvider(null));
+        ref.invalidate(materialsProvider('RAW'));
+        ref.invalidate(materialsProvider('OUTSOURCE'));
         ref.invalidate(dashboardMetricsProvider);
-        await ref.read(itemsProvider.future);
+        ref.invalidate(adjustmentsProvider);
+        ref.invalidate(materialRequestsProvider);
+        await Future.wait([
+          ref.read(itemsProvider.future),
+          ref.read(materialsProvider(null).future),
+        ]);
       },
       child: CustomScrollView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -142,6 +149,7 @@ class _InventoryAdjustmentDashboardPageState
                   onMoveStock: () => context.push('/inventory-adjustments/move-stock'),
                   onHistory: () => _showHistory(context),
                   onAddMaterial: () => context.push('/inventory-adjustments/add-material'),
+                  onRequestMaterial: () => context.push('/inventory-adjustments/requests'),
                 ),
                 const SizedBox(height: 24),
                 _SectionHeader(
@@ -225,36 +233,79 @@ class _InventoryAdjustmentDashboardPageState
       isScrollControlled: true,
       builder: (context) => SafeArea(
         child: SizedBox(
-          height: MediaQuery.sizeOf(context).height * .62,
-          child: Consumer(
-            builder: (context, sheetRef, _) => sheetRef
-                .watch(adjustmentsProvider)
-                .when(
-                  loading: () => const _HistoryShimmer(),
-                  error: (error, _) => _ErrorState(
-                    onRetry: () => sheetRef.invalidate(adjustmentsProvider),
-                  ),
-                  data: (rows) => rows.isEmpty
-                      ? const _HistoryEmptyState()
-                      : ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                          itemCount: rows.length,
-                          separatorBuilder: (_, _) => const SizedBox(height: 8),
-                          itemBuilder: (_, index) => Card(
-                            child: ListTile(
-                              leading: const CircleAvatar(
-                                backgroundColor: AppColors.canvas,
-                                child: Icon(Icons.receipt_long_outlined),
-                              ),
-                              title: Text(rowTitle(rows[index])),
-                              subtitle: Text(
-                                '${rows[index].reason} · ${DateFormat('dd/MM/yyyy').format(rows[index].date)}',
-                              ),
-                              trailing: Text(rows[index].status),
-                            ),
+          height: MediaQuery.sizeOf(context).height * .65,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Recent History',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
                           ),
-                        ),
+                    ),
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        context.push('/inventory-adjustments/history');
+                      },
+                      icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                      label: const Text('View All'),
+                    ),
+                  ],
                 ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: Consumer(
+                  builder: (context, sheetRef, _) => sheetRef
+                      .watch(adjustmentsProvider)
+                      .when(
+                        loading: () => const _HistoryShimmer(),
+                        error: (error, _) => _ErrorState(
+                          onRetry: () => sheetRef.invalidate(adjustmentsProvider),
+                        ),
+                        data: (rows) => rows.isEmpty
+                            ? const _HistoryEmptyState()
+                            : ListView.separated(
+                                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                                itemCount: rows.length,
+                                separatorBuilder: (_, _) => const SizedBox(height: 8),
+                                itemBuilder: (_, index) => Card(
+                                  child: ListTile(
+                                    leading: const CircleAvatar(
+                                      backgroundColor: AppColors.canvas,
+                                      child: Icon(Icons.receipt_long_outlined),
+                                    ),
+                                    title: Text(rowTitle(rows[index])),
+                                    subtitle: Text(
+                                      '${rows[index].reason} · ${DateFormat('dd/MM/yyyy').format(rows[index].date)}',
+                                    ),
+                                    trailing: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primary.withValues(alpha: .12),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        rows[index].status,
+                                        style: TextStyle(
+                                          color: Theme.of(context).colorScheme.primary,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                      ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -520,25 +571,48 @@ class _QuickActions extends StatelessWidget {
     required this.onMoveStock,
     required this.onHistory,
     required this.onAddMaterial,
+    required this.onRequestMaterial,
   });
 
   final VoidCallback onAddStock;
   final VoidCallback onMoveStock;
   final VoidCallback onHistory;
   final VoidCallback onAddMaterial;
+  final VoidCallback onRequestMaterial;
 
   @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      _QuickAction(Icons.add_box_outlined, 'Add stock', onAddStock),
-      const SizedBox(width: 8),
-      _QuickAction(Icons.swap_horiz_rounded, 'Move stock', onMoveStock),
-      const SizedBox(width: 8),
-      _QuickAction(Icons.history_rounded, 'History', onHistory),
-      const SizedBox(width: 8),
-      _QuickAction(Icons.inventory_2_outlined, 'Material', onAddMaterial),
-    ],
-  );
+  Widget build(BuildContext context) => SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 90,
+              child: _QuickAction(Icons.add_box_outlined, 'Add stock', onAddStock),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 90,
+              child: _QuickAction(Icons.swap_horiz_rounded, 'Move stock', onMoveStock),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 90,
+              child: _QuickAction(Icons.history_rounded, 'History', onHistory),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 90,
+              child: _QuickAction(Icons.inventory_2_outlined, 'Material', onAddMaterial),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 90,
+              child: _QuickAction(Icons.assignment_outlined, 'Requests', onRequestMaterial),
+            ),
+          ],
+        ),
+      );
 }
 
 class _QuickAction extends StatelessWidget {
@@ -548,40 +622,38 @@ class _QuickAction extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Expanded(
-    child: Semantics(
-      button: true,
-      label: label,
-      child: Card(
-        elevation: 1,
-        shadowColor: AppColors.active.withValues(alpha: .10),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 76),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(icon, size: 24, color: AppColors.active),
-                  const SizedBox(height: 6),
-                  Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelMedium,
-                  ),
-                ],
+  Widget build(BuildContext context) => Semantics(
+        button: true,
+        label: label,
+        child: Card(
+          elevation: 1,
+          shadowColor: AppColors.active.withValues(alpha: .10),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 76),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(icon, size: 24, color: AppColors.active),
+                    const SizedBox(height: 6),
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelMedium,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
-      ),
-    ),
-  );
+      );
 }
 
 class _InventorySearch extends StatelessWidget {
@@ -884,9 +956,9 @@ class _AnimatedMaterialCardState extends State<_AnimatedMaterialCard> {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          widget.material.size.isNotEmpty ? widget.material.size : 'Standard',
+                          widget.material.stockOnHand.toStringAsFixed(0),
                           style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700, fontSize: 13),
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         Text(
                           widget.material.unit.isNotEmpty ? widget.material.unit : 'pcs',
@@ -1076,4 +1148,438 @@ class _ShimmerBlockState extends State<_ShimmerBlock>
       ),
     ),
   );
+}
+
+class FullInventoryHistoryPage extends ConsumerStatefulWidget {
+  const FullInventoryHistoryPage({super.key});
+
+  @override
+  ConsumerState<FullInventoryHistoryPage> createState() =>
+      _FullInventoryHistoryPageState();
+}
+
+class _FullInventoryHistoryPageState
+    extends ConsumerState<FullInventoryHistoryPage> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final adjustmentsState = ref.watch(adjustmentsProvider);
+
+    return Scaffold(
+      backgroundColor: AppColors.canvas,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: adjustmentsState.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, _) => Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text('Failed to load history'),
+                      const SizedBox(height: 12),
+                      ElevatedButton(
+                        onPressed: () => ref.invalidate(adjustmentsProvider),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                ),
+                data: (allRows) {
+                  final queryNorm = _query.trim().toLowerCase();
+                  final rows = allRows.where((r) {
+                    if (queryNorm.isEmpty) return true;
+                    final text =
+                        '${r.referenceNumber} ${r.reason} ${r.type} ${r.status} ${r.description}'
+                            .toLowerCase();
+                    return text.contains(queryNorm);
+                  }).toList();
+
+                  return Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                        child: TextField(
+                          controller: _searchController,
+                          onChanged: (val) => setState(() => _query = val),
+                          decoration: InputDecoration(
+                            hintText: 'Search history by reference, reason, type...',
+                            prefixIcon: const Icon(Icons.search_rounded),
+                            suffixIcon: _query.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.close_rounded),
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() => _query = '');
+                                    },
+                                  )
+                                : null,
+                            filled: true,
+                            fillColor: Theme.of(context).colorScheme.surface,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: RefreshIndicator(
+                          onRefresh: () async {
+                            ref.invalidate(adjustmentsProvider);
+                            await ref.read(adjustmentsProvider.future);
+                          },
+                          child: rows.isEmpty
+                              ? Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.history_toggle_off_rounded,
+                                          size: 64, color: AppColors.textSecondary),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        _query.isNotEmpty
+                                            ? 'No matching history entries'
+                                            : 'No history entries found',
+                                        style: Theme.of(context).textTheme.titleMedium,
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : ListView.separated(
+                                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                                  itemCount: rows.length,
+                                  separatorBuilder: (_, _) => const SizedBox(height: 10),
+                                  itemBuilder: (context, index) {
+                                    final item = rows[index];
+                                    return Card(
+                                      elevation: 1,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.spaceBetween,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Container(
+                                                      padding: const EdgeInsets.all(8),
+                                                      decoration: BoxDecoration(
+                                                        color: AppColors.primary
+                                                            .withValues(alpha: .12),
+                                                        borderRadius:
+                                                            BorderRadius.circular(10),
+                                                      ),
+                                                      child: const Icon(
+                                                          Icons.receipt_long_outlined,
+                                                          size: 20,
+                                                          color: AppColors.active),
+                                                    ),
+                                                    const SizedBox(width: 10),
+                                                    Text(
+                                                      item.referenceNumber,
+                                                      style: Theme.of(context)
+                                                          .textTheme
+                                                          .titleMedium
+                                                          ?.copyWith(
+                                                            fontWeight: FontWeight.bold,
+                                                          ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(
+                                                      horizontal: 10, vertical: 5),
+                                                  decoration: BoxDecoration(
+                                                    color: AppColors.primary
+                                                        .withValues(alpha: .12),
+                                                    borderRadius:
+                                                        BorderRadius.circular(8),
+                                                  ),
+                                                  child: Text(
+                                                    item.status,
+                                                    style: TextStyle(
+                                                      color: Theme.of(context)
+                                                          .colorScheme
+                                                          .primary,
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 12),
+                                            Text(
+                                              item.reason,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                            ),
+                                            if (item.description.isNotEmpty) ...[
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                item.description,
+                                                style: AppTextStyles.caption.copyWith(
+                                                    color: AppColors.textSecondary),
+                                              ),
+                                            ],
+                                            const SizedBox(height: 10),
+                                            Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.spaceBetween,
+                                              children: [
+                                                Chip(
+                                                  label: Text(item.type,
+                                                      style: const TextStyle(fontSize: 11)),
+                                                  visualDensity: VisualDensity.compact,
+                                                  padding: EdgeInsets.zero,
+                                                ),
+                                                Text(
+                                                  DateFormat('dd/MM/yyyy · hh:mm a')
+                                                      .format(item.date),
+                                                  style: AppTextStyles.caption.copyWith(
+                                                      color: AppColors.textSecondary),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class MaterialRequestsPage extends ConsumerWidget {
+  const MaterialRequestsPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final requestsState = ref.watch(materialRequestsProvider);
+
+    return Scaffold(
+      backgroundColor: AppColors.canvas,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: requestsState.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, _) => Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text('Failed to load material requests'),
+                      const SizedBox(height: 12),
+                      ElevatedButton(
+                        onPressed: () => ref.invalidate(materialRequestsProvider),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                ),
+                data: (requests) => RefreshIndicator(
+                  onRefresh: () async {
+                    ref.invalidate(materialRequestsProvider);
+                    await ref.read(materialRequestsProvider.future);
+                  },
+                  child: requests.isEmpty
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.assignment_late_outlined,
+                                    size: 64, color: AppColors.textSecondary),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'No Material Requests Created Yet',
+                                  style: Theme.of(context).textTheme.titleMedium,
+                                ),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'Create a new request to issue materials to machines and operators.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: AppColors.textSecondary),
+                                ),
+                                const SizedBox(height: 20),
+                                ElevatedButton.icon(
+                                  onPressed: () =>
+                                      context.push('/inventory-adjustments/request-material'),
+                                  icon: const Icon(Icons.add),
+                                  label: const Text('Create Material Request'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                          itemCount: requests.length,
+                          separatorBuilder: (_, _) => const SizedBox(height: 12),
+                          itemBuilder: (context, index) {
+                            final req = requests[index];
+                            return Card(
+                              elevation: 1.5,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.all(8),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.primary
+                                                    .withValues(alpha: .12),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                              ),
+                                              child: const Icon(
+                                                  Icons.assignment_outlined,
+                                                  color: AppColors.active),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Text(
+                                              'WO: ${req.workOrder}',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleMedium
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                        Text(
+                                          DateFormat('dd MMM yyyy').format(req.date),
+                                          style: AppTextStyles.caption
+                                              .copyWith(color: AppColors.textSecondary),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      req.material,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleSmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Row(
+                                            children: [
+                                              const Icon(
+                                                  Icons.precision_manufacturing_outlined,
+                                                  size: 16,
+                                                  color: AppColors.textSecondary),
+                                              const SizedBox(width: 4),
+                                              Expanded(
+                                                child: Text(
+                                                  'Machine: ${req.machine}',
+                                                  style: AppTextStyles.caption,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Expanded(
+                                          child: Row(
+                                            children: [
+                                              const Icon(Icons.person_outline_rounded,
+                                                  size: 16,
+                                                  color: AppColors.textSecondary),
+                                              const SizedBox(width: 4),
+                                              Expanded(
+                                                child: Text(
+                                                  'Operator: ${req.operatorName}',
+                                                  style: AppTextStyles.caption,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const Divider(height: 20),
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Chip(
+                                          avatar: const Icon(Icons.numbers, size: 14),
+                                          label: Text(
+                                              'Qty: ${req.quantityIssued.toStringAsFixed(0)} pcs'),
+                                          visualDensity: VisualDensity.compact,
+                                        ),
+                                        Chip(
+                                          avatar:
+                                              const Icon(Icons.scale_outlined, size: 14),
+                                          label: Text(
+                                              'Weight: ${req.weightIssued.toStringAsFixed(1)} kg'),
+                                          visualDensity: VisualDensity.compact,
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

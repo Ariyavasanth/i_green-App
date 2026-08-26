@@ -288,6 +288,7 @@ class MaterialItem {
     required this.maximumStock,
     required this.reorderLevel,
     required this.createdAt,
+    this.stockOnHand = 0,
   });
 
   final int id;
@@ -296,6 +297,7 @@ class MaterialItem {
   final String warehouseLocation, rackLocation;
   final String minimumStock, maximumStock, reorderLevel;
   final DateTime createdAt;
+  final double stockOnHand;
 }
 
 class StockEntry {

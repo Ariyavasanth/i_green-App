@@ -37,6 +37,8 @@ class _AddStockPageState extends ConsumerState<AddStockPage> {
   final storeLocation = TextEditingController();
   DateTime poDate = DateTime.now();
   DateTime invoiceDate = DateTime.now();
+  String materialType = 'RAW';
+  String? selectedSubMaterialId;
   bool saving = false;
 
   @override
@@ -83,50 +85,199 @@ class _AddStockPageState extends ConsumerState<AddStockPage> {
   }
 
   @override
-  Widget build(BuildContext context) => FormPage(
-    title: 'Add Stock',
-    saving: saving,
-    saveLabel: widget.readOnly ? 'Close' : 'Add Stock',
-    showLeading: false,
-    showAppBar: false,
-    onSave: widget.readOnly ? () => context.go('/inventory-adjustments') : _save,
-    children: [
-      Form(
-        key: formKey,
-        child: Column(
-          children: [
-            _requiredField(grnNumber, 'GRN Number'),
-            const SizedBox(height: 14),
-            _requiredField(supplier, 'Supplier'),
-            const SizedBox(height: 14),
-            _requiredField(poNumber, 'PO Number'),
-            const SizedBox(height: 14),
-            _dateField('PO Date', poDate, (date) => setState(() => poDate = date)),
-            const SizedBox(height: 14),
-            _requiredField(invoiceNumber, 'Invoice Number'),
-            const SizedBox(height: 14),
-            _dateField('Invoice Date', invoiceDate, (date) => setState(() => invoiceDate = date)),
-            const SizedBox(height: 14),
-            _requiredField(materialCode, 'Material Code'),
-            const SizedBox(height: 14),
-            _requiredField(description, 'Description', maxLines: 3),
-            const SizedBox(height: 14),
-            _requiredField(heatNumber, 'Heat Number'),
-            const SizedBox(height: 14),
-            _requiredField(batchNumber, 'Batch Number'),
-            const SizedBox(height: 14),
-            _numberField(quantity, 'Quantity'),
-            const SizedBox(height: 14),
-            _numberField(weight, 'Weight'),
-            const SizedBox(height: 14),
-            _requiredField(inspectionStatus, 'Inspection Status'),
-            const SizedBox(height: 14),
-            _requiredField(storeLocation, 'Store Location'),
-          ],
+  Widget build(BuildContext context) {
+    final materialsState = ref.watch(materialsProvider(null));
+    final itemsState = ref.watch(itemsProvider);
+
+    final rawMaterials = (materialsState.valueOrNull ?? <MaterialItem>[])
+        .where((m) => m.sourceType.toUpperCase() == 'RAW')
+        .toList();
+    final outsourceMaterials = (materialsState.valueOrNull ?? <MaterialItem>[])
+        .where((m) => m.sourceType.toUpperCase() == 'OUTSOURCE')
+        .toList();
+
+    final rawBookItems = (itemsState.valueOrNull ?? <BookItem>[])
+        .where((i) => i.type == 'Goods')
+        .toList();
+    final outsourceBookItems = (itemsState.valueOrNull ?? <BookItem>[])
+        .where((i) => i.type == 'Service')
+        .toList();
+
+    final List<_SubMaterialOption> subMaterialOptions = [];
+
+    if (materialType == 'RAW') {
+      for (final m in rawMaterials) {
+        final loc = m.warehouseLocation.isNotEmpty
+            ? (m.rackLocation.isNotEmpty
+                ? '${m.warehouseLocation} - ${m.rackLocation}'
+                : m.warehouseLocation)
+            : m.rackLocation;
+        subMaterialOptions.add(_SubMaterialOption(
+          id: 'mat-${m.id}',
+          label: '${m.description} (${m.code})',
+          code: m.code,
+          description: m.description,
+          supplier: m.supplier,
+          heatNumber: m.heatNumber,
+          batchNumber: m.batchNumber,
+          storeLocation: loc,
+          weight: m.density,
+        ));
+      }
+      for (final item in rawBookItems) {
+        final code = item.sku.isNotEmpty ? item.sku : 'ITEM-${item.id}';
+        subMaterialOptions.add(_SubMaterialOption(
+          id: 'item-${item.id}',
+          label: '${item.name} ($code)',
+          code: code,
+          description: item.name,
+          supplier: item.preferredVendor,
+        ));
+      }
+    } else {
+      for (final m in outsourceMaterials) {
+        final loc = m.warehouseLocation.isNotEmpty
+            ? (m.rackLocation.isNotEmpty
+                ? '${m.warehouseLocation} - ${m.rackLocation}'
+                : m.warehouseLocation)
+            : m.rackLocation;
+        subMaterialOptions.add(_SubMaterialOption(
+          id: 'mat-${m.id}',
+          label: '${m.description} (${m.code})',
+          code: m.code,
+          description: m.description,
+          supplier: m.supplier,
+          heatNumber: m.heatNumber,
+          batchNumber: m.batchNumber,
+          storeLocation: loc,
+          weight: m.density,
+        ));
+      }
+      for (final item in outsourceBookItems) {
+        final code = item.sku.isNotEmpty ? item.sku : 'ITEM-${item.id}';
+        subMaterialOptions.add(_SubMaterialOption(
+          id: 'item-${item.id}',
+          label: '${item.name} ($code)',
+          code: code,
+          description: item.name,
+          supplier: item.preferredVendor,
+        ));
+      }
+    }
+
+    final validSubMaterialId =
+        subMaterialOptions.any((o) => o.id == selectedSubMaterialId)
+            ? selectedSubMaterialId
+            : null;
+
+    return FormPage(
+      title: 'Add Stock',
+      saving: saving,
+      saveLabel: widget.readOnly ? 'Close' : 'Add Stock',
+      showLeading: false,
+      showAppBar: false,
+      onSave: widget.readOnly ? () => context.go('/inventory-adjustments') : _save,
+      children: [
+        Form(
+          key: formKey,
+          child: Column(
+            children: [
+              DropdownButtonFormField<String>(
+                value: materialType,
+                decoration: const InputDecoration(labelText: 'Material Type*'),
+                items: const [
+                  DropdownMenuItem(value: 'RAW', child: Text('Raw Material')),
+                  DropdownMenuItem(value: 'OUTSOURCE', child: Text('Outsource')),
+                ],
+                onChanged: widget.readOnly
+                    ? null
+                    : (value) {
+                        if (value != null && value != materialType) {
+                          setState(() {
+                            materialType = value;
+                            selectedSubMaterialId = null;
+                          });
+                        }
+                      },
+              ),
+              const SizedBox(height: 14),
+              _requiredField(grnNumber, 'GRN Number'),
+              const SizedBox(height: 14),
+              _requiredField(supplier, 'Supplier'),
+              const SizedBox(height: 14),
+              _requiredField(poNumber, 'PO Number'),
+              const SizedBox(height: 14),
+              _dateField('PO Date', poDate, (date) => setState(() => poDate = date)),
+              const SizedBox(height: 14),
+              _requiredField(invoiceNumber, 'Invoice Number'),
+              const SizedBox(height: 14),
+              _dateField('Invoice Date', invoiceDate, (date) => setState(() => invoiceDate = date)),
+              const SizedBox(height: 14),
+              _requiredField(materialCode, 'Material Code'),
+              const SizedBox(height: 14),
+              DropdownButtonFormField<String>(
+                value: validSubMaterialId,
+                decoration: const InputDecoration(
+                  labelText: 'Select Item / Sub-Material*',
+                ),
+                items: subMaterialOptions.map((opt) {
+                  return DropdownMenuItem<String>(
+                    value: opt.id,
+                    child: Text(opt.label, overflow: TextOverflow.ellipsis),
+                  );
+                }).toList(),
+                onChanged: widget.readOnly
+                    ? null
+                    : (value) {
+                        if (value != null) {
+                          final selected =
+                              subMaterialOptions.firstWhere((o) => o.id == value);
+                          setState(() {
+                            selectedSubMaterialId = value;
+                            materialCode.text = selected.code;
+                            description.text = selected.description;
+                            if (selected.supplier.isNotEmpty) {
+                              supplier.text = selected.supplier;
+                            }
+                            if (selected.heatNumber.isNotEmpty) {
+                              heatNumber.text = selected.heatNumber;
+                            }
+                            if (selected.batchNumber.isNotEmpty) {
+                              batchNumber.text = selected.batchNumber;
+                            }
+                            if (selected.storeLocation.isNotEmpty) {
+                              storeLocation.text = selected.storeLocation;
+                            }
+                            if (selected.weight.isNotEmpty) {
+                              weight.text = selected.weight;
+                            }
+                            if (inspectionStatus.text.isEmpty) {
+                              inspectionStatus.text = 'Passed';
+                            }
+                          });
+                        }
+                      },
+              ),
+              const SizedBox(height: 14),
+              _requiredField(description, 'Description', maxLines: 3),
+              const SizedBox(height: 14),
+              _requiredField(heatNumber, 'Heat Number'),
+              const SizedBox(height: 14),
+              _requiredField(batchNumber, 'Batch Number'),
+              const SizedBox(height: 14),
+              _numberField(quantity, 'Quantity'),
+              const SizedBox(height: 14),
+              _numberField(weight, 'Weight'),
+              const SizedBox(height: 14),
+              _requiredField(inspectionStatus, 'Inspection Status'),
+              const SizedBox(height: 14),
+              _requiredField(storeLocation, 'Store Location'),
+            ],
+          ),
         ),
-      ),
-    ],
-  );
+      ],
+    );
+  }
 
   Widget _requiredField(
     TextEditingController controller,
@@ -206,6 +357,9 @@ class _AddStockPageState extends ConsumerState<AddStockPage> {
         ),
       );
       ref.invalidate(itemsProvider);
+      ref.invalidate(materialsProvider(null));
+      ref.invalidate(materialsProvider('RAW'));
+      ref.invalidate(materialsProvider('OUTSOURCE'));
       ref.invalidate(stockEntriesProvider);
       ref.invalidate(dashboardMetricsProvider);
       if (mounted) context.go('/inventory-adjustments');
@@ -213,4 +367,28 @@ class _AddStockPageState extends ConsumerState<AddStockPage> {
       if (mounted) setState(() => saving = false);
     }
   }
+}
+
+class _SubMaterialOption {
+  const _SubMaterialOption({
+    required this.id,
+    required this.label,
+    required this.code,
+    required this.description,
+    this.supplier = '',
+    this.heatNumber = '',
+    this.batchNumber = '',
+    this.storeLocation = '',
+    this.weight = '',
+  });
+
+  final String id;
+  final String label;
+  final String code;
+  final String description;
+  final String supplier;
+  final String heatNumber;
+  final String batchNumber;
+  final String storeLocation;
+  final String weight;
 }

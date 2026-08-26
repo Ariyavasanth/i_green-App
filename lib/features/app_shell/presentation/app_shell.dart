@@ -418,6 +418,10 @@ class _TopBar extends ConsumerWidget {
     if (cleanLoc == '/inventory-adjustments/add-stock') return 'Add Stock';
     if (cleanLoc == '/inventory-adjustments/add-material') return 'Add Material';
     if (cleanLoc == '/inventory-adjustments/move-stock') return 'Move Stock';
+    if (cleanLoc == '/inventory-adjustments/history') return 'Adjustment History';
+    if (cleanLoc == '/inventory-adjustments/requests') return 'Material Requests';
+    if (cleanLoc == '/inventory-adjustments/request-material') return 'Request Material';
+    if (cleanLoc == '/items/request-material') return 'Request Material';
     if (cleanLoc == '/items/new') return 'New Item';
     if (cleanLoc == '/customers/new') return 'New Customer';
     if (cleanLoc == '/quotes/new') return 'New Quote';
@@ -616,6 +620,13 @@ class _TopBar extends ConsumerWidget {
                 ),
               ),
             ),
+
+            if (currentLocation == '/inventory-adjustments/requests')
+              IconButton(
+                tooltip: 'Create Material Request',
+                icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.active, size: 24),
+                onPressed: () => context.push('/inventory-adjustments/request-material'),
+              ),
 
             if (compact) ...[
               Stack(
