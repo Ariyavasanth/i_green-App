@@ -60,6 +60,9 @@ class PayrollRecord {
   final String status; // 'Pending', 'Processed', 'Paid'
   final String paymentDate;
   final String paymentMethod; // 'Bank Transfer', 'Cash', 'Cheque'
+  final String periodStartDate;
+  final String periodEndDate;
+  final String processingDate;
 
   // Additional fields for employee self-service and loan tracing
   final String loanDescription;
@@ -111,6 +114,9 @@ class PayrollRecord {
     required this.status,
     this.paymentDate = '',
     this.paymentMethod = 'Bank Transfer',
+    this.periodStartDate = '',
+    this.periodEndDate = '',
+    this.processingDate = '',
     this.loanDescription = '',
     this.advanceDescription = '',
     this.isDisputed = false,
@@ -162,6 +168,9 @@ class PayrollRecord {
       'status': status,
       'payment_date': paymentDate,
       'payment_method': paymentMethod,
+      'period_start_date': periodStartDate,
+      'period_end_date': periodEndDate,
+      'processing_date': processingDate,
       'loan_description': loanDescription,
       'advance_description': advanceDescription,
       'is_disputed': isDisputed ? 1 : 0,
@@ -214,6 +223,9 @@ class PayrollRecord {
       status: map['status'] as String? ?? 'Pending',
       paymentDate: map['payment_date'] as String? ?? '',
       paymentMethod: map['payment_method'] as String? ?? 'Bank Transfer',
+      periodStartDate: map['period_start_date'] as String? ?? '',
+      periodEndDate: map['period_end_date'] as String? ?? '',
+      processingDate: map['processing_date'] as String? ?? '',
       loanDescription: map['loan_description'] as String? ?? '',
       advanceDescription: map['advance_description'] as String? ?? '',
       isDisputed: map['is_disputed'] == 1 || map['is_disputed'] == true,
@@ -265,6 +277,9 @@ class PayrollRecord {
     String? status,
     String? paymentDate,
     String? paymentMethod,
+    String? periodStartDate,
+    String? periodEndDate,
+    String? processingDate,
     String? loanDescription,
     String? advanceDescription,
     bool? isDisputed,
@@ -314,11 +329,55 @@ class PayrollRecord {
       status: status ?? this.status,
       paymentDate: paymentDate ?? this.paymentDate,
       paymentMethod: paymentMethod ?? this.paymentMethod,
+      periodStartDate: periodStartDate ?? this.periodStartDate,
+      periodEndDate: periodEndDate ?? this.periodEndDate,
+      processingDate: processingDate ?? this.processingDate,
       loanDescription: loanDescription ?? this.loanDescription,
       advanceDescription: advanceDescription ?? this.advanceDescription,
       isDisputed: isDisputed ?? this.isDisputed,
       disputeComment: disputeComment ?? this.disputeComment,
     );
+  }
+}
+
+class PayrollPeriod {
+  final DateTime startDate;
+  final DateTime endDateExclusive;
+  final DateTime processingDate;
+  final DateTime paymentDate;
+
+  const PayrollPeriod({
+    required this.startDate,
+    required this.endDateExclusive,
+    required this.processingDate,
+    required this.paymentDate,
+  });
+
+  String get displayPeriodString {
+    final startStr = _formatMonthDayYear(startDate);
+    final endDisplay = endDateExclusive.subtract(const Duration(seconds: 1));
+    final endStr = _formatMonthDayYear(endDisplay);
+    return '$startStr – $endStr';
+  }
+
+  String get startDateFormatted => _formatDash(startDate);
+  String get endDateFormatted => _formatDash(endDateExclusive.subtract(const Duration(seconds: 1)));
+  String get processingDateFormatted => _formatDash(processingDate);
+  String get paymentDateFormatted => _formatDash(paymentDate);
+
+  static String _formatMonthDayYear(DateTime dt) {
+    final months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    final day = dt.day.toString().padLeft(2, '0');
+    return '$day ${months[dt.month - 1]} ${dt.year}';
+  }
+
+  static String _formatDash(DateTime dt) {
+    final day = dt.day.toString().padLeft(2, '0');
+    final month = dt.month.toString().padLeft(2, '0');
+    return '$day-$month-${dt.year}';
   }
 }
 
@@ -328,25 +387,42 @@ class PayrollSettings {
   final double penaltyPerLateDay;
   final int allowedLateDays;
   final double workingDaysInMonth;
-  // Statutory percentages
-  final double pfPercentage;
-  final double taxPercentage;
-  final double professionalTaxPercentage;
   // Payment dates
-  final int payrollCutoffDay;
+  final int payrollStartDay;
+  final int payrollEndDay;
+  final int processingDay;
   final int paymentDay;
+
+  int get payrollCutoffDay => payrollStartDay;
 
   const PayrollSettings({
     this.id = 1,
     this.penaltyPerLateDay = 0.5,
     this.allowedLateDays = 3,
     this.workingDaysInMonth = 30.0,
-    this.pfPercentage = 12.0,
-    this.taxPercentage = 10.0,
-    this.professionalTaxPercentage = 2.0,
-    this.payrollCutoffDay = 20,
-    this.paymentDay = 5,
+    this.payrollStartDay = 20,
+    this.payrollEndDay = 21,
+    this.processingDay = 21,
+    this.paymentDay = 21,
   });
+
+  PayrollPeriod getPayrollPeriod(int year, int month) {
+    final start = DateTime(year, month, payrollStartDay);
+    final nextMonthDate = DateTime(year, month + 1, 1);
+    final nextYear = nextMonthDate.year;
+    final nextMonth = nextMonthDate.month;
+
+    final endExclusive = DateTime(nextYear, nextMonth, payrollEndDay + 1);
+    final processing = DateTime(nextYear, nextMonth, processingDay);
+    final payment = DateTime(nextYear, nextMonth, paymentDay);
+
+    return PayrollPeriod(
+      startDate: start,
+      endDateExclusive: endExclusive,
+      processingDate: processing,
+      paymentDate: payment,
+    );
+  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -354,25 +430,25 @@ class PayrollSettings {
       'penalty_per_late_day': penaltyPerLateDay,
       'allowed_late_days': allowedLateDays,
       'working_days_in_month': workingDaysInMonth,
-      'pf_percentage': pfPercentage,
-      'tax_percentage': taxPercentage,
-      'professional_tax_percentage': professionalTaxPercentage,
-      'payroll_cutoff_day': payrollCutoffDay,
+      'payroll_start_day': payrollStartDay,
+      'payroll_end_day': payrollEndDay,
+      'processing_day': processingDay,
       'payment_day': paymentDay,
+      'payroll_cutoff_day': payrollStartDay,
     };
   }
 
   factory PayrollSettings.fromMap(Map<String, dynamic> map) {
+    final startDay = map['payroll_start_day'] as int? ?? map['payroll_cutoff_day'] as int? ?? 20;
     return PayrollSettings(
       id: map['id'] as int? ?? 1,
       penaltyPerLateDay: (map['penalty_per_late_day'] as num?)?.toDouble() ?? 0.5,
       allowedLateDays: map['allowed_late_days'] as int? ?? 3,
       workingDaysInMonth: (map['working_days_in_month'] as num?)?.toDouble() ?? 30.0,
-      pfPercentage: (map['pf_percentage'] as num?)?.toDouble() ?? 12.0,
-      taxPercentage: (map['tax_percentage'] as num?)?.toDouble() ?? 10.0,
-      professionalTaxPercentage: (map['professional_tax_percentage'] as num?)?.toDouble() ?? 2.0,
-      payrollCutoffDay: map['payroll_cutoff_day'] as int? ?? 20,
-      paymentDay: map['payment_day'] as int? ?? 5,
+      payrollStartDay: startDay,
+      payrollEndDay: map['payroll_end_day'] as int? ?? 21,
+      processingDay: map['processing_day'] as int? ?? 21,
+      paymentDay: map['payment_day'] as int? ?? 21,
     );
   }
 
@@ -381,10 +457,9 @@ class PayrollSettings {
     double? penaltyPerLateDay,
     int? allowedLateDays,
     double? workingDaysInMonth,
-    double? pfPercentage,
-    double? taxPercentage,
-    double? professionalTaxPercentage,
-    int? payrollCutoffDay,
+    int? payrollStartDay,
+    int? payrollEndDay,
+    int? processingDay,
     int? paymentDay,
   }) {
     return PayrollSettings(
@@ -392,11 +467,11 @@ class PayrollSettings {
       penaltyPerLateDay: penaltyPerLateDay ?? this.penaltyPerLateDay,
       allowedLateDays: allowedLateDays ?? this.allowedLateDays,
       workingDaysInMonth: workingDaysInMonth ?? this.workingDaysInMonth,
-      pfPercentage: pfPercentage ?? this.pfPercentage,
-      taxPercentage: taxPercentage ?? this.taxPercentage,
-      professionalTaxPercentage: professionalTaxPercentage ?? this.professionalTaxPercentage,
-      payrollCutoffDay: payrollCutoffDay ?? this.payrollCutoffDay,
+      payrollStartDay: payrollStartDay ?? this.payrollStartDay,
+      payrollEndDay: payrollEndDay ?? this.payrollEndDay,
+      processingDay: processingDay ?? this.processingDay,
       paymentDay: paymentDay ?? this.paymentDay,
     );
   }
 }
+

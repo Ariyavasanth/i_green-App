@@ -75,8 +75,11 @@ class FirebasePayrollRepository implements PayrollRepository {
           'greeting': 0.0,
           'net_salary': 72555.0,
           'status': 'Paid',
-          'payment_date': '05-07-2026',
+          'payment_date': '21-07-2026',
           'payment_method': 'Bank Transfer',
+          'period_start_date': '20-06-2026',
+          'period_end_date': '20-07-2026',
+          'processing_date': '21-07-2026',
           'loan_description': '',
           'advance_description': '',
           'is_disputed': 0,
@@ -125,8 +128,11 @@ class FirebasePayrollRepository implements PayrollRepository {
           'greeting': 0.0,
           'net_salary': 53100.0,
           'status': 'Paid',
-          'payment_date': '05-07-2026',
+          'payment_date': '21-07-2026',
           'payment_method': 'Bank Transfer',
+          'period_start_date': '20-06-2026',
+          'period_end_date': '20-07-2026',
+          'processing_date': '21-07-2026',
           'loan_description': '',
           'advance_description': '',
           'is_disputed': 0,
@@ -200,8 +206,24 @@ class FirebasePayrollRepository implements PayrollRepository {
 
   @override
   Future<PayrollRecord> savePayrollRecord(PayrollRecord record) async {
+    final docId = '${record.employeeId}_${record.month.replaceAll(' ', '_')}';
+    
+    // Check if existing record is already PAID in Firestore -> REJECT ALL MUTATIONS
     try {
-      final docId = '${record.employeeId}_${record.month.replaceAll(' ', '_')}';
+      final existingDoc = await _payrollsRef.doc(docId).get();
+      if (existingDoc.exists && existingDoc.data() != null) {
+        final existingStatus = (existingDoc.data()!['status'] as String? ?? '').trim().toUpperCase();
+        if (existingStatus == 'PAID') {
+          throw Exception('This payroll record has been marked as PAID and is locked against all changes.');
+        }
+      }
+    } catch (e) {
+      if (e.toString().contains('locked against all changes')) {
+        rethrow;
+      }
+    }
+
+    try {
       final map = record.toMap();
       final numericId = record.id != 0 ? record.id : (docId.hashCode & 0x7FFFFFFF);
       map['id'] = numericId;
@@ -209,7 +231,6 @@ class FirebasePayrollRepository implements PayrollRepository {
       await _payrollsRef.doc(docId).set(map, SetOptions(merge: true));
       return record.copyWith(id: numericId);
     } catch (_) {
-      // Return record unchanged if Firestore is unavailable
       return record;
     }
   }

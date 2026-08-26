@@ -7,27 +7,37 @@ import '../../../core/layout/responsive_layout.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../employee/providers/employee_providers.dart';
+import '../../employee/domain/employee.dart';
 import '../domain/payroll.dart';
 import '../providers/payroll_providers.dart';
 import '../../leave/providers/leave_providers.dart';
-import 'employee_payslip_list_screen.dart';
 
-class PayrollDashboardScreen extends ConsumerWidget {
+class PayrollDashboardScreen extends ConsumerStatefulWidget {
   const PayrollDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final employee = ref.watch(currentEmployeeProvider);
-    if (employee != null && employee.userType.toUpperCase() == 'EMPLOYEE') {
-      return const EmployeePayslipListScreen();
-    }
+  ConsumerState<PayrollDashboardScreen> createState() => _PayrollDashboardScreenState();
+}
 
+class _PayrollDashboardScreenState extends ConsumerState<PayrollDashboardScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  String _statusFilter = 'All';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final selectedMonth = ref.watch(selectedPayrollMonthProvider);
     final employeesAsync = ref.watch(employeesProvider);
     final payrollRecordsAsync = ref.watch(payrollRecordsForMonthProvider);
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColors.canvas,
       body: LayoutBuilder(
         builder: (context, constraints) {
           final isMobile = constraints.maxWidth < AppBreakpoints.tablet;
@@ -46,17 +56,17 @@ class PayrollDashboardScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     // Header row
-                    _buildHeader(context, ref, selectedMonth, isMobile),
-                    const SizedBox(height: 24),
+                    _buildHeader(context, selectedMonth, isMobile),
+                    const SizedBox(height: 20),
 
-                    // Metrics/Stat cards
+                    // 5 Metric Summary Cards
                     payrollRecordsAsync.when(
                       data: (records) => employeesAsync.when(
                         data: (employees) => _buildMetricsGrid(
                           context,
                           records,
                           employees.length,
-                          isMobile,
+                          constraints.maxWidth,
                         ),
                         loading: () => const Center(child: CircularProgressIndicator()),
                         error: (_, _) => const SizedBox.shrink(),
@@ -66,23 +76,41 @@ class PayrollDashboardScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 24),
 
-                    // Table/List header and title
-                    Text(
-                      'Payroll Summary - $selectedMonth',
-                      style: AppTextStyles.heading,
-                    ),
-                    const SizedBox(height: 12),
+                    // Search & Status Filter Controls Bar
+                    _buildFilterBar(isMobile),
+                    const SizedBox(height: 16),
 
                     // Main Table or Card List
                     payrollRecordsAsync.when(
-                      data: (records) {
-                        if (records.isEmpty) {
-                          return _buildEmptyState(context);
-                        }
-                        return isMobile
-                            ? _buildMobileCardList(context, records)
-                            : _buildDesktopTable(context, records);
-                      },
+                      data: (records) => employeesAsync.when(
+                        data: (employees) {
+                          // Filter records based on search query and status filter
+                          var filtered = records.where((r) {
+                            final matchesSearch = _searchQuery.isEmpty ||
+                                r.employeeName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                                r.employeeId.toString().contains(_searchQuery);
+
+                            bool matchesStatus = true;
+                            if (_statusFilter != 'All') {
+                              if (_statusFilter == 'Draft') {
+                                matchesStatus = r.status == 'Draft' || r.status == 'Pending';
+                              } else {
+                                matchesStatus = r.status.toLowerCase() == _statusFilter.toLowerCase();
+                              }
+                            }
+                            return matchesSearch && matchesStatus;
+                          }).toList();
+
+                          if (filtered.isEmpty) {
+                            return _buildEmptyState(context);
+                          }
+                          return isMobile
+                              ? _buildMobileCardList(context, filtered, employees)
+                              : _buildDesktopTable(context, filtered, employees);
+                        },
+                        loading: () => const Center(child: CircularProgressIndicator()),
+                        error: (err, _) => Text('Error loading employees: $err'),
+                      ),
                       loading: () => const Center(child: CircularProgressIndicator()),
                       error: (err, _) => Card(
                         child: Padding(
@@ -98,23 +126,11 @@ class PayrollDashboardScreen extends ConsumerWidget {
           );
         },
       ),
-      floatingActionButton: LayoutBuilder(
-        builder: (context, constraints) {
-          final isMobile = constraints.maxWidth < AppBreakpoints.tablet;
-          if (!isMobile) return const SizedBox.shrink();
-          return FloatingActionButton(
-            onPressed: () => context.push('/payroll/run'),
-            backgroundColor: AppColors.primary,
-            child: const Icon(Icons.add, color: Colors.white),
-          );
-        },
-      ),
     );
   }
 
   Widget _buildHeader(
     BuildContext context,
-    WidgetRef ref,
     String selectedMonth,
     bool isMobile,
   ) {
@@ -128,14 +144,14 @@ class PayrollDashboardScreen extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.divider),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.divider, width: 1),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: selectedMonth,
           icon: const Icon(Icons.arrow_drop_down, color: AppColors.textSecondary),
-          style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+          style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold, color: AppColors.textPrimary),
           onChanged: (val) {
             if (val != null) {
               ref.read(selectedPayrollMonthProvider.notifier).state = val;
@@ -159,8 +175,8 @@ class PayrollDashboardScreen extends ConsumerWidget {
           children: [
             Text('Payroll', style: AppTextStyles.pageTitle),
             const SizedBox(height: 4),
-            Text(
-              'Manage and view active monthly payroll records',
+            const Text(
+              'Manage monthly payroll',
               style: AppTextStyles.caption,
             ),
           ],
@@ -169,22 +185,20 @@ class PayrollDashboardScreen extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             monthDropdown,
-            if (!isMobile) ...[
-              const SizedBox(width: 12),
-              ElevatedButton.icon(
-                onPressed: () => context.push('/payroll/run'),
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Run Payroll'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+            const SizedBox(width: 12),
+            ElevatedButton.icon(
+              onPressed: () => context.push('/payroll/run'),
+              icon: const Icon(Icons.play_arrow_rounded, size: 18),
+              label: const Text('Run Payroll'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
               ),
-            ],
+            ),
           ],
         ),
       ],
@@ -195,17 +209,19 @@ class PayrollDashboardScreen extends ConsumerWidget {
     BuildContext context,
     List<PayrollRecord> records,
     int totalEmployeesCount,
-    bool isMobile,
+    double width,
   ) {
-    // Computations
-    final processedCount = records.where((r) => r.status != 'Pending').length;
-    final pendingCount = totalEmployeesCount - processedCount;
-    final totalPaid = records.fold(0.0, (sum, r) => sum + r.netSalary);
-    final formattedTotalPaid = NumberFormat.currency(
+    // 5 Computations:
+    final draftCount = records.where((r) => r.status == 'Draft' || r.status == 'Pending').length;
+    final processedCount = records.where((r) => r.status == 'Processed').length;
+    final paidCount = records.where((r) => r.status == 'Paid').length;
+    final totalNetPayroll = records.fold(0.0, (sum, r) => sum + r.netSalary);
+
+    final formattedTotalNet = NumberFormat.currency(
       locale: 'en_IN',
       symbol: '₹',
       decimalDigits: 0,
-    ).format(totalPaid);
+    ).format(totalNetPayroll);
 
     final cards = [
       _StatCard(
@@ -214,35 +230,41 @@ class PayrollDashboardScreen extends ConsumerWidget {
         icon: Icons.people_outline,
       ),
       _StatCard(
+        title: 'Draft',
+        value: draftCount.toString(),
+        icon: Icons.edit_note_outlined,
+        valueColor: Colors.amber[800],
+      ),
+      _StatCard(
         title: 'Processed',
         value: processedCount.toString(),
         icon: Icons.check_circle_outline,
-        valueColor: Colors.green[700],
+        valueColor: Colors.blue[700],
       ),
       _StatCard(
-        title: 'Pending',
-        value: pendingCount < 0 ? '0' : pendingCount.toString(),
-        icon: Icons.pending_actions_outlined,
-        valueColor: Colors.orange[700],
+        title: 'Paid',
+        value: paidCount.toString(),
+        icon: Icons.lock_outlined,
+        valueColor: const Color(0xFF9CC70A),
       ),
       _StatCard(
-        title: 'Total Payroll',
-        value: formattedTotalPaid,
+        title: 'Total Net Payroll',
+        value: formattedTotalNet,
         icon: Icons.payments_outlined,
-        valueColor: AppColors.primary, // Green accent color as requested
+        valueColor: AppColors.primary,
         isAccentValue: true,
       ),
     ];
 
-    if (isMobile) {
+    if (width < AppBreakpoints.tablet) {
       return SizedBox(
-        height: 110,
+        height: 100,
         child: ListView.builder(
           scrollDirection: Axis.horizontal,
           itemCount: cards.length,
           itemBuilder: (context, index) {
             return Container(
-              width: 170,
+              width: 155,
               margin: const EdgeInsets.only(right: 12),
               child: cards[index],
             );
@@ -251,28 +273,102 @@ class PayrollDashboardScreen extends ConsumerWidget {
       );
     }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final crossCount = constraints.maxWidth >= AppBreakpoints.desktop ? 4 : 2;
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossCount,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-            childAspectRatio: 2.8,
-          ),
-          itemCount: cards.length,
-          itemBuilder: (context, index) => cards[index],
-        );
-      },
+    final crossCount = width >= AppBreakpoints.desktop ? 5 : 3;
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossCount,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 2.3,
+      ),
+      itemCount: cards.length,
+      itemBuilder: (context, index) => cards[index],
     );
   }
 
-  Widget _buildDesktopTable(BuildContext context, List<PayrollRecord> records) {
+  Widget _buildFilterBar(bool isMobile) {
+    final searchInput = SizedBox(
+      width: isMobile ? double.infinity : 280,
+      height: 42,
+      child: TextField(
+        controller: _searchController,
+        onChanged: (val) => setState(() => _searchQuery = val),
+        style: const TextStyle(fontSize: 13),
+        decoration: InputDecoration(
+          hintText: 'Search employee by name or ID...',
+          prefixIcon: const Icon(Icons.search, size: 18, color: AppColors.textSecondary),
+          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: AppColors.divider),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: AppColors.divider),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: AppColors.primary),
+          ),
+        ),
+      ),
+    );
+
+    final statusFilterDropdown = Container(
+      height: 42,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _statusFilter,
+          icon: const Icon(Icons.filter_alt_outlined, size: 18, color: AppColors.textSecondary),
+          style: const TextStyle(fontSize: 13, color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+          onChanged: (val) {
+            if (val != null) setState(() => _statusFilter = val);
+          },
+          items: const [
+            DropdownMenuItem(value: 'All', child: Text('Status: All')),
+            DropdownMenuItem(value: 'Draft', child: Text('Status: Draft')),
+            DropdownMenuItem(value: 'Processed', child: Text('Status: Processed')),
+            DropdownMenuItem(value: 'Paid', child: Text('Status: Paid')),
+          ],
+        ),
+      ),
+    );
+
+    if (isMobile) {
+      return Column(
+        children: [
+          searchInput,
+          const SizedBox(height: 10),
+          Row(children: [Expanded(child: statusFilterDropdown)]),
+        ],
+      );
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        searchInput,
+        statusFilterDropdown,
+      ],
+    );
+  }
+
+  Widget _buildDesktopTable(BuildContext context, List<PayrollRecord> records, List<Employee> employees) {
+    final empMap = {for (var e in employees) e.id: e};
+
     return Card(
       elevation: 0,
+      color: Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: const BorderSide(color: AppColors.divider),
@@ -280,12 +376,12 @@ class PayrollDashboardScreen extends ConsumerWidget {
       clipBehavior: Clip.antiAlias,
       child: Table(
         columnWidths: const {
-          0: FlexColumnWidth(1.2),
-          1: FlexColumnWidth(2.5),
-          2: FlexColumnWidth(1.5),
-          3: FlexColumnWidth(1.8),
-          4: FlexColumnWidth(1.8),
-          5: FlexColumnWidth(2.2),
+          0: FlexColumnWidth(2.2), // Employee
+          1: FlexColumnWidth(1.2), // Employee ID
+          2: FlexColumnWidth(1.6), // Department
+          3: FlexColumnWidth(1.8), // Net Salary
+          4: FlexColumnWidth(1.5), // Status
+          5: FlexColumnWidth(2.0), // View & Payslip
         },
         children: [
           // Header row
@@ -295,9 +391,9 @@ class PayrollDashboardScreen extends ConsumerWidget {
               border: Border(bottom: BorderSide(color: AppColors.divider)),
             ),
             children: [
-              _buildTableHeader('Emp ID'),
-              _buildTableHeader('Employee Name'),
-              _buildTableHeader('Month'),
+              _buildTableHeader('Employee'),
+              _buildTableHeader('Employee ID'),
+              _buildTableHeader('Department'),
               _buildTableHeader('Net Salary'),
               _buildTableHeader('Status'),
               _buildTableHeader('Actions'),
@@ -310,14 +406,14 @@ class PayrollDashboardScreen extends ConsumerWidget {
                 border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
               ),
               children: [
-                _buildTableCell(Text('EMP${record.employeeId}', style: const TextStyle(fontWeight: FontWeight.w600))),
-                _buildTableCell(Text(record.employeeName, style: const TextStyle(fontWeight: FontWeight.w500))),
-                _buildTableCell(Text(record.month)),
+                _buildTableCell(Text(record.employeeName, style: const TextStyle(fontWeight: FontWeight.w600))),
+                _buildTableCell(Text('EMP${record.employeeId}', style: const TextStyle(fontWeight: FontWeight.w500))),
+                _buildTableCell(Text(empMap[record.employeeId]?.department ?? 'General')),
                 _buildTableCell(Text(
-                  NumberFormat.currency(locale: 'en_IN', symbol: '₹').format(record.netSalary),
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+                  NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0).format(record.netSalary),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 )),
-                _buildTableCell(_buildStatusPill(record.status, isDisputed: record.isDisputed)),
+                _buildTableCell(_buildStatusBadge(record.status)),
                 _buildTableCell(
                   Row(
                     mainAxisSize: MainAxisSize.min,
@@ -325,7 +421,7 @@ class PayrollDashboardScreen extends ConsumerWidget {
                       TextButton.icon(
                         onPressed: () => context.push('/payroll/details/${record.id}'),
                         icon: const Icon(Icons.visibility_outlined, size: 14),
-                        label: const Text('Details', style: TextStyle(fontSize: 12)),
+                        label: const Text('View', style: TextStyle(fontSize: 12)),
                         style: TextButton.styleFrom(
                           foregroundColor: AppColors.active,
                           padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -351,15 +447,21 @@ class PayrollDashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildMobileCardList(BuildContext context, List<PayrollRecord> records) {
+  Widget _buildMobileCardList(BuildContext context, List<PayrollRecord> records, List<Employee> employees) {
+    final empMap = {for (var e in employees) e.id: e};
+
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: records.length,
       itemBuilder: (context, index) {
         final record = records[index];
+        final dept = empMap[record.employeeId]?.department ?? 'General';
+
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
+          elevation: 0,
+          color: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
             side: const BorderSide(color: AppColors.divider),
@@ -377,7 +479,7 @@ class PayrollDashboardScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'ID: EMP${record.employeeId} • ${record.month}',
+                      'EMP${record.employeeId} • $dept',
                       style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                     ),
                     const Divider(height: 20),
@@ -389,8 +491,8 @@ class PayrollDashboardScreen extends ConsumerWidget {
                           children: [
                             const Text('Net Salary', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
                             Text(
-                              NumberFormat.currency(locale: 'en_IN', symbol: '₹').format(record.netSalary),
-                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                              NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0).format(record.netSalary),
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                             ),
                           ],
                         ),
@@ -400,7 +502,7 @@ class PayrollDashboardScreen extends ConsumerWidget {
                               onPressed: () => context.push('/payroll/details/${record.id}'),
                               icon: const Icon(Icons.visibility_outlined, size: 20),
                               color: AppColors.active,
-                              tooltip: 'Details',
+                              tooltip: 'View Details',
                             ),
                             IconButton(
                               onPressed: () => context.push('/payroll/payslip/${record.id}'),
@@ -417,7 +519,7 @@ class PayrollDashboardScreen extends ConsumerWidget {
                 Positioned(
                   right: 0,
                   top: 0,
-                  child: _buildStatusPill(record.status, isDisputed: record.isDisputed),
+                  child: _buildStatusBadge(record.status),
                 ),
               ],
             ),
@@ -427,56 +529,15 @@ class PayrollDashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildEmptyState(BuildContext context) {
-    return Card(
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.payments_outlined,
-                size: 48,
-                color: AppColors.textSecondary,
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'No Payroll Generated Yet',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Generate monthly payroll calculations for your active employees.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                onPressed: () => context.push('/payroll/run'),
-                icon: const Icon(Icons.add),
-                label: const Text('Generate Payroll Now'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildTableHeader(String text) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Text(
         text,
         style: const TextStyle(
           fontWeight: FontWeight.bold,
           color: AppColors.textSecondary,
-          fontSize: 13,
+          fontSize: 12,
         ),
       ),
     );
@@ -484,7 +545,7 @@ class PayrollDashboardScreen extends ConsumerWidget {
 
   Widget _buildTableCell(Widget child) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Align(
         alignment: Alignment.centerLeft,
         child: child,
@@ -492,44 +553,79 @@ class PayrollDashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildStatusPill(String status, {bool isDisputed = false}) {
-    if (isDisputed) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.red[50],
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.red[200]!),
-        ),
-        child: Text(
-          'Disputed',
-          style: TextStyle(
-            color: Colors.red[700],
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      );
+  Widget _buildStatusBadge(String status) {
+    Color color;
+    Color bgColor;
+
+    if (status == 'Paid') {
+      color = const Color(0xFF9CC70A);
+      bgColor = const Color(0xFF9CC70A).withValues(alpha: 0.1);
+    } else if (status == 'Processed') {
+      color = Colors.blue[700]!;
+      bgColor = Colors.blue[50]!;
+    } else {
+      color = Colors.amber[800]!;
+      bgColor = Colors.amber[50]!;
     }
 
-    final isPaid = status == 'Paid' || status == 'Processed';
-    final color = isPaid ? Colors.green[700]! : Colors.orange[700]!;
-    final bgColor = isPaid ? Colors.green[50]! : Colors.orange[50]!;
-
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Text(
-        status == 'Paid'
-            ? 'Paid'
-            : (status == 'Processed' ? 'Processed' : 'Pending'),
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (status == 'Paid') ...[
+            const Icon(Icons.lock_outlined, size: 10, color: Color(0xFF9CC70A)),
+            const SizedBox(width: 3),
+          ],
+          Text(
+            status,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context) {
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: AppColors.divider),
+      ),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.search_off_rounded,
+                size: 44,
+                color: AppColors.textSecondary,
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'No Payroll Records Found',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Try adjusting your search query or status filter.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -553,61 +649,46 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: AppColors.divider),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: (valueColor ?? AppColors.active).withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                icon,
-                color: valueColor ?? AppColors.active,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: valueColor ?? AppColors.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+        border: Border.all(
+          color: isAccentValue ? AppColors.primary.withValues(alpha: 0.4) : AppColors.divider,
         ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Icon(icon, size: 16, color: valueColor ?? AppColors.textSecondary),
+            ],
+          ),
+          const SizedBox(height: 6),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: isAccentValue ? 16 : 18,
+                fontWeight: FontWeight.bold,
+                color: valueColor ?? AppColors.textPrimary,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

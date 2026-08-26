@@ -8,7 +8,6 @@ import '../../../core/theme/app_colors.dart';
 import '../domain/payroll.dart';
 import '../providers/payroll_providers.dart';
 import '../../leave/providers/leave_providers.dart';
-import 'widgets/access_denied_view.dart';
 
 class PayrollDetailsScreen extends ConsumerStatefulWidget {
   const PayrollDetailsScreen({required this.payrollId, super.key});
@@ -25,8 +24,6 @@ class _GenerateStepperStep {
 
   _GenerateStepperStep({required this.title, this.date = '', required this.isCompleted});
 }
-
-
 
 class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
   Future<void> _updateStatus(PayrollRecord record, String newStatus) async {
@@ -61,9 +58,65 @@ class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
     }
   }
 
+  Future<void> _confirmMarkAsPaid(PayrollRecord record) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 24),
+              SizedBox(width: 8),
+              Text(
+                'Mark Payroll as Paid?',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+            ],
+          ),
+          content: const Text(
+            'Once this payroll is marked as Paid, it will be permanently locked and cannot be changed.',
+            style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+          ),
+          actions: [
+            OutlinedButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.textPrimary,
+                side: const BorderSide(color: AppColors.divider),
+              ),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () => Navigator.of(context).pop(true),
+              icon: const Icon(Icons.check_circle_outline, size: 16),
+              label: const Text('Mark as Paid'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF9CC70A),
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == true) {
+      await _updateStatus(record, 'Paid');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final payrollAsync = ref.watch(payrollRecordByIdProvider(widget.payrollId));
+    final currentEmp = ref.watch(currentEmployeeProvider);
+    final userRole = (currentEmp?.userType ?? '').trim().toUpperCase();
+    final isAdminOrHR = currentEmp == null ||
+        userRole.contains('SUPER') ||
+        userRole.contains('ADMIN') ||
+        userRole.contains('HR') ||
+        (currentEmp?.accessPermissions.contains('Payroll') ?? false);
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
@@ -145,26 +198,25 @@ class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
   }
 
   Widget _buildStepperStrip(PayrollRecord record) {
-    // Stepper setup
     final status = record.status;
-    final generatedCompleted = true; // Always true if details exist
+    final draftCompleted = true;
     final processedCompleted = status == 'Processed' || status == 'Paid';
     final paidCompleted = status == 'Paid';
 
     final steps = [
       _GenerateStepperStep(
-        title: 'Generated',
-        date: 'Created automatically',
-        isCompleted: generatedCompleted,
+        title: 'Draft',
+        date: 'Generated & Reviewable',
+        isCompleted: draftCompleted,
       ),
       _GenerateStepperStep(
         title: 'Processed',
-        date: processedCompleted ? 'Calculated & Checked' : 'Awaiting check',
+        date: processedCompleted ? 'Approved by HR' : 'Pending Approval',
         isCompleted: processedCompleted,
       ),
       _GenerateStepperStep(
-        title: 'Paid',
-        date: paidCompleted ? 'Paid on ${record.paymentDate}' : 'Awaiting payment',
+        title: 'Paid 🔒',
+        date: paidCompleted ? 'Paid on ${record.paymentDate}' : 'Awaiting Payment',
         isCompleted: paidCompleted,
       ),
     ];
@@ -180,69 +232,54 @@ class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
         padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
         child: Row(
           children: [
-            for (var i = 0; i < steps.length; i++) ...[
+            for (int i = 0; i < steps.length; i++) ...[
               Expanded(
                 child: Row(
                   children: [
-                    // Dot
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 24,
-                              height: 24,
-                              decoration: BoxDecoration(
-                                color: steps[i].isCompleted ? AppColors.primary : Colors.grey[300],
-                                shape: BoxShape.circle,
-                              ),
-                              child: Center(
-                                child: steps[i].isCompleted
-                                    ? const Icon(Icons.check, color: Colors.white, size: 14)
-                                    : Text(
-                                        '${i + 1}',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              steps[i].title,
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                                color: steps[i].isCompleted ? AppColors.textPrimary : AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Padding(
-                          padding: const EdgeInsets.only(left: 32),
-                          child: Text(
-                            steps[i].date,
-                            style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
-                          ),
-                        ),
-                      ],
-                    ),
-                    // Line connector
-                    if (i < steps.length - 1)
-                      Expanded(
-                        child: Container(
-                          height: 2,
-                          margin: const EdgeInsets.symmetric(horizontal: 12),
-                          color: steps[i + 1].isCompleted ? AppColors.primary : Colors.grey[300],
-                        ),
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: steps[i].isCompleted ? AppColors.primary : Colors.grey[300],
                       ),
+                      child: Icon(
+                        steps[i].isCompleted ? Icons.check : Icons.circle,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            steps[i].title,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: steps[i].isCompleted ? AppColors.textPrimary : AppColors.textSecondary,
+                            ),
+                          ),
+                          Text(
+                            steps[i].date,
+                            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
+              if (i < steps.length - 1)
+                Container(
+                  width: 32,
+                  height: 2,
+                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                  color: steps[i + 1].isCompleted ? AppColors.primary : AppColors.divider,
+                ),
             ],
           ],
         ),
@@ -278,7 +315,7 @@ class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'EMP${record.employeeId} • ${record.month}',
+                    'EMP${record.employeeId} • ${record.month}${record.periodStartDate.isNotEmpty ? " (${record.periodStartDate} – ${record.periodEndDate})" : ""}',
                     style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                   ),
                 ],
@@ -469,17 +506,51 @@ class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
 
   Widget _buildActionsRow(BuildContext context, PayrollRecord record) {
     final status = record.status;
+    final isPaid = status == 'Paid';
+    final isDraft = status == 'Draft' || status == 'Pending';
 
     return Wrap(
       spacing: 12,
       runSpacing: 12,
       alignment: WrapAlignment.end,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        if (status == 'Pending')
+        if (isPaid)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF3C7),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFF59E0B)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.lock_outlined, size: 16, color: Color(0xFFB45309)),
+                SizedBox(width: 6),
+                Text(
+                  'PAID 🔒 (Finalized payroll)',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFFB45309)),
+                ),
+              ],
+            ),
+          ),
+        if (isDraft) ...[
+          OutlinedButton.icon(
+            onPressed: () => context.push('/payroll/generate/${record.employeeId}'),
+            icon: const Icon(Icons.edit_note_outlined, size: 16),
+            label: const Text('Edit / Recalculate'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.active,
+              side: const BorderSide(color: AppColors.divider),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
           ElevatedButton.icon(
             onPressed: () => _updateStatus(record, 'Processed'),
-            icon: const Icon(Icons.check, size: 16),
-            label: const Text('Process Payroll'),
+            icon: const Icon(Icons.check_circle_outline, size: 16),
+            label: const Text('Approve & Process'),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
@@ -487,13 +558,14 @@ class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
           ),
+        ],
         if (status == 'Processed')
           ElevatedButton.icon(
-            onPressed: () => _updateStatus(record, 'Paid'),
+            onPressed: () => _confirmMarkAsPaid(record),
             icon: const Icon(Icons.payment, size: 16),
             label: const Text('Mark as Paid'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
+              backgroundColor: const Color(0xFF9CC70A),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -501,7 +573,7 @@ class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
           ),
         OutlinedButton.icon(
           onPressed: () => context.push('/payroll/payslip/${record.id}'),
-          icon: const Icon(Icons.description, size: 16),
+          icon: const Icon(Icons.description_outlined, size: 16),
           label: const Text('View Payslip'),
           style: OutlinedButton.styleFrom(
             foregroundColor: AppColors.primary,

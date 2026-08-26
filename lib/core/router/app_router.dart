@@ -51,6 +51,7 @@ import '../../features/payroll/presentation/payroll_details_screen.dart';
 import '../../features/payroll/presentation/payslip_screen.dart';
 import '../../features/payroll/presentation/payroll_history_screen.dart';
 import '../../features/payroll/presentation/payroll_settings_screen.dart';
+import '../../features/payroll/presentation/employee_payslip_list_screen.dart';
 import '../../features/loan/presentation/loan_page.dart';
 import '../../features/loan/presentation/loan_management_page.dart';
 import '../../features/loan/presentation/create_loan_page.dart';
@@ -338,6 +339,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 },
               ),
             ],
+          ),
+          GoRoute(
+            path: '/my-payslips',
+            builder: (_, _) => const EmployeePayslipListScreen(),
           ),
           GoRoute(
             path: '/payroll-history',

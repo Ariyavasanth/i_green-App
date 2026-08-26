@@ -8,7 +8,6 @@ import '../../../core/theme/app_colors.dart';
 import '../domain/payroll.dart';
 import '../providers/payroll_providers.dart';
 import '../../leave/providers/leave_providers.dart';
-import 'widgets/access_denied_view.dart';
 
 class PayslipScreen extends ConsumerStatefulWidget {
   const PayslipScreen({required this.payrollId, super.key});
@@ -93,6 +92,14 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
     final payrollAsync = ref.watch(payrollRecordByIdProvider(widget.payrollId));
     final employee = ref.watch(currentEmployeeProvider);
     final isEmployee = employee != null && employee.userType.toUpperCase() == 'EMPLOYEE';
+
+    final currentEmp = ref.watch(currentEmployeeProvider);
+    final userRole = (currentEmp?.userType ?? '').trim().toUpperCase();
+    final isAdminOrHR = currentEmp == null ||
+        userRole.contains('SUPER') ||
+        userRole.contains('ADMIN') ||
+        userRole.contains('HR') ||
+        (currentEmp?.accessPermissions.contains('Payroll') ?? false);
 
     return payrollAsync.when(
       data: (record) {

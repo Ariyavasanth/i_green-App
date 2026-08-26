@@ -6,8 +6,11 @@ import 'package:intl/intl.dart';
 
 import '../../../core/layout/responsive_layout.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
 import '../../attendance/providers/attendance_providers.dart';
+import '../../attendance/domain/attendance_record.dart';
+import '../../attendance/domain/attendance_status_helper.dart';
 import '../domain/payroll.dart';
 import '../providers/payroll_providers.dart';
 import '../../leave/providers/leave_providers.dart';
@@ -168,10 +171,10 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
 
     _recalculate();
     _loadActiveLoan(employee.id, selectedMonth);
-    _loadLopDetails(employee.id, selectedMonth);
+    _loadLopDetails(employee.id, selectedMonth, settings);
   }
 
-  Future<void> _loadLopDetails(int employeeId, String month) async {
+  Future<void> _loadLopDetails(int employeeId, String month, PayrollSettings settings) async {
     try {
       final now = DateTime.now();
       int year = now.year;
@@ -191,11 +194,15 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
         if (m != null) monthNum = m;
       }
 
+      final period = settings.getPayrollPeriod(year, monthNum);
+
       final salaryCalc = await ref.read(leaveRepositoryProvider).calculateSalaryAndLop(
         employeeId,
         year,
         monthNum,
-        workingDays: 26,
+        workingDays: 30,
+        startDate: period.startDate,
+        endDateExclusive: period.endDateExclusive,
       );
 
       if (mounted) {
@@ -223,36 +230,82 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     } catch (_) {}
   }
 
-  void _calculateAttendanceMetrics(dynamic attendanceRecords, String month) {
-    if (attendanceRecords == null || attendanceRecords.isEmpty) return;
+  void _calculateAttendanceMetrics(Employee employee, dynamic attendanceRecords, String month, PayrollSettings settings) {
+    final now = DateTime.now();
+    int year = now.year;
+    int monthNum = now.month;
 
-    final dateParts = month.split(' ');
-    if (dateParts.length < 2) return;
-    final monthName = dateParts[0].substring(0, 3);
-    final yearStr = dateParts[1];
+    final parts = month.trim().split(' ');
+    if (parts.length >= 2) {
+      final yearParsed = int.tryParse(parts[1]);
+      if (yearParsed != null) year = yearParsed;
+      final monthMap = {
+        'january': 1, 'jan': 1, 'february': 2, 'feb': 2, 'march': 3, 'mar': 3,
+        'april': 4, 'apr': 4, 'may': 5, 'june': 6, 'jun': 6, 'july': 7, 'jul': 7,
+        'august': 8, 'aug': 8, 'september': 9, 'sep': 9, 'october': 10, 'oct': 10,
+        'november': 11, 'nov': 11, 'december': 12, 'dec': 12
+      };
+      final m = monthMap[parts[0].toLowerCase()];
+      if (m != null) monthNum = m;
+    }
+
+    final period = settings.getPayrollPeriod(year, monthNum);
+
+    // Map records by date string
+    Map<String, dynamic> attMap = {};
+    if (attendanceRecords != null) {
+      for (final r in attendanceRecords) {
+        final dStr = r.date?.toString() ?? '';
+        attMap[dStr] = r;
+      }
+    }
 
     int present = 0;
     int late = 0;
     int absent = 0;
     int leave = 0;
+    int missingCheckout = 0;
 
-    for (final r in attendanceRecords) {
-      if (r.date.contains(monthName) && r.date.contains(yearStr)) {
-        final status = r.status.toLowerCase();
-        if (status.contains('present') || status.contains('check')) {
+    final today = DateTime(now.year, now.month, now.day);
+    DateTime cursor = period.startDate;
+
+    while (cursor.isBefore(period.endDateExclusive)) {
+      final targetDate = DateTime(cursor.year, cursor.month, cursor.day);
+      final dateStr = '${cursor.day.toString().padLeft(2, '0')}-${cursor.month.toString().padLeft(2, '0')}-${cursor.year}';
+      final isoStr = '${cursor.year}-${cursor.month.toString().padLeft(2, '0')}-${cursor.day.toString().padLeft(2, '0')}';
+
+      dynamic rawRec = attMap[dateStr] ?? attMap[isoStr];
+      AttendanceRecord? rec;
+      if (rawRec != null && rawRec is AttendanceRecord) {
+        rec = rawRec;
+      }
+
+      final status = AttendanceStatusHelper.resolveStatus(
+        employee: employee,
+        date: cursor,
+        record: rec,
+      );
+
+      if (targetDate.isBefore(today) || targetDate.isAtSameMomentAs(today)) {
+        if (status == AttendanceStatusInfo.present || status == AttendanceStatusInfo.onDuty) {
           present++;
-        } else if (status.contains('late')) {
+        } else if (status == AttendanceStatusInfo.late) {
           present++;
           late++;
-        } else if (status.contains('absent')) {
-          absent++;
-        } else if (status.contains('leave') || status.contains('half')) {
+        } else if (status == AttendanceStatusInfo.onLeave) {
           leave++;
+        } else if (status == AttendanceStatusInfo.missingCheckout) {
+          present++;
+          missingCheckout++;
+        } else if (status == AttendanceStatusInfo.absent || status == null) {
+          absent++;
         }
       }
+
+      cursor = cursor.add(const Duration(days: 1));
     }
 
-    if (present > 0 || absent > 0 || leave > 0) {
+    if (mounted) {
       setState(() {
         _presentDays = present;
         _lateDays = late;
@@ -295,7 +348,27 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     });
   }
 
-  Future<void> _savePayroll(dynamic employee, String month) async {
+  Future<void> _savePayroll(dynamic employee, String month, PayrollSettings settings, {String saveStatus = 'Processed'}) async {
+    final now = DateTime.now();
+    int year = now.year;
+    int monthNum = now.month;
+
+    final parts = month.trim().split(' ');
+    if (parts.length >= 2) {
+      final yearParsed = int.tryParse(parts[1]);
+      if (yearParsed != null) year = yearParsed;
+      final monthMap = {
+        'january': 1, 'jan': 1, 'february': 2, 'feb': 2, 'march': 3, 'mar': 3,
+        'april': 4, 'apr': 4, 'may': 5, 'june': 6, 'jun': 6, 'july': 7, 'jul': 7,
+        'august': 8, 'aug': 8, 'september': 9, 'sep': 9, 'october': 10, 'oct': 10,
+        'november': 11, 'nov': 11, 'december': 12, 'dec': 12
+      };
+      final m = monthMap[parts[0].toLowerCase()];
+      if (m != null) monthNum = m;
+    }
+
+    final period = settings.getPayrollPeriod(year, monthNum);
+
     final record = PayrollRecord(
       id: 0,
       employeeId: employee.id,
@@ -345,7 +418,11 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
       greeting: 0.0,
       
       netSalary: _netSalary,
-      status: 'Processed',
+      status: saveStatus,
+      periodStartDate: period.startDateFormatted,
+      periodEndDate: period.endDateFormatted,
+      processingDate: period.processingDateFormatted,
+      paymentDate: period.paymentDateFormatted,
     );
 
     try {
@@ -354,9 +431,10 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
       ref.invalidate(allPayrollRecordsProvider);
 
       if (mounted) {
+        final actionText = saveStatus == 'Draft' ? 'saved as Draft' : 'processed successfully';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Payroll processed successfully for ${employee.firstName}!'),
+            content: Text('Payroll $actionText for ${employee.firstName}!'),
             backgroundColor: Colors.green[700],
           ),
         );
@@ -366,8 +444,9 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to save payroll: $e'),
+            content: Text('Action blocked: $e'),
             backgroundColor: Colors.red[700],
+            duration: const Duration(seconds: 4),
           ),
         );
       }
@@ -398,14 +477,12 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
             return const Center(child: Text('Employee not found.'));
           }
           final employee = matching.first;
-
-          // Load attendance
           final attendanceAsync = ref.watch(attendanceRecordsProvider(widget.employeeId));
-          attendanceAsync.whenData((records) => _calculateAttendanceMetrics(records, selectedMonth));
 
           return settingsAsync.when(
             data: (settings) {
               _initializeValues(employee, settings, selectedMonth);
+              attendanceAsync.whenData((records) => _calculateAttendanceMetrics(employee, records, selectedMonth, settings));
 
               return LayoutBuilder(
                 builder: (context, constraints) {
@@ -413,10 +490,10 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
                   final gutter = AppLayout.gutter(constraints.maxWidth);
 
                   if (isMobile) {
-                    return _buildMobileStepFlow(context, employee, selectedMonth);
+                    return _buildMobileStepFlow(context, employee, selectedMonth, settings);
                   }
 
-                  return _buildDesktopLayout(context, employee, selectedMonth, gutter);
+                  return _buildDesktopLayout(context, employee, selectedMonth, settings, gutter);
                 },
               );
             },
@@ -461,6 +538,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     BuildContext context,
     dynamic employee,
     String selectedMonth,
+    PayrollSettings settings,
     double gutter,
   ) {
     return Column(
@@ -474,7 +552,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
                 children: [
                   Expanded(
                     flex: 4,
-                    child: _buildAttendanceSummaryCard(),
+                    child: _buildAttendanceSummaryCard(settings, selectedMonth),
                   ),
                   const SizedBox(width: 24),
                   Expanded(
@@ -495,19 +573,19 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
             ),
           ),
         ),
-        _buildStickyFooter(employee, selectedMonth),
+        _buildStickyFooter(employee, selectedMonth, settings),
       ],
     );
   }
 
-  Widget _buildMobileStepFlow(BuildContext context, dynamic employee, String selectedMonth) {
+  Widget _buildMobileStepFlow(BuildContext context, dynamic employee, String selectedMonth, PayrollSettings settings) {
     Widget stepWidget;
     String stepTitle;
 
     switch (_currentStep) {
       case 0:
         stepTitle = 'Step 1: Attendance';
-        stepWidget = _buildAttendanceSummaryCard();
+        stepWidget = _buildAttendanceSummaryCard(settings, selectedMonth);
         break;
       case 1:
         stepTitle = 'Step 2: Earnings';
@@ -569,7 +647,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
             child: stepWidget,
           ),
         ),
-        _buildMobileFooter(employee, selectedMonth),
+        _buildMobileFooter(employee, selectedMonth, settings),
       ],
     );
   }
@@ -636,7 +714,27 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     );
   }
 
-  Widget _buildAttendanceSummaryCard() {
+  Widget _buildAttendanceSummaryCard(PayrollSettings settings, String selectedMonth) {
+    final now = DateTime.now();
+    int year = now.year;
+    int monthNum = now.month;
+
+    final parts = selectedMonth.trim().split(' ');
+    if (parts.length >= 2) {
+      final yearParsed = int.tryParse(parts[1]);
+      if (yearParsed != null) year = yearParsed;
+      final monthMap = {
+        'january': 1, 'jan': 1, 'february': 2, 'feb': 2, 'march': 3, 'mar': 3,
+        'april': 4, 'apr': 4, 'may': 5, 'june': 6, 'jun': 6, 'july': 7, 'jul': 7,
+        'august': 8, 'aug': 8, 'september': 9, 'sep': 9, 'october': 10, 'oct': 10,
+        'november': 11, 'nov': 11, 'december': 12, 'dec': 12
+      };
+      final m = monthMap[parts[0].toLowerCase()];
+      if (m != null) monthNum = m;
+    }
+
+    final period = settings.getPayrollPeriod(year, monthNum);
+
     final summaries = [
       ('Present Days', '$_presentDays Days', Icons.check_circle_outline, Colors.green),
       ('Late Days', '$_lateDays Days', Icons.watch_later_outlined, Colors.amber),
@@ -657,14 +755,30 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Attendance Summary',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Attendance Summary',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    'HR Proc: ${period.processingDateFormatted}',
+                    style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 11),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 6),
-            const Text(
-              'Read-only attendance data pulled for the selected payroll period.',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            Text(
+              'Period: ${period.displayPeriodString}',
+              style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 12),
             ),
             const Divider(height: 24),
             for (var i = 0; i < summaries.length; i++) ...[
@@ -807,7 +921,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     );
   }
 
-  Widget _buildStickyFooter(dynamic employee, String selectedMonth) {
+  Widget _buildStickyFooter(dynamic employee, String selectedMonth, PayrollSettings settings) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       decoration: const BoxDecoration(
@@ -832,8 +946,19 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
               ],
             ),
             const Spacer(),
+            OutlinedButton(
+              onPressed: () => _savePayroll(employee, selectedMonth, settings, saveStatus: 'Draft'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.active,
+                side: const BorderSide(color: AppColors.divider),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('Save as Draft', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+            const SizedBox(width: 12),
             ElevatedButton(
-              onPressed: () => _savePayroll(employee, selectedMonth),
+              onPressed: () => _savePayroll(employee, selectedMonth, settings, saveStatus: 'Processed'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
@@ -848,7 +973,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     );
   }
 
-  Widget _buildMobileFooter(dynamic employee, String selectedMonth) {
+  Widget _buildMobileFooter(dynamic employee, String selectedMonth, PayrollSettings settings) {
     final isLastStep = _currentStep == 3;
 
     return Container(
@@ -891,7 +1016,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
             ],
             ElevatedButton(
               onPressed: isLastStep
-                  ? () => _savePayroll(employee, selectedMonth)
+                  ? () => _savePayroll(employee, selectedMonth, settings)
                   : () {
                       setState(() {
                         _currentStep++;

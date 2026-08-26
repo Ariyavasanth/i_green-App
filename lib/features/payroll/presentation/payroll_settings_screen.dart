@@ -7,7 +7,6 @@ import '../../../core/theme/app_text_styles.dart';
 import '../domain/payroll.dart';
 import '../providers/payroll_providers.dart';
 import '../../leave/providers/leave_providers.dart';
-import 'widgets/access_denied_view.dart';
 
 class PayrollSettingsScreen extends ConsumerStatefulWidget {
   const PayrollSettingsScreen({super.key});
@@ -21,11 +20,9 @@ class _PayrollSettingsScreenState extends ConsumerState<PayrollSettingsScreen> {
   final _penaltyController = TextEditingController();
   final _workingDaysController = TextEditingController();
 
-  final _pfPercentController = TextEditingController();
-  final _taxPercentController = TextEditingController();
-  final _profTaxPercentController = TextEditingController();
-
-  final _cutoffController = TextEditingController();
+  final _startDayController = TextEditingController();
+  final _endDayController = TextEditingController();
+  final _processingDayController = TextEditingController();
   final _paymentController = TextEditingController();
 
   bool _initialized = false;
@@ -35,10 +32,9 @@ class _PayrollSettingsScreenState extends ConsumerState<PayrollSettingsScreen> {
     _allowedLateController.dispose();
     _penaltyController.dispose();
     _workingDaysController.dispose();
-    _pfPercentController.dispose();
-    _taxPercentController.dispose();
-    _profTaxPercentController.dispose();
-    _cutoffController.dispose();
+    _startDayController.dispose();
+    _endDayController.dispose();
+    _processingDayController.dispose();
     _paymentController.dispose();
     super.dispose();
   }
@@ -51,11 +47,9 @@ class _PayrollSettingsScreenState extends ConsumerState<PayrollSettingsScreen> {
     _penaltyController.text = settings.penaltyPerLateDay.toStringAsFixed(1);
     _workingDaysController.text = settings.workingDaysInMonth.toStringAsFixed(1);
 
-    _pfPercentController.text = settings.pfPercentage.toStringAsFixed(1);
-    _taxPercentController.text = settings.taxPercentage.toStringAsFixed(1);
-    _profTaxPercentController.text = settings.professionalTaxPercentage.toStringAsFixed(1);
-
-    _cutoffController.text = settings.payrollCutoffDay.toString();
+    _startDayController.text = settings.payrollStartDay.toString();
+    _endDayController.text = settings.payrollEndDay.toString();
+    _processingDayController.text = settings.processingDay.toString();
     _paymentController.text = settings.paymentDay.toString();
   }
 
@@ -65,11 +59,10 @@ class _PayrollSettingsScreenState extends ConsumerState<PayrollSettingsScreen> {
       allowedLateDays: int.tryParse(_allowedLateController.text) ?? 3,
       penaltyPerLateDay: double.tryParse(_penaltyController.text) ?? 0.5,
       workingDaysInMonth: double.tryParse(_workingDaysController.text) ?? 30.0,
-      pfPercentage: double.tryParse(_pfPercentController.text) ?? 12.0,
-      taxPercentage: double.tryParse(_taxPercentController.text) ?? 10.0,
-      professionalTaxPercentage: double.tryParse(_profTaxPercentController.text) ?? 2.0,
-      payrollCutoffDay: int.tryParse(_cutoffController.text) ?? 20,
-      paymentDay: int.tryParse(_paymentController.text) ?? 5,
+      payrollStartDay: int.tryParse(_startDayController.text) ?? 20,
+      payrollEndDay: int.tryParse(_endDayController.text) ?? 20,
+      processingDay: int.tryParse(_processingDayController.text) ?? 21,
+      paymentDay: int.tryParse(_paymentController.text) ?? 21,
     );
 
     try {
@@ -101,14 +94,14 @@ class _PayrollSettingsScreenState extends ConsumerState<PayrollSettingsScreen> {
     final settingsAsync = ref.watch(payrollSettingsProvider);
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColors.canvas,
       body: settingsAsync.when(
         data: (settings) {
           _initializeValues(settings);
 
           return LayoutBuilder(
             builder: (context, constraints) {
-              final isMobile = constraints.maxWidth < AppBreakpoints.tablet;
+              final isWideDesktop = constraints.maxWidth >= AppBreakpoints.desktop;
               final gutter = AppLayout.gutter(constraints.maxWidth);
 
               return SingleChildScrollView(
@@ -121,35 +114,25 @@ class _PayrollSettingsScreenState extends ConsumerState<PayrollSettingsScreen> {
                       _buildHeader(),
                       const SizedBox(height: 24),
 
-                      // Responsive card structure
-                      isMobile
-                          ? Column(
-                              children: [
-                                _buildAttendanceRulesCard(),
-                                const SizedBox(height: 16),
-                                _buildStatutoryCard(),
-                                const SizedBox(height: 16),
-                                _buildPaymentDatesCard(),
-                              ],
-                            )
-                          : Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    children: [
-                                      _buildAttendanceRulesCard(),
-                                      const SizedBox(height: 16),
-                                      _buildPaymentDatesCard(),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: _buildStatutoryCard(),
-                                ),
-                              ],
-                            ),
+                      // Grouped Settings Sections (3 Cards: Payroll Rules, Attendance Rules, Payment Schedule)
+                      if (!isWideDesktop) ...[
+                        _buildPayrollRulesCard(),
+                        const SizedBox(height: 16),
+                        _buildAttendanceRulesCard(),
+                        const SizedBox(height: 16),
+                        _buildPaymentScheduleCard(),
+                      ] else ...[
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: _buildPayrollRulesCard()),
+                            const SizedBox(width: 16),
+                            Expanded(child: _buildAttendanceRulesCard()),
+                            const SizedBox(width: 16),
+                            Expanded(child: _buildPaymentScheduleCard()),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 32),
 
                       // Action Button
@@ -214,10 +197,85 @@ class _PayrollSettingsScreenState extends ConsumerState<PayrollSettingsScreen> {
         Text('Payroll Settings', style: AppTextStyles.pageTitle),
         const SizedBox(height: 4),
         const Text(
-          'Configure statutory values, payment schedules, and attendance rules',
+          'Configure company payroll schedules and attendance rules',
           style: AppTextStyles.caption,
         ),
       ],
+    );
+  }
+
+  Widget _buildPayrollRulesCard() {
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: AppColors.divider),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.rule_folder_outlined, color: AppColors.primary, size: 20),
+                SizedBox(width: 8),
+                Text(
+                  'Payroll Rules',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            _buildInputField(
+              'Payroll Cycle Start Date',
+              _startDayController,
+              isInt: true,
+              helperText: 'Example: 21st of the previous month.',
+            ),
+            const SizedBox(height: 16),
+            _buildInputField(
+              'Payroll Cycle End Date',
+              _endDayController,
+              isInt: true,
+              helperText: 'Example: 20th of the current month.',
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAFB),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.divider),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.info_outline, size: 14, color: AppColors.primary),
+                      SizedBox(width: 6),
+                      Text(
+                        'Active Period Calculation Example:',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textPrimary),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'For August 2026 Payroll:\n'
+                    '• Attendance Period: ${_startDayController.text.isEmpty ? "21" : _startDayController.text} July 2026 – ${_endDayController.text.isEmpty ? "20" : _endDayController.text} August 2026\n'
+                    '• HR Processing: ${_processingDayController.text.isEmpty ? "21" : _processingDayController.text} August 2026\n'
+                    '• Salary Disbursement: ${_paymentController.text.isEmpty ? "21" : _paymentController.text} August 2026',
+                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -245,18 +303,31 @@ class _PayrollSettingsScreenState extends ConsumerState<PayrollSettingsScreen> {
               ],
             ),
             const Divider(height: 24),
-            _buildInputField('Allowed Late Days (Grace Period)', _allowedLateController, isInt: true),
-            const SizedBox(height: 12),
-            _buildInputField('Penalty per Late Day (Salary Days Deducted)', _penaltyController),
-            const SizedBox(height: 12),
-            _buildInputField('Working Days in Month', _workingDaysController),
+            _buildInputField(
+              'Allowed Late Days (Grace Period)',
+              _allowedLateController,
+              isInt: true,
+              helperText: 'Maximum permitted late check-ins per month.',
+            ),
+            const SizedBox(height: 16),
+            _buildInputField(
+              'Penalty per Late Day',
+              _penaltyController,
+              helperText: 'Salary days deducted per excess late day.',
+            ),
+            const SizedBox(height: 16),
+            _buildInputField(
+              'Working Days in Month',
+              _workingDaysController,
+              helperText: 'Standard billable working days per month.',
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStatutoryCard() {
+  Widget _buildPaymentScheduleCard() {
     return Card(
       elevation: 0,
       color: Colors.white,
@@ -271,53 +342,28 @@ class _PayrollSettingsScreenState extends ConsumerState<PayrollSettingsScreen> {
           children: [
             const Row(
               children: [
-                Icon(Icons.percent_outlined, color: AppColors.primary, size: 20),
+                Icon(Icons.schedule_outlined, color: AppColors.primary, size: 20),
                 SizedBox(width: 8),
                 Text(
-                  'Statutory Contributions (%)',
+                  'Payment Schedule',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                 ),
               ],
             ),
             const Divider(height: 24),
-            _buildInputField('Provident Fund (PF) Rate', _pfPercentController, suffix: '%'),
-            const SizedBox(height: 12),
-            _buildInputField('TDS / Income Tax Rate', _taxPercentController, suffix: '%'),
-            const SizedBox(height: 12),
-            _buildInputField('Professional Tax Rate', _profTaxPercentController, suffix: '%'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPaymentDatesCard() {
-    return Card(
-      elevation: 0,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: AppColors.divider),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
-              children: [
-                Icon(Icons.payment_outlined, color: AppColors.primary, size: 20),
-                SizedBox(width: 8),
-                Text(
-                  'Payment Dates',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                ),
-              ],
+            _buildInputField(
+              'HR Processing Day',
+              _processingDayController,
+              isInt: true,
+              helperText: 'Example: 21st of the following month.',
             ),
-            const Divider(height: 24),
-            _buildInputField('Payroll Cutoff Day of Month (e.g. 20th)', _cutoffController, isInt: true),
-            const SizedBox(height: 12),
-            _buildInputField('Salary Payment Day of Month (e.g. 5th)', _paymentController, isInt: true),
+            const SizedBox(height: 16),
+            _buildInputField(
+              'Salary Payment Day',
+              _paymentController,
+              isInt: true,
+              helperText: 'Example: 21st of the following month.',
+            ),
           ],
         ),
       ),
@@ -329,13 +375,14 @@ class _PayrollSettingsScreenState extends ConsumerState<PayrollSettingsScreen> {
     TextEditingController controller, {
     bool isInt = false,
     String? suffix,
+    String? helperText,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: AppColors.textSecondary),
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: AppColors.textPrimary),
         ),
         const SizedBox(height: 6),
         TextField(
@@ -360,6 +407,13 @@ class _PayrollSettingsScreenState extends ConsumerState<PayrollSettingsScreen> {
             ),
           ),
         ),
+        if (helperText != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            helperText,
+            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+          ),
+        ],
       ],
     );
   }

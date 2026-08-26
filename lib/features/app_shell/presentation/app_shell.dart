@@ -62,6 +62,7 @@ final userDestinationsProvider = Provider<List<SidebarDestination>>((ref) {
         'My Asset',
         'My Exit',
         'Incentive Request',
+        'My Payslips',
       };
 
       if (allowed.isEmpty) {
@@ -73,6 +74,7 @@ final userDestinationsProvider = Provider<List<SidebarDestination>>((ref) {
       return AppShell.destinations
           .where((d) =>
               d.label == 'Home' ||
+              d.label == 'My Payslips' ||
               allowed.contains(d.label) ||
               (d.label == 'Leave Management' && allowed.contains('Leave')))
           .toList();
@@ -223,6 +225,12 @@ class AppShell extends ConsumerWidget {
       'Incentive Management',
       '/incentive-management',
       Icons.price_check_outlined,
+      'Employee',
+    ),
+    SidebarDestination(
+      'My Payslips',
+      '/my-payslips',
+      Icons.receipt_long_outlined,
       'Employee',
     ),
     SidebarDestination(

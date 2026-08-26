@@ -36,7 +36,14 @@ abstract class LeaveRepository {
   Future<List<Map<String, dynamic>>> getEmployeeOverrides();
   Future<void> addEmployeeOverride(Map<String, dynamic> override);
   Future<void> deleteEmployeeOverride(int id);
-  Future<SalaryCalculation> calculateSalaryAndLop(int employeeId, int year, int month, {int workingDays = 26});
+  Future<SalaryCalculation> calculateSalaryAndLop(
+    int employeeId,
+    int year,
+    int month, {
+    int workingDays = 30,
+    DateTime? startDate,
+    DateTime? endDateExclusive,
+  });
   Future<List<Map<String, dynamic>>> getAuditLogs(int leaveRequestId);
   Future<PermissionAllowance> getPermissionAllowance(int employeeId, DateTime month);
 }

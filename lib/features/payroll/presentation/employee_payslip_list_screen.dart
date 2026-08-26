@@ -19,6 +19,7 @@ class EmployeePayslipListScreen extends ConsumerStatefulWidget {
 
 class _EmployeePayslipListScreenState extends ConsumerState<EmployeePayslipListScreen> {
   String? _selectedYear;
+  String _selectedStatusFilter = 'All';
 
   @override
   Widget build(BuildContext context) {
@@ -75,22 +76,49 @@ class _EmployeePayslipListScreenState extends ConsumerState<EmployeePayslipListS
                               }
                             }
 
-                            final filteredRecords = records
+                            // Filter records by selected year and status
+                            var filteredRecords = records
                                 .where((r) => r.month.trim().endsWith(_selectedYear!))
                                 .toList();
+
+                            if (_selectedStatusFilter != 'All') {
+                              filteredRecords = filteredRecords
+                                  .where((r) => r.status.toLowerCase() == _selectedStatusFilter.toLowerCase())
+                                  .toList();
+                            }
+
+                            // Sort newest month first
+                            filteredRecords.sort((a, b) => b.id.compareTo(a.id));
 
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
+                                // Top Header Row
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text(
-                                      'My payslips',
-                                      style: TextStyle(
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.textPrimary,
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: const [
+                                          Text(
+                                            'My Payslips',
+                                            style: TextStyle(
+                                              fontSize: 24,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppColors.textPrimary,
+                                            ),
+                                          ),
+                                          SizedBox(height: 4),
+                                          Text(
+                                            'Your monthly salary statements',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: AppColors.textSecondary,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                     if (years.isNotEmpty)
@@ -98,16 +126,16 @@ class _EmployeePayslipListScreenState extends ConsumerState<EmployeePayslipListS
                                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                                         decoration: BoxDecoration(
                                           color: Colors.white,
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(color: AppColors.divider, width: 0.5),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: AppColors.divider, width: 1),
                                         ),
                                         child: DropdownButtonHideUnderline(
                                           child: DropdownButton<String>(
                                             value: _selectedYear,
-                                            icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textSecondary, size: 18),
+                                            icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textSecondary, size: 20),
                                             style: const TextStyle(
                                               fontSize: 14,
-                                              fontWeight: FontWeight.w600,
+                                              fontWeight: FontWeight.w700,
                                               color: AppColors.textPrimary,
                                             ),
                                             dropdownColor: Colors.white,
@@ -124,7 +152,41 @@ class _EmployeePayslipListScreenState extends ConsumerState<EmployeePayslipListS
                                       ),
                                   ],
                                 ),
-                                const SizedBox(height: 24),
+                                const SizedBox(height: 20),
+
+                                // Status Filter Chips: [ All ] [ Paid ] [ Processed ]
+                                Wrap(
+                                  spacing: 8,
+                                  children: ['All', 'Paid', 'Processed'].map((status) {
+                                    final isSelected = _selectedStatusFilter == status;
+                                    return ChoiceChip(
+                                      label: Text(status),
+                                      selected: isSelected,
+                                      onSelected: (selected) {
+                                        if (selected) {
+                                          setState(() {
+                                            _selectedStatusFilter = status;
+                                          });
+                                        }
+                                      },
+                                      selectedColor: AppColors.primary,
+                                      labelStyle: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                        color: isSelected ? Colors.white : AppColors.textPrimary,
+                                      ),
+                                      backgroundColor: Colors.white,
+                                      side: BorderSide(
+                                        color: isSelected ? AppColors.primary : AppColors.divider,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                                const SizedBox(height: 20),
+
                                 if (filteredRecords.isEmpty)
                                   _buildEmptyState()
                                 else
@@ -135,7 +197,7 @@ class _EmployeePayslipListScreenState extends ConsumerState<EmployeePayslipListS
                                     separatorBuilder: (_, _) => const SizedBox(height: 12),
                                     itemBuilder: (context, index) {
                                       final record = filteredRecords[index];
-                                      return _buildCompactPayslipCard(context, record);
+                                      return _buildPayslipCard(context, record);
                                     },
                                   ),
                               ],
@@ -144,27 +206,18 @@ class _EmployeePayslipListScreenState extends ConsumerState<EmployeePayslipListS
                           loading: () => Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text(
-                                    'My payslips',
-                                    style: TextStyle(
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.textPrimary,
-                                    ),
-                                  ),
-                                  Container(
-                                    width: 80,
-                                    height: 36,
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: AppColors.divider, width: 0.5),
-                                    ),
-                                  ),
-                                ],
+                              const Text(
+                                'My Payslips',
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'Your monthly salary statements',
+                                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
                               ),
                               const SizedBox(height: 24),
                               _buildSkeletonLoader(),
@@ -202,74 +255,163 @@ class _EmployeePayslipListScreenState extends ConsumerState<EmployeePayslipListS
     );
   }
 
-  Widget _buildCompactPayslipCard(BuildContext context, PayrollRecord record) {
-    return GestureDetector(
-      onTap: () => context.push('/payroll/payslip/${record.id}'),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.divider, width: 0.5),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  record.month,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
+  Widget _buildPayslipCard(BuildContext context, PayrollRecord record) {
+    final isPaid = record.status == 'Paid';
+    final formattedNetSalary = NumberFormat.currency(
+      locale: 'en_IN',
+      symbol: '₹',
+      decimalDigits: 0,
+    ).format(record.netSalary);
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.divider, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                record.month,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0).format(record.netSalary),
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textSecondary,
-                  ),
+              ),
+              _buildStatusPill(record),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Text(
+                'Net Salary: ',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w500,
                 ),
-              ],
-            ),
-            _buildStatusPill(record),
-          ],
-        ),
+              ),
+              Text(
+                formattedNetSalary,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => context.push('/payroll/payslip/${record.id}'),
+                icon: const Icon(Icons.visibility_outlined, size: 16),
+                label: const Text('View Payslip'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: () => context.push('/payroll/payslip/${record.id}'),
+                icon: const Icon(Icons.download_outlined, size: 16),
+                label: const Text('Download PDF'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildStatusPill(PayrollRecord record) {
     final isPaid = record.status == 'Paid';
-    final color = isPaid ? const Color(0xFF9CC70A) : Colors.amber[800]!;
-    final bgColor = isPaid ? const Color(0xFF9CC70A).withValues(alpha: 0.1) : Colors.amber[50]!;
-    final label = isPaid ? 'Paid' : 'Processing';
+    final isProcessed = record.status == 'Processed';
+    
+    Color color;
+    Color bgColor;
+    String label;
+
+    if (isPaid) {
+      color = const Color(0xFF9CC70A);
+      bgColor = const Color(0xFF9CC70A).withValues(alpha: 0.1);
+      label = 'Paid';
+    } else if (isProcessed) {
+      color = Colors.blue[700]!;
+      bgColor = Colors.blue[50]!;
+      label = 'Processed';
+    } else {
+      color = Colors.amber[800]!;
+      bgColor = Colors.amber[50]!;
+      label = record.status;
+    }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
       ),
-      child: Text(
-        label,
-        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isPaid) ...[
+            const Icon(Icons.lock_outlined, size: 12, color: Color(0xFF9CC70A)),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            label,
+            style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildEmptyState() {
     return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 80, horizontal: 16),
+      padding: EdgeInsets.symmetric(vertical: 60, horizontal: 16),
       child: Center(
-        child: Text(
-          'Your payslips will appear here once payroll is processed.',
-          style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-          textAlign: TextAlign.center,
+        child: Column(
+          children: [
+            Icon(Icons.description_outlined, size: 48, color: AppColors.textSecondary),
+            SizedBox(height: 12),
+            Text(
+              'No payslips found for the selected filter.',
+              style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            SizedBox(height: 4),
+            Text(
+              'Your monthly payslips will appear here once payroll is processed by HR.',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       ),
     );
@@ -278,47 +420,69 @@ class _EmployeePayslipListScreenState extends ConsumerState<EmployeePayslipListS
   Widget _buildSkeletonLoader() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: List.generate(4, (index) => Padding(
+      children: List.generate(3, (index) => Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(color: AppColors.divider, width: 0.5),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Container(
                     width: 120,
-                    height: 16,
+                    height: 20,
                     decoration: BoxDecoration(
                       color: Colors.grey[200],
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
-                  const SizedBox(height: 6),
                   Container(
-                    width: 70,
-                    height: 12,
+                    width: 60,
+                    height: 22,
                     decoration: BoxDecoration(
                       color: Colors.grey[200],
-                      borderRadius: BorderRadius.circular(4),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
               Container(
-                width: 70,
-                height: 22,
+                width: 160,
+                height: 16,
                 decoration: BoxDecoration(
                   color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(4),
                 ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Container(
+                    width: 110,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    width: 120,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
