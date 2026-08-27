@@ -366,12 +366,24 @@ class _EmployeeRegistrationPageState
     if (!hasPhoto) {
       errors.add('Candidate Photo is mandatory');
     }
-    if (_firstNameController.text.trim().isEmpty) {
+    final firstName = _firstNameController.text.trim();
+    if (firstName.isEmpty) {
       errors.add('First Name is required');
+    } else if (RegExp(r'[0-9]').hasMatch(firstName)) {
+      errors.add('First Name cannot contain numbers');
+    } else if (RegExp(r"[^a-zA-Z\s.\-']").hasMatch(firstName)) {
+      errors.add('First Name cannot contain special characters');
     }
-    if (_lastNameController.text.trim().isEmpty) {
+
+    final lastName = _lastNameController.text.trim();
+    if (lastName.isEmpty) {
       errors.add('Last Name is required');
+    } else if (RegExp(r'[0-9]').hasMatch(lastName)) {
+      errors.add('Last Name cannot contain numbers');
+    } else if (RegExp(r"[^a-zA-Z\s.\-']").hasMatch(lastName)) {
+      errors.add('Last Name cannot contain special characters');
     }
+
     if (_gender.trim().isEmpty) {
       errors.add('Gender is required');
     }
@@ -381,28 +393,40 @@ class _EmployeeRegistrationPageState
     final aadhaar = _aadhaarController.text.trim();
     if (aadhaar.isEmpty) {
       errors.add('Aadhaar Number is required');
-    } else if (aadhaar.length != 12) {
+    } else if (aadhaar.length != 12 || !RegExp(r'^\d{12}$').hasMatch(aadhaar)) {
       errors.add('Aadhaar Number must be exactly 12 digits');
     }
+
     final phone = _phoneController.text.trim();
+    final phoneDetails = getCountryPhoneDetails(_phoneCountryCode);
+    final expectedPhoneDigits = phoneDetails['digits'] as int? ?? 10;
     if (phone.isEmpty) {
       errors.add('Primary Mobile Number is required');
-    } else if (phone.length != 10) {
-      errors.add('Primary Mobile Number must be exactly 10 digits');
+    } else if (!RegExp(r'^\d+$').hasMatch(phone)) {
+      errors.add('Primary Mobile Number must contain only digits (0-9)');
+    } else if (phone.length != expectedPhoneDigits) {
+      errors.add('Primary Mobile Number must be exactly $expectedPhoneDigits digits for $_phoneCountryCode');
     }
+
     final email = _emailController.text.trim();
     if (email.isEmpty) {
       errors.add('Email Address is required');
-    } else if (!email.contains('@')) {
-      errors.add('Invalid Email Address format');
+    } else if (!RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$').hasMatch(email)) {
+      errors.add('Invalid Email Address format (e.g. user@domain.com)');
     }
-    final pfText = _pfNumberController.text.trim();
-    if (pfText.isNotEmpty && pfText.length != 12 && pfText.length != 22) {
-      errors.add('PF Number / UAN must be 12 digits or 22 characters');
+
+    final pfText = _pfNumberController.text.trim().toUpperCase();
+    if (pfText.isNotEmpty) {
+      if (pfText.length != 12 && pfText.length != 22) {
+        errors.add('PF Number / UAN must be 12 digits or 22 characters');
+      }
     }
+
     final esiText = _esiNumberController.text.trim();
-    if (esiText.isNotEmpty && esiText.length != 17) {
-      errors.add('ESI Number must be exactly 17 digits');
+    if (esiText.isNotEmpty) {
+      if (esiText.length != 17 || !RegExp(r'^\d{17}$').hasMatch(esiText)) {
+        errors.add('ESI Number must be exactly 17 digits');
+      }
     }
     return errors;
   }
@@ -412,8 +436,11 @@ class _EmployeeRegistrationPageState
     if (_permAddressController.text.trim().isEmpty) {
       errors.add('Permanent Address is required');
     }
-    if (_permCityController.text.trim().isEmpty) {
+    final permCity = _permCityController.text.trim();
+    if (permCity.isEmpty) {
       errors.add('Permanent City is required');
+    } else if (RegExp(r'[0-9]').hasMatch(permCity)) {
+      errors.add('Permanent City name cannot contain numbers');
     }
     if (_permCountryController.text.trim().isEmpty) {
       errors.add('Permanent Country is required');
@@ -422,8 +449,11 @@ class _EmployeeRegistrationPageState
       if (_presAddressController.text.trim().isEmpty) {
         errors.add('Present Address is required');
       }
-      if (_presCityController.text.trim().isEmpty) {
+      final presCity = _presCityController.text.trim();
+      if (presCity.isEmpty) {
         errors.add('Present City is required');
+      } else if (RegExp(r'[0-9]').hasMatch(presCity)) {
+        errors.add('Present City name cannot contain numbers');
       }
       if (_presCountryController.text.trim().isEmpty) {
         errors.add('Present Country is required');
@@ -455,7 +485,6 @@ class _EmployeeRegistrationPageState
 
   List<String> _validateExperienceTab() {
     final errors = <String>[];
-    // Work Experience is optional for freshers!
     for (int i = 0; i < _experienceList.length; i++) {
       final exp = _experienceList[i];
       if (exp.companyName.trim().isEmpty) {
@@ -473,18 +502,79 @@ class _EmployeeRegistrationPageState
     final pan = _panController.text.trim().toUpperCase();
     if (pan.isEmpty) {
       errors.add('PAN Number is required');
-    } else if (pan.length != 10) {
-      errors.add('PAN Number must be exactly 10 characters');
+    } else if (pan.length != 10 || !RegExp(r'^[A-Z]{5}[0-9]{4}[A-Z]{1}$').hasMatch(pan)) {
+      errors.add('PAN Number must be valid 10 characters (e.g. ABCDE1234F)');
     }
-    if (_emergencyNameController.text.trim().isEmpty) {
+
+    final personalMobile = _personalMobileController.text.trim();
+    if (personalMobile.isNotEmpty) {
+      final phoneDetails = getCountryPhoneDetails(_personalMobileCountryCode);
+      final expectedDigits = phoneDetails['digits'] as int? ?? 10;
+      if (!RegExp(r'^\d+$').hasMatch(personalMobile)) {
+        errors.add('Personal Mobile Number must contain only digits (0-9)');
+      } else if (personalMobile.length != expectedDigits) {
+        errors.add('Personal Mobile Number must be exactly $expectedDigits digits for $_personalMobileCountryCode');
+      }
+    }
+
+    final passport = _passportController.text.trim().toUpperCase();
+    if (passport.isNotEmpty) {
+      if (passport.length < 8 || passport.length > 9 || !RegExp(r'^[A-Z0-9]{8,9}$').hasMatch(passport)) {
+        errors.add('Passport Number must be 8 or 9 alphanumeric characters');
+      }
+    }
+
+    final dl = _drivingLicenseController.text.trim().toUpperCase();
+    if (dl.isNotEmpty) {
+      if (dl.length < 10 || dl.length > 16 || !RegExp(r'^[A-Z0-9 \-]{10,16}$').hasMatch(dl)) {
+        errors.add('Driving License must be 10 to 16 alphanumeric characters');
+      }
+    }
+
+    final emergencyName = _emergencyNameController.text.trim();
+    if (emergencyName.isEmpty) {
       errors.add('Emergency Contact Person Name is required');
+    } else if (RegExp(r'[0-9]').hasMatch(emergencyName)) {
+      errors.add('Emergency Contact Person Name cannot contain numbers');
     }
-    final emergencyPhone = _emergencyMobileController.text.trim();
-    if (emergencyPhone.isEmpty) {
+
+    final emergencyMobile = _emergencyMobileController.text.trim();
+    final emergencyPhoneDetails = getCountryPhoneDetails(_emergencyMobileCountryCode);
+    final expectedEmergencyDigits = emergencyPhoneDetails['digits'] as int? ?? 10;
+    if (emergencyMobile.isEmpty) {
       errors.add('Emergency Contact Mobile Number is required');
-    } else if (emergencyPhone.length != 10) {
-      errors.add('Emergency Contact Mobile Number must be exactly 10 digits');
+    } else if (!RegExp(r'^\d+$').hasMatch(emergencyMobile)) {
+      errors.add('Emergency Contact Mobile Number must contain only digits (0-9)');
+    } else if (emergencyMobile.length != expectedEmergencyDigits) {
+      errors.add('Emergency Contact Mobile Number must be exactly $expectedEmergencyDigits digits for $_emergencyMobileCountryCode');
     }
+
+    final refMobile = _referredByMobileController.text.trim();
+    if (refMobile.isNotEmpty) {
+      final refPhoneDetails = getCountryPhoneDetails(_referredByMobileCountryCode);
+      final expectedRefDigits = refPhoneDetails['digits'] as int? ?? 10;
+      if (!RegExp(r'^\d+$').hasMatch(refMobile)) {
+        errors.add('Referred By Mobile Number must contain only digits (0-9)');
+      } else if (refMobile.length != expectedRefDigits) {
+        errors.add('Referred By Mobile Number must be exactly $expectedRefDigits digits for $_referredByMobileCountryCode');
+      }
+    }
+
+    final fatherName = _fatherNameController.text.trim();
+    if (fatherName.isNotEmpty && RegExp(r'[0-9]').hasMatch(fatherName)) {
+      errors.add("Father's Name cannot contain numbers");
+    }
+
+    final motherName = _motherNameController.text.trim();
+    if (motherName.isNotEmpty && RegExp(r'[0-9]').hasMatch(motherName)) {
+      errors.add("Mother's Name cannot contain numbers");
+    }
+
+    final spouseName = _spouseNameController.text.trim();
+    if (spouseName.isNotEmpty && RegExp(r'[0-9]').hasMatch(spouseName)) {
+      errors.add("Spouse's Name cannot contain numbers");
+    }
+
     if (_hasCriminalCases && _criminalCaseDetailsController.text.trim().isEmpty) {
       errors.add('Criminal Case Details are required when declaration is Yes');
     }
@@ -493,21 +583,33 @@ class _EmployeeRegistrationPageState
 
   List<String> _validateBankAccountTab() {
     final errors = <String>[];
-    if (_bankHolderController.text.trim().isEmpty) {
+    final bankHolder = _bankHolderController.text.trim();
+    if (bankHolder.isEmpty) {
       errors.add('Account Holder Name is required');
+    } else if (RegExp(r'[0-9]').hasMatch(bankHolder)) {
+      errors.add('Account Holder Name cannot contain numbers');
     }
+
     if (_bankNameController.text.trim().isEmpty) {
       errors.add('Bank Name is required');
     }
-    if (_bankAccNumController.text.trim().isEmpty) {
+
+    final bankAccNum = _bankAccNumController.text.trim();
+    if (bankAccNum.isEmpty) {
       errors.add('Account Number is required');
+    } else if (!RegExp(r'^\d+$').hasMatch(bankAccNum)) {
+      errors.add('Account Number must contain only digits (0-9)');
+    } else if (bankAccNum.length < 9 || bankAccNum.length > 18) {
+      errors.add('Account Number must be between 9 and 18 digits');
     }
+
     final ifsc = _bankIfscController.text.trim().toUpperCase();
     if (ifsc.isEmpty) {
       errors.add('IFSC Code is required');
-    } else if (ifsc.length != 11) {
-      errors.add('IFSC Code must be exactly 11 characters');
+    } else if (ifsc.length != 11 || !RegExp(r'^[A-Z]{4}0[A-Z0-9]{6}$').hasMatch(ifsc)) {
+      errors.add('IFSC Code must be valid 11 characters (e.g. SBIN0001234)');
     }
+
     if (_bankAccountType.trim().isEmpty) {
       errors.add('Account Type is required');
     }
@@ -533,6 +635,51 @@ class _EmployeeRegistrationPageState
     return [];
   }
 
+  List<String> _validateJobAdminDetailsTab() {
+    final errors = <String>[];
+    if (_isManagementAdd) {
+      if (_joiningDateController.text.trim().isEmpty) {
+        errors.add('Date of Joining is required');
+      }
+      final coordPhone = _coordinatorPhoneController.text.trim();
+      if (coordPhone.isNotEmpty) {
+        final coordPhoneDetails = getCountryPhoneDetails(_coordinatorPhoneCountryCode);
+        final expectedDigits = coordPhoneDetails['digits'] as int? ?? 10;
+        if (!RegExp(r'^\d+$').hasMatch(coordPhone)) {
+          errors.add('Coordinator Phone must contain only digits');
+        } else if (coordPhone.length != expectedDigits) {
+          errors.add('Coordinator Phone must be exactly $expectedDigits digits');
+        }
+      }
+    }
+    return errors;
+  }
+
+  List<String> _validateSalaryOfferLetterTab() {
+    final errors = <String>[];
+    if (_isManagementAdd) {
+      final total = double.tryParse(_totalSalaryController.text.replaceAll(',', '').trim()) ?? 0.0;
+      if (total > 0) {
+        final additionsTotal = _getAdditionsTotal();
+        final excess = additionsTotal - total;
+        if (excess > 0.01) {
+          errors.add('Total additions (\u20B9${additionsTotal.toStringAsFixed(2)}) exceed Total Salary CTC (\u20B9${total.toStringAsFixed(2)})');
+        }
+      }
+    }
+    return errors;
+  }
+
+  List<String> _validateCredentialsTab() {
+    final errors = <String>[];
+    if (_isManagementAdd && !_isEditing && widget.acceptedEmpId == null) {
+      if (_passwordController.text.trim().isEmpty) {
+        errors.add('Temporary Password is required for employee account creation');
+      }
+    }
+    return errors;
+  }
+
   List<String> _validateTabByName(String tabName) {
     switch (tabName) {
       case 'Personal Info':
@@ -551,6 +698,12 @@ class _EmployeeRegistrationPageState
         return _validateDocumentTab();
       case 'Social Media':
         return _validateSocialMediaTab();
+      case 'Job & Admin Details':
+        return _validateJobAdminDetailsTab();
+      case 'Salary & Offer Letter':
+        return _validateSalaryOfferLetterTab();
+      case 'Credentials':
+        return _validateCredentialsTab();
       default:
         return [];
     }
@@ -567,6 +720,9 @@ class _EmployeeRegistrationPageState
       'Bank Account',
       'Document',
       'Social Media',
+      if (_isManagementAdd) 'Job & Admin Details',
+      if (_isManagementAdd) 'Salary & Offer Letter',
+      if (_isManagementAdd) 'Credentials',
     ];
     for (final tab in candidateTabs) {
       final errs = _validateTabByName(tab);
@@ -1510,6 +1666,16 @@ class _EmployeeRegistrationPageState
     final isEditMode = widget.employee != null || widget.linkId == 'edit' || (_currentEmployee != null && _currentEmployee!.employeeId.startsWith('EMP-'));
 
     if (isSubmit) {
+      setState(() {
+        _hasSubmittedAtLeastOnce = true;
+      });
+
+      final candidateErrors = _getAllCandidateFormErrors();
+      if (candidateErrors.isNotEmpty) {
+        _showSubmissionErrorSummaryDialog(candidateErrors);
+        return;
+      }
+
       if (_firstNameController.text.trim().isEmpty) {
         _tabController.animateTo(0);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1521,11 +1687,12 @@ class _EmployeeRegistrationPageState
         return;
       }
 
-      if (!_formKey.currentState!.validate()) {
+      if (_formKey.currentState != null && !_formKey.currentState!.validate()) {
         _tabController.animateTo(0);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Please fill mandatory fields marked with *'),
+            content: Text('Please fill mandatory fields marked with * and correct invalid format errors.'),
+            backgroundColor: Colors.orange,
           ),
         );
         return;
