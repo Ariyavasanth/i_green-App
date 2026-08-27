@@ -34,6 +34,10 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
   ];
 
   static const List<String> locationOptions = [
+    'Chennai Head Office',
+    'Chennai Manufacturing Plant',
+    'Bangalore Branch',
+    'Hyderabad Branch',
     'Factory',
     'Office',
     'Remote',

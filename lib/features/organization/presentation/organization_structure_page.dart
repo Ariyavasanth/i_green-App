@@ -450,20 +450,46 @@ class _OrganizationStructurePageState
 
   Widget _buildMobileList(List<Department> depts) {
     return ListView.separated(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       itemCount: depts.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final dept = depts[index];
-        return Card(
-          margin: EdgeInsets.zero,
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.divider.withOpacity(0.7)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: AppColors.active.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.domain_outlined,
+                        color: AppColors.active,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -480,46 +506,123 @@ class _OrganizationStructurePageState
                           Text(
                             dept.departmentName,
                             style: const TextStyle(
-                              fontSize: 15,
+                              fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              color: AppColors.active,
+                              color: AppColors.textPrimary,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.remove_red_eye_outlined,
-                          size: 18, color: AppColors.active),
-                      tooltip: 'View Details',
-                      onPressed: () => _openViewDialog(context, dept),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined,
-                          size: 18, color: AppColors.active),
-                      tooltip: 'Edit Department',
-                      onPressed: () => _openEditDialog(context, dept),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline,
-                          size: 18, color: Colors.redAccent),
-                      tooltip: 'Delete Department',
-                      onPressed: () => _confirmDelete(context, dept),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          constraints: const BoxConstraints(),
+                          padding: const EdgeInsets.all(6),
+                          icon: const Icon(Icons.remove_red_eye_outlined,
+                              size: 18, color: AppColors.active),
+                          tooltip: 'View Details',
+                          onPressed: () => _openViewDialog(context, dept),
+                        ),
+                        IconButton(
+                          constraints: const BoxConstraints(),
+                          padding: const EdgeInsets.all(6),
+                          icon: const Icon(Icons.edit_outlined,
+                              size: 18, color: AppColors.active),
+                          tooltip: 'Edit Department',
+                          onPressed: () => _openEditDialog(context, dept),
+                        ),
+                        IconButton(
+                          constraints: const BoxConstraints(),
+                          padding: const EdgeInsets.all(6),
+                          icon: const Icon(Icons.delete_outline,
+                              size: 18, color: Colors.redAccent),
+                          tooltip: 'Delete Department',
+                          onPressed: () => _confirmDelete(context, dept),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  'Head: ${dept.departmentHead}',
-                  style: const TextStyle(fontSize: 13),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 10),
+                  child: Divider(height: 1),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '${dept.reportingHierarchy}  \u00b7  ${dept.workLocation}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
+                Row(
+                  children: [
+                    const Icon(Icons.person_outline,
+                        size: 16, color: AppColors.active),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Head: ',
+                      style: TextStyle(
+                          fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                    Text(
+                      dept.departmentHead.isEmpty ? '-' : dept.departmentHead,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    if (dept.workLocation.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: AppColors.divider),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.location_on_outlined,
+                                size: 12, color: AppColors.textSecondary),
+                            const SizedBox(width: 4),
+                            Text(
+                              dept.workLocation,
+                              style: const TextStyle(
+                                  fontSize: 11, color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (dept.reportingHierarchy.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.active.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.badge_outlined,
+                                size: 12, color: AppColors.active),
+                            const SizedBox(width: 4),
+                            Text(
+                              dept.reportingHierarchy,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.active,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
               ],
             ),
@@ -541,10 +644,10 @@ class _OrganizationStructurePageState
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: AppColors.divider)),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 500;
+          final showingText = Text(
             totalItems == 0
                 ? 'Showing 0 records'
                 : 'Showing ${startIndex + 1} - $endIndex of $totalItems',
@@ -552,11 +655,13 @@ class _OrganizationStructurePageState
               fontSize: 12,
               color: AppColors.textSecondary,
             ),
-          ),
-          Row(
+          );
+
+          final controlsRow = Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                'Rows per page: ',
+                'Rows: ',
                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
               ),
               DropdownButton<int>(
@@ -583,26 +688,52 @@ class _OrganizationStructurePageState
                   }
                 },
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 8),
               IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
                 icon: const Icon(Icons.chevron_left, size: 20),
                 onPressed: currentPage > 0
                     ? () => setState(() => _currentPage -= 1)
                     : null,
               ),
-              Text(
-                '${totalPages == 0 ? 0 : currentPage + 1} / $totalPages',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  '${totalPages == 0 ? 0 : currentPage + 1} / $totalPages',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
               ),
               IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
                 icon: const Icon(Icons.chevron_right, size: 20),
                 onPressed: currentPage < totalPages - 1
                     ? () => setState(() => _currentPage += 1)
                     : null,
               ),
             ],
-          ),
-        ],
+          );
+
+          if (isNarrow) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                showingText,
+                const SizedBox(height: 4),
+                controlsRow,
+              ],
+            );
+          }
+
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              showingText,
+              controlsRow,
+            ],
+          );
+        },
       ),
     );
   }

@@ -469,76 +469,207 @@ class _OrganizationManagementPageState
 
   Widget _buildMobileList(List<Organization> orgs) {
     return ListView.separated(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       itemCount: orgs.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final org = orgs[index];
-        return Card(
-          margin: EdgeInsets.zero,
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.divider.withOpacity(0.7)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        org.name,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.active,
-                        ),
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppColors.active.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.business_rounded,
+                        color: AppColors.active,
+                        size: 22,
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.remove_red_eye_outlined,
-                          size: 18, color: AppColors.active),
-                      tooltip: 'View Details',
-                      onPressed: () => _openViewDialog(context, org),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            org.name,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.active.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  org.businessType.isEmpty
+                                      ? 'Pvt Ltd'
+                                      : org.businessType,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.active,
+                                  ),
+                                ),
+                              ),
+                              if (org.industryType.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    org.industryType,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined,
-                          size: 18, color: AppColors.active),
-                      tooltip: 'Edit Organization',
-                      onPressed: () => _openEditDialog(context, org),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline,
-                          size: 18, color: Colors.redAccent),
-                      tooltip: 'Delete Organization',
-                      onPressed: () => _confirmDelete(context, org),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          constraints: const BoxConstraints(),
+                          padding: const EdgeInsets.all(6),
+                          icon: const Icon(Icons.remove_red_eye_outlined,
+                              size: 18, color: AppColors.active),
+                          tooltip: 'View Details',
+                          onPressed: () => _openViewDialog(context, org),
+                        ),
+                        IconButton(
+                          constraints: const BoxConstraints(),
+                          padding: const EdgeInsets.all(6),
+                          icon: const Icon(Icons.edit_outlined,
+                              size: 18, color: AppColors.active),
+                          tooltip: 'Edit Organization',
+                          onPressed: () => _openEditDialog(context, org),
+                        ),
+                        IconButton(
+                          constraints: const BoxConstraints(),
+                          padding: const EdgeInsets.all(6),
+                          icon: const Icon(Icons.delete_outline,
+                              size: 18, color: Colors.redAccent),
+                          tooltip: 'Delete Organization',
+                          onPressed: () => _confirmDelete(context, org),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  '${org.businessType}  \u00b7  ${org.industryType}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 10),
+                  child: Divider(height: 1),
                 ),
-                const SizedBox(height: 4),
-                if (org.phoneNumber.isNotEmpty || org.emailAddress.isNotEmpty)
-                  Text(
-                    [org.phoneNumber, org.emailAddress]
-                        .where((e) => e.isNotEmpty)
-                        .join('  \u00b7  '),
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                if (org.taxId.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    'Tax ID: ${org.taxId}',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
+                if (org.locations.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.location_on_outlined,
+                            size: 15, color: AppColors.textSecondary),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            org.locations,
+                            style: const TextStyle(
+                                fontSize: 12, color: AppColors.textPrimary),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
+                if (org.businessUnits.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.account_tree_outlined,
+                            size: 15, color: AppColors.textSecondary),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            org.businessUnits,
+                            style: const TextStyle(
+                                fontSize: 12, color: AppColors.textPrimary),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 4,
+                  children: [
+                    if (org.phoneNumber.isNotEmpty)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.phone_outlined,
+                              size: 14, color: AppColors.textSecondary),
+                          const SizedBox(width: 4),
+                          Text(
+                            org.phoneNumber,
+                            style: const TextStyle(
+                                fontSize: 12, color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    if (org.taxId.isNotEmpty)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.receipt_long_outlined,
+                              size: 14, color: AppColors.textSecondary),
+                          const SizedBox(width: 4),
+                          Text(
+                            'GST: ${org.taxId}',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -559,10 +690,10 @@ class _OrganizationManagementPageState
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: AppColors.divider)),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 500;
+          final showingText = Text(
             totalItems == 0
                 ? 'Showing 0 records'
                 : 'Showing ${startIndex + 1} - $endIndex of $totalItems',
@@ -570,11 +701,13 @@ class _OrganizationManagementPageState
               fontSize: 12,
               color: AppColors.textSecondary,
             ),
-          ),
-          Row(
+          );
+
+          final controlsRow = Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                'Rows per page: ',
+                'Rows: ',
                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
               ),
               DropdownButton<int>(
@@ -601,26 +734,52 @@ class _OrganizationManagementPageState
                   }
                 },
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 8),
               IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
                 icon: const Icon(Icons.chevron_left, size: 20),
                 onPressed: currentPage > 0
                     ? () => setState(() => _currentPage -= 1)
                     : null,
               ),
-              Text(
-                '${totalPages == 0 ? 0 : currentPage + 1} / $totalPages',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  '${totalPages == 0 ? 0 : currentPage + 1} / $totalPages',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
               ),
               IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
                 icon: const Icon(Icons.chevron_right, size: 20),
                 onPressed: currentPage < totalPages - 1
                     ? () => setState(() => _currentPage += 1)
                     : null,
               ),
             ],
-          ),
-        ],
+          );
+
+          if (isNarrow) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                showingText,
+                const SizedBox(height: 4),
+                controlsRow,
+              ],
+            );
+          }
+
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              showingText,
+              controlsRow,
+            ],
+          );
+        },
       ),
     );
   }

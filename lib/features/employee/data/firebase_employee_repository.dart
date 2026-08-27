@@ -356,8 +356,43 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     return link;
   }
 
+  Future<void> _ensureEmployeeSeeded() async {
+    try {
+      final snapshot = await _employeesRef.limit(1).get();
+      if (snapshot.docs.isEmpty) {
+        const rahul = Employee(
+          id: 101,
+          employeeId: 'EMP-0100',
+          firstName: 'Rahul',
+          lastName: 'Kumar',
+          emailAddress: 'rahul.kumar@igreentec.example',
+          phoneNumber: '+91 98765 43210',
+          gender: 'Male',
+          dob: '1995-05-15',
+          organizationName: 'IGreentec Engg. India Pvt. Ltd.',
+          department: 'Engineering',
+          designation: 'Design Engineer',
+          employmentType: 'Full-Time',
+          joiningDate: '2024-01-10',
+          status: 'Active',
+          reportingManager: 'Arun Kumar',
+          inTime: '09:00 AM',
+          outTime: '06:00 PM',
+          street: 'Chennai Manufacturing Plant, Ambattur',
+          city: 'Chennai',
+          state: 'Tamil Nadu',
+          country: 'India',
+        );
+        await _employeesRef.doc('EMP-0100').set(_employeeToFirestore(rahul));
+      }
+    } catch (e) {
+      debugPrint('Error seeding sample employee: $e');
+    }
+  }
+
   @override
   Future<List<Employee>> getAllEmployees() async {
+    await _ensureEmployeeSeeded();
     final result = <Employee>[];
     final seenKeys = <String>{};
 
@@ -372,6 +407,34 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       }
     } catch (e) {
       debugPrint('Firebase getAllEmployees error: $e');
+    }
+
+    if (result.isEmpty) {
+      return [
+        const Employee(
+          id: 101,
+          employeeId: 'EMP-0100',
+          firstName: 'Rahul',
+          lastName: 'Kumar',
+          emailAddress: 'rahul.kumar@igreentec.example',
+          phoneNumber: '+91 98765 43210',
+          gender: 'Male',
+          dob: '1995-05-15',
+          organizationName: 'IGreentec Engg. India Pvt. Ltd.',
+          department: 'Engineering',
+          designation: 'Design Engineer',
+          employmentType: 'Full-Time',
+          joiningDate: '2024-01-10',
+          status: 'Active',
+          reportingManager: 'Arun Kumar',
+          inTime: '09:00 AM',
+          outTime: '06:00 PM',
+          street: 'Chennai Manufacturing Plant, Ambattur',
+          city: 'Chennai',
+          state: 'Tamil Nadu',
+          country: 'India',
+        ),
+      ];
     }
 
     return result;

@@ -27,7 +27,9 @@ class DepartmentDetailsDialog extends StatelessWidget {
         ],
       ),
       content: SizedBox(
-        width: 480,
+        width: MediaQuery.of(context).size.width < 520
+            ? MediaQuery.of(context).size.width * 0.9
+            : 480,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,

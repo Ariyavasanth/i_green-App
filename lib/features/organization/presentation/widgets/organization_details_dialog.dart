@@ -27,7 +27,9 @@ class OrganizationDetailsDialog extends StatelessWidget {
         ],
       ),
       content: SizedBox(
-        width: 520,
+        width: MediaQuery.of(context).size.width < 560
+            ? MediaQuery.of(context).size.width * 0.9
+            : 520,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
