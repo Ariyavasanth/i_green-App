@@ -13,6 +13,7 @@ import '../domain/registration_link.dart';
 import '../domain/employee.dart';
 import '../providers/employee_providers.dart';
 import 'dialogs/add_employee_link_dialog.dart';
+import 'dialogs/candidate_conversion_dialog.dart';
 import 'dialogs/registration_links_dialog.dart';
 import 'widgets/admin_list_toolbar.dart';
 
@@ -1657,6 +1658,18 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(),
                             itemBuilder: (context) => [
+                              if (normalizedStatus == CandidateCardStatus.accepted || normalizedStatus == CandidateCardStatus.submitted) ...[
+                                const PopupMenuItem(
+                                  value: 'convert',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.assignment_ind_outlined, size: 18, color: Color(0xFF2E7D32)),
+                                      SizedBox(width: 8),
+                                      Text('Approve & Convert to Employee', style: TextStyle(fontSize: 13, color: Color(0xFF2E7D32), fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                ),
+                              ],
                               if (normalizedStatus == CandidateCardStatus.submitted || normalizedStatus == CandidateCardStatus.pending) ...[
                                 const PopupMenuItem(
                                   value: 'accept',
@@ -1723,7 +1736,12 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                               ),
                             ],
                             onSelected: (value) {
-                              if (value == 'accept') {
+                              if (value == 'convert') {
+                                showDialog(
+                                  context: context,
+                                  builder: (_) => CandidateConversionDialog(link: link, candidateEmployee: employee),
+                                );
+                              } else if (value == 'accept') {
                                 _setResponseStatus(link, 'Accepted');
                               } else if (value == 'reject') {
                                 _setResponseStatus(link, 'Rejected');

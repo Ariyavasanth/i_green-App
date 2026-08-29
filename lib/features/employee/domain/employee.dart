@@ -223,6 +223,10 @@ class Employee {
     this.requiresLeaveApproval = true,
     this.companyAssets = '',
     this.reportingManager = '',
+    this.reportingManagerId = '',
+    this.businessUnit = '',
+    this.workLocation = '',
+    this.workScheduleType = 'Fixed Schedule',
     this.reportingManagerTitle = 'Managing Director',
     this.adminName = 'Saravanan G S',
     this.coordinatorName = 'Admin Team',
@@ -588,6 +592,10 @@ class Employee {
   final String companyAssets;
 
   final String reportingManager;
+  final String reportingManagerId;
+  final String businessUnit;
+  final String workLocation;
+  final String workScheduleType;
   final String reportingManagerTitle;
   final String adminName;
   final String coordinatorName;
@@ -754,6 +762,10 @@ class Employee {
       'requires_leave_approval': requiresLeaveApproval ? 1 : 0,
       'company_assets': companyAssets,
       'reporting_manager': reportingManager,
+      'reporting_manager_id': reportingManagerId,
+      'business_unit': businessUnit,
+      'work_location': workLocation,
+      'work_schedule_type': workScheduleType,
       'reporting_manager_title': reportingManagerTitle,
       'admin_name': adminName,
       'coordinator_name': coordinatorName,
@@ -895,6 +907,10 @@ class Employee {
       }(),
       companyAssets: map['company_assets'] as String? ?? '',
       reportingManager: map['reporting_manager'] as String? ?? '',
+      reportingManagerId: map['reporting_manager_id'] as String? ?? '',
+      businessUnit: map['business_unit'] as String? ?? '',
+      workLocation: (map['work_location'] ?? map['workLocation']) as String? ?? '',
+      workScheduleType: (map['work_schedule_type'] ?? map['workScheduleType']) as String? ?? 'Fixed Schedule',
       reportingManagerTitle: (map['reporting_manager_title'] as String?)?.isNotEmpty == true
           ? map['reporting_manager_title'] as String
           : 'Managing Director',
@@ -1109,6 +1125,10 @@ class Employee {
     bool? requiresLeaveApproval,
     String? companyAssets,
     String? reportingManager,
+    String? reportingManagerId,
+    String? businessUnit,
+    String? workLocation,
+    String? workScheduleType,
     String? reportingManagerTitle,
     String? adminName,
     String? coordinatorName,
@@ -1232,6 +1252,10 @@ class Employee {
       requiresLeaveApproval: requiresLeaveApproval ?? this.requiresLeaveApproval,
       companyAssets: companyAssets ?? this.companyAssets,
       reportingManager: reportingManager ?? this.reportingManager,
+      reportingManagerId: reportingManagerId ?? this.reportingManagerId,
+      businessUnit: businessUnit ?? this.businessUnit,
+      workLocation: workLocation ?? this.workLocation,
+      workScheduleType: workScheduleType ?? this.workScheduleType,
       reportingManagerTitle: reportingManagerTitle ?? this.reportingManagerTitle,
       adminName: adminName ?? this.adminName,
       coordinatorName: coordinatorName ?? this.coordinatorName,

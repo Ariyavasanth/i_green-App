@@ -11,9 +11,37 @@ class DepartmentFormDialog extends ConsumerStatefulWidget {
 
   final Department? department;
 
+  static Future<bool?> show(BuildContext context, {Department? department}) {
+    final isMobile = MediaQuery.of(context).size.width < 640 || MediaQuery.of(context).size.height < 700;
+    if (isMobile) {
+      return showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (context) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          child: DepartmentFormDialog(department: department),
+        ),
+      );
+    } else {
+      return showDialog<bool>(
+        context: context,
+        builder: (context) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: SizedBox(
+            width: 500,
+            child: DepartmentFormDialog(department: department),
+          ),
+        ),
+      );
+    }
+  }
+
   @override
-  ConsumerState<DepartmentFormDialog> createState() =>
-      _DepartmentFormDialogState();
+  ConsumerState<DepartmentFormDialog> createState() => _DepartmentFormDialogState();
 }
 
 class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
@@ -53,8 +81,7 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
         ? dept.organizationName
         : null;
 
-    _reportingHierarchy = (dept != null &&
-            hierarchyOptions.contains(dept.reportingHierarchy))
+    _reportingHierarchy = (dept != null && hierarchyOptions.contains(dept.reportingHierarchy))
         ? dept.reportingHierarchy
         : hierarchyOptions.first;
 
@@ -114,181 +141,201 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
   Widget build(BuildContext context) {
     final isEdit = widget.department != null;
     final orgsAsync = ref.watch(organizationsProvider);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSingleColumn = screenWidth < 540;
 
-    return AlertDialog(
-      title: Row(
-        children: [
-          Icon(
-            isEdit ? Icons.edit_note : Icons.account_tree,
-            color: AppColors.active,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            isEdit ? 'Edit Department' : 'Add Department',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.close, size: 20),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ],
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.85,
       ),
-      content: SizedBox(
-        width: 480,
-        child: SingleChildScrollView(
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Drag handle for bottom sheet
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(top: 10, bottom: 4),
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD0D5DD),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          // Header Row
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 12, 12),
+            child: Row(
               children: [
-                _buildOrgDropdown(orgsAsync),
-                const SizedBox(height: 12),
-                _buildTextField(
-                  label: 'Department Name *',
-                  controller: _nameController,
-                  validator: (v) =>
-                      v == null || v.trim().isEmpty ? 'Name is required' : null,
-                  hint: 'e.g. Information Technology (IT)',
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    isEdit ? Icons.edit_note : Icons.account_tree,
+                    color: AppColors.primary,
+                    size: 20,
+                  ),
                 ),
-                const SizedBox(height: 12),
-                _buildTextField(
-                  label: 'Department Head *',
-                  controller: _headController,
-                  validator: (v) =>
-                      v == null || v.trim().isEmpty ? 'Head is required' : null,
-                  hint: 'e.g. John Doe',
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    isEdit ? 'Edit Department' : 'Add Department',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF101828),
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Reporting Hierarchy',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          DropdownButtonFormField<String>(
-                            initialValue: _reportingHierarchy,
-                            isDense: true,
-                            decoration: InputDecoration(
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 10,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(6),
-                                borderSide:
-                                    const BorderSide(color: AppColors.divider),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(6),
-                                borderSide:
-                                    const BorderSide(color: AppColors.active),
-                              ),
-                            ),
-                            items: hierarchyOptions
-                                .map(
-                                  (opt) => DropdownMenuItem(
-                                    value: opt,
-                                    child: Text(opt,
-                                        style: const TextStyle(fontSize: 13)),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (val) {
-                              if (val != null) {
-                                setState(() => _reportingHierarchy = val);
-                              }
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Work Location',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          DropdownButtonFormField<String>(
-                            initialValue: _workLocation,
-                            isDense: true,
-                            decoration: InputDecoration(
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 10,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(6),
-                                borderSide:
-                                    const BorderSide(color: AppColors.divider),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(6),
-                                borderSide:
-                                    const BorderSide(color: AppColors.active),
-                              ),
-                            ),
-                            items: locationOptions
-                                .map(
-                                  (opt) => DropdownMenuItem(
-                                    value: opt,
-                                    child: Text(opt,
-                                        style: const TextStyle(fontSize: 13)),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (val) {
-                              if (val != null) {
-                                setState(() => _workLocation = val);
-                              }
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                IconButton(
+                  icon: const Icon(Icons.close, size: 20, color: Color(0xFF667085)),
+                  onPressed: () => Navigator.of(context).pop(),
                 ),
               ],
             ),
           ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: AppColors.active),
-          onPressed: _isSaving ? null : _submit,
-          child: _isSaving
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
+          const Divider(height: 1, color: Color(0xFFEAECF0)),
+
+          // Scrollable Form Body
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildOrgDropdown(orgsAsync),
+                    const SizedBox(height: 16),
+                    _buildTextField(
+                      label: 'Department Name *',
+                      controller: _nameController,
+                      validator: (v) => v == null || v.trim().isEmpty ? 'Name is required' : null,
+                      hint: 'e.g. Engineering',
+                    ),
+                    const SizedBox(height: 16),
+                    _buildTextField(
+                      label: 'Department Head *',
+                      controller: _headController,
+                      validator: (v) => v == null || v.trim().isEmpty ? 'Head is required' : null,
+                      hint: 'e.g. Arun Kumar',
+                    ),
+                    const SizedBox(height: 16),
+                    if (isSingleColumn) ...[
+                      _buildHierarchyDropdown(),
+                      const SizedBox(height: 16),
+                      _buildLocationDropdown(),
+                    ] else ...[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: _buildHierarchyDropdown()),
+                          const SizedBox(width: 12),
+                          Expanded(child: _buildLocationDropdown()),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // Sticky Footer Action Buttons
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(top: BorderSide(color: Color(0xFFEAECF0))),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    side: const BorderSide(color: Color(0xFFD0D5DD)),
                   ),
-                )
-              : Text(isEdit ? 'Save Changes' : 'Add Department'),
+                  onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
+                  child: const Text('Cancel', style: TextStyle(color: Color(0xFF344054), fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: _isSaving ? null : _submit,
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : Text(isEdit ? 'Save Changes' : 'Add Department', style: const TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHierarchyDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Reporting Hierarchy',
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF344054)),
+        ),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<String>(
+          initialValue: _reportingHierarchy,
+          isDense: true,
+          isExpanded: true,
+          decoration: _inputDecoration(),
+          items: hierarchyOptions
+              .map((opt) => DropdownMenuItem(value: opt, child: Text(opt, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis)))
+              .toList(),
+          onChanged: (val) {
+            if (val != null) setState(() => _reportingHierarchy = val);
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLocationDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Work Location',
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF344054)),
+        ),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<String>(
+          initialValue: _workLocation,
+          isDense: true,
+          isExpanded: true,
+          decoration: _inputDecoration(),
+          items: locationOptions
+              .map((opt) => DropdownMenuItem(value: opt, child: Text(opt, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis)))
+              .toList(),
+          onChanged: (val) {
+            if (val != null) setState(() => _workLocation = val);
+          },
         ),
       ],
     );
@@ -305,37 +352,14 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
       children: [
         Text(
           label,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          ),
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF344054)),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         TextFormField(
           controller: controller,
           validator: validator,
           style: const TextStyle(fontSize: 13),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 12,
-            ),
-            isDense: true,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 10,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(6),
-              borderSide: const BorderSide(color: AppColors.divider),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(6),
-              borderSide: const BorderSide(color: AppColors.active),
-            ),
-          ),
+          decoration: _inputDecoration(hint: hint),
         ),
       ],
     );
@@ -347,58 +371,30 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
       children: [
         const Text(
           'Organization Name *',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          ),
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF344054)),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         orgsAsync.when(
           loading: () => const LinearProgressIndicator(),
-          error: (err, _) => Text(
-            'Error loading organizations: $err',
-            style: const TextStyle(color: Colors.red, fontSize: 12),
-          ),
+          error: (err, _) => Text('Error loading organizations: $err', style: const TextStyle(color: Colors.red, fontSize: 12)),
           data: (orgs) {
             final orgNames = orgs.map((o) => o.name).toList();
-            if (_selectedOrganization != null &&
-                !orgNames.contains(_selectedOrganization)) {
+            if (_selectedOrganization != null && !orgNames.contains(_selectedOrganization)) {
               _selectedOrganization = null;
             }
 
             return DropdownButtonFormField<String>(
               initialValue: _selectedOrganization,
               isDense: true,
-              hint: const Text(
-                'Select Organization',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-              ),
-              validator: (v) =>
-                  v == null || v.trim().isEmpty ? 'Organization is required' : null,
-              decoration: InputDecoration(
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide: const BorderSide(color: AppColors.divider),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide: const BorderSide(color: AppColors.active),
-                ),
-              ),
+              isExpanded: true,
+              hint: const Text('Select Organization', style: TextStyle(fontSize: 12, color: Color(0xFF667085))),
+              validator: (v) => v == null || v.trim().isEmpty ? 'Organization is required' : null,
+              decoration: _inputDecoration(),
               items: orgs
                   .map(
                     (org) => DropdownMenuItem(
                       value: org.name,
-                      child: Text(
-                        org.name,
-                        style: const TextStyle(fontSize: 13),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      child: Text(org.name, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
                     ),
                   )
                   .toList(),
@@ -409,6 +405,27 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
           },
         ),
       ],
+    );
+  }
+
+  InputDecoration _inputDecoration({String? hint}) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(color: Color(0xFF667085), fontSize: 12),
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFFD0D5DD)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFFD0D5DD)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+      ),
     );
   }
 }

@@ -42,13 +42,24 @@ class _OrganizationManagementPageState
     final orgsAsync = ref.watch(organizationsProvider);
     final prefAsync = ref.watch(columnPreferenceProvider(_tableId));
     final searchQuery = ref.watch(orgSearchQueryProvider);
+    final isMobile = MediaQuery.of(context).size.width < 650;
 
-    return ColoredBox(
-      color: Colors.white,
-      child: Column(
+    return Scaffold(
+      backgroundColor: Colors.white,
+      floatingActionButton: isMobile
+          ? FloatingActionButton.extended(
+              onPressed: () => _openAddDialog(context),
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              elevation: 3,
+              icon: const Icon(Icons.add),
+              label: const Text('Add Organization', style: TextStyle(fontWeight: FontWeight.bold)),
+            )
+          : null,
+      body: Column(
         children: [
-          _buildToolbar(context, prefAsync),
-          const Divider(height: 1),
+          _buildToolbar(context, prefAsync, isMobile),
+          const Divider(height: 1, color: Color(0xFFEAECF0)),
           Expanded(
             child: orgsAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -82,7 +93,6 @@ class _OrganizationManagementPageState
                   );
                 }
 
-                // Determine active visible columns and ordering from user preferences
                 final pref = prefAsync.valueOrNull;
                 List<String> visibleCols;
                 if (pref != null && pref.visibleColumns.isNotEmpty) {
@@ -91,7 +101,6 @@ class _OrganizationManagementPageState
                   visibleCols = List.from(_defaultAllColumns);
                 }
 
-                // Calculate pagination
                 final totalItems = filtered.length;
                 final totalPages = (totalItems / _rowsPerPage).ceil();
                 final pageIndex = _currentPage.clamp(0, (totalPages - 1).clamp(0, 999));
@@ -102,16 +111,13 @@ class _OrganizationManagementPageState
                 return Column(
                   children: [
                     Expanded(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) =>
-                            constraints.maxWidth < 720
-                                ? _buildMobileList(pageItems)
-                                : _buildDesktopTable(
-                                    pageItems,
-                                    visibleCols,
-                                    constraints.maxWidth,
-                                  ),
-                      ),
+                      child: isMobile
+                          ? _buildMobileList(pageItems)
+                          : _buildDesktopTable(
+                              pageItems,
+                              visibleCols,
+                              MediaQuery.of(context).size.width,
+                            ),
                     ),
                     _buildPaginationBar(
                       totalItems: totalItems,
@@ -119,6 +125,7 @@ class _OrganizationManagementPageState
                       endIndex: endIndex,
                       currentPage: pageIndex,
                       totalPages: totalPages,
+                      isMobile: isMobile,
                     ),
                   ],
                 );
@@ -133,6 +140,7 @@ class _OrganizationManagementPageState
   Widget _buildToolbar(
     BuildContext context,
     AsyncValue<dynamic> prefAsync,
+    bool isMobile,
   ) {
     final searchController = TextEditingController(
       text: ref.read(orgSearchQueryProvider),
@@ -142,152 +150,96 @@ class _OrganizationManagementPageState
     );
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 16, 12),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isCompact = constraints.maxWidth < 640;
-
-          return Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Text(
-                    'Organization Management',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 42,
+              child: TextField(
+                controller: searchController,
+                style: const TextStyle(fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'Search organizations...',
+                  hintStyle: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF667085),
                   ),
-                ],
+                  prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF667085)),
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (searchController.text.isNotEmpty)
+                        IconButton(
+                          icon: const Icon(Icons.clear, size: 18, color: Color(0xFF667085)),
+                          onPressed: () {
+                            ref.read(orgSearchQueryProvider.notifier).state = '';
+                            setState(() => _currentPage = 0);
+                          },
+                        ),
+                      const Icon(Icons.tune_rounded, size: 18, color: Color(0xFF667085)),
+                      const SizedBox(width: 8),
+                    ],
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                  filled: true,
+                  fillColor: const Color(0xFFF9FAFB),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: Color(0xFFD0D5DD)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: Color(0xFFD0D5DD)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                  ),
+                ),
+                onChanged: (val) {
+                  ref.read(orgSearchQueryProvider.notifier).state = val;
+                  setState(() => _currentPage = 0);
+                },
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    width: isCompact ? 160 : 220,
-                    height: 36,
-                    child: TextField(
-                      controller: searchController,
-                      style: const TextStyle(fontSize: 13),
-                      decoration: InputDecoration(
-                        hintText: 'Search organizations...',
-                        hintStyle: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                        ),
-                        prefixIcon: const Icon(Icons.search, size: 18),
-                        suffixIcon: searchController.text.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear, size: 16),
-                                onPressed: () {
-                                  ref
-                                      .read(orgSearchQueryProvider.notifier)
-                                      .state = '';
-                                  setState(() => _currentPage = 0);
-                                },
-                              )
-                            : null,
-                        contentPadding: EdgeInsets.zero,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(6),
-                          borderSide:
-                              const BorderSide(color: AppColors.divider),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(6),
-                          borderSide:
-                              const BorderSide(color: AppColors.active),
-                        ),
-                      ),
-                      onChanged: (val) {
-                        ref.read(orgSearchQueryProvider.notifier).state = val;
-                        setState(() => _currentPage = 0);
-                      },
-                    ),
-                  ),
-                  if (!isCompact) ...[
-                    const SizedBox(width: 8),
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        side: const BorderSide(color: AppColors.divider),
-                      ),
-                      onPressed: () => _openColumnSelectionDialog(context),
-                      icon: const Icon(Icons.view_column_outlined, size: 18),
-                      label: const Text('Columns', style: TextStyle(fontSize: 13)),
-                    ),
-                  ],
-                  const SizedBox(width: 8),
-                  FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.active,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                    ),
-                    onPressed: () => _openAddDialog(context),
-                    icon: const Icon(Icons.add, size: 18),
-                    label: Text(
-                      isCompact ? 'Add' : 'Add Organization',
-                      style: const TextStyle(fontSize: 13),
-                    ),
-                  ),
-                ],
+            ),
+          ),
+          if (!isMobile) ...[
+            const SizedBox(width: 10),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                minimumSize: const Size(0, 42),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-            ],
-          );
-        },
+              onPressed: () => _openAddDialog(context),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text(
+                'Add Organization',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
 
-  Future<void> _openColumnSelectionDialog(BuildContext context) async {
-    final pref = ref.read(columnPreferenceProvider(_tableId)).valueOrNull;
+  void _openAddDialog(BuildContext context) {
+    OrganizationFormDialog.show(context);
+  }
 
-    final updated = await showDialog<bool>(
-      context: context,
-      builder: (context) => ColumnSelectionDialog(
-        tableId: _tableId,
-        allColumns: _defaultAllColumns,
-        currentVisibleColumns:
-            pref?.visibleColumns ?? List.from(_defaultAllColumns),
-        currentColumnOrder: pref?.columnOrder ?? List.from(_defaultAllColumns),
-      ),
-    );
-
-    if (updated == true) {
-      ref.invalidate(columnPreferenceProvider(_tableId));
-    }
+  void _openEditDialog(BuildContext context, Organization org) {
+    OrganizationFormDialog.show(context, organization: org);
   }
 
   void _openViewDialog(BuildContext context, Organization org) {
     showDialog<void>(
       context: context,
       builder: (context) => OrganizationDetailsDialog(organization: org),
-    );
-  }
-
-  void _openAddDialog(BuildContext context) {
-    showDialog<bool>(
-      context: context,
-      builder: (context) => const OrganizationFormDialog(),
-    );
-  }
-
-  void _openEditDialog(BuildContext context, Organization org) {
-    showDialog<bool>(
-      context: context,
-      builder: (context) => OrganizationFormDialog(organization: org),
     );
   }
 
@@ -320,9 +272,7 @@ class _OrganizationManagementPageState
     );
 
     if (confirm == true) {
-      await ref
-          .read(organizationRepositoryProvider)
-          .deleteOrganization(org.id);
+      await ref.read(organizationRepositoryProvider).deleteOrganization(org.id);
       ref.invalidate(organizationsProvider);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -336,7 +286,6 @@ class _OrganizationManagementPageState
     List<String> visibleColumns,
     double screenWidth,
   ) {
-    // Calculate required width based on columns
     final minTableWidth = (visibleColumns.length * 150.0 + 120.0).clamp(800.0, 2400.0);
 
     return SingleChildScrollView(
@@ -383,20 +332,17 @@ class _OrganizationManagementPageState
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.remove_red_eye_outlined,
-                              size: 18, color: AppColors.active),
+                          icon: const Icon(Icons.remove_red_eye_outlined, size: 18, color: AppColors.primary),
                           tooltip: 'View Details',
                           onPressed: () => _openViewDialog(context, org),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.edit_outlined,
-                              size: 18, color: AppColors.active),
+                          icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
                           tooltip: 'Edit Organization',
                           onPressed: () => _openEditDialog(context, org),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.delete_outline,
-                              size: 18, color: Colors.redAccent),
+                          icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
                           tooltip: 'Delete Organization',
                           onPressed: () => _confirmDelete(context, org),
                         ),
@@ -419,10 +365,7 @@ class _OrganizationManagementPageState
     switch (columnName) {
       case 'Organization Name':
         value = org.name;
-        style = const TextStyle(
-          fontWeight: FontWeight.w600,
-          color: AppColors.active,
-        );
+        style = const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF101828), fontSize: 14);
         break;
       case 'Business Type':
         value = org.businessType;
@@ -469,7 +412,7 @@ class _OrganizationManagementPageState
 
   Widget _buildMobileList(List<Organization> orgs) {
     return ListView.separated(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       itemCount: orgs.length,
       separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
@@ -478,33 +421,35 @@ class _OrganizationManagementPageState
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.divider.withOpacity(0.7)),
+            border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 8,
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 6,
                 offset: const Offset(0, 2),
               ),
             ],
           ),
           child: Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Neutral light gray icon box (#F3F4F6)
                     Container(
-                      width: 40,
-                      height: 40,
+                      width: 44,
+                      height: 44,
                       decoration: BoxDecoration(
-                        color: AppColors.active.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(8),
+                        color: const Color(0xFFF3F4F6),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
                       ),
                       child: const Icon(
                         Icons.business_rounded,
-                        color: AppColors.active,
+                        color: Color(0xFF475467),
                         size: 22,
                       ),
                     ),
@@ -516,99 +461,120 @@ class _OrganizationManagementPageState
                           Text(
                             org.name,
                             style: const TextStyle(
-                              fontSize: 15,
+                              fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
+                              color: Color(0xFF101828),
                             ),
                           ),
-                          const SizedBox(height: 3),
-                          Row(
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
                             children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppColors.active.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  org.businessType.isEmpty
-                                      ? 'Pvt Ltd'
-                                      : org.businessType,
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.active,
+                              if (org.businessType.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFEFF6FF),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: const Color(0xFFDBEAFE)),
                                   ),
-                                ),
-                              ),
-                              if (org.industryType.isNotEmpty) ...[
-                                const SizedBox(width: 6),
-                                Expanded(
                                   child: Text(
-                                    org.industryType,
-                                    overflow: TextOverflow.ellipsis,
+                                    org.businessType,
                                     style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.textSecondary,
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF1E40AF),
                                     ),
                                   ),
                                 ),
-                              ],
+                              if (org.industryType.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF3E8FF),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: const Color(0xFFE9D5FF)),
+                                  ),
+                                  child: Text(
+                                    org.industryType,
+                                    style: const TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF6B21A8),
+                                    ),
+                                  ),
+                                ),
                             ],
                           ),
                         ],
                       ),
                     ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          constraints: const BoxConstraints(),
-                          padding: const EdgeInsets.all(6),
-                          icon: const Icon(Icons.remove_red_eye_outlined,
-                              size: 18, color: AppColors.active),
-                          tooltip: 'View Details',
-                          onPressed: () => _openViewDialog(context, org),
-                        ),
-                        IconButton(
-                          constraints: const BoxConstraints(),
-                          padding: const EdgeInsets.all(6),
-                          icon: const Icon(Icons.edit_outlined,
-                              size: 18, color: AppColors.active),
-                          tooltip: 'Edit Organization',
-                          onPressed: () => _openEditDialog(context, org),
-                        ),
-                        IconButton(
-                          constraints: const BoxConstraints(),
-                          padding: const EdgeInsets.all(6),
-                          icon: const Icon(Icons.delete_outline,
-                              size: 18, color: Colors.redAccent),
-                          tooltip: 'Delete Organization',
-                          onPressed: () => _confirmDelete(context, org),
-                        ),
-                      ],
+                    // Action Menu with 44x44 pt minimum touch target
+                    SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert, size: 20, color: Color(0xFF667085)),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'view',
+                            child: Row(
+                              children: [
+                                Icon(Icons.remove_red_eye_outlined, size: 18, color: AppColors.primary),
+                                SizedBox(width: 8),
+                                Text('View Details', style: TextStyle(fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                                SizedBox(width: 8),
+                                Text('Edit Organization', style: TextStyle(fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                                SizedBox(width: 8),
+                                Text('Delete Organization', style: TextStyle(fontSize: 13, color: Colors.redAccent)),
+                              ],
+                            ),
+                          ),
+                        ],
+                        onSelected: (val) {
+                          if (val == 'view') _openViewDialog(context, org);
+                          if (val == 'edit') _openEditDialog(context, org);
+                          if (val == 'delete') _confirmDelete(context, org);
+                        },
+                      ),
                     ),
                   ],
                 ),
                 const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 10),
-                  child: Divider(height: 1),
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Divider(height: 1, color: Color(0xFFEAECF0)),
                 ),
                 if (org.locations.isNotEmpty)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.only(bottom: 8),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.location_on_outlined,
-                            size: 15, color: AppColors.textSecondary),
-                        const SizedBox(width: 6),
+                        const Icon(Icons.location_on_outlined, size: 16, color: Color(0xFF2563EB)),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             org.locations,
-                            style: const TextStyle(
-                                fontSize: 12, color: AppColors.textPrimary),
+                            style: const TextStyle(fontSize: 12.5, color: Color(0xFF344054)),
                           ),
                         ),
                       ],
@@ -616,58 +582,40 @@ class _OrganizationManagementPageState
                   ),
                 if (org.businessUnits.isNotEmpty)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.only(bottom: 8),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.account_tree_outlined,
-                            size: 15, color: AppColors.textSecondary),
-                        const SizedBox(width: 6),
+                        const Icon(Icons.account_tree_outlined, size: 16, color: Color(0xFF9333EA)),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             org.businessUnits,
-                            style: const TextStyle(
-                                fontSize: 12, color: AppColors.textPrimary),
+                            style: const TextStyle(fontSize: 12.5, color: Color(0xFF344054)),
                           ),
                         ),
                       ],
                     ),
                   ),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 4,
+                Row(
                   children: [
-                    if (org.phoneNumber.isNotEmpty)
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.phone_outlined,
-                              size: 14, color: AppColors.textSecondary),
-                          const SizedBox(width: 4),
-                          Text(
-                            org.phoneNumber,
-                            style: const TextStyle(
-                                fontSize: 12, color: AppColors.textSecondary),
-                          ),
-                        ],
+                    if (org.phoneNumber.isNotEmpty) ...[
+                      const Icon(Icons.phone_outlined, size: 15, color: Color(0xFF667085)),
+                      const SizedBox(width: 6),
+                      Text(
+                        org.phoneNumber,
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF344054)),
                       ),
-                    if (org.taxId.isNotEmpty)
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.receipt_long_outlined,
-                              size: 14, color: AppColors.textSecondary),
-                          const SizedBox(width: 4),
-                          Text(
-                            'GST: ${org.taxId}',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
+                      const SizedBox(width: 14),
+                    ],
+                    if (org.taxId.isNotEmpty) ...[
+                      const Icon(Icons.receipt_long_outlined, size: 15, color: Color(0xFF667085)),
+                      const SizedBox(width: 6),
+                      Text(
+                        'GST: ${org.taxId}',
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF344054), fontWeight: FontWeight.w500),
                       ),
+                    ],
                   ],
                 ),
               ],
@@ -684,102 +632,89 @@ class _OrganizationManagementPageState
     required int endIndex,
     required int currentPage,
     required int totalPages,
+    required bool isMobile,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: AppColors.divider)),
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Color(0xFFEAECF0))),
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isNarrow = constraints.maxWidth < 500;
-          final showingText = Text(
-            totalItems == 0
-                ? 'Showing 0 records'
-                : 'Showing ${startIndex + 1} - $endIndex of $totalItems',
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary,
-            ),
-          );
-
-          final controlsRow = Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Rows: ',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-              ),
-              DropdownButton<int>(
-                value: _rowsPerPage,
-                isDense: true,
-                underline: const SizedBox(),
-                items: [5, 10, 20, 50]
-                    .map(
-                      (val) => DropdownMenuItem(
-                        value: val,
-                        child: Text(
-                          '$val',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (val) {
-                  if (val != null) {
-                    setState(() {
-                      _rowsPerPage = val;
-                      _currentPage = 0;
-                    });
-                  }
-                },
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                icon: const Icon(Icons.chevron_left, size: 20),
-                onPressed: currentPage > 0
-                    ? () => setState(() => _currentPage -= 1)
-                    : null,
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Text(
-                  '${totalPages == 0 ? 0 : currentPage + 1} / $totalPages',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-              ),
-              IconButton(
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                icon: const Icon(Icons.chevron_right, size: 20),
-                onPressed: currentPage < totalPages - 1
-                    ? () => setState(() => _currentPage += 1)
-                    : null,
-              ),
-            ],
-          );
-
-          if (isNarrow) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            totalItems == 0 ? 'Showing 0 of 0' : 'Showing ${startIndex + 1} - $endIndex of $totalItems',
+            style: const TextStyle(fontSize: 12, color: Color(0xFF667085), fontWeight: FontWeight.w500),
+          ),
+          if (!isMobile)
+            Row(
               children: [
-                showingText,
-                const SizedBox(height: 4),
-                controlsRow,
+                const Text('Rows per page ', style: TextStyle(fontSize: 12, color: Color(0xFF667085))),
+                DropdownButtonHideUnderline(
+                  child: DropdownButton<int>(
+                    value: _rowsPerPage,
+                    isDense: true,
+                    items: [5, 10, 20, 50].map((val) => DropdownMenuItem(value: val, child: Text('$val', style: const TextStyle(fontSize: 12)))).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() {
+                          _rowsPerPage = val;
+                          _currentPage = 0;
+                        });
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  icon: const Icon(Icons.chevron_left, size: 20),
+                  onPressed: currentPage > 0 ? () => setState(() => _currentPage -= 1) : null,
+                ),
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    '${currentPage + 1}',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                ),
+                IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  icon: const Icon(Icons.chevron_right, size: 20),
+                  onPressed: currentPage < totalPages - 1 ? () => setState(() => _currentPage += 1) : null,
+                ),
               ],
-            );
-          }
-
-          return Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              showingText,
-              controlsRow,
-            ],
-          );
-        },
+            )
+          else
+            Row(
+              children: [
+                IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  icon: const Icon(Icons.chevron_left, size: 22),
+                  onPressed: currentPage > 0 ? () => setState(() => _currentPage -= 1) : null,
+                ),
+                Text(
+                  '${currentPage + 1} / ${totalPages == 0 ? 1 : totalPages}',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF344054)),
+                ),
+                IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  icon: const Icon(Icons.chevron_right, size: 22),
+                  onPressed: currentPage < totalPages - 1 ? () => setState(() => _currentPage += 1) : null,
+                ),
+              ],
+            ),
+        ],
       ),
     );
   }

@@ -1,8 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
+import '../domain/business_unit.dart';
 import '../domain/column_preference.dart';
 import '../domain/department.dart';
+import '../domain/designation.dart';
+import '../domain/location.dart';
 import '../domain/organization.dart';
 import '../domain/organization_repository.dart';
 
@@ -23,33 +26,18 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
     }
   }
 
-  CollectionReference<Map<String, dynamic>>? get _orgsRef {
-    try {
-      return _firestore?.collection('organizations');
-    } catch (_) {
-      return null;
-    }
-  }
+  CollectionReference<Map<String, dynamic>>? get _orgsRef => _firestore?.collection('organizations');
+  CollectionReference<Map<String, dynamic>>? get _buRef => _firestore?.collection('business_units');
+  CollectionReference<Map<String, dynamic>>? get _locationsRef => _firestore?.collection('locations');
+  CollectionReference<Map<String, dynamic>>? get _deptsRef => _firestore?.collection('departments');
+  CollectionReference<Map<String, dynamic>>? get _designationsRef => _firestore?.collection('designations');
+  CollectionReference<Map<String, dynamic>>? get _colPrefRef => _firestore?.collection('column_preferences');
 
-  CollectionReference<Map<String, dynamic>>? get _deptsRef {
-    try {
-      return _firestore?.collection('departments');
-    } catch (_) {
-      return null;
-    }
-  }
-
-  CollectionReference<Map<String, dynamic>>? get _colPrefRef {
-    try {
-      return _firestore?.collection('column_preferences');
-    } catch (_) {
-      return null;
-    }
-  }
+  static const String _orgName = 'IGreentec Engg. India Pvt. Ltd.';
 
   static final Organization _initialSeedOrg = const Organization(
     id: 1,
-    name: 'IGreentec Engg. India Pvt. Ltd.',
+    name: _orgName,
     businessType: 'Private Limited Company',
     industryType: 'Engineering & Manufacturing',
     businessUnits: 'Engineering & Manufacturing, Projects & Services, Corporate Operations',
@@ -61,111 +49,170 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
     taxId: '33ABCDE1234F1Z5',
   );
 
+  static final List<BusinessUnit> _initialSeedBUs = [
+    const BusinessUnit(id: 1, organizationName: _orgName, unitName: 'Engineering & Manufacturing', description: 'Core engineering, design, and plant manufacturing operations.'),
+    const BusinessUnit(id: 2, organizationName: _orgName, unitName: 'Projects & Services', description: 'On-site execution, HDD, trenchless, and utility infrastructure services.'),
+    const BusinessUnit(id: 3, organizationName: _orgName, unitName: 'Corporate Operations', description: 'HR, Finance, IT, Administration, Sales and corporate functions.'),
+  ];
+
+  static final List<Location> _initialSeedLocations = [
+    const Location(id: 1, organizationName: _orgName, businessUnitName: 'Engineering & Manufacturing', locationName: 'Chennai Manufacturing Plant', address: 'Plot No. 45, Ambattur Industrial Estate, Chennai - 600058'),
+    const Location(id: 2, organizationName: _orgName, businessUnitName: 'Corporate Operations', locationName: 'Chennai Head Office', address: 'No. 25, Greams Road, Thousand Lights, Chennai - 600006'),
+    const Location(id: 3, organizationName: _orgName, businessUnitName: 'Projects & Services', locationName: 'Chennai Manufacturing Plant', address: 'Plot No. 45, Ambattur Industrial Estate, Chennai - 600058'),
+  ];
+
   static final List<Department> _initialSeedDepts = [
-    const Department(
-      id: 1,
-      organizationName: 'IGreentec Engg. India Pvt. Ltd.',
-      departmentName: 'Engineering',
-      departmentHead: 'Arun Kumar',
-      reportingHierarchy: 'Manager',
-      workLocation: 'Chennai Manufacturing Plant',
-    ),
-    const Department(
-      id: 2,
-      organizationName: 'IGreentec Engg. India Pvt. Ltd.',
-      departmentName: 'Production',
-      departmentHead: 'Suresh Kumar',
-      reportingHierarchy: 'Manager',
-      workLocation: 'Chennai Manufacturing Plant',
-    ),
-    const Department(
-      id: 3,
-      organizationName: 'IGreentec Engg. India Pvt. Ltd.',
-      departmentName: 'Quality Assurance',
-      departmentHead: 'Priya Raj',
-      reportingHierarchy: 'Manager',
-      workLocation: 'Chennai Manufacturing Plant',
-    ),
-    const Department(
-      id: 4,
-      organizationName: 'IGreentec Engg. India Pvt. Ltd.',
-      departmentName: 'Projects',
-      departmentHead: 'Karthik M',
-      reportingHierarchy: 'Manager',
-      workLocation: 'Chennai Manufacturing Plant',
-    ),
-    const Department(
-      id: 5,
-      organizationName: 'IGreentec Engg. India Pvt. Ltd.',
-      departmentName: 'Purchase & Procurement',
-      departmentHead: 'Divya S',
-      reportingHierarchy: 'Manager',
-      workLocation: 'Chennai Manufacturing Plant',
-    ),
-    const Department(
-      id: 6,
-      organizationName: 'IGreentec Engg. India Pvt. Ltd.',
-      departmentName: 'Sales & Marketing',
-      departmentHead: 'Naveen Kumar',
-      reportingHierarchy: 'Manager',
-      workLocation: 'Chennai Head Office',
-    ),
-    const Department(
-      id: 7,
-      organizationName: 'IGreentec Engg. India Pvt. Ltd.',
-      departmentName: 'Human Resources',
-      departmentHead: 'Meena R',
-      reportingHierarchy: 'Manager',
-      workLocation: 'Chennai Head Office',
-    ),
-    const Department(
-      id: 8,
-      organizationName: 'IGreentec Engg. India Pvt. Ltd.',
-      departmentName: 'Finance & Accounts',
-      departmentHead: 'Ravi Shankar',
-      reportingHierarchy: 'Manager',
-      workLocation: 'Chennai Head Office',
-    ),
-    const Department(
-      id: 9,
-      organizationName: 'IGreentec Engg. India Pvt. Ltd.',
-      departmentName: 'Administration',
-      departmentHead: 'Anitha P',
-      reportingHierarchy: 'Manager',
-      workLocation: 'Chennai Head Office',
-    ),
-    const Department(
-      id: 10,
-      organizationName: 'IGreentec Engg. India Pvt. Ltd.',
-      departmentName: 'Information Technology',
-      departmentHead: 'Vijay Kumar',
-      reportingHierarchy: 'Manager',
-      workLocation: 'Chennai Head Office',
-    ),
+    const Department(id: 1, organizationName: _orgName, businessUnitName: 'Engineering & Manufacturing', departmentName: 'Engineering', departmentHead: 'Arun Kumar', reportingHierarchy: 'Manager', workLocation: 'Chennai Manufacturing Plant'),
+    const Department(id: 2, organizationName: _orgName, businessUnitName: 'Engineering & Manufacturing', departmentName: 'Production', departmentHead: 'Suresh Kumar', reportingHierarchy: 'Manager', workLocation: 'Chennai Manufacturing Plant'),
+    const Department(id: 3, organizationName: _orgName, businessUnitName: 'Engineering & Manufacturing', departmentName: 'Quality Assurance', departmentHead: 'Priya Raj', reportingHierarchy: 'Manager', workLocation: 'Chennai Manufacturing Plant'),
+    const Department(id: 4, organizationName: _orgName, businessUnitName: 'Projects & Services', departmentName: 'Projects', departmentHead: 'Karthik M', reportingHierarchy: 'Manager', workLocation: 'Chennai Manufacturing Plant'),
+    const Department(id: 5, organizationName: _orgName, businessUnitName: 'Engineering & Manufacturing', departmentName: 'Purchase & Procurement', departmentHead: 'Divya S', reportingHierarchy: 'Manager', workLocation: 'Chennai Manufacturing Plant'),
+    const Department(id: 6, organizationName: _orgName, businessUnitName: 'Corporate Operations', departmentName: 'Sales & Marketing', departmentHead: 'Naveen Kumar', reportingHierarchy: 'Manager', workLocation: 'Chennai Head Office'),
+    const Department(id: 7, organizationName: _orgName, businessUnitName: 'Corporate Operations', departmentName: 'Human Resources', departmentHead: 'Meena R', reportingHierarchy: 'Manager', workLocation: 'Chennai Head Office'),
+    const Department(id: 8, organizationName: _orgName, businessUnitName: 'Corporate Operations', departmentName: 'Finance & Accounts', departmentHead: 'Ravi Shankar', reportingHierarchy: 'Head', workLocation: 'Chennai Head Office'),
+    const Department(id: 9, organizationName: _orgName, businessUnitName: 'Corporate Operations', departmentName: 'Administration', departmentHead: 'Anitha P', reportingHierarchy: 'Manager', workLocation: 'Chennai Head Office'),
+    const Department(id: 10, organizationName: _orgName, businessUnitName: 'Corporate Operations', departmentName: 'Information Technology', departmentHead: 'Vijay Kumar', reportingHierarchy: 'Manager', workLocation: 'Chennai Head Office'),
+  ];
+
+  static final List<Designation> _initialSeedDesignations = [
+    // Engineering
+    const Designation(id: 1, departmentName: 'Engineering', designationName: 'Technical Head', hierarchyLevel: HierarchyLevel.head),
+    const Designation(id: 2, departmentName: 'Engineering', designationName: 'Engineering Manager', hierarchyLevel: HierarchyLevel.manager),
+    const Designation(id: 3, departmentName: 'Engineering', designationName: 'Senior Design Engineer', hierarchyLevel: HierarchyLevel.senior),
+    const Designation(id: 4, departmentName: 'Engineering', designationName: 'Design Engineer', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 5, departmentName: 'Engineering', designationName: 'Mechanical Engineer', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 6, departmentName: 'Engineering', designationName: 'Electrical Engineer', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 7, departmentName: 'Engineering', designationName: 'Junior Engineer', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 8, departmentName: 'Engineering', designationName: 'CAD Engineer', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 9, departmentName: 'Engineering', designationName: 'CAD Designer', hierarchyLevel: HierarchyLevel.employee),
+
+    // Production
+    const Designation(id: 10, departmentName: 'Production', designationName: 'Factory Manager', hierarchyLevel: HierarchyLevel.manager),
+    const Designation(id: 11, departmentName: 'Production', designationName: 'Production Manager', hierarchyLevel: HierarchyLevel.manager),
+    const Designation(id: 12, departmentName: 'Production', designationName: 'Production Engineer', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 13, departmentName: 'Production', designationName: 'Production Supervisor', hierarchyLevel: HierarchyLevel.supervisor),
+    const Designation(id: 14, departmentName: 'Production', designationName: 'Factory Coordinator', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 15, departmentName: 'Production', designationName: 'Machine Operator', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 16, departmentName: 'Production', designationName: 'Operator', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 17, departmentName: 'Production', designationName: 'Production Trainee', hierarchyLevel: HierarchyLevel.trainee),
+
+    // Quality Assurance
+    const Designation(id: 18, departmentName: 'Quality Assurance', designationName: 'Quality Manager', hierarchyLevel: HierarchyLevel.manager),
+    const Designation(id: 19, departmentName: 'Quality Assurance', designationName: 'Quality Engineer', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 20, departmentName: 'Quality Assurance', designationName: 'Quality Inspector', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 21, departmentName: 'Quality Assurance', designationName: 'QA Executive', hierarchyLevel: HierarchyLevel.employee),
+
+    // Projects
+    const Designation(id: 22, departmentName: 'Projects', designationName: 'Technical Head', hierarchyLevel: HierarchyLevel.head),
+    const Designation(id: 23, departmentName: 'Projects', designationName: 'Project Manager', hierarchyLevel: HierarchyLevel.manager),
+    const Designation(id: 24, departmentName: 'Projects', designationName: 'Project Lead', hierarchyLevel: HierarchyLevel.lead),
+    const Designation(id: 25, departmentName: 'Projects', designationName: 'Project Engineer', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 26, departmentName: 'Projects', designationName: 'Sr. Project Coordinator', hierarchyLevel: HierarchyLevel.senior),
+    const Designation(id: 27, departmentName: 'Projects', designationName: 'Project Coordinator', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 28, departmentName: 'Projects', designationName: 'Project Assistant', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 29, departmentName: 'Projects', designationName: 'Site Engineer', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 30, departmentName: 'Projects', designationName: 'Site Coordinator', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 31, departmentName: 'Projects', designationName: 'Sr. Site Coordinator', hierarchyLevel: HierarchyLevel.senior),
+    const Designation(id: 32, departmentName: 'Projects', designationName: 'Site Coordinator - Trainee', hierarchyLevel: HierarchyLevel.trainee),
+    const Designation(id: 33, departmentName: 'Projects', designationName: 'Rig Operator', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 34, departmentName: 'Projects', designationName: 'Bore Path Specialist', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 35, departmentName: 'Projects', designationName: 'Tracker', hierarchyLevel: HierarchyLevel.employee),
+
+    // Human Resources
+    const Designation(id: 36, departmentName: 'Human Resources', designationName: 'HR Manager', hierarchyLevel: HierarchyLevel.manager),
+    const Designation(id: 37, departmentName: 'Human Resources', designationName: 'HR Executive', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 38, departmentName: 'Human Resources', designationName: 'HR Coordinator', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 39, departmentName: 'Human Resources', designationName: 'HR Trainee', hierarchyLevel: HierarchyLevel.trainee),
+
+    // Finance & Accounts
+    const Designation(id: 40, departmentName: 'Finance & Accounts', designationName: 'Finance Head', hierarchyLevel: HierarchyLevel.head),
+    const Designation(id: 41, departmentName: 'Finance & Accounts', designationName: 'Finance Manager', hierarchyLevel: HierarchyLevel.manager),
+    const Designation(id: 42, departmentName: 'Finance & Accounts', designationName: 'Senior Accountant', hierarchyLevel: HierarchyLevel.senior),
+    const Designation(id: 43, departmentName: 'Finance & Accounts', designationName: 'Accountant', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 44, departmentName: 'Finance & Accounts', designationName: 'Junior Accountant', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 45, departmentName: 'Finance & Accounts', designationName: 'Accounts Executive', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 46, departmentName: 'Finance & Accounts', designationName: 'Accounts Assistant', hierarchyLevel: HierarchyLevel.employee),
+
+    // Information Technology
+    const Designation(id: 47, departmentName: 'Information Technology', designationName: 'IT Manager', hierarchyLevel: HierarchyLevel.manager),
+    const Designation(id: 48, departmentName: 'Information Technology', designationName: 'Software Developer', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 49, departmentName: 'Information Technology', designationName: 'System Administrator', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 50, departmentName: 'Information Technology', designationName: 'IT Support Executive', hierarchyLevel: HierarchyLevel.employee),
+
+    // Purchase & Procurement
+    const Designation(id: 51, departmentName: 'Purchase & Procurement', designationName: 'Purchase Manager', hierarchyLevel: HierarchyLevel.manager),
+    const Designation(id: 52, departmentName: 'Purchase & Procurement', designationName: 'Purchase Executive', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 53, departmentName: 'Purchase & Procurement', designationName: 'Procurement Specialist', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 54, departmentName: 'Purchase & Procurement', designationName: 'Purchase Assistant', hierarchyLevel: HierarchyLevel.employee),
+
+    // Sales & Marketing
+    const Designation(id: 55, departmentName: 'Sales & Marketing', designationName: 'Sales Manager', hierarchyLevel: HierarchyLevel.manager),
+    const Designation(id: 56, departmentName: 'Sales & Marketing', designationName: 'Sales Executive', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 57, departmentName: 'Sales & Marketing', designationName: 'Marketing Executive', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 58, departmentName: 'Sales & Marketing', designationName: 'Business Development Executive', hierarchyLevel: HierarchyLevel.employee),
+
+    // Administration
+    const Designation(id: 59, departmentName: 'Administration', designationName: 'Admin Manager', hierarchyLevel: HierarchyLevel.manager),
+    const Designation(id: 60, departmentName: 'Administration', designationName: 'Admin Executive', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 61, departmentName: 'Administration', designationName: 'Office Assistant', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 62, departmentName: 'Administration', designationName: 'Receptionist', hierarchyLevel: HierarchyLevel.employee),
   ];
 
   final List<Organization> _memoryOrgs = [_initialSeedOrg];
+  final List<BusinessUnit> _memoryBUs = List.from(_initialSeedBUs);
+  final List<Location> _memoryLocations = List.from(_initialSeedLocations);
   final List<Department> _memoryDepts = List.from(_initialSeedDepts);
+  final List<Designation> _memoryDesignations = List.from(_initialSeedDesignations);
 
   Future<void> _ensureSeeded() async {
     if (_seeded) return;
     _seeded = true;
 
     try {
-      final ref = _orgsRef;
-      if (ref != null) {
-        final orgSnapshot = await ref.limit(1).get();
-        if (orgSnapshot.docs.isEmpty) {
-          await ref.doc('org_1').set(_initialSeedOrg.toMap());
+      final orgRef = _orgsRef;
+      if (orgRef != null) {
+        final snap = await orgRef.limit(1).get();
+        if (snap.docs.isEmpty) {
+          await orgRef.doc('org_1').set(_initialSeedOrg.toMap());
+        }
+      }
+
+      final buRef = _buRef;
+      if (buRef != null) {
+        final snap = await buRef.limit(1).get();
+        if (snap.docs.isEmpty) {
+          for (final item in _initialSeedBUs) {
+            await buRef.doc('bu_${item.id}').set(item.toMap());
+          }
+        }
+      }
+
+      final locRef = _locationsRef;
+      if (locRef != null) {
+        final snap = await locRef.limit(1).get();
+        if (snap.docs.isEmpty) {
+          for (final item in _initialSeedLocations) {
+            await locRef.doc('loc_${item.id}').set(item.toMap());
+          }
         }
       }
 
       final dRef = _deptsRef;
       if (dRef != null) {
-        final deptSnapshot = await dRef.limit(1).get();
-        if (deptSnapshot.docs.isEmpty) {
+        final snap = await dRef.limit(1).get();
+        if (snap.docs.isEmpty) {
           for (final dept in _initialSeedDepts) {
             await dRef.doc('dept_${dept.id}').set(dept.toMap());
+          }
+        }
+      }
+
+      final desigRef = _designationsRef;
+      if (desigRef != null) {
+        final snap = await desigRef.limit(1).get();
+        if (snap.docs.isEmpty) {
+          for (final desig in _initialSeedDesignations) {
+            await desigRef.doc('desig_${desig.id}').set(desig.toMap());
           }
         }
       }
@@ -174,6 +221,7 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
     }
   }
 
+  // --- Organization ---
   @override
   Future<List<Organization>> getOrganizations() async {
     await _ensureSeeded();
@@ -182,9 +230,7 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
       if (ref != null) {
         final snapshot = await ref.get();
         if (snapshot.docs.isNotEmpty) {
-          final orgs = snapshot.docs
-              .map((doc) => Organization.fromMap(doc.data()))
-              .toList();
+          final orgs = snapshot.docs.map((doc) => Organization.fromMap(doc.data())).toList();
           _memoryOrgs.clear();
           _memoryOrgs.addAll(orgs);
           return orgs;
@@ -198,137 +244,295 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
 
   @override
   Future<void> addOrganization(Organization organization) async {
-    final nextId = organization.id != 0
-        ? organization.id
-        : DateTime.now().millisecondsSinceEpoch;
+    final nextId = organization.id != 0 ? organization.id : DateTime.now().millisecondsSinceEpoch;
     final orgWithId = organization.copyWith(id: nextId);
 
     _memoryOrgs.add(orgWithId);
-
     try {
       final ref = _orgsRef;
       if (ref != null) {
         await ref.doc('org_$nextId').set(orgWithId.toMap());
       }
     } catch (e) {
-      debugPrint('Error adding organization to Firestore: $e');
+      debugPrint('Error adding organization: $e');
     }
   }
 
   @override
   Future<void> updateOrganization(Organization organization) async {
     final idx = _memoryOrgs.indexWhere((o) => o.id == organization.id);
-    if (idx != -1) {
-      _memoryOrgs[idx] = organization;
-    } else {
-      _memoryOrgs.add(organization);
-    }
-
+    if (idx != -1) _memoryOrgs[idx] = organization; else _memoryOrgs.add(organization);
     try {
       final ref = _orgsRef;
       if (ref != null) {
-        await ref.doc('org_${organization.id}').set(
-              organization.toMap(),
-              SetOptions(merge: true),
-            );
+        await ref.doc('org_${organization.id}').set(organization.toMap(), SetOptions(merge: true));
       }
     } catch (e) {
-      debugPrint('Error updating organization in Firestore: $e');
+      debugPrint('Error updating organization: $e');
     }
   }
 
   @override
   Future<void> deleteOrganization(int id) async {
     _memoryOrgs.removeWhere((o) => o.id == id);
-
     try {
       final ref = _orgsRef;
+      if (ref != null) await ref.doc('org_$id').delete();
+    } catch (e) {
+      debugPrint('Error deleting organization: $e');
+    }
+  }
+
+  // --- Business Units ---
+  @override
+  Future<List<BusinessUnit>> getBusinessUnits({String? organizationName}) async {
+    await _ensureSeeded();
+    try {
+      final ref = _buRef;
       if (ref != null) {
-        await ref.doc('org_$id').delete();
+        final snapshot = await ref.get();
+        if (snapshot.docs.isNotEmpty) {
+          final list = snapshot.docs.map((doc) => BusinessUnit.fromMap(doc.data())).toList();
+          _memoryBUs.clear();
+          _memoryBUs.addAll(list);
+        }
       }
     } catch (e) {
-      debugPrint('Error deleting organization in Firestore: $e');
+      debugPrint('Error getting business units: $e');
+    }
+    if (organizationName != null && organizationName.isNotEmpty) {
+      return _memoryBUs.where((bu) => bu.organizationName.isEmpty || bu.organizationName == organizationName).toList();
+    }
+    return List.from(_memoryBUs);
+  }
+
+  @override
+  Future<void> addBusinessUnit(BusinessUnit businessUnit) async {
+    final nextId = businessUnit.id != 0 ? businessUnit.id : DateTime.now().millisecondsSinceEpoch;
+    final item = businessUnit.copyWith(id: nextId);
+    _memoryBUs.add(item);
+    try {
+      final ref = _buRef;
+      if (ref != null) await ref.doc('bu_$nextId').set(item.toMap());
+    } catch (e) {
+      debugPrint('Error adding business unit: $e');
     }
   }
 
   @override
-  Future<List<Department>> getDepartments() async {
+  Future<void> updateBusinessUnit(BusinessUnit businessUnit) async {
+    final idx = _memoryBUs.indexWhere((b) => b.id == businessUnit.id);
+    if (idx != -1) _memoryBUs[idx] = businessUnit; else _memoryBUs.add(businessUnit);
+    try {
+      final ref = _buRef;
+      if (ref != null) await ref.doc('bu_${businessUnit.id}').set(businessUnit.toMap(), SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Error updating business unit: $e');
+    }
+  }
+
+  @override
+  Future<void> deleteBusinessUnit(int id) async {
+    _memoryBUs.removeWhere((b) => b.id == id);
+    try {
+      final ref = _buRef;
+      if (ref != null) await ref.doc('bu_$id').delete();
+    } catch (e) {
+      debugPrint('Error deleting business unit: $e');
+    }
+  }
+
+  // --- Locations ---
+  @override
+  Future<List<Location>> getLocations({String? organizationName, String? businessUnitName}) async {
+    await _ensureSeeded();
+    try {
+      final ref = _locationsRef;
+      if (ref != null) {
+        final snapshot = await ref.get();
+        if (snapshot.docs.isNotEmpty) {
+          final list = snapshot.docs.map((doc) => Location.fromMap(doc.data())).toList();
+          _memoryLocations.clear();
+          _memoryLocations.addAll(list);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error getting locations: $e');
+    }
+    var res = _memoryLocations;
+    if (organizationName != null && organizationName.isNotEmpty) {
+      res = res.where((l) => l.organizationName.isEmpty || l.organizationName == organizationName).toList();
+    }
+    if (businessUnitName != null && businessUnitName.isNotEmpty) {
+      res = res.where((l) => l.businessUnitName.isEmpty || l.businessUnitName == businessUnitName).toList();
+    }
+    return List.from(res);
+  }
+
+  @override
+  Future<void> addLocation(Location location) async {
+    final nextId = location.id != 0 ? location.id : DateTime.now().millisecondsSinceEpoch;
+    final item = location.copyWith(id: nextId);
+    _memoryLocations.add(item);
+    try {
+      final ref = _locationsRef;
+      if (ref != null) await ref.doc('loc_$nextId').set(item.toMap());
+    } catch (e) {
+      debugPrint('Error adding location: $e');
+    }
+  }
+
+  @override
+  Future<void> updateLocation(Location location) async {
+    final idx = _memoryLocations.indexWhere((l) => l.id == location.id);
+    if (idx != -1) _memoryLocations[idx] = location; else _memoryLocations.add(location);
+    try {
+      final ref = _locationsRef;
+      if (ref != null) await ref.doc('loc_${location.id}').set(location.toMap(), SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Error updating location: $e');
+    }
+  }
+
+  @override
+  Future<void> deleteLocation(int id) async {
+    _memoryLocations.removeWhere((l) => l.id == id);
+    try {
+      final ref = _locationsRef;
+      if (ref != null) await ref.doc('loc_$id').delete();
+    } catch (e) {
+      debugPrint('Error deleting location: $e');
+    }
+  }
+
+  // --- Departments ---
+  @override
+  Future<List<Department>> getDepartments({String? organizationName, String? businessUnitName, String? workLocation}) async {
     await _ensureSeeded();
     try {
       final ref = _deptsRef;
       if (ref != null) {
         final snapshot = await ref.get();
         if (snapshot.docs.isNotEmpty) {
-          final list = snapshot.docs
-              .map((doc) => Department.fromMap(doc.data()))
-              .toList();
+          final list = snapshot.docs.map((doc) => Department.fromMap(doc.data())).toList();
           list.sort((a, b) => a.id.compareTo(b.id));
           _memoryDepts.clear();
           _memoryDepts.addAll(list);
-          return list;
         }
       }
     } catch (e) {
-      debugPrint('Error getting departments from Firestore: $e');
+      debugPrint('Error getting departments: $e');
     }
-    return List.from(_memoryDepts);
+    var res = _memoryDepts;
+    if (organizationName != null && organizationName.isNotEmpty) {
+      res = res.where((d) => d.organizationName.isEmpty || d.organizationName == organizationName).toList();
+    }
+    if (businessUnitName != null && businessUnitName.isNotEmpty) {
+      res = res.where((d) => d.businessUnitName.isEmpty || d.businessUnitName == businessUnitName).toList();
+    }
+    if (workLocation != null && workLocation.isNotEmpty) {
+      res = res.where((d) => d.workLocation.isEmpty || d.workLocation == workLocation).toList();
+    }
+    return List.from(res);
   }
 
   @override
   Future<void> addDepartment(Department department) async {
-    final nextId = department.id != 0
-        ? department.id
-        : DateTime.now().millisecondsSinceEpoch;
+    final nextId = department.id != 0 ? department.id : DateTime.now().millisecondsSinceEpoch;
     final deptWithId = department.copyWith(id: nextId);
-
     _memoryDepts.add(deptWithId);
-
     try {
       final ref = _deptsRef;
-      if (ref != null) {
-        await ref.doc('dept_$nextId').set(deptWithId.toMap());
-      }
+      if (ref != null) await ref.doc('dept_$nextId').set(deptWithId.toMap());
     } catch (e) {
-      debugPrint('Error adding department to Firestore: $e');
+      debugPrint('Error adding department: $e');
     }
   }
 
   @override
   Future<void> updateDepartment(Department department) async {
     final idx = _memoryDepts.indexWhere((d) => d.id == department.id);
-    if (idx != -1) {
-      _memoryDepts[idx] = department;
-    } else {
-      _memoryDepts.add(department);
-    }
-
+    if (idx != -1) _memoryDepts[idx] = department; else _memoryDepts.add(department);
     try {
       final ref = _deptsRef;
-      if (ref != null) {
-        await ref.doc('dept_${department.id}').set(
-              department.toMap(),
-              SetOptions(merge: true),
-            );
-      }
+      if (ref != null) await ref.doc('dept_${department.id}').set(department.toMap(), SetOptions(merge: true));
     } catch (e) {
-      debugPrint('Error updating department in Firestore: $e');
+      debugPrint('Error updating department: $e');
     }
   }
 
   @override
   Future<void> deleteDepartment(int id) async {
     _memoryDepts.removeWhere((d) => d.id == id);
-
     try {
       final ref = _deptsRef;
-      if (ref != null) {
-        await ref.doc('dept_$id').delete();
-      }
+      if (ref != null) await ref.doc('dept_$id').delete();
     } catch (e) {
-      debugPrint('Error deleting department in Firestore: $e');
+      debugPrint('Error deleting department: $e');
     }
   }
 
+  // --- Designations ---
+  @override
+  Future<List<Designation>> getDesignations({String? departmentName}) async {
+    await _ensureSeeded();
+    try {
+      final ref = _designationsRef;
+      if (ref != null) {
+        final snapshot = await ref.get();
+        if (snapshot.docs.isNotEmpty) {
+          final list = snapshot.docs.map((doc) => Designation.fromMap(doc.data())).toList();
+          list.sort((a, b) => a.id.compareTo(b.id));
+          _memoryDesignations.clear();
+          _memoryDesignations.addAll(list);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error getting designations: $e');
+    }
+    if (departmentName != null && departmentName.isNotEmpty) {
+      return _memoryDesignations.where((d) => d.departmentName.trim().toLowerCase() == departmentName.trim().toLowerCase()).toList();
+    }
+    return List.from(_memoryDesignations);
+  }
+
+  @override
+  Future<void> addDesignation(Designation designation) async {
+    final nextId = designation.id != 0 ? designation.id : DateTime.now().millisecondsSinceEpoch;
+    final item = designation.copyWith(id: nextId);
+    _memoryDesignations.add(item);
+    try {
+      final ref = _designationsRef;
+      if (ref != null) await ref.doc('desig_$nextId').set(item.toMap());
+    } catch (e) {
+      debugPrint('Error adding designation: $e');
+    }
+  }
+
+  @override
+  Future<void> updateDesignation(Designation designation) async {
+    final idx = _memoryDesignations.indexWhere((d) => d.id == designation.id);
+    if (idx != -1) _memoryDesignations[idx] = designation; else _memoryDesignations.add(designation);
+    try {
+      final ref = _designationsRef;
+      if (ref != null) await ref.doc('desig_${designation.id}').set(designation.toMap(), SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Error updating designation: $e');
+    }
+  }
+
+  @override
+  Future<void> deleteDesignation(int id) async {
+    _memoryDesignations.removeWhere((d) => d.id == id);
+    try {
+      final ref = _designationsRef;
+      if (ref != null) await ref.doc('desig_$id').delete();
+    } catch (e) {
+      debugPrint('Error deleting designation: $e');
+    }
+  }
+
+  // --- Column Preferences ---
   @override
   Future<ColumnPreference?> getColumnPreference(String tableId) async {
     try {
@@ -350,9 +554,7 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
     try {
       final ref = _colPrefRef;
       if (ref != null) {
-        await ref
-            .doc(preference.tableId)
-            .set(preference.toMap(), SetOptions(merge: true));
+        await ref.doc(preference.tableId).set(preference.toMap(), SetOptions(merge: true));
       }
     } catch (e) {
       debugPrint('Error saving column preference: $e');
