@@ -1,13 +1,18 @@
+import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 import '../../../core/layout/responsive_layout.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/smart_network_image.dart';
 import '../../../screens/bom/bom_details_screen.dart';
+import '../../employee/services/offer_letter_save_stub.dart'
+    if (dart.library.html) '../../employee/services/offer_letter_save_web.dart'
+    if (dart.library.io) '../../employee/services/offer_letter_save_io.dart';
 import '../domain/books_repository.dart';
 import 'books_pages.dart' show money;
 
@@ -24,7 +29,7 @@ class ItemOverviewTab extends StatelessWidget {
       final details = ItemDetailsCard(item: item);
       return SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.all(gutter),
+        padding: EdgeInsets.fromLTRB(gutter, gutter + 6, gutter, gutter + 24),
         child: ResponsiveContent(
           child: details,
         ),
@@ -99,11 +104,120 @@ class DetailSectionTitle extends StatelessWidget {
   );
 }
 
+/// Download drawing PDF from storage or data URL directly to local downloads.
+Future<void> downloadDrawingPdf(BuildContext context, String rawUrl, {String? defaultFileName}) async {
+  final target = rawUrl.trim();
+  if (target.isEmpty || target == '-') {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('No drawing PDF file associated with this item.'),
+        backgroundColor: Colors.orange,
+        duration: Duration(seconds: 4),
+      ),
+    );
+    return;
+  }
+
+  String cleanName = defaultFileName ?? 'Drawing.pdf';
+  if (cleanName.isEmpty || cleanName == '-') {
+    cleanName = 'Drawing.pdf';
+  }
+
+  if (target.contains('/')) {
+    final namePart = target.split('/').last.split('?').first;
+    final decoded = Uri.decodeComponent(namePart).replaceAll(RegExp(r'^\d+_'), '');
+    if (decoded.isNotEmpty) {
+      cleanName = decoded;
+    }
+  }
+  if (!cleanName.toLowerCase().endsWith('.pdf')) {
+    cleanName = '$cleanName.pdf';
+  }
+
+  try {
+    // 1. If it's a data URI
+    if (target.startsWith('data:')) {
+      final data = Uri.parse(target).data;
+      if (data != null) {
+        final pdfBytes = data.contentAsBytes();
+        if (context.mounted) {
+          await saveAndDownloadOfferLetter(
+            context: context,
+            bytes: pdfBytes,
+            fileName: cleanName,
+            docTitle: 'Drawing PDF',
+          );
+          return;
+        }
+      }
+    }
+
+    // 2. If it's a local asset
+    if (target.startsWith('assets/')) {
+      final byteData = await DefaultAssetBundle.of(context).load(target);
+      final pdfBytes = byteData.buffer.asUint8List();
+      if (context.mounted) {
+        await saveAndDownloadOfferLetter(
+          context: context,
+          bytes: pdfBytes,
+          fileName: cleanName,
+          docTitle: 'Drawing PDF',
+        );
+        return;
+      }
+    }
+
+    // 3. If it's a web URL (or Firebase Storage URL)
+    String effectiveUrl = target;
+    if (target.startsWith('gs://')) {
+      effectiveUrl = 'https://firebasestorage.googleapis.com/v0/b/${target.substring(5).replaceAll('/', '%2F')}?alt=media';
+    } else if (!target.startsWith('http://') && !target.startsWith('https://')) {
+      final encodedName = Uri.encodeComponent(target);
+      effectiveUrl =
+          'https://firebasestorage.googleapis.com/v0/b/i-green-tech.firebasestorage.app/o/Drawing%20Images%2F$encodedName?alt=media';
+    }
+
+    if (effectiveUrl.startsWith('http://') || effectiveUrl.startsWith('https://')) {
+      if (context.mounted) {
+        await downloadFileFromUrl(
+          context: context,
+          url: effectiveUrl,
+          fileName: cleanName,
+          docTitle: 'Drawing PDF',
+        );
+        return;
+      }
+    }
+  } catch (e) {
+    debugPrint('Error downloading drawing PDF: $e');
+  }
+
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Failed to download Drawing PDF. Please verify file in storage.'),
+        backgroundColor: Colors.redAccent,
+        duration: Duration(seconds: 4),
+      ),
+    );
+  }
+}
+
 class DetailRow extends StatelessWidget {
-  const DetailRow(this.label, this.value, {this.isFile = false, super.key});
+  const DetailRow(
+    this.label,
+    this.value, {
+    this.isFile = false,
+    this.fileUrl,
+    this.onTapFile,
+    super.key,
+  });
+
   final String label;
   final String value;
   final bool isFile;
+  final String? fileUrl;
+  final VoidCallback? onTapFile;
 
   static String cleanFileName(String raw) {
     if (raw.isEmpty || raw == '-') return raw;
@@ -119,33 +233,55 @@ class DetailRow extends StatelessWidget {
     final isDrawingOrPdf = isFile ||
         label.toLowerCase() == 'drawing' ||
         value.toLowerCase().endsWith('.pdf') ||
-        value.contains('.pdf?');
+        value.contains('.pdf?') ||
+        (fileUrl != null && fileUrl!.isNotEmpty);
 
     final displayValue = isDrawingOrPdf ? cleanFileName(value) : value;
+    final effectiveFileUrl = fileUrl?.isNotEmpty == true ? fileUrl! : (isDrawingOrPdf ? value : null);
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 550;
 
+        final VoidCallback? handleDownload = onTapFile ??
+            (effectiveFileUrl != null && effectiveFileUrl.isNotEmpty && effectiveFileUrl != '-'
+                ? () => downloadDrawingPdf(context, effectiveFileUrl, defaultFileName: displayValue)
+                : null);
+
         final Widget valueChild = isDrawingOrPdf && displayValue != '-'
-            ? Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.picture_as_pdf, size: 18, color: Colors.redAccent),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Text(
-                      displayValue,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
+            ? MouseRegion(
+                cursor: handleDownload != null ? SystemMouseCursors.click : SystemMouseCursors.basic,
+                child: InkWell(
+                  onTap: handleDownload,
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.picture_as_pdf, size: 18, color: Colors.redAccent),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            displayValue,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: handleDownload != null ? const Color(0xFF1E88E5) : AppColors.textPrimary,
+                              decoration: handleDownload != null ? TextDecoration.underline : TextDecoration.none,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        if (handleDownload != null) ...[
+                          const SizedBox(width: 6),
+                          const Icon(Icons.download_rounded, size: 16, color: Color(0xFF1E88E5)),
+                        ],
+                      ],
                     ),
                   ),
-                ],
+                ),
               )
             : Text(
                 displayValue,
@@ -657,17 +793,11 @@ class LabeledSwivelDiagram extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             FilledButton.icon(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Opening PDF Document: $cleanFileName'),
-                    backgroundColor: const Color(0xFF414A51),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
+              onPressed: () async {
+                await downloadDrawingPdf(context, path, defaultFileName: cleanFileName);
               },
-              icon: const Icon(Icons.picture_as_pdf, size: 18),
-              label: const Text('View / Download PDF Drawing'),
+              icon: const Icon(Icons.download_rounded, size: 18),
+              label: const Text('Download PDF Drawing'),
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFF414A51),
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -799,7 +929,7 @@ class _ItemTransactionsTabState extends State<ItemTransactionsTab> {
 
       return ResponsiveContent(
         child: Padding(
-          padding: EdgeInsets.all(gutter),
+          padding: EdgeInsets.fromLTRB(gutter, gutter + 6, gutter, gutter + 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1024,6 +1154,7 @@ class _ItemProductDetailsTabState extends State<ItemProductDetailsTab> {
                         ? Uri.decodeComponent(item.drawingFileName.split('/').last.split('?').first)
                         : item.drawingFileName)
                     : 'GS-1001.pdf',
+                fileUrl: item.drawingFileName.isNotEmpty ? item.drawingFileName : null,
               ),
               DetailRow('Product Name', item.productName.isNotEmpty ? item.productName : 'Industrial Gear Shaft'),
               DetailRow('Master Serial No.', item.masterSerialNo.isNotEmpty ? item.masterSerialNo : 'MSN-GS-001'),
@@ -1052,7 +1183,7 @@ class _ItemProductDetailsTabState extends State<ItemProductDetailsTab> {
 
       return SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.all(gutter),
+        padding: EdgeInsets.fromLTRB(gutter, gutter + 6, gutter, gutter + 24),
         child: ResponsiveContent(
           child: fields,
         ),
@@ -1224,14 +1355,17 @@ class _ItemFieldsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) => SingleChildScrollView(
-      padding: EdgeInsets.all(AppLayout.gutter(constraints.maxWidth)),
-      child: ResponsiveContent(
-        child: Card(
-          child: Padding(padding: const EdgeInsets.all(20), child: child),
+    builder: (context, constraints) {
+      final gutter = AppLayout.gutter(constraints.maxWidth);
+      return SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(gutter, gutter + 6, gutter, gutter + 24),
+        child: ResponsiveContent(
+          child: Card(
+            child: Padding(padding: const EdgeInsets.all(20), child: child),
+          ),
         ),
-      ),
-    ),
+      );
+    },
   );
 }
 
@@ -1287,4 +1421,3 @@ class _EditableDetailRow extends StatelessWidget {
     ),
   );
 }
-

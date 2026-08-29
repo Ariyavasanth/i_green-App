@@ -1,7 +1,38 @@
 import 'dart:io' show Directory, File, Platform;
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+Future<void> downloadFileFromUrl({
+  required BuildContext context,
+  required String url,
+  required String fileName,
+  String? docTitle,
+}) async {
+  try {
+    final res = await http.get(Uri.parse(url));
+    if (res.statusCode == 200) {
+      await saveAndDownloadOfferLetter(
+        context: context,
+        bytes: res.bodyBytes,
+        fileName: fileName,
+        docTitle: docTitle,
+      );
+      return;
+    }
+  } catch (e) {
+    debugPrint('IO download from URL failed: $e');
+  }
+
+  try {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+      return;
+    }
+  } catch (_) {}
+}
 
 Future<void> saveAndDownloadOfferLetter({
   required BuildContext context,

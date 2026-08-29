@@ -45,15 +45,33 @@ class ItemDetailsScreen extends ConsumerWidget {
           ),
           const SizedBox(width: 4),
         ],
-        bottom: const TabBar(
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
-          tabs: [
-            Tab(text: 'Overview'),
-            Tab(text: 'Transactions'),
-            Tab(text: 'History'),
-            Tab(text: 'Product Details'),
-          ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            alignment: Alignment.centerLeft,
+            decoration: const BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: AppColors.divider, width: 1),
+              ),
+            ),
+            child: const TabBar(
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              labelColor: AppColors.primary,
+              unselectedLabelColor: AppColors.textSecondary,
+              indicatorColor: AppColors.primary,
+              indicatorWeight: 3,
+              indicatorSize: TabBarIndicatorSize.tab,
+              labelPadding: EdgeInsets.symmetric(horizontal: 16),
+              padding: EdgeInsets.symmetric(horizontal: 6),
+              tabs: [
+                Tab(text: 'Overview'),
+                Tab(text: 'Transactions'),
+                Tab(text: 'History'),
+                Tab(text: 'Product Details'),
+              ],
+            ),
+          ),
         ),
       ),
       body: RefreshIndicator(

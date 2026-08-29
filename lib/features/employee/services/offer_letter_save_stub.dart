@@ -8,3 +8,12 @@ Future<void> saveAndDownloadOfferLetter({
 }) async {
   throw UnsupportedError('Unsupported platform');
 }
+
+Future<void> downloadFileFromUrl({
+  required BuildContext context,
+  required String url,
+  required String fileName,
+  String? docTitle,
+}) async {
+  throw UnsupportedError('Unsupported platform');
+}

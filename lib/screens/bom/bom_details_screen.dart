@@ -120,12 +120,19 @@ class BomDetailsScreen extends StatelessWidget {
                               pdfBytes = base64Decode(targetPdfUrl.split(',').last);
                             }
                             if (pdfBytes != null && context.mounted) {
-                              final cleanName = part.name.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
+                              String cleanFileName = '${part.name.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}_Drawing.pdf';
+                              if (targetPdfUrl.contains('/')) {
+                                final namePart = targetPdfUrl.split('/').last.split('?').first;
+                                final decoded = Uri.decodeComponent(namePart).replaceAll(RegExp(r'^\d+_'), '');
+                                if (decoded.toLowerCase().endsWith('.pdf')) {
+                                  cleanFileName = decoded;
+                                }
+                              }
                               await saveAndDownloadOfferLetter(
                                 context: context,
                                 bytes: pdfBytes,
-                                fileName: '${cleanName}_Drawing.pdf',
-                                docTitle: 'Part PDF',
+                                fileName: cleanFileName,
+                                docTitle: 'Drawing PDF',
                               );
                               return;
                             }
