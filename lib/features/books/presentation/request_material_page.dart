@@ -24,7 +24,10 @@ class _RequestMaterialPageState extends ConsumerState<RequestMaterialPage> {
   final _weight = TextEditingController();
   DateTime _date = DateTime.now();
   bool _saving = false;
+  String _selectedType = 'Raw Material';
   String? _selectedMaterial;
+
+  static const _typeOptions = ['Raw Material', 'Outsource'];
 
   @override
   void dispose() {
@@ -108,7 +111,19 @@ class _RequestMaterialPageState extends ConsumerState<RequestMaterialPage> {
   @override
   Widget build(BuildContext context) {
     final materialsState = ref.watch(materialsProvider(null));
-    final availableMaterials = materialsState.valueOrNull ?? <MaterialItem>[];
+    final allMaterials = materialsState.valueOrNull ?? <MaterialItem>[];
+    final filteredMaterials = allMaterials.where((m) {
+      if (_selectedType == 'Raw Material') {
+        return m.sourceType.toUpperCase() == 'RAW';
+      } else {
+        return m.sourceType.toUpperCase() == 'OUTSOURCE';
+      }
+    }).toList();
+
+    final selectedMaterialValue =
+        filteredMaterials.any((m) => m.description == _selectedMaterial)
+            ? _selectedMaterial
+            : null;
 
     return FormPage(
       title: 'Request Material',
@@ -158,13 +173,36 @@ class _RequestMaterialPageState extends ConsumerState<RequestMaterialPage> {
                 validator: _required,
               ),
               const SizedBox(height: 16),
-              if (availableMaterials.isNotEmpty) ...[
+              DropdownButtonFormField<String>(
+                value: _selectedType,
+                isExpanded: true,
+                decoration: _decoration('Type'),
+                items: _typeOptions.map((type) {
+                  return DropdownMenuItem<String>(
+                    value: type,
+                    child: Text(type),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null && val != _selectedType) {
+                    setState(() {
+                      _selectedType = val;
+                      _selectedMaterial = null;
+                      _material.clear();
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+              if (filteredMaterials.isNotEmpty) ...[
                 DropdownButtonFormField<String>(
-                  value: _selectedMaterial,
+                  value: selectedMaterialValue,
                   isExpanded: true,
-                  decoration: _decoration('Material (Dropdown / Search)'),
-                  items: availableMaterials.map((m) {
-                    final label = '${m.description} (${m.code})';
+                  decoration: _decoration('Material'),
+                  items: filteredMaterials.map((m) {
+                    final label = m.code.isNotEmpty
+                        ? '${m.description} (${m.code})'
+                        : m.description;
                     return DropdownMenuItem<String>(
                       value: m.description,
                       child: Text(label, overflow: TextOverflow.ellipsis),
@@ -198,21 +236,6 @@ class _RequestMaterialPageState extends ConsumerState<RequestMaterialPage> {
                 decoration: _decoration('Weight Issued'),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 validator: _number,
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  OutlinedButton(
-                    onPressed: _saving ? null : _onCancel,
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: 12),
-                  FilledButton(
-                    onPressed: _saving ? null : _submit,
-                    child: Text(_saving ? 'Saving...' : 'Submit Request'),
-                  ),
-                ],
               ),
             ],
           ),

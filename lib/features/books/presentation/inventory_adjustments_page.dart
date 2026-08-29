@@ -47,7 +47,7 @@ class _InventoryAdjustmentDashboardPageState
           body: SafeArea(
             top: false,
             child: _InventoryDashboardBody(
-              itemsState: itemsState,
+              materialsState: materialsState,
               dashboard: _buildDashboard(
                 itemsState.valueOrNull ?? const <BookItem>[],
                 materialsState.valueOrNull ?? const <MaterialItem>[],
@@ -83,19 +83,7 @@ class _InventoryAdjustmentDashboardPageState
       return searchable.contains(normalizedQuery);
     }).toList();
 
-    final filteredItems = allItems.where((item) {
-      if (_selectedCategory == _InventoryCategory.rawMaterial && item.type != 'Goods') {
-        return false;
-      }
-      if (_selectedCategory == _InventoryCategory.outsource && item.type != 'Service') {
-        return false;
-      }
-      if (normalizedQuery.isEmpty) return true;
-      final searchable = '${item.name} ${item.sku} ${item.type}'.toLowerCase();
-      return searchable.contains(normalizedQuery);
-    }).toList();
-
-    final totalCount = filteredMaterials.length + filteredItems.length;
+    final totalCount = filteredMaterials.length;
 
     final inventoryValue = allItems.fold<double>(
       0,
@@ -129,7 +117,6 @@ class _InventoryAdjustmentDashboardPageState
                 _SummaryGrid(
                   purchaseAmount: purchaseAmount,
                   outstanding: inventoryValue,
-                  items: allItems,
                   materials: allMaterials,
                   selectedCategory: _selectedCategory,
                   onCategorySelected: (category) => setState(() {
@@ -201,19 +188,10 @@ class _InventoryAdjustmentDashboardPageState
               sliver: SliverList(
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
-                    if (index < filteredMaterials.length) {
-                      final mat = filteredMaterials[index];
-                      return _AnimatedMaterialCard(
-                        key: ValueKey('mat-${mat.id}'),
-                        material: mat,
-                        index: index,
-                      );
-                    }
-                    final itemIndex = index - filteredMaterials.length;
-                    final item = filteredItems[itemIndex];
-                    return _AnimatedInventoryCard(
-                      key: ValueKey('item-${item.id}'),
-                      item: item,
+                    final mat = filteredMaterials[index];
+                    return _AnimatedMaterialCard(
+                      key: ValueKey('mat-${mat.id}'),
+                      material: mat,
                       index: index,
                     );
                   },
@@ -319,25 +297,27 @@ enum _InventoryCategory { rawMaterial, outsource }
 
 class _InventoryDashboardBody extends StatelessWidget {
   const _InventoryDashboardBody({
-    required this.itemsState,
+    required this.materialsState,
     required this.dashboard,
     required this.onRetry,
+    this.itemsState = const AsyncValue.data(<BookItem>[]),
   });
 
+  final AsyncValue<List<MaterialItem>> materialsState;
   final AsyncValue<List<BookItem>> itemsState;
   final Widget dashboard;
   final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
-    if (itemsState.hasError && !itemsState.hasValue) {
+    if (materialsState.hasError && !materialsState.hasValue) {
       return _ErrorState(onRetry: onRetry);
     }
 
     return Stack(
       children: [
         Positioned.fill(child: dashboard),
-        if (itemsState.isLoading)
+        if (materialsState.isLoading)
           const Positioned(
             top: 0,
             left: 0,
@@ -357,25 +337,27 @@ class _SummaryGrid extends StatelessWidget {
   const _SummaryGrid({
     required this.purchaseAmount,
     required this.outstanding,
-    required this.items,
     required this.materials,
     required this.selectedCategory,
     required this.onCategorySelected,
+    this.items = const <BookItem>[],
   });
 
   final double purchaseAmount;
   final double outstanding;
-  final List<BookItem> items;
   final List<MaterialItem> materials;
+  final List<BookItem> items;
   final _InventoryCategory? selectedCategory;
   final ValueChanged<_InventoryCategory> onCategorySelected;
 
   @override
   Widget build(BuildContext context) {
-    final rawCount = materials.where((m) => m.sourceType.toUpperCase() == 'RAW').length +
-        items.where((item) => item.type == 'Goods').length;
-    final outsourceCount = materials.where((m) => m.sourceType.toUpperCase() == 'OUTSOURCE').length +
-        items.where((item) => item.type == 'Service').length;
+    final rawCount = materials
+        .where((m) => m.sourceType.toUpperCase() == 'RAW')
+        .length;
+    final outsourceCount = materials
+        .where((m) => m.sourceType.toUpperCase() == 'OUTSOURCE')
+        .length;
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),

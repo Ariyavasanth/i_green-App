@@ -87,20 +87,12 @@ class _AddStockPageState extends ConsumerState<AddStockPage> {
   @override
   Widget build(BuildContext context) {
     final materialsState = ref.watch(materialsProvider(null));
-    final itemsState = ref.watch(itemsProvider);
 
     final rawMaterials = (materialsState.valueOrNull ?? <MaterialItem>[])
         .where((m) => m.sourceType.toUpperCase() == 'RAW')
         .toList();
     final outsourceMaterials = (materialsState.valueOrNull ?? <MaterialItem>[])
         .where((m) => m.sourceType.toUpperCase() == 'OUTSOURCE')
-        .toList();
-
-    final rawBookItems = (itemsState.valueOrNull ?? <BookItem>[])
-        .where((i) => i.type == 'Goods')
-        .toList();
-    final outsourceBookItems = (itemsState.valueOrNull ?? <BookItem>[])
-        .where((i) => i.type == 'Service')
         .toList();
 
     final List<_SubMaterialOption> subMaterialOptions = [];
@@ -124,16 +116,6 @@ class _AddStockPageState extends ConsumerState<AddStockPage> {
           weight: m.density,
         ));
       }
-      for (final item in rawBookItems) {
-        final code = item.sku.isNotEmpty ? item.sku : 'ITEM-${item.id}';
-        subMaterialOptions.add(_SubMaterialOption(
-          id: 'item-${item.id}',
-          label: '${item.name} ($code)',
-          code: code,
-          description: item.name,
-          supplier: item.preferredVendor,
-        ));
-      }
     } else {
       for (final m in outsourceMaterials) {
         final loc = m.warehouseLocation.isNotEmpty
@@ -151,16 +133,6 @@ class _AddStockPageState extends ConsumerState<AddStockPage> {
           batchNumber: m.batchNumber,
           storeLocation: loc,
           weight: m.density,
-        ));
-      }
-      for (final item in outsourceBookItems) {
-        final code = item.sku.isNotEmpty ? item.sku : 'ITEM-${item.id}';
-        subMaterialOptions.add(_SubMaterialOption(
-          id: 'item-${item.id}',
-          label: '${item.name} ($code)',
-          code: code,
-          description: item.name,
-          supplier: item.preferredVendor,
         ));
       }
     }
