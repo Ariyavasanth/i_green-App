@@ -114,9 +114,9 @@ class _RequestMaterialPageState extends ConsumerState<RequestMaterialPage> {
     final allMaterials = materialsState.valueOrNull ?? <MaterialItem>[];
     final filteredMaterials = allMaterials.where((m) {
       if (_selectedType == 'Raw Material') {
-        return m.sourceType.toUpperCase() == 'RAW';
+        return m.isRawMaterial;
       } else {
-        return m.sourceType.toUpperCase() == 'OUTSOURCE';
+        return m.isOutsource;
       }
     }).toList();
 

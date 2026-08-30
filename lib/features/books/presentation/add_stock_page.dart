@@ -89,10 +89,10 @@ class _AddStockPageState extends ConsumerState<AddStockPage> {
     final materialsState = ref.watch(materialsProvider(null));
 
     final rawMaterials = (materialsState.valueOrNull ?? <MaterialItem>[])
-        .where((m) => m.sourceType.toUpperCase() == 'RAW')
+        .where((m) => m.isRawMaterial)
         .toList();
     final outsourceMaterials = (materialsState.valueOrNull ?? <MaterialItem>[])
-        .where((m) => m.sourceType.toUpperCase() == 'OUTSOURCE')
+        .where((m) => m.isOutsource)
         .toList();
 
     final List<_SubMaterialOption> subMaterialOptions = [];

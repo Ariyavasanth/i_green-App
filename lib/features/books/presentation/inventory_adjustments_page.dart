@@ -72,10 +72,10 @@ class _InventoryAdjustmentDashboardPageState
     final normalizedQuery = _query.trim().toLowerCase();
 
     final filteredMaterials = allMaterials.where((m) {
-      if (_selectedCategory == _InventoryCategory.rawMaterial && m.sourceType.toUpperCase() != 'RAW') {
+      if (_selectedCategory == _InventoryCategory.rawMaterial && !m.isRawMaterial) {
         return false;
       }
-      if (_selectedCategory == _InventoryCategory.outsource && m.sourceType.toUpperCase() != 'OUTSOURCE') {
+      if (_selectedCategory == _InventoryCategory.outsource && !m.isOutsource) {
         return false;
       }
       if (normalizedQuery.isEmpty) return true;
@@ -352,12 +352,8 @@ class _SummaryGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rawCount = materials
-        .where((m) => m.sourceType.toUpperCase() == 'RAW')
-        .length;
-    final outsourceCount = materials
-        .where((m) => m.sourceType.toUpperCase() == 'OUTSOURCE')
-        .length;
+    final rawCount = materials.where((m) => m.isRawMaterial).length;
+    final outsourceCount = materials.where((m) => m.isOutsource).length;
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -682,156 +678,7 @@ class _InventorySearch extends StatelessWidget {
   );
 }
 
-class _AnimatedInventoryCard extends StatefulWidget {
-  const _AnimatedInventoryCard({
-    required this.item,
-    required this.index,
-    super.key,
-  });
-  final BookItem item;
-  final int index;
-
-  @override
-  State<_AnimatedInventoryCard> createState() => _AnimatedInventoryCardState();
-}
-
-class _AnimatedInventoryCardState extends State<_AnimatedInventoryCard> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
-    duration: Duration(milliseconds: 220 + (widget.index.clamp(0, 5) * 35)),
-    curve: Curves.easeOutCubic,
-    tween: Tween(begin: 0, end: 1),
-    builder: (context, value, child) => Opacity(
-      opacity: value,
-      child: Transform.translate(
-        offset: Offset(0, 10 * (1 - value)),
-        child: child,
-      ),
-    ),
-    child: Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: AnimatedScale(
-        duration: const Duration(milliseconds: 120),
-        scale: _pressed ? .985 : 1,
-        child: Semantics(
-          button: true,
-          label:
-              '${widget.item.name}, ${widget.item.type}, ${widget.item.stockOnHand.toStringAsFixed(0)} ${widget.item.unit}',
-          child: Card(
-            elevation: _pressed ? 0 : 1.5,
-            shadowColor: AppColors.active.withValues(alpha: .11),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: () {
-                context.push(
-                  '/inventory-adjustments/add-material',
-                  extra: {
-                    'material': MaterialItem(
-                      id: widget.item.id,
-                      sourceType: widget.item.type == 'Service' ? 'OUTSOURCE' : 'RAW',
-                      code: widget.item.sku.isNotEmpty ? widget.item.sku : 'MAT-${widget.item.id}',
-                      description: widget.item.name,
-                      materialType: widget.item.type,
-                      grade: 'MS-350',
-                      make: 'Standard',
-                      model: 'Model-A',
-                      size: widget.item.unit,
-                      unit: widget.item.unit,
-                      density: '7.85',
-                      supplier: widget.item.preferredVendor.isNotEmpty ? widget.item.preferredVendor : 'Primary Supplier',
-                      heatNumber: 'HT-${widget.item.id}01',
-                      batchNumber: 'BATCH-${widget.item.id}',
-                      warehouseLocation: 'Warehouse A',
-                      rackLocation: 'Rack R-01',
-                      minimumStock: '10',
-                      maximumStock: '100',
-                      reorderLevel: '20',
-                      createdAt: DateTime.now(),
-                    ),
-                    'readOnly': true,
-                  },
-                );
-              },
-              onLongPress: () {},
-              onHighlightChanged: (value) => setState(() => _pressed = value),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  children: [
-                    Hero(
-                      tag: 'inventory-item-${widget.item.id}',
-                      child: Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: .12),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Icon(
-                          widget.item.type == 'Service'
-                              ? Icons.handyman_outlined
-                              : Icons.precision_manufacturing_outlined,
-                          color: AppColors.active,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.item.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            widget.item.sku.isEmpty
-                                ? 'SKU not assigned'
-                                : widget.item.sku,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.caption,
-                          ),
-                          const SizedBox(height: 6),
-                          _CategoryChip(label: widget.item.type),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          widget.item.stockOnHand.toStringAsFixed(0),
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        Text(widget.item.unit, style: AppTextStyles.caption),
-                      ],
-                    ),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.chevron_right_rounded, size: 22),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    ),
-  );
-}
-
-class _AnimatedMaterialCard extends StatefulWidget {
+class _AnimatedMaterialCard extends ConsumerStatefulWidget {
   const _AnimatedMaterialCard({
     required this.material,
     required this.index,
@@ -841,11 +688,50 @@ class _AnimatedMaterialCard extends StatefulWidget {
   final int index;
 
   @override
-  State<_AnimatedMaterialCard> createState() => _AnimatedMaterialCardState();
+  ConsumerState<_AnimatedMaterialCard> createState() => _AnimatedMaterialCardState();
 }
 
-class _AnimatedMaterialCardState extends State<_AnimatedMaterialCard> {
+class _AnimatedMaterialCardState extends ConsumerState<_AnimatedMaterialCard> {
   bool _pressed = false;
+
+  Future<void> _deleteMaterial() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Material'),
+        content: Text(
+          'Are you sure you want to delete "${widget.material.description}" (${widget.material.code})?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      await ref.read(booksRepositoryProvider).deleteMaterial(widget.material.id);
+      ref.invalidate(materialsProvider(null));
+      ref.invalidate(materialsProvider('RAW'));
+      ref.invalidate(materialsProvider('OUTSOURCE'));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${widget.material.description} deleted successfully'),
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) => TweenAnimationBuilder<double>(
@@ -897,7 +783,7 @@ class _AnimatedMaterialCardState extends State<_AnimatedMaterialCard> {
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Icon(
-                        widget.material.sourceType.toUpperCase() == 'OUTSOURCE'
+                        widget.material.isOutsource
                             ? Icons.handyman_outlined
                             : Icons.precision_manufacturing_outlined,
                         color: AppColors.active,
@@ -919,16 +805,16 @@ class _AnimatedMaterialCardState extends State<_AnimatedMaterialCard> {
                           Text(
                             widget.material.code.isEmpty
                                 ? 'Code not assigned'
-                                : '${widget.material.code} · ${widget.material.supplier}',
+                                : widget.material.supplier.isNotEmpty
+                                    ? '${widget.material.code} · ${widget.material.supplier}'
+                                    : widget.material.code,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: AppTextStyles.caption,
                           ),
                           const SizedBox(height: 6),
                           _CategoryChip(
-                            label: widget.material.sourceType.toUpperCase() == 'OUTSOURCE'
-                                ? 'Outsource'
-                                : 'Raw Material',
+                            label: widget.material.displayType,
                           ),
                         ],
                       ),
@@ -949,7 +835,45 @@ class _AnimatedMaterialCardState extends State<_AnimatedMaterialCard> {
                       ],
                     ),
                     const SizedBox(width: 4),
-                    const Icon(Icons.chevron_right_rounded, size: 22),
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert_rounded, size: 20),
+                      padding: EdgeInsets.zero,
+                      onSelected: (val) {
+                        if (val == 'view') {
+                          context.push(
+                            '/inventory-adjustments/add-material',
+                            extra: {
+                              'material': widget.material,
+                              'readOnly': true,
+                            },
+                          );
+                        } else if (val == 'delete') {
+                          _deleteMaterial();
+                        }
+                      },
+                      itemBuilder: (ctx) => [
+                        const PopupMenuItem(
+                          value: 'view',
+                          child: Row(
+                            children: [
+                              Icon(Icons.visibility_outlined, size: 18),
+                              SizedBox(width: 8),
+                              Text('View Details'),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete_outline, size: 18, color: Theme.of(ctx).colorScheme.error),
+                              const SizedBox(width: 8),
+                              Text('Delete', style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -1362,204 +1286,852 @@ class _FullInventoryHistoryPageState
     );
   }
 }
-
-class MaterialRequestsPage extends ConsumerWidget {
+class MaterialRequestsPage extends ConsumerStatefulWidget {
   const MaterialRequestsPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MaterialRequestsPage> createState() => _MaterialRequestsPageState();
+}
+
+class _MaterialRequestsPageState extends ConsumerState<MaterialRequestsPage> {
+  int? _processingId;
+
+  String _getMaterialClassification(String materialName, List<MaterialItem> allMaterials) {
+    final nameLower = materialName.trim().toLowerCase();
+    for (final m in allMaterials) {
+      final d = m.description.trim().toLowerCase();
+      final c = m.code.trim().toLowerCase();
+      if (d == nameLower ||
+          c == nameLower ||
+          nameLower.contains(d) ||
+          (d.isNotEmpty && nameLower.startsWith(d))) {
+        return m.displayType;
+      }
+    }
+    if (nameLower.contains('outsource') || nameLower.contains('cnc') || nameLower.contains('service')) {
+      return 'Outsource';
+    }
+    return 'Raw Material';
+  }
+
+  double _getMaterialStock(String materialName, List<MaterialItem> allMaterials) {
+    final nameLower = materialName.trim().toLowerCase();
+    for (final m in allMaterials) {
+      final d = m.description.trim().toLowerCase();
+      final c = m.code.trim().toLowerCase();
+      if (d == nameLower ||
+          c == nameLower ||
+          nameLower.contains(d) ||
+          (d.isNotEmpty && nameLower.startsWith(d))) {
+        return m.stockOnHand;
+      }
+    }
+    return 0.0;
+  }
+
+  void _showDetailsModal(MaterialRequest req, List<MaterialItem> allMaterials) {
+    final category = _getMaterialClassification(req.material, allMaterials);
+    final isOutsource = category == 'Outsource';
+    final currentStock = _getMaterialStock(req.material, allMaterials);
+    final isPending = req.status.toLowerCase() == 'pending';
+    final isApproved = req.status.toLowerCase() == 'approved';
+    final isRejected = req.status.toLowerCase() == 'rejected';
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Material Request Details',
+                    style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isApproved
+                          ? Colors.green.withValues(alpha: .12)
+                          : isRejected
+                              ? Colors.red.withValues(alpha: .12)
+                              : Colors.amber.withValues(alpha: .15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      req.status,
+                      style: TextStyle(
+                        color: isApproved
+                            ? Colors.green[800]
+                            : isRejected
+                                ? Colors.red[800]
+                                : Colors.amber[900],
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(height: 24),
+              _detailRow('Work Order', req.workOrder),
+              _detailRow('Date', DateFormat('dd MMM yyyy').format(req.date)),
+              _detailRow('Material', req.material),
+              _detailRow(
+                'Type',
+                category,
+                valueWidget: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: isOutsource
+                        ? const Color(0xFFE8F5FF)
+                        : const Color(0xFFEFF5D8),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: isOutsource
+                          ? const Color(0xFFB8DCFE)
+                          : const Color(0xFFDCEB9F),
+                    ),
+                  ),
+                  child: Text(
+                    category,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isOutsource ? const Color(0xFF0066CC) : AppColors.active,
+                    ),
+                  ),
+                ),
+              ),
+              _detailRow(
+                'Current Stock',
+                '${currentStock.toStringAsFixed(0)} pcs',
+                valueColor: currentStock > 0 ? Colors.green[700] : Colors.red[700],
+              ),
+              _detailRow('Machine', req.machine),
+              _detailRow('Operator', req.operatorName),
+              _detailRow('Quantity Requested', '${req.quantityIssued.toStringAsFixed(0)} pcs'),
+              _detailRow('Weight Requested', '${req.weightIssued.toStringAsFixed(1)} kg'),
+              if (isPending) ...[
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          Navigator.of(ctx).pop();
+                          _handleReject(req);
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red[700],
+                          side: BorderSide(color: Colors.red[300]!),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text('Reject Request'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () {
+                          Navigator.of(ctx).pop();
+                          _handleApprove(req, allMaterials);
+                        },
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text('Approve Request', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value, {Widget? valueWidget, Color? valueColor}) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+            const SizedBox(width: 16),
+            valueWidget ??
+                Flexible(
+                  child: Text(
+                    value,
+                    textAlign: TextAlign.end,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: valueColor ?? AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+          ],
+        ),
+      );
+
+  Future<void> _handleApprove(MaterialRequest req, List<MaterialItem> allMaterials) async {
+    final currentStock = _getMaterialStock(req.material, allMaterials);
+
+    if (currentStock <= 0) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          icon: const Icon(Icons.warning_amber_rounded, size: 48, color: Colors.orange),
+          title: const Text('No Stock Available', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                req.material,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Current stock: 0 pcs',
+                style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 12),
+              const Text('Please add stock before approving this request.'),
+            ],
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    if (currentStock < req.quantityIssued) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          icon: const Icon(Icons.warning_amber_rounded, size: 48, color: Colors.orange),
+          title: const Text('Insufficient Stock', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                req.material,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Insufficient stock. Only ${currentStock.toStringAsFixed(0)} pcs are available, but ${req.quantityIssued.toStringAsFixed(0)} pcs were requested.',
+                style: const TextStyle(height: 1.4),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Available stock: ${currentStock.toStringAsFixed(0)} pcs',
+                style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final remainingStock = currentStock - req.quantityIssued;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: .15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.verified_outlined, color: AppColors.active, size: 24),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Approve Request',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              req.material,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'WO: ${req.workOrder} · ${req.operatorName}',
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7FAEE),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFDCEB9F)),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Current Stock:', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                      Text('${currentStock.toStringAsFixed(0)} pcs', style: const TextStyle(fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Requested / Deduct:', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                      Text('- ${req.quantityIssued.toStringAsFixed(0)} pcs', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  const Divider(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Remaining Stock:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      Text(
+                        '${remainingStock.toStringAsFixed(0)} pcs',
+                        style: const TextStyle(
+                          color: Color(0xFF4A7300),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Confirm Approval', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      if (_processingId != null) return;
+      setState(() => _processingId = req.id);
+
+      try {
+        await ref.read(booksRepositoryProvider).approveMaterialRequest(req.id);
+        ref.invalidate(materialRequestsProvider);
+        ref.invalidate(materialsProvider(null));
+        ref.invalidate(materialsProvider('RAW'));
+        ref.invalidate(materialsProvider('OUTSOURCE'));
+        ref.invalidate(adjustmentsProvider);
+        ref.invalidate(itemsProvider);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Request for ${req.material} approved. Stock updated to ${remainingStock.toStringAsFixed(0)} pcs.'),
+              backgroundColor: AppColors.primary,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error approving request: $e')),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _processingId = null);
+      }
+    }
+  }
+
+  Future<void> _handleReject(MaterialRequest req) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text('Reject Material Request'),
+        content: Text(
+          'Are you sure you want to reject this request for "${req.material}" (WO: ${req.workOrder})?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      setState(() => _processingId = req.id);
+      try {
+        await ref.read(booksRepositoryProvider).rejectMaterialRequest(req.id);
+        ref.invalidate(materialRequestsProvider);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Request for ${req.material} marked as Rejected.')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error rejecting request: $e')),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _processingId = null);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final requestsState = ref.watch(materialRequestsProvider);
+    final materialsState = ref.watch(materialsProvider(null));
+    final allMaterials = materialsState.valueOrNull ?? <MaterialItem>[];
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
       body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: requestsState.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, _) => Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text('Failed to load material requests'),
-                      const SizedBox(height: 12),
-                      ElevatedButton(
-                        onPressed: () => ref.invalidate(materialRequestsProvider),
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
+        child: requestsState.when(
+          loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+          error: (error, _) => Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text('Failed to load material requests'),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: () => ref.invalidate(materialRequestsProvider),
+                  child: const Text('Retry'),
                 ),
-                data: (requests) => RefreshIndicator(
-                  onRefresh: () async {
-                    ref.invalidate(materialRequestsProvider);
-                    await ref.read(materialRequestsProvider.future);
-                  },
-                  child: requests.isEmpty
-                      ? Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.assignment_late_outlined,
-                                    size: 64, color: AppColors.textSecondary),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'No Material Requests Created Yet',
-                                  style: Theme.of(context).textTheme.titleMedium,
-                                ),
-                                const SizedBox(height: 8),
-                                const Text(
-                                  'Create a new request to issue materials to machines and operators.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(color: AppColors.textSecondary),
-                                ),
-                                const SizedBox(height: 20),
-                                ElevatedButton.icon(
-                                  onPressed: () =>
-                                      context.push('/inventory-adjustments/request-material'),
-                                  icon: const Icon(Icons.add),
-                                  label: const Text('Create Material Request'),
-                                ),
-                              ],
-                            ),
+              ],
+            ),
+          ),
+          data: (requests) => RefreshIndicator(
+            color: AppColors.primary,
+            onRefresh: () async {
+              ref.invalidate(materialRequestsProvider);
+              ref.invalidate(materialsProvider(null));
+              await Future.wait([
+                ref.read(materialRequestsProvider.future),
+                ref.read(materialsProvider(null).future),
+              ]);
+            },
+            child: requests.isEmpty
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.assignment_late_outlined,
+                              size: 64, color: AppColors.textSecondary),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No Material Requests Created Yet',
+                            style: Theme.of(context).textTheme.titleMedium,
                           ),
-                        )
-                      : ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-                          itemCount: requests.length,
-                          separatorBuilder: (_, _) => const SizedBox(height: 12),
-                          itemBuilder: (context, index) {
-                            final req = requests[index];
-                            return Card(
-                              elevation: 1.5,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Create a new request to issue materials to machines and operators.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
+                          const SizedBox(height: 20),
+                          ElevatedButton.icon(
+                            onPressed: () =>
+                                context.push('/inventory-adjustments/request-material'),
+                            icon: const Icon(Icons.add),
+                            label: const Text('Create Material Request'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                    itemCount: requests.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final req = requests[index];
+                      final isPending = req.status.toLowerCase() == 'pending';
+                      final isApproved = req.status.toLowerCase() == 'approved';
+                      final isCurrentProcessing = _processingId == req.id;
+                      final category = _getMaterialClassification(req.material, allMaterials);
+                      final isOutsource = category == 'Outsource';
+
+                      return Card(
+                        elevation: 1.5,
+                        shadowColor: AppColors.active.withValues(alpha: .08),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(
+                            color: isApproved
+                                ? AppColors.primary.withValues(alpha: .5)
+                                : AppColors.active.withValues(alpha: .06),
+                            width: 1,
+                          ),
+                        ),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: () => _showDetailsModal(req, allMaterials),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
                                     Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
                                       children: [
-                                        Row(
-                                          children: [
-                                            Container(
-                                              padding: const EdgeInsets.all(8),
-                                              decoration: BoxDecoration(
-                                                color: AppColors.primary
-                                                    .withValues(alpha: .12),
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                              ),
-                                              child: const Icon(
-                                                  Icons.assignment_outlined,
-                                                  color: AppColors.active),
-                                            ),
-                                            const SizedBox(width: 10),
-                                            Text(
-                                              'WO: ${req.workOrder}',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .titleMedium
-                                                  ?.copyWith(
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                            ),
-                                          ],
+                                        Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFEFF5D8),
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          child: const Icon(
+                                            Icons.assignment_outlined,
+                                            color: AppColors.active,
+                                            size: 20,
+                                          ),
                                         ),
+                                        const SizedBox(width: 10),
+                                        Text(
+                                          'WO: ${req.workOrder}',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 16,
+                                              ),
+                                        ),
+                                      ],
+                                    ),
+                                    Row(
+                                      children: [
                                         Text(
                                           DateFormat('dd MMM yyyy').format(req.date),
                                           style: AppTextStyles.caption
                                               .copyWith(color: AppColors.textSecondary),
                                         ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      req.material,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleSmall
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Row(
-                                            children: [
-                                              const Icon(
-                                                  Icons.precision_manufacturing_outlined,
-                                                  size: 16,
-                                                  color: AppColors.textSecondary),
-                                              const SizedBox(width: 4),
-                                              Expanded(
-                                                child: Text(
-                                                  'Machine: ${req.machine}',
-                                                  style: AppTextStyles.caption,
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        Expanded(
-                                          child: Row(
-                                            children: [
-                                              const Icon(Icons.person_outline_rounded,
-                                                  size: 16,
-                                                  color: AppColors.textSecondary),
-                                              const SizedBox(width: 4),
-                                              Expanded(
-                                                child: Text(
-                                                  'Operator: ${req.operatorName}',
-                                                  style: AppTextStyles.caption,
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const Divider(height: 20),
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Chip(
-                                          avatar: const Icon(Icons.numbers, size: 14),
-                                          label: Text(
-                                              'Qty: ${req.quantityIssued.toStringAsFixed(0)} pcs'),
-                                          visualDensity: VisualDensity.compact,
-                                        ),
-                                        Chip(
-                                          avatar:
-                                              const Icon(Icons.scale_outlined, size: 14),
-                                          label: Text(
-                                              'Weight: ${req.weightIssued.toStringAsFixed(1)} kg'),
-                                          visualDensity: VisualDensity.compact,
+                                        const SizedBox(width: 6),
+                                        IconButton(
+                                          icon: const Icon(Icons.visibility_outlined, size: 20, color: AppColors.active),
+                                          tooltip: 'View Details',
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                          onPressed: () => _showDetailsModal(req, allMaterials),
                                         ),
                                       ],
                                     ),
                                   ],
                                 ),
-                              ),
-                            );
-                          },
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        req.material,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: isOutsource
+                                            ? const Color(0xFFE8F5FF)
+                                            : const Color(0xFFEFF5D8),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(
+                                          color: isOutsource
+                                              ? const Color(0xFFB8DCFE)
+                                              : const Color(0xFFDCEB9F),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            isOutsource
+                                                ? Icons.handyman_outlined
+                                                : Icons.precision_manufacturing_outlined,
+                                            size: 13,
+                                            color: isOutsource
+                                                ? const Color(0xFF0066CC)
+                                                : AppColors.active,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            category,
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: isOutsource
+                                                  ? const Color(0xFF0066CC)
+                                                  : AppColors.active,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.precision_manufacturing_outlined,
+                                            size: 16,
+                                            color: AppColors.textSecondary,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Text(
+                                              'Machine: ${req.machine}',
+                                              style: AppTextStyles.caption,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.person_outline_rounded,
+                                            size: 16,
+                                            color: AppColors.textSecondary,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Text(
+                                              'Operator: ${req.operatorName}',
+                                              style: AppTextStyles.caption,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 14),
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF7FAEE),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: const Color(0xFFDCEB9F)),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.tag_rounded,
+                                              size: 15, color: Color(0xFF7FA800)),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            'Qty: ${req.quantityIssued.toStringAsFixed(0)} pcs',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.active,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF7FAEE),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: const Color(0xFFDCEB9F)),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.scale_outlined,
+                                              size: 15, color: Color(0xFF7FA800)),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            'Weight: ${req.weightIssued.toStringAsFixed(1)} kg',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.active,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    if (!isPending)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 10, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: isApproved
+                                              ? Colors.green.withValues(alpha: .12)
+                                              : Colors.red.withValues(alpha: .12),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          req.status,
+                                          style: TextStyle(
+                                            color: isApproved ? Colors.green[800] : Colors.red[800],
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                if (isPending) ...[
+                                  const Divider(height: 24),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      OutlinedButton(
+                                        onPressed: isCurrentProcessing
+                                            ? null
+                                            : () => _handleReject(req),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: Colors.red[700],
+                                          side: BorderSide(color: Colors.red[300]!),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 16, vertical: 8),
+                                        ),
+                                        child: const Text('Reject'),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      FilledButton(
+                                        onPressed: isCurrentProcessing
+                                            ? null
+                                            : () => _handleApprove(req, allMaterials),
+                                        style: FilledButton.styleFrom(
+                                          backgroundColor: AppColors.primary,
+                                          foregroundColor: Colors.white,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 20, vertical: 8),
+                                        ),
+                                        child: isCurrentProcessing
+                                            ? const SizedBox(
+                                                width: 16,
+                                                height: 16,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  color: Colors.white,
+                                                ),
+                                              )
+                                            : const Text(
+                                                'Approve',
+                                                style: TextStyle(fontWeight: FontWeight.bold),
+                                              ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
                         ),
-                ),
-              ),
-            ),
-          ],
+                      );
+                    },
+                  ),
+          ),
         ),
       ),
     );

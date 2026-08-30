@@ -66,8 +66,8 @@ class _AddMaterialPageState extends ConsumerState<AddMaterialPage> {
     super.initState();
     final item = widget.material;
     if (item != null) {
-      sourceType = item.sourceType.toUpperCase();
-      if (sourceType == 'RAW') {
+      sourceType = item.isOutsource ? 'OUTSOURCE' : 'RAW';
+      if (item.isRawMaterial) {
         _controller('Material Code').text = item.code;
         _controller('Material Description').text = item.description;
         _controller('Material Type').text = item.materialType;

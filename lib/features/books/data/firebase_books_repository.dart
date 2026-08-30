@@ -104,10 +104,10 @@ class FirebaseBooksRepository implements BooksRepository {
 
   static final List<MaterialItem> _materialsStore = [
     MaterialItem(
-      id: 101,
+      id: 1787774178236,
       sourceType: 'RAW',
       code: 'MAT-101',
-      description: 'Mild Steel Plate 12mm',
+      description: 'Miled Steel Plate 12mm',
       materialType: 'Steel',
       grade: 'MS-350',
       make: 'Tata Steel',
@@ -124,9 +124,10 @@ class FirebaseBooksRepository implements BooksRepository {
       maximumStock: '100',
       reorderLevel: '20',
       createdAt: DateTime.now().subtract(const Duration(days: 5)),
+      stockOnHand: 25,
     ),
     MaterialItem(
-      id: 201,
+      id: 1787774273725,
       sourceType: 'OUTSOURCE',
       code: 'OUT-201',
       description: 'CNC Milling & Shaft Turning Service',
@@ -146,6 +147,30 @@ class FirebaseBooksRepository implements BooksRepository {
       maximumStock: '50',
       reorderLevel: '10',
       createdAt: DateTime.now().subtract(const Duration(days: 3)),
+      stockOnHand: 50,
+    ),
+    MaterialItem(
+      id: 1787777204793,
+      sourceType: 'RAW',
+      code: 'RM-AL',
+      description: 'aluminium sheet summary (6061)',
+      materialType: 'aluminium',
+      grade: 'a',
+      make: '',
+      model: '',
+      size: '12x12',
+      unit: 'pcs',
+      density: '60',
+      supplier: 'ajay',
+      heatNumber: '728282',
+      batchNumber: '100',
+      warehouseLocation: 'warehouse n',
+      rackLocation: 'delhi',
+      minimumStock: '5',
+      maximumStock: '60',
+      reorderLevel: '20',
+      createdAt: DateTime.now().subtract(const Duration(days: 2)),
+      stockOnHand: 20,
     ),
   ];
 
@@ -567,9 +592,17 @@ class FirebaseBooksRepository implements BooksRepository {
           } else if (createdVal is String) {
             createdAt = DateTime.tryParse(createdVal) ?? DateTime.now();
           }
+          final dynamic rawStock = data['stockOnHand'];
+          final double stockOnHand = (rawStock is num)
+              ? rawStock.toDouble()
+              : (double.tryParse(rawStock?.toString() ?? '') ?? 0.0);
+
+          final String rawType =
+              (data['sourceType'] ?? data['type'] ?? 'RAW').toString();
+
           return MaterialItem(
-            id: (data['id'] as num?)?.toInt() ?? doc.id.hashCode,
-            sourceType: data['sourceType'] ?? 'RAW',
+            id: (data['id'] as num?)?.toInt() ?? int.tryParse(doc.id) ?? doc.id.hashCode,
+            sourceType: rawType,
             code: data['code'] ?? '',
             description: data['description'] ?? '',
             materialType: data['materialType'] ?? '',
@@ -584,18 +617,24 @@ class FirebaseBooksRepository implements BooksRepository {
             batchNumber: data['batchNumber'] ?? '',
             warehouseLocation: data['warehouseLocation'] ?? '',
             rackLocation: data['rackLocation'] ?? '',
-            minimumStock: data['minimumStock'] ?? '0',
-            maximumStock: data['maximumStock'] ?? '0',
-            reorderLevel: data['reorderLevel'] ?? '0',
+            minimumStock: data['minimumStock']?.toString() ?? '0',
+            maximumStock: data['maximumStock']?.toString() ?? '0',
+            reorderLevel: data['reorderLevel']?.toString() ?? '0',
             createdAt: createdAt,
-            stockOnHand: (data['stockOnHand'] as num?)?.toDouble() ?? 0,
+            stockOnHand: stockOnHand,
           );
         }).toList();
 
         if (sourceType != null && sourceType.isNotEmpty) {
+          final upper = sourceType.trim().toUpperCase();
+          if (upper.startsWith('RAW')) {
+            return list.where((m) => m.isRawMaterial).toList();
+          } else if (upper.startsWith('OUT')) {
+            return list.where((m) => m.isOutsource).toList();
+          }
           return list
               .where((m) =>
-                  m.sourceType.toUpperCase() == sourceType.toUpperCase())
+                  m.sourceType.toUpperCase() == upper)
               .toList();
         }
         return list;
@@ -605,9 +644,15 @@ class FirebaseBooksRepository implements BooksRepository {
     }
 
     if (sourceType != null && sourceType.isNotEmpty) {
+      final upper = sourceType.trim().toUpperCase();
+      if (upper.startsWith('RAW')) {
+        return _materialsStore.where((m) => m.isRawMaterial).toList();
+      } else if (upper.startsWith('OUT')) {
+        return _materialsStore.where((m) => m.isOutsource).toList();
+      }
       return _materialsStore
           .where(
-              (m) => m.sourceType.toUpperCase() == sourceType.toUpperCase())
+              (m) => m.sourceType.toUpperCase() == upper)
           .toList();
     }
     return List.unmodifiable(_materialsStore);
@@ -661,10 +706,25 @@ class FirebaseBooksRepository implements BooksRepository {
         'minimumStock': draft.minimumStock,
         'maximumStock': draft.maximumStock,
         'reorderLevel': draft.reorderLevel,
+        'stockOnHand': 0,
         'createdAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
       debugPrint('Firestore addMaterial error: $e');
+    }
+  }
+
+  @override
+  Future<void> deleteMaterial(int id) async {
+    _materialsStore.removeWhere((m) => m.id == id);
+    try {
+      final snap = await _materialsRef.where('id', isEqualTo: id).get();
+      for (final doc in snap.docs) {
+        await doc.reference.delete();
+      }
+      await _materialsRef.doc('$id').delete();
+    } catch (e) {
+      debugPrint('Firestore deleteMaterial error: $e');
     }
   }
 
@@ -1033,7 +1093,7 @@ class FirebaseBooksRepository implements BooksRepository {
           }
 
           return MaterialRequest(
-            id: (data['id'] as num?)?.toInt() ?? doc.id.hashCode,
+            id: (data['id'] as num?)?.toInt() ?? int.tryParse(doc.id) ?? doc.id.hashCode,
             date: parseDate(dateVal),
             machine: data['machine'] ?? '',
             operatorName: data['operatorName'] ?? '',
@@ -1042,6 +1102,7 @@ class FirebaseBooksRepository implements BooksRepository {
             quantityIssued: (data['quantityIssued'] as num?)?.toDouble() ?? 0,
             weightIssued: (data['weightIssued'] as num?)?.toDouble() ?? 0,
             createdAt: parseDate(crVal),
+            status: data['status'] ?? 'Pending',
           );
         }).toList();
       }
@@ -1064,6 +1125,7 @@ class FirebaseBooksRepository implements BooksRepository {
       quantityIssued: draft.quantityIssued,
       weightIssued: draft.weightIssued,
       createdAt: DateTime.now(),
+      status: draft.status,
     );
     _materialRequestsStore.insert(0, req);
 
@@ -1077,10 +1139,235 @@ class FirebaseBooksRepository implements BooksRepository {
         'material': draft.material,
         'quantityIssued': draft.quantityIssued,
         'weightIssued': draft.weightIssued,
+        'status': draft.status,
         'createdAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
       debugPrint('Firestore requestMaterial error: $e');
+    }
+  }
+
+  @override
+  Future<void> approveMaterialRequest(int requestId) async {
+    // 1. Find the request from local store or Firestore
+    MaterialRequest? req;
+    try {
+      req = _materialRequestsStore.firstWhere((r) => r.id == requestId);
+    } catch (_) {
+      final reqs = await getMaterialRequests();
+      try {
+        req = reqs.firstWhere((r) => r.id == requestId);
+      } catch (_) {
+        throw Exception('Material request not found (ID: $requestId)');
+      }
+    }
+
+    // 2. Fetch the latest material data from Firestore
+    DocumentReference<Map<String, dynamic>>? matDocRef;
+    Map<String, dynamic>? matData;
+    double currentStock = 0.0;
+    String matchedMatName = req.material;
+
+    try {
+      final materialsSnap = await _materialsRef.get();
+      for (final doc in materialsSnap.docs) {
+        final d = doc.data();
+        final desc = (d['description'] ?? '').toString().trim().toLowerCase();
+        final code = (d['code'] ?? '').toString().trim().toLowerCase();
+        final reqMat = req.material.trim().toLowerCase();
+
+        if (desc == reqMat ||
+            code == reqMat ||
+            reqMat.contains(desc) ||
+            (desc.isNotEmpty && reqMat.startsWith(desc))) {
+          matDocRef = doc.reference;
+          matData = d;
+          matchedMatName = d['description'] ?? req.material;
+          final dynamic rawStock = d['stockOnHand'];
+          currentStock = (rawStock is num)
+              ? rawStock.toDouble()
+              : (double.tryParse(rawStock?.toString() ?? '') ?? 0.0);
+          break;
+        }
+      }
+    } catch (e) {
+      debugPrint('Error finding material in Firestore: $e');
+    }
+
+    // If not found in Firestore, check in-memory store
+    if (matDocRef == null) {
+      final reqMat = req.material.trim().toLowerCase();
+      try {
+        final localMat = _materialsStore.firstWhere((m) {
+          final desc = m.description.trim().toLowerCase();
+          final code = m.code.trim().toLowerCase();
+          return desc == reqMat || code == reqMat || reqMat.contains(desc);
+        });
+        currentStock = localMat.stockOnHand;
+        matchedMatName = localMat.description;
+      } catch (_) {
+        currentStock = 0.0;
+      }
+    }
+
+    // 3. Stock validation
+    if (currentStock <= 0) {
+      throw NoStockException(
+        materialName: matchedMatName,
+        currentStock: currentStock,
+      );
+    }
+
+    if (currentStock < req.quantityIssued) {
+      throw InsufficientStockException(
+        materialName: matchedMatName,
+        currentStock: currentStock,
+        requestedQuantity: req.quantityIssued,
+      );
+    }
+
+    // 4. Reduce stock in Firestore & local store
+    final double updatedStock = currentStock - req.quantityIssued;
+
+    if (matDocRef != null) {
+      try {
+        await matDocRef.update({
+          'stockOnHand': updatedStock,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        debugPrint('Error updating material stock in Firestore: $e');
+      }
+    }
+
+    for (var i = 0; i < _materialsStore.length; i++) {
+      final m = _materialsStore[i];
+      if (m.description.trim().toLowerCase() == matchedMatName.trim().toLowerCase() ||
+          m.code.trim().toLowerCase() == req.material.trim().toLowerCase()) {
+        _materialsStore[i] = MaterialItem(
+          id: m.id,
+          sourceType: m.sourceType,
+          code: m.code,
+          description: m.description,
+          materialType: m.materialType,
+          grade: m.grade,
+          make: m.make,
+          model: m.model,
+          size: m.size,
+          unit: m.unit,
+          density: m.density,
+          supplier: m.supplier,
+          heatNumber: m.heatNumber,
+          batchNumber: m.batchNumber,
+          warehouseLocation: m.warehouseLocation,
+          rackLocation: m.rackLocation,
+          minimumStock: m.minimumStock,
+          maximumStock: m.maximumStock,
+          reorderLevel: m.reorderLevel,
+          createdAt: m.createdAt,
+          stockOnHand: updatedStock,
+        );
+        break;
+      }
+    }
+
+    // 5. Update request status to 'Approved'
+    try {
+      final reqSnap = await _requestsRef.where('id', isEqualTo: requestId).get();
+      for (final doc in reqSnap.docs) {
+        await doc.reference.update({
+          'status': 'Approved',
+          'approvedAt': FieldValue.serverTimestamp(),
+        });
+      }
+      await _requestsRef.doc('$requestId').update({
+        'status': 'Approved',
+        'approvedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint('Error updating request status in Firestore: $e');
+    }
+
+    for (var i = 0; i < _materialRequestsStore.length; i++) {
+      if (_materialRequestsStore[i].id == requestId) {
+        final r = _materialRequestsStore[i];
+        _materialRequestsStore[i] = MaterialRequest(
+          id: r.id,
+          date: r.date,
+          machine: r.machine,
+          operatorName: r.operatorName,
+          workOrder: r.workOrder,
+          material: r.material,
+          quantityIssued: r.quantityIssued,
+          weightIssued: r.weightIssued,
+          createdAt: r.createdAt,
+          status: 'Approved',
+        );
+        break;
+      }
+    }
+
+    // 6. Record inventory adjustment log
+    final adjId = DateTime.now().millisecondsSinceEpoch;
+    final adj = InventoryAdjustment(
+      id: adjId,
+      date: DateTime.now(),
+      reason: 'Approved Material Issue for WO: ${req.workOrder}',
+      referenceNumber: req.workOrder,
+      type: 'Material Issued',
+      status: 'Approved',
+      description:
+          'Issued ${req.quantityIssued.toStringAsFixed(0)} pcs of ${req.material} to ${req.operatorName} (${req.machine})',
+    );
+    _adjustmentsStore.insert(0, adj);
+    try {
+      await _adjustmentsRef.doc('$adjId').set({
+        'id': adjId,
+        'date': Timestamp.fromDate(adj.date),
+        'reason': adj.reason,
+        'referenceNumber': adj.referenceNumber,
+        'type': adj.type,
+        'status': adj.status,
+        'description': adj.description,
+      });
+    } catch (_) {}
+  }
+
+  @override
+  Future<void> rejectMaterialRequest(int requestId) async {
+    try {
+      final reqSnap = await _requestsRef.where('id', isEqualTo: requestId).get();
+      for (final doc in reqSnap.docs) {
+        await doc.reference.update({
+          'status': 'Rejected',
+          'rejectedAt': FieldValue.serverTimestamp(),
+        });
+      }
+      await _requestsRef.doc('$requestId').update({
+        'status': 'Rejected',
+        'rejectedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint('Error rejecting request in Firestore: $e');
+    }
+
+    for (var i = 0; i < _materialRequestsStore.length; i++) {
+      if (_materialRequestsStore[i].id == requestId) {
+        final r = _materialRequestsStore[i];
+        _materialRequestsStore[i] = MaterialRequest(
+          id: r.id,
+          date: r.date,
+          machine: r.machine,
+          operatorName: r.operatorName,
+          workOrder: r.workOrder,
+          material: r.material,
+          quantityIssued: r.quantityIssued,
+          weightIssued: r.weightIssued,
+          createdAt: r.createdAt,
+          status: 'Rejected',
+        );
+        break;
+      }
     }
   }
 

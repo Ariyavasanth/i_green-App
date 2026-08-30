@@ -94,13 +94,23 @@ class _MoveStockPageState extends ConsumerState<MoveStockPage> {
     },
   );
 
-  Widget _materialField() => ref.watch(itemsProvider).when(
+  Widget _materialField() => ref.watch(materialsProvider(null)).when(
     loading: () => const LinearProgressIndicator(),
     error: (_, _) => const Text('Unable to load materials'),
-    data: (items) => DropdownButtonFormField<int>(
+    data: (materials) => DropdownButtonFormField<int>(
       initialValue: _materialId,
       decoration: const InputDecoration(labelText: 'Material*'),
-      items: items.map((item) => DropdownMenuItem(value: item.id, child: Text('${item.name} (${item.stockOnHand.toStringAsFixed(0)} ${item.unit})'))).toList(),
+      items: materials
+          .map((mat) => DropdownMenuItem(
+                value: mat.id,
+                child: Text(
+                  mat.code.isNotEmpty
+                      ? '${mat.description} (${mat.code})'
+                      : mat.description,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ))
+          .toList(),
       onChanged: (value) => setState(() => _materialId = value),
       validator: (value) => value == null ? 'Material is required' : null,
     ),
@@ -130,7 +140,11 @@ class _MoveStockPageState extends ConsumerState<MoveStockPage> {
         weightIssued: double.parse(_weightIssued.text), issuedBy: _issuedBy.text.trim(),
         receivedBy: _receivedBy.text.trim(),
       ));
+      ref.invalidate(materialsProvider(null));
+      ref.invalidate(materialsProvider('RAW'));
+      ref.invalidate(materialsProvider('OUTSOURCE'));
       ref.invalidate(itemsProvider);
+      ref.invalidate(adjustmentsProvider);
       ref.invalidate(dashboardMetricsProvider);
       if (mounted) context.pop();
     } finally {

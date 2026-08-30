@@ -298,6 +298,21 @@ class MaterialItem {
   final String minimumStock, maximumStock, reorderLevel;
   final DateTime createdAt;
   final double stockOnHand;
+
+  bool get isRawMaterial {
+    final upper = sourceType.trim().toUpperCase();
+    return upper == 'RAW' ||
+        upper == 'RAW MATERIAL' ||
+        upper == 'RAW_MATERIAL' ||
+        upper.startsWith('RAW');
+  }
+
+  bool get isOutsource {
+    final upper = sourceType.trim().toUpperCase();
+    return upper == 'OUTSOURCE' || upper.startsWith('OUT');
+  }
+
+  String get displayType => isOutsource ? 'Outsource' : 'Raw Material';
 }
 
 class StockEntry {
@@ -352,6 +367,35 @@ class MoveStockDraft {
   final String issuedBy, receivedBy;
 }
 
+class NoStockException implements Exception {
+  final String materialName;
+  final double currentStock;
+
+  const NoStockException({
+    required this.materialName,
+    this.currentStock = 0,
+  });
+
+  @override
+  String toString() => 'No stock available for $materialName. Current stock: ${currentStock.toStringAsFixed(0)} pcs';
+}
+
+class InsufficientStockException implements Exception {
+  final String materialName;
+  final double currentStock;
+  final double requestedQuantity;
+
+  const InsufficientStockException({
+    required this.materialName,
+    required this.currentStock,
+    required this.requestedQuantity,
+  });
+
+  @override
+  String toString() =>
+      'Insufficient stock for $materialName. Only ${currentStock.toStringAsFixed(0)} pcs available, but ${requestedQuantity.toStringAsFixed(0)} pcs were requested.';
+}
+
 class MaterialRequestDraft {
   const MaterialRequestDraft({
     required this.date,
@@ -361,10 +405,11 @@ class MaterialRequestDraft {
     required this.material,
     required this.quantityIssued,
     required this.weightIssued,
+    this.status = 'Pending',
   });
 
   final DateTime date;
-  final String machine, operatorName, workOrder, material;
+  final String machine, operatorName, workOrder, material, status;
   final double quantityIssued, weightIssued;
 }
 
@@ -379,11 +424,12 @@ class MaterialRequest {
     required this.quantityIssued,
     required this.weightIssued,
     required this.createdAt,
+    this.status = 'Pending',
   });
 
   final int id;
   final DateTime date;
-  final String machine, operatorName, workOrder, material;
+  final String machine, operatorName, workOrder, material, status;
   final double quantityIssued, weightIssued;
   final DateTime createdAt;
 }
@@ -504,8 +550,11 @@ abstract interface class BooksRepository {
   Future<List<MaterialReturn>> getMaterialReturns();
   Future<void> addStock(StockEntryDraft draft);
   Future<void> addMaterial(MaterialDraft draft);
+  Future<void> deleteMaterial(int id);
   Future<void> moveStock(MoveStockDraft draft);
   Future<void> requestMaterial(MaterialRequestDraft draft);
+  Future<void> approveMaterialRequest(int requestId);
+  Future<void> rejectMaterialRequest(int requestId);
   Future<void> returnMaterial(MaterialReturnDraft draft);
   Future<DashboardMetrics> getDashboardMetrics();
   Future<void> recordInvoicePaid(int invoiceId);
