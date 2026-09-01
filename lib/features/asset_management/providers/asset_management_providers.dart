@@ -7,6 +7,7 @@ import '../domain/asset_assignment_repository.dart';
 import '../domain/asset_transfer_request.dart';
 import '../../leave/providers/leave_providers.dart';
 import '../../employee/domain/employee.dart';
+import '../../employee/providers/employee_providers.dart';
 
 // Firestore implementation active.
 final assetAssignmentRepositoryProvider = Provider<AssetAssignmentRepository>(

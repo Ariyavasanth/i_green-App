@@ -245,6 +245,38 @@ class Employee {
     this.siteRequireGpsVerification = true,
   });
 
+  /// Check if the user is a Super Admin.
+  /// Super Admin has unconditional full access to all modules and actions.
+  bool get isSuperAdmin {
+    final type = userType.trim().toUpperCase();
+    return type == 'SUPER_ADMIN' || type == 'SUPER ADMIN';
+  }
+
+  /// Check if the user has access to a specific permission.
+  /// Super Admin always returns true.
+  /// Other users are checked against their explicit accessPermissions list.
+  bool hasPermission(String permission) {
+    if (isSuperAdmin) return true;
+    final normalized = permission.trim().toLowerCase();
+    return accessPermissions.any((p) {
+      final pLower = p.trim().toLowerCase();
+      if (pLower == normalized) return true;
+      // Also match common semantic variations
+      if (normalized == 'leave management' && (pLower == 'leave' || pLower == 'leaves' || pLower == 'leave management')) return true;
+      if (normalized == 'leave' && (pLower == 'leave' || pLower == 'leaves' || pLower == 'leave management')) return true;
+      if (normalized == 'tasks and clocking management' && (pLower == 'tasks & timesheets' || pLower == 'tasks and timesheets' || pLower == 'tasks and clocking management')) return true;
+      if (normalized == 'organization structure' && (pLower == 'organization' || pLower == 'organization structure')) return true;
+      if (normalized == 'organization management' && (pLower == 'organization' || pLower == 'organization management')) return true;
+      return false;
+    });
+  }
+
+  /// Check if the user has at least one of the specified permissions.
+  bool hasAnyPermission(List<String> permissions) {
+    if (isSuperAdmin) return true;
+    return permissions.any(hasPermission);
+  }
+
   static const List<String> allSidebarPermissions = [
     'Home',
     'Organization Management',

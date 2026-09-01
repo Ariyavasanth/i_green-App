@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../leave/providers/leave_providers.dart';
+import '../../employee/providers/employee_providers.dart';
 import '../domain/permission_enums.dart';
 import '../domain/permission_request.dart';
 import '../providers/permission_providers.dart';
@@ -179,9 +180,9 @@ class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
     try {
       final req = PermissionRequest(
         employeeId: employeeId,
-        employeeName: '${emp?.firstName ?? "Admin"} ${emp?.lastName ?? "User"}',
-        employeeCode: emp?.employeeId ?? 'EMP-001',
-        department: emp?.department ?? 'Management',
+        employeeName: '${emp?.firstName ?? ""} ${emp?.lastName ?? ""}'.trim(),
+        employeeCode: emp?.employeeId ?? '',
+        department: emp?.department ?? '',
         date: _selectedDate,
         fromTime: _fromTime.format(context),
         toTime: _toTime.format(context),

@@ -8,7 +8,7 @@ import '../../attendance/providers/attendance_providers.dart';
 class ClockActionWidget extends ConsumerWidget {
   const ClockActionWidget({
     super.key,
-    this.employeeId = 'EMP-001',
+    required this.employeeId,
     this.onClockChanged,
   });
 
@@ -18,9 +18,10 @@ class ClockActionWidget extends ConsumerWidget {
   Future<void> _startActivity(BuildContext context, WidgetRef ref, String type, {String? notes}) async {
     final attendanceRepo = ref.read(attendanceRepositoryProvider);
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final empIdStr = employeeId == 'EMP-0001' ? 'EMP-001' : employeeId;
+    final empIdStr = employeeId.trim();
     final digits = empIdStr.replaceAll(RegExp(r'[^0-9]'), '');
-    final empIdInt = int.tryParse(digits) ?? 1;
+    final empIdInt = int.tryParse(digits) ?? 0;
+    if (empIdInt == 0) return;
     final attendanceRecord = await attendanceRepo.getAttendanceRecordForDate(empIdInt, today);
 
     if (attendanceRecord == null || attendanceRecord.effectiveCheckInTime.trim().isEmpty) {

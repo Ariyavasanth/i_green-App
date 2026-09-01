@@ -6,6 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../domain/exit_model.dart';
 import '../providers/exit_providers.dart';
+import '../../employee/providers/employee_providers.dart';
 import 'widgets/exit_policy_dialog.dart';
 
 class MyExitPage extends ConsumerStatefulWidget {

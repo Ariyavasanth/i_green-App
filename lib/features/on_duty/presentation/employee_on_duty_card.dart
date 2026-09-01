@@ -159,19 +159,13 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
     }
 
     // 2. Mutual Exclusion: Check if any Task or Clocking activity is currently IN_PROGRESS
-    final empIdStr = widget.assignment.employeeId > 0
-        ? 'EMP-${widget.assignment.employeeId.toString().padLeft(3, '0')}'
-        : 'EMP-001';
+    final empIdStr = 'EMP-${widget.assignment.employeeId.toString().padLeft(3, '0')}';
     final taskRepo = ref.read(taskRepositoryProvider);
     final runningTasks = await taskRepo.getTasks(assignedTo: empIdStr, status: 'IN_PROGRESS');
-    final runningTasksAlt1 = await taskRepo.getTasks(assignedTo: 'EMP-001', status: 'IN_PROGRESS');
-    final runningTasksAlt2 = await taskRepo.getTasks(assignedTo: 'EMP-0001', status: 'IN_PROGRESS');
-    final activeTask = [...runningTasks, ...runningTasksAlt1, ...runningTasksAlt2].firstOrNull;
+    final activeTask = runningTasks.firstOrNull;
 
     final clockRepo = ref.read(clockingRepositoryProvider);
-    final activeClockEntry = await clockRepo.getActiveEntry(empIdStr) ??
-        await clockRepo.getActiveEntry('EMP-001') ??
-        await clockRepo.getActiveEntry('EMP-0001');
+    final activeClockEntry = await clockRepo.getActiveEntry(empIdStr);
 
     if (activeTask != null || activeClockEntry != null) {
       final runningName = activeTask != null ? 'Task "${activeTask.title}"' : 'Activity "${activeClockEntry?.entryType}"';

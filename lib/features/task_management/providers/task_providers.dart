@@ -24,15 +24,11 @@ final taskProjectHoursProvider = FutureProvider.family<Map<String, double>, Stri
 });
 
 final activeTaskProvider = FutureProvider.family<TaskItem?, String>((ref, employeeId) async {
+  if (employeeId.trim().isEmpty) return null;
   final repo = ref.watch(taskRepositoryProvider);
-  final empId = employeeId == 'EMP-0001' ? 'EMP-001' : employeeId;
-  final tasks = await repo.getTasks(assignedTo: empId, status: 'IN_PROGRESS');
+  final tasks = await repo.getTasks(assignedTo: employeeId.trim(), status: 'IN_PROGRESS');
   if (tasks.isNotEmpty) {
     return tasks.first;
-  }
-  if (empId == 'EMP-001') {
-    final tasksAlt = await repo.getTasks(assignedTo: 'EMP-0001', status: 'IN_PROGRESS');
-    if (tasksAlt.isNotEmpty) return tasksAlt.first;
   }
   return null;
 });

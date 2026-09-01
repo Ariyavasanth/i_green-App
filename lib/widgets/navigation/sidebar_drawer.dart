@@ -1,8 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../features/employee/domain/employee.dart';
 
 class SidebarDestination {
   const SidebarDestination(
@@ -27,6 +30,7 @@ class SidebarDrawer extends StatefulWidget {
     required this.expanded,
     required this.onSelected,
     required this.onLogout,
+    this.employee,
     super.key,
   });
 
@@ -35,6 +39,7 @@ class SidebarDrawer extends StatefulWidget {
   final bool expanded;
   final ValueChanged<String> onSelected;
   final VoidCallback onLogout;
+  final Employee? employee;
 
   @override
   State<SidebarDrawer> createState() => _SidebarDrawerState();
@@ -156,6 +161,13 @@ class _SidebarDrawerState extends State<SidebarDrawer> {
               ),
             ),
             const Divider(height: 1, color: Color(0x1F000000)),
+            if (widget.expanded && widget.employee != null) ...[
+              _DrawerProfileCard(
+                employee: widget.employee!,
+                onTap: () => widget.onSelected('/my-profile'),
+              ),
+              const Divider(height: 1, color: Color(0x1F000000)),
+            ],
             const SizedBox(height: 4),
             Expanded(
               child: ListView(
@@ -346,3 +358,120 @@ class _BadgeCount extends StatelessWidget {
     ),
   );
 }
+
+class _DrawerProfileCard extends StatelessWidget {
+  const _DrawerProfileCard({
+    required this.employee,
+    this.onTap,
+  });
+
+  final Employee employee;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = employee.fullName.isNotEmpty
+        ? employee.fullName
+        : (employee.firstName.isNotEmpty ? employee.firstName : 'Ariya J');
+    final role = employee.designation.isNotEmpty
+        ? employee.designation
+        : (employee.userType.isNotEmpty ? employee.userType : 'Administrator');
+    final initial = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : 'A';
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Row(
+              children: [
+                _buildAvatar(employee, initial),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        role,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right,
+                  size: 16,
+                  color: Color(0xFF94A3B8),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAvatar(Employee employee, String initial) {
+    final photoUrl = employee.profileImageUrl.trim();
+    if (photoUrl.isNotEmpty) {
+      if (photoUrl.startsWith('data:')) {
+        try {
+          final commaIdx = photoUrl.indexOf(',');
+          final bytes = base64Decode(commaIdx != -1 ? photoUrl.substring(commaIdx + 1) : photoUrl);
+          return CircleAvatar(
+            radius: 17,
+            backgroundColor: AppColors.active,
+            backgroundImage: MemoryImage(bytes),
+          );
+        } catch (_) {}
+      } else if (photoUrl.startsWith('http://') || photoUrl.startsWith('https://')) {
+        return CircleAvatar(
+          radius: 17,
+          backgroundColor: AppColors.active,
+          backgroundImage: NetworkImage(photoUrl),
+        );
+      }
+    }
+    return CircleAvatar(
+      radius: 17,
+      backgroundColor: AppColors.active,
+      child: Text(
+        initial,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 13,
+        ),
+      ),
+    );
+  }
+}
+

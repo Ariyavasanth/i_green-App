@@ -54,11 +54,12 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
   Future<void> _saveTask() async {
     if (!_formKey.currentState!.validate()) return;
 
-    if (_status == 'IN_PROGRESS') {
-      final empIdStr = _selectedAssignedTo ?? 'EMP-001';
-      final digits = empIdStr.replaceAll(RegExp(r'[^0-9]'), '');
-      final empIdInt = int.tryParse(digits) ?? 1;
+    final currentEmp = ref.read(currentEmployeeProvider);
+    final empIdStr = _selectedAssignedTo ?? (currentEmp?.employeeId ?? '');
+    final digits = empIdStr.replaceAll(RegExp(r'[^0-9]'), '');
+    final empIdInt = int.tryParse(digits) ?? (currentEmp?.id ?? 0);
 
+    if (_status == 'IN_PROGRESS' && empIdInt > 0) {
       final onDutyRepo = ref.read(onDutyRepositoryProvider);
       final activeOD = await onDutyRepo.getActiveAssignmentForEmployee(empIdInt);
       if (activeOD != null && (activeOD.status == 'IN_PROGRESS' || activeOD.status == 'ACTIVE')) {
@@ -229,8 +230,8 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
       id: taskId,
       title: _titleController.text.trim(),
       projectOrOfficeCode: _codeController.text.trim().toUpperCase(),
-      assignedBy: 'Admin',
-      assignedTo: _selectedAssignedTo ?? 'EMP-001',
+      assignedBy: '${currentEmp?.firstName ?? "Admin"} ${currentEmp?.lastName ?? ""}'.trim(),
+      assignedTo: _selectedAssignedTo ?? (currentEmp?.employeeId ?? ''),
       startTime: _startTime,
       endTime: _endTime,
       status: _status,
@@ -265,12 +266,13 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
     const primaryColor = Color(0xFF9CC70A);
     final employeesAsync = ref.watch(employeesProvider);
     final employees = employeesAsync.valueOrNull ?? [];
+    final currentEmp = ref.watch(currentEmployeeProvider);
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
 
-    final empIdStr = _selectedAssignedTo ?? 'EMP-001';
+    final empIdStr = _selectedAssignedTo ?? (currentEmp?.employeeId ?? '');
     final digits = empIdStr.replaceAll(RegExp(r'[^0-9]'), '');
-    final empIdInt = int.tryParse(digits) ?? 1;
+    final empIdInt = int.tryParse(digits) ?? (currentEmp?.id ?? 0);
     final activeODAsync = ref.watch(activeOnDutyAssignmentProvider(empIdInt));
     final activeOD = activeODAsync.valueOrNull;
     final isOnDutyRunning = activeOD != null && (activeOD.status == 'IN_PROGRESS' || activeOD.status == 'ACTIVE');
@@ -353,15 +355,16 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
                       labelText: 'Assign To',
                       border: OutlineInputBorder(),
                     ),
-                    items: [
-                      const DropdownMenuItem(value: 'EMP-001', child: Text('EMP-001 (Self)')),
-                      ...employees.map(
-                        (emp) => DropdownMenuItem(
+                    items: employees.map(
+                      (emp) {
+                        final isSelf = currentEmp != null && emp.id == currentEmp.id;
+                        final label = isSelf ? '${emp.employeeId} - ${emp.fullName} (Self)' : '${emp.employeeId} - ${emp.fullName}';
+                        return DropdownMenuItem(
                           value: emp.employeeId,
-                          child: Text('${emp.employeeId} - ${emp.fullName}'),
-                        ),
-                      ),
-                    ],
+                          child: Text(label),
+                        );
+                      },
+                    ).toList(),
                     onChanged: (val) => setState(() => _selectedAssignedTo = val),
                   ),
                   const SizedBox(height: 16),
@@ -422,15 +425,16 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
                             labelText: 'Assign To',
                             border: OutlineInputBorder(),
                           ),
-                          items: [
-                            const DropdownMenuItem(value: 'EMP-001', child: Text('EMP-001 (Self)')),
-                            ...employees.map(
-                              (emp) => DropdownMenuItem(
+                          items: employees.map(
+                            (emp) {
+                              final isSelf = currentEmp != null && emp.id == currentEmp.id;
+                              final label = isSelf ? '${emp.employeeId} - ${emp.fullName} (Self)' : '${emp.employeeId} - ${emp.fullName}';
+                              return DropdownMenuItem(
                                 value: emp.employeeId,
-                                child: Text('${emp.employeeId} - ${emp.fullName}'),
-                              ),
-                            ),
-                          ],
+                                child: Text(label),
+                              );
+                            },
+                          ).toList(),
                           onChanged: (val) => setState(() => _selectedAssignedTo = val),
                         ),
                       ),

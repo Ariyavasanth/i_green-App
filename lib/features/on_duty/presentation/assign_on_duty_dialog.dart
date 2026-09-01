@@ -59,7 +59,7 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
       _afterCompletionOption = existing.afterCompletionOption;
       _selectedEmployee = Employee.fromMap({
         'id': existing.employeeId,
-        'employee_id': existing.employeeId > 0 ? 'EMP-${existing.employeeId.toString().padLeft(3, '0')}' : 'EMP-001',
+        'employee_id': existing.employeeId > 0 ? 'EMP-${existing.employeeId.toString().padLeft(3, '0')}' : '',
         'first_name': existing.employeeName,
         'last_name': '',
       });
@@ -115,7 +115,8 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
     final empId = emp.employeeId.trim();
     final fallbackId = empId.isNotEmpty ? empId : (emp.id > 0 ? "EMP-${emp.id}" : "EMP");
 
-    if (empId == 'EMP-001' || emp.employeeId == 'EMP-001 (Self)' || (widget.preSelectedEmployee != null && emp.id == widget.preSelectedEmployee!.id)) {
+    final currentEmp = ref.read(currentEmployeeProvider);
+    if ((currentEmp != null && emp.id == currentEmp.id) || (widget.preSelectedEmployee != null && emp.id == widget.preSelectedEmployee!.id)) {
       return '$fallbackId (Self)';
     }
 

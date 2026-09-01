@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../leave/providers/leave_providers.dart';
+import '../../employee/providers/employee_providers.dart';
 import '../domain/permission_enums.dart';
 import '../domain/permission_request.dart';
 import '../providers/permission_providers.dart';
@@ -83,14 +84,15 @@ class _ApplyEmergencyPermissionPageState extends ConsumerState<ApplyEmergencyPer
 
     try {
       final emp = ref.read(currentEmployeeProvider);
-      final employeeId = emp?.id ?? 1;
+      if (emp == null) return;
+      final employeeId = emp.id;
       final repo = ref.read(permissionRepositoryProvider);
 
       final req = PermissionRequest(
         employeeId: employeeId,
-        employeeName: '${emp?.firstName ?? "Admin"} ${emp?.lastName ?? "User"}',
-        employeeCode: emp?.employeeId ?? 'EMP-001',
-        department: emp?.department ?? 'Management',
+        employeeName: '${emp.firstName} ${emp.lastName}'.trim(),
+        employeeCode: emp.employeeId,
+        department: emp.department,
         date: _selectedDate,
         fromTime: _fromTime.format(context),
         toTime: _toTime.format(context),

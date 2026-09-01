@@ -1,12 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../authentication/providers/authentication_providers.dart';
 import '../../organization/domain/column_preference.dart';
 import '../data/firebase_employee_repository.dart';
 import '../domain/candidate_response.dart';
 import '../domain/employee.dart';
 import '../domain/employee_repository.dart';
 import '../domain/registration_link.dart';
+
+final currentEmployeeProvider = Provider<Employee?>((ref) {
+  final emailOrId = ref.watch(currentUserEmailProvider);
+  if (emailOrId == null || emailOrId.trim().isEmpty) {
+    return null;
+  }
+  final target = emailOrId.trim().toLowerCase();
+  final employeesAsync = ref.watch(employeesProvider);
+  return employeesAsync.maybeWhen(
+    data: (list) {
+      final matches = list.where((e) {
+        return e.emailAddress.trim().toLowerCase() == target ||
+            e.employeeId.trim().toLowerCase() == target ||
+            e.id.toString() == target;
+      }).toList();
+      if (matches.isNotEmpty) return matches.first;
+      return null;
+    },
+    orElse: () => null,
+  );
+});
+
+final isSuperAdminProvider = Provider<bool>((ref) {
+  return ref.watch(currentEmployeeProvider)?.isSuperAdmin ?? false;
+});
+
+final hasPermissionProvider = Provider.family<bool, String>((ref, permission) {
+  return ref.watch(currentEmployeeProvider)?.hasPermission(permission) ?? false;
+});
 
 final candidateResponsesProvider = FutureProvider<List<CandidateResponse>>(
   (ref) => ref.watch(employeeRepositoryProvider).getCandidateResponses(),

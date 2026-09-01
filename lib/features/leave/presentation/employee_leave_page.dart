@@ -8,6 +8,7 @@ import '../domain/leave_balance.dart';
 import '../domain/leave_request.dart';
 import '../domain/leave_overlap_validator.dart';
 import '../providers/leave_providers.dart';
+import '../../employee/providers/employee_providers.dart';
 
 enum EmployeeLeaveTab {
   dashboard,
@@ -171,10 +172,16 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
       builder: (dialogCtx) {
         return StatefulBuilder(
           builder: (ctx, setDialogState) {
-            if (_fromDate != null && _toDate != null && _toDate!.isAfter(_fromDate!)) {
+            final isSingleDay = _fromDate != null &&
+                _toDate != null &&
+                _fromDate!.year == _toDate!.year &&
+                _fromDate!.month == _toDate!.month &&
+                _fromDate!.day == _toDate!.day;
+
+            if (!isSingleDay) {
               durationOption = 'full_day';
             }
-            final isHalfDay = durationOption != 'full_day';
+            final isHalfDay = isSingleDay && durationOption != 'full_day';
             final halfDayPeriod = isHalfDay ? durationOption : null;
 
             double days = 1.0;
@@ -360,110 +367,113 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 14),
+                      // Leave Duration Radio Tiles (Only for Single Day)
+                      if (isSingleDay) ...[
+                        const SizedBox(height: 14),
+                        const Text('Leave Duration', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: RadioListTile<String>(
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                                activeColor: const Color(0xFF9CC70A),
+                                title: const Text('Full Day', style: TextStyle(fontSize: 12, color: Color(0xFF414A51))),
+                                value: 'full_day',
+                                groupValue: durationOption,
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setDialogState(() => durationOption = val);
+                                  }
+                                },
+                              ),
+                            ),
+                            Expanded(
+                              child: RadioListTile<String>(
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                                activeColor: const Color(0xFF9CC70A),
+                                title: const Text('First Half', style: TextStyle(fontSize: 12, color: Color(0xFF414A51))),
+                                value: 'first_half',
+                                groupValue: durationOption,
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setDialogState(() {
+                                      durationOption = val;
+                                      _toDate = _fromDate;
+                                    });
+                                  }
+                                },
+                              ),
+                            ),
+                            Expanded(
+                              child: RadioListTile<String>(
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                                activeColor: const Color(0xFF9CC70A),
+                                title: const Text('Second Half', style: TextStyle(fontSize: 12, color: Color(0xFF414A51))),
+                                value: 'second_half',
+                                groupValue: durationOption,
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setDialogState(() {
+                                      durationOption = val;
+                                      _toDate = _fromDate;
+                                    });
+                                  }
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
 
-                      // Leave Duration Radio Tiles
-                      const Text('Leave Duration', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: RadioListTile<String>(
-                              dense: true,
-                              contentPadding: EdgeInsets.zero,
-                              activeColor: const Color(0xFF9CC70A),
-                              title: const Text('Full Day', style: TextStyle(fontSize: 12, color: Color(0xFF414A51))),
-                              value: 'full_day',
-                              groupValue: durationOption,
-                              onChanged: (val) {
-                                if (val != null) {
-                                  setDialogState(() => durationOption = val);
-                                }
-                              },
+                        // Shift breakdown banner for half-day
+                        if (durationOption == 'first_half') ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(10),
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: const [
+                                Text('First Half Leave: 9:00 AM – 1:30 PM', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
+                                SizedBox(height: 2),
+                                Text('Remaining Work: 1:30 PM – 6:00 PM', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                                SizedBox(height: 2),
+                                Text('Duration: 0.5 Day', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF9CC70A))),
+                              ],
                             ),
                           ),
-                          Expanded(
-                            child: RadioListTile<String>(
-                              dense: true,
-                              contentPadding: EdgeInsets.zero,
-                              activeColor: const Color(0xFF9CC70A),
-                              title: const Text('First Half', style: TextStyle(fontSize: 12, color: Color(0xFF414A51))),
-                              value: 'first_half',
-                              groupValue: durationOption,
-                              onChanged: (val) {
-                                if (val != null) {
-                                  setDialogState(() {
-                                    durationOption = val;
-                                    _toDate = _fromDate;
-                                  });
-                                }
-                              },
+                        ] else if (durationOption == 'second_half') ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(10),
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
                             ),
-                          ),
-                          Expanded(
-                            child: RadioListTile<String>(
-                              dense: true,
-                              contentPadding: EdgeInsets.zero,
-                              activeColor: const Color(0xFF9CC70A),
-                              title: const Text('Second Half', style: TextStyle(fontSize: 12, color: Color(0xFF414A51))),
-                              value: 'second_half',
-                              groupValue: durationOption,
-                              onChanged: (val) {
-                                if (val != null) {
-                                  setDialogState(() {
-                                    durationOption = val;
-                                    _toDate = _fromDate;
-                                  });
-                                }
-                              },
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: const [
+                                Text('Second Half Leave: 1:30 PM – 6:00 PM', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
+                                SizedBox(height: 2),
+                                Text('Remaining Work: 9:00 AM – 1:30 PM', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                                SizedBox(height: 2),
+                                Text('Duration: 0.5 Day', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF9CC70A))),
+                              ],
                             ),
                           ),
                         ],
-                      ),
-
-                      // Shift breakdown banner for half-day
-                      if (durationOption == 'first_half') ...[
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(10),
-                          margin: const EdgeInsets.only(bottom: 12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF8FAFC),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
-                              Text('First Half Leave: 9:00 AM – 1:30 PM', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
-                              SizedBox(height: 2),
-                              Text('Remaining Work: 1:30 PM – 6:00 PM', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-                              SizedBox(height: 2),
-                              Text('Duration: 0.5 Day', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF9CC70A))),
-                            ],
-                          ),
-                        ),
-                      ] else if (durationOption == 'second_half') ...[
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(10),
-                          margin: const EdgeInsets.only(bottom: 12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF8FAFC),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
-                              Text('Second Half Leave: 1:30 PM – 6:00 PM', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
-                              SizedBox(height: 2),
-                              Text('Remaining Work: 9:00 AM – 1:30 PM', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-                              SizedBox(height: 2),
-                              Text('Duration: 0.5 Day', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF9CC70A))),
-                            ],
-                          ),
-                        ),
+                      ] else ...[
+                        const SizedBox(height: 12),
                       ],
 
                       Align(

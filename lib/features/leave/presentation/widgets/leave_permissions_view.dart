@@ -22,19 +22,9 @@ class _LeavePermissionsViewState extends ConsumerState<LeavePermissionsView> {
   final Set<int> _selectedEmployeeIds = {};
 
   bool _canEdit(Employee? currentEmp) {
-    if (currentEmp == null) return true;
-    final role = currentEmp.userType.toUpperCase().trim();
-    // Only lock out basic EMPLOYEE role if they lack explicit Leave permission
-    if (role == 'EMPLOYEE' && currentEmp.accessPermissions.isNotEmpty) {
-      final perms = currentEmp.accessPermissions.map((p) => p.trim().toLowerCase()).toSet();
-      if (!perms.contains('leave management') &&
-          !perms.contains('leave') &&
-          !perms.contains('leave permissions') &&
-          !perms.contains('leave policy')) {
-        return false;
-      }
-    }
-    return true;
+    if (currentEmp == null) return false;
+    if (currentEmp.isSuperAdmin) return true;
+    return currentEmp.hasPermission('Leave Management');
   }
 
   List<Employee> _filterEmployees(List<Employee> employees) {

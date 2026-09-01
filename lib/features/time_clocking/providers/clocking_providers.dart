@@ -18,7 +18,7 @@ final clockEntriesProvider = FutureProvider.family<List<ClockEntry>, ClockFilter
   final repo = ref.watch(clockingRepositoryProvider);
   final empId = (filter.employeeId == null || filter.employeeId!.isEmpty)
       ? null
-      : (filter.employeeId == 'EMP-0001' ? 'EMP-001' : filter.employeeId);
+      : filter.employeeId;
   return repo.getClockEntries(
     employeeId: empId,
     date: _normalizeDate(filter.date),
@@ -26,14 +26,9 @@ final clockEntriesProvider = FutureProvider.family<List<ClockEntry>, ClockFilter
 });
 
 final activeClockEntryProvider = FutureProvider.family<ClockEntry?, String>((ref, employeeId) async {
+  if (employeeId.trim().isEmpty) return null;
   final repo = ref.watch(clockingRepositoryProvider);
-  final empId = employeeId == 'EMP-0001' ? 'EMP-001' : employeeId;
-  final entry = await repo.getActiveEntry(empId);
-  if (entry != null) return entry;
-  if (empId == 'EMP-001') {
-    return await repo.getActiveEntry('EMP-0001');
-  }
-  return null;
+  return repo.getActiveEntry(employeeId.trim());
 });
 
 final allActiveClockEntriesProvider = FutureProvider<List<ClockEntry>>((ref) async {
@@ -43,14 +38,16 @@ final allActiveClockEntriesProvider = FutureProvider<List<ClockEntry>>((ref) asy
 
 final totalWorkHoursProvider = FutureProvider.family<double, ClockFilter>((ref, filter) async {
   final repo = ref.watch(clockingRepositoryProvider);
-  final empId = filter.employeeId ?? 'EMP-001';
+  final empId = filter.employeeId;
+  if (empId == null || empId.trim().isEmpty) return 0.0;
   final normDate = _normalizeDate(filter.date);
-  return repo.getTotalWorkHours(empId, normDate);
+  return repo.getTotalWorkHours(empId.trim(), normDate);
 });
 
 final totalBreakHoursProvider = FutureProvider.family<double, ClockFilter>((ref, filter) async {
   final repo = ref.watch(clockingRepositoryProvider);
-  final empId = filter.employeeId ?? 'EMP-001';
+  final empId = filter.employeeId;
+  if (empId == null || empId.trim().isEmpty) return 0.0;
   final normDate = _normalizeDate(filter.date);
-  return repo.getTotalBreakHours(empId, normDate);
+  return repo.getTotalBreakHours(empId.trim(), normDate);
 });

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../authentication/providers/authentication_providers.dart';
 import '../../employee/domain/employee.dart';
 import '../../leave/providers/leave_providers.dart';
+import '../../employee/providers/employee_providers.dart';
 import '../domain/permission_balance.dart';
 import '../domain/permission_enums.dart';
 import '../domain/permission_request.dart';

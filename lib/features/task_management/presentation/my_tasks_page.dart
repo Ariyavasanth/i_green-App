@@ -7,6 +7,7 @@ import '../providers/task_providers.dart';
 import '../../time_clocking/providers/clocking_providers.dart';
 import '../../attendance/providers/attendance_providers.dart';
 import '../../on_duty/providers/on_duty_providers.dart';
+import '../../employee/providers/employee_providers.dart';
 
 class MyTasksPage extends ConsumerStatefulWidget {
   const MyTasksPage({
@@ -22,7 +23,7 @@ class MyTasksPage extends ConsumerStatefulWidget {
 
 class _MyTasksPageState extends ConsumerState<MyTasksPage> {
   Timer? _tickerTimer;
-  String _selectedEmployeeId = 'EMP-001';
+  String _selectedEmployeeId = 'All';
   String _selectedStatusFilter = 'All';
 
   @override
@@ -45,15 +46,17 @@ class _MyTasksPageState extends ConsumerState<MyTasksPage> {
   Future<void> _startTask(TaskItem task) async {
     final repo = ref.read(taskRepositoryProvider);
     final clockingRepo = ref.read(clockingRepositoryProvider);
-    final rawEmpId = task.assignedTo.isNotEmpty ? task.assignedTo : _selectedEmployeeId;
-    final empId = rawEmpId == 'EMP-0001' ? 'EMP-001' : rawEmpId;
+    final currentEmp = ref.read(currentEmployeeProvider);
+    final empId = task.assignedTo.isNotEmpty ? task.assignedTo : (currentEmp?.employeeId ?? '');
+    if (empId.isEmpty) return;
     final now = DateTime.now();
 
     // 0. Check attendance status for assigned employee
     final attendanceRepo = ref.read(attendanceRepositoryProvider);
     final today = DateFormat('yyyy-MM-dd').format(now);
     final digits = empId.replaceAll(RegExp(r'[^0-9]'), '');
-    final empIdInt = int.tryParse(digits) ?? 1;
+    final empIdInt = int.tryParse(digits) ?? (currentEmp?.id ?? 0);
+    if (empIdInt == 0) return;
     final attendanceRecord = await attendanceRepo.getAttendanceRecordForDate(empIdInt, today);
 
     if (attendanceRecord == null || attendanceRecord.effectiveCheckInTime.trim().isEmpty) {
@@ -216,9 +219,7 @@ class _MyTasksPageState extends ConsumerState<MyTasksPage> {
     }
 
     // 1. Check if a Clocking activity is currently running
-    final activeClocking = await clockingRepo.getActiveEntry(empId) ??
-        await clockingRepo.getActiveEntry('EMP-001') ??
-        await clockingRepo.getActiveEntry('EMP-0001');
+    final activeClocking = await clockingRepo.getActiveEntry(empId);
 
     if (activeClocking != null) {
       if (mounted) {
@@ -278,7 +279,8 @@ class _MyTasksPageState extends ConsumerState<MyTasksPage> {
 
   Future<void> _stopTask(TaskItem task) async {
     final repo = ref.read(taskRepositoryProvider);
-    final empId = task.assignedTo.isNotEmpty ? task.assignedTo : _selectedEmployeeId;
+    final currentEmp = ref.read(currentEmployeeProvider);
+    final empId = task.assignedTo.isNotEmpty ? task.assignedTo : (currentEmp?.employeeId ?? '');
     final updatedTask = task.copyWith(
       status: 'COMPLETED',
       endTime: DateTime.now(),
@@ -288,12 +290,11 @@ class _MyTasksPageState extends ConsumerState<MyTasksPage> {
   }
 
   void _refreshAll(String empId) {
+    if (empId.isEmpty) return;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     ref.invalidate(tasksProvider);
     ref.invalidate(activeTaskProvider(empId));
-    ref.invalidate(activeTaskProvider('EMP-001'));
-    ref.invalidate(activeTaskProvider('EMP-0001'));
     ref.invalidate(taskProjectHoursProvider);
     ref.invalidate(activeClockEntryProvider(empId));
     ref.invalidate(clockEntriesProvider((employeeId: empId, date: today)));
@@ -322,9 +323,16 @@ class _MyTasksPageState extends ConsumerState<MyTasksPage> {
     const primaryColor = Color(0xFF9CC70A);
     const secondaryColor = Color(0xFF414A51);
 
+    final currentEmp = ref.watch(currentEmployeeProvider);
+    final canManageAllTasks = currentEmp != null &&
+        (currentEmp.isSuperAdmin || currentEmp.hasPermission('Tasks and Clocking Management'));
+    final effectiveAssignedTo = canManageAllTasks
+        ? (_selectedEmployeeId == 'All' ? null : _selectedEmployeeId)
+        : (currentEmp?.employeeId ?? 'UNAUTHENTICATED');
+
     final tasksAsync = ref.watch(
       tasksProvider((
-        assignedTo: _selectedEmployeeId == 'All' ? null : _selectedEmployeeId,
+        assignedTo: effectiveAssignedTo,
         projectOrOfficeCode: null,
         status: _selectedStatusFilter == 'All' ? null : _selectedStatusFilter,
       )),

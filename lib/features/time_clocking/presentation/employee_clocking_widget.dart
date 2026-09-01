@@ -67,13 +67,15 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
 
   Future<void> _showStartActivityDialog(BuildContext context) async {
     final taskRepo = ref.read(taskRepositoryProvider);
-    final empId = widget.employeeId == 'EMP-0001' ? 'EMP-001' : widget.employeeId;
+    final empId = widget.employeeId.trim();
+    if (empId.isEmpty) return;
 
     // Check attendance status
     final attendanceRepo = ref.read(attendanceRepositoryProvider);
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final digits = empId.replaceAll(RegExp(r'[^0-9]'), '');
-    final empIdInt = int.tryParse(digits) ?? 1;
+    final empIdInt = int.tryParse(digits) ?? 0;
+    if (empIdInt == 0) return;
     final attendanceRecord = await attendanceRepo.getAttendanceRecordForDate(empIdInt, today);
 
     if (attendanceRecord == null || attendanceRecord.effectiveCheckInTime.trim().isEmpty) {
@@ -236,10 +238,8 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
     }
 
     // Check if any Task is currently IN_PROGRESS
-    final tasks1 = await taskRepo.getTasks(assignedTo: empId, status: 'IN_PROGRESS');
-    final tasks2 = await taskRepo.getTasks(assignedTo: 'EMP-001', status: 'IN_PROGRESS');
-    final tasks3 = await taskRepo.getTasks(assignedTo: 'EMP-0001', status: 'IN_PROGRESS');
-    final runningTask = [...tasks1, ...tasks2, ...tasks3].firstOrNull;
+    final tasks = await taskRepo.getTasks(assignedTo: empId, status: 'IN_PROGRESS');
+    final runningTask = tasks.isNotEmpty ? tasks.first : null;
 
     if (runningTask != null) {
       if (context.mounted) {
@@ -457,10 +457,9 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
   }
 
   Future<void> _stopActivity(BuildContext context) async {
+    if (widget.employeeId.trim().isEmpty) return;
     final repo = ref.read(clockingRepositoryProvider);
-    await repo.clockOutActiveEntry(widget.employeeId);
-    await repo.clockOutActiveEntry('EMP-001');
-    await repo.clockOutActiveEntry('EMP-0001');
+    await repo.clockOutActiveEntry(widget.employeeId.trim());
     _refreshData();
 
     if (context.mounted) {
@@ -475,23 +474,14 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
   }
 
   void _refreshData() {
+    if (widget.employeeId.trim().isEmpty) return;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    ref.invalidate(activeClockEntryProvider(widget.employeeId));
-    ref.invalidate(activeClockEntryProvider('EMP-001'));
-    ref.invalidate(activeClockEntryProvider('EMP-0001'));
-    ref.invalidate(activeTaskProvider(widget.employeeId));
-    ref.invalidate(activeTaskProvider('EMP-001'));
-    ref.invalidate(activeTaskProvider('EMP-0001'));
-    ref.invalidate(clockEntriesProvider((employeeId: widget.employeeId, date: today)));
-    ref.invalidate(clockEntriesProvider((employeeId: 'EMP-001', date: today)));
-    ref.invalidate(clockEntriesProvider((employeeId: 'EMP-0001', date: today)));
-    ref.invalidate(totalWorkHoursProvider((employeeId: widget.employeeId, date: today)));
-    ref.invalidate(totalWorkHoursProvider((employeeId: 'EMP-001', date: today)));
-    ref.invalidate(totalWorkHoursProvider((employeeId: 'EMP-0001', date: today)));
-    ref.invalidate(totalBreakHoursProvider((employeeId: widget.employeeId, date: today)));
-    ref.invalidate(totalBreakHoursProvider((employeeId: 'EMP-001', date: today)));
-    ref.invalidate(totalBreakHoursProvider((employeeId: 'EMP-0001', date: today)));
+    ref.invalidate(activeClockEntryProvider(widget.employeeId.trim()));
+    ref.invalidate(activeTaskProvider(widget.employeeId.trim()));
+    ref.invalidate(clockEntriesProvider((employeeId: widget.employeeId.trim(), date: today)));
+    ref.invalidate(totalWorkHoursProvider((employeeId: widget.employeeId.trim(), date: today)));
+    ref.invalidate(totalBreakHoursProvider((employeeId: widget.employeeId.trim(), date: today)));
     ref.invalidate(tasksProvider);
     ref.invalidate(taskProjectHoursProvider);
   }
@@ -516,11 +506,9 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
     final activeTaskAsync = ref.watch(activeTaskProvider(widget.employeeId));
     final entriesAsync = ref.watch(clockEntriesProvider((employeeId: widget.employeeId, date: today)));
 
-    final empInt = int.tryParse(widget.employeeId.replaceAll(RegExp(r'[^0-9]'), '')) ?? 1;
-    final activeODAsync = ref.watch(activeOnDutyAssignmentProvider(empInt));
-    final fallbackODAsync1 = empInt != 1 ? ref.watch(activeOnDutyAssignmentProvider(1)) : null;
-    final fallbackODAsync0 = empInt != 0 ? ref.watch(activeOnDutyAssignmentProvider(0)) : null;
-    final activeOD = activeODAsync.valueOrNull ?? fallbackODAsync1?.valueOrNull ?? fallbackODAsync0?.valueOrNull;
+    final empInt = int.tryParse(widget.employeeId.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+    final activeODAsync = empInt > 0 ? ref.watch(activeOnDutyAssignmentProvider(empInt)) : null;
+    final activeOD = activeODAsync?.valueOrNull;
 
     final activeEntry = activeEntryAsync.valueOrNull;
     final activeTask = activeTaskAsync.valueOrNull;
@@ -605,9 +593,9 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
 
         _buildCombinedActivitiesList(
           entriesAsync: entriesAsync,
-          tasksAsync: ref.watch(tasksProvider((assignedTo: widget.employeeId == 'EMP-0001' ? 'EMP-001' : widget.employeeId, projectOrOfficeCode: null, status: null))),
-          odAsync: ref.watch(allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: null))),
-          empId: widget.employeeId == 'EMP-0001' ? 'EMP-001' : widget.employeeId,
+          tasksAsync: ref.watch(tasksProvider((assignedTo: widget.employeeId.trim(), projectOrOfficeCode: null, status: null))),
+          odAsync: empInt > 0 ? ref.watch(allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: empInt))) : const AsyncValue.data([]),
+          empId: widget.employeeId.trim(),
           primaryColor: primaryColor,
           secondaryColor: secondaryColor,
         ),
@@ -657,18 +645,22 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
     final allTasks = tasksAsync.valueOrNull ?? [];
     final allOd = odAsync.valueOrNull ?? [];
     final todayStr = DateFormat('dd-MM-yyyy').format(DateTime.now());
+    final todayIso = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final now = DateTime.now();
 
     final empTasks = allTasks.where((t) {
-      final taskEmp = t.assignedTo == 'EMP-0001' ? 'EMP-001' : t.assignedTo;
-      return (taskEmp == empId || taskEmp == 'EMP-001' || taskEmp == 'EMP-0001') &&
-          (t.status == 'COMPLETED' || t.status == 'IN_PROGRESS');
+      final isAssigned = t.assignedTo.trim().toLowerCase() == empId.trim().toLowerCase();
+      final isToday = t.startTime.year == now.year && t.startTime.month == now.month && t.startTime.day == now.day;
+      return isAssigned && isToday && (t.status == 'COMPLETED' || t.status == 'IN_PROGRESS');
     }).toList();
 
-    final empInt = int.tryParse(empId.replaceAll(RegExp(r'[^0-9]'), '')) ?? 1;
+    final digits = empId.replaceAll(RegExp(r'[^0-9]'), '');
+    final empInt = int.tryParse(digits) ?? 0;
     final empOdAssignments = allOd.where((od) {
-      final isEmpMatch = (od.employeeId == empInt) || (empInt == 1 && (od.employeeId == 0 || od.employeeId == 1));
+      final isEmpMatch = empInt > 0 && od.employeeId == empInt;
       final isCompleted = od.status.toUpperCase() == 'COMPLETED';
-      return isEmpMatch && isCompleted;
+      final isToday = od.date.trim() == todayStr || od.date.trim() == todayIso;
+      return isEmpMatch && isCompleted && isToday;
     }).toList();
 
     final List<CombinedActivityItem> combinedList = [];

@@ -91,17 +91,17 @@ class _EmployeeManagementPageState
               final dbDepts = ref.watch(departmentsProvider).valueOrNull ?? [];
               final dbDesigs = ref.watch(allDesignationsProvider).valueOrNull ?? [];
 
-              final deptList = ['All Departments', ...{
+              final deptList = <String>['All Departments', ...<String>{
                 ...dbDepts.map((d) => d.departmentName),
                 ...Employee.departmentOptions,
                 for (final e in employees) if (e.department.isNotEmpty) e.department,
               }];
-              final desigList = ['All Designations', ...{
+              final desigList = <String>['All Designations', ...<String>{
                 ...dbDesigs.map((d) => d.designationName),
                 ...Employee.designationOptions,
                 for (final e in employees) if (e.designation.isNotEmpty) e.designation,
               }];
-              final statusList = ['All Statuses', ...{for (final e in employees) if (e.status.isNotEmpty) e.status}];
+              final statusList = <String>['All Statuses', ...<String>{for (final e in employees) if (e.status.isNotEmpty) e.status}];
 
               final filtered = employees.where((emp) {
                 final q = searchQuery.toLowerCase().trim();
@@ -139,9 +139,9 @@ class _EmployeeManagementPageState
               if (isMobile) {
                 final totalItems = filtered.length;
                 final totalPages = (totalItems / _rowsPerPage).ceil();
-                final pageIndex = _currentPage.clamp(0, (totalPages - 1).clamp(0, 999));
-                final startIndex = pageIndex * _rowsPerPage;
-                final endIndex = (startIndex + _rowsPerPage).clamp(0, totalItems);
+                final pageIndex = _currentPage.clamp(0, (totalPages - 1).clamp(0, 999)).toInt();
+                final startIndex = (pageIndex * _rowsPerPage).toInt();
+                final endIndex = (startIndex + _rowsPerPage).clamp(0, totalItems).toInt();
                 final pageItems = filtered.sublist(startIndex, endIndex);
 
                 return Scaffold(
@@ -235,9 +235,9 @@ class _EmployeeManagementPageState
               // Pagination for desktop
               final totalItems = filtered.length;
               final totalPages = (totalItems / _rowsPerPage).ceil();
-              final pageIndex = _currentPage.clamp(0, (totalPages - 1).clamp(0, 999));
-              final startIndex = pageIndex * _rowsPerPage;
-              final endIndex = (startIndex + _rowsPerPage).clamp(0, totalItems);
+              final pageIndex = _currentPage.clamp(0, (totalPages - 1).clamp(0, 999)).toInt();
+              final startIndex = (pageIndex * _rowsPerPage).toInt();
+              final endIndex = (startIndex + _rowsPerPage).clamp(0, totalItems).toInt();
               final pageItems = filtered.sublist(startIndex, endIndex);
 
               return Column(

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -24,63 +26,18 @@ final sidebarExpandedProvider = StateProvider<bool>((ref) {
 final attendanceActiveTabProvider = StateProvider<int>((ref) => 0);
 
 final userDestinationsProvider = Provider<List<SidebarDestination>>((ref) {
-  final userEmail = ref.watch(currentUserEmailProvider);
-  if (userEmail == null || userEmail.trim().isEmpty) {
+  final currentEmp = ref.watch(currentEmployeeProvider);
+  if (currentEmp == null) {
     return AppShell.destinations;
   }
 
-  final employeesAsync = ref.watch(employeesProvider);
-  return employeesAsync.maybeWhen(
-    data: (employees) {
-      final matchingEmp = employees.where(
-        (e) =>
-            e.emailAddress.trim().toLowerCase() == userEmail.trim().toLowerCase() ||
-            e.employeeId.trim().toLowerCase() == userEmail.trim().toLowerCase(),
-      ).toList();
+  // Super Admin has full unrestricted access to all modules automatically
+  if (currentEmp.isSuperAdmin) {
+    return AppShell.destinations;
+  }
 
-      if (matchingEmp.isEmpty) return AppShell.destinations;
-
-      final emp = matchingEmp.first;
-      final role = emp.userType.trim().toUpperCase();
-
-      // ── SUPER_ADMIN / ADMIN: unrestricted full access ──────────────────────────────
-      if (role == 'SUPER_ADMIN' || role == 'SUPER ADMIN' || role == 'ADMIN') {
-        return AppShell.destinations;
-      }
-
-      // ── EMPLOYEE / standard roles:
-      final allowed = emp.accessPermissions.map((p) => p.trim()).toSet();
-
-      // Default basic employee modules when no explicit permissions are specified
-      const defaultEmployeeModules = {
-        'Home',
-        'Attendance',
-        'My Tasks',
-        'Site Visit Attendance',
-        'Permission',
-        'Loan',
-        'My Asset',
-        'My Exit',
-        'Incentive Request',
-        'My Payslips',
-      };
-
-      if (allowed.isEmpty) {
-        return AppShell.destinations
-            .where((d) => defaultEmployeeModules.contains(d.label))
-            .toList();
-      }
-
-      return AppShell.destinations
-          .where((d) =>
-              d.label == 'Home' ||
-              d.label == 'My Payslips' ||
-              allowed.contains(d.label) ||
-              (d.label == 'Leave Management' && allowed.contains('Leave')))
-          .toList();
-    },
-    orElse: () => AppShell.destinations,
-  );
+  // All other users: strictly filter by granular access permissions
+  return AppShell.destinations.where((d) => currentEmp.hasPermission(d.label)).toList();
 });
 
 void _toggleSidebarExpanded(WidgetRef ref, bool expanded) {
@@ -355,6 +312,7 @@ class AppShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final expanded = ref.watch(sidebarExpandedProvider);
     final activeDestinations = ref.watch(userDestinationsProvider);
+    final currentEmp = ref.watch(currentEmployeeProvider);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -363,6 +321,7 @@ class AppShell extends ConsumerWidget {
           destinations: activeDestinations,
           currentLocation: currentLocation,
           expanded: compact || expanded,
+          employee: compact ? currentEmp : null,
           onSelected: (path) {
             context.go(path);
             if (compact) Navigator.of(context).pop();
@@ -371,6 +330,9 @@ class AppShell extends ConsumerWidget {
             ref.read(currentUserEmailProvider.notifier).state = null;
             await ref.read(authSessionStorageProvider).writeUserEmail(null);
             await ref.read(authenticationRepositoryProvider).signOut();
+            ref.invalidate(employeesProvider);
+            ref.invalidate(allEmployeesProvider);
+            ref.invalidate(currentEmployeeProvider);
             if (context.mounted) context.go('/login');
           },
         );
@@ -432,7 +394,10 @@ class _TopBar extends ConsumerWidget {
   final VoidCallback onMenuPressed;
 
   String _getHeading(String location) {
-    final cleanLoc = location.split('?').first;
+    final cleanLoc = location.split('?').first.trim();
+    if (cleanLoc == '/my-profile' || cleanLoc == '/profile' || cleanLoc.startsWith('/my-profile') || cleanLoc.startsWith('/profile')) {
+      return 'My Profile';
+    }
     if (cleanLoc == '/inventory-adjustments/add-stock') return 'Add Stock';
     if (cleanLoc == '/inventory-adjustments/add-material') return 'Add Material';
     if (cleanLoc == '/inventory-adjustments/move-stock') return 'Move Stock';
@@ -517,6 +482,12 @@ class _TopBar extends ConsumerWidget {
                     context.go('/inventory-adjustments');
                   } else if (currentLocation.startsWith('/permission/')) {
                     context.go('/permission');
+                  } else if (currentLocation == '/my-profile' || currentLocation == '/profile') {
+                    if (Navigator.of(context).canPop()) {
+                      Navigator.of(context).pop();
+                    } else {
+                      context.go('/home');
+                    }
                   } else if (Navigator.of(context).canPop()) {
                     Navigator.of(context).pop();
                   } else {
@@ -749,15 +720,135 @@ class _TopBar extends ConsumerWidget {
                 icon: const Icon(Icons.notifications_none),
               ),
             ],
-            if (MediaQuery.sizeOf(context).width >= 520)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
-                child: CircleAvatar(
-                  radius: 16,
-                  backgroundColor: AppColors.active,
-                  child: Text('A', style: TextStyle(color: Colors.white)),
-                ),
+            if (MediaQuery.sizeOf(context).width >= 520) ...[
+              const SizedBox(width: 4),
+              Consumer(
+                builder: (context, ref, _) {
+                  final emp = ref.watch(currentEmployeeProvider);
+                  final name = emp?.fullName.isNotEmpty == true
+                      ? emp!.fullName
+                      : (emp?.firstName.isNotEmpty == true ? emp!.firstName : 'Ariya J');
+                  final role = emp?.designation.isNotEmpty == true
+                      ? emp!.designation
+                      : (emp?.userType.isNotEmpty == true ? emp!.userType : 'Administrator');
+                  final email = emp?.emailAddress ?? '';
+                  final initial = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : 'A';
+                  final photoUrl = emp?.profileImageUrl.trim() ?? '';
+
+                  Widget avatarWidget;
+                  if (photoUrl.isNotEmpty) {
+                    if (photoUrl.startsWith('data:')) {
+                      try {
+                        final commaIdx = photoUrl.indexOf(',');
+                        final bytes = base64Decode(commaIdx != -1 ? photoUrl.substring(commaIdx + 1) : photoUrl);
+                        avatarWidget = CircleAvatar(
+                          radius: 16,
+                          backgroundColor: AppColors.active,
+                          backgroundImage: MemoryImage(bytes),
+                        );
+                      } catch (_) {
+                        avatarWidget = CircleAvatar(
+                          radius: 16,
+                          backgroundColor: AppColors.active,
+                          child: Text(initial, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        );
+                      }
+                    } else {
+                      avatarWidget = CircleAvatar(
+                        radius: 16,
+                        backgroundColor: AppColors.active,
+                        backgroundImage: NetworkImage(photoUrl),
+                      );
+                    }
+                  } else {
+                    avatarWidget = CircleAvatar(
+                      radius: 16,
+                      backgroundColor: AppColors.active,
+                      child: Text(initial, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    );
+                  }
+
+                  return PopupMenuButton<String>(
+                    tooltip: 'Profile & Account',
+                    offset: const Offset(0, 42),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: avatarWidget,
+                    ),
+                    onSelected: (value) async {
+                      if (value == 'profile') {
+                        context.go('/my-profile');
+                      } else if (value == 'logout') {
+                        ref.read(currentUserEmailProvider.notifier).state = null;
+                        await ref.read(authSessionStorageProvider).writeUserEmail(null);
+                        await ref.read(authenticationRepositoryProvider).signOut();
+                        ref.invalidate(employeesProvider);
+                        ref.invalidate(allEmployeesProvider);
+                        ref.invalidate(currentEmployeeProvider);
+                        if (context.mounted) context.go('/login');
+                      }
+                    },
+                    itemBuilder: (ctx) => [
+                      PopupMenuItem<String>(
+                        enabled: false,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                color: Color(0xFF1E293B),
+                              ),
+                            ),
+                            if (role.isNotEmpty)
+                              Text(
+                                role,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                            if (email.isNotEmpty)
+                              Text(
+                                email,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF94A3B8),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuDivider(),
+                      const PopupMenuItem<String>(
+                        value: 'profile',
+                        child: Row(
+                          children: [
+                            Icon(Icons.person_outline, size: 18, color: Color(0xFF1E293B)),
+                            SizedBox(width: 8),
+                            Text('My Profile', style: TextStyle(color: Color(0xFF1E293B), fontWeight: FontWeight.w500)),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem<String>(
+                        value: 'logout',
+                        child: Row(
+                          children: [
+                            Icon(Icons.logout, size: 18, color: Color(0xFFE53935)),
+                            SizedBox(width: 8),
+                            Text('Logout', style: TextStyle(color: Color(0xFFE53935), fontWeight: FontWeight.w500)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
+            ],
           ],
         ),
       ),

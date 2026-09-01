@@ -352,6 +352,26 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     return link;
   }
 
+  static const Employee _superAdminMotherAccount = Employee(
+    id: 1,
+    employeeId: 'EMP-001',
+    firstName: 'Super',
+    lastName: 'Admin',
+    emailAddress: 'admin@igreen.com',
+    phoneNumber: '+91 9876543210',
+    gender: 'Male',
+    dob: '1990-01-01',
+    organizationName: 'iGreen Tech',
+    department: 'Management',
+    designation: 'Super Administrator',
+    employmentType: 'Full-time',
+    joiningDate: '2024-01-01',
+    userType: 'Super Admin',
+    status: 'Active',
+    temporaryPassword: 'admin123',
+    accessPermissions: Employee.allSidebarPermissions,
+  );
+
   @override
   Future<List<Employee>> getAllEmployees() async {
     final result = <Employee>[];
@@ -374,8 +394,20 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
           result.add(emp);
         }
       }
+
+      // Ensure at least one Super Admin account exists in Firestore
+      final hasSuperAdmin = result.any((e) => e.isSuperAdmin);
+      if (!hasSuperAdmin && result.isEmpty) {
+        final data = _employeeToFirestore(_superAdminMotherAccount);
+        data['created_at'] = FieldValue.serverTimestamp();
+        await _employeesRef.doc('EMP-001').set(data, SetOptions(merge: true));
+        result.insert(0, _superAdminMotherAccount);
+      }
     } catch (e) {
       debugPrint('Firebase getAllEmployees error: $e');
+      if (result.isEmpty) {
+        result.add(_superAdminMotherAccount);
+      }
     }
 
     return result;

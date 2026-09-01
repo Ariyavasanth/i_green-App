@@ -9,6 +9,7 @@ class CustomTextField extends StatelessWidget {
     required this.validator,
     this.keyboardType,
     this.prefixIcon,
+    this.suffixIcon,
     this.maxLength,
     this.obscureText = false,
   });
@@ -17,6 +18,7 @@ class CustomTextField extends StatelessWidget {
   final String? Function(String?) validator;
   final TextInputType? keyboardType;
   final IconData? prefixIcon;
+  final Widget? suffixIcon;
   final int? maxLength;
   final bool obscureText;
 
@@ -33,6 +35,7 @@ class CustomTextField extends StatelessWidget {
       hintText: hint,
       counterText: '',
       prefixIcon: prefixIcon == null ? null : Icon(prefixIcon, size: 17),
+      suffixIcon: suffixIcon,
     ),
   );
 }

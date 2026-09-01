@@ -1444,8 +1444,8 @@ class _EmployeeRegistrationPageState
             ),
           );
         } else {
-          final links = await ref.read(registrationLinksProvider.future);
-          final allEmps = await ref.read(allEmployeesProvider.future);
+          final List<RegistrationLink> links = await ref.read(registrationLinksProvider.future);
+          final List<Employee> allEmps = await ref.read(allEmployeesProvider.future);
           final matchingLinks = links.where((l) => l.linkId == widget.acceptedLinkId).toList();
           if (matchingLinks.isNotEmpty && mounted) {
             final link = matchingLinks.first;
@@ -1478,7 +1478,7 @@ class _EmployeeRegistrationPageState
       _selectedAcceptedEmpId = widget.acceptedEmpId;
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         ref.invalidate(allEmployeesProvider);
-        final emps = await ref.read(allEmployeesProvider.future);
+        final List<Employee> emps = await ref.read(allEmployeesProvider.future);
         final matches = emps.where((e) => e.id == widget.acceptedEmpId).toList();
         if (matches.isNotEmpty && mounted) {
           final match = matches.first;
@@ -1515,8 +1515,8 @@ class _EmployeeRegistrationPageState
             ),
           );
         } else {
-          final links = await ref.read(registrationLinksProvider.future);
-          final allEmps = await ref.read(allEmployeesProvider.future);
+          final List<RegistrationLink> links = await ref.read(registrationLinksProvider.future);
+          final List<Employee> allEmps = await ref.read(allEmployeesProvider.future);
           final matchingLinks = links.where((l) => l.linkId == widget.linkId).toList();
           if (matchingLinks.isNotEmpty && mounted) {
             final link = matchingLinks.first;
@@ -2181,7 +2181,7 @@ class _EmployeeRegistrationPageState
                         if (candidateResponse != null && mounted) {
                           _populateFromEmployee(candidateResponse.employeeData);
                         } else {
-                          final emps = await ref.read(allEmployeesProvider.future);
+                          final List<Employee> emps = await ref.read(allEmployeesProvider.future);
                           final matchedEmployee = _findMatchingEmployee(link, emps);
                           if (matchedEmployee != null && mounted) {
                             _selectedAcceptedEmpId = matchedEmployee.id;

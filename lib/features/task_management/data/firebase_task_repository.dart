@@ -4,26 +4,7 @@ import '../domain/task_repository.dart';
 
 class FirebaseTaskRepository implements TaskRepository {
   final FirebaseFirestore? _firestore;
-  static final List<TaskItem> _fallbackTasks = [
-    TaskItem(
-      id: '101',
-      title: 'Client Website',
-      projectOrOfficeCode: 'PRJ-101',
-      assignedBy: 'Manager',
-      assignedTo: 'EMP-001',
-      startTime: DateTime.now(),
-      status: 'TODO',
-    ),
-    TaskItem(
-      id: '205',
-      title: 'Employee Report',
-      projectOrOfficeCode: 'OFF-205',
-      assignedBy: 'Manager',
-      assignedTo: 'EMP-001',
-      startTime: DateTime.now(),
-      status: 'TODO',
-    ),
-  ];
+  static final List<TaskItem> _fallbackTasks = [];
 
   FirebaseTaskRepository({FirebaseFirestore? firestore})
       : _firestore = firestore ?? _getFirestoreSafely();

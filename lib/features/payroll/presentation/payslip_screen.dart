@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../domain/payroll.dart';
 import '../providers/payroll_providers.dart';
 import '../../leave/providers/leave_providers.dart';
+import '../../employee/providers/employee_providers.dart';
 
 class PayslipScreen extends ConsumerStatefulWidget {
   const PayslipScreen({required this.payrollId, super.key});

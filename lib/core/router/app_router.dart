@@ -24,6 +24,7 @@ import '../../features/organization/presentation/organization_management_page.da
 import '../../features/organization/presentation/organization_structure_page.dart';
 import '../../features/employee/presentation/responses_page.dart';
 import '../../features/employee/presentation/employee_management_page.dart';
+import '../../features/employee/presentation/my_profile_page.dart';
 import '../../features/employee/domain/employee.dart';
 import '../../features/employee/presentation/employee_registration_page.dart';
 import '../../features/leave/presentation/leave_page.dart';
@@ -70,10 +71,149 @@ import '../../features/permission/presentation/apply_emergency_permission_page.d
 import '../../features/permission/presentation/apply_permission_page.dart';
 import '../../features/permission/presentation/permission_dashboard_page.dart';
 import '../../features/permission/presentation/permission_details_page.dart';
+import '../../features/authentication/providers/authentication_providers.dart';
+import '../../features/employee/providers/employee_providers.dart';
+
+String? _getRequiredPermissionForPath(String path) {
+  if (path == '/home') return 'Home';
+  if (path == '/organization-management') return 'Organization Management';
+  if (path == '/organization-structure') return 'Organization Structure';
+  if (path == '/employee' || path == '/employee-management') return 'Employee Management';
+  if (path == '/responses') return 'Responses';
+  if (path == '/leave' || path == '/leave-management') return 'Leave Management';
+  if (path == '/attendance') return 'Attendance';
+  if (path == '/attendance-settings') return 'Attendance Settings';
+  if (path == '/attendance-management') return 'Attendance Management';
+  if (path == '/on-duty-management') return 'On-Duty Management';
+  if (path == '/my-tasks') return 'My Tasks';
+  if (path == '/tasks-and-timesheets') return 'Tasks and Clocking Management';
+  if (path == '/site-visit-attendance') return 'Site Visit Attendance';
+  if (path == '/site-visit-attendance-management') return 'Site Visit Attendance Management';
+  if (path == '/permission') return 'Permission';
+  if (path == '/permission-management') return 'Permission Management';
+  if (path == '/salary-settings') return 'Salary Settings';
+  if (path == '/asset-settings') return 'Asset Settings';
+  if (path == '/asset-management') return 'Asset Management';
+  if (path == '/my-asset') return 'My Asset';
+  if (path == '/loan') return 'Loan';
+  if (path == '/loan-management') return 'Loan Management';
+  if (path == '/my-exit') return 'My Exit';
+  if (path == '/exit-management') return 'Exit Management';
+  if (path == '/incentive') return 'Incentive Request';
+  if (path == '/incentive-management') return 'Incentive Management';
+  if (path == '/my-payslips') return 'My Payslips';
+  if (path == '/payroll') return 'Payroll';
+  if (path == '/payroll-history') return 'Payroll History';
+  if (path == '/payroll-settings') return 'Payroll Settings';
+  if (path == '/items') return 'Items';
+  if (path == '/inventory-adjustments') return 'Inventory Adjustments';
+  if (path == '/customers') return 'Customers';
+  if (path == '/quotes') return 'Quotes';
+  if (path == '/sales-orders') return 'Sales Orders';
+  if (path == '/invoices') return 'Invoices';
+  if (path == '/delivery-challans') return 'Delivery Challans';
+  if (path == '/payments-received') return 'Payments Received';
+  if (path == '/credit-notes') return 'Credit Notes';
+  if (path == '/eway-bills') return 'e-Way Bills';
+  if (path == '/vendors') return 'Vendors';
+  if (path == '/expenses') return 'Expenses';
+  if (path == '/purchase-orders') return 'Purchase Orders';
+  if (path == '/bills') return 'Bills';
+  return null;
+}
+
+String _getFirstAllowedPath(Employee emp) {
+  if (emp.isSuperAdmin) return '/home';
+
+  const permissionToPath = <String, String>{
+    'home': '/home',
+    'leave management': '/leave-management',
+    'leave': '/leave-management',
+    'attendance': '/attendance',
+    'attendance management': '/attendance-management',
+    'attendance settings': '/attendance-settings',
+    'my tasks': '/my-tasks',
+    'tasks and clocking management': '/tasks-and-timesheets',
+    'tasks & timesheets': '/tasks-and-timesheets',
+    'tasks and timesheets': '/tasks-and-timesheets',
+    'site visit attendance': '/site-visit-attendance',
+    'site visit attendance management': '/site-visit-attendance-management',
+    'on-duty management': '/on-duty-management',
+    'employee management': '/employee-management',
+    'responses': '/responses',
+    'permission': '/permission',
+    'permission management': '/permission-management',
+    'salary settings': '/salary-settings',
+    'asset settings': '/asset-settings',
+    'asset management': '/asset-management',
+    'my asset': '/my-asset',
+    'loan': '/loan',
+    'loan management': '/loan-management',
+    'my exit': '/my-exit',
+    'exit management': '/exit-management',
+    'incentive request': '/incentive',
+    'incentive management': '/incentive-management',
+    'my payslips': '/my-payslips',
+    'payroll': '/payroll',
+    'payroll history': '/payroll-history',
+    'payroll settings': '/payroll-settings',
+    'organization management': '/organization-management',
+    'organization structure': '/organization-structure',
+    'items': '/items',
+    'inventory adjustments': '/inventory-adjustments',
+    'customers': '/customers',
+    'quotes': '/quotes',
+    'sales orders': '/sales-orders',
+    'invoices': '/invoices',
+    'delivery challans': '/delivery-challans',
+    'payments received': '/payments-received',
+    'credit notes': '/credit-notes',
+    'e-way bills': '/eway-bills',
+    'vendors': '/vendors',
+    'expenses': '/expenses',
+    'purchase orders': '/purchase-orders',
+    'bills': '/bills',
+  };
+
+  for (final entry in permissionToPath.entries) {
+    if (emp.hasPermission(entry.key)) {
+      return entry.value;
+    }
+  }
+
+  return '/login';
+}
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
     initialLocation: '/home',
+    redirect: (context, state) {
+      final path = state.uri.path;
+      if (path == '/login' || path.startsWith('/employee/register')) {
+        return null;
+      }
+
+      final emailOrId = ref.read(currentUserEmailProvider);
+      if (emailOrId == null || emailOrId.trim().isEmpty) {
+        return '/login';
+      }
+
+      final currentEmp = ref.read(currentEmployeeProvider);
+      if (currentEmp == null) return null;
+
+      // Super Admin has unrestricted access to all routes
+      if (currentEmp.isSuperAdmin) return null;
+
+      final requiredPerm = _getRequiredPermissionForPath(path);
+      if (requiredPerm != null && !currentEmp.hasPermission(requiredPerm)) {
+        final fallback = _getFirstAllowedPath(currentEmp);
+        if (fallback != path) {
+          return fallback;
+        }
+      }
+
+      return null;
+    },
     routes: [
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       GoRoute(
@@ -95,6 +235,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             AppShell(currentLocation: state.uri.path, child: child),
         routes: [
           GoRoute(path: '/home', builder: (_, _) => const HomePage()),
+          GoRoute(path: '/my-profile', builder: (_, _) => const MyProfilePage()),
+          GoRoute(path: '/profile', builder: (_, _) => const MyProfilePage()),
           GoRoute(
             path: '/organization-management',
             builder: (_, _) => const OrganizationManagementPage(),

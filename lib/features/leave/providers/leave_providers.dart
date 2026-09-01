@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../authentication/providers/authentication_providers.dart';
 import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
+export '../../employee/providers/employee_providers.dart' show currentEmployeeProvider;
 import '../data/firebase_leave_repository.dart';
 import '../domain/leave_repository.dart';
 import '../domain/leave_request.dart';
@@ -78,67 +79,6 @@ final salaryCalculationProvider = FutureProvider.family<SalaryCalculation, Salar
         workingDays: param.workingDays,
       ),
 );
-
-final currentEmployeeProvider = Provider<Employee?>((ref) {
-  final emailOrId = ref.watch(currentUserEmailProvider);
-  final employeesAsync = ref.watch(employeesProvider);
-  return employeesAsync.maybeWhen(
-    data: (list) {
-      if (list.isEmpty) {
-        return const Employee(
-          id: 1,
-          employeeId: 'EMP-001',
-          firstName: 'Admin',
-          lastName: 'User',
-          emailAddress: 'admin@company.com',
-          phoneNumber: '',
-          gender: 'Male',
-          dob: '',
-          organizationName: 'iGreen Tech',
-          department: 'Management',
-          designation: 'Administrator',
-          employmentType: 'Full-time',
-          joiningDate: '',
-          userType: 'Super Admin',
-          status: 'Active',
-        );
-      }
-      if (emailOrId != null && emailOrId.trim().isNotEmpty) {
-        final matches = list.where((e) {
-          final target = emailOrId.trim().toLowerCase();
-          return e.emailAddress.trim().toLowerCase() == target ||
-              e.employeeId.trim().toLowerCase() == target;
-        }).toList();
-        if (matches.isNotEmpty) return matches.first;
-      }
-      // Fallback: return Super Admin / Admin employee if present, else first employee
-      return list.firstWhere(
-        (e) =>
-            e.userType.toUpperCase() == 'SUPER_ADMIN' ||
-            e.userType.toUpperCase() == 'SUPER ADMIN' ||
-            e.userType.toUpperCase() == 'ADMIN',
-        orElse: () => list.first,
-      );
-    },
-    orElse: () => const Employee(
-      id: 1,
-      employeeId: 'EMP-001',
-      firstName: 'Admin',
-      lastName: 'User',
-      emailAddress: 'admin@company.com',
-      phoneNumber: '',
-      gender: 'Male',
-      dob: '',
-      organizationName: 'iGreen Tech',
-      department: 'Management',
-      designation: 'Administrator',
-      employmentType: 'Full-time',
-      joiningDate: '',
-      userType: 'Super Admin',
-      status: 'Active',
-    ),
-  );
-});
 
 final leaveAuditLogsProvider = FutureProvider.family<List<Map<String, dynamic>>, int>(
   (ref, requestId) => ref.watch(leaveRepositoryProvider).getAuditLogs(requestId),

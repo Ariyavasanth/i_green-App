@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../employee/domain/employee.dart';
 import '../../leave/providers/leave_providers.dart';
+import '../../employee/providers/employee_providers.dart';
 import '../domain/employee_loan.dart';
 import '../providers/loan_providers.dart';
 

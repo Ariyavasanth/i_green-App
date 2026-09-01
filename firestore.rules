@@ -1,0 +1,195 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper Functions ─────────────────────────────────────────────────────
+
+    // Checks if the request is from an authenticated user
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Fetches the employee document corresponding to the authenticated UID
+    function getAuthEmployee() {
+      return get(/databases/$(database)/documents/employees/$(request.auth.uid)).data;
+    }
+
+    // Super Admin is the ONLY exception with unconditional full access
+    function isSuperAdmin() {
+      return isAuthenticated() && (
+        getAuthEmployee().user_type == 'Super Admin' ||
+        getAuthEmployee().user_type == 'SUPER_ADMIN' ||
+        getAuthEmployee().user_type == 'SUPER ADMIN' ||
+        getAuthEmployee().role == 'SUPER_ADMIN' ||
+        getAuthEmployee().role == 'SUPER ADMIN'
+      );
+    }
+
+    // Check if a specific permission is granted in the user's access_permissions list
+    function hasPermission(perm) {
+      return isSuperAdmin() || (
+        isAuthenticated() &&
+        getAuthEmployee().access_permissions != null &&
+        getAuthEmployee().access_permissions.hasAny([perm])
+      );
+    }
+
+    // Resolves authenticated user's numeric ID and Employee ID
+    function getAuthEmployeeId() {
+      return getAuthEmployee().id;
+    }
+
+    function getAuthEmployeeCode() {
+      return getAuthEmployee().employee_id;
+    }
+
+    // ── Employee Profiles & Directory ────────────────────────────────────────
+    match /employees/{employeeId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isSuperAdmin() || hasPermission('Employee Management');
+      allow update: if isAuthenticated() && (
+        request.auth.uid == employeeId ||
+        getAuthEmployeeCode() == employeeId
+      );
+    }
+
+    // ── Leave Requests ───────────────────────────────────────────────────────
+    match /leave_requests/{requestId} {
+      allow read: if isAuthenticated() && (
+        hasPermission('Leave Management') ||
+        resource.data.employee_id == getAuthEmployeeId() ||
+        resource.data.employee_custom_id == getAuthEmployeeCode()
+      );
+
+      allow create: if isAuthenticated() && (
+        hasPermission('Leave Management') ||
+        request.resource.data.employee_id == getAuthEmployeeId()
+      );
+
+      allow update: if isAuthenticated() && hasPermission('Leave Management');
+      allow delete: if isSuperAdmin();
+    }
+
+    // ── Leave Balances & Types ───────────────────────────────────────────────
+    match /leave_balances/{balanceId} {
+      allow read: if isAuthenticated() && (
+        hasPermission('Leave Management') ||
+        resource.data.employee_id == getAuthEmployeeId()
+      );
+      allow write: if hasPermission('Leave Management');
+    }
+
+    match /leave_types/{typeId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin() || hasPermission('Leave Management');
+    }
+
+    // ── Attendance & Clocking ────────────────────────────────────────────────
+    match /attendance_records/{recordId} {
+      allow read: if isAuthenticated() && (
+        hasPermission('Attendance Management') ||
+        hasPermission('Attendance') ||
+        resource.data.employee_id == getAuthEmployeeId() ||
+        resource.data.employee_code == getAuthEmployeeCode()
+      );
+      allow create, update: if isAuthenticated() && (
+        hasPermission('Attendance Management') ||
+        request.resource.data.employee_id == getAuthEmployeeId() ||
+        request.resource.data.employee_code == getAuthEmployeeCode()
+      );
+      allow delete: if isSuperAdmin();
+    }
+
+    match /clock_entries/{entryId} {
+      allow read: if isAuthenticated() && (
+        hasPermission('Tasks and Clocking Management') ||
+        hasPermission('Attendance Management') ||
+        resource.data.employee_id == getAuthEmployeeCode()
+      );
+      allow create, update: if isAuthenticated() && (
+        hasPermission('Tasks and Clocking Management') ||
+        request.resource.data.employee_id == getAuthEmployeeCode()
+      );
+      allow delete: if isSuperAdmin();
+    }
+
+    // ── Tasks ────────────────────────────────────────────────────────────────
+    match /tasks/{taskId} {
+      allow read: if isAuthenticated() && (
+        hasPermission('Tasks and Clocking Management') ||
+        hasPermission('My Tasks') ||
+        resource.data.assigned_to == getAuthEmployeeCode()
+      );
+      allow create, update: if isAuthenticated() && (
+        hasPermission('Tasks and Clocking Management') ||
+        resource.data.assigned_to == getAuthEmployeeCode()
+      );
+      allow delete: if hasPermission('Tasks and Clocking Management');
+    }
+
+    // ── Permissions & Exit & Loans ───────────────────────────────────────────
+    match /permission_requests/{permId} {
+      allow read: if isAuthenticated() && (
+        hasPermission('Permission Management') ||
+        hasPermission('Permission') ||
+        resource.data.employee_id == getAuthEmployeeId() ||
+        resource.data.employee_code == getAuthEmployeeCode()
+      );
+      allow create: if isAuthenticated() && (
+        hasPermission('Permission Management') ||
+        request.resource.data.employee_id == getAuthEmployeeId()
+      );
+      allow update, delete: if hasPermission('Permission Management');
+    }
+
+    match /exit_requests/{exitId} {
+      allow read: if isAuthenticated() && (
+        hasPermission('Exit Management') ||
+        hasPermission('My Exit') ||
+        resource.data.employee_id == getAuthEmployeeCode()
+      );
+      allow create: if isAuthenticated() && (
+        hasPermission('Exit Management') ||
+        request.resource.data.employee_id == getAuthEmployeeCode()
+      );
+      allow update, delete: if hasPermission('Exit Management');
+    }
+
+    match /employee_loans/{loanId} {
+      allow read: if isAuthenticated() && (
+        hasPermission('Loan Management') ||
+        hasPermission('Loan') ||
+        resource.data.employee_id == getAuthEmployeeId()
+      );
+      allow write: if hasPermission('Loan Management');
+    }
+
+    // ── Payroll & Payslips ───────────────────────────────────────────────────
+    match /payroll_records/{payrollId} {
+      allow read: if isAuthenticated() && (
+        hasPermission('Payroll') ||
+        hasPermission('My Payslips') ||
+        resource.data.employee_id == getAuthEmployeeId()
+      );
+      allow write: if hasPermission('Payroll');
+    }
+
+    // ── Company Structure & Settings ─────────────────────────────────────────
+    match /organizations/{orgId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin() || hasPermission('Organization Management');
+    }
+    match /business_units/{buId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin() || hasPermission('Organization Management');
+    }
+    match /departments/{deptId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin() || hasPermission('Organization Structure');
+    }
+    match /designations/{desigId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin() || hasPermission('Organization Structure');
+    }
+  }
+}

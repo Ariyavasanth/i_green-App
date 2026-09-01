@@ -147,9 +147,9 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
               if (isMobile) {
                 final totalItems = filtered.length;
                 final totalPages = (totalItems / _rowsPerPage).ceil();
-                final pageIndex = _currentPage.clamp(0, (totalPages - 1).clamp(0, 999));
-                final startIndex = pageIndex * _rowsPerPage;
-                final endIndex = (startIndex + _rowsPerPage).clamp(0, totalItems);
+                final pageIndex = _currentPage.clamp(0, (totalPages - 1).clamp(0, 999)).toInt();
+                final startIndex = (pageIndex * _rowsPerPage).toInt();
+                final endIndex = (startIndex + _rowsPerPage).clamp(0, totalItems).toInt();
                 final pageItems = filtered.sublist(startIndex, endIndex);
 
                 return Scaffold(
@@ -239,9 +239,9 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
 
               final totalItems = filtered.length;
               final totalPages = (totalItems / _rowsPerPage).ceil();
-              final pageIndex = _currentPage.clamp(0, (totalPages - 1).clamp(0, 999));
-              final startIndex = pageIndex * _rowsPerPage;
-              final endIndex = (startIndex + _rowsPerPage).clamp(0, totalItems);
+              final pageIndex = _currentPage.clamp(0, (totalPages - 1).clamp(0, 999)).toInt();
+              final startIndex = (pageIndex * _rowsPerPage).toInt();
+              final endIndex = (startIndex + _rowsPerPage).clamp(0, totalItems).toInt();
               final pageItems = filtered.sublist(startIndex, endIndex);
 
               return Column(
