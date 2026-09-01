@@ -31,7 +31,7 @@ abstract interface class OrganizationRepository {
   Future<void> deleteDepartment(int id);
 
   // Designation methods
-  Future<List<Designation>> getDesignations({String? departmentName});
+  Future<List<Designation>> getDesignations({String? organizationName, String? departmentName});
   Future<void> addDesignation(Designation designation);
   Future<void> updateDesignation(Designation designation);
   Future<void> deleteDesignation(int id);

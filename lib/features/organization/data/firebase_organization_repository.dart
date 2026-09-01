@@ -76,86 +76,86 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
 
   static final List<Designation> _initialSeedDesignations = [
     // Engineering
-    const Designation(id: 1, departmentName: 'Engineering', designationName: 'Technical Head', hierarchyLevel: HierarchyLevel.head),
-    const Designation(id: 2, departmentName: 'Engineering', designationName: 'Engineering Manager', hierarchyLevel: HierarchyLevel.manager),
-    const Designation(id: 3, departmentName: 'Engineering', designationName: 'Senior Design Engineer', hierarchyLevel: HierarchyLevel.senior),
-    const Designation(id: 4, departmentName: 'Engineering', designationName: 'Design Engineer', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 5, departmentName: 'Engineering', designationName: 'Mechanical Engineer', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 6, departmentName: 'Engineering', designationName: 'Electrical Engineer', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 7, departmentName: 'Engineering', designationName: 'Junior Engineer', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 8, departmentName: 'Engineering', designationName: 'CAD Engineer', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 9, departmentName: 'Engineering', designationName: 'CAD Designer', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 1, organizationName: _orgName, departmentName: 'Engineering', designationName: 'Technical Head', hierarchyLevel: HierarchyLevel.head),
+    const Designation(id: 2, organizationName: _orgName, departmentName: 'Engineering', designationName: 'Engineering Manager', hierarchyLevel: HierarchyLevel.manager),
+    const Designation(id: 3, organizationName: _orgName, departmentName: 'Engineering', designationName: 'Senior Design Engineer', hierarchyLevel: HierarchyLevel.senior),
+    const Designation(id: 4, organizationName: _orgName, departmentName: 'Engineering', designationName: 'Design Engineer', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 5, organizationName: _orgName, departmentName: 'Engineering', designationName: 'Mechanical Engineer', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 6, organizationName: _orgName, departmentName: 'Engineering', designationName: 'Electrical Engineer', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 7, organizationName: _orgName, departmentName: 'Engineering', designationName: 'Junior Engineer', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 8, organizationName: _orgName, departmentName: 'Engineering', designationName: 'CAD Engineer', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 9, organizationName: _orgName, departmentName: 'Engineering', designationName: 'CAD Designer', hierarchyLevel: HierarchyLevel.employee),
 
     // Production
-    const Designation(id: 10, departmentName: 'Production', designationName: 'Factory Manager', hierarchyLevel: HierarchyLevel.manager),
-    const Designation(id: 11, departmentName: 'Production', designationName: 'Production Manager', hierarchyLevel: HierarchyLevel.manager),
-    const Designation(id: 12, departmentName: 'Production', designationName: 'Production Engineer', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 13, departmentName: 'Production', designationName: 'Production Supervisor', hierarchyLevel: HierarchyLevel.supervisor),
-    const Designation(id: 14, departmentName: 'Production', designationName: 'Factory Coordinator', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 15, departmentName: 'Production', designationName: 'Machine Operator', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 16, departmentName: 'Production', designationName: 'Operator', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 17, departmentName: 'Production', designationName: 'Production Trainee', hierarchyLevel: HierarchyLevel.trainee),
+    const Designation(id: 10, organizationName: _orgName, departmentName: 'Production', designationName: 'Factory Manager', hierarchyLevel: HierarchyLevel.manager),
+    const Designation(id: 11, organizationName: _orgName, departmentName: 'Production', designationName: 'Production Manager', hierarchyLevel: HierarchyLevel.manager),
+    const Designation(id: 12, organizationName: _orgName, departmentName: 'Production', designationName: 'Production Engineer', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 13, organizationName: _orgName, departmentName: 'Production', designationName: 'Production Supervisor', hierarchyLevel: HierarchyLevel.supervisor),
+    const Designation(id: 14, organizationName: _orgName, departmentName: 'Production', designationName: 'Factory Coordinator', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 15, organizationName: _orgName, departmentName: 'Production', designationName: 'Machine Operator', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 16, organizationName: _orgName, departmentName: 'Production', designationName: 'Operator', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 17, organizationName: _orgName, departmentName: 'Production', designationName: 'Production Trainee', hierarchyLevel: HierarchyLevel.trainee),
 
     // Quality Assurance
-    const Designation(id: 18, departmentName: 'Quality Assurance', designationName: 'Quality Manager', hierarchyLevel: HierarchyLevel.manager),
-    const Designation(id: 19, departmentName: 'Quality Assurance', designationName: 'Quality Engineer', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 20, departmentName: 'Quality Assurance', designationName: 'Quality Inspector', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 21, departmentName: 'Quality Assurance', designationName: 'QA Executive', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 18, organizationName: _orgName, departmentName: 'Quality Assurance', designationName: 'Quality Manager', hierarchyLevel: HierarchyLevel.manager),
+    const Designation(id: 19, organizationName: _orgName, departmentName: 'Quality Assurance', designationName: 'Quality Engineer', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 20, organizationName: _orgName, departmentName: 'Quality Assurance', designationName: 'Quality Inspector', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 21, organizationName: _orgName, departmentName: 'Quality Assurance', designationName: 'QA Executive', hierarchyLevel: HierarchyLevel.employee),
 
     // Projects
-    const Designation(id: 22, departmentName: 'Projects', designationName: 'Technical Head', hierarchyLevel: HierarchyLevel.head),
-    const Designation(id: 23, departmentName: 'Projects', designationName: 'Project Manager', hierarchyLevel: HierarchyLevel.manager),
-    const Designation(id: 24, departmentName: 'Projects', designationName: 'Project Lead', hierarchyLevel: HierarchyLevel.lead),
-    const Designation(id: 25, departmentName: 'Projects', designationName: 'Project Engineer', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 26, departmentName: 'Projects', designationName: 'Sr. Project Coordinator', hierarchyLevel: HierarchyLevel.senior),
-    const Designation(id: 27, departmentName: 'Projects', designationName: 'Project Coordinator', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 28, departmentName: 'Projects', designationName: 'Project Assistant', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 29, departmentName: 'Projects', designationName: 'Site Engineer', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 30, departmentName: 'Projects', designationName: 'Site Coordinator', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 31, departmentName: 'Projects', designationName: 'Sr. Site Coordinator', hierarchyLevel: HierarchyLevel.senior),
-    const Designation(id: 32, departmentName: 'Projects', designationName: 'Site Coordinator - Trainee', hierarchyLevel: HierarchyLevel.trainee),
-    const Designation(id: 33, departmentName: 'Projects', designationName: 'Rig Operator', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 34, departmentName: 'Projects', designationName: 'Bore Path Specialist', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 35, departmentName: 'Projects', designationName: 'Tracker', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 22, organizationName: _orgName, departmentName: 'Projects', designationName: 'Technical Head', hierarchyLevel: HierarchyLevel.head),
+    const Designation(id: 23, organizationName: _orgName, departmentName: 'Projects', designationName: 'Project Manager', hierarchyLevel: HierarchyLevel.manager),
+    const Designation(id: 24, organizationName: _orgName, departmentName: 'Projects', designationName: 'Project Lead', hierarchyLevel: HierarchyLevel.lead),
+    const Designation(id: 25, organizationName: _orgName, departmentName: 'Projects', designationName: 'Project Engineer', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 26, organizationName: _orgName, departmentName: 'Projects', designationName: 'Sr. Project Coordinator', hierarchyLevel: HierarchyLevel.senior),
+    const Designation(id: 27, organizationName: _orgName, departmentName: 'Projects', designationName: 'Project Coordinator', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 28, organizationName: _orgName, departmentName: 'Projects', designationName: 'Project Assistant', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 29, organizationName: _orgName, departmentName: 'Projects', designationName: 'Site Engineer', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 30, organizationName: _orgName, departmentName: 'Projects', designationName: 'Site Coordinator', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 31, organizationName: _orgName, departmentName: 'Projects', designationName: 'Sr. Site Coordinator', hierarchyLevel: HierarchyLevel.senior),
+    const Designation(id: 32, organizationName: _orgName, departmentName: 'Projects', designationName: 'Site Coordinator - Trainee', hierarchyLevel: HierarchyLevel.trainee),
+    const Designation(id: 33, organizationName: _orgName, departmentName: 'Projects', designationName: 'Rig Operator', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 34, organizationName: _orgName, departmentName: 'Projects', designationName: 'Bore Path Specialist', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 35, organizationName: _orgName, departmentName: 'Projects', designationName: 'Tracker', hierarchyLevel: HierarchyLevel.employee),
 
     // Human Resources
-    const Designation(id: 36, departmentName: 'Human Resources', designationName: 'HR Manager', hierarchyLevel: HierarchyLevel.manager),
-    const Designation(id: 37, departmentName: 'Human Resources', designationName: 'HR Executive', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 38, departmentName: 'Human Resources', designationName: 'HR Coordinator', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 39, departmentName: 'Human Resources', designationName: 'HR Trainee', hierarchyLevel: HierarchyLevel.trainee),
+    const Designation(id: 36, organizationName: _orgName, departmentName: 'Human Resources', designationName: 'HR Manager', hierarchyLevel: HierarchyLevel.manager),
+    const Designation(id: 37, organizationName: _orgName, departmentName: 'Human Resources', designationName: 'HR Executive', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 38, organizationName: _orgName, departmentName: 'Human Resources', designationName: 'HR Coordinator', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 39, organizationName: _orgName, departmentName: 'Human Resources', designationName: 'HR Trainee', hierarchyLevel: HierarchyLevel.trainee),
 
     // Finance & Accounts
-    const Designation(id: 40, departmentName: 'Finance & Accounts', designationName: 'Finance Head', hierarchyLevel: HierarchyLevel.head),
-    const Designation(id: 41, departmentName: 'Finance & Accounts', designationName: 'Finance Manager', hierarchyLevel: HierarchyLevel.manager),
-    const Designation(id: 42, departmentName: 'Finance & Accounts', designationName: 'Senior Accountant', hierarchyLevel: HierarchyLevel.senior),
-    const Designation(id: 43, departmentName: 'Finance & Accounts', designationName: 'Accountant', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 44, departmentName: 'Finance & Accounts', designationName: 'Junior Accountant', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 45, departmentName: 'Finance & Accounts', designationName: 'Accounts Executive', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 46, departmentName: 'Finance & Accounts', designationName: 'Accounts Assistant', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 40, organizationName: _orgName, departmentName: 'Finance & Accounts', designationName: 'Finance Head', hierarchyLevel: HierarchyLevel.head),
+    const Designation(id: 41, organizationName: _orgName, departmentName: 'Finance & Accounts', designationName: 'Finance Manager', hierarchyLevel: HierarchyLevel.manager),
+    const Designation(id: 42, organizationName: _orgName, departmentName: 'Finance & Accounts', designationName: 'Senior Accountant', hierarchyLevel: HierarchyLevel.senior),
+    const Designation(id: 43, organizationName: _orgName, departmentName: 'Finance & Accounts', designationName: 'Accountant', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 44, organizationName: _orgName, departmentName: 'Finance & Accounts', designationName: 'Junior Accountant', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 45, organizationName: _orgName, departmentName: 'Finance & Accounts', designationName: 'Accounts Executive', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 46, organizationName: _orgName, departmentName: 'Finance & Accounts', designationName: 'Accounts Assistant', hierarchyLevel: HierarchyLevel.employee),
 
     // Information Technology
-    const Designation(id: 47, departmentName: 'Information Technology', designationName: 'IT Manager', hierarchyLevel: HierarchyLevel.manager),
-    const Designation(id: 48, departmentName: 'Information Technology', designationName: 'Software Developer', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 49, departmentName: 'Information Technology', designationName: 'System Administrator', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 50, departmentName: 'Information Technology', designationName: 'IT Support Executive', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 47, organizationName: _orgName, departmentName: 'Information Technology', designationName: 'IT Manager', hierarchyLevel: HierarchyLevel.manager),
+    const Designation(id: 48, organizationName: _orgName, departmentName: 'Information Technology', designationName: 'Software Developer', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 49, organizationName: _orgName, departmentName: 'Information Technology', designationName: 'System Administrator', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 50, organizationName: _orgName, departmentName: 'Information Technology', designationName: 'IT Support Executive', hierarchyLevel: HierarchyLevel.employee),
 
     // Purchase & Procurement
-    const Designation(id: 51, departmentName: 'Purchase & Procurement', designationName: 'Purchase Manager', hierarchyLevel: HierarchyLevel.manager),
-    const Designation(id: 52, departmentName: 'Purchase & Procurement', designationName: 'Purchase Executive', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 53, departmentName: 'Purchase & Procurement', designationName: 'Procurement Specialist', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 54, departmentName: 'Purchase & Procurement', designationName: 'Purchase Assistant', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 51, organizationName: _orgName, departmentName: 'Purchase & Procurement', designationName: 'Purchase Manager', hierarchyLevel: HierarchyLevel.manager),
+    const Designation(id: 52, organizationName: _orgName, departmentName: 'Purchase & Procurement', designationName: 'Purchase Executive', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 53, organizationName: _orgName, departmentName: 'Purchase & Procurement', designationName: 'Procurement Specialist', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 54, organizationName: _orgName, departmentName: 'Purchase & Procurement', designationName: 'Purchase Assistant', hierarchyLevel: HierarchyLevel.employee),
 
     // Sales & Marketing
-    const Designation(id: 55, departmentName: 'Sales & Marketing', designationName: 'Sales Manager', hierarchyLevel: HierarchyLevel.manager),
-    const Designation(id: 56, departmentName: 'Sales & Marketing', designationName: 'Sales Executive', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 57, departmentName: 'Sales & Marketing', designationName: 'Marketing Executive', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 58, departmentName: 'Sales & Marketing', designationName: 'Business Development Executive', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 55, organizationName: _orgName, departmentName: 'Sales & Marketing', designationName: 'Sales Manager', hierarchyLevel: HierarchyLevel.manager),
+    const Designation(id: 56, organizationName: _orgName, departmentName: 'Sales & Marketing', designationName: 'Sales Executive', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 57, organizationName: _orgName, departmentName: 'Sales & Marketing', designationName: 'Marketing Executive', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 58, organizationName: _orgName, departmentName: 'Sales & Marketing', designationName: 'Business Development Executive', hierarchyLevel: HierarchyLevel.employee),
 
     // Administration
-    const Designation(id: 59, departmentName: 'Administration', designationName: 'Admin Manager', hierarchyLevel: HierarchyLevel.manager),
-    const Designation(id: 60, departmentName: 'Administration', designationName: 'Admin Executive', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 61, departmentName: 'Administration', designationName: 'Office Assistant', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 62, departmentName: 'Administration', designationName: 'Receptionist', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 59, organizationName: _orgName, departmentName: 'Administration', designationName: 'Admin Manager', hierarchyLevel: HierarchyLevel.manager),
+    const Designation(id: 60, organizationName: _orgName, departmentName: 'Administration', designationName: 'Admin Executive', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 61, organizationName: _orgName, departmentName: 'Administration', designationName: 'Office Assistant', hierarchyLevel: HierarchyLevel.employee),
+    const Designation(id: 62, organizationName: _orgName, departmentName: 'Administration', designationName: 'Receptionist', hierarchyLevel: HierarchyLevel.employee),
   ];
 
   final List<Organization> _memoryOrgs = [_initialSeedOrg];
@@ -474,14 +474,22 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
 
   // --- Designations ---
   @override
-  Future<List<Designation>> getDesignations({String? departmentName}) async {
+  Future<List<Designation>> getDesignations({String? organizationName, String? departmentName}) async {
     await _ensureSeeded();
     try {
       final ref = _designationsRef;
       if (ref != null) {
         final snapshot = await ref.get();
         if (snapshot.docs.isNotEmpty) {
-          final list = snapshot.docs.map((doc) => Designation.fromMap(doc.data())).toList();
+          final list = snapshot.docs.map((doc) {
+            final desig = Designation.fromMap(doc.data());
+            if (desig.organizationName.isEmpty) {
+              final dept = _memoryDepts.where((dept) => dept.departmentName == desig.departmentName).firstOrNull;
+              final org = (dept != null && dept.organizationName.isNotEmpty) ? dept.organizationName : _orgName;
+              return desig.copyWith(organizationName: org);
+            }
+            return desig;
+          }).toList();
           list.sort((a, b) => a.id.compareTo(b.id));
           _memoryDesignations.clear();
           _memoryDesignations.addAll(list);
@@ -490,10 +498,29 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
     } catch (e) {
       debugPrint('Error getting designations: $e');
     }
-    if (departmentName != null && departmentName.isNotEmpty) {
-      return _memoryDesignations.where((d) => d.departmentName.trim().toLowerCase() == departmentName.trim().toLowerCase()).toList();
-    }
-    return List.from(_memoryDesignations);
+    return _memoryDesignations.map((d) {
+      if (d.organizationName.isEmpty) {
+        final dept = _memoryDepts.where((dept) => dept.departmentName == d.departmentName).firstOrNull;
+        final org = (dept != null && dept.organizationName.isNotEmpty) ? dept.organizationName : _orgName;
+        return d.copyWith(organizationName: org);
+      }
+      return d;
+    }).where((d) {
+      if (organizationName != null &&
+          organizationName.isNotEmpty &&
+          organizationName != 'All' &&
+          d.organizationName.isNotEmpty &&
+          d.organizationName.trim().toLowerCase() != organizationName.trim().toLowerCase()) {
+        return false;
+      }
+      if (departmentName != null &&
+          departmentName.isNotEmpty &&
+          departmentName != 'All' &&
+          d.departmentName.trim().toLowerCase() != departmentName.trim().toLowerCase()) {
+        return false;
+      }
+      return true;
+    }).toList();
   }
 
   @override

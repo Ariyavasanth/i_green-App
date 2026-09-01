@@ -85,6 +85,30 @@ final allDesignationsProvider = FutureProvider<List<Designation>>(
   (ref) => ref.watch(organizationRepositoryProvider).getDesignations(),
 );
 
+class DesignationFilter {
+  final String? organizationName;
+  final String? departmentName;
+  const DesignationFilter({this.organizationName, this.departmentName});
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DesignationFilter &&
+          runtimeType == other.runtimeType &&
+          organizationName == other.organizationName &&
+          departmentName == other.departmentName;
+
+  @override
+  int get hashCode => organizationName.hashCode ^ departmentName.hashCode;
+}
+
+final filteredDesignationsProvider = FutureProvider.family<List<Designation>, DesignationFilter>(
+  (ref, filter) => ref.watch(organizationRepositoryProvider).getDesignations(
+        organizationName: filter.organizationName,
+        departmentName: filter.departmentName,
+      ),
+);
+
 final columnPreferenceProvider =
     FutureProvider.family<ColumnPreference?, String>(
   (ref, tableId) =>
@@ -93,3 +117,4 @@ final columnPreferenceProvider =
 
 final orgSearchQueryProvider = StateProvider<String>((ref) => '');
 final deptSearchQueryProvider = StateProvider<String>((ref) => '');
+final desigSearchQueryProvider = StateProvider<String>((ref) => '');

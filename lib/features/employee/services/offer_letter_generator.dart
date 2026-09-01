@@ -85,6 +85,12 @@ class OfferLetterGenerator {
     final designation = employee.designation.trim().isNotEmpty
         ? employee.designation.trim()
         : 'Designation';
+    final orgName = employee.organizationName.trim().isNotEmpty
+        ? employee.organizationName.trim()
+        : 'IGreentec Engg. India Pvt. Ltd.';
+    final workLocation = employee.workLocation.trim().isNotEmpty
+        ? employee.workLocation.trim()
+        : 'Chennai Office';
     final joiningDate = employee.joiningDate.trim().isNotEmpty
         ? employee.joiningDate.trim()
         : todayStr;
@@ -131,7 +137,7 @@ class OfferLetterGenerator {
       </w:r>
       <w:r>
         <w:rPr><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>
-        <w:t xml:space="preserve">” at our Chennai Office on the terms discussed with you.</w:t>
+        <w:t xml:space="preserve">” at our ${_xmlEscape(workLocation)} on the terms discussed with you.</w:t>
       </w:r>
     </w:p>
 
@@ -265,7 +271,7 @@ class OfferLetterGenerator {
       </w:r>
       <w:r>
         <w:rPr><w:b/><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>
-        <w:t>M/s. IGreentec Engg. India Pvt. Ltd.</w:t>
+        <w:t>M/s. ${_xmlEscape(orgName)}.</w:t>
       </w:r>
     </w:p>
 
@@ -274,7 +280,7 @@ class OfferLetterGenerator {
       <w:pPr><w:spacing w:before="200" w:after="400"/></w:pPr>
       <w:r>
         <w:rPr><w:b/><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>
-        <w:t>For IGreentec Engg. India Pvt. Ltd.</w:t>
+        <w:t>For ${_xmlEscape(orgName)}</w:t>
       </w:r>
     </w:p>
 
@@ -341,7 +347,7 @@ class OfferLetterGenerator {
       <w:pPr><w:spacing w:after="160"/><w:jc w:val="both"/></w:pPr>
       <w:r><w:rPr><w:b/><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr><w:t xml:space="preserve">1)&#x9;PLACE OF WORK:  </w:t></w:r>
       <w:r><w:rPr><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr><w:t xml:space="preserve">Your present place of work will be at our </w:t></w:r>
-      <w:r><w:rPr><w:b/><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr><w:t>Chennai Office</w:t></w:r>
+      <w:r><w:rPr><w:b/><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr><w:t>${_xmlEscape(workLocation)}</w:t></w:r>
       <w:r><w:rPr><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr><w:t xml:space="preserve">. However, during the course of service, you may be posted/ transferred/ deputed anywhere in India or overseas to serve any of the Group Company’s project / work, at the sole discretion of the Management.</w:t></w:r>
     </w:p>
 
@@ -461,7 +467,7 @@ class OfferLetterGenerator {
         <w:tc>
           <w:tcPr><w:tcW w:w="2500" w:type="pct"/></w:tcPr>
           <w:p><w:pPr><w:spacing w:after="60"/></w:pPr><w:r><w:rPr><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr><w:t>Yours faithfully,</w:t></w:r></w:p>
-          <w:p><w:pPr><w:spacing w:after="300"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr><w:t>For IGreentec Engg. India Pvt. Ltd.</w:t></w:r></w:p>
+          <w:p><w:pPr><w:spacing w:after="300"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr><w:t>For ${_xmlEscape(orgName)}</w:t></w:r></w:p>
         </w:tc>
         <w:tc>
           <w:tcPr><w:tcW w:w="2500" w:type="pct"/></w:tcPr>

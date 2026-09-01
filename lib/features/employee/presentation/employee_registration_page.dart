@@ -16,6 +16,13 @@ import '../services/welcome_letter_generator.dart';
 import '../../salary_settings/domain/salary_settings.dart';
 import '../../salary_settings/providers/salary_settings_providers.dart';
 import '../../attendance_settings/presentation/widgets/attendance_location_fields.dart';
+import '../../organization/domain/business_unit.dart';
+import '../../organization/domain/department.dart';
+import '../../organization/domain/designation.dart';
+import '../../organization/domain/location.dart';
+import '../../organization/domain/organization.dart';
+import '../../organization/providers/organization_providers.dart';
+import '../../../../core/widgets/app_searchable_dropdown.dart';
 
 class EmployeeRegistrationPage extends ConsumerStatefulWidget {
   const EmployeeRegistrationPage({
@@ -56,20 +63,23 @@ class _EmployeeRegistrationPageState
   final _aadhaarController = TextEditingController();
   final _phoneController = TextEditingController();
   String _phoneCountryCode = '+91';
-  String _department = 'Management';
-  String _designation = 'Company Director';
+  String _organizationName = '';
+  String _businessUnit = '';
+  String _workLocation = '';
+  String _department = '';
+  String _designation = '';
   final _joiningDateController = TextEditingController();
   final _contractEndDateController = TextEditingController();
   final _emailController = TextEditingController();
   final _pfNumberController = TextEditingController();
   final _esiNumberController = TextEditingController();
-  final _reportingToController = TextEditingController(text: 'Saravanan G S');
+  final _reportingToController = TextEditingController();
   String _workScheduleType = 'Fixed Schedule';
   final _requiredWorkingHoursController = TextEditingController(text: '9 Hours');
   final _inTimeController = TextEditingController();
   final _outTimeController = TextEditingController();
   final _weeklyOffDayController = TextEditingController();
-  final _reportingManagerTitleController = TextEditingController(text: 'Managing Director');
+  final _reportingManagerTitleController = TextEditingController();
   final _adminNameController = TextEditingController(text: 'Saravanan G S');
   final _coordinatorNameController = TextEditingController(text: 'Admin Team');
   final _coordinatorPhoneController = TextEditingController(text: '8760098789');
@@ -638,6 +648,15 @@ class _EmployeeRegistrationPageState
   List<String> _validateJobAdminDetailsTab() {
     final errors = <String>[];
     if (_isManagementAdd) {
+      if (_organizationName.trim().isEmpty) {
+        errors.add('Organization is required');
+      }
+      if (_department.trim().isEmpty) {
+        errors.add('Department is required');
+      }
+      if (_designation.trim().isEmpty) {
+        errors.add('Designation is required');
+      }
       if (_joiningDateController.text.trim().isEmpty) {
         errors.add('Date of Joining is required');
       }
@@ -1120,6 +1139,9 @@ class _EmployeeRegistrationPageState
       final (phoneCc, phoneNum) = _parsePhoneAndCountryCode(emp.phoneNumber);
       _phoneCountryCode = phoneCc;
       _phoneController.text = phoneNum;
+      if (emp.organizationName.isNotEmpty) _organizationName = emp.organizationName;
+      if (emp.businessUnit.isNotEmpty) _businessUnit = emp.businessUnit;
+      if (emp.workLocation.isNotEmpty) _workLocation = emp.workLocation;
       if (emp.department.isNotEmpty) _department = emp.department;
       if (emp.designation.isNotEmpty) _designation = emp.designation;
       _joiningDateController.text = emp.joiningDate;
@@ -1771,11 +1793,15 @@ class _EmployeeRegistrationPageState
         phoneNumber: _formatPhoneWithCountryCode(_phoneCountryCode, _phoneController.text),
         gender: _gender,
         dob: _dobController.text.trim(),
-        organizationName: (link?.organizationName ?? '').isEmpty
-            ? 'iGreen Tech'
-            : link!.organizationName,
-        department: _department,
-        designation: _designation,
+        organizationName: _organizationName.trim().isNotEmpty
+            ? _organizationName.trim()
+            : ((link?.organizationName ?? '').isNotEmpty
+                ? link!.organizationName
+                : 'iGreen Tech'),
+        businessUnit: _businessUnit.trim(),
+        workLocation: _workLocation.trim(),
+        department: _department.trim(),
+        designation: _designation.trim(),
         employmentType: 'Full-Time',
         joiningDate: _joiningDateController.text.trim(),
         status: (isSubmit || isEditMode || resolvedEmployeeId.startsWith('EMP-'))
@@ -2932,24 +2958,162 @@ class _EmployeeRegistrationPageState
               ),
             ),
             const SizedBox(height: 16),
-            _buildRow2or3(
-              isMobile: isMobile,
-              children: [
-                _buildDropdown(
-                  'Department',
-                  _department,
-                  {...Employee.departmentOptions, if (_department.isNotEmpty) _department}.toList(),
-                  (val) { if (val != null) { setState(() => _department = val); _markTabUnsaved('Job & Admin Details'); } },
-                ),
-                _buildDropdown(
-                  'Designation',
-                  _designation,
-                  {...Employee.designationOptions, if (_designation.isNotEmpty) _designation}.toList(),
-                  (val) { if (val != null) { setState(() => _designation = val); _markTabUnsaved('Job & Admin Details'); } },
-                ),
-                _buildDateField('Date Of Joining', _joiningDateController, placeholder: '29-04-2017'),
-              ],
-            ),
+            () {
+              final orgsAsync = ref.watch(organizationsProvider);
+              final orgList = orgsAsync.valueOrNull ?? [];
+              final orgNames = orgList.map((e) => e.name).toList();
+              if (_organizationName.isNotEmpty && !orgNames.contains(_organizationName)) {
+                orgNames.insert(0, _organizationName);
+              }
+              if (_organizationName.isEmpty && orgNames.isNotEmpty) {
+                _organizationName = orgNames.first;
+              }
+
+              final buAsync = ref.watch(businessUnitsProvider(_organizationName.isEmpty ? null : _organizationName));
+              final buList = buAsync.valueOrNull ?? [];
+              final buNames = buList.map((e) => e.unitName).toList();
+              if (_businessUnit.isNotEmpty && !buNames.contains(_businessUnit)) {
+                buNames.insert(0, _businessUnit);
+              }
+
+              final locAsync = ref.watch(locationsProvider(LocationFilter(
+                organizationName: _organizationName.isEmpty ? null : _organizationName,
+                businessUnitName: _businessUnit.isEmpty ? null : _businessUnit,
+              )));
+              final locList = locAsync.valueOrNull ?? [];
+              final locNames = locList.map((e) => e.locationName).toList();
+              if (_workLocation.isNotEmpty && !locNames.contains(_workLocation)) {
+                locNames.insert(0, _workLocation);
+              }
+
+              final deptsAsync = ref.watch(filteredDepartmentsProvider(DepartmentFilter(
+                organizationName: _organizationName.isEmpty ? null : _organizationName,
+                businessUnitName: _businessUnit.isEmpty ? null : _businessUnit,
+                workLocation: _workLocation.isEmpty ? null : _workLocation,
+              )));
+              final deptList = deptsAsync.valueOrNull ?? [];
+              final deptNames = deptList.map((e) => e.departmentName).toList();
+              if (deptNames.isEmpty) {
+                deptNames.addAll(Employee.departmentOptions);
+              }
+              if (_department.isNotEmpty && !deptNames.contains(_department)) {
+                deptNames.insert(0, _department);
+              }
+              if (_department.isEmpty && deptNames.isNotEmpty) {
+                _department = deptNames.first;
+              }
+
+              final desigAsync = ref.watch(designationsProvider(_department.isEmpty ? null : _department));
+              final desigList = desigAsync.valueOrNull ?? [];
+              final desigNames = desigList.map((e) => e.designationName).where((s) => s.isNotEmpty).toSet().toList();
+              if (_designation.isNotEmpty && !desigNames.contains(_designation)) {
+                desigNames.insert(0, _designation);
+              }
+              if (_designation.isEmpty && desigNames.isNotEmpty) {
+                _designation = desigNames.first;
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildRow2or3(
+                    isMobile: isMobile,
+                    children: [
+                      _buildDropdown(
+                        'Organization *',
+                        _organizationName,
+                        orgNames,
+                        (val) {
+                          if (val != null && val != _organizationName) {
+                            setState(() {
+                              _organizationName = val;
+                              _businessUnit = '';
+                              _workLocation = '';
+                              _department = '';
+                              _designation = '';
+                            });
+                            _markTabUnsaved('Job & Admin Details');
+                          }
+                        },
+                        placeholder: 'Select Organization',
+                      ),
+                      _buildDropdown(
+                        'Business Unit / Division',
+                        _businessUnit,
+                        buNames,
+                        (val) {
+                          if (val != null && val != _businessUnit) {
+                            setState(() {
+                              _businessUnit = val;
+                              _workLocation = '';
+                              _department = '';
+                              _designation = '';
+                            });
+                            _markTabUnsaved('Job & Admin Details');
+                          }
+                        },
+                        placeholder: 'Select Business Unit',
+                      ),
+                      _buildDropdown(
+                        'Work Location',
+                        _workLocation,
+                        locNames,
+                        (val) {
+                          if (val != null && val != _workLocation) {
+                            setState(() {
+                              _workLocation = val;
+                              _department = '';
+                              _designation = '';
+                            });
+                            _markTabUnsaved('Job & Admin Details');
+                          }
+                        },
+                        placeholder: 'Select Work Location',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _buildRow2or3(
+                    isMobile: isMobile,
+                    children: [
+                      _buildDropdown(
+                        'Department *',
+                        _department,
+                        deptNames,
+                        (val) {
+                          if (val != null && val != _department) {
+                            setState(() {
+                              _department = val;
+                              _designation = '';
+                              final match = deptList.where((d) => d.departmentName.trim().toLowerCase() == val.trim().toLowerCase()).firstOrNull;
+                              if (match != null && match.departmentHead.trim().isNotEmpty) {
+                                _reportingToController.text = match.departmentHead.trim();
+                                _reportingManagerTitleController.text = '${match.departmentName} Head';
+                              }
+                            });
+                            _markTabUnsaved('Job & Admin Details');
+                          }
+                        },
+                        placeholder: 'Select Department',
+                      ),
+                      _buildDropdown(
+                        'Designation *',
+                        _designation,
+                        desigNames,
+                        (val) {
+                          if (val != null && val != _designation) {
+                            setState(() => _designation = val);
+                            _markTabUnsaved('Job & Admin Details');
+                          }
+                        },
+                        placeholder: 'Select Designation',
+                      ),
+                      _buildDateField('Date Of Joining', _joiningDateController, placeholder: '29-04-2017'),
+                    ],
+                  ),
+                ],
+              );
+            }(),
             const SizedBox(height: 12),
             _buildRow2or3(
               isMobile: isMobile,
@@ -2965,7 +3129,6 @@ class _EmployeeRegistrationPageState
                   'Reporting Manager Title',
                   _reportingManagerTitleController,
                   placeholder: 'e.g. Managing Director',
-                  isName: true,
                 ),
               ],
             ),
@@ -2983,7 +3146,6 @@ class _EmployeeRegistrationPageState
                   'Coordinator Name',
                   _coordinatorNameController,
                   placeholder: 'e.g. Admin Team',
-                  isName: true,
                 ),
                 _buildTextField(
                   'Coordinator Contact Phone',
@@ -4408,49 +4570,177 @@ class _EmployeeRegistrationPageState
     required ValueChanged<String> onChanged,
   }) {
     final effectiveCode = allWorldCountryCodes.any((c) => c['code'] == selectedCode) ? selectedCode : '+91';
+    final details = getCountryPhoneDetails(effectiveCode);
 
-    return Container(
-      margin: const EdgeInsets.only(right: 6),
-      padding: const EdgeInsets.only(left: 8, right: 4),
-      decoration: const BoxDecoration(
-        border: Border(
-          right: BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
-        ),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: effectiveCode,
-          isDense: true,
-          menuMaxHeight: 300,
-          style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w500),
-          icon: const Icon(Icons.keyboard_arrow_down, size: 14, color: Colors.black54),
-          selectedItemBuilder: (context) {
-            return allWorldCountryCodes.map((item) {
-              final code = item['code']!;
-              final details = getCountryPhoneDetails(code);
-              return Container(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  details['compact'] as String,
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87),
-                ),
-              );
-            }).toList();
-          },
-          items: allWorldCountryCodes.map((item) {
-            return DropdownMenuItem<String>(
-              value: item['code'],
-              child: Text(
-                item['label']!,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-              ),
+    return InkWell(
+      onTap: () {
+        showDialog(
+          context: context,
+          barrierColor: Colors.black26,
+          builder: (ctx) {
+            String q = '';
+            return StatefulBuilder(
+              builder: (context, setModalState) {
+                final filtered = allWorldCountryCodes.where((item) {
+                  if (q.trim().isEmpty) return true;
+                  final query = q.trim().toLowerCase();
+                  return item['label']!.toLowerCase().contains(query) ||
+                      item['code']!.toLowerCase().contains(query);
+                }).toList();
+
+                return Dialog(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  backgroundColor: Colors.white,
+                  insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                  child: Container(
+                    width: 380,
+                    constraints: const BoxConstraints(maxHeight: 440),
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Select Country Code',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1E293B),
+                              ),
+                            ),
+                            InkWell(
+                              onTap: () => Navigator.pop(context),
+                              borderRadius: BorderRadius.circular(16),
+                              child: const Padding(
+                                padding: EdgeInsets.all(4),
+                                child: Icon(Icons.close, size: 18, color: Color(0xFF64748B)),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          autofocus: true,
+                          style: const TextStyle(fontSize: 12.5, color: Colors.black87),
+                          decoration: InputDecoration(
+                            hintText: 'Search country or code...',
+                            hintStyle: const TextStyle(fontSize: 12, color: Colors.black38),
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            prefixIcon: const Icon(Icons.search, size: 16, color: Color(0xFF94A3B8)),
+                            prefixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                            ),
+                            focusedBorder: const OutlineInputBorder(
+                              borderRadius: BorderRadius.all(Radius.circular(8)),
+                              borderSide: BorderSide(color: AppColors.primary, width: 1.2),
+                            ),
+                            filled: true,
+                            fillColor: const Color(0xFFF8FAFC),
+                          ),
+                          onChanged: (val) => setModalState(() => q = val),
+                        ),
+                        const SizedBox(height: 10),
+                        Expanded(
+                          child: filtered.isEmpty
+                              ? const Center(
+                                  child: Padding(
+                                    padding: EdgeInsets.all(24),
+                                    child: Text(
+                                      'No country found',
+                                      style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                                    ),
+                                  ),
+                                )
+                              : Scrollbar(
+                                  thumbVisibility: true,
+                                  child: ListView.builder(
+                                    itemCount: filtered.length,
+                                    padding: const EdgeInsets.symmetric(vertical: 2),
+                                    itemBuilder: (context, index) {
+                                      final item = filtered[index];
+                                      final code = item['code']!;
+                                      final isSelected = code == effectiveCode;
+
+                                      return InkWell(
+                                        onTap: () {
+                                          onChanged(code);
+                                          Navigator.pop(ctx);
+                                        },
+                                        borderRadius: BorderRadius.circular(6),
+                                        hoverColor: const Color(0xFFF1F5F9),
+                                        child: Container(
+                                          margin: const EdgeInsets.symmetric(vertical: 2),
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                          decoration: BoxDecoration(
+                                            color: isSelected
+                                                ? AppColors.primary.withOpacity(0.08)
+                                                : Colors.transparent,
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  item['label']!,
+                                                  style: TextStyle(
+                                                    fontSize: 12.5,
+                                                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                                    color: isSelected ? AppColors.primary : const Color(0xFF334155),
+                                                  ),
+                                                ),
+                                              ),
+                                              if (isSelected)
+                                                const Icon(
+                                                  Icons.check_rounded,
+                                                  size: 16,
+                                                  color: AppColors.primary,
+                                                ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             );
-          }).toList(),
-          onChanged: (val) {
-            if (val != null) {
-              onChanged(val);
-            }
           },
+        );
+      },
+      borderRadius: const BorderRadius.horizontal(left: Radius.circular(8)),
+      child: Container(
+        margin: const EdgeInsets.only(right: 6),
+        padding: const EdgeInsets.only(left: 10, right: 6),
+        decoration: const BoxDecoration(
+          border: Border(
+            right: BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              details['compact'] as String,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87),
+            ),
+            const SizedBox(width: 2),
+            const Icon(Icons.keyboard_arrow_down, size: 14, color: Colors.black54),
+          ],
         ),
       ),
     );
@@ -4774,43 +5064,21 @@ class _EmployeeRegistrationPageState
     String label,
     String value,
     List<String> items,
-    ValueChanged<String?> onChanged,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _buildLabelWithRequiredStar(label),
-        const SizedBox(height: 5),
-        DropdownButtonFormField<String>(
-          initialValue: items.contains(value) ? value : items.first,
-          onChanged: onChanged,
-          style: const TextStyle(fontSize: 12, color: Colors.black87),
-          icon: const Icon(Icons.keyboard_arrow_down, size: 16),
-          decoration: InputDecoration(
-            isDense: true,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppColors.active, width: 1.2),
-            ),
-          ),
-          items: items.map((item) {
-            return DropdownMenuItem<String>(
-              value: item,
-              child: Text(item, style: const TextStyle(fontSize: 12)),
-            );
-          }).toList(),
-        ),
-      ],
+    ValueChanged<String?> onChanged, {
+    String? placeholder,
+  }) {
+    final effectiveItems = <String>{...items, if (value.isNotEmpty) value}.toList();
+    final effectiveValue = effectiveItems.contains(value) && value.isNotEmpty
+        ? value
+        : (effectiveItems.isNotEmpty && placeholder == null ? effectiveItems.first : (value.isNotEmpty ? value : null));
+
+    return AppSearchableDropdown<String>(
+      label: label,
+      value: effectiveValue,
+      items: effectiveItems,
+      placeholder: placeholder,
+      searchHint: 'Search ${label.replaceAll('*', '').trim()}...',
+      onChanged: onChanged,
     );
   }
 
@@ -5063,6 +5331,9 @@ class _EmployeeRegistrationPageState
                         if (_isManagementAdd || _isEditing || _department.isNotEmpty || _joiningDateController.text.isNotEmpty || link != null) ...[
                           _buildPreviewSectionHeader('Job & Administrative Details', Icons.badge_outlined),
                           _buildPreviewGrid([
+                            if (_organizationName.isNotEmpty) _buildPreviewField('Organization', _organizationName),
+                            if (_businessUnit.isNotEmpty) _buildPreviewField('Business Unit / Division', _businessUnit),
+                            if (_workLocation.isNotEmpty) _buildPreviewField('Work Location', _workLocation),
                             _buildPreviewField('Department', _department),
                             _buildPreviewField('Designation', _designation),
                             _buildPreviewField('User Role / Type', _userType),
@@ -5938,7 +6209,7 @@ class _EmployeeRegistrationPageState
                             ],
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 16),
                         FilledButton.icon(
                           style: FilledButton.styleFrom(
                             backgroundColor: const Color(0xFF00BFA5),
@@ -5959,8 +6230,8 @@ class _EmployeeRegistrationPageState
                       ],
                     ),
             ),
-            const SizedBox(height: 24),
-            _buildSaveButtonsRow(link, 'Salary & Offer Letter'),
+            const SizedBox(height: 28),
+            _buildSaveButtonsRow(link, 'Salary & Compensation'),
           ],
         ),
       ),
@@ -5970,7 +6241,12 @@ class _EmployeeRegistrationPageState
   // TAB: WELCOME LETTER
   Widget _buildWelcomeLetterTab(RegistrationLink link, bool isMobile) {
     final empName = '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}'.trim();
+    final selectedOrg = _organizationName.trim().isNotEmpty
+        ? _organizationName.trim()
+        : (link.organizationName.isNotEmpty ? link.organizationName : 'IGreen Technologies');
+
     final data = WelcomeLetterData(
+      organizationName: selectedOrg,
       employeeName: empName.isNotEmpty ? empName : 'Employee',
       reportingManagerName: _reportingToController.text.trim().isNotEmpty && _reportingToController.text.trim() != 'None'
           ? _reportingToController.text.trim()
@@ -6060,10 +6336,10 @@ class _EmployeeRegistrationPageState
                                 );
                               },
                               icon: const Icon(Icons.refresh, size: 16),
-                              label: const Text('Refresh', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                              label: const Text('Refresh Preview', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                             ),
                           ),
-                          const SizedBox(width: 10),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
@@ -6083,7 +6359,7 @@ class _EmployeeRegistrationPageState
                   )
                 : Row(
                     children: [
-                      const Icon(Icons.mark_email_read_outlined, color: AppColors.active, size: 24),
+                      const Icon(Icons.mark_email_read_outlined, color: AppColors.active, size: 28),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -6164,7 +6440,7 @@ class _EmployeeRegistrationPageState
                     child: Column(
                       children: [
                         Text(
-                          'IGREEN TECHNOLOGIES',
+                          selectedOrg.toUpperCase(),
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: isMobile ? 18 : 22,
@@ -6213,10 +6489,10 @@ class _EmployeeRegistrationPageState
                   ),
                   const SizedBox(height: 16),
 
-                  // Paragraph 2: Welcome to IGreen Technologies! ...
-                  const Text(
-                    'Welcome to IGreen Technologies! We are excited to have you on board and look forward to working with you.',
-                    style: TextStyle(
+                  // Paragraph 2: Welcome to Organization Name! ...
+                  Text(
+                    'Welcome to $selectedOrg! We are excited to have you on board and look forward to working with you.',
+                    style: const TextStyle(
                       fontSize: 14,
                       height: 1.6,
                       color: Color(0xFF334155),
@@ -6322,9 +6598,9 @@ class _EmployeeRegistrationPageState
                     ),
                   ),
                   const SizedBox(height: 6),
-                  const Text(
-                    'IGreen Technologies Team',
-                    style: TextStyle(
+                  Text(
+                    '$selectedOrg Team',
+                    style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
                       color: Color(0xFF1E293B),
@@ -6352,16 +6628,17 @@ class _EmployeeRegistrationPageState
       phoneNumber: _formatPhoneWithCountryCode(_phoneCountryCode, _phoneController.text),
       gender: _gender,
       dob: _dobController.text.trim(),
-      organizationName: link.organizationName.isEmpty
-          ? 'iGreen Tech'
-          : link.organizationName,
+      organizationName: _organizationName.trim().isNotEmpty
+          ? _organizationName.trim()
+          : (link.organizationName.isNotEmpty ? link.organizationName : 'IGreentec Engg. India Pvt. Ltd.'),
+      workLocation: _workLocation.trim().isNotEmpty ? _workLocation.trim() : 'Chennai Office',
+      businessUnit: _businessUnit.trim(),
       department: _department,
       designation: _designation,
       employmentType: 'Full-Time',
       joiningDate: _joiningDateController.text.trim(),
       status: _status,
       bloodGroup: _bloodGroup,
-      userType: _userType,
       contractEndDate: _contractEndDateController.text.trim(),
       permanentAddress: _permAddressController.text.trim(),
       permanentCity: _permCityController.text.trim(),

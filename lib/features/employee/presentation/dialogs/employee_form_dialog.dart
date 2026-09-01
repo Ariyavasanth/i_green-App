@@ -6,8 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../domain/employee.dart';
 import '../../providers/employee_providers.dart';
+import '../../../organization/providers/organization_providers.dart';
 
 import '../employee_registration_page.dart';
+import '../../../../core/widgets/app_searchable_dropdown.dart';
 
 class EmployeeFormDialog extends ConsumerStatefulWidget {
   const EmployeeFormDialog({this.employee, super.key});
@@ -511,46 +513,63 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                     ),
                     validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
                   ),
-                  child2: DropdownButtonFormField<String>(
-                    initialValue: {
-                      ...Employee.departmentOptions,
-                      if (_deptController.text.isNotEmpty) _deptController.text,
-                    }.contains(_deptController.text)
-                        ? _deptController.text
-                        : Employee.departmentOptions.first,
-                    decoration: const InputDecoration(
-                      labelText: 'Department *',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: {
-                      ...Employee.departmentOptions,
-                      if (_deptController.text.isNotEmpty) _deptController.text,
-                    }.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
-                    onChanged: (val) {
-                      if (val != null) setState(() => _deptController.text = val);
+                  child2: Builder(
+                    builder: (context) {
+                      final dbDepts = ref.watch(departmentsProvider).valueOrNull ?? [];
+                      final deptItems = {
+                        ...dbDepts.map((d) => d.departmentName),
+                        ...Employee.departmentOptions,
+                        if (_deptController.text.isNotEmpty) _deptController.text,
+                      }.where((s) => s.isNotEmpty).toList();
+
+                      return AppSearchableDropdown<String>(
+                        label: 'Department *',
+                        value: deptItems.contains(_deptController.text)
+                            ? _deptController.text
+                            : (deptItems.isNotEmpty ? deptItems.first : null),
+                        items: deptItems,
+                        searchHint: 'Search department...',
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() {
+                              _deptController.text = val;
+                              _designationController.text = '';
+                            });
+                          }
+                        },
+                      );
                     },
                   ),
                 ),
                 const SizedBox(height: 12),
                 _buildFieldPair(
                   isMobile: isMobile,
-                  child1: DropdownButtonFormField<String>(
-                    initialValue: {
-                      ...Employee.designationOptions,
-                      if (_designationController.text.isNotEmpty) _designationController.text,
-                    }.contains(_designationController.text)
-                        ? _designationController.text
-                        : Employee.designationOptions.first,
-                    decoration: const InputDecoration(
-                      labelText: 'Designation *',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: {
-                      ...Employee.designationOptions,
-                      if (_designationController.text.isNotEmpty) _designationController.text,
-                    }.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
-                    onChanged: (val) {
-                      if (val != null) setState(() => _designationController.text = val);
+                  child1: Builder(
+                    builder: (context) {
+                      final currentDept = _deptController.text.trim();
+                      final desigsAsync = ref.watch(designationsProvider(currentDept.isEmpty ? null : currentDept));
+                      final desigItems = desigsAsync.valueOrNull?.map((d) => d.designationName).where((s) => s.isNotEmpty).toSet().toList() ?? [];
+                      if (desigItems.isEmpty) {
+                        desigItems.addAll(Employee.designationOptions);
+                      }
+                      if (_designationController.text.isNotEmpty && !desigItems.contains(_designationController.text)) {
+                        desigItems.insert(0, _designationController.text);
+                      }
+                      if (_designationController.text.isEmpty && desigItems.isNotEmpty) {
+                        _designationController.text = desigItems.first;
+                      }
+
+                      return AppSearchableDropdown<String>(
+                        label: 'Designation *',
+                        value: desigItems.contains(_designationController.text)
+                            ? _designationController.text
+                            : (desigItems.isNotEmpty ? desigItems.first : null),
+                        items: desigItems,
+                        searchHint: 'Search designation...',
+                        onChanged: (val) {
+                          if (val != null) setState(() => _designationController.text = val);
+                        },
+                      );
                     },
                   ),
                   child2: TextFormField(
@@ -564,35 +583,27 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                 const SizedBox(height: 12),
                 _buildFieldPair(
                   isMobile: isMobile,
-                  child1: DropdownButtonFormField<String>(
-                    initialValue: {
+                  child1: AppSearchableDropdown<String>(
+                    label: 'User Role *',
+                    value: {
                       'SUPER_ADMIN', 'ADMIN', 'EMPLOYEE', 'HR', 'MANAGER',
                       if (_userType.isNotEmpty) _userType,
                     }.contains(_userType)
                         ? _userType
                         : 'EMPLOYEE',
-                    decoration: const InputDecoration(
-                      labelText: 'User Role *',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: ['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE', 'HR', 'MANAGER']
-                        .map((r) => DropdownMenuItem(value: r, child: Text(r)))
-                        .toList(),
+                    items: const ['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE', 'HR', 'MANAGER'],
+                    searchHint: 'Search role...',
                     onChanged: (val) {
                       if (val != null) setState(() => _userType = val);
                     },
                   ),
-                  child2: DropdownButtonFormField<String>(
-                    initialValue: employmentTypeItems.contains(_employmentType)
+                  child2: AppSearchableDropdown<String>(
+                    label: 'Employment Type',
+                    value: employmentTypeItems.contains(_employmentType)
                         ? _employmentType
                         : employmentTypeItems.first,
-                    decoration: const InputDecoration(
-                      labelText: 'Employment Type',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: employmentTypeItems
-                        .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                        .toList(),
+                    items: employmentTypeItems,
+                    searchHint: 'Search employment type...',
                     onChanged: (val) {
                       if (val != null) setState(() => _employmentType = val);
                     },
@@ -601,17 +612,13 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                 const SizedBox(height: 12),
                 _buildFieldPair(
                   isMobile: isMobile,
-                  child1: DropdownButtonFormField<String>(
-                    initialValue: statusItems.contains(_status)
+                  child1: AppSearchableDropdown<String>(
+                    label: 'Status',
+                    value: statusItems.contains(_status)
                         ? _status
                         : statusItems.first,
-                    decoration: const InputDecoration(
-                      labelText: 'Status',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: statusItems
-                        .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                        .toList(),
+                    items: statusItems,
+                    searchHint: 'Search status...',
                     onChanged: (val) {
                       if (val != null) setState(() => _status = val);
                     },
@@ -621,31 +628,23 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                 const SizedBox(height: 12),
                 _buildFieldPair(
                   isMobile: isMobile,
-                  child1: DropdownButtonFormField<String>(
-                    initialValue: ['As Needed', 'Manual Allocation', 'No Leave'].contains(_leaveType)
+                  child1: AppSearchableDropdown<String>(
+                    label: 'Leave Type',
+                    value: ['As Needed', 'Manual Allocation', 'No Leave'].contains(_leaveType)
                         ? _leaveType
                         : 'As Needed',
-                    decoration: const InputDecoration(
-                      labelText: 'Leave Type',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: ['As Needed', 'Manual Allocation', 'No Leave']
-                        .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                        .toList(),
+                    items: const ['As Needed', 'Manual Allocation', 'No Leave'],
+                    searchHint: 'Search leave type...',
                     onChanged: (val) {
                       if (val != null) setState(() => _leaveType = val);
                     },
                   ),
                   child2: _leaveType == 'Manual Allocation'
-                      ? DropdownButtonFormField<String>(
-                          initialValue: _leaveAllocationFrequency,
-                          decoration: const InputDecoration(
-                            labelText: 'Allocation Frequency',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: ['Monthly', 'Quarterly', 'Yearly']
-                              .map((f) => DropdownMenuItem(value: f, child: Text(f)))
-                              .toList(),
+                      ? AppSearchableDropdown<String>(
+                          label: 'Allocation Frequency',
+                          value: _leaveAllocationFrequency,
+                          items: const ['Monthly', 'Quarterly', 'Yearly'],
+                          searchHint: 'Search frequency...',
                           onChanged: (val) {
                             if (val != null) setState(() => _leaveAllocationFrequency = val);
                           },
@@ -655,15 +654,11 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                 const SizedBox(height: 12),
                 _buildFieldPair(
                   isMobile: isMobile,
-                  child1: DropdownButtonFormField<String>(
-                    initialValue: _workScheduleType,
-                    decoration: const InputDecoration(
-                      labelText: 'Work Schedule Type',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: ['Fixed Schedule', 'Flexible Schedule']
-                        .map((type) => DropdownMenuItem(value: type, child: Text(type)))
-                        .toList(),
+                  child1: AppSearchableDropdown<String>(
+                    label: 'Work Schedule Type',
+                    value: _workScheduleType,
+                    items: const ['Fixed Schedule', 'Flexible Schedule'],
+                    searchHint: 'Search schedule type...',
                     onChanged: (val) {
                       if (val != null) setState(() => _workScheduleType = val);
                     },

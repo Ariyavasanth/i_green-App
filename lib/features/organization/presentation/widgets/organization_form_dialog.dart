@@ -49,8 +49,10 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
   late final TextEditingController _nameController;
   late final TextEditingController _businessTypeController;
   late final TextEditingController _industryTypeController;
-  late final TextEditingController _businessUnitsController;
-  late final TextEditingController _locationsController;
+  final TextEditingController _newBuController = TextEditingController();
+  final TextEditingController _newLocController = TextEditingController();
+  List<String> _businessUnits = [];
+  List<String> _locations = [];
   late final TextEditingController _addressController;
   late final TextEditingController _phoneController;
   late final TextEditingController _emailController;
@@ -65,9 +67,17 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
     final org = widget.organization;
     _nameController = TextEditingController(text: org?.name ?? '');
     _businessTypeController = TextEditingController(text: org?.businessType ?? 'Private Limited');
-    _industryTypeController = TextEditingController(text: org?.industryType ?? 'Information Technology');
-    _businessUnitsController = TextEditingController(text: org?.businessUnits ?? '');
-    _locationsController = TextEditingController(text: org?.locations ?? '');
+    _industryTypeController = TextEditingController(text: org?.industryType ?? '');
+    _businessUnits = (org?.businessUnits ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    _locations = (org?.locations ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
     _addressController = TextEditingController(text: org?.address ?? '');
     _phoneController = TextEditingController(text: org?.phoneNumber ?? '');
     _emailController = TextEditingController(text: org?.emailAddress ?? '');
@@ -80,8 +90,8 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
     _nameController.dispose();
     _businessTypeController.dispose();
     _industryTypeController.dispose();
-    _businessUnitsController.dispose();
-    _locationsController.dispose();
+    _newBuController.dispose();
+    _newLocController.dispose();
     _addressController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
@@ -90,8 +100,43 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
     super.dispose();
   }
 
+  void _addBusinessUnit([String? value]) {
+    final text = (value ?? _newBuController.text).trim();
+    if (text.isEmpty) return;
+    final items = text.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty);
+    setState(() {
+      for (final item in items) {
+        if (!_businessUnits.contains(item)) {
+          _businessUnits.add(item);
+        }
+      }
+      _newBuController.clear();
+    });
+  }
+
+  void _addLocation([String? value]) {
+    final text = (value ?? _newLocController.text).trim();
+    if (text.isEmpty) return;
+    final items = text.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty);
+    setState(() {
+      for (final item in items) {
+        if (!_locations.contains(item)) {
+          _locations.add(item);
+        }
+      }
+      _newLocController.clear();
+    });
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (_newBuController.text.trim().isNotEmpty) {
+      _addBusinessUnit();
+    }
+    if (_newLocController.text.trim().isNotEmpty) {
+      _addLocation();
+    }
 
     setState(() => _isSaving = true);
 
@@ -102,8 +147,8 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
         name: _nameController.text.trim(),
         businessType: _businessTypeController.text.trim(),
         industryType: _industryTypeController.text.trim(),
-        businessUnits: _businessUnitsController.text.trim(),
-        locations: _locationsController.text.trim(),
+        businessUnits: _businessUnits.join(', '),
+        locations: _locations.join(', '),
         address: _addressController.text.trim(),
         phoneNumber: _phoneController.text.trim(),
         emailAddress: _emailController.text.trim(),
@@ -230,15 +275,23 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
                     const SizedBox(height: 16),
                     _buildResponsiveRow(
                       isSingleColumn: isSingleColumn,
-                      left: _buildField(
+                      left: _buildMultiItemField(
                         label: 'Business Unit(s)',
-                        controller: _businessUnitsController,
-                        hint: 'e.g. Cloud, Manufacturing',
+                        controller: _newBuController,
+                        items: _businessUnits,
+                        onAdd: _addBusinessUnit,
+                        onRemove: (item) => setState(() => _businessUnits.remove(item)),
+                        isMobile: isSingleColumn,
+                        hint: 'e.g. Manufacturing',
                       ),
-                      right: _buildField(
+                      right: _buildMultiItemField(
                         label: 'Location(s)',
-                        controller: _locationsController,
-                        hint: 'e.g. HQ, Regional Office',
+                        controller: _newLocController,
+                        items: _locations,
+                        onAdd: _addLocation,
+                        onRemove: (item) => setState(() => _locations.remove(item)),
+                        isMobile: isSingleColumn,
+                        hint: 'e.g. Chennai Plant',
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -359,15 +412,26 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
     required TextEditingController controller,
     String? Function(String?)? validator,
     String? hint,
+    String? helperText,
     int maxLines = 1,
     TextInputType? keyboardType,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF344054)),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF344054)),
+            ),
+            if (helperText != null)
+              Text(
+                helperText,
+                style: const TextStyle(fontSize: 11, color: Color(0xFF667085), fontStyle: FontStyle.italic),
+              ),
+          ],
         ),
         const SizedBox(height: 6),
         TextFormField(
@@ -395,6 +459,126 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
             ),
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildMultiItemField({
+    required String label,
+    required TextEditingController controller,
+    required List<String> items,
+    required VoidCallback onAdd,
+    required void Function(String) onRemove,
+    required bool isMobile,
+    String? hint,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF344054)),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: controller,
+                style: const TextStyle(fontSize: 13),
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => onAdd(),
+                decoration: InputDecoration(
+                  hintText: hint,
+                  hintStyle: const TextStyle(color: Color(0xFF667085), fontSize: 12),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: Color(0xFFD0D5DD)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: Color(0xFFD0D5DD)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (isMobile)
+              IconButton(
+                style: IconButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  minimumSize: const Size(40, 40),
+                ),
+                tooltip: 'Add',
+                onPressed: onAdd,
+                icon: const Icon(Icons.add, size: 20),
+              )
+            else
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  minimumSize: const Size(0, 40),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: onAdd,
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text(
+                  'Add',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ),
+          ],
+        ),
+        if (items.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: items.map((item) {
+              return Container(
+                padding: const EdgeInsets.fromLTRB(10, 4, 6, 4),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      item,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    InkWell(
+                      onTap: () => onRemove(item),
+                      borderRadius: BorderRadius.circular(10),
+                      child: const Padding(
+                        padding: EdgeInsets.all(2),
+                        child: Icon(Icons.close, size: 14, color: Color(0xFF64748B)),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ],
       ],
     );
   }

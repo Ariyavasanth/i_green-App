@@ -20,6 +20,29 @@ class ColumnSelectionDialog extends ConsumerStatefulWidget {
   final List<String> currentVisibleColumns;
   final List<String> currentColumnOrder;
 
+  static Future<void> show(
+    BuildContext context, {
+    required String tableId,
+    required List<String> allColumns,
+    ColumnPreference? currentPreferences,
+  }) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => ColumnSelectionDialog(
+        tableId: tableId,
+        allColumns: allColumns,
+        currentVisibleColumns: (currentPreferences != null &&
+                currentPreferences.visibleColumns.isNotEmpty)
+            ? currentPreferences.visibleColumns
+            : allColumns,
+        currentColumnOrder: (currentPreferences != null &&
+                currentPreferences.columnOrder.isNotEmpty)
+            ? currentPreferences.columnOrder
+            : allColumns,
+      ),
+    );
+  }
+
   @override
   ConsumerState<ColumnSelectionDialog> createState() =>
       _ColumnSelectionDialogState();

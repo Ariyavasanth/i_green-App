@@ -6,6 +6,8 @@ import '../../domain/department.dart';
 import '../../domain/organization.dart';
 import '../../providers/organization_providers.dart';
 
+import '../../../../core/widgets/app_searchable_dropdown.dart';
+
 class DepartmentFormDialog extends ConsumerStatefulWidget {
   const DepartmentFormDialog({this.department, super.key});
 
@@ -49,27 +51,11 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
 
   late final TextEditingController _nameController;
   late final TextEditingController _headController;
+  late final TextEditingController _locationController;
   String? _selectedOrganization;
-  late String _reportingHierarchy;
-  late String _workLocation;
+  String? _selectedWorkLocation;
 
   bool _isSaving = false;
-
-  static const List<String> hierarchyOptions = [
-    'Manager',
-    'Supervisor',
-    'Employee',
-  ];
-
-  static const List<String> locationOptions = [
-    'Chennai Head Office',
-    'Chennai Manufacturing Plant',
-    'Bangalore Branch',
-    'Hyderabad Branch',
-    'Factory',
-    'Office',
-    'Remote',
-  ];
 
   @override
   void initState() {
@@ -77,23 +63,20 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
     final dept = widget.department;
     _nameController = TextEditingController(text: dept?.departmentName ?? '');
     _headController = TextEditingController(text: dept?.departmentHead ?? '');
+    _locationController = TextEditingController(text: dept?.workLocation ?? '');
+    _selectedWorkLocation = (dept != null && dept.workLocation.isNotEmpty)
+        ? dept.workLocation
+        : null;
     _selectedOrganization = (dept != null && dept.organizationName.isNotEmpty)
         ? dept.organizationName
         : null;
-
-    _reportingHierarchy = (dept != null && hierarchyOptions.contains(dept.reportingHierarchy))
-        ? dept.reportingHierarchy
-        : hierarchyOptions.first;
-
-    _workLocation = (dept != null && locationOptions.contains(dept.workLocation))
-        ? dept.workLocation
-        : locationOptions.first;
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _headController.dispose();
+    _locationController.dispose();
     super.dispose();
   }
 
@@ -109,8 +92,8 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
         organizationName: _selectedOrganization ?? '',
         departmentName: _nameController.text.trim(),
         departmentHead: _headController.text.trim(),
-        reportingHierarchy: _reportingHierarchy,
-        workLocation: _workLocation,
+        reportingHierarchy: widget.department?.reportingHierarchy ?? '',
+        workLocation: _selectedWorkLocation?.trim() ?? _locationController.text.trim(),
       );
 
       if (widget.department == null) {
@@ -222,24 +205,11 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
                     _buildTextField(
                       label: 'Department Head *',
                       controller: _headController,
-                      validator: (v) => v == null || v.trim().isEmpty ? 'Head is required' : null,
+                      validator: (v) => v == null || v.trim().isEmpty ? 'Department Head is required' : null,
                       hint: 'e.g. Arun Kumar',
                     ),
                     const SizedBox(height: 16),
-                    if (isSingleColumn) ...[
-                      _buildHierarchyDropdown(),
-                      const SizedBox(height: 16),
-                      _buildLocationDropdown(),
-                    ] else ...[
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(child: _buildHierarchyDropdown()),
-                          const SizedBox(width: 12),
-                          Expanded(child: _buildLocationDropdown()),
-                        ],
-                      ),
-                    ],
+                    _buildLocationDropdown(orgsAsync),
                   ],
                 ),
               ),
@@ -291,56 +261,6 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
     );
   }
 
-  Widget _buildHierarchyDropdown() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Reporting Hierarchy',
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF344054)),
-        ),
-        const SizedBox(height: 6),
-        DropdownButtonFormField<String>(
-          initialValue: _reportingHierarchy,
-          isDense: true,
-          isExpanded: true,
-          decoration: _inputDecoration(),
-          items: hierarchyOptions
-              .map((opt) => DropdownMenuItem(value: opt, child: Text(opt, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis)))
-              .toList(),
-          onChanged: (val) {
-            if (val != null) setState(() => _reportingHierarchy = val);
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLocationDropdown() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Work Location',
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF344054)),
-        ),
-        const SizedBox(height: 6),
-        DropdownButtonFormField<String>(
-          initialValue: _workLocation,
-          isDense: true,
-          isExpanded: true,
-          decoration: _inputDecoration(),
-          items: locationOptions
-              .map((opt) => DropdownMenuItem(value: opt, child: Text(opt, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis)))
-              .toList(),
-          onChanged: (val) {
-            if (val != null) setState(() => _workLocation = val);
-          },
-        ),
-      ],
-    );
-  }
-
   Widget _buildTextField({
     required String label,
     required TextEditingController controller,
@@ -366,45 +286,121 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
   }
 
   Widget _buildOrgDropdown(AsyncValue<List<Organization>> orgsAsync) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Organization Name *',
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF344054)),
-        ),
-        const SizedBox(height: 6),
-        orgsAsync.when(
-          loading: () => const LinearProgressIndicator(),
-          error: (err, _) => Text('Error loading organizations: $err', style: const TextStyle(color: Colors.red, fontSize: 12)),
-          data: (orgs) {
-            final orgNames = orgs.map((o) => o.name).toList();
-            if (_selectedOrganization != null && !orgNames.contains(_selectedOrganization)) {
-              _selectedOrganization = null;
-            }
+    return orgsAsync.when(
+      loading: () => const LinearProgressIndicator(),
+      error: (err, _) => Text('Error loading organizations: $err', style: const TextStyle(color: Colors.red, fontSize: 12)),
+      data: (orgs) {
+        final orgNames = orgs.map((o) => o.name).toList();
+        if (_selectedOrganization != null && !orgNames.contains(_selectedOrganization)) {
+          _selectedOrganization = null;
+        }
 
-            return DropdownButtonFormField<String>(
-              initialValue: _selectedOrganization,
-              isDense: true,
-              isExpanded: true,
-              hint: const Text('Select Organization', style: TextStyle(fontSize: 12, color: Color(0xFF667085))),
-              validator: (v) => v == null || v.trim().isEmpty ? 'Organization is required' : null,
-              decoration: _inputDecoration(),
-              items: orgs
-                  .map(
-                    (org) => DropdownMenuItem(
-                      value: org.name,
-                      child: Text(org.name, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (val) {
-                setState(() => _selectedOrganization = val);
-              },
-            );
+        return AppSearchableDropdown<String>(
+          label: 'Organization Name *',
+          value: _selectedOrganization,
+          items: orgNames,
+          placeholder: 'Select Organization',
+          searchHint: 'Search organization...',
+          validator: (v) => v == null || v.trim().isEmpty ? 'Organization is required' : null,
+          onChanged: (val) {
+            setState(() {
+              _selectedOrganization = val;
+              if (val != null) {
+                final org = orgs.cast<Organization?>().firstWhere(
+                  (o) => o?.name == val,
+                  orElse: () => null,
+                );
+                if (org != null) {
+                  final orgLocs = org.locations
+                      .split(',')
+                      .map((s) => s.trim())
+                      .where((s) => s.isNotEmpty)
+                      .toList();
+                  if (_selectedWorkLocation != null && !orgLocs.contains(_selectedWorkLocation)) {
+                    _selectedWorkLocation = null;
+                    _locationController.clear();
+                  }
+                }
+              }
+            });
           },
-        ),
-      ],
+        );
+      },
+    );
+  }
+
+  Widget _buildLocationDropdown(AsyncValue<List<Organization>> orgsAsync) {
+    return orgsAsync.when(
+      loading: () => const SizedBox(height: 42, child: Center(child: LinearProgressIndicator())),
+      error: (err, _) => _buildTextField(
+        label: 'Work Location *',
+        controller: _locationController,
+        validator: (v) => v == null || v.trim().isEmpty ? 'Work Location is required' : null,
+        hint: 'e.g. Chennai Head Office',
+      ),
+      data: (orgs) {
+        List<String> locations = [];
+        if (_selectedOrganization != null && _selectedOrganization!.isNotEmpty) {
+          final org = orgs.cast<Organization?>().firstWhere(
+            (o) => o?.name == _selectedOrganization,
+            orElse: () => null,
+          );
+          if (org != null && org.locations.isNotEmpty) {
+            locations = org.locations
+                .split(',')
+                .map((s) => s.trim())
+                .where((s) => s.isNotEmpty)
+                .toList();
+          }
+        } else {
+          final allLocs = <String>{};
+          for (final org in orgs) {
+            if (org.locations.isNotEmpty) {
+              allLocs.addAll(
+                org.locations.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty),
+              );
+            }
+          }
+          locations = allLocs.toList();
+        }
+
+        final locOptions = <String>{
+          if (_selectedWorkLocation != null && _selectedWorkLocation!.isNotEmpty)
+            _selectedWorkLocation!,
+          if (_locationController.text.trim().isNotEmpty)
+            _locationController.text.trim(),
+          ...locations,
+        }.toList();
+
+        if (locOptions.isEmpty) {
+          return _buildTextField(
+            label: 'Work Location *',
+            controller: _locationController,
+            validator: (v) => v == null || v.trim().isEmpty ? 'Work Location is required' : null,
+            hint: 'e.g. Chennai Head Office',
+          );
+        }
+
+        if (_selectedWorkLocation != null && !locOptions.contains(_selectedWorkLocation)) {
+          _selectedWorkLocation = null;
+        }
+
+        return AppSearchableDropdown<String>(
+          label: 'Work Location *',
+          value: _selectedWorkLocation,
+          items: locOptions,
+          placeholder: 'Select Work Location',
+          searchHint: 'Search location...',
+          isRequired: true,
+          validator: (v) => v == null || v.trim().isEmpty ? 'Work Location is required' : null,
+          onChanged: (val) {
+            setState(() {
+              _selectedWorkLocation = val;
+              _locationController.text = val ?? '';
+            });
+          },
+        );
+      },
     );
   }
 

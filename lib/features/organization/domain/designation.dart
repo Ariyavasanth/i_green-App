@@ -21,13 +21,15 @@ enum HierarchyLevel {
 class Designation {
   const Designation({
     required this.id,
+    this.organizationName = '',
     required this.departmentName,
     required this.designationName,
-    required this.hierarchyLevel,
+    this.hierarchyLevel = HierarchyLevel.employee,
     this.description = '',
   });
 
   final int id;
+  final String organizationName;
   final String departmentName;
   final String designationName;
   final HierarchyLevel hierarchyLevel;
@@ -35,6 +37,7 @@ class Designation {
 
   Designation copyWith({
     int? id,
+    String? organizationName,
     String? departmentName,
     String? designationName,
     HierarchyLevel? hierarchyLevel,
@@ -42,6 +45,7 @@ class Designation {
   }) {
     return Designation(
       id: id ?? this.id,
+      organizationName: organizationName ?? this.organizationName,
       departmentName: departmentName ?? this.departmentName,
       designationName: designationName ?? this.designationName,
       hierarchyLevel: hierarchyLevel ?? this.hierarchyLevel,
@@ -52,6 +56,7 @@ class Designation {
   Map<String, dynamic> toMap() {
     return {
       if (id != 0) 'id': id,
+      'organization_name': organizationName,
       'department_name': departmentName,
       'designation_name': designationName,
       'hierarchy_level': hierarchyLevel.label,
@@ -62,8 +67,9 @@ class Designation {
   factory Designation.fromMap(Map<String, dynamic> map) {
     return Designation(
       id: (map['id'] as num?)?.toInt() ?? 0,
-      departmentName: map['department_name']?.toString() ?? '',
-      designationName: map['designation_name']?.toString() ?? '',
+      organizationName: map['organization_name']?.toString() ?? map['organizationName']?.toString() ?? '',
+      departmentName: map['department_name']?.toString() ?? map['departmentName']?.toString() ?? '',
+      designationName: map['designation_name']?.toString() ?? map['designationName']?.toString() ?? '',
       hierarchyLevel: HierarchyLevel.fromString(map['hierarchy_level']?.toString() ?? 'Employee'),
       description: map['description']?.toString() ?? '',
     );

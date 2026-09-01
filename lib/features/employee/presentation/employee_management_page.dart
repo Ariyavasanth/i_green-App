@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../organization/presentation/widgets/column_selection_dialog.dart';
+import '../../organization/providers/organization_providers.dart';
 import '../domain/employee.dart';
 import '../providers/employee_providers.dart';
 import 'dialogs/employee_details_dialog.dart';
@@ -86,9 +87,20 @@ class _EmployeeManagementPageState
                 return s != 'archived' && s != 'deleted';
               }).toList();
 
-              // Populate unique dropdown filter choices
-              final deptList = ['All Departments', ...{...Employee.departmentOptions, for (final e in employees) if (e.department.isNotEmpty) e.department}];
-              final desigList = ['All Designations', ...{...Employee.designationOptions, for (final e in employees) if (e.designation.isNotEmpty) e.designation}];
+              // Populate unique dropdown filter choices including dynamic database entries
+              final dbDepts = ref.watch(departmentsProvider).valueOrNull ?? [];
+              final dbDesigs = ref.watch(allDesignationsProvider).valueOrNull ?? [];
+
+              final deptList = ['All Departments', ...{
+                ...dbDepts.map((d) => d.departmentName),
+                ...Employee.departmentOptions,
+                for (final e in employees) if (e.department.isNotEmpty) e.department,
+              }];
+              final desigList = ['All Designations', ...{
+                ...dbDesigs.map((d) => d.designationName),
+                ...Employee.designationOptions,
+                for (final e in employees) if (e.designation.isNotEmpty) e.designation,
+              }];
               final statusList = ['All Statuses', ...{for (final e in employees) if (e.status.isNotEmpty) e.status}];
 
               final filtered = employees.where((emp) {

@@ -459,6 +459,9 @@ class EmployeeDetailsDialog extends StatelessWidget {
       children: [
         _buildSectionHeader('Job & Administrative Details'),
         _buildInfoGrid([
+          if (employee.organizationName.isNotEmpty) _InfoItem('Organization', employee.organizationName),
+          if (employee.businessUnit.isNotEmpty) _InfoItem('Business Unit / Division', employee.businessUnit),
+          if (employee.workLocation.isNotEmpty) _InfoItem('Work Location', employee.workLocation),
           _InfoItem('Department', employee.department),
           _InfoItem('Designation', employee.designation),
           _InfoItem('User Role / Type', employee.userType),

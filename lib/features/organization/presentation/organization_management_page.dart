@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../domain/organization.dart';
+import '../domain/column_preference.dart';
 import '../providers/organization_providers.dart';
 import 'widgets/column_selection_dialog.dart';
 import 'widgets/organization_details_dialog.dart';
 import 'widgets/organization_form_dialog.dart';
+import '../../../../core/widgets/app_searchable_dropdown.dart';
 
 class OrganizationManagementPage extends ConsumerStatefulWidget {
   const OrganizationManagementPage({super.key});
@@ -36,6 +38,15 @@ class _OrganizationManagementPageState
   int _currentPage = 0;
   int _rowsPerPage = 10;
   final Set<int> _selectedIds = {};
+  String _selectedBusinessTypeFilter = 'All';
+  String _selectedIndustryTypeFilter = 'All';
+
+  int get _activeFiltersCount {
+    int count = 0;
+    if (_selectedBusinessTypeFilter != 'All') count++;
+    if (_selectedIndustryTypeFilter != 'All') count++;
+    return count;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,19 +57,10 @@ class _OrganizationManagementPageState
 
     return Scaffold(
       backgroundColor: Colors.white,
-      floatingActionButton: isMobile
-          ? FloatingActionButton.extended(
-              onPressed: () => _openAddDialog(context),
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              elevation: 3,
-              icon: const Icon(Icons.add),
-              label: const Text('Add Organization', style: TextStyle(fontWeight: FontWeight.bold)),
-            )
-          : null,
       body: Column(
         children: [
-          _buildToolbar(context, prefAsync, isMobile),
+          _buildToolbar(context, prefAsync, orgsAsync.valueOrNull ?? [], isMobile),
+          _buildActiveFilterChips(),
           const Divider(height: 1, color: Color(0xFFEAECF0)),
           Expanded(
             child: orgsAsync.when(
@@ -68,6 +70,12 @@ class _OrganizationManagementPageState
               ),
               data: (orgs) {
                 final filtered = orgs.where((org) {
+                  if (_selectedBusinessTypeFilter != 'All' && org.businessType != _selectedBusinessTypeFilter) {
+                    return false;
+                  }
+                  if (_selectedIndustryTypeFilter != 'All' && org.industryType != _selectedIndustryTypeFilter) {
+                    return false;
+                  }
                   if (searchQuery.trim().isEmpty) return true;
                   final q = searchQuery.toLowerCase();
                   return org.name.toLowerCase().contains(q) ||
@@ -140,6 +148,7 @@ class _OrganizationManagementPageState
   Widget _buildToolbar(
     BuildContext context,
     AsyncValue<dynamic> prefAsync,
+    List<Organization> allOrgs,
     bool isMobile,
   ) {
     final searchController = TextEditingController(
@@ -177,8 +186,46 @@ class _OrganizationManagementPageState
                             setState(() => _currentPage = 0);
                           },
                         ),
-                      const Icon(Icons.tune_rounded, size: 18, color: Color(0xFF667085)),
-                      const SizedBox(width: 8),
+                      InkWell(
+                        onTap: () => _openFilterModal(context, allOrgs),
+                        borderRadius: BorderRadius.circular(20),
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(6),
+                              child: Icon(
+                                Icons.tune_rounded,
+                                size: 20,
+                                color: _activeFiltersCount > 0
+                                    ? AppColors.primary
+                                    : const Color(0xFF667085),
+                              ),
+                            ),
+                            if (_activeFiltersCount > 0)
+                              Positioned(
+                                top: 0,
+                                right: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.all(3.5),
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.primary,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Text(
+                                    '$_activeFiltersCount',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
                     ],
                   ),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 14),
@@ -204,8 +251,20 @@ class _OrganizationManagementPageState
               ),
             ),
           ),
-          if (!isMobile) ...[
-            const SizedBox(width: 10),
+          const SizedBox(width: 8),
+          if (isMobile)
+            IconButton(
+              style: IconButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                minimumSize: const Size(42, 42),
+              ),
+              tooltip: 'Add Organization',
+              onPressed: () => _openAddDialog(context),
+              icon: const Icon(Icons.add, size: 20),
+            )
+          else
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
@@ -222,9 +281,202 @@ class _OrganizationManagementPageState
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
               ),
             ),
-          ],
         ],
       ),
+    );
+  }
+
+  Widget _buildActiveFilterChips() {
+    if (_activeFiltersCount == 0) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 6,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          const Text('Filters:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
+          if (_selectedBusinessTypeFilter != 'All')
+            _buildFilterChip('Business: $_selectedBusinessTypeFilter', () {
+              setState(() {
+                _selectedBusinessTypeFilter = 'All';
+                _currentPage = 0;
+              });
+            }),
+          if (_selectedIndustryTypeFilter != 'All')
+            _buildFilterChip('Industry: $_selectedIndustryTypeFilter', () {
+              setState(() {
+                _selectedIndustryTypeFilter = 'All';
+                _currentPage = 0;
+              });
+            }),
+          InkWell(
+            onTap: () {
+              setState(() {
+                _selectedBusinessTypeFilter = 'All';
+                _selectedIndustryTypeFilter = 'All';
+                _currentPage = 0;
+              });
+            },
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              child: Text('Reset All', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.red)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String label, VoidCallback onRemove) {
+    return Container(
+      padding: const EdgeInsets.only(left: 8, right: 4, top: 3, bottom: 3),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primary.withOpacity(0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+          ),
+          const SizedBox(width: 4),
+          InkWell(
+            onTap: onRemove,
+            child: const Icon(Icons.close, size: 14, color: AppColors.primary),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openFilterModal(BuildContext context, List<Organization> allOrgs) {
+    final businessOptions = <String>{'All', ...allOrgs.map((o) => o.businessType).where((s) => s.isNotEmpty)}.toList();
+    final industryOptions = <String>{'All', ...allOrgs.map((o) => o.industryType).where((s) => s.isNotEmpty)}.toList();
+
+    String tempBusiness = _selectedBusinessTypeFilter;
+    String tempIndustry = _selectedIndustryTypeFilter;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                16,
+                20,
+                MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Filter Organizations',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          setModalState(() {
+                            tempBusiness = 'All';
+                            tempIndustry = 'All';
+                          });
+                        },
+                        child: const Text('Reset', style: TextStyle(color: Colors.red, fontSize: 13)),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 1),
+                  const SizedBox(height: 16),
+                  AppSearchableDropdown<String>(
+                    label: 'Business Type',
+                    value: tempBusiness,
+                    items: businessOptions,
+                    onChanged: (val) {
+                      if (val != null) setModalState(() => tempBusiness = val);
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  AppSearchableDropdown<String>(
+                    label: 'Industry Type',
+                    value: tempIndustry,
+                    items: industryOptions,
+                    onChanged: (val) {
+                      if (val != null) setModalState(() => tempIndustry = val);
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _openColumnSelection(context, ref.read(columnPreferenceProvider(_tableId)).valueOrNull);
+                          },
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            side: const BorderSide(color: Color(0xFFD0D5DD)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          icon: const Icon(Icons.view_column_outlined, size: 16, color: Color(0xFF344054)),
+                          label: const Text('Columns', style: TextStyle(color: Color(0xFF344054), fontSize: 12.5)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            setState(() {
+                              _selectedBusinessTypeFilter = tempBusiness;
+                              _selectedIndustryTypeFilter = tempIndustry;
+                              _currentPage = 0;
+                            });
+                            Navigator.pop(ctx);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: const Text('Apply Filters', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _openColumnSelection(BuildContext context, dynamic currentPref) {
+    ColumnSelectionDialog.show(
+      context,
+      tableId: _tableId,
+      allColumns: _defaultAllColumns,
+      currentPreferences: currentPref is ColumnPreference ? currentPref : null,
     );
   }
 

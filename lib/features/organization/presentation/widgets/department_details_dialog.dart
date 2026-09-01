@@ -41,14 +41,10 @@ class DepartmentDetailsDialog extends StatelessWidget {
               const Divider(height: 20),
               _buildDetailItem('Department Head', department.departmentHead),
               const SizedBox(height: 12),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: _buildDetailItem('Reporting Hierarchy', department.reportingHierarchy)),
-                  const SizedBox(width: 16),
-                  Expanded(child: _buildDetailItem('Work Location', department.workLocation)),
-                ],
-              ),
+              if (department.workLocation.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _buildDetailItem('Work Location', department.workLocation),
+              ],
             ],
           ),
         ),

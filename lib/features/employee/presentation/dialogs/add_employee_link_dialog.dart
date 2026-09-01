@@ -8,6 +8,9 @@ import '../../../../core/theme/app_colors.dart';
 import '../../domain/registration_link.dart';
 import '../../providers/employee_providers.dart';
 
+import '../../../../core/widgets/app_searchable_dropdown.dart';
+import '../../../organization/providers/organization_providers.dart';
+
 class AddEmployeeLinkDialog extends ConsumerStatefulWidget {
   const AddEmployeeLinkDialog({super.key});
 
@@ -19,8 +22,8 @@ class AddEmployeeLinkDialog extends ConsumerStatefulWidget {
 class _AddEmployeeLinkDialogState
     extends ConsumerState<AddEmployeeLinkDialog> {
   final _generatedByController = TextEditingController(text: 'HR Admin');
-  final _orgController = TextEditingController();
-  final _deptController = TextEditingController();
+  String? _selectedOrg;
+  String? _selectedDept;
   late final TextEditingController _baseUrlController;
 
   RegistrationLink? _generatedLink;
@@ -47,8 +50,6 @@ class _AddEmployeeLinkDialogState
   @override
   void dispose() {
     _generatedByController.dispose();
-    _orgController.dispose();
-    _deptController.dispose();
     _baseUrlController.dispose();
     super.dispose();
   }
@@ -59,8 +60,8 @@ class _AddEmployeeLinkDialogState
       final repo = ref.read(employeeRepositoryProvider);
       final link = await repo.createRegistrationLink(
         generatedBy: _generatedByController.text.trim(),
-        organizationName: _orgController.text.trim(),
-        department: _deptController.text.trim(),
+        organizationName: _selectedOrg ?? '',
+        department: _selectedDept ?? '',
       );
       ref.invalidate(registrationLinksProvider);
       setState(() {
@@ -203,31 +204,48 @@ class _AddEmployeeLinkDialogState
                 ),
               ),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _orgController,
-                      decoration: const InputDecoration(
-                        labelText: 'Target Organization (Optional)',
-                        hintText: 'e.g. Acme Corp',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
+              ref.watch(organizationsProvider).when(
+                    loading: () => const SizedBox(height: 48, child: Center(child: LinearProgressIndicator())),
+                    error: (_, __) => const SizedBox.shrink(),
+                    data: (orgs) {
+                      final orgNames = orgs.map((o) => o.name).where((s) => s.isNotEmpty).toList();
+                      return AppSearchableDropdown<String>(
+                        label: 'Target Organization (Optional)',
+                        value: _selectedOrg,
+                        items: orgNames,
+                        placeholder: 'Select Target Organization',
+                        searchHint: 'Search organization...',
+                        onChanged: (val) {
+                          setState(() {
+                            _selectedOrg = val;
+                            _selectedDept = null;
+                          });
+                        },
+                      );
+                    },
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: _deptController,
-                      decoration: const InputDecoration(
-                        labelText: 'Target Department (Optional)',
-                        hintText: 'e.g. IT Department',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
+              const SizedBox(height: 12),
+              ref.watch(departmentsProvider).when(
+                    loading: () => const SizedBox(height: 48, child: Center(child: LinearProgressIndicator())),
+                    error: (_, __) => const SizedBox.shrink(),
+                    data: (depts) {
+                      var filteredDepts = depts;
+                      if (_selectedOrg != null && _selectedOrg!.isNotEmpty) {
+                        filteredDepts = depts.where((d) => d.organizationName == _selectedOrg).toList();
+                      }
+                      final deptNames = filteredDepts.map((d) => d.departmentName).where((s) => s.isNotEmpty).toSet().toList();
+                      return AppSearchableDropdown<String>(
+                        label: 'Target Department (Optional)',
+                        value: _selectedDept,
+                        items: deptNames,
+                        placeholder: 'Select Target Department',
+                        searchHint: 'Search department...',
+                        onChanged: (val) {
+                          setState(() => _selectedDept = val);
+                        },
+                      );
+                    },
                   ),
-                ],
-              ),
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,

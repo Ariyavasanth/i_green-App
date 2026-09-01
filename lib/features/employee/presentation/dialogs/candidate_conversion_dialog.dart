@@ -271,7 +271,7 @@ class _CandidateConversionDialogState
                             hint: 'Select Designation...',
                             items: desigList.map((d) => DropdownMenuItem(
                               value: d.designationName,
-                              child: Text('${d.designationName} (${d.hierarchyLevel.label})', style: const TextStyle(fontSize: 13)),
+                              child: Text(d.designationName, style: const TextStyle(fontSize: 13)),
                             )).toList(),
                             onChanged: (val) {
                               setState(() {
