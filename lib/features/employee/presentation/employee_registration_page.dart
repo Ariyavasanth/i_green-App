@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../domain/employee.dart';
 import '../domain/registration_link.dart';
+import '../domain/candidate_response.dart';
 import '../providers/employee_providers.dart';
 import '../services/offer_letter_generator.dart';
 import '../services/welcome_letter_generator.dart';
@@ -1086,7 +1087,29 @@ class _EmployeeRegistrationPageState
     return '$countryCode $digits';
   }
 
-  Employee? _findMatchingEmployee(RegistrationLink link, List<Employee> employees) {
+  Employee? _findMatchingEmployee(
+    RegistrationLink link,
+    List<Employee> employees, {
+    List<CandidateResponse> candidateResponses = const [],
+  }) {
+    if (candidateResponses.isNotEmpty) {
+      for (final resp in candidateResponses) {
+        if ((link.linkId.isNotEmpty && resp.linkId == link.linkId) ||
+            (link.employeeId.isNotEmpty && (resp.candidateId == link.employeeId || resp.linkId == link.employeeId))) {
+          return resp.employeeData;
+        }
+      }
+      if (link.employeeName.trim().isNotEmpty) {
+        final targetName = link.employeeName.trim().toLowerCase();
+        for (final resp in candidateResponses) {
+          final empName = resp.employeeData.fullName.trim().toLowerCase();
+          final empFirst = resp.employeeData.firstName.trim().toLowerCase();
+          if (empName == targetName || empFirst == targetName || empName.contains(targetName) || targetName.contains(empName)) {
+            return resp.employeeData;
+          }
+        }
+      }
+    }
     if (link.employeeId.isNotEmpty) {
       for (final emp in employees) {
         if (emp.employeeId == link.employeeId || emp.id.toString() == link.employeeId) {
@@ -1339,6 +1362,8 @@ class _EmployeeRegistrationPageState
     if (_facebookController.text.isNotEmpty || _twitterController.text.isNotEmpty || _linkedinController.text.isNotEmpty || _googleController.text.isNotEmpty) _savedTabs.add('Social Media');
     if (_joiningDateController.text.isNotEmpty) _savedTabs.add('Job & Admin Details');
     if (_totalSalaryController.text.isNotEmpty || _basicPayController.text.isNotEmpty) _savedTabs.add('Salary & Offer Letter');
+    _snapshotSavedTexts();
+    _isPopulating = false;
   }
 
   bool _isTabSaved(String tab) {
@@ -1795,9 +1820,7 @@ class _EmployeeRegistrationPageState
         dob: _dobController.text.trim(),
         organizationName: _organizationName.trim().isNotEmpty
             ? _organizationName.trim()
-            : ((link?.organizationName ?? '').isNotEmpty
-                ? link!.organizationName
-                : 'iGreen Tech'),
+            : (link?.organizationName ?? ''),
         businessUnit: _businessUnit.trim(),
         workLocation: _workLocation.trim(),
         department: _department.trim(),
@@ -2058,8 +2081,8 @@ class _EmployeeRegistrationPageState
                           generatedDate: '',
                           expiryDate: '',
                           linkStatus: 'Pending',
-                          organizationName: 'iGreen Tech',
-                          department: 'Management',
+                          organizationName: '',
+                          department: '',
                         );
                     return Form(
                       key: _formKey,
@@ -2532,6 +2555,7 @@ class _EmployeeRegistrationPageState
                     builder: (context, ref, child) {
                       final linksAsync = ref.watch(registrationLinksProvider);
                       final employeesAsync = ref.watch(allEmployeesProvider);
+                      final candidateResponsesAsync = ref.watch(candidateResponsesProvider);
                       return linksAsync.when(
                         loading: () => const SizedBox(
                           height: 36,
@@ -2550,98 +2574,128 @@ class _EmployeeRegistrationPageState
                             'Error loading employee data: $err',
                             style: const TextStyle(color: Colors.red, fontSize: 12),
                           ),
-                          data: (allEmps) {
-                            final acceptedLinks = links
-                                .where((link) => link.linkStatus.trim().toLowerCase() == 'accepted')
-                                .toList();
+                          data: (allEmps) => candidateResponsesAsync.when(
+                            loading: () => const SizedBox(
+                              height: 36,
+                              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                            ),
+                            error: (err, _) => Text(
+                              'Error loading candidate responses: $err',
+                              style: const TextStyle(color: Colors.red, fontSize: 12),
+                            ),
+                            data: (candidateResps) {
+                              final acceptedLinks = links
+                                  .where((link) => link.linkStatus.trim().toLowerCase() == 'accepted')
+                                  .toList();
 
-                            if (acceptedLinks.isEmpty) {
-                              return const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 4),
-                                child: Text(
-                                  'No accepted responses available yet. (Accept candidate responses in the Response UI first).',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.orange,
-                                    fontStyle: FontStyle.italic,
+                              if (acceptedLinks.isEmpty) {
+                                return const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 4),
+                                  child: Text(
+                                    'No accepted responses available yet. (Accept candidate responses in the Response UI first).',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.orange,
+                                      fontStyle: FontStyle.italic,
+                                    ),
                                   ),
-                                ),
-                              );
-                            }
+                                );
+                              }
 
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Select Accepted Applicant / Member Name *',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.textSecondary,
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Select Accepted Applicant / Member Name *',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.textSecondary,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 4),
-                                DropdownButtonFormField<String>(
-                                  initialValue: acceptedLinks.any((e) => e.linkId == _selectedAcceptedLinkId)
-                                      ? _selectedAcceptedLinkId
-                                      : null,
-                                  hint: const Text('Choose accepted member name...', style: TextStyle(fontSize: 12)),
-                                  isDense: true,
-                                  decoration: const InputDecoration(
+                                  const SizedBox(height: 4),
+                                  DropdownButtonFormField<String>(
+                                    initialValue: acceptedLinks.any((e) => e.linkId == _selectedAcceptedLinkId)
+                                        ? _selectedAcceptedLinkId
+                                        : null,
+                                    hint: const Text('Choose accepted member name...', style: TextStyle(fontSize: 12)),
                                     isDense: true,
-                                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  items: acceptedLinks.map((link) {
-                                    final matchedEmployee = _findMatchingEmployee(link, allEmps);
+                                    decoration: const InputDecoration(
+                                      isDense: true,
+                                      contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    items: acceptedLinks.map((link) {
+                                      final matchedEmployee = _findMatchingEmployee(link, allEmps, candidateResponses: candidateResps);
 
-                                    final displayName = matchedEmployee?.fullName.isNotEmpty == true
-                                        ? matchedEmployee!.fullName
-                                        : (link.employeeName.isNotEmpty ? link.employeeName : link.linkId);
-                                    final secondary = matchedEmployee?.emailAddress.isNotEmpty == true
-                                        ? matchedEmployee!.emailAddress
-                                        : (link.department.isNotEmpty ? link.department : link.organizationName);
+                                      final candidateId = (matchedEmployee != null && matchedEmployee.employeeId.isNotEmpty)
+                                          ? matchedEmployee.employeeId
+                                          : (link.employeeId.isNotEmpty ? link.employeeId : link.linkId);
+                                      final displayName = matchedEmployee?.fullName.isNotEmpty == true
+                                          ? matchedEmployee!.fullName
+                                          : (link.employeeName.isNotEmpty ? link.employeeName : candidateId);
+                                      final secondary = matchedEmployee?.emailAddress.isNotEmpty == true
+                                          ? matchedEmployee!.emailAddress
+                                          : (link.department.isNotEmpty ? link.department : link.organizationName);
 
-                                    return DropdownMenuItem<String>(
-                                      value: link.linkId,
-                                      child: Text(
-                                        '$displayName (${secondary.isEmpty ? '-' : secondary})',
-                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                                      ),
-                                    );
-                                  }).toList(),
-                                  onChanged: (selectedLinkId) {
-                                    if (selectedLinkId != null) {
-                                      final selectedLink = acceptedLinks.firstWhere((e) => e.linkId == selectedLinkId);
-                                      final selectedEmployee = _findMatchingEmployee(selectedLink, allEmps);
-
-                                      setState(() {
-                                        _selectedAcceptedEmpId = selectedEmployee?.id;
-                                        _selectedAcceptedLinkId = selectedLinkId;
-                                      });
-
-                                      if (selectedEmployee != null) {
-                                        _populateFromEmployee(selectedEmployee);
-                                      } else {
-                                        _firstNameController.text = selectedLink.employeeName;
-                                        _status = 'ACTIVE';
-                                      }
-
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            'Auto-fetched all details for ${selectedEmployee?.fullName.isNotEmpty == true ? selectedEmployee!.fullName : selectedLink.employeeName}',
-                                          ),
-                                          behavior: SnackBarBehavior.floating,
-                                          duration: const Duration(seconds: 2),
+                                      return DropdownMenuItem<String>(
+                                        value: link.linkId,
+                                        child: Text(
+                                          '$displayName ($candidateId)',
+                                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                                         ),
                                       );
-                                    }
-                                  },
-                                ),
-                              ],
-                            );
-                          },
+                                    }).toList(),
+                                    onChanged: (selectedLinkId) async {
+                                      if (selectedLinkId != null) {
+                                        final selectedLink = acceptedLinks.firstWhere((e) => e.linkId == selectedLinkId);
+                                        var selectedEmployee = _findMatchingEmployee(selectedLink, allEmps, candidateResponses: candidateResps);
+
+                                        if (selectedEmployee == null) {
+                                          final repo = ref.read(employeeRepositoryProvider);
+                                          final resp = await repo.getCandidateResponseByLinkId(selectedLinkId) ??
+                                              (selectedLink.employeeId.isNotEmpty ? await repo.getCandidateResponseByCandidateId(selectedLink.employeeId) : null);
+                                          if (resp != null) {
+                                            selectedEmployee = resp.employeeData;
+                                          }
+                                        }
+
+                                        setState(() {
+                                          _selectedAcceptedEmpId = selectedEmployee?.id;
+                                          _selectedAcceptedLinkId = selectedLinkId;
+                                        });
+
+                                        if (selectedEmployee != null) {
+                                          _populateFromEmployee(selectedEmployee);
+                                        } else {
+                                          final nameParts = selectedLink.employeeName.trim().split(RegExp(r'\s+'));
+                                          if (nameParts.length > 1) {
+                                            _firstNameController.text = nameParts.first;
+                                            _lastNameController.text = nameParts.sublist(1).join(' ');
+                                          } else {
+                                            _firstNameController.text = selectedLink.employeeName;
+                                          }
+                                          _status = 'ACTIVE';
+                                        }
+
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                'Auto-fetched all details for ${selectedEmployee?.fullName.isNotEmpty == true ? selectedEmployee!.fullName : selectedLink.employeeName}',
+                                              ),
+                                              behavior: SnackBarBehavior.floating,
+                                              duration: const Duration(seconds: 2),
+                                            ),
+                                          );
+                                        }
+                                      }
+                                    },
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
                         ),
                       );
                     },
@@ -5076,14 +5130,16 @@ class _EmployeeRegistrationPageState
     final effectiveItems = <String>{...items, if (value.isNotEmpty) value}.toList();
     final effectiveValue = effectiveItems.contains(value) && value.isNotEmpty
         ? value
-        : (effectiveItems.isNotEmpty && placeholder == null ? effectiveItems.first : (value.isNotEmpty ? value : null));
+        : (value.isNotEmpty ? value : null);
+
+    final cleanLabel = label.replaceAll('*', '').trim();
 
     return AppSearchableDropdown<String>(
       label: label,
       value: effectiveValue,
       items: effectiveItems,
-      placeholder: placeholder,
-      searchHint: 'Search ${label.replaceAll('*', '').trim()}...',
+      placeholder: placeholder ?? 'Select $cleanLabel...',
+      searchHint: 'Search $cleanLabel...',
       onChanged: onChanged,
     );
   }

@@ -230,7 +230,15 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
       if (ref != null) {
         final snapshot = await ref.get();
         if (snapshot.docs.isNotEmpty) {
-          final orgs = snapshot.docs.map((doc) => Organization.fromMap(doc.data())).toList();
+          final orgs = <Organization>[];
+          for (final doc in snapshot.docs) {
+            final o = Organization.fromMap(doc.data());
+            if (o.name.trim().toLowerCase() == 'igreen tech') {
+              doc.reference.delete().ignore();
+            } else {
+              orgs.add(o);
+            }
+          }
           _memoryOrgs.clear();
           _memoryOrgs.addAll(orgs);
           return orgs;
@@ -239,6 +247,7 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
     } catch (e) {
       debugPrint('Error getting organizations from Firestore: $e');
     }
+    _memoryOrgs.removeWhere((o) => o.name.trim().toLowerCase() == 'igreen tech');
     return List.from(_memoryOrgs);
   }
 
