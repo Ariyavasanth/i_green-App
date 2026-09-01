@@ -1,3 +1,47 @@
+class LoanRepayment {
+  final String repaymentId;
+  final String payrollId; // e.g. "6_June_2026" or "PAY-001"
+  final String month; // e.g. "September 2026"
+  final double amount;
+  final String paymentDate; // e.g. "2026-09-30"
+  final String referenceNote;
+  final String createdAt;
+
+  const LoanRepayment({
+    required this.repaymentId,
+    required this.payrollId,
+    required this.month,
+    required this.amount,
+    required this.paymentDate,
+    this.referenceNote = '',
+    this.createdAt = '',
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'repayment_id': repaymentId,
+      'payroll_id': payrollId,
+      'month': month,
+      'amount': amount,
+      'payment_date': paymentDate,
+      'reference_note': referenceNote,
+      'created_at': createdAt,
+    };
+  }
+
+  factory LoanRepayment.fromMap(Map<String, dynamic> map) {
+    return LoanRepayment(
+      repaymentId: map['repayment_id'] as String? ?? '',
+      payrollId: map['payroll_id'] as String? ?? '',
+      month: map['month'] as String? ?? '',
+      amount: (map['amount'] as num?)?.toDouble() ?? 0.0,
+      paymentDate: map['payment_date'] as String? ?? '',
+      referenceNote: map['reference_note'] as String? ?? '',
+      createdAt: map['created_at'] as String? ?? '',
+    );
+  }
+}
+
 class EmployeeLoan {
   final int id;
   final String loanId; // e.g. LN001
@@ -21,8 +65,9 @@ class EmployeeLoan {
   final String approvedBy;
   final String approvalDate;
   final String remarks;
-  final String status; // Pending, Approved, Rejected, Active, Closed
+  final String status; // Pending, Pending Supervisor, Pending HR, Pending MD, Approved, Rejected, Active, Closed
   final double remainingBalance;
+  final List<LoanRepayment> repayments;
 
   const EmployeeLoan({
     required this.id,
@@ -49,7 +94,76 @@ class EmployeeLoan {
     this.remarks = '',
     required this.status,
     required this.remainingBalance,
+    this.repayments = const [],
   });
+
+  /// Total amount repaid from the repayment ledger, fallback to balance difference.
+  double get totalPaid {
+    if (repayments.isNotEmpty) {
+      return repayments.fold<double>(0.0, (total, r) => total + r.amount);
+    }
+    final paid = totalRepayableAmount - remainingBalance;
+    return paid < 0 ? 0.0 : (paid > totalRepayableAmount ? totalRepayableAmount : paid);
+  }
+
+  /// Accurate calculated remaining balance
+  double get actualRemainingBalance {
+    if (repayments.isNotEmpty) {
+      final balance = totalRepayableAmount - totalPaid;
+      return balance < 0.01 ? 0.0 : balance;
+    }
+    return remainingBalance < 0.01 ? 0.0 : remainingBalance;
+  }
+
+  /// Paid installments count
+  int get paidInstallments {
+    if (emiAmount <= 0) return 0;
+    final count = (totalPaid / emiAmount).round();
+    return count > installments ? installments : count;
+  }
+
+  /// Remaining installments count
+  int get remainingInstallments {
+    final rem = installments - paidInstallments;
+    return rem < 0 ? 0 : rem;
+  }
+
+  /// Generate chronological list of deduction months
+  List<String> get scheduleMonths {
+    if (installments <= 0 || firstDeductionMonth.isEmpty) return [];
+    final parts = firstDeductionMonth.trim().split(' ');
+    if (parts.length < 2) return [firstDeductionMonth];
+    final monthName = parts[0];
+    final year = int.tryParse(parts[1]) ?? DateTime.now().year;
+
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    final startIndex = months.indexOf(monthName);
+    if (startIndex == -1) return [firstDeductionMonth];
+
+    final result = <String>[];
+    for (int i = 0; i < installments; i++) {
+      final totalMonths = startIndex + i;
+      final finalMonthIndex = totalMonths % 12;
+      final finalYear = year + (totalMonths ~/ 12);
+      result.add('${months[finalMonthIndex]} $finalYear');
+    }
+    return result;
+  }
+
+  /// Next EMI Month calculation
+  String get nextEmiMonth {
+    if (actualRemainingBalance <= 0 || status == 'Closed') return 'Completed';
+    final months = scheduleMonths;
+    if (months.isEmpty) return firstDeductionMonth;
+    final paidCount = paidInstallments;
+    if (paidCount < months.length) {
+      return months[paidCount];
+    }
+    return months.last;
+  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -76,11 +190,20 @@ class EmployeeLoan {
       'approval_date': approvalDate,
       'remarks': remarks,
       'status': status,
-      'remaining_balance': remainingBalance,
+      'remaining_balance': actualRemainingBalance,
+      'repayments': repayments.map((r) => r.toMap()).toList(),
     };
   }
 
   factory EmployeeLoan.fromMap(Map<String, dynamic> map) {
+    var rawRepayments = map['repayments'];
+    List<LoanRepayment> repaymentsList = [];
+    if (rawRepayments is List) {
+      repaymentsList = rawRepayments
+          .map((r) => LoanRepayment.fromMap(Map<String, dynamic>.from(r as Map)))
+          .toList();
+    }
+
     return EmployeeLoan(
       id: map['id'] as int? ?? 0,
       loanId: map['loan_id'] as String? ?? '',
@@ -106,6 +229,7 @@ class EmployeeLoan {
       remarks: map['remarks'] as String? ?? '',
       status: map['status'] as String? ?? 'Pending',
       remainingBalance: (map['remaining_balance'] as num?)?.toDouble() ?? 0.0,
+      repayments: repaymentsList,
     );
   }
 
@@ -134,6 +258,7 @@ class EmployeeLoan {
     String? remarks,
     String? status,
     double? remainingBalance,
+    List<LoanRepayment>? repayments,
   }) {
     return EmployeeLoan(
       id: id ?? this.id,
@@ -160,6 +285,7 @@ class EmployeeLoan {
       remarks: remarks ?? this.remarks,
       status: status ?? this.status,
       remainingBalance: remainingBalance ?? this.remainingBalance,
+      repayments: repayments ?? this.repayments,
     );
   }
 }

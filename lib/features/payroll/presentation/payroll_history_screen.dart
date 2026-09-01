@@ -9,8 +9,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../domain/payroll.dart';
 import '../providers/payroll_providers.dart';
-import '../../leave/providers/leave_providers.dart';
-import 'widgets/access_denied_view.dart';
 
 class PayrollHistoryScreen extends ConsumerStatefulWidget {
   const PayrollHistoryScreen({super.key});

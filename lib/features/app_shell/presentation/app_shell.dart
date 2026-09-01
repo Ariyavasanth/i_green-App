@@ -13,6 +13,7 @@ import '../../../widgets/navigation/sidebar_drawer.dart';
 import '../../authentication/providers/authentication_providers.dart';
 import '../../books/providers/books_providers.dart';
 import '../../employee/providers/employee_providers.dart';
+import '../../loan/providers/loan_providers.dart';
 import '../../permission/providers/permission_providers.dart';
 
 final sidebarStateStorageProvider = Provider<SidebarStateStorage>(
@@ -398,6 +399,12 @@ class _TopBar extends ConsumerWidget {
     if (cleanLoc == '/my-profile' || cleanLoc == '/profile' || cleanLoc.startsWith('/my-profile') || cleanLoc.startsWith('/profile')) {
       return 'My Profile';
     }
+    if (cleanLoc.startsWith('/loan/details') || cleanLoc.startsWith('/loan-management/details')) {
+      return 'Loan Details';
+    }
+    if (cleanLoc == '/loan-management/create') {
+      return 'Loan';
+    }
     if (cleanLoc == '/inventory-adjustments/add-stock') return 'Add Stock';
     if (cleanLoc == '/inventory-adjustments/add-material') return 'Add Material';
     if (cleanLoc == '/inventory-adjustments/move-stock') return 'Move Stock';
@@ -461,10 +468,15 @@ class _TopBar extends ConsumerWidget {
       headingText = _getHeading(currentLocation);
     }
 
+    final isLoanDetails = currentLocation.startsWith('/loan/details') || currentLocation.startsWith('/loan-management/details');
+    final loanId = isLoanDetails ? int.tryParse(currentLocation.split('?').first.split('/').last) : null;
+
     final isFormPage = currentLocation.endsWith('/new') ||
         currentLocation.contains('/edit') ||
         currentLocation.startsWith('/permission/') ||
-        currentLocation.startsWith('/inventory-adjustments/');
+        currentLocation.startsWith('/inventory-adjustments/') ||
+        isLoanDetails ||
+        currentLocation.startsWith('/loan-management/create');
 
     final content = SafeArea(
       bottom: false,
@@ -478,18 +490,18 @@ class _TopBar extends ConsumerWidget {
                 icon: const Icon(Icons.arrow_back, color: Color(0xFF1E293B)),
                 tooltip: 'Back',
                 onPressed: () {
-                  if (currentLocation.startsWith('/inventory-adjustments/')) {
+                  if (Navigator.of(context).canPop()) {
+                    Navigator.of(context).pop();
+                  } else if (currentLocation.startsWith('/loan-management/')) {
+                    context.go('/loan-management');
+                  } else if (currentLocation.startsWith('/loan/')) {
+                    context.go('/loan');
+                  } else if (currentLocation.startsWith('/inventory-adjustments/')) {
                     context.go('/inventory-adjustments');
                   } else if (currentLocation.startsWith('/permission/')) {
                     context.go('/permission');
                   } else if (currentLocation == '/my-profile' || currentLocation == '/profile') {
-                    if (Navigator.of(context).canPop()) {
-                      Navigator.of(context).pop();
-                    } else {
-                      context.go('/home');
-                    }
-                  } else if (Navigator.of(context).canPop()) {
-                    Navigator.of(context).pop();
+                    context.go('/home');
                   } else {
                     context.go('/home');
                   }
@@ -618,6 +630,25 @@ class _TopBar extends ConsumerWidget {
               ),
 
             if (compact) ...[
+              if (isLoanDetails && loanId != null) ...[
+                Consumer(
+                  builder: (context, ref, _) {
+                    final loanAsync = ref.watch(loanByIdProvider(loanId));
+                    return loanAsync.maybeWhen(
+                      data: (loan) {
+                        if (loan == null) return const SizedBox.shrink();
+                        return IconButton(
+                          icon: const Icon(Icons.edit_outlined, color: Color(0xFF414A51), size: 20),
+                          tooltip: 'Edit Loan',
+                          onPressed: () => context.push('/loan-management/create', extra: loan),
+                        );
+                      },
+                      orElse: () => const SizedBox.shrink(),
+                    );
+                  },
+                ),
+                const SizedBox(width: 4),
+              ],
               Stack(
                 children: [
                   Container(
@@ -650,6 +681,25 @@ class _TopBar extends ConsumerWidget {
               ),
             ],
             if (!compact) ...[
+              if (isLoanDetails && loanId != null) ...[
+                Consumer(
+                  builder: (context, ref, _) {
+                    final loanAsync = ref.watch(loanByIdProvider(loanId));
+                    return loanAsync.maybeWhen(
+                      data: (loan) {
+                        if (loan == null) return const SizedBox.shrink();
+                        return IconButton(
+                          icon: const Icon(Icons.edit_outlined, color: Color(0xFF414A51), size: 20),
+                          tooltip: 'Edit Loan',
+                          onPressed: () => context.push('/loan-management/create', extra: loan),
+                        );
+                      },
+                      orElse: () => const SizedBox.shrink(),
+                    );
+                  },
+                ),
+                const SizedBox(width: 4),
+              ],
               IconButton(
                 tooltip: 'Search current section',
                 onPressed: () => showDialog<void>(

@@ -15,7 +15,6 @@ import '../domain/payroll.dart';
 import '../providers/payroll_providers.dart';
 import '../../leave/providers/leave_providers.dart';
 import '../../loan/providers/loan_providers.dart';
-import 'widgets/access_denied_view.dart';
 
 class GeneratePayrollScreen extends ConsumerStatefulWidget {
   const GeneratePayrollScreen({required this.employeeId, super.key});
@@ -264,7 +263,6 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     int late = 0;
     int absent = 0;
     int leave = 0;
-    int missingCheckout = 0;
 
     final today = DateTime(now.year, now.month, now.day);
     DateTime cursor = period.startDate;
@@ -296,7 +294,6 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
           leave++;
         } else if (status == AttendanceStatusInfo.missingCheckout) {
           present++;
-          missingCheckout++;
         } else if (status == AttendanceStatusInfo.absent || status == null) {
           absent++;
         }
@@ -372,7 +369,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     final record = PayrollRecord(
       id: 0,
       employeeId: employee.id,
-      employeeName: '${employee.firstName} ${employee.lastName}',
+      employeeName: employee.fullName,
       month: month,
       presentDays: _presentDays,
       lateDays: _lateDays,
@@ -434,7 +431,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
         final actionText = saveStatus == 'Draft' ? 'saved as Draft' : 'processed successfully';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Payroll $actionText for ${employee.firstName}!'),
+            content: Text('Payroll $actionText for ${employee.fullName}!'),
             backgroundColor: Colors.green[700],
           ),
         );
@@ -765,7 +762,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
+                    color: AppColors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(

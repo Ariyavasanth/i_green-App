@@ -634,7 +634,7 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
               : ListView.separated(
                   shrinkWrap: true,
                   itemCount: history.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  separatorBuilder: (_, _) => const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final loan = history[index];
                     return ListTile(

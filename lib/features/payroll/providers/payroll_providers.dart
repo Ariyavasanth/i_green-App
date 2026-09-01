@@ -1,11 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../loan/providers/loan_providers.dart';
 import '../data/firebase_payroll_repository.dart';
 import '../domain/payroll.dart';
 import '../domain/payroll_repository.dart';
 
 final payrollRepositoryProvider = Provider<PayrollRepository>(
-  (ref) => FirebasePayrollRepository(),
+  (ref) => FirebasePayrollRepository(
+    loanRepository: ref.watch(loanRepositoryProvider),
+  ),
 );
 
 final payrollSettingsProvider = FutureProvider<PayrollSettings>(

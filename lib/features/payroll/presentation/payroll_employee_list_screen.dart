@@ -10,7 +10,6 @@ import '../../employee/domain/employee.dart';
 import '../../attendance/providers/attendance_providers.dart';
 import '../domain/payroll.dart';
 import '../providers/payroll_providers.dart';
-import '../../leave/providers/leave_providers.dart';
 
 class PayrollEmployeeListScreen extends ConsumerStatefulWidget {
   const PayrollEmployeeListScreen({super.key});

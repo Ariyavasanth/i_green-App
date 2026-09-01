@@ -6,11 +6,10 @@ import 'package:intl/intl.dart';
 import '../../../core/layout/responsive_layout.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../employee/providers/employee_providers.dart';
 import '../../employee/domain/employee.dart';
+import '../../employee/providers/employee_providers.dart';
 import '../domain/payroll.dart';
 import '../providers/payroll_providers.dart';
-import '../../leave/providers/leave_providers.dart';
 
 class PayrollDashboardScreen extends ConsumerStatefulWidget {
   const PayrollDashboardScreen({super.key});

@@ -39,6 +39,7 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
   final _emiController = TextEditingController();
   final _interestRateController = TextEditingController(text: '0');
   final _totalRepayableController = TextEditingController();
+  final _lastDeductionController = TextEditingController();
   String _firstDeductionMonth = '';
   String _lastDeductionMonth = '';
 
@@ -113,6 +114,25 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
     }
   }
 
+  @override
+  void dispose() {
+    _amountController.removeListener(_calculateRepayment);
+    _installmentsController.removeListener(_calculateRepayment);
+    _interestRateController.removeListener(_calculateRepayment);
+    _loanIdController.dispose();
+    _amountController.dispose();
+    _installmentsController.dispose();
+    _emiController.dispose();
+    _interestRateController.dispose();
+    _totalRepayableController.dispose();
+    _lastDeductionController.dispose();
+    _purposeController.dispose();
+    _requestedByController.dispose();
+    _approvedByController.dispose();
+    _remarksController.dispose();
+    super.dispose();
+  }
+
   void _loadExistingLoan(EmployeeLoan loan) {
     _loanIdController.text = loan.loanId;
     _employeeId = loan.employeeCustomId;
@@ -136,6 +156,7 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
       _firstDeductionMonth = loan.firstDeductionMonth;
     }
     _lastDeductionMonth = loan.lastDeductionMonth;
+    _lastDeductionController.text = _lastDeductionMonth;
 
     _requestedByController.text = loan.requestedBy;
     _approvedByController.text = loan.approvedBy;
@@ -162,6 +183,7 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
       _totalRepayableController.text = total.toStringAsFixed(2);
       _emiController.text = emi.toStringAsFixed(2);
       _lastDeductionMonth = _calculateLastDeductionMonth(_firstDeductionMonth, installments);
+      _lastDeductionController.text = _lastDeductionMonth;
     });
   }
 
@@ -546,7 +568,7 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
                       Expanded(
                         child: TextFormField(
                           decoration: _inputDecoration('Last Deduction Month'),
-                          controller: TextEditingController(text: _lastDeductionMonth),
+                          controller: _lastDeductionController,
                           readOnly: true,
                         ),
                       ),

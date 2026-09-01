@@ -6,7 +6,6 @@ import 'package:intl/intl.dart';
 import '../../../../core/layout/responsive_layout.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../employee/providers/employee_providers.dart';
-import '../../leave/providers/leave_providers.dart';
 import '../domain/payroll.dart';
 import '../providers/payroll_providers.dart';
 
@@ -256,7 +255,6 @@ class _EmployeePayslipListScreenState extends ConsumerState<EmployeePayslipListS
   }
 
   Widget _buildPayslipCard(BuildContext context, PayrollRecord record) {
-    final isPaid = record.status == 'Paid';
     final formattedNetSalary = NumberFormat.currency(
       locale: 'en_IN',
       symbol: '₹',

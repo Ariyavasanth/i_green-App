@@ -1,13 +1,17 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../loan/data/firebase_loan_repository.dart';
+import '../../loan/domain/employee_loan.dart';
+import '../../loan/domain/loan_repository.dart';
 import '../domain/payroll.dart';
 import '../domain/payroll_repository.dart';
 
-
 class FirebasePayrollRepository implements PayrollRepository {
   final FirebaseFirestore _firestore;
+  final LoanRepository? _loanRepository;
 
-  FirebasePayrollRepository({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance {
+  FirebasePayrollRepository({FirebaseFirestore? firestore, LoanRepository? loanRepository})
+      : _firestore = firestore ?? FirebaseFirestore.instance,
+        _loanRepository = loanRepository {
     _seedDataIfNeeded();
   }
 
@@ -181,8 +185,19 @@ class FirebasePayrollRepository implements PayrollRepository {
   Future<PayrollRecord?> getPayrollRecordById(int id) async {
     try {
       final snap = await _payrollsRef.where('id', isEqualTo: id).get();
-      if (snap.docs.isEmpty) return null;
-      return _recordFromFirestore(snap.docs.first.data(), snap.docs.first.id);
+      if (snap.docs.isNotEmpty) {
+        return _recordFromFirestore(snap.docs.first.data(), snap.docs.first.id);
+      }
+
+      // Fallback: search all docs by computed id
+      final allSnap = await _payrollsRef.get();
+      for (final doc in allSnap.docs) {
+        final rec = _recordFromFirestore(doc.data(), doc.id);
+        if (rec.id == id) {
+          return rec;
+        }
+      }
+      return null;
     } catch (_) {
       return null;
     }
@@ -229,6 +244,30 @@ class FirebasePayrollRepository implements PayrollRepository {
       map['id'] = numericId;
       map['updated_at'] = FieldValue.serverTimestamp();
       await _payrollsRef.doc(docId).set(map, SetOptions(merge: true));
+
+      // Record loan repayment if status is Paid and companyLoan > 0
+      if (record.status.trim().toUpperCase() == 'PAID' && record.companyLoan > 0) {
+        try {
+          final loanRepo = _loanRepository ?? FirebaseLoanRepository(firestore: _firestore);
+          EmployeeLoan? targetLoan;
+          if (record.loanDescription.isNotEmpty) {
+            targetLoan = await loanRepo.getLoanByLoanId(record.loanDescription.trim());
+          }
+          targetLoan ??= await loanRepo.getActiveLoanForEmployee(record.employeeId, record.month);
+
+          if (targetLoan != null) {
+            await loanRepo.recordRepayment(
+              loanId: targetLoan.loanId,
+              payrollId: docId,
+              month: record.month,
+              amount: record.companyLoan,
+              paymentDate: record.paymentDate,
+              referenceNote: 'Payroll deduction for ${record.month}',
+            );
+          }
+        } catch (_) {}
+      }
+
       return record.copyWith(id: numericId);
     } catch (_) {
       return record;

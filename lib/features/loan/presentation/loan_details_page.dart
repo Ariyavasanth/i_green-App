@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../employee/providers/employee_providers.dart';
+import '../../payroll/domain/payroll.dart';
 import '../../payroll/providers/payroll_providers.dart';
 import '../domain/employee_loan.dart';
 import '../providers/loan_providers.dart';
@@ -19,18 +21,6 @@ class LoanDetailsPage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => context.pop(),
-        ),
-        title: const Text(
-          'Loan Details',
-          style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold),
-        ),
-      ),
       body: loanAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => Center(child: Text('Error loading loan: $err')),
@@ -50,9 +40,11 @@ class LoanDetailsPage extends ConsumerWidget {
                   children: [
                     _buildEmployeeCard(loan),
                     const SizedBox(height: 20),
-                    _buildLoanSummaryCard(loan, payrolls),
+                    _buildLoanSummaryCard(context, ref, loan),
                     const SizedBox(height: 20),
-                    _buildEmiHistoryCard(loan, payrolls),
+                    _buildRepaymentScheduleCard(loan, payrolls),
+                    const SizedBox(height: 20),
+                    _buildActionFooter(context, ref, loan),
                   ],
                 ),
               );
@@ -96,21 +88,8 @@ class LoanDetailsPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildLoanSummaryCard(EmployeeLoan loan, List<dynamic> payrolls) {
+  Widget _buildLoanSummaryCard(BuildContext context, WidgetRef ref, EmployeeLoan loan) {
     final formatCurrency = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
-    final paidAmount = loan.totalRepayableAmount - loan.remainingBalance;
-
-    // Determine Next EMI Month
-    final installmentsList = _generateInstallments(loan);
-    int paidCount = loan.emiAmount > 0 ? (paidAmount / loan.emiAmount).round() : 0;
-    String nextEmiMonth = 'None';
-    if (loan.remainingBalance > 0 && installmentsList.isNotEmpty) {
-      if (paidCount < installmentsList.length) {
-        nextEmiMonth = installmentsList[paidCount];
-      } else {
-        nextEmiMonth = installmentsList.last;
-      }
-    }
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -137,14 +116,19 @@ class LoanDetailsPage extends ConsumerWidget {
           const SizedBox(height: 16),
           _buildRowDetail('Loan ID', loan.loanId),
           _buildRowDetail('Loan Type', loan.loanType),
-          _buildRowDetail('Loan Amount', formatCurrency.format(loan.loanAmount)),
+          _buildRowDetail('Principal Amount', formatCurrency.format(loan.loanAmount)),
           _buildRowDetail('Interest Rate', '${loan.interestRate}%'),
           _buildRowDetail('Total Repayable', formatCurrency.format(loan.totalRepayableAmount)),
-          _buildRowDetail('Paid Amount', formatCurrency.format(paidAmount)),
-          _buildRowDetail('Remaining Balance', formatCurrency.format(loan.remainingBalance)),
           _buildRowDetail('Monthly EMI', formatCurrency.format(loan.emiAmount)),
-          _buildRowDetail('Next EMI Month', nextEmiMonth),
-          _buildRowDetail('Purpose', loan.purpose),
+          _buildRowDetail('Total Paid', formatCurrency.format(loan.totalPaid)),
+          _buildRowDetail('Remaining Balance', formatCurrency.format(loan.actualRemainingBalance)),
+          _buildRowDetail('Paid Installments', '${loan.paidInstallments} of ${loan.installments}'),
+          _buildRowDetail('Remaining Installments', '${loan.remainingInstallments}'),
+          _buildRowDetail('First Deduction Month', loan.firstDeductionMonth),
+          _buildRowDetail('Last Deduction Month', loan.lastDeductionMonth),
+          _buildRowDetail('Next EMI Month', loan.nextEmiMonth),
+          _buildRowDetail('Disbursement Date', loan.disbursementDate.isNotEmpty ? loan.disbursementDate : '-'),
+          _buildRowDetail('Purpose', loan.purpose.isNotEmpty ? loan.purpose : '-'),
           _buildRowDetail('Requested By', loan.requestedBy),
           _buildRowDetail('Approved By', loan.approvedBy.isNotEmpty ? loan.approvedBy : '-'),
           _buildRowDetail('Status', loan.status, isStatus: true),
@@ -153,11 +137,9 @@ class LoanDetailsPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildEmiHistoryCard(EmployeeLoan loan, List<dynamic> payrolls) {
+  Widget _buildRepaymentScheduleCard(EmployeeLoan loan, List<PayrollRecord> payrolls) {
     final formatCurrency = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
-    final installmentsList = _generateInstallments(loan);
-    final paidAmount = loan.totalRepayableAmount - loan.remainingBalance;
-    int calculatedPaidCount = loan.emiAmount > 0 ? (paidAmount / loan.emiAmount).round() : 0;
+    final scheduleMonths = loan.scheduleMonths;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -169,131 +151,301 @@ class LoanDetailsPage extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(Icons.history_outlined, color: AppColors.active, size: 20),
-              SizedBox(width: 8),
+              const Row(
+                children: [
+                  Icon(Icons.calendar_month_outlined, color: AppColors.active, size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'Repayment Schedule',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  ),
+                ],
+              ),
               Text(
-                'EMI History',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                '${loan.paidInstallments} / ${loan.installments} Paid',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
               ),
             ],
           ),
           const SizedBox(height: 16),
           const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
           const SizedBox(height: 12),
-          if (installmentsList.isEmpty)
+          if (scheduleMonths.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(child: Text('No installments defined for this loan.')),
+              child: Center(child: Text('No deduction schedule defined.')),
             )
           else
-            Table(
-              columnWidths: const {
-                0: FlexColumnWidth(4),
-                1: FlexColumnWidth(3),
-                2: FlexColumnWidth(3),
-              },
-              children: [
-                const TableRow(
-                  decoration: BoxDecoration(
-                    border: Border(bottom: BorderSide(color: AppColors.divider, width: 0.5)),
-                  ),
-                  children: [
-                    Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8),
-                      child: Text('Month', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8),
-                      child: Text('EMI', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8),
-                      child: Text('Status', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
-                    ),
-                  ],
-                ),
-                for (int i = 0; i < installmentsList.length; i++) ...[
-                  (() {
-                    final month = installmentsList[i];
-                    // A month is paid if:
-                    // 1. We have a payroll record for this employee and month where company_loan is matching EMI and description matches
-                    // 2. OR, if the index of this installment is less than calculatedPaidCount (for historical seeded data)
-                    final isPayrollPaid = payrolls.any((p) =>
-                        p.employeeId == loan.employeeId &&
-                        p.month.trim().toLowerCase() == month.trim().toLowerCase() &&
-                        p.companyLoan > 0 &&
-                        p.loanDescription.trim() == loan.loanId);
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                headingRowHeight: 40,
+                dataRowMinHeight: 44,
+                columns: const [
+                  DataColumn(label: Text('Month', style: TextStyle(fontWeight: FontWeight.bold))),
+                  DataColumn(label: Text('EMI', style: TextStyle(fontWeight: FontWeight.bold))),
+                  DataColumn(label: Text('Paid', style: TextStyle(fontWeight: FontWeight.bold))),
+                  DataColumn(label: Text('Remaining', style: TextStyle(fontWeight: FontWeight.bold))),
+                  DataColumn(label: Text('Status', style: TextStyle(fontWeight: FontWeight.bold))),
+                  DataColumn(label: Text('Payroll Ref', style: TextStyle(fontWeight: FontWeight.bold))),
+                ],
+                rows: List<DataRow>.generate(scheduleMonths.length, (index) {
+                  final month = scheduleMonths[index];
 
-                    final isPaid = isPayrollPaid || (i < calculatedPaidCount);
+                  // Check if repayment ledger has an entry for this month
+                  final ledgerRepayment = loan.repayments.where((r) => r.month.trim().toLowerCase() == month.trim().toLowerCase()).firstOrNull;
 
-                    return TableRow(
-                      decoration: const BoxDecoration(
-                        border: Border(bottom: BorderSide(color: AppColors.divider, width: 0.5)),
+                  // Check if payroll has a paid record
+                  final matchingPayroll = payrolls.where((p) =>
+                      p.employeeId == loan.employeeId &&
+                      p.month.trim().toLowerCase() == month.trim().toLowerCase() &&
+                      p.status.toLowerCase() == 'paid' &&
+                      p.companyLoan > 0).firstOrNull;
+
+                  final isPaid = ledgerRepayment != null || matchingPayroll != null || index < loan.paidInstallments;
+                  final paidAmount = isPaid ? (ledgerRepayment?.amount ?? loan.emiAmount) : 0.0;
+
+                  // Calculate remaining balance at this step in the timeline
+                  final runningPaid = (index + 1) * loan.emiAmount;
+                  final expectedRemaining = isPaid
+                      ? ((loan.totalRepayableAmount - runningPaid).clamp(0.0, loan.totalRepayableAmount))
+                      : ((loan.totalRepayableAmount - (index * loan.emiAmount)).clamp(0.0, loan.totalRepayableAmount));
+
+                  final payrollRef = ledgerRepayment?.payrollId.isNotEmpty == true
+                      ? ledgerRepayment!.payrollId
+                      : (matchingPayroll != null ? matchingPayroll.month : '-');
+
+                  return DataRow(
+                    cells: [
+                      DataCell(Text(month, style: const TextStyle(fontWeight: FontWeight.w500))),
+                      DataCell(Text(formatCurrency.format(loan.emiAmount))),
+                      DataCell(Text(formatCurrency.format(paidAmount))),
+                      DataCell(Text(formatCurrency.format(expectedRemaining))),
+                      DataCell(
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isPaid ? Icons.check_circle : (loan.status == 'Active' && index == loan.paidInstallments ? Icons.schedule : Icons.circle_outlined),
+                              size: 14,
+                              color: isPaid ? AppColors.primary : (loan.status == 'Active' && index == loan.paidInstallments ? Colors.orange : Colors.grey),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              isPaid ? 'Paid' : (loan.status == 'Active' && index == loan.paidInstallments ? 'Upcoming' : 'Scheduled'),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: isPaid ? AppColors.primary : (loan.status == 'Active' && index == loan.paidInstallments ? Colors.orange : Colors.grey),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Text(month, style: const TextStyle(fontWeight: FontWeight.w500)),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Text(formatCurrency.format(loan.emiAmount)),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Row(
-                            children: [
-                              Icon(
-                                isPaid ? Icons.check_circle : Icons.pending_actions,
-                                size: 16,
-                                color: isPaid ? AppColors.primary : Colors.orange,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                isPaid ? 'Paid' : 'Pending',
-                                style: TextStyle(
-                                  color: isPaid ? AppColors.primary : Colors.orange,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    );
-                  }())
-                ]
-              ],
+                      DataCell(Text(payrollRef, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
+                    ],
+                  );
+                }),
+              ),
             ),
         ],
       ),
     );
   }
 
-  List<String> _generateInstallments(EmployeeLoan loan) {
-    if (loan.installments <= 0 || loan.firstDeductionMonth.isEmpty) return [];
-    final list = <String>[];
-    final parts = loan.firstDeductionMonth.split(' ');
-    if (parts.length < 2) return [loan.firstDeductionMonth];
-    final monthName = parts[0];
-    final year = int.tryParse(parts[1]) ?? DateTime.now().year;
+  Widget _buildActionFooter(BuildContext context, WidgetRef ref, EmployeeLoan loan) {
+    final isPending = loan.status == 'Pending' || loan.status.startsWith('Pending ');
+    final isApproved = loan.status == 'Approved';
+    final isActive = loan.status == 'Active';
 
-    final months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    final startIndex = months.indexOf(monthName);
-    if (startIndex == -1) return [loan.firstDeductionMonth];
-
-    for (int i = 0; i < loan.installments; i++) {
-      final totalMonths = startIndex + i;
-      final mIndex = totalMonths % 12;
-      final yOffset = totalMonths ~/ 12;
-      list.add('${months[mIndex]} ${year + yOffset}');
+    if (!isPending && !isApproved && !isActive) {
+      return const SizedBox.shrink();
     }
-    return list;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.divider, width: 0.5),
+      ),
+      child: Wrap(
+        alignment: WrapAlignment.end,
+        spacing: 12,
+        runSpacing: 12,
+        children: [
+          if (isPending) ...[
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red,
+                side: const BorderSide(color: Colors.red),
+              ),
+              icon: const Icon(Icons.cancel_outlined, size: 16),
+              label: const Text('Reject Loan'),
+              onPressed: () => _confirmReject(context, ref, loan),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              icon: const Icon(Icons.check_circle_outline, size: 16),
+              label: Text('Approve (${loan.status})'),
+              onPressed: () => _approveLoan(context, ref, loan),
+            ),
+          ],
+          if (isApproved)
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              icon: const Icon(Icons.send_outlined, size: 16),
+              label: const Text('Disburse / Activate Loan'),
+              onPressed: () => _disburseLoan(context, ref, loan),
+            ),
+          if (isActive)
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.grey[700],
+              ),
+              icon: const Icon(Icons.lock_outline, size: 16),
+              label: const Text('Mark as Closed'),
+              onPressed: () => _closeLoan(context, ref, loan),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _approveLoan(BuildContext context, WidgetRef ref, EmployeeLoan loan) async {
+    try {
+      final currentEmp = ref.read(currentEmployeeProvider);
+      final approverName = currentEmp?.fullName ?? 'Admin';
+      final approverRole = currentEmp?.userType ?? 'Admin';
+
+      final nextStatus = await ref.read(loanRepositoryProvider).approveLoan(
+        id: loan.id,
+        approverName: approverName,
+        approverRole: approverRole,
+      );
+
+      ref.invalidate(loanByIdProvider(loan.id));
+      ref.invalidate(allLoansProvider);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Loan updated to $nextStatus.'),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to approve loan: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _disburseLoan(BuildContext context, WidgetRef ref, EmployeeLoan loan) async {
+    try {
+      final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      await ref.read(loanRepositoryProvider).disburseLoan(loan.id, todayStr);
+      ref.invalidate(loanByIdProvider(loan.id));
+      ref.invalidate(allLoansProvider);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Loan disbursed and is now Active.'),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to disburse loan: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmReject(BuildContext context, WidgetRef ref, EmployeeLoan loan) async {
+    final reasonController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dContext) => AlertDialog(
+        title: const Text('Reject Loan Request'),
+        content: TextField(
+          controller: reasonController,
+          decoration: const InputDecoration(
+            labelText: 'Reason for rejection',
+            hintText: 'Enter reason...',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dContext, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(dContext, true),
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await ref.read(loanRepositoryProvider).rejectLoan(loan.id, reasonController.text);
+      ref.invalidate(loanByIdProvider(loan.id));
+      ref.invalidate(allLoansProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Loan rejected.'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _closeLoan(BuildContext context, WidgetRef ref, EmployeeLoan loan) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dContext) => AlertDialog(
+        title: const Text('Close Loan'),
+        content: const Text('Are you sure you want to close this loan?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dContext, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(dContext, true),
+            child: const Text('Confirm Close'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await ref.read(loanRepositoryProvider).changeLoanStatus(loan.id, 'Closed');
+      ref.invalidate(loanByIdProvider(loan.id));
+      ref.invalidate(allLoansProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Loan marked as Closed.')),
+        );
+      }
+    }
   }
 
   Widget _buildRowDetail(String label, String value, {bool isStatus = false}) {
