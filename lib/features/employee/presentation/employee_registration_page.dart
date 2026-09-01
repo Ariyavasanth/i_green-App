@@ -305,12 +305,17 @@ class _EmployeeRegistrationPageState
   // Tab 11: Access Permissions
   late Set<String> _selectedPermissions;
 
-  void _generateSampleEmpId() {
-    final stamp = DateTime.now().millisecondsSinceEpoch.toString();
-    final suffix = stamp.length > 4 ? stamp.substring(stamp.length - 4) : stamp;
-    setState(() {
-      _employeeCustomIdController.text = 'EMP-$suffix';
-    });
+  Future<void> _autoGenerateNextEmpId({bool force = false}) async {
+    try {
+      if (force || _employeeCustomIdController.text.trim().isEmpty || !_employeeCustomIdController.text.trim().startsWith('EMP-')) {
+        final nextId = await ref.read(employeeRepositoryProvider).getNextEmployeeId();
+        if (mounted) {
+          setState(() {
+            _employeeCustomIdController.text = nextId;
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   void _generateRandomPassword() {
@@ -1156,7 +1161,14 @@ class _EmployeeRegistrationPageState
       if (emp.bloodGroupReport.isNotEmpty) _bloodGroupDocFileName = emp.bloodGroupReport;
       if (emp.gender.isNotEmpty) _gender = emp.gender;
       if (emp.userType.isNotEmpty) _userType = emp.userType;
-      if (emp.status.isNotEmpty) _status = emp.status;
+      if (emp.status.isNotEmpty) {
+        final st = emp.status.trim().toUpperCase();
+        if (st == 'ACTIVE' || st == 'INACTIVE' || st == 'SUSPENDED') {
+          _status = st;
+        } else {
+          _status = 'ACTIVE';
+        }
+      }
       _dobController.text = emp.dob;
       _aadhaarController.text = emp.aadhaarNumber;
       final (phoneCc, phoneNum) = _parsePhoneAndCountryCode(emp.phoneNumber);
@@ -1181,13 +1193,13 @@ class _EmployeeRegistrationPageState
         _workScheduleType = 'Fixed Schedule';
       }
       _requiredWorkingHoursController.text = '${emp.requiredWorkingHours > 0 ? emp.requiredWorkingHours.toStringAsFixed(0) : "9"} Hours';
-      _reportingManagerTitleController.text = emp.reportingManagerTitle.isNotEmpty ? emp.reportingManagerTitle : 'Managing Director';
-      _adminNameController.text = emp.adminName.isNotEmpty ? emp.adminName : 'Saravanan G S';
+      _reportingManagerTitleController.text = emp.reportingManagerTitle;
+      _adminNameController.text = emp.adminName.isNotEmpty ? emp.adminName : 'Admin Team';
       _coordinatorNameController.text = emp.coordinatorName.isNotEmpty ? emp.coordinatorName : 'Admin Team';
       final (coordCc, coordNum) = _parsePhoneAndCountryCode(emp.coordinatorPhone.isNotEmpty ? emp.coordinatorPhone : '8760098789');
       _coordinatorPhoneCountryCode = coordCc;
       _coordinatorPhoneController.text = coordNum;
-      if (emp.reportingManager.isNotEmpty) _reportingToController.text = emp.reportingManager;
+      _reportingToController.text = emp.reportingManager;
       if (emp.leaveType.isNotEmpty) {
         _leaveType = emp.leaveType == 'Once a Month' ? 'Manual Allocation' : emp.leaveType;
       }
@@ -1397,6 +1409,12 @@ class _EmployeeRegistrationPageState
     _tabController.addListener(() {
       if (mounted) {
         setState(() {});
+        if (_isManagementAdd &&
+            _tabController.index < _tabs.length &&
+            _tabs[_tabController.index] == 'Credentials' &&
+            _employeeCustomIdController.text.trim().isEmpty) {
+          _autoGenerateNextEmpId();
+        }
       }
     });
     if (widget.employee != null) {
@@ -1405,6 +1423,9 @@ class _EmployeeRegistrationPageState
       _registrationMode = 'accepted_response';
       _selectedAcceptedLinkId = widget.acceptedLinkId;
       WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (_isManagementAdd) {
+          _autoGenerateNextEmpId();
+        }
         ref.invalidate(allEmployeesProvider);
         ref.invalidate(registrationLinksProvider);
         ref.invalidate(candidateResponsesProvider);
@@ -1925,56 +1946,66 @@ class _EmployeeRegistrationPageState
       if (isEditMode) {
         // Edit existing employee record
         final targetId = widget.employee?.id ?? _currentEmployee?.id ?? 0;
-        final updated = employeeData.copyWith(id: targetId);
+        final existingEmpId = (widget.employee?.employeeId.isNotEmpty == true)
+            ? widget.employee!.employeeId
+            : (_currentEmployee?.employeeId.isNotEmpty == true ? _currentEmployee!.employeeId : '');
+        final updated = employeeData.copyWith(
+          id: targetId,
+          employeeId: existingEmpId.isNotEmpty ? existingEmpId : employeeData.employeeId,
+        );
         await repo.updateEmployee(updated);
         savedEmployee = updated;
-      } else if (_registrationMode == 'accepted_response' || widget.acceptedLinkId != null || widget.acceptedEmpId != null) {
+      } else if (!isSubmit) {
+        // ==========================================
+        // DRAFT SAVE / SAVE PROGRESS (Tabs 1 to 12)
+        // ==========================================
+        // NEVER call addEmployee() and NEVER touch /employees!
+        // Persist draft exclusively to candidate_responses / registration_links
+        final cleanFirstName = _firstNameController.text.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+        final linkIdToUse = _selectedAcceptedLinkId ??
+            widget.acceptedLinkId ??
+            (widget.linkId.isNotEmpty && widget.linkId != 'new' && widget.linkId != 'edit'
+                ? widget.linkId
+                : (_currentEmployee?.employeeId.startsWith('CAN-') == true
+                    ? _currentEmployee!.employeeId
+                    : 'draft_${cleanFirstName.isEmpty ? "new" : cleanFirstName}'));
 
-        if (!isSubmit) {
-          // Draft save: preserve candidate record
-          final targetId = _currentEmployee?.id ?? widget.acceptedEmpId ?? 0;
-          final updated = employeeData.copyWith(
-            id: targetId,
-            employeeId: (_currentEmployee?.employeeId.isNotEmpty == true)
-                ? _currentEmployee!.employeeId
-                : 'CAN-draft',
-            status: 'Draft',
-          );
-          if (targetId != 0) {
-            await repo.updateEmployee(updated);
-            savedEmployee = updated;
-          } else {
-            savedEmployee = await repo.addEmployee(updated);
-          }
-        } else {
-          // Admin conversion mode: Convert Candidate to full Employee with EMP- ID and set status to Registered
+        final candidateIdToUse = (_currentEmployee != null && _currentEmployee!.employeeId.startsWith('CAN-'))
+            ? _currentEmployee!.employeeId
+            : (widget.acceptedEmpId != null ? 'CAN-${widget.acceptedEmpId}' : '');
+
+        final draftData = employeeData.copyWith(
+          employeeId: candidateIdToUse,
+          status: 'Draft',
+        );
+
+        savedEmployee = await repo.submitEmployeeRegistration(
+          linkId: linkIdToUse,
+          employeeData: draftData,
+          isSubmit: false,
+        );
+      } else {
+        // ==========================================
+        // FINAL SUBMISSION (Submit Registration)
+        // ==========================================
+        // ONLY here is the employee document created in /employees
+        if (_registrationMode == 'accepted_response' || widget.acceptedLinkId != null || widget.acceptedEmpId != null) {
           final linkIdToConvert = _selectedAcceptedLinkId ?? widget.acceptedLinkId ?? widget.linkId;
+          final dataWithExistingId = (_currentEmployee != null && _currentEmployee!.employeeId.startsWith('EMP-'))
+              ? employeeData.copyWith(employeeId: _currentEmployee!.employeeId, id: _currentEmployee!.id)
+              : employeeData;
           savedEmployee = await repo.convertCandidateToEmployee(
             linkId: linkIdToConvert,
-            employeeData: employeeData,
+            employeeData: dataWithExistingId,
           );
-        }
-      } else if (widget.linkId == 'new' || widget.linkId.isEmpty) {
-        // Manual Add mode
-        if (_currentEmployee != null) {
-          final updated = employeeData.copyWith(id: _currentEmployee!.id);
-          await repo.updateEmployee(updated);
-          savedEmployee = updated;
-        } else {
+        } else if (widget.linkId == 'new' || widget.linkId.isEmpty) {
+          // Manual Add finalized
           savedEmployee = await repo.addEmployee(employeeData);
-        }
-      } else {
-        // Candidate Link submission
-        if (isSubmit) {
+        } else {
+          // Candidate Link submission
           savedEmployee = await repo.submitCandidateRegistration(
             linkId: widget.linkId,
             candidateData: employeeData,
-          );
-        } else {
-          savedEmployee = await repo.submitEmployeeRegistration(
-            linkId: widget.linkId,
-            employeeData: employeeData,
-            isSubmit: false,
           );
         }
       }
@@ -2367,6 +2398,16 @@ class _EmployeeRegistrationPageState
             _twitterController.text.trim().isNotEmpty ||
             _linkedinController.text.trim().isNotEmpty ||
             _googleController.text.trim().isNotEmpty;
+      case 'Job & Admin Details':
+        return _organizationName.trim().isNotEmpty || _department.trim().isNotEmpty || _joiningDateController.text.trim().isNotEmpty;
+      case 'Salary & Offer Letter':
+        return _totalSalaryController.text.trim().isNotEmpty || _basicPayController.text.trim().isNotEmpty;
+      case 'Welcome Letter':
+        return true;
+      case 'Access Permissions':
+        return _selectedPermissions.isNotEmpty;
+      case 'Credentials':
+        return _employeeCustomIdController.text.trim().isNotEmpty || _passwordController.text.trim().isNotEmpty;
       default:
         return false;
     }
@@ -2387,15 +2428,11 @@ class _EmployeeRegistrationPageState
         unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.normal),
         tabAlignment: TabAlignment.start,
         tabs: _tabs.map((tab) {
-          final isCandidateTab = [
-            'Personal Info', 'Address', 'Education', 'Experience',
-            'History', 'Bank Account', 'Document', 'Social Media'
-          ].contains(tab);
-          final tabErrors = isCandidateTab ? _validateTabByName(tab) : <String>[];
+          final tabErrors = _validateTabByName(tab);
           final isSaved = _isTabSaved(tab);
           final hasData = _isTabHasData(tab);
-          final showGreenCheck = isCandidateTab && tabErrors.isEmpty && (isSaved || (_hasSubmittedAtLeastOnce && hasData));
-          final showRedAlert = isCandidateTab && tabErrors.isNotEmpty && (_hasSubmittedAtLeastOnce || isSaved);
+          final showGreenCheck = tabErrors.isEmpty && (isSaved || (_hasSubmittedAtLeastOnce && hasData));
+          final showRedAlert = tabErrors.isNotEmpty && (_hasSubmittedAtLeastOnce || isSaved);
 
           return Tab(
             child: Row(
@@ -3019,14 +3056,20 @@ class _EmployeeRegistrationPageState
             ),
             const SizedBox(height: 16),
             () {
+              if (_organizationName.trim().toLowerCase() == 'igreen tech') {
+                _organizationName = '';
+              }
+
               final orgsAsync = ref.watch(organizationsProvider);
               final orgList = orgsAsync.valueOrNull ?? [];
-              final orgNames = orgList.map((e) => e.name).toList();
-              if (_organizationName.isNotEmpty && !orgNames.contains(_organizationName)) {
+              final orgNames = orgList
+                  .map((e) => e.name)
+                  .where((name) => name.trim().isNotEmpty && name.trim().toLowerCase() != 'igreen tech')
+                  .toList();
+              if (_organizationName.isNotEmpty &&
+                  _organizationName.trim().toLowerCase() != 'igreen tech' &&
+                  !orgNames.contains(_organizationName)) {
                 orgNames.insert(0, _organizationName);
-              }
-              if (_organizationName.isEmpty && orgNames.isNotEmpty) {
-                _organizationName = orgNames.first;
               }
 
               final buAsync = ref.watch(businessUnitsProvider(_organizationName.isEmpty ? null : _organizationName));
@@ -3046,31 +3089,69 @@ class _EmployeeRegistrationPageState
                 locNames.insert(0, _workLocation);
               }
 
-              final deptsAsync = ref.watch(filteredDepartmentsProvider(DepartmentFilter(
-                organizationName: _organizationName.isEmpty ? null : _organizationName,
-                businessUnitName: _businessUnit.isEmpty ? null : _businessUnit,
-                workLocation: _workLocation.isEmpty ? null : _workLocation,
-              )));
-              final deptList = deptsAsync.valueOrNull ?? [];
-              final deptNames = deptList.map((e) => e.departmentName).toList();
-              if (deptNames.isEmpty) {
+              final allDeptsAsync = ref.watch(departmentsProvider);
+              final allDeptsList = allDeptsAsync.valueOrNull ?? [];
+
+              final orgDepts = allDeptsList.where((d) =>
+                  _organizationName.isEmpty ||
+                  d.organizationName.trim().toLowerCase() == _organizationName.trim().toLowerCase()
+              ).toList();
+
+              var deptList = orgDepts.where((d) {
+                final matchLoc = _workLocation.isEmpty || d.workLocation.trim().isEmpty || d.workLocation.trim().toLowerCase() == _workLocation.trim().toLowerCase();
+                final matchBu = _businessUnit.isEmpty || d.businessUnitName.trim().isEmpty || d.businessUnitName.trim().toLowerCase() == _businessUnit.trim().toLowerCase();
+                return matchLoc && matchBu;
+              }).toList();
+
+              if (deptList.isEmpty) {
+                deptList = orgDepts;
+              }
+
+              final deptNames = deptList.map((e) => e.departmentName).where((s) => s.isNotEmpty).toSet().toList();
+              if (deptNames.isEmpty && _organizationName.isEmpty) {
                 deptNames.addAll(Employee.departmentOptions);
               }
               if (_department.isNotEmpty && !deptNames.contains(_department)) {
                 deptNames.insert(0, _department);
               }
-              if (_department.isEmpty && deptNames.isNotEmpty) {
-                _department = deptNames.first;
+
+              Department? findDepartmentMatch(String deptName) {
+                if (deptName.trim().isEmpty) return null;
+                final target = deptName.trim().toLowerCase();
+                return orgDepts.where((d) => d.departmentName.trim().toLowerCase() == target).firstOrNull ??
+                    allDeptsList.where((d) => d.departmentName.trim().toLowerCase() == target).firstOrNull;
               }
 
-              final desigAsync = ref.watch(designationsProvider(_department.isEmpty ? null : _department));
-              final desigList = desigAsync.valueOrNull ?? [];
+              final allDesigsAsync = ref.watch(allDesignationsProvider);
+              final allDesigsList = allDesigsAsync.valueOrNull ?? [];
+
+              var desigList = allDesigsList.where((d) {
+                final matchOrg = _organizationName.isEmpty || d.organizationName.trim().isEmpty || d.organizationName.trim().toLowerCase() == _organizationName.trim().toLowerCase();
+                final matchDept = _department.isEmpty || d.departmentName.trim().isEmpty || d.departmentName.trim().toLowerCase() == _department.trim().toLowerCase();
+                return matchOrg && matchDept;
+              }).toList();
+
+              if (desigList.isEmpty && _department.isNotEmpty) {
+                desigList = allDesigsList.where((d) => d.departmentName.trim().toLowerCase() == _department.trim().toLowerCase()).toList();
+              }
+
               final desigNames = desigList.map((e) => e.designationName).where((s) => s.isNotEmpty).toSet().toList();
               if (_designation.isNotEmpty && !desigNames.contains(_designation)) {
                 desigNames.insert(0, _designation);
               }
-              if (_designation.isEmpty && desigNames.isNotEmpty) {
-                _designation = desigNames.first;
+
+              if (_department.isNotEmpty) {
+                final match = findDepartmentMatch(_department);
+                if (match != null && match.departmentHead.trim().isNotEmpty) {
+                  if (_reportingToController.text.isEmpty) {
+                    _reportingToController.text = match.departmentHead.trim();
+                  }
+                  if (_reportingManagerTitleController.text.isEmpty) {
+                    _reportingManagerTitleController.text = match.reportingHierarchy.trim().isNotEmpty
+                        ? match.reportingHierarchy.trim()
+                        : '${match.departmentName} Head';
+                  }
+                }
               }
 
               return Column(
@@ -3145,10 +3226,15 @@ class _EmployeeRegistrationPageState
                             setState(() {
                               _department = val;
                               _designation = '';
-                              final match = deptList.where((d) => d.departmentName.trim().toLowerCase() == val.trim().toLowerCase()).firstOrNull;
+                              final match = findDepartmentMatch(val);
                               if (match != null && match.departmentHead.trim().isNotEmpty) {
                                 _reportingToController.text = match.departmentHead.trim();
-                                _reportingManagerTitleController.text = '${match.departmentName} Head';
+                                _reportingManagerTitleController.text = match.reportingHierarchy.trim().isNotEmpty
+                                    ? match.reportingHierarchy.trim()
+                                    : '${match.departmentName} Head';
+                              } else {
+                                _reportingToController.text = '';
+                                _reportingManagerTitleController.text = '';
                               }
                             });
                             _markTabUnsaved('Job & Admin Details');
@@ -3168,7 +3254,7 @@ class _EmployeeRegistrationPageState
                         },
                         placeholder: 'Select Designation',
                       ),
-                      _buildDateField('Date Of Joining', _joiningDateController, placeholder: '29-04-2017'),
+                      _buildDateField('Date Of Joining', _joiningDateController, placeholder: 'dd-mm-yyyy'),
                     ],
                   ),
                 ],
@@ -6816,13 +6902,13 @@ class _EmployeeRegistrationPageState
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text(
-                            'Employee ID / Username',
+                            'Employee ID / Username (Auto-Generated)',
                             style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
                           ),
                           InkWell(
-                            onTap: _generateSampleEmpId,
+                            onTap: () => _autoGenerateNextEmpId(force: true),
                             child: const Text(
-                              'Auto Generate ID',
+                              'Auto-Generated ↺',
                               style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.active),
                             ),
                           ),

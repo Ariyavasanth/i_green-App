@@ -184,19 +184,13 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   }
 
   @override
+  Future<String> getNextEmployeeId() async {
+    return _generateNextEmployeeId();
+  }
+
+  @override
   Future<void> updateEmployee(Employee employee) async {
     var emp = employee;
-    final empIdUpper = emp.employeeId.trim().toUpperCase();
-    if (emp.status.toLowerCase() == 'active' &&
-        (empIdUpper.isEmpty ||
-         empIdUpper.startsWith('CAN-') ||
-         empIdUpper.startsWith('PENDING_') ||
-         empIdUpper.startsWith('REG-') ||
-         !empIdUpper.startsWith('EMP-'))) {
-      final newEmpId = await _generateNextEmployeeId();
-      emp = emp.copyWith(employeeId: newEmpId);
-    }
-
     String docId = emp.employeeId.isNotEmpty
         ? emp.employeeId
         : (emp.id != 0 ? emp.id.toString() : '');
@@ -207,7 +201,9 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       if (snapshot.docs.isNotEmpty) {
         docId = snapshot.docs.first.id;
       } else {
-        docId = _employeesRef.doc().id;
+        final newEmpId = await _generateNextEmployeeId();
+        docId = newEmpId;
+        emp = emp.copyWith(employeeId: newEmpId);
       }
     }
 
@@ -356,50 +352,23 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     return link;
   }
 
-  Future<void> _ensureEmployeeSeeded() async {
-    try {
-      final snapshot = await _employeesRef.limit(1).get();
-      if (snapshot.docs.isEmpty) {
-        const rahul = Employee(
-          id: 101,
-          employeeId: 'EMP-0100',
-          firstName: 'Rahul',
-          lastName: 'Kumar',
-          emailAddress: 'rahul.kumar@igreentec.example',
-          phoneNumber: '+91 98765 43210',
-          gender: 'Male',
-          dob: '1995-05-15',
-          organizationName: 'IGreentec Engg. India Pvt. Ltd.',
-          department: 'Engineering',
-          designation: 'Design Engineer',
-          employmentType: 'Full-Time',
-          joiningDate: '2024-01-10',
-          status: 'Active',
-          reportingManager: 'Arun Kumar',
-          inTime: '09:00 AM',
-          outTime: '06:00 PM',
-          street: 'Chennai Manufacturing Plant, Ambattur',
-          city: 'Chennai',
-          state: 'Tamil Nadu',
-          country: 'India',
-        );
-        await _employeesRef.doc('EMP-0100').set(_employeeToFirestore(rahul));
-      }
-    } catch (e) {
-      debugPrint('Error seeding sample employee: $e');
-    }
-  }
-
   @override
   Future<List<Employee>> getAllEmployees() async {
-    await _ensureEmployeeSeeded();
     final result = <Employee>[];
     final seenKeys = <String>{};
 
     try {
       final snapshot = await _employeesRef.get();
       for (final doc in snapshot.docs) {
+        if (doc.id == 'EMP-0100') {
+          doc.reference.delete().ignore();
+          continue;
+        }
         final emp = _employeeFromFirestore(doc.data(), doc.id);
+        if (emp.employeeId == 'EMP-0100' || emp.firstName.toLowerCase() == 'rahul') {
+          doc.reference.delete().ignore();
+          continue;
+        }
         final key = doc.id.isNotEmpty ? doc.id : (emp.employeeId.isNotEmpty ? emp.employeeId : emp.id.toString());
         if (seenKeys.add(key)) {
           result.add(emp);
@@ -407,34 +376,6 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       }
     } catch (e) {
       debugPrint('Firebase getAllEmployees error: $e');
-    }
-
-    if (result.isEmpty) {
-      return [
-        const Employee(
-          id: 101,
-          employeeId: 'EMP-0100',
-          firstName: 'Rahul',
-          lastName: 'Kumar',
-          emailAddress: 'rahul.kumar@igreentec.example',
-          phoneNumber: '+91 98765 43210',
-          gender: 'Male',
-          dob: '1995-05-15',
-          organizationName: 'IGreentec Engg. India Pvt. Ltd.',
-          department: 'Engineering',
-          designation: 'Design Engineer',
-          employmentType: 'Full-Time',
-          joiningDate: '2024-01-10',
-          status: 'Active',
-          reportingManager: 'Arun Kumar',
-          inTime: '09:00 AM',
-          outTime: '06:00 PM',
-          street: 'Chennai Manufacturing Plant, Ambattur',
-          city: 'Chennai',
-          state: 'Tamil Nadu',
-          country: 'India',
-        ),
-      ];
     }
 
     return result;
@@ -729,10 +670,20 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     required String linkId,
     required Employee employeeData,
   }) async {
-    final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-    final empId = (employeeData.employeeId.isNotEmpty && employeeData.employeeId.startsWith('EMP-'))
-        ? employeeData.employeeId
-        : 'EMP-${timestamp.substring(timestamp.length - 4)}';
+    String empId = employeeData.employeeId;
+    if (!empId.startsWith('EMP-')) {
+      final all = await getAllEmployees();
+      final existing = all.where((e) =>
+          (employeeData.aadhaarNumber.isNotEmpty && e.aadhaarNumber == employeeData.aadhaarNumber) ||
+          (employeeData.emailAddress.isNotEmpty && e.emailAddress.toLowerCase() == employeeData.emailAddress.toLowerCase())
+      ).firstOrNull;
+
+      if (existing != null && existing.employeeId.startsWith('EMP-')) {
+        empId = existing.employeeId;
+      } else {
+        empId = await _generateNextEmployeeId();
+      }
+    }
 
     final activeEmployee = employeeData.copyWith(
       employeeId: empId,

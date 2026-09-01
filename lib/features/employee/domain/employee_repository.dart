@@ -60,4 +60,6 @@ abstract class EmployeeRepository {
 
   Future<ColumnPreference?> getColumnPreference(String tableId);
   Future<void> saveColumnPreference(ColumnPreference preference);
+
+  Future<String> getNextEmployeeId();
 }

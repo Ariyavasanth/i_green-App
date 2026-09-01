@@ -2069,6 +2069,15 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
         ? link.submittedDate
         : (link.generatedDate.isNotEmpty ? link.generatedDate : '');
 
+    final normalized = _normalizeStatus(candidateResp?.status ?? link.linkStatus, link);
+    final displayStatus = switch (normalized) {
+      CandidateCardStatus.submitted => 'Submitted',
+      CandidateCardStatus.accepted => 'Accepted',
+      CandidateCardStatus.registered => 'Converted',
+      CandidateCardStatus.rejected => 'Rejected',
+      CandidateCardStatus.pending => 'Pending',
+    };
+
     showDialog<void>(
       context: context,
       builder: (context) => Dialog(
@@ -2184,15 +2193,15 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: _getStatusBgColor(link.linkStatus),
+                        color: _getStatusBgColor(displayStatus),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        link.linkStatus.isNotEmpty ? link.linkStatus : 'Pending',
+                        displayStatus,
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
-                          color: _getStatusTextColor(link.linkStatus),
+                          color: _getStatusTextColor(displayStatus),
                         ),
                       ),
                     ),
@@ -2216,7 +2225,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                           _buildModernViewItem('Date of Birth', employee?.dob ?? '', icon: Icons.cake_outlined),
                           _buildModernViewItem('Gender', employee?.gender ?? ''),
                           _buildModernViewItem('Candidate ID', _candidateId(link)),
-                          _buildModernViewItem('Status', link.linkStatus),
+                          _buildModernViewItem('Status', displayStatus),
                         ],
                       ),
                       _buildModernViewSection(
