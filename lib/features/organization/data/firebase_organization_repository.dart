@@ -300,10 +300,31 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
     } catch (e) {
       debugPrint('Error getting business units: $e');
     }
-    if (organizationName != null && organizationName.isNotEmpty) {
-      return _memoryBUs.where((bu) => bu.organizationName.isEmpty || bu.organizationName == organizationName).toList();
+
+    // Merge business units listed inside Organization documents
+    final allOrgs = await getOrganizations();
+    final combinedBUs = List<BusinessUnit>.from(_memoryBUs);
+    int extraId = 10000;
+    for (final org in allOrgs) {
+      if (org.businessUnits.isNotEmpty) {
+        final buNames = org.businessUnits.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty);
+        for (final buName in buNames) {
+          if (!combinedBUs.any((b) => b.organizationName.trim().toLowerCase() == org.name.trim().toLowerCase() && b.unitName.trim().toLowerCase() == buName.toLowerCase())) {
+            combinedBUs.add(BusinessUnit(
+              id: extraId++,
+              organizationName: org.name,
+              unitName: buName,
+              description: 'Business unit under ${org.name}',
+            ));
+          }
+        }
+      }
     }
-    return List.from(_memoryBUs);
+
+    if (organizationName != null && organizationName.isNotEmpty) {
+      return combinedBUs.where((bu) => bu.organizationName.isEmpty || bu.organizationName.trim().toLowerCase() == organizationName.trim().toLowerCase()).toList();
+    }
+    return combinedBUs;
   }
 
   @override
@@ -359,12 +380,34 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
     } catch (e) {
       debugPrint('Error getting locations: $e');
     }
-    var res = _memoryLocations;
+
+    // Merge locations listed inside Organization documents
+    final allOrgs = await getOrganizations();
+    final combinedLocations = List<Location>.from(_memoryLocations);
+    int extraId = 20000;
+    for (final org in allOrgs) {
+      if (org.locations.isNotEmpty) {
+        final locNames = org.locations.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty);
+        for (final locName in locNames) {
+          if (!combinedLocations.any((l) => l.organizationName.trim().toLowerCase() == org.name.trim().toLowerCase() && l.locationName.trim().toLowerCase() == locName.toLowerCase())) {
+            combinedLocations.add(Location(
+              id: extraId++,
+              organizationName: org.name,
+              businessUnitName: '',
+              locationName: locName,
+              address: org.address,
+            ));
+          }
+        }
+      }
+    }
+
+    var res = combinedLocations;
     if (organizationName != null && organizationName.isNotEmpty) {
-      res = res.where((l) => l.organizationName.isEmpty || l.organizationName == organizationName).toList();
+      res = res.where((l) => l.organizationName.isEmpty || l.organizationName.trim().toLowerCase() == organizationName.trim().toLowerCase()).toList();
     }
     if (businessUnitName != null && businessUnitName.isNotEmpty) {
-      res = res.where((l) => l.businessUnitName.isEmpty || l.businessUnitName == businessUnitName).toList();
+      res = res.where((l) => l.businessUnitName.isEmpty || l.businessUnitName.trim().toLowerCase() == businessUnitName.trim().toLowerCase()).toList();
     }
     return List.from(res);
   }

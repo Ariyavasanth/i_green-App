@@ -138,6 +138,12 @@ class AppShell extends ConsumerWidget {
       'Employee',
     ),
     SidebarDestination(
+      'Attendance Settings',
+      '/attendance-settings',
+      Icons.tune_outlined,
+      'Employee',
+    ),
+    SidebarDestination(
       'On-Duty Management',
       '/on-duty-management',
       Icons.business_center_outlined,
@@ -162,6 +168,12 @@ class AppShell extends ConsumerWidget {
       'Employee',
     ),
     SidebarDestination(
+      'Site Visit Attendance Management',
+      '/site-visit-attendance-management',
+      Icons.pin_drop_outlined,
+      'Employee',
+    ),
+    SidebarDestination(
       'Leave Management',
       '/leave-management',
       Icons.event_note,
@@ -183,6 +195,12 @@ class AppShell extends ConsumerWidget {
       'Salary Settings',
       '/salary-settings',
       Icons.request_quote_outlined,
+      'Employee',
+    ),
+    SidebarDestination(
+      'Asset Settings',
+      '/asset-settings',
+      Icons.settings_suggest_outlined,
       'Employee',
     ),
     SidebarDestination(

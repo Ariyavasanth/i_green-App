@@ -2783,45 +2783,51 @@ class _EmployeeRegistrationPageState
                   : null,
             ),
             const SizedBox(width: 14),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildLabelWithRequiredStar('Candidate Photo *'),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    if (hasProfileImage)
-                      OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          side: const BorderSide(color: Colors.grey),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildLabelWithRequiredStar('Candidate Photo *'),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      if (hasProfileImage)
+                        OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            side: const BorderSide(color: Colors.grey),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                          ),
+                          onPressed: _removeProfileImage,
+                          child: const Text('Delete file', style: TextStyle(fontSize: 12, color: Colors.black)),
+                        )
+                      else
+                        OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            side: const BorderSide(color: Colors.grey),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                          ),
+                          onPressed: _pickProfileImage,
+                          child: const Text('Choose file', style: TextStyle(fontSize: 12, color: Colors.black)),
                         ),
-                        onPressed: _removeProfileImage,
-                        child: const Text('Delete file', style: TextStyle(fontSize: 12, color: Colors.black)),
-                      )
-                    else
-                      OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          side: const BorderSide(color: Colors.grey),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _selectedFileName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12, color: Colors.black87),
                         ),
-                        onPressed: _pickProfileImage,
-                        child: const Text('Choose file', style: TextStyle(fontSize: 12, color: Colors.black)),
                       ),
-                    const SizedBox(width: 8),
-                    Text(
-                      _selectedFileName,
-                      style: const TextStyle(fontSize: 12, color: Colors.black87),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),

@@ -11,9 +11,9 @@ import '../../../../core/theme/app_colors.dart';
 import '../../organization/presentation/widgets/column_selection_dialog.dart';
 import '../domain/registration_link.dart';
 import '../domain/employee.dart';
+import '../domain/candidate_response.dart';
 import '../providers/employee_providers.dart';
 import 'dialogs/add_employee_link_dialog.dart';
-import 'dialogs/candidate_conversion_dialog.dart';
 import 'dialogs/registration_links_dialog.dart';
 import 'widgets/admin_list_toolbar.dart';
 
@@ -62,6 +62,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
   Widget build(BuildContext context) {
     final linksAsync = ref.watch(registrationLinksProvider);
     final employeesAsync = ref.watch(allEmployeesProvider);
+    final candidateResponsesAsync = ref.watch(candidateResponsesProvider);
     final prefAsync = ref.watch(empColumnPreferenceProvider(_tableId));
     final searchQuery = ref.watch(responseSearchQueryProvider);
     final statusFilter = ref.watch(responseStatusFilterProvider);
@@ -80,6 +81,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             ),
             data: (links) {
               final employees = employeesAsync.valueOrNull ?? const <Employee>[];
+              final candidateResponses = candidateResponsesAsync.valueOrNull ?? const <CandidateResponse>[];
 
               // Keep only active candidate links (exclude converted and registered employees)
               final activeLinks = links.where((link) {
@@ -98,7 +100,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
               final filtered = activeLinks.where((link) {
                 final q = searchQuery.toLowerCase().trim();
                 final candidateId = _candidateId(link);
-                final employee = _employeeForLink(link, employees);
+                final employee = _employeeForLink(link, employees, candidateResponses);
                 final matchesSearch = q.isEmpty ||
                     candidateId.toLowerCase().contains(q) ||
                     link.linkId.toLowerCase().contains(q) ||
@@ -131,6 +133,17 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                 return matchesSearch && matchesStatus && matchesDate;
               }).toList();
 
+              // Sort by newest/most recent date descending (recent accepted/submitted on top)
+              filtered.sort((a, b) {
+                final dateA = _getLinkSortDate(a);
+                final dateB = _getLinkSortDate(b);
+                final dateCompare = dateB.compareTo(dateA);
+                if (dateCompare != 0) return dateCompare;
+                final idA = _candidateId(a);
+                final idB = _candidateId(b);
+                return idB.compareTo(idA);
+              });
+
               if (isMobile) {
                 final totalItems = filtered.length;
                 final totalPages = (totalItems / _rowsPerPage).ceil();
@@ -152,6 +165,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                           onRefresh: () async {
                             ref.invalidate(registrationLinksProvider);
                             ref.invalidate(allEmployeesProvider);
+                            ref.invalidate(candidateResponsesProvider);
                             await ref.read(registrationLinksProvider.future);
                           },
                           child: filtered.isEmpty
@@ -170,7 +184,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                                     ),
                                   ),
                                 )
-                              : _buildMobileList(pageItems, employees),
+                              : _buildMobileList(pageItems, employees, candidateResponses),
                         ),
                       ),
                     ],
@@ -237,7 +251,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                   _buildFiltersRow(statusList),
                   const Divider(height: 1),
                   Expanded(
-                    child: _buildDesktopTable(pageItems, visibleCols, constraints.maxWidth, employees),
+                    child: _buildDesktopTable(pageItems, visibleCols, constraints.maxWidth, employees, candidateResponses),
                   ),
                   _buildPaginationBar(
                     totalItems: totalItems,
@@ -1016,10 +1030,43 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     if (rawDate.trim().isEmpty) return null;
     try {
       final str = rawDate.trim();
-      return DateTime.tryParse(str) ?? DateTime.tryParse(str.replaceAll(' ', 'T'));
+      if (str.contains('seconds=')) {
+        final match = RegExp(r'seconds=(\d+)').firstMatch(str);
+        if (match != null) {
+          final secs = int.tryParse(match.group(1) ?? '');
+          if (secs != null) {
+            return DateTime.fromMillisecondsSinceEpoch(secs * 1000);
+          }
+        }
+      }
+      final parsed = DateTime.tryParse(str) ?? DateTime.tryParse(str.replaceAll(' ', 'T'));
+      if (parsed != null) return parsed;
+      final formats = [
+        DateFormat('d MMM yyyy'),
+        DateFormat('dd MMM yyyy'),
+        DateFormat('dd-MMM-yyyy'),
+        DateFormat('d-MMM-yyyy'),
+        DateFormat('yyyy-MM-dd'),
+        DateFormat('dd/MM/yyyy'),
+        DateFormat('d/M/yyyy'),
+      ];
+      for (final fmt in formats) {
+        try {
+          return fmt.parse(str);
+        } catch (_) {}
+      }
     } catch (_) {
       return null;
     }
+    return null;
+  }
+
+  DateTime _getLinkSortDate(RegistrationLink link) {
+    final subDate = _parseDate(link.submittedDate);
+    if (subDate != null) return subDate;
+    final genDate = _parseDate(link.generatedDate);
+    if (genDate != null) return genDate;
+    return DateTime(1970);
   }
 
   bool _matchesDateRange(RegistrationLink link, DateTimeRange? range) {
@@ -1298,7 +1345,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     }
   }
 
-  Widget _buildDesktopTable(List<RegistrationLink> links, List<String> visibleColumns, double screenWidth, List<Employee> employees) {
+  Widget _buildDesktopTable(List<RegistrationLink> links, List<String> visibleColumns, double screenWidth, List<Employee> employees, [List<CandidateResponse>? candidateResponses]) {
     final minTableWidth = (visibleColumns.length * 140.0 + 220.0).clamp(800.0, 3200.0);
     return Container(
       margin: const EdgeInsets.all(12),
@@ -1349,7 +1396,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                   const DataColumn(label: Text('ACTIONS')),
                 ],
                 rows: links.map((link) {
-                  final employee = _employeeForLink(link, employees);
+                  final employee = _employeeForLink(link, employees, candidateResponses);
                   final isSelected = _selectedIds.contains(link.id);
                   return DataRow(
                     selected: isSelected,
@@ -1435,12 +1482,12 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     );
   }
 
-  Widget _buildMobileList(List<RegistrationLink> links, List<Employee> employees) {
+  Widget _buildMobileList(List<RegistrationLink> links, List<Employee> employees, [List<CandidateResponse>? candidateResponses]) {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       itemCount: links.length,
       separatorBuilder: (context, index) => const SizedBox(height: 10),
-      itemBuilder: (context, index) => _buildCompactResponseCard(context, links[index], employees),
+      itemBuilder: (context, index) => _buildCompactResponseCard(context, links[index], employees, candidateResponses),
     );
   }
 
@@ -1473,22 +1520,10 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
   String _formatAppliedDate(RegistrationLink link) {
     final raw = link.submittedDate.trim().isNotEmpty ? link.submittedDate.trim() : link.generatedDate.trim();
     if (raw.isEmpty) return 'N/A';
-    try {
-      if (raw.contains('seconds=')) {
-        final match = RegExp(r'seconds=(\d+)').firstMatch(raw);
-        if (match != null) {
-          final secs = int.tryParse(match.group(1) ?? '');
-          if (secs != null) {
-            final dt = DateTime.fromMillisecondsSinceEpoch(secs * 1000);
-            return DateFormat('d MMM yyyy').format(dt);
-          }
-        }
-      }
-      final parsed = DateTime.tryParse(raw) ?? DateTime.tryParse(raw.replaceAll(' ', 'T'));
-      if (parsed != null) {
-        return DateFormat('d MMM yyyy').format(parsed);
-      }
-    } catch (_) {}
+    final dt = _parseDate(raw);
+    if (dt != null) {
+      return DateFormat('d MMM yyyy').format(dt);
+    }
     return raw;
   }
 
@@ -1506,8 +1541,8 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     return colors[name.hashCode.abs() % colors.length];
   }
 
-  Widget _buildCompactResponseCard(BuildContext context, RegistrationLink link, List<Employee> employees) {
-    final employee = _employeeForLink(link, employees);
+  Widget _buildCompactResponseCard(BuildContext context, RegistrationLink link, List<Employee> employees, [List<CandidateResponse>? candidateResponses]) {
+    final employee = _employeeForLink(link, employees, candidateResponses);
     final rawName = _candidateName(link, employee).trim();
     final hasName = rawName.isNotEmpty && rawName != '-';
     final candidateName = hasName ? rawName : 'Unknown Applicant';
@@ -1658,18 +1693,6 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(),
                             itemBuilder: (context) => [
-                              if (normalizedStatus == CandidateCardStatus.accepted || normalizedStatus == CandidateCardStatus.submitted) ...[
-                                const PopupMenuItem(
-                                  value: 'convert',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.assignment_ind_outlined, size: 18, color: Color(0xFF2E7D32)),
-                                      SizedBox(width: 8),
-                                      Text('Approve & Convert to Employee', style: TextStyle(fontSize: 13, color: Color(0xFF2E7D32), fontWeight: FontWeight.bold)),
-                                    ],
-                                  ),
-                                ),
-                              ],
                               if (normalizedStatus == CandidateCardStatus.submitted || normalizedStatus == CandidateCardStatus.pending) ...[
                                 const PopupMenuItem(
                                   value: 'accept',
@@ -1724,24 +1747,9 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                                   ],
                                 ),
                               ),
-                              const PopupMenuItem(
-                                value: 'view',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.visibility_outlined, size: 18, color: AppColors.textPrimary),
-                                    SizedBox(width: 8),
-                                    Text('Full Profile Details', style: TextStyle(fontSize: 13)),
-                                  ],
-                                ),
-                              ),
                             ],
                             onSelected: (value) {
-                              if (value == 'convert') {
-                                showDialog(
-                                  context: context,
-                                  builder: (_) => CandidateConversionDialog(link: link, candidateEmployee: employee),
-                                );
-                              } else if (value == 'accept') {
+                              if (value == 'accept') {
                                 _setResponseStatus(link, 'Accepted');
                               } else if (value == 'reject') {
                                 _setResponseStatus(link, 'Rejected');
@@ -1755,8 +1763,6 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                                     behavior: SnackBarBehavior.floating,
                                   ),
                                 );
-                              } else if (value == 'view') {
-                                _openViewDialog(context, link);
                               }
                             },
                           ),
@@ -2391,7 +2397,16 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     return '';
   }
 
-  Employee? _employeeForLink(RegistrationLink link, List<Employee> employees) {
+  Employee? _employeeForLink(RegistrationLink link, List<Employee> employees, [List<CandidateResponse>? candidateResponses]) {
+    if (candidateResponses != null) {
+      for (final resp in candidateResponses) {
+        if ((link.linkId.isNotEmpty && (resp.linkId == link.linkId || resp.candidateId == link.linkId)) ||
+            (link.employeeId.isNotEmpty && (resp.candidateId == link.employeeId || resp.linkId == link.employeeId)) ||
+            (link.employeeName.isNotEmpty && resp.employeeData.fullName.trim().toLowerCase() == link.employeeName.trim().toLowerCase())) {
+          return resp.employeeData;
+        }
+      }
+    }
     for (final employee in employees) {
       if ((link.employeeId.isNotEmpty && (employee.employeeId == link.employeeId || employee.id.toString() == link.employeeId)) ||
           (link.linkId.isNotEmpty && employee.employeeId == link.linkId) ||

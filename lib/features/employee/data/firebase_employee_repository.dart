@@ -462,6 +462,16 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         final linkId = (data['link_id']?.toString() ?? doc.id).trim();
         data['link_id'] = linkId.isNotEmpty ? linkId : doc.id;
 
+        final cand = candMap[linkId] ?? candMap[data['employee_id']?.toString() ?? ''];
+        if (cand != null) {
+          if ((data['employee_name']?.toString() ?? '').isEmpty) {
+            data['employee_name'] = cand.employeeData.fullName;
+          }
+          if ((data['employee_id']?.toString() ?? '').isEmpty) {
+            data['employee_id'] = cand.candidateId;
+          }
+        }
+
         final link = RegistrationLink.fromMap(data);
         final statusLower = link.linkStatus.trim().toLowerCase();
 
@@ -471,16 +481,6 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
           if (expiry != null && now.isAfter(expiry)) {
             await doc.reference.delete();
             continue;
-          }
-        }
-
-        final cand = candMap[linkId] ?? candMap[data['employee_id']?.toString() ?? ''];
-        if (cand != null) {
-          if ((data['employee_name']?.toString() ?? '').isEmpty) {
-            data['employee_name'] = cand.employeeData.fullName;
-          }
-          if ((data['employee_id']?.toString() ?? '').isEmpty) {
-            data['employee_id'] = cand.candidateId;
           }
         }
 
