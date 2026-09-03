@@ -264,6 +264,10 @@ class Employee {
       // Also match common semantic variations
       if (normalized == 'leave management' && (pLower == 'leave' || pLower == 'leaves' || pLower == 'leave management')) return true;
       if (normalized == 'leave' && (pLower == 'leave' || pLower == 'leaves' || pLower == 'leave management')) return true;
+      if ((normalized == 'on-duty' || normalized == 'on duty' || normalized == 'my on-duty') &&
+          (pLower == 'on-duty' || pLower == 'on duty' || pLower == 'my on-duty' || pLower == 'onduty')) return true;
+      if ((normalized == 'time clocking' || normalized == 'clocking') &&
+          (pLower == 'time clocking' || pLower == 'clocking')) return true;
       if (normalized == 'tasks and clocking management' && (pLower == 'tasks & timesheets' || pLower == 'tasks and timesheets' || pLower == 'tasks and clocking management')) return true;
       if (normalized == 'organization structure' && (pLower == 'organization' || pLower == 'organization structure')) return true;
       if (normalized == 'organization management' && (pLower == 'organization' || pLower == 'organization management')) return true;
@@ -286,8 +290,10 @@ class Employee {
     'Attendance',
     'Attendance Management',
     'Attendance Settings',
+    'On-Duty',
     'On-Duty Management',
     'My Tasks',
+    'Time Clocking',
     'Tasks and Clocking Management',
     'Site Visit Attendance',
     'Site Visit Attendance Management',
@@ -338,8 +344,10 @@ class Employee {
       'Attendance',
       'Attendance Management',
       'Attendance Settings',
+      'On-Duty',
       'On-Duty Management',
       'My Tasks',
+      'Time Clocking',
       'Tasks and Clocking Management',
       'Site Visit Attendance',
       'Site Visit Attendance Management',

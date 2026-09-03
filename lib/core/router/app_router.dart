@@ -40,6 +40,7 @@ import '../../features/site_visit_attendance_management/presentation/site_visit_
 import '../../features/asset_settings/presentation/asset_settings_page.dart';
 import '../../features/salary_settings/presentation/salary_settings_page.dart';
 import '../../features/asset_management/presentation/asset_management_page.dart';
+import '../../features/on_duty/presentation/on_duty_page.dart';
 import '../../features/on_duty/presentation/on_duty_management_page.dart';
 import '../../features/asset_management/presentation/my_asset_page.dart';
 import '../../screens/login_screen.dart';
@@ -85,8 +86,10 @@ String? _getRequiredPermissionForPath(String path) {
   if (path == '/attendance') return 'Attendance';
   if (path == '/attendance-settings') return 'Attendance Settings';
   if (path == '/attendance-management') return 'Attendance Management';
+  if (path == '/on-duty' || path == '/my-on-duty') return 'On-Duty';
   if (path == '/on-duty-management') return 'On-Duty Management';
   if (path == '/my-tasks') return 'My Tasks';
+  if (path == '/time-clocking') return 'Time Clocking';
   if (path == '/tasks-and-timesheets') return 'Tasks and Clocking Management';
   if (path == '/site-visit-attendance') return 'Site Visit Attendance';
   if (path == '/site-visit-attendance-management') return 'Site Visit Attendance Management';
@@ -133,13 +136,18 @@ String _getFirstAllowedPath(Employee emp) {
     'attendance': '/attendance',
     'attendance management': '/attendance-management',
     'attendance settings': '/attendance-settings',
+    'on-duty': '/on-duty',
+    'on duty': '/on-duty',
+    'my on-duty': '/on-duty',
+    'on-duty management': '/on-duty-management',
     'my tasks': '/my-tasks',
+    'time clocking': '/time-clocking',
+    'clocking': '/time-clocking',
     'tasks and clocking management': '/tasks-and-timesheets',
     'tasks & timesheets': '/tasks-and-timesheets',
     'tasks and timesheets': '/tasks-and-timesheets',
     'site visit attendance': '/site-visit-attendance',
     'site visit attendance management': '/site-visit-attendance-management',
-    'on-duty management': '/on-duty-management',
     'employee management': '/employee-management',
     'responses': '/responses',
     'permission': '/permission',
@@ -344,6 +352,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/permission-management',
             builder: (_, _) => const AdminPermissionManagementPage(),
+          ),
+          GoRoute(
+            path: '/on-duty',
+            builder: (_, _) => const OnDutyPage(),
           ),
           GoRoute(
             path: '/on-duty-management',

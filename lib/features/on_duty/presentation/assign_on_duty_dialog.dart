@@ -12,10 +12,12 @@ class AssignOnDutyDialog extends ConsumerStatefulWidget {
     super.key,
     this.preSelectedEmployee,
     this.existingAssignment,
+    this.isSelfRequest = false,
   });
 
   final Employee? preSelectedEmployee;
   final OnDutyAssignment? existingAssignment;
+  final bool isSelfRequest;
 
   @override
   ConsumerState<AssignOnDutyDialog> createState() => _AssignOnDutyDialogState();
@@ -198,7 +200,9 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      widget.existingAssignment != null ? 'Edit On Duty' : 'Assign On Duty',
+                      widget.existingAssignment != null
+                          ? 'Edit On Duty'
+                          : (widget.isSelfRequest ? 'Request On-Duty' : 'Assign On-Duty'),
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -214,57 +218,93 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
                 const Divider(height: 20, color: Color(0xFFE2E8F0)),
                 const SizedBox(height: 8),
 
-                // 1. Select Employee
+                // 1. Select Employee / Self Request Display
                 const Text(
                   'Employee *',
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: darkTextColor),
                 ),
                 const SizedBox(height: 6),
-                InkWell(
-                  onTap: () {
-                    showDialog<void>(
-                      context: context,
-                      builder: (ctx) => _EmployeePickerModal(
-                        employees: confirmedEmployees,
-                        selectedEmployee: _selectedEmployee,
-                        getEmployeeLabel: _getEmployeeLabel,
-                        onSelected: (emp) {
-                          setState(() => _selectedEmployee = emp);
-                        },
-                      ),
-                    );
-                  },
-                  borderRadius: BorderRadius.circular(10),
-                  child: Container(
+                if (widget.isSelfRequest && _selectedEmployee != null) ...[
+                  Container(
+                    width: double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: const Color(0xFF9CC70A).withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: const Color(0xFFCBD5E1),
-                      ),
+                      border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.5)),
                     ),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
+                        const Icon(Icons.person, size: 18, color: Color(0xFF414A51)),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            _selectedEmployee != null
-                                ? _getEmployeeLabel(_selectedEmployee!)
-                                : 'Select Employee...',
-                            style: TextStyle(
+                            _getEmployeeLabel(_selectedEmployee!),
+                            style: const TextStyle(
                               fontSize: 13,
-                              fontWeight: _selectedEmployee != null ? FontWeight.bold : FontWeight.normal,
-                              color: _selectedEmployee != null ? darkTextColor : const Color(0xFF94A3B8),
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF414A51),
                             ),
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const Icon(Icons.arrow_drop_down, color: Color(0xFF64748B)),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text('Self', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
+                        ),
                       ],
                     ),
                   ),
-                ),
+                ] else ...[
+                  InkWell(
+                    onTap: () {
+                      showDialog<void>(
+                        context: context,
+                        builder: (ctx) => _EmployeePickerModal(
+                          employees: confirmedEmployees,
+                          selectedEmployee: _selectedEmployee,
+                          getEmployeeLabel: _getEmployeeLabel,
+                          onSelected: (emp) {
+                            setState(() => _selectedEmployee = emp);
+                          },
+                        ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: const Color(0xFFCBD5E1),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _selectedEmployee != null
+                                  ? _getEmployeeLabel(_selectedEmployee!)
+                                  : 'Select Employee...',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: _selectedEmployee != null ? FontWeight.bold : FontWeight.normal,
+                                color: _selectedEmployee != null ? darkTextColor : const Color(0xFF94A3B8),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const Icon(Icons.arrow_drop_down, color: Color(0xFF64748B)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 16),
 
                 // 2. OD Type
@@ -608,7 +648,9 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
                                 child: CircularProgressIndicator(strokeWidth: 2, color: darkTextColor),
                               )
                             : Text(
-                                widget.existingAssignment != null ? 'Update OD' : 'Assign OD',
+                                widget.existingAssignment != null
+                                    ? 'Update OD'
+                                    : (widget.isSelfRequest ? 'Submit OD Request' : 'Assign OD'),
                                 style: const TextStyle(fontWeight: FontWeight.bold),
                               ),
                       ),
@@ -653,6 +695,10 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
         );
         await repo.updateAssignment(updated);
       } else {
+        final assignedByVal = widget.isSelfRequest
+            ? 'Self (Employee Request)'
+            : (widget.preSelectedEmployee != null ? 'Self' : 'Admin');
+
         final assignment = OnDutyAssignment(
           id: 0,
           employeeId: _selectedEmployee!.id,
@@ -668,23 +714,24 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
           status: 'ASSIGNED',
           notes: _notesController.text.trim(),
           afterCompletionOption: _afterCompletionOption,
-          assignedBy: widget.preSelectedEmployee != null ? 'Self' : 'Admin',
+          assignedBy: assignedByVal,
           createdAt: DateTime.now().toIso8601String(),
         );
         await repo.createAssignment(assignment);
       }
 
       // Invalidate providers
-      ref.invalidate(allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: null)));
+      ref.invalidate(allOnDutyAssignmentsProvider);
       ref.invalidate(activeOnDutyAssignmentProvider(_selectedEmployee!.id));
-      ref.invalidate(activeOnDutyAssignmentProvider(1));
-      ref.invalidate(activeOnDutyAssignmentProvider(0));
+      ref.invalidate(employeeOnDutyAssignmentsProvider);
 
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(isEditing ? 'On-Duty updated successfully!' : 'On-Duty assigned to ${_getEmployeeLabel(_selectedEmployee!)}!'),
+            content: Text(isEditing
+                ? 'On-Duty updated successfully!'
+                : (widget.isSelfRequest ? 'On-Duty request submitted successfully!' : 'On-Duty assigned to ${_getEmployeeLabel(_selectedEmployee!)}!')),
             backgroundColor: const Color(0xFF2E7D32),
           ),
         );

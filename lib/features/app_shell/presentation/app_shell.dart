@@ -102,9 +102,15 @@ class AppShell extends ConsumerWidget {
       'Employee',
     ),
     SidebarDestination(
+      'On-Duty',
+      '/on-duty',
+      Icons.business_center_outlined,
+      'Employee',
+    ),
+    SidebarDestination(
       'On-Duty Management',
       '/on-duty-management',
-      Icons.business_center_outlined,
+      Icons.business_center,
       'Employee',
     ),
     SidebarDestination(

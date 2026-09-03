@@ -547,8 +547,6 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
     AsyncValue<List<SiteVisitRecord>> todayVisitsAsync,
     AsyncValue<List<SiteVisitRecord>> selectedVisitsAsync,
   ) {
-    final activeOnDutyAsync = ref.watch(activeOnDutyAssignmentProvider(currentEmp.id));
-
     return SingleChildScrollView(
       controller: _scrollController,
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
@@ -578,15 +576,6 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
           ),
           const SizedBox(height: 16),
 
-          activeOnDutyAsync.when(
-            loading: () => _buildEmptyOnDutyCard(currentEmp),
-            error: (e, _) => _buildEmptyOnDutyCard(currentEmp),
-            data: (assignment) {
-              if (assignment == null) return _buildEmptyOnDutyCard(currentEmp);
-              return EmployeeOnDutyCard(assignment: assignment);
-            },
-          ),
-
           _buildTodayOverviewCard(currentEmp, todayVisitsAsync),
           const SizedBox(height: 20),
           AnimatedSwitcher(
@@ -595,77 +584,6 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
           ),
           if (_showVisitForm) const SizedBox(height: 20),
           _buildSelectedDaySection(selectedVisitsAsync),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyOnDutyCard(Employee currentEmp) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.assignment_ind_outlined, color: Color(0xFF414A51), size: 24),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'MY ON-DUTY',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: Color(0xFF414A51),
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'No active On-Duty task assigned today.',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                ),
-              ],
-            ),
-          ),
-          ElevatedButton.icon(
-            onPressed: () {
-              showDialog<void>(
-                context: context,
-                builder: (ctx) => AssignOnDutyDialog(preSelectedEmployee: currentEmp),
-              );
-            },
-            icon: const Icon(Icons.add, size: 15),
-            label: const Text('+ Apply OD'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF9CC70A),
-              foregroundColor: const Color(0xFF414A51),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              elevation: 0,
-            ),
-          ),
         ],
       ),
     );

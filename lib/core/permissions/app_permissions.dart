@@ -18,12 +18,14 @@ class AppPermissions {
   static const String attendance = 'Attendance';
   static const String attendanceManagement = 'Attendance Management';
   static const String attendanceSettings = 'Attendance Settings';
+  static const String onDuty = 'On-Duty';
   static const String onDutyManagement = 'On-Duty Management';
   static const String siteVisitAttendance = 'Site Visit Attendance';
   static const String siteVisitAttendanceManagement = 'Site Visit Attendance Management';
 
   // Task Management
   static const String myTasks = 'My Tasks';
+  static const String timeClocking = 'Time Clocking';
   static const String tasksAndClockingManagement = 'Tasks and Clocking Management';
 
   // Leave & Permissions
@@ -77,8 +79,10 @@ class AppPermissions {
     attendance,
     attendanceManagement,
     attendanceSettings,
+    onDuty,
     onDutyManagement,
     myTasks,
+    timeClocking,
     tasksAndClockingManagement,
     siteVisitAttendance,
     siteVisitAttendanceManagement,
@@ -132,12 +136,14 @@ class AppPermissions {
       attendance,
       attendanceManagement,
       attendanceSettings,
+      onDuty,
       onDutyManagement,
       siteVisitAttendance,
       siteVisitAttendanceManagement,
     ],
     'TASK MANAGEMENT': [
       myTasks,
+      timeClocking,
       tasksAndClockingManagement,
     ],
     'LEAVE & PERMISSIONS': [
