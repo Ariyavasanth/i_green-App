@@ -34,6 +34,7 @@ import '../../features/attendance_management/presentation/attendance_management_
 import '../../features/attendance_settings/presentation/attendance_settings_page.dart';
 import '../../features/task_management/presentation/task_board_page.dart';
 import '../../features/task_management/presentation/my_tasks_page.dart';
+import '../../features/time_clocking/presentation/time_clocking_page.dart';
 import '../../features/site_visit_attendance/presentation/site_visit_attendance_page.dart';
 import '../../features/site_visit_attendance_management/presentation/site_visit_attendance_management_page.dart';
 import '../../features/asset_settings/presentation/asset_settings_page.dart';
@@ -276,6 +277,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/my-tasks',
             builder: (_, _) => const MyTasksPage(),
+          ),
+          GoRoute(
+            path: '/time-clocking',
+            builder: (_, _) => const TimeClockingPage(),
           ),
           GoRoute(
             path: '/tasks-and-timesheets',

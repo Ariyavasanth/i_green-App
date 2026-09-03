@@ -114,6 +114,12 @@ class AppShell extends ConsumerWidget {
       'Employee',
     ),
     SidebarDestination(
+      'Time Clocking',
+      '/time-clocking',
+      Icons.timer_outlined,
+      'Employee',
+    ),
+    SidebarDestination(
       'Tasks and Clocking Management',
       '/tasks-and-timesheets',
       Icons.assignment_outlined,

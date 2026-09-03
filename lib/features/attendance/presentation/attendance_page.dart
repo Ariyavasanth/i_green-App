@@ -25,7 +25,6 @@ import '../../permission/providers/permission_providers.dart';
 import '../../attendance_settings/providers/attendance_settings_providers.dart';
 import '../providers/attendance_providers.dart';
 import '../../employee/providers/employee_providers.dart';
-import '../../time_clocking/presentation/employee_clocking_widget.dart';
 
 class AttendancePage extends ConsumerStatefulWidget {
   const AttendancePage({super.key});
@@ -327,10 +326,6 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
           children: [
             // Today's Status Banner Card
             _buildTodayBannerCard(currentEmp, todayAttendanceAsync),
-            const SizedBox(height: 16),
-
-            // Work Activity / Clocking Section (Includes Active On-Duty)
-            EmployeeClockingWidget(employeeId: currentEmp.employeeId.isNotEmpty ? currentEmp.employeeId : currentEmp.id.toString()),
             const SizedBox(height: 24),
 
             // This Month Overview Card
