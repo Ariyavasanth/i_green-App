@@ -69,7 +69,7 @@ class AccessDeniedView extends StatelessWidget {
                           if (Navigator.of(context).canPop()) {
                             context.pop();
                           } else {
-                            context.go('/home');
+                            context.go('/module-dashboard');
                           }
                         },
                         icon: const Icon(Icons.arrow_back, size: 18),

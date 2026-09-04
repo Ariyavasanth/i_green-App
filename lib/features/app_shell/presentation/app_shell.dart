@@ -29,7 +29,7 @@ final attendanceActiveTabProvider = StateProvider<int>((ref) => 0);
 final userDestinationsProvider = Provider<List<SidebarDestination>>((ref) {
   final currentEmp = ref.watch(currentEmployeeProvider);
   if (currentEmp == null) {
-    return AppShell.destinations;
+    return const [];
   }
 
   // Super Admin has full unrestricted access to all modules automatically
@@ -447,6 +447,121 @@ class _TopBar extends ConsumerWidget {
     return 'Green Technology';
   }
 
+  String _getBackRoute(String location) {
+    final cleanLoc = location.split('?').first.trim();
+
+    // Nested sub-pages -> Section main page
+    if (cleanLoc.startsWith('/loan/details') || cleanLoc.startsWith('/loan-management/details')) {
+      return '/loan-management';
+    }
+    if (cleanLoc == '/loan-management/create' || cleanLoc == '/loan/create') {
+      return '/loan-management';
+    }
+    if (cleanLoc.startsWith('/employee/register')) {
+      return '/employee-management';
+    }
+    if (cleanLoc.startsWith('/permission/')) {
+      return '/permission';
+    }
+    if (cleanLoc.startsWith('/inventory-adjustments/') && cleanLoc != '/inventory-adjustments') {
+      return '/inventory-adjustments';
+    }
+    if (cleanLoc == '/items/new' || cleanLoc == '/items/request-material') {
+      return '/items';
+    }
+    if (cleanLoc == '/customers/new') return '/customers';
+    if (cleanLoc == '/quotes/new') return '/quotes';
+    if (cleanLoc == '/sales-orders/new') return '/sales-orders';
+    if (cleanLoc == '/invoices/new') return '/invoices';
+    if (cleanLoc == '/bills/new') return '/bills';
+    if (cleanLoc == '/purchase-orders/new') return '/purchase-orders';
+    if (cleanLoc == '/vendors/new') return '/vendors';
+    if (cleanLoc == '/expenses/new') return '/expenses';
+    if (cleanLoc.startsWith('/payroll/') && cleanLoc != '/payroll') return '/payroll';
+
+    // HRMS Sub-modules -> HRMS Module Screen
+    const hrmsRoutes = [
+      '/organization-management',
+      '/organization-structure',
+      '/employee',
+      '/employee-management',
+      '/responses',
+      '/leave',
+      '/leave-management',
+      '/attendance',
+      '/attendance-settings',
+      '/attendance-management',
+      '/my-tasks',
+      '/time-clocking',
+      '/tasks-and-timesheets',
+      '/site-visit-attendance',
+      '/site-visit-attendance-management',
+      '/salary-settings',
+      '/asset-settings',
+      '/asset-management',
+      '/my-asset',
+      '/on-duty',
+      '/my-on-duty',
+      '/on-duty-management',
+      '/loan',
+      '/loan-management',
+      '/my-exit',
+      '/exit-management',
+      '/incentive',
+      '/incentive-management',
+      '/my-payslips',
+      '/permission',
+      '/permission-management',
+    ];
+
+    for (final route in hrmsRoutes) {
+      if (cleanLoc == route || cleanLoc.startsWith('$route/')) {
+        return '/module/hrms';
+      }
+    }
+
+    // Inventory Sub-modules -> Inventory Module Screen
+    const inventoryRoutes = [
+      '/items',
+      '/inventory-adjustments',
+    ];
+
+    for (final route in inventoryRoutes) {
+      if (cleanLoc == route || cleanLoc.startsWith('$route/')) {
+        return '/module/inventory';
+      }
+    }
+
+    // Accounts Sub-modules -> Accounts Module Screen
+    const accountsRoutes = [
+      '/customers',
+      '/quotes',
+      '/sales-orders',
+      '/invoices',
+      '/delivery-challans',
+      '/payments-received',
+      '/credit-notes',
+      '/e-way-bills',
+      '/eway-bills',
+      '/vendors',
+      '/expenses',
+      '/purchase-orders',
+      '/bills',
+      '/payroll',
+      '/payroll-history',
+      '/payroll-settings',
+    ];
+
+    for (final route in accountsRoutes) {
+      if (cleanLoc == route || cleanLoc.startsWith('$route/')) {
+        return '/module/accounts';
+      }
+    }
+
+    // Module screens or profile -> Module Dashboard
+    return '/module-dashboard';
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     String headingText;
@@ -497,31 +612,33 @@ class _TopBar extends ConsumerWidget {
         constraints: const BoxConstraints(minHeight: 48),
         child: Row(
           children: [
-            if (isFormPage)
+            if (compact)
+              IconButton(
+                icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1E293B)),
+                tooltip: 'Back',
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go(_getBackRoute(currentLocation));
+                  }
+                },
+              )
+            else if (isFormPage)
               IconButton(
                 icon: const Icon(Icons.arrow_back, color: Color(0xFF1E293B)),
                 tooltip: 'Back',
                 onPressed: () {
-                  if (Navigator.of(context).canPop()) {
-                    Navigator.of(context).pop();
-                  } else if (currentLocation.startsWith('/loan-management/')) {
-                    context.go('/loan-management');
-                  } else if (currentLocation.startsWith('/loan/')) {
-                    context.go('/loan');
-                  } else if (currentLocation.startsWith('/inventory-adjustments/')) {
-                    context.go('/inventory-adjustments');
-                  } else if (currentLocation.startsWith('/permission/')) {
-                    context.go('/permission');
-                  } else if (currentLocation == '/my-profile' || currentLocation == '/profile') {
-                    context.go('/home');
+                  if (context.canPop()) {
+                    context.pop();
                   } else {
-                    context.go('/home');
+                    context.go(_getBackRoute(currentLocation));
                   }
                 },
               )
             else
               _AnimatedMenuButton(
-                tooltip: compact ? 'Open navigation' : 'Toggle navigation',
+                tooltip: 'Toggle navigation',
                 onPressed: onMenuPressed,
               ),
             const SizedBox(width: 8),

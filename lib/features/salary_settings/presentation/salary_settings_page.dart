@@ -158,9 +158,17 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
             builder: (context, constraints) {
               final isMobile = constraints.maxWidth < 600;
 
-              return SingleChildScrollView(
-                padding: EdgeInsets.all(isMobile ? 12 : 24),
-                child: Form(
+              return RefreshIndicator(
+                color: const Color(0xFF9CC70A),
+                onRefresh: () async {
+                  await ref.read(salarySettingsNotifierProvider.notifier).loadSettings();
+                  await Future.delayed(const Duration(milliseconds: 500));
+                },
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.all(isMobile ? 12 : 24),
+                  child: Form(
+
                   key: _formKey,
                   child: Center(
                     child: ConstrainedBox(
@@ -392,10 +400,13 @@ class _SalarySettingsPageState extends ConsumerState<SalarySettingsPage> {
                     ),
                   ),
                 ),
-              );
-            },
-          );
-        },
+              ),
+            );
+          },
+        );
+      },
+
+
       ),
     );
   }

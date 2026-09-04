@@ -142,21 +142,32 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
                   Column(
                     children: [
                       Expanded(
-                        child: SingleChildScrollView(
-                          padding: EdgeInsets.only(
-                            left: isMobile ? 12.0 : 24.0,
-                            right: isMobile ? 12.0 : 24.0,
-                            top: isMobile ? 12.0 : 24.0,
-                            bottom: 80.0,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Top Header: Only show on desktop (!isMobile)
-                              if (!isMobile) ...[
-                                _buildTopHeader(context, employees, leaveTypes, currentEmp, isMobile),
-                                const SizedBox(height: 20),
-                              ],
+                        child: RefreshIndicator(
+                          color: const Color(0xFF0D8A4E),
+                          onRefresh: () async {
+                            ref.invalidate(allLeaveRequestsProvider);
+                            ref.invalidate(employeesProvider);
+                            ref.invalidate(leaveTypesProvider);
+                            ref.invalidate(currentEmployeeProvider);
+                            await Future.delayed(const Duration(milliseconds: 500));
+                          },
+                          child: SingleChildScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: EdgeInsets.only(
+                              left: isMobile ? 12.0 : 24.0,
+                              right: isMobile ? 12.0 : 24.0,
+                              top: isMobile ? 12.0 : 24.0,
+                              bottom: 80.0,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Top Header: Only show on desktop (!isMobile)
+                                if (!isMobile) ...[
+                                  _buildTopHeader(context, employees, leaveTypes, currentEmp, isMobile),
+                                  const SizedBox(height: 20),
+                                ],
+
 
                               // Animated Active Tab Switcher
                               AnimatedSwitcher(
@@ -179,7 +190,9 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
                           ),
                         ),
                       ),
-                      _buildBottomNavBar(pendingRequestsCount, isMobile),
+                    ),
+                    _buildBottomNavBar(pendingRequestsCount, isMobile),
+
                     ],
                   ),
                   if (isMobile)

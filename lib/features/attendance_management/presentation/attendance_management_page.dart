@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -363,14 +364,16 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
       children: [
         Row(
           children: [
-            Builder(
-              builder: (ctx) => IconButton(
-                icon: const Icon(Icons.menu, color: Color(0xFF1E293B), size: 24),
+            IconButton(
+                icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1E293B), size: 24),
                 onPressed: () {
-                  Scaffold.maybeOf(ctx)?.openDrawer();
+                  if (Navigator.of(context).canPop()) {
+                    Navigator.of(context).pop();
+                  } else {
+                    GoRouter.of(context).go('/module-dashboard');
+                  }
                 },
               ),
-            ),
             const SizedBox(width: 4),
             const Column(
               crossAxisAlignment: CrossAxisAlignment.start,

@@ -43,18 +43,26 @@ class _ExpensesPageState extends ConsumerState<ExpensesPage> {
           _toolbar(context),
           const Divider(height: 1),
           Expanded(
-            child: result.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Center(
-                child: Text('Unable to load expenses: $error'),
-              ),
-              data: (expenses) => LayoutBuilder(
-                builder: (context, constraints) => constraints.maxWidth < 720
-                    ? _mobileList(expenses)
-                    : _desktopTable(expenses, constraints.maxWidth),
+            child: RefreshIndicator(
+              color: AppColors.active,
+              onRefresh: () async {
+                ref.invalidate(expensesProvider);
+                await Future.delayed(const Duration(milliseconds: 500));
+              },
+              child: result.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, _) => Center(
+                  child: Text('Unable to load expenses: $error'),
+                ),
+                data: (expenses) => LayoutBuilder(
+                  builder: (context, constraints) => constraints.maxWidth < 720
+                      ? _mobileList(expenses)
+                      : _desktopTable(expenses, constraints.maxWidth),
+                ),
               ),
             ),
           ),
+
         ],
       ),
     );

@@ -431,15 +431,24 @@ class _AssetSettingsPageState extends ConsumerState<AssetSettingsPage>
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          // View 1: Asset Types List
-          _buildAssetTypesView(assetTypesAsync, searchQuery),
-          // View 2: Categories List
-          _buildCategoriesView(assetCategoriesAsync, assetTypes),
-        ],
+      body: RefreshIndicator(
+        color: primaryColor,
+        onRefresh: () async {
+          ref.invalidate(assetTypesProvider);
+          ref.invalidate(assetCategoriesProvider);
+          await Future.delayed(const Duration(milliseconds: 500));
+        },
+        child: TabBarView(
+          controller: _tabController,
+          children: [
+            // View 1: Asset Types List
+            _buildAssetTypesView(assetTypesAsync, searchQuery),
+            // View 2: Categories List
+            _buildCategoriesView(assetCategoriesAsync, assetTypes),
+          ],
+        ),
       ),
+
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           if (_tabController.index == 0) {

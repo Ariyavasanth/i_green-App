@@ -146,20 +146,28 @@ class _ExitManagementPageState extends ConsumerState<ExitManagementPage> with Si
 
               // ── Tab Views ──────────────────────────────────────────────────
               Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _DashboardTab(requests: filteredRequests, isMobile: isMobile),
-                    _ResignationRequestsTab(requests: filteredRequests, isMobile: isMobile),
-                    _NoticePeriodTab(requests: filteredRequests, isMobile: isMobile),
-                    _ClearanceTab(requests: filteredRequests, isMobile: isMobile),
-                    _ExitInterviewTab(requests: filteredRequests, isMobile: isMobile),
-                    _SettlementTab(requests: filteredRequests, isMobile: isMobile),
-                    _DocumentsTab(requests: filteredRequests, isMobile: isMobile),
-                    _CompletedExitsTab(requests: filteredRequests, isMobile: isMobile),
-                  ],
+                child: RefreshIndicator(
+                  color: const Color(0xFF9CC70A),
+                  onRefresh: () async {
+                    ref.invalidate(allExitRequestsProvider);
+                    await Future.delayed(const Duration(milliseconds: 500));
+                  },
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _DashboardTab(requests: filteredRequests, isMobile: isMobile),
+                      _ResignationRequestsTab(requests: filteredRequests, isMobile: isMobile),
+                      _NoticePeriodTab(requests: filteredRequests, isMobile: isMobile),
+                      _ClearanceTab(requests: filteredRequests, isMobile: isMobile),
+                      _ExitInterviewTab(requests: filteredRequests, isMobile: isMobile),
+                      _SettlementTab(requests: filteredRequests, isMobile: isMobile),
+                      _DocumentsTab(requests: filteredRequests, isMobile: isMobile),
+                      _CompletedExitsTab(requests: filteredRequests, isMobile: isMobile),
+                    ],
+                  ),
                 ),
               ),
+
             ],
           );
         },

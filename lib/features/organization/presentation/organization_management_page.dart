@@ -63,83 +63,97 @@ class _OrganizationManagementPageState
           _buildActiveFilterChips(),
           const Divider(height: 1, color: Color(0xFFEAECF0)),
           Expanded(
-            child: orgsAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, _) => Center(
-                child: Text('Unable to load organizations: $err'),
-              ),
-              data: (orgs) {
-                final filtered = orgs.where((org) {
-                  if (_selectedBusinessTypeFilter != 'All' && org.businessType != _selectedBusinessTypeFilter) {
-                    return false;
-                  }
-                  if (_selectedIndustryTypeFilter != 'All' && org.industryType != _selectedIndustryTypeFilter) {
-                    return false;
-                  }
-                  if (searchQuery.trim().isEmpty) return true;
-                  final q = searchQuery.toLowerCase();
-                  return org.name.toLowerCase().contains(q) ||
-                      org.businessType.toLowerCase().contains(q) ||
-                      org.industryType.toLowerCase().contains(q) ||
-                      org.emailAddress.toLowerCase().contains(q) ||
-                      org.phoneNumber.toLowerCase().contains(q) ||
-                      org.taxId.toLowerCase().contains(q);
-                }).toList();
-
-                if (filtered.isEmpty) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(32),
-                      child: Text(
-                        'No organizations found.',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  );
-                }
-
-                final pref = prefAsync.valueOrNull;
-                List<String> visibleCols;
-                if (pref != null && pref.visibleColumns.isNotEmpty) {
-                  visibleCols = pref.visibleColumns;
-                } else {
-                  visibleCols = List.from(_defaultAllColumns);
-                }
-
-                final totalItems = filtered.length;
-                final totalPages = (totalItems / _rowsPerPage).ceil();
-                final pageIndex = _currentPage.clamp(0, (totalPages - 1).clamp(0, 999));
-                final startIndex = pageIndex * _rowsPerPage;
-                final endIndex = (startIndex + _rowsPerPage).clamp(0, totalItems);
-                final pageItems = filtered.sublist(startIndex, endIndex);
-
-                return Column(
-                  children: [
-                    Expanded(
-                      child: isMobile
-                          ? _buildMobileList(pageItems)
-                          : _buildDesktopTable(
-                              pageItems,
-                              visibleCols,
-                              MediaQuery.of(context).size.width,
-                            ),
-                    ),
-                    _buildPaginationBar(
-                      totalItems: totalItems,
-                      startIndex: startIndex,
-                      endIndex: endIndex,
-                      currentPage: pageIndex,
-                      totalPages: totalPages,
-                      isMobile: isMobile,
-                    ),
-                  ],
-                );
+            child: RefreshIndicator(
+              color: const Color(0xFF9CC70A),
+              onRefresh: () async {
+                ref.invalidate(organizationsProvider);
+                ref.invalidate(columnPreferenceProvider(_tableId));
+                await Future.delayed(const Duration(milliseconds: 500));
               },
+              child: orgsAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (err, _) => Center(
+                  child: Text('Unable to load organizations: $err'),
+                ),
+                data: (orgs) {
+                  final filtered = orgs.where((org) {
+                    if (_selectedBusinessTypeFilter != 'All' && org.businessType != _selectedBusinessTypeFilter) {
+                      return false;
+                    }
+                    if (_selectedIndustryTypeFilter != 'All' && org.industryType != _selectedIndustryTypeFilter) {
+                      return false;
+                    }
+                    if (searchQuery.trim().isEmpty) return true;
+                    final q = searchQuery.toLowerCase();
+                    return org.name.toLowerCase().contains(q) ||
+                        org.businessType.toLowerCase().contains(q) ||
+                        org.industryType.toLowerCase().contains(q) ||
+                        org.emailAddress.toLowerCase().contains(q) ||
+                        org.phoneNumber.toLowerCase().contains(q) ||
+                        org.taxId.toLowerCase().contains(q);
+                  }).toList();
+
+                  if (filtered.isEmpty) {
+                    return ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: const [
+                        Padding(
+                          padding: EdgeInsets.all(48),
+                          child: Center(
+                            child: Text(
+                              'No organizations found.',
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+
+                  final pref = prefAsync.valueOrNull;
+                  List<String> visibleCols;
+                  if (pref != null && pref.visibleColumns.isNotEmpty) {
+                    visibleCols = pref.visibleColumns;
+                  } else {
+                    visibleCols = List.from(_defaultAllColumns);
+                  }
+
+                  final totalItems = filtered.length;
+                  final totalPages = (totalItems / _rowsPerPage).ceil();
+                  final pageIndex = _currentPage.clamp(0, (totalPages - 1).clamp(0, 999));
+                  final startIndex = pageIndex * _rowsPerPage;
+                  final endIndex = (startIndex + _rowsPerPage).clamp(0, totalItems);
+                  final pageItems = filtered.sublist(startIndex, endIndex);
+
+                  return Column(
+                    children: [
+                      Expanded(
+                        child: isMobile
+                            ? _buildMobileList(pageItems)
+                            : _buildDesktopTable(
+                                pageItems,
+                                visibleCols,
+                                MediaQuery.of(context).size.width,
+                              ),
+                      ),
+                      _buildPaginationBar(
+                        totalItems: totalItems,
+                        startIndex: startIndex,
+                        endIndex: endIndex,
+                        currentPage: pageIndex,
+                        totalPages: totalPages,
+                        isMobile: isMobile,
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
+
         ],
       ),
     );

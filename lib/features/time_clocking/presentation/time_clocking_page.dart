@@ -30,22 +30,30 @@ class TimeClockingPage extends ConsumerWidget {
       backgroundColor: const Color(0xFFF8FAFC),
       body: SafeArea(
         top: false,
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: EdgeInsets.fromLTRB(
-            isMobile ? 12 : 24,
-            isMobile ? 12 : 20,
-            isMobile ? 12 : 24,
-            60,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              EmployeeClockingWidget(employeeId: empId),
-            ],
+        child: RefreshIndicator(
+          color: const Color(0xFF9CC70A),
+          onRefresh: () async {
+            ref.invalidate(currentEmployeeProvider);
+            await Future.delayed(const Duration(milliseconds: 500));
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(
+              isMobile ? 12 : 24,
+              isMobile ? 12 : 20,
+              isMobile ? 12 : 24,
+              60,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                EmployeeClockingWidget(employeeId: empId),
+              ],
+            ),
           ),
         ),
       ),
     );
+
   }
 }

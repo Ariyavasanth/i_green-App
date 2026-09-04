@@ -299,10 +299,18 @@ class _MyTasksPageState extends ConsumerState<MyTasksPage> {
       )),
     );
 
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.all(16),
-      child: Column(
+    return RefreshIndicator(
+      color: primaryColor,
+      onRefresh: () async {
+        ref.invalidate(tasksProvider);
+        ref.invalidate(currentEmployeeProvider);
+        await Future.delayed(const Duration(milliseconds: 500));
+      },
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Quick Status Filter Chips
@@ -394,7 +402,9 @@ class _MyTasksPageState extends ConsumerState<MyTasksPage> {
           ),
         ],
       ),
-    );
+    ),
+  );
+
   }
 
   Widget _buildTaskCard(

@@ -103,58 +103,67 @@ class _PayrollSettingsScreenState extends ConsumerState<PayrollSettingsScreen> {
               final isWideDesktop = constraints.maxWidth >= AppBreakpoints.desktop;
               final gutter = AppLayout.gutter(constraints.maxWidth);
 
-              return SingleChildScrollView(
-                padding: EdgeInsets.all(gutter),
-                child: ResponsiveContent(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Header
-                      _buildHeader(),
-                      const SizedBox(height: 24),
+              return RefreshIndicator(
+                color: AppColors.active,
+                onRefresh: () async {
+                  ref.invalidate(payrollSettingsProvider);
+                  await Future.delayed(const Duration(milliseconds: 500));
+                },
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.all(gutter),
+                  child: ResponsiveContent(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Header
+                        _buildHeader(),
+                        const SizedBox(height: 24),
 
-                      // Grouped Settings Sections (3 Cards: Payroll Rules, Attendance Rules, Payment Schedule)
-                      if (!isWideDesktop) ...[
-                        _buildPayrollRulesCard(),
-                        const SizedBox(height: 16),
-                        _buildAttendanceRulesCard(),
-                        const SizedBox(height: 16),
-                        _buildPaymentScheduleCard(),
-                      ] else ...[
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(child: _buildPayrollRulesCard()),
-                            const SizedBox(width: 16),
-                            Expanded(child: _buildAttendanceRulesCard()),
-                            const SizedBox(width: 16),
-                            Expanded(child: _buildPaymentScheduleCard()),
-                          ],
-                        ),
-                      ],
-                      const SizedBox(height: 32),
+                        // Grouped Settings Sections (3 Cards: Payroll Rules, Attendance Rules, Payment Schedule)
+                        if (!isWideDesktop) ...[
+                          _buildPayrollRulesCard(),
+                          const SizedBox(height: 16),
+                          _buildAttendanceRulesCard(),
+                          const SizedBox(height: 16),
+                          _buildPaymentScheduleCard(),
+                        ] else ...[
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(child: _buildPayrollRulesCard()),
+                              const SizedBox(width: 16),
+                              Expanded(child: _buildAttendanceRulesCard()),
+                              const SizedBox(width: 16),
+                              Expanded(child: _buildPaymentScheduleCard()),
+                            ],
+                          ),
+                        ],
+                        const SizedBox(height: 32),
 
-                      // Action Button
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: ElevatedButton.icon(
-                          onPressed: _saveSettings,
-                          icon: const Icon(Icons.save_outlined, size: 18),
-                          label: const Text('Save Settings', style: TextStyle(fontWeight: FontWeight.bold)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        // Action Button
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: ElevatedButton.icon(
+                            onPressed: _saveSettings,
+                            icon: const Icon(Icons.save_outlined, size: 18),
+                            label: const Text('Save Settings', style: TextStyle(fontWeight: FontWeight.bold)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               );
             },
           );
+
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => Center(

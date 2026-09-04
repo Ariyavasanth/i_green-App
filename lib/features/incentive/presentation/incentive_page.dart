@@ -491,17 +491,28 @@ class _IncentivePageState extends ConsumerState<IncentivePage> {
 
               // Tab Views
               Expanded(
-                child: TabBarView(
-                  children: [
-                    // Tab 1: New Incentive Request Form
-                    SingleChildScrollView(
-                      child: _buildFormCard(),
-                    ),
-                    // Tab 2: My Incentive Requests List & Date Filter
-                    _buildRequestsTabContent(requestsAsync),
-                  ],
+                child: RefreshIndicator(
+                  color: AppColors.active,
+                  onRefresh: () async {
+                    ref.invalidate(allIncentiveRequestsProvider);
+                    ref.invalidate(incentiveSettingsProvider);
+                    await Future.delayed(const Duration(milliseconds: 500));
+                  },
+
+                  child: TabBarView(
+                    children: [
+                      // Tab 1: New Incentive Request Form
+                      SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        child: _buildFormCard(),
+                      ),
+                      // Tab 2: My Incentive Requests List & Date Filter
+                      _buildRequestsTabContent(requestsAsync),
+                    ],
+                  ),
                 ),
               ),
+
             ],
           ),
         ),

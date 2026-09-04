@@ -92,17 +92,26 @@ class _MyExitPageState extends ConsumerState<MyExitPage> {
         foregroundColor: AppColors.textPrimary,
         elevation: 0.5,
       ),
-      body: myExitAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF9CC70A))),
-        error: (err, stack) => Center(child: Text('Error loading exit details: $err')),
-        data: (exitRequest) {
-          if (exitRequest == null) {
-            return _buildNoExitSubmittedView(emp?.employeeId ?? '');
-          }
-          return _buildResponsiveExitDashboard(context, exitRequest);
+      body: RefreshIndicator(
+        color: const Color(0xFF9CC70A),
+        onRefresh: () async {
+          ref.invalidate(myExitRequestProvider);
+          ref.invalidate(allExitRequestsProvider);
+          await Future.delayed(const Duration(milliseconds: 500));
         },
+        child: myExitAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF9CC70A))),
+          error: (err, stack) => Center(child: Text('Error loading exit details: $err')),
+          data: (exitRequest) {
+            if (exitRequest == null) {
+              return _buildNoExitSubmittedView(emp?.employeeId ?? '');
+            }
+            return _buildResponsiveExitDashboard(context, exitRequest);
+          },
+        ),
       ),
     );
+
   }
 
   Widget _buildNoExitSubmittedView(String empId) {

@@ -2,6 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../screens/splash_screen.dart';
+import '../../screens/module_dashboard_screen.dart';
+import '../../screens/modules/hrms_module_screen.dart';
+import '../../screens/modules/inventory_module_screen.dart';
+import '../../screens/modules/accounts_module_screen.dart';
+import '../../screens/modules/project_module_screen.dart';
+import '../../screens/modules/factory_module_screen.dart';
+
 import '../../features/app_shell/presentation/app_shell.dart';
 import '../../features/app_shell/presentation/section_page.dart';
 import '../../features/books/domain/books_repository.dart';
@@ -195,16 +203,21 @@ String _getFirstAllowedPath(Employee emp) {
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
-    initialLocation: '/home',
+    initialLocation: '/splash',
     redirect: (context, state) {
       final path = state.uri.path;
-      if (path == '/login' || path.startsWith('/employee/register')) {
+      if (path == '/login' || path == '/splash' || path.startsWith('/employee/register')) {
         return null;
       }
 
       final emailOrId = ref.read(currentUserEmailProvider);
       if (emailOrId == null || emailOrId.trim().isEmpty) {
         return '/login';
+      }
+
+      // Module dashboard and sub-module pages require login but not sidebar-level permissions
+      if (path == '/module-dashboard' || path.startsWith('/module/')) {
+        return null;
       }
 
       final currentEmp = ref.read(currentEmployeeProvider);
@@ -224,7 +237,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
+      GoRoute(path: '/module-dashboard', builder: (_, _) => const ModuleDashboardScreen()),
+      GoRoute(path: '/module/hrms', builder: (_, _) => const HrmsModuleScreen()),
+      GoRoute(path: '/module/inventory', builder: (_, _) => const InventoryModuleScreen()),
+      GoRoute(path: '/module/accounts', builder: (_, _) => const AccountsModuleScreen()),
+      GoRoute(path: '/module/project', builder: (_, _) => const ProjectModuleScreen()),
+      GoRoute(path: '/module/factory', builder: (_, _) => const FactoryModuleScreen()),
       GoRoute(
         path: '/employee/register/:linkId',
         builder: (_, state) {

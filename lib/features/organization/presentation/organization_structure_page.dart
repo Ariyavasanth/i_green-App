@@ -97,10 +97,20 @@ class _OrganizationStructurePageState
           ),
           // Tab Content
           Expanded(
-            child: _selectedTab == 0
-                ? _buildDepartmentsView(context, isMobile)
-                : _buildDesignationsView(context, isMobile),
+            child: RefreshIndicator(
+              color: const Color(0xFF9CC70A),
+              onRefresh: () async {
+                ref.invalidate(departmentsProvider);
+                ref.invalidate(allDesignationsProvider);
+                ref.invalidate(organizationsProvider);
+                await Future.delayed(const Duration(milliseconds: 500));
+              },
+              child: _selectedTab == 0
+                  ? _buildDepartmentsView(context, isMobile)
+                  : _buildDesignationsView(context, isMobile),
+            ),
           ),
+
         ],
       ),
     );

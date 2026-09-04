@@ -1266,16 +1266,26 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth <= 700) {
-          return _buildMobileView(context);
-        } else {
-          return _buildDesktopView(context);
-        }
+    return RefreshIndicator(
+      color: AppColors.active,
+      onRefresh: () async {
+        ref.invalidate(assetAssignmentsProvider);
+        ref.invalidate(employeesProvider);
+        ref.invalidate(assetTypesProvider);
+        await Future.delayed(const Duration(milliseconds: 500));
       },
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth <= 700) {
+            return _buildMobileView(context);
+          } else {
+            return _buildDesktopView(context);
+          }
+        },
+      ),
     );
   }
+
 
   Widget _buildDesktopView(BuildContext context) {
     final assignmentsAsync = ref.watch(assetAssignmentsProvider);

@@ -759,10 +759,19 @@ class _MyAssetPageState extends ConsumerState<MyAssetPage> {
           ],
         ),
       ),
-      body: TabBarView(children: [
-      myAssetsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF9CC70A))),
-        error: (err, stack) => Center(child: Text('Error loading assets: $err')),
+      body: RefreshIndicator(
+        color: const Color(0xFF9CC70A),
+        onRefresh: () async {
+          ref.invalidate(myAssetAssignmentsProvider);
+          ref.invalidate(employeesProvider);
+          ref.invalidate(assetAssignmentsProvider);
+          await Future.delayed(const Duration(milliseconds: 500));
+        },
+        child: TabBarView(children: [
+          myAssetsAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF9CC70A))),
+            error: (err, stack) => Center(child: Text('Error loading assets: $err')),
+
         data: (assignments) {
           final allEmployees = employeesAsync.asData?.value ?? [];
 
@@ -983,10 +992,12 @@ class _MyAssetPageState extends ConsumerState<MyAssetPage> {
           );
         },
       ),
-      _buildIncomingRequests(),
-      ]),
+        _buildIncomingRequests(),
+        ]),
+      ),
       ),
     );
+
   }
 
   Widget _buildIncomingRequests() {

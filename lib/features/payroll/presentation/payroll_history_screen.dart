@@ -31,10 +31,18 @@ class _PayrollHistoryScreenState extends ConsumerState<PayrollHistoryScreen> {
           final isMobile = constraints.maxWidth < AppBreakpoints.tablet;
           final gutter = AppLayout.gutter(constraints.maxWidth);
 
-          return SingleChildScrollView(
-            padding: EdgeInsets.all(gutter),
-            child: ResponsiveContent(
-              child: Column(
+          return RefreshIndicator(
+            color: AppColors.active,
+            onRefresh: () async {
+              ref.invalidate(allPayrollRecordsProvider);
+              await Future.delayed(const Duration(milliseconds: 500));
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.all(gutter),
+              child: ResponsiveContent(
+                child: Column(
+
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // Title + toggle controls
@@ -86,8 +94,10 @@ class _PayrollHistoryScreenState extends ConsumerState<PayrollHistoryScreen> {
                 ],
               ),
             ),
-          );
-        },
+          ),
+        );
+      },
+
       ),
     );
   }

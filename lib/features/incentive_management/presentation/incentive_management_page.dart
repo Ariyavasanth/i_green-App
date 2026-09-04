@@ -389,16 +389,26 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth <= 700) {
-          return _buildMobileView(context);
-        } else {
-          return _buildDesktopView(context);
-        }
+    return RefreshIndicator(
+      color: AppColors.active,
+      onRefresh: () async {
+        ref.invalidate(allManagementRequestsProvider);
+        ref.invalidate(allIncentiveRequestsProvider);
+        ref.invalidate(incentiveSettingsProvider);
+        await Future.delayed(const Duration(milliseconds: 500));
       },
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth <= 700) {
+            return _buildMobileView(context);
+          } else {
+            return _buildDesktopView(context);
+          }
+        },
+      ),
     );
   }
+
 
   // Mobile View with Grouped Employee Cards
   Widget _buildMobileView(BuildContext context) {

@@ -163,6 +163,8 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
       }
 
       ref.invalidate(organizationsProvider);
+      ref.invalidate(departmentsProvider);
+      ref.invalidate(allDesignationsProvider);
 
       if (mounted) {
         Navigator.of(context).pop(true);

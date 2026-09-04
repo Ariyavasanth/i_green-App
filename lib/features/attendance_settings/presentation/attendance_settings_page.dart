@@ -123,9 +123,17 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F8FA),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
+      body: RefreshIndicator(
+        color: AppColors.active,
+        onRefresh: () async {
+          ref.invalidate(attendanceSettingsProvider);
+          await Future.delayed(const Duration(milliseconds: 500));
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
@@ -235,6 +243,8 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
           ],
         ),
       ),
-    );
+    ),
+  );
+
   }
 }

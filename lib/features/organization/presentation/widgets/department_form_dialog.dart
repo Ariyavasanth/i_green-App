@@ -103,6 +103,7 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
       }
 
       ref.invalidate(departmentsProvider);
+      ref.invalidate(allDesignationsProvider);
 
       if (mounted) {
         Navigator.of(context).pop(true);
