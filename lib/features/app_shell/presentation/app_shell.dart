@@ -789,12 +789,12 @@ class _TopBar extends ConsumerWidget {
                   final emp = ref.watch(currentEmployeeProvider);
                   final name = emp?.fullName.isNotEmpty == true
                       ? emp!.fullName
-                      : (emp?.firstName.isNotEmpty == true ? emp!.firstName : 'Ariya J');
+                      : (emp?.firstName.isNotEmpty == true ? emp!.firstName : (emp?.employeeId.isNotEmpty == true ? emp!.employeeId : 'User'));
                   final role = emp?.designation.isNotEmpty == true
                       ? emp!.designation
                       : (emp?.userType.isNotEmpty == true ? emp!.userType : 'Administrator');
                   final email = emp?.emailAddress ?? '';
-                  final initial = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : 'A';
+                  final initial = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : 'U';
                   final photoUrl = emp?.profileImageUrl.trim() ?? '';
 
                   Widget avatarWidget;

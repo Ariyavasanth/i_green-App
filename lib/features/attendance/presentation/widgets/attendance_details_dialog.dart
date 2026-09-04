@@ -34,7 +34,8 @@ class AttendanceDetailsDialog extends StatelessWidget {
     }
     if (record!.status.trim().toLowerCase() == 'late' && record!.effectiveCheckInTime.isNotEmpty) {
       try {
-        final inTimeStr = employee.inTime.trim().isNotEmpty ? employee.inTime : '09:00 AM';
+        final inTimeStr = employee.inTime.trim();
+        if (inTimeStr.isEmpty) return 0;
         final inParts = _parseTimeStringToMinutes(inTimeStr);
         final actualParts = _parseTimeStringToMinutes(record!.effectiveCheckInTime);
         if (inParts != null && actualParts != null) {
@@ -51,7 +52,7 @@ class AttendanceDetailsDialog extends StatelessWidget {
       final clean = timeStr.trim();
       final isPm = clean.toUpperCase().contains('PM');
       final isAm = clean.toUpperCase().contains('AM');
-      final rawNumbers = clean.replaceAll(RegExp(r'[^0-9:]'), '').split(':');
+      final rawNumbers = clean.replaceAll(RegExp(r'[^0-9:]'), '').split(':').where((p) => p.trim().isNotEmpty).toList();
       if (rawNumbers.length >= 2) {
         int hour = int.parse(rawNumbers[0]);
         final min = int.parse(rawNumbers[1]);
@@ -72,7 +73,7 @@ class AttendanceDetailsDialog extends StatelessWidget {
     } else if (employee.inTime.isNotEmpty) {
       return 'From ${employee.inTime}';
     }
-    return '09:00 AM - 06:00 PM';
+    return 'Flexible Schedule';
   }
 
   String _resolveAttendanceSource() {

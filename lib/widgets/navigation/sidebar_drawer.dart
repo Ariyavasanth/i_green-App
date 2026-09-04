@@ -372,11 +372,11 @@ class _DrawerProfileCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final name = employee.fullName.isNotEmpty
         ? employee.fullName
-        : (employee.firstName.isNotEmpty ? employee.firstName : 'Ariya J');
+        : (employee.firstName.isNotEmpty ? employee.firstName : (employee.employeeId.isNotEmpty ? employee.employeeId : 'Employee'));
     final role = employee.designation.isNotEmpty
         ? employee.designation
         : (employee.userType.isNotEmpty ? employee.userType : 'Administrator');
-    final initial = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : 'A';
+    final initial = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : 'E';
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),

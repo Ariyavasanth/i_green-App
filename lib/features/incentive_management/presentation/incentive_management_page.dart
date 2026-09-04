@@ -603,7 +603,7 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
   Widget _buildGroupedEmployeeCard(EmployeeIncentiveGroup group) {
     final empIdStr = group.employeeId != null
         ? 'EMP${group.employeeId.toString().padLeft(3, '0')}'
-        : 'EMP001';
+        : '';
     final reqCountText = '${group.requests.length} ${group.requests.length == 1 ? 'Request' : 'Requests'}';
 
     void openEmployeeRequests() {
@@ -1100,7 +1100,7 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
                                 final isBulkSelected = req.id != null && _selectedBulkIds.contains(req.id);
                                 final empIdStr = req.employeeId != null
                                     ? 'EMP${req.employeeId.toString().padLeft(3, '0')}'
-                                    : 'EMP001';
+                                    : '';
 
                                 return DataRow(
                                   selected: isBulkSelected,

@@ -8807,12 +8807,8 @@ class _EmployeeRegistrationPageState
       coordinatorPhone: _coordinatorPhoneController.text.trim().isNotEmpty
           ? _coordinatorPhoneController.text.trim()
           : '',
-      officeStartTime: _inTimeController.text.trim().isNotEmpty
-          ? _inTimeController.text.trim()
-          : '09:00 AM',
-      officeEndTime: _outTimeController.text.trim().isNotEmpty
-          ? _outTimeController.text.trim()
-          : '06:00 PM',
+      officeStartTime: _inTimeController.text.trim(),
+      officeEndTime: _outTimeController.text.trim(),
       weeklyOffDay: _weeklyOffDayController.text.trim(),
     );
 

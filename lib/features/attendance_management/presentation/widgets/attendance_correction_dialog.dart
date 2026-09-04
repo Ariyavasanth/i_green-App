@@ -49,8 +49,8 @@ class _AttendanceCorrectionDialogState extends State<AttendanceCorrectionDialog>
     final initialIn = rec?.effectiveCheckInTime.isNotEmpty == true ? rec!.effectiveCheckInTime : '';
     final initialOut = rec?.checkOutTime.isNotEmpty == true ? rec!.checkOutTime : '';
 
-    _checkInController = TextEditingController(text: initialIn.isNotEmpty ? initialIn : '09:00 AM');
-    _checkOutController = TextEditingController(text: initialOut.isNotEmpty ? initialOut : '06:00 PM');
+    _checkInController = TextEditingController(text: initialIn);
+    _checkOutController = TextEditingController(text: initialOut);
     _reasonController = TextEditingController();
 
     _selectedStatus = widget.statusInfo?.label ?? rec?.status ?? 'Present';

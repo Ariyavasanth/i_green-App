@@ -150,7 +150,7 @@ class _EmployeeIncentiveRequestsPageState extends ConsumerState<EmployeeIncentiv
     final titleName = widget.employeeName.isNotEmpty ? widget.employeeName : 'Employee';
     final empIdStr = widget.employeeId != null && widget.employeeId! > 0
         ? 'EMP${widget.employeeId.toString().padLeft(3, '0')}'
-        : 'EMP001';
+        : '';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),

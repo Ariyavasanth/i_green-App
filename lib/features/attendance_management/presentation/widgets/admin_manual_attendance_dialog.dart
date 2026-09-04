@@ -45,7 +45,7 @@ class _AdminManualAttendanceDialogState extends ConsumerState<AdminManualAttenda
     _dateController = TextEditingController(
       text: rec?.date ?? widget.initialDate ?? DateFormat('dd-MM-yyyy').format(DateTime.now()),
     );
-    _checkInController = TextEditingController(text: rec?.effectiveCheckInTime ?? '09:00:00');
+    _checkInController = TextEditingController(text: rec?.effectiveCheckInTime ?? '');
     _checkOutController = TextEditingController(text: rec?.checkOutTime ?? '');
     _notesController = TextEditingController(text: rec?.notes ?? '');
     if (rec != null) _status = rec.status;

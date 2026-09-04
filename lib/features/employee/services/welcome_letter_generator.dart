@@ -58,12 +58,8 @@ class WelcomeLetterData {
       coordinatorPhone: emp.coordinatorPhone.trim().isNotEmpty
           ? emp.coordinatorPhone.trim()
           : '',
-      officeStartTime: emp.inTime.trim().isNotEmpty
-          ? emp.inTime.trim()
-          : '09:00 AM',
-      officeEndTime: emp.outTime.trim().isNotEmpty
-          ? emp.outTime.trim()
-          : '06:00 PM',
+      officeStartTime: emp.inTime.trim(),
+      officeEndTime: emp.outTime.trim(),
       weeklyOffDay: emp.weeklyOffDay.trim(),
     );
   }

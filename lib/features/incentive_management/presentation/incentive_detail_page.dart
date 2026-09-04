@@ -157,7 +157,7 @@ class _IncentiveDetailPageState extends ConsumerState<IncentiveDetailPage> {
           final isPending = req.status == 'Pending';
           final empIdCode = req.employeeId != null
               ? 'EMP${req.employeeId.toString().padLeft(3, '0')}'
-              : 'EMP001';
+              : '';
 
           // Live / saved verified values
           final liveMeters = double.tryParse(_verifiedMetersController.text.trim()) ?? req.verifiedMeters ?? req.meters;

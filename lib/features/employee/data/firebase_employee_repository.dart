@@ -380,15 +380,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     try {
       final snapshot = await _employeesRef.get();
       for (final doc in snapshot.docs) {
-        if (doc.id == 'EMP-0100') {
-          doc.reference.delete().ignore();
-          continue;
-        }
         final emp = _employeeFromFirestore(doc.data(), doc.id);
-        if (emp.employeeId == 'EMP-0100' || emp.firstName.toLowerCase() == 'rahul') {
-          doc.reference.delete().ignore();
-          continue;
-        }
         final key = doc.id.isNotEmpty ? doc.id : (emp.employeeId.isNotEmpty ? emp.employeeId : emp.id.toString());
         if (seenKeys.add(key)) {
           result.add(emp);

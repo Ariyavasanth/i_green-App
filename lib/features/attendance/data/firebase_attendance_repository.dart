@@ -281,10 +281,22 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       try {
         final snap = await _firestore.collection('employees').get();
         for (final doc in snap.docs) {
-          final data = doc.data();
+          final data = Map<String, dynamic>.from(doc.data());
+          final docId = doc.id;
+          final docIdNum = int.tryParse(docId.replaceAll(RegExp(r'\D'), '')) ?? 0;
           final idNum = data['id'] is int ? data['id'] : (int.tryParse(data['id']?.toString() ?? '') ?? 0);
           final codeStr = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
-          if ((employeeId != 0 && idNum == employeeId) || data['id']?.toString() == employeeId.toString()) {
+          final codeNum = int.tryParse(codeStr.replaceAll(RegExp(r'\D'), '')) ?? 0;
+
+          final matches = (employeeId != 0 && (idNum == employeeId || docIdNum == employeeId || codeNum == employeeId)) ||
+              docId == employeeId.toString() ||
+              data['id']?.toString() == employeeId.toString() ||
+              data['employee_id']?.toString() == employeeId.toString();
+
+          if (matches) {
+            if (!data.containsKey('id') || data['id'] == null || data['id'] == 0) {
+              data['id'] = (docIdNum != 0) ? docIdNum : (docId.hashCode & 0x7FFFFFFF);
+            }
             employee = Employee.fromMap(data);
             break;
           }
@@ -295,15 +307,18 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       String notes = '';
 
       final isDynamic = employee?.isDynamicEmployee ?? false;
-      if (isDynamic) {
+      final schedIn = scheduledCheckInTime.trim().isNotEmpty
+          ? scheduledCheckInTime.trim()
+          : (employee?.inTime.trim().isNotEmpty == true
+              ? employee!.inTime.trim()
+              : '');
+
+      final scheduledMinutes = _parseMinutes(schedIn);
+
+      if (isDynamic || scheduledMinutes == null) {
         status = 'Present';
         notes = 'Flexible schedule';
       } else {
-        final schedIn = (employee?.inTime.isNotEmpty == true)
-            ? employee!.inTime
-            : (scheduledCheckInTime.isNotEmpty ? scheduledCheckInTime : '09:00');
-
-        final scheduledMinutes = _parseMinutes(schedIn);
         final actualMinutes = now.hour * 60 + now.minute;
         final rawDelay = actualMinutes - scheduledMinutes;
 
@@ -599,13 +614,16 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         final parts = outTime.split(':');
         if (parts.length >= 2) outMin = int.parse(parts[0]) * 60 + int.parse(parts[1]);
       } catch (_) {}
-      int empOutMin = 1080;
+      int? empOutMin;
       if (employee != null && employee.outTime.trim().isNotEmpty) {
         empOutMin = _parseMinutes(employee.outTime);
       } else if (employee != null && employee.inTime.trim().isNotEmpty) {
-        empOutMin = (_parseMinutes(employee.inTime) + (requiredHours * 60).toInt()) % 1440;
+        final parsedIn = _parseMinutes(employee.inTime);
+        if (parsedIn != null) {
+          empOutMin = (parsedIn + (requiredHours * 60).toInt()) % 1440;
+        }
       }
-      final isLateCheckout = empOutMin > 0 && outMin > empOutMin;
+      final isLateCheckout = empOutMin != null && empOutMin > 0 && outMin > empOutMin;
 
       if (shortfallMins == 0) {
         if (isDynamic) {
@@ -654,15 +672,22 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     required int employeeId,
     required String date,
   }) async {
+    final normDate = _normalizeDateKey(date);
     _localMemoryCache.remove('${employeeId}_$date');
+    _localMemoryCache.remove('${employeeId}_$normDate');
     try {
+      await _recordsRef.doc('${employeeId}_${normDate.replaceAll('-', '')}').delete();
       await _recordsRef.doc('${employeeId}_${date.replaceAll('-', '')}').delete();
-      final snap = await _recordsRef
-          .where('employee_id', isEqualTo: employeeId)
-          .where('date', isEqualTo: date)
-          .get();
-      for (final doc in snap.docs) {
-        await doc.reference.delete();
+      final allSnap = await _recordsRef.get();
+      for (final doc in allSnap.docs) {
+        final data = doc.data();
+        final docEmpId = data['employee_id'] is int ? data['employee_id'] : int.tryParse(data['employee_id']?.toString() ?? '');
+        final docDate = (data['date'] ?? '').toString();
+        final normDocDate = _normalizeDateKey(docDate);
+        if ((docEmpId == employeeId || data['employee_id']?.toString() == employeeId.toString()) &&
+            (docDate == date || docDate == normDate || normDocDate == normDate)) {
+          await doc.reference.delete();
+        }
       }
     } catch (_) {}
   }
@@ -739,8 +764,8 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     }
   }
 
-  int _parseMinutes(String timeStr) {
-    if (timeStr.trim().isEmpty) return 540;
+  int? _parseMinutes(String timeStr) {
+    if (timeStr.trim().isEmpty) return null;
     try {
       final clean = timeStr.trim().toUpperCase();
       final isPm = clean.contains('PM');
@@ -748,14 +773,15 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       final digits = clean.replaceAll(RegExp(r'[^0-9:]'), '');
       final parts = digits.split(':').where((p) => p.trim().isNotEmpty).toList();
       if (parts.isNotEmpty) {
-        int hours = int.tryParse(parts[0]) ?? 9;
+        int? hours = int.tryParse(parts[0]);
+        if (hours == null) return null;
         final minutes = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
         if (isPm && hours < 12) hours += 12;
         if (isAm && hours == 12) hours = 0;
         return hours * 60 + minutes;
       }
     } catch (_) {}
-    return 540;
+    return null;
   }
 
   @override

@@ -3074,13 +3074,15 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         final now = DateTime.now();
         final expectedInTimeOfDay = _getEmployeeInTime(employee);
         final expectedOutTimeOfDay = _getEmployeeOutTime(employee);
-        final officialStartTime = DateTime(now.year, now.month, now.day, expectedInTimeOfDay.hour, expectedInTimeOfDay.minute);
-        final gracePeriodEndTime = officialStartTime.add(Duration(minutes: gracePeriodMinutes));
-        final officialTimeStr = _formatTimeOfDayLabel(expectedInTimeOfDay);
+        final officialStartTime = expectedInTimeOfDay != null
+            ? DateTime(now.year, now.month, now.day, expectedInTimeOfDay.hour, expectedInTimeOfDay.minute)
+            : null;
+        final gracePeriodEndTime = officialStartTime?.add(Duration(minutes: gracePeriodMinutes));
+        final officialTimeStr = expectedInTimeOfDay != null ? _formatTimeOfDayLabel(expectedInTimeOfDay) : '';
         final officialOutTimeStr = expectedOutTimeOfDay != null ? _formatTimeOfDayLabel(expectedOutTimeOfDay) : '';
-        final graceTimeStr = _formatTimeOfDayLabel(TimeOfDay.fromDateTime(gracePeriodEndTime));
-        final isWithinGracePeriod = !hasCheckedIn && now.isAfter(officialStartTime) && !now.isAfter(gracePeriodEndTime);
-        final isLate = now.isAfter(gracePeriodEndTime) && !hasCheckedIn;
+        final graceTimeStr = gracePeriodEndTime != null ? _formatTimeOfDayLabel(TimeOfDay.fromDateTime(gracePeriodEndTime)) : '';
+        final isWithinGracePeriod = !hasCheckedIn && officialStartTime != null && gracePeriodEndTime != null && now.isAfter(officialStartTime) && !now.isAfter(gracePeriodEndTime);
+        final isLate = !hasCheckedIn && gracePeriodEndTime != null && now.isAfter(gracePeriodEndTime);
 
         final myRequestsAsync = ref.watch(myPermissionRequestsProvider(employee.id));
         PermissionRequest? todayApprovedPermission;
@@ -3406,16 +3408,17 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                           ),
                           onPressed: () {
                             final nowTod = TimeOfDay.now();
+                            final inTod = expectedInTimeOfDay ?? const TimeOfDay(hour: 9, minute: 0);
                             final nowMins = nowTod.hour * 60 + nowTod.minute;
-                            final expMins = expectedInTimeOfDay.hour * 60 + expectedInTimeOfDay.minute;
+                            final expMins = inTod.hour * 60 + inTod.minute;
                             final toTod = nowMins > expMins
                                 ? nowTod
                                 : TimeOfDay(
-                                    hour: (expectedInTimeOfDay.hour + ((expectedInTimeOfDay.minute + 30) ~/ 60)) % 24,
-                                    minute: (expectedInTimeOfDay.minute + 30) % 60,
+                                    hour: (inTod.hour + ((inTod.minute + 30) ~/ 60)) % 24,
+                                    minute: (inTod.minute + 30) % 60,
                                   );
                             context.go('/permission/apply', extra: {
-                              'fromTime': expectedInTimeOfDay,
+                              'fromTime': inTod,
                               'toTime': toTod,
                             });
                           },
@@ -4047,7 +4050,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     );
   }
 
-  TimeOfDay _getEmployeeInTime(Employee emp) {
+  TimeOfDay? _getEmployeeInTime(Employee emp) {
     final inTimeStr = emp.inTime.trim();
     if (inTimeStr.isNotEmpty) {
       try {
@@ -4064,7 +4067,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         }
       } catch (_) {}
     }
-    return const TimeOfDay(hour: 9, minute: 30);
+    return null;
   }
 
   TimeOfDay? _getEmployeeOutTime(Employee emp) {
@@ -4138,7 +4141,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     required AttendanceRecord? todayRecord,
     required PermissionRequest permission,
     required String officialTimeStr,
-    required TimeOfDay expectedInTimeOfDay,
+    TimeOfDay? expectedInTimeOfDay,
   }) async {
     final nowTod = TimeOfDay.now();
     await showDialog(
@@ -4187,7 +4190,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
             ),
             onPressed: () {
               Navigator.pop(ctx);
-              final fromTod = _parsePermissionTime(permission.toTime) ?? expectedInTimeOfDay;
+              final fromTod = _parsePermissionTime(permission.toTime) ?? (expectedInTimeOfDay ?? nowTod);
               context.go('/permission/apply', extra: {
                 'fromTime': fromTod,
                 'toTime': nowTod,
@@ -4227,7 +4230,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     required DateTime today,
     required AttendanceRecord? todayRecord,
     required String officialTimeStr,
-    required TimeOfDay expectedInTimeOfDay,
+    TimeOfDay? expectedInTimeOfDay,
   }) async {
     await showDialog(
       context: context,
@@ -4265,16 +4268,17 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
             onPressed: () {
               Navigator.pop(ctx);
               final nowTod = TimeOfDay.now();
+              final effectiveExp = expectedInTimeOfDay ?? nowTod;
               final nowMins = nowTod.hour * 60 + nowTod.minute;
-              final expMins = expectedInTimeOfDay.hour * 60 + expectedInTimeOfDay.minute;
+              final expMins = effectiveExp.hour * 60 + effectiveExp.minute;
               final toTod = nowMins > expMins
                   ? nowTod
                   : TimeOfDay(
-                      hour: (expectedInTimeOfDay.hour + ((expectedInTimeOfDay.minute + 30) ~/ 60)) % 24,
-                      minute: (expectedInTimeOfDay.minute + 30) % 60,
+                      hour: (effectiveExp.hour + ((effectiveExp.minute + 30) ~/ 60)) % 24,
+                      minute: (effectiveExp.minute + 30) % 60,
                     );
               context.go('/permission/apply', extra: {
-                'fromTime': expectedInTimeOfDay,
+                'fromTime': effectiveExp,
                 'toTime': toTod,
               });
             },
@@ -4697,6 +4701,10 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
     );
   }
 
+  String _getInTimeStr(Employee emp) {
+    return emp.inTime.trim();
+  }
+
   Future<void> _authenticateAndProceed() async {
     if (_verifying) return;
 
@@ -4747,7 +4755,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
           employeeName: widget.currentEmployee.fullName,
           date: dateKey,
           profileImageUrl: widget.currentEmployee.profileImageUrl,
-          scheduledCheckInTime: widget.currentEmployee.inTime,
+          scheduledCheckInTime: _getInTimeStr(widget.currentEmployee),
           currentLatitude: currentLat,
           currentLongitude: currentLng,
         );
