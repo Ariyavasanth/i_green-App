@@ -785,6 +785,123 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
   }
 
   @override
+  Future<void> recalculateAttendanceForDate(int employeeId, String date) async {
+    try {
+      final normDate = _normalizeDateKey(date);
+      final docId = '${employeeId}_${normDate.replaceAll('-', '')}';
+      final docRef = _recordsRef.doc(docId);
+
+      AttendanceRecord? record;
+      final snap = await docRef.get();
+      if (snap.exists && snap.data() != null) {
+        record = AttendanceRecord.fromMap(snap.data()!);
+      }
+      record ??= await getAttendanceRecordForDate(employeeId, date);
+      if (record == null) return;
+
+      final inTime = record.effectiveCheckInTime.trim();
+      if (inTime.isEmpty) return;
+
+      Employee? employee;
+      try {
+        final empSnap = await _firestore.collection('employees').where('id', isEqualTo: employeeId).limit(1).get();
+        if (empSnap.docs.isNotEmpty) {
+          employee = Employee.fromMap(empSnap.docs.first.data());
+        }
+      } catch (_) {}
+
+      final isDynamic = employee?.isDynamicEmployee ?? false;
+      final settings = await getAttendanceSettings();
+      final approvedPermissionMins = await _getApprovedPermissionMinutes(employeeId, date);
+
+      String schedIn = '';
+      if (employee != null && employee.inTime.trim().isNotEmpty) {
+        schedIn = employee.inTime.trim();
+      }
+      if (schedIn.isEmpty) schedIn = '09:00 AM';
+
+      final scheduledMinutes = _parseMinutes(schedIn);
+      final checkInMinutes = _parseMinutes(inTime);
+
+      String newStatus = record.status;
+      String newNotes = record.notes;
+
+      if (isDynamic || scheduledMinutes == null || checkInMinutes == null) {
+        if (record.checkOutTime.trim().isEmpty) {
+          newStatus = 'Present';
+          newNotes = 'Flexible schedule';
+        }
+      } else {
+        final rawDelay = checkInMinutes - scheduledMinutes;
+        final totalAuthorizedWindowMins = settings.gracePeriodMinutes + approvedPermissionMins;
+        final netUnauthorizedDelay = rawDelay - totalAuthorizedWindowMins;
+
+        if (record.checkOutTime.trim().isEmpty) {
+          if (netUnauthorizedDelay <= 0) {
+            newStatus = 'Present';
+            newNotes = approvedPermissionMins > 0
+                ? 'Present (Authorized Permission)'
+                : 'On time';
+          } else if (netUnauthorizedDelay <= settings.lateLimitMinutes) {
+            newStatus = 'Late';
+            newNotes = approvedPermissionMins > 0
+                ? 'Late = $netUnauthorizedDelay mins unauthorized after $approvedPermissionMins mins permission'
+                : 'Late = $netUnauthorizedDelay minutes';
+          } else {
+            newStatus = 'Absent';
+            newNotes = approvedPermissionMins > 0
+                ? 'Absent (Exceeds late limit cutoff after $approvedPermissionMins mins permission)'
+                : 'Absent (Exceeds late limit cutoff of ${settings.lateLimitMinutes} mins)';
+          }
+        } else {
+          final checkOutTime = record.checkOutTime.trim();
+          double hours = record.totalHours;
+          final outMinutes = _parseMinutes(checkOutTime);
+          if (outMinutes != null && outMinutes > checkInMinutes) {
+            hours = double.parse(((outMinutes - checkInMinutes) / 60.0).toStringAsFixed(2));
+          }
+
+          final requiredHours = (employee?.requiredWorkingHours ?? 0) > 0
+              ? employee!.requiredWorkingHours
+              : 9.0;
+          final shortfallHours = (requiredHours - hours).clamp(0, requiredHours);
+          final shortfallMins = (shortfallHours * 60).ceil();
+
+          if (netUnauthorizedDelay <= 0) {
+            if (shortfallMins == 0 || approvedPermissionMins >= shortfallMins) {
+              newStatus = 'Completed';
+              newNotes = approvedPermissionMins > 0
+                  ? 'Worked ${hours.toStringAsFixed(1)} hrs (Permission Authorized)'
+                  : 'Worked ${hours.toStringAsFixed(1)} hrs (Completed shift)';
+            } else {
+              newStatus = 'Insufficient hours';
+              newNotes = 'Worked ${hours.toStringAsFixed(1)} hrs (Insufficient hours)';
+            }
+          } else if (netUnauthorizedDelay <= settings.lateLimitMinutes) {
+            newStatus = 'Late';
+            newNotes = 'Worked ${hours.toStringAsFixed(1)} hrs (Late: $netUnauthorizedDelay mins)';
+          } else {
+            newStatus = 'Absent';
+            newNotes = 'Worked ${hours.toStringAsFixed(1)} hrs (Exceeded late limit)';
+          }
+        }
+      }
+
+      final updatedRec = record.copyWith(
+        status: newStatus,
+        notes: newNotes,
+      );
+      _localMemoryCache['${employeeId}_$normDate'] = updatedRec;
+      _localMemoryCache['${employeeId}_$date'] = updatedRec;
+
+      await docRef.set({
+        'status': newStatus,
+        'notes': newNotes,
+      }, SetOptions(merge: true));
+    } catch (_) {}
+  }
+
+  @override
   Future<void> clearAllAttendanceRecords() async {
     _localMemoryCache.clear();
     try {

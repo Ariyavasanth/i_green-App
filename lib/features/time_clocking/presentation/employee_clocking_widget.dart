@@ -117,45 +117,6 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
       return;
     }
 
-    if (attendanceRecord.status == 'Absent') {
-      if (context.mounted) {
-        await showDialog(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Row(
-              children: [
-                Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 24),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Attendance Marked Absent',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
-                  ),
-                ),
-              ],
-            ),
-            content: const Text(
-              'Your attendance status is marked Absent for today because check-in exceeded the late limit cutoff. You cannot start clocking activities.',
-              style: TextStyle(fontSize: 14, color: Color(0xFF334155)),
-            ),
-            actions: [
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF9CC70A),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-        );
-      }
-      return;
-    }
-
     if (attendanceRecord.checkOutTime.trim().isNotEmpty || attendanceRecord.status == 'Checked Out') {
       if (context.mounted) {
         await showDialog(

@@ -5,6 +5,7 @@ import '../domain/permission_enums.dart';
 import '../domain/permission_policy.dart';
 import '../domain/permission_repository.dart';
 import '../domain/permission_request.dart';
+import '../../attendance/data/firebase_attendance_repository.dart';
 
 /// Full Firebase implementation for PermissionRepository.
 class FirebasePermissionRepository implements PermissionRepository {
@@ -195,12 +196,31 @@ class FirebasePermissionRepository implements PermissionRepository {
   @override
   Future<void> approveNormalRequest(int id, String adminName, {String? comment}) async {
     try {
+      final docSnap = await _requestsRef.doc(id.toString()).get();
       await _requestsRef.doc(id.toString()).set({
         'status': PermissionStatus.approved.name,
         'reviewed_by': adminName,
         'reviewed_at': DateTime.now().toIso8601String(),
         if (comment != null) 'admin_comment': comment,
       }, SetOptions(merge: true));
+
+      if (docSnap.exists && docSnap.data() != null) {
+        final data = docSnap.data()!;
+        final empId = data['employee_id'] is int
+            ? data['employee_id'] as int
+            : (int.tryParse(data['employee_id']?.toString() ?? '') ?? 0);
+        final rawDate = data['date'];
+        DateTime? dt;
+        if (rawDate is Timestamp) {
+          dt = rawDate.toDate();
+        } else if (rawDate is String) {
+          dt = DateTime.tryParse(rawDate);
+        }
+        if (empId > 0 && dt != null) {
+          final dateStr = '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+          await FirebaseAttendanceRepository().recalculateAttendanceForDate(empId, dateStr);
+        }
+      }
     } catch (_) {}
   }
 
@@ -223,11 +243,13 @@ class FirebasePermissionRepository implements PermissionRepository {
     required PayrollTreatment decision,
     String? comment,
   }) async {
-    final statusStr = (decision == PayrollTreatment.paid || decision == PayrollTreatment.lop)
+    final isApproved = decision == PayrollTreatment.paid || decision == PayrollTreatment.lop;
+    final statusStr = isApproved
         ? PermissionStatus.approved.name
         : PermissionStatus.rejected.name;
 
     try {
+      final docSnap = await _requestsRef.doc(id.toString()).get();
       await _requestsRef.doc(id.toString()).set({
         'status': statusStr,
         'payroll_treatment': decision.name,
@@ -235,6 +257,24 @@ class FirebasePermissionRepository implements PermissionRepository {
         'reviewed_at': DateTime.now().toIso8601String(),
         if (comment != null) 'admin_comment': comment,
       }, SetOptions(merge: true));
+
+      if (isApproved && docSnap.exists && docSnap.data() != null) {
+        final data = docSnap.data()!;
+        final empId = data['employee_id'] is int
+            ? data['employee_id'] as int
+            : (int.tryParse(data['employee_id']?.toString() ?? '') ?? 0);
+        final rawDate = data['date'];
+        DateTime? dt;
+        if (rawDate is Timestamp) {
+          dt = rawDate.toDate();
+        } else if (rawDate is String) {
+          dt = DateTime.tryParse(rawDate);
+        }
+        if (empId > 0 && dt != null) {
+          final dateStr = '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+          await FirebaseAttendanceRepository().recalculateAttendanceForDate(empId, dateStr);
+        }
+      }
     } catch (_) {}
   }
 
