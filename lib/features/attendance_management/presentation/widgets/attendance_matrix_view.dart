@@ -37,17 +37,22 @@ class AttendanceMatrixView extends StatelessWidget {
     final month = focusedMonth.month;
     final daysInMonth = DateTime(year, month + 1, 0).day;
 
-    // Index records by employeeId + date string "DD-MM-YYYY"
+    // Index records by unique employee identifier + date string "DD-MM-YYYY"
     final recordMap = <String, AttendanceRecord>{};
     for (final r in records) {
       final dt = _parseKey(r.date);
-      if (dt != null) {
-        final dateKey = '${dt.day.toString().padLeft(2, '0')}-${dt.month.toString().padLeft(2, '0')}-${dt.year}';
+      final dateKey = dt != null
+          ? '${dt.day.toString().padLeft(2, '0')}-${dt.month.toString().padLeft(2, '0')}-${dt.year}'
+          : r.date;
+
+      if (r.employeeCode.isNotEmpty) {
+        recordMap['${r.employeeCode.trim().toUpperCase()}_$dateKey'] = r;
+      }
+      if (r.employeeId != 0) {
         recordMap['${r.employeeId}_$dateKey'] = r;
-        if (r.employeeName.isNotEmpty) recordMap['${r.employeeName}_$dateKey'] = r;
-      } else {
-        recordMap['${r.employeeId}_${r.date}'] = r;
-        if (r.employeeName.isNotEmpty) recordMap['${r.employeeName}_${r.date}'] = r;
+      }
+      if (r.employeeName.isNotEmpty) {
+        recordMap['${r.employeeName.trim().toLowerCase()}_$dateKey'] = r;
       }
     }
 
@@ -297,7 +302,26 @@ class AttendanceMatrixView extends StatelessWidget {
   ) {
     final date = DateTime(year, month, day);
     final dateStr = '${day.toString().padLeft(2, '0')}-${month.toString().padLeft(2, '0')}-$year';
-    final record = recordMap['${emp.id}_$dateStr'] ?? recordMap['${emp.employeeId}_$dateStr'] ?? recordMap['${emp.fullName}_$dateStr'];
+
+    final empCodeUpper = emp.employeeId.trim().toUpperCase();
+    final empNameLower = emp.fullName.trim().toLowerCase();
+
+    // 1. Primary match: specific employee code (e.g. 'EMP-0001' vs 'EMP-001')
+    AttendanceRecord? record;
+    if (empCodeUpper.isNotEmpty) {
+      record = recordMap['${empCodeUpper}_$dateStr'];
+    }
+    // 2. Secondary match: specific full name
+    if (record == null && empNameLower.isNotEmpty) {
+      record = recordMap['${empNameLower}_$dateStr'];
+    }
+    // 3. Fallback: integer ID (only if no duplicate ID collision among listed employees)
+    if (record == null && emp.id != 0) {
+      final duplicateCount = employees.where((e) => e.id == emp.id).length;
+      if (duplicateCount <= 1) {
+        record = recordMap['${emp.id}_$dateStr'];
+      }
+    }
 
     final statusInfo = AttendanceStatusHelper.resolveStatus(
       employee: emp,

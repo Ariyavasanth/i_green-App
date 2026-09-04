@@ -28,6 +28,7 @@ class AdminManualAttendanceDialog extends ConsumerStatefulWidget {
 class _AdminManualAttendanceDialogState extends ConsumerState<AdminManualAttendanceDialog> {
   final _formKey = GlobalKey<FormState>();
   int? _selectedEmployeeId;
+  String _selectedEmployeeCode = '';
   String _selectedEmployeeName = '';
   late TextEditingController _dateController;
   late TextEditingController _checkInController;
@@ -41,6 +42,7 @@ class _AdminManualAttendanceDialogState extends ConsumerState<AdminManualAttenda
     super.initState();
     final rec = widget.existingRecord;
     _selectedEmployeeId = rec?.employeeId ?? widget.initialEmployeeId;
+    _selectedEmployeeCode = rec?.employeeCode ?? '';
     _selectedEmployeeName = rec?.employeeName ?? '';
     _dateController = TextEditingController(
       text: rec?.date ?? widget.initialDate ?? DateFormat('dd-MM-yyyy').format(DateTime.now()),
@@ -73,6 +75,7 @@ class _AdminManualAttendanceDialogState extends ConsumerState<AdminManualAttenda
       final record = AttendanceRecord(
         id: widget.existingRecord?.id ?? 0,
         employeeId: _selectedEmployeeId!,
+        employeeCode: _selectedEmployeeCode,
         employeeName: _selectedEmployeeName,
         date: _dateController.text.trim(),
         time: _checkInController.text.trim(),
@@ -193,7 +196,10 @@ class _AdminManualAttendanceDialogState extends ConsumerState<AdminManualAttenda
                   data: (employees) {
                     if (_selectedEmployeeId != null && _selectedEmployeeName.isEmpty) {
                       final match = employees.where((e) => e.id == _selectedEmployeeId).toList();
-                      if (match.isNotEmpty) _selectedEmployeeName = match.first.fullName;
+                      if (match.isNotEmpty) {
+                        _selectedEmployeeName = match.first.fullName;
+                        _selectedEmployeeCode = match.first.employeeId;
+                      }
                     }
                     return DropdownButtonFormField<int>(
                       initialValue: _selectedEmployeeId,
@@ -218,6 +224,7 @@ class _AdminManualAttendanceDialogState extends ConsumerState<AdminManualAttenda
                             _selectedEmployeeId = val;
                             final match = employees.firstWhere((e) => e.id == val);
                             _selectedEmployeeName = match.fullName;
+                            _selectedEmployeeCode = match.employeeId;
                           });
                         }
                       },

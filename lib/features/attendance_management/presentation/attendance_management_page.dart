@@ -116,16 +116,54 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
           required String correctedCheckOut,
           required String correctedStatus,
           required String reason,
-        }) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Step #3A Correction Form Validated!\nReason: "$reason" | Check-in: $correctedCheckIn | Check-out: $correctedCheckOut | Status: $correctedStatus',
-              ),
-              backgroundColor: const Color(0xFF414A51),
-              duration: const Duration(seconds: 4),
-            ),
+        }) async {
+          final dateStr = DateFormat('dd-MM-yyyy').format(date);
+          final repo = ref.read(attendanceManagementRepositoryProvider);
+          final updatedRecord = AttendanceRecord(
+            id: record?.id ?? 0,
+            employeeId: emp.id,
+            employeeCode: emp.employeeId,
+            employeeName: emp.name,
+            date: dateStr,
+            time: correctedCheckIn,
+            status: correctedStatus,
+            verificationStatus: 'Admin Correction (Firestore)',
+            similarityScore: 1.0,
+            checkInTime: correctedCheckIn,
+            checkOutTime: correctedCheckOut,
+            checkInVerificationStatus: 'Admin Correction (Firestore)',
+            checkOutVerificationStatus: correctedCheckOut.isNotEmpty ? 'Admin Correction (Firestore)' : '',
+            checkInSimilarityScore: 1.0,
+            checkOutSimilarityScore: correctedCheckOut.isNotEmpty ? 1.0 : 0.0,
+            totalHours: 0.0,
+            notes: reason,
+            markedAt: record?.markedAt ?? DateTime.now().toIso8601String(),
           );
+
+          try {
+            await repo.saveOrOverrideAttendance(updatedRecord);
+            ref.invalidate(attendanceManagementRecordsProvider);
+            ref.invalidate(attendanceManagementStatsProvider);
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Attendance updated for ${emp.name} on $dateStr!'),
+                  backgroundColor: const Color(0xFF414A51),
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error updating attendance: $e'),
+                  backgroundColor: Colors.red,
+                  duration: const Duration(seconds: 4),
+                ),
+              );
+            }
+          }
         },
       ),
     );

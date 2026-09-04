@@ -38,11 +38,13 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
     final combinedMap = <String, AttendanceRecord>{};
     for (final r in _localMemoryCache.values) {
       if (employeeId == null || r.employeeId == employeeId) {
-        combinedMap['${r.employeeId}_${r.date}'] = r;
+        final key = r.employeeCode.isNotEmpty ? '${r.employeeCode}_${r.date}' : '${r.employeeId}_${r.date}';
+        combinedMap[key] = r;
       }
     }
     for (final r in firestoreRecords) {
-      combinedMap['${r.employeeId}_${r.date}'] = r;
+      final key = r.employeeCode.isNotEmpty ? '${r.employeeCode}_${r.date}' : '${r.employeeId}_${r.date}';
+      combinedMap[key] = r;
     }
 
     var list = combinedMap.values.toList();
@@ -150,21 +152,21 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
 
   @override
   Future<void> saveOrOverrideAttendance(AttendanceRecord record) async {
-    _localMemoryCache['${record.employeeId}_${record.date}'] = record;
+    final cacheKey = record.employeeCode.isNotEmpty
+        ? '${record.employeeCode}_${record.date}'
+        : '${record.employeeId}_${record.date}';
+    _localMemoryCache[cacheKey] = record;
     try {
-      final docId = '${record.employeeId}_${record.date.replaceAll('-', '')}';
+      final key = record.employeeCode.isNotEmpty ? record.employeeCode : record.employeeId.toString();
+      final docId = '${key}_${record.date.replaceAll('-', '')}';
 
       double totalHours = record.totalHours;
       if (record.effectiveCheckInTime.isNotEmpty && record.checkOutTime.isNotEmpty) {
         try {
-          final inParts = record.effectiveCheckInTime.split(':');
-          final outParts = record.checkOutTime.split(':');
-          if (inParts.length >= 2 && outParts.length >= 2) {
-            final inMin = int.parse(inParts[0]) * 60 + int.parse(inParts[1]);
-            final outMin = int.parse(outParts[0]) * 60 + int.parse(outParts[1]);
-            if (outMin > inMin) {
-              totalHours = double.parse(((outMin - inMin) / 60.0).toStringAsFixed(2));
-            }
+          final inMin = _parseTimeToMinutes(record.effectiveCheckInTime);
+          final outMin = _parseTimeToMinutes(record.checkOutTime);
+          if (inMin != null && outMin != null && outMin > inMin) {
+            totalHours = double.parse(((outMin - inMin) / 60.0).toStringAsFixed(2));
           }
         } catch (_) {}
       }
@@ -254,6 +256,23 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
       }
       await batch.commit();
     } catch (_) {}
+  }
+
+  int? _parseTimeToMinutes(String timeStr) {
+    try {
+      final clean = timeStr.trim();
+      final isPm = clean.toUpperCase().contains('PM');
+      final isAm = clean.toUpperCase().contains('AM');
+      final rawNumbers = clean.replaceAll(RegExp(r'[^0-9:]'), '').split(':').where((p) => p.trim().isNotEmpty).toList();
+      if (rawNumbers.length >= 2) {
+        int hour = int.parse(rawNumbers[0]);
+        final min = int.parse(rawNumbers[1]);
+        if (isPm && hour < 12) hour += 12;
+        if (isAm && hour == 12) hour = 0;
+        return hour * 60 + min;
+      }
+    } catch (_) {}
+    return null;
   }
 }
 

@@ -64,10 +64,15 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   Employee _employeeFromFirestore(Map<String, dynamic> map, String docId) {
     final mutableMap = Map<String, dynamic>.from(map);
 
-    // If ID is missing or 0, try parsing numeric part of docId or generate deterministic hash
-    if (!mutableMap.containsKey('id') || mutableMap['id'] == null || mutableMap['id'] == 0) {
+    // Ensure unique integer ID per employee document to prevent collisions (e.g. EMP-0001 vs EMP-001)
+    final docKey = docId.isNotEmpty ? docId : (mutableMap['employee_id']?.toString() ?? '');
+    final fallbackId = (docKey.hashCode.abs() & 0x7FFFFFFF);
+    final currentId = mutableMap['id'] as int?;
+    if (currentId == null || currentId == 0 || (currentId == 1 && docKey != 'EMP-001')) {
       final parsed = int.tryParse(docId.replaceAll(RegExp(r'\D'), ''));
-      mutableMap['id'] = (parsed != null && parsed != 0) ? parsed : (docId.hashCode & 0x7FFFFFFF);
+      mutableMap['id'] = (parsed != null && parsed != 0 && (docId == 'EMP-$parsed' || docId == 'EMP-${parsed.toString().padLeft(3, '0')}'))
+          ? parsed
+          : (fallbackId != 0 ? fallbackId : 1);
     }
 
     // Convert Firestore native array lists back to JSON strings for domain model compatibility

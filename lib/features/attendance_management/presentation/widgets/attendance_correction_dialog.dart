@@ -46,8 +46,12 @@ class _AttendanceCorrectionDialogState extends State<AttendanceCorrectionDialog>
   void initState() {
     super.initState();
     final rec = widget.record;
-    final initialIn = rec?.effectiveCheckInTime.isNotEmpty == true ? rec!.effectiveCheckInTime : '';
-    final initialOut = rec?.checkOutTime.isNotEmpty == true ? rec!.checkOutTime : '';
+    final initialIn = rec?.effectiveCheckInTime.isNotEmpty == true
+        ? rec!.effectiveCheckInTime
+        : (widget.employee.inTime.trim().isNotEmpty ? widget.employee.inTime.trim() : '');
+    final initialOut = rec?.checkOutTime.isNotEmpty == true
+        ? rec!.checkOutTime
+        : (widget.employee.outTime.trim().isNotEmpty ? widget.employee.outTime.trim() : '');
 
     _checkInController = TextEditingController(text: initialIn);
     _checkOutController = TextEditingController(text: initialOut);
@@ -129,6 +133,12 @@ class _AttendanceCorrectionDialogState extends State<AttendanceCorrectionDialog>
     final empCode = widget.employee.employeeId.isNotEmpty
         ? widget.employee.employeeId
         : 'EMP${widget.employee.id.toString().padLeft(3, '0')}';
+
+    final expectedCheckIn = widget.employee.inTime.trim().isNotEmpty ? widget.employee.inTime.trim() : '--:--';
+    final expectedCheckOut = widget.employee.outTime.trim().isNotEmpty ? widget.employee.outTime.trim() : '--:--';
+    final scheduleType = widget.employee.workScheduleType.isNotEmpty
+        ? widget.employee.workScheduleType
+        : (widget.employee.isDynamicEmployee ? 'Flexible' : 'Fixed Schedule');
 
     final rec = widget.record;
     final origCheckIn = rec?.effectiveCheckInTime.isNotEmpty == true ? rec!.effectiveCheckInTime : '--:--';
@@ -231,10 +241,28 @@ class _AttendanceCorrectionDialogState extends State<AttendanceCorrectionDialog>
                                       '${widget.employee.fullName} ($empCode)',
                                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B)),
                                     ),
-                                    const SizedBox(height: 1),
-                                    Text(
-                                      dateStr,
-                                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Color(0xFF64748B)),
+                                    const SizedBox(height: 2),
+                                    Wrap(
+                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                      spacing: 6,
+                                      children: [
+                                        Text(
+                                          dateStr,
+                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Color(0xFF64748B)),
+                                        ),
+                                        if (expectedCheckIn != '--:--' || expectedCheckOut != '--:--')
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(3),
+                                            ),
+                                            child: Text(
+                                              'Shift: $expectedCheckIn - $expectedCheckOut',
+                                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF414A51)),
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -252,6 +280,82 @@ class _AttendanceCorrectionDialogState extends State<AttendanceCorrectionDialog>
                             fontWeight: FontWeight.w700,
                             letterSpacing: 0.8,
                             color: Color(0xFF64748B),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+
+                        // Expected Values Card (From Employee Management)
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF9CC70A).withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.4)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.schedule, size: 14, color: Color(0xFF414A51)),
+                                  const SizedBox(width: 6),
+                                  const Text(
+                                    'Expected Shift (Employee Management)',
+                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF334155)),
+                                  ),
+                                  const Spacer(),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.6)),
+                                    ),
+                                    child: Text(
+                                      scheduleType,
+                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.login, size: 13, color: Color(0xFF16A34A)),
+                                        const SizedBox(width: 4),
+                                        const Text(
+                                          'Expected In: ',
+                                          style: TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                                        ),
+                                        Text(
+                                          expectedCheckIn,
+                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.logout, size: 13, color: Color(0xFFEA580C)),
+                                        const SizedBox(width: 4),
+                                        const Text(
+                                          'Expected Out: ',
+                                          style: TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                                        ),
+                                        Text(
+                                          expectedCheckOut,
+                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -334,13 +438,20 @@ class _AttendanceCorrectionDialogState extends State<AttendanceCorrectionDialog>
                                 onTap: () => _selectTime(_checkInController),
                                 decoration: InputDecoration(
                                   labelText: 'Correct Check-in *',
+                                  helperText: 'Expected: $expectedCheckIn',
+                                  helperStyle: const TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
                                   labelStyle: const TextStyle(fontSize: 12),
                                   prefixIcon: const Icon(Icons.login, size: 16, color: Color(0xFF16A34A)),
                                   suffixIcon: const Icon(Icons.access_time, size: 16, color: Color(0xFF64748B)),
                                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                                 ),
-                                validator: (v) => v == null || v.trim().isEmpty ? 'Check-in required' : null,
+                                validator: (v) {
+                                  if (_selectedStatus == 'Absent' || _selectedStatus == 'On Leave') {
+                                    return null;
+                                  }
+                                  return (v == null || v.trim().isEmpty) ? 'Check-in required' : null;
+                                },
                               ),
                             ),
                             const SizedBox(width: 10),
@@ -351,6 +462,8 @@ class _AttendanceCorrectionDialogState extends State<AttendanceCorrectionDialog>
                                 onTap: () => _selectTime(_checkOutController),
                                 decoration: InputDecoration(
                                   labelText: 'Correct Check-out',
+                                  helperText: 'Expected: $expectedCheckOut',
+                                  helperStyle: const TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
                                   labelStyle: const TextStyle(fontSize: 12),
                                   prefixIcon: const Icon(Icons.logout, size: 16, color: Color(0xFFEA580C)),
                                   suffixIcon: const Icon(Icons.access_time, size: 16, color: Color(0xFF64748B)),

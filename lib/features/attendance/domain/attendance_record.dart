@@ -2,6 +2,7 @@ class AttendanceRecord {
   const AttendanceRecord({
     required this.id,
     required this.employeeId,
+    this.employeeCode = '',
     required this.employeeName,
     required this.date,
     required this.time,
@@ -21,6 +22,7 @@ class AttendanceRecord {
 
   final int id;
   final int employeeId;
+  final String employeeCode;
   final String employeeName;
   final String date;
   final String time; // Represents Check In time by default for backward compatibility
@@ -50,6 +52,7 @@ class AttendanceRecord {
   AttendanceRecord copyWith({
     int? id,
     int? employeeId,
+    String? employeeCode,
     String? employeeName,
     String? date,
     String? time,
@@ -69,6 +72,7 @@ class AttendanceRecord {
     return AttendanceRecord(
       id: id ?? this.id,
       employeeId: employeeId ?? this.employeeId,
+      employeeCode: employeeCode ?? this.employeeCode,
       employeeName: employeeName ?? this.employeeName,
       date: date ?? this.date,
       time: time ?? this.time,
@@ -90,6 +94,7 @@ class AttendanceRecord {
   Map<String, dynamic> toMap() => {
         if (id != 0) 'id': id,
         'employee_id': employeeId,
+        if (employeeCode.isNotEmpty) 'employee_code': employeeCode,
         'employee_name': employeeName,
         'date': date,
         'time': effectiveCheckInTime,
@@ -114,10 +119,15 @@ class AttendanceRecord {
     final rawCheckInVer = map['check_in_verification_status'] as String? ?? rawVer;
     final rawScore = (map['similarity_score'] as num?)?.toDouble() ?? 0.0;
     final rawCheckInScore = (map['check_in_similarity_score'] as num?)?.toDouble() ?? rawScore;
+    final rawEmpCode = (map['employee_code'] ?? (map['employee_id'] is String ? map['employee_id'] : ''))?.toString().trim() ?? '';
+    final rawEmpId = map['employee_id'] is int
+        ? map['employee_id'] as int
+        : (int.tryParse(map['employee_id']?.toString() ?? '') ?? 0);
 
     return AttendanceRecord(
       id: map['id'] as int? ?? 0,
-      employeeId: map['employee_id'] as int? ?? 0,
+      employeeId: rawEmpId,
+      employeeCode: rawEmpCode,
       employeeName: map['employee_name'] as String? ?? '',
       date: map['date'] as String? ?? '',
       time: rawTime.isNotEmpty ? rawTime : rawCheckIn,
