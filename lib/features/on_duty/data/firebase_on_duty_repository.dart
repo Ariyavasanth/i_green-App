@@ -82,7 +82,7 @@ class FirebaseOnDutyRepository implements OnDutyRepository {
           .map((doc) => OnDutyAssignment.fromMap({...doc.data(), 'id': int.tryParse(doc.id) ?? doc.data()['id'] ?? 0}))
           .where((item) {
             final s = item.status.toUpperCase();
-            final matchesEmp = item.employeeId == employeeId || item.employeeId == 1 || item.employeeId == 0 || employeeId == 1 || employeeId == 0;
+            final matchesEmp = item.employeeId == employeeId || employeeId == 0;
             return matchesEmp && (s == 'IN_PROGRESS' || s == 'ASSIGNED' || s == 'ACTIVE');
           })
           .toList();

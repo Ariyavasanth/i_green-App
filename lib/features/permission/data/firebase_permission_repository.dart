@@ -93,7 +93,7 @@ class FirebasePermissionRepository implements PermissionRepository {
         final isMatch = employeeId == 0 ||
             req.employeeId == employeeId ||
             docEmpIdNum == employeeId ||
-            (employeeId == 1 && (req.employeeId == 0 || req.employeeId == 1));
+            data['employee_id']?.toString() == employeeId.toString();
 
         if (isMatch) {
           list.add(req);

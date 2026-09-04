@@ -38,18 +38,32 @@ class WelcomeLetterData {
       organizationName: emp.organizationName.trim().isNotEmpty
           ? emp.organizationName.trim()
           : 'IGreen Technologies',
-      employeeName: emp.fullName.trim().isNotEmpty ? emp.fullName.trim() : 'Employee',
-      reportingManagerName: emp.reportingManager.trim().isNotEmpty && emp.reportingManager.trim() != 'None'
+      employeeName: emp.fullName.trim().isNotEmpty
+          ? emp.fullName.trim()
+          : 'Employee',
+      reportingManagerName:
+          emp.reportingManager.trim().isNotEmpty &&
+              emp.reportingManager.trim() != 'None'
           ? emp.reportingManager.trim()
-          : 'Saravanan G S',
+          : '',
       reportingManagerTitle: emp.reportingManagerTitle.trim().isNotEmpty
           ? emp.reportingManagerTitle.trim()
-          : 'Managing Director',
-      adminName: emp.adminName.trim().isNotEmpty ? emp.adminName.trim() : 'Saravanan G S',
-      coordinatorName: emp.coordinatorName.trim().isNotEmpty ? emp.coordinatorName.trim() : 'Admin Team',
-      coordinatorPhone: emp.coordinatorPhone.trim().isNotEmpty ? emp.coordinatorPhone.trim() : '8760098789',
-      officeStartTime: emp.inTime.trim().isNotEmpty ? emp.inTime.trim() : '09:00 AM',
-      officeEndTime: emp.outTime.trim().isNotEmpty ? emp.outTime.trim() : '06:00 PM',
+          : 'Reporting Manager',
+      adminName: emp.adminName.trim().isNotEmpty
+          ? emp.adminName.trim()
+          : '',
+      coordinatorName: emp.coordinatorName.trim().isNotEmpty
+          ? emp.coordinatorName.trim()
+          : '',
+      coordinatorPhone: emp.coordinatorPhone.trim().isNotEmpty
+          ? emp.coordinatorPhone.trim()
+          : '',
+      officeStartTime: emp.inTime.trim().isNotEmpty
+          ? emp.inTime.trim()
+          : '09:00 AM',
+      officeEndTime: emp.outTime.trim().isNotEmpty
+          ? emp.outTime.trim()
+          : '06:00 PM',
       weeklyOffDay: emp.weeklyOffDay.trim(),
     );
   }
@@ -57,7 +71,9 @@ class WelcomeLetterData {
 
 class WelcomeLetterGenerator {
   static String generateLetterText(WelcomeLetterData data) {
-    final offDayText = data.weeklyOffDay.trim().isNotEmpty ? ' (${data.weeklyOffDay.trim()} Holiday)' : '';
+    final offDayText = data.weeklyOffDay.trim().isNotEmpty
+        ? ' (${data.weeklyOffDay.trim()} Holiday)'
+        : '';
     return '''Dear ${data.employeeName},
 
 Welcome to ${data.organizationName}! We are excited to have you on board and look forward to working with you.
@@ -78,7 +94,11 @@ ${data.organizationName} Team''';
 
   static List<int> generateDocxBytes(WelcomeLetterData data) {
     final dateStr = DateFormat('MMMM dd, yyyy').format(DateTime.now());
-    final orgName = _xmlEscape(data.organizationName.trim().isNotEmpty ? data.organizationName.trim() : 'IGreen Technologies');
+    final orgName = _xmlEscape(
+      data.organizationName.trim().isNotEmpty
+          ? data.organizationName.trim()
+          : 'IGreen Technologies',
+    );
     final employeeName = _xmlEscape(data.employeeName);
     final managerName = _xmlEscape(data.reportingManagerName);
     final managerTitle = _xmlEscape(data.reportingManagerTitle);
@@ -89,9 +109,12 @@ ${data.organizationName} Team''';
     final endTime = _xmlEscape(data.officeEndTime);
     final weeklyOff = _xmlEscape(data.weeklyOffDay);
 
-    final offDayText = weeklyOff.trim().isNotEmpty ? ' ($weeklyOff Holiday)' : '';
+    final offDayText = weeklyOff.trim().isNotEmpty
+        ? ' ($weeklyOff Holiday)'
+        : '';
 
-    final docXmlContent = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    final docXmlContent =
+        '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
     <w:p>
@@ -115,7 +138,8 @@ ${data.organizationName} Team''';
   </w:body>
 </w:document>''';
 
-    const contentTypesXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    const contentTypesXml =
+        '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
@@ -128,9 +152,23 @@ ${data.organizationName} Team''';
 </Relationships>''';
 
     final archive = Archive();
-    archive.addFile(ArchiveFile('[Content_Types].xml', contentTypesXml.length, utf8.encode(contentTypesXml)));
-    archive.addFile(ArchiveFile('_rels/.rels', relsXml.length, utf8.encode(relsXml)));
-    archive.addFile(ArchiveFile('word/document.xml', docXmlContent.length, utf8.encode(docXmlContent)));
+    archive.addFile(
+      ArchiveFile(
+        '[Content_Types].xml',
+        contentTypesXml.length,
+        utf8.encode(contentTypesXml),
+      ),
+    );
+    archive.addFile(
+      ArchiveFile('_rels/.rels', relsXml.length, utf8.encode(relsXml)),
+    );
+    archive.addFile(
+      ArchiveFile(
+        'word/document.xml',
+        docXmlContent.length,
+        utf8.encode(docXmlContent),
+      ),
+    );
 
     return ZipEncoder().encode(archive) ?? [];
   }
@@ -144,11 +182,18 @@ ${data.organizationName} Team''';
         .replaceAll("'", '&apos;');
   }
 
-  static Future<void> downloadWelcomeLetter(BuildContext context, WelcomeLetterData data) async {
+  static Future<void> downloadWelcomeLetter(
+    BuildContext context,
+    WelcomeLetterData data,
+  ) async {
     try {
       final docxBytes = generateDocxBytes(data);
-      final rawName = data.employeeName.trim().replaceAll(RegExp(r'[^\w\s\-]'), '');
-      final fileName = 'Welcome_Letter_${rawName.isEmpty ? "Employee" : rawName.replaceAll(" ", "_")}.docx';
+      final rawName = data.employeeName.trim().replaceAll(
+        RegExp(r'[^\w\s\-]'),
+        '',
+      );
+      final fileName =
+          'Welcome_Letter_${rawName.isEmpty ? "Employee" : rawName.replaceAll(" ", "_")}.docx';
 
       await saveAndDownloadOfferLetter(
         context: context,

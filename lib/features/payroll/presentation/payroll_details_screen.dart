@@ -312,10 +312,7 @@ class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
                     }
                     if (matchingEmp == null && currentEmp != null) {
                       if (currentEmp.id == record.employeeId ||
-                          record.employeeName.trim().isEmpty ||
-                          record.employeeName.contains('Saravanan') ||
-                          record.employeeId == 0 ||
-                          record.employeeId == 1) {
+                          (record.employeeName.trim().isNotEmpty && record.employeeName.toLowerCase() == currentEmp.fullName.toLowerCase())) {
                         matchingEmp = currentEmp;
                       }
                     }
@@ -323,9 +320,9 @@ class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
                         ? matchingEmp.fullName
                         : (matchingEmp != null && matchingEmp.firstName.isNotEmpty
                             ? matchingEmp.firstName
-                            : (record.employeeName.isNotEmpty && !record.employeeName.contains('Saravanan')
+                            : (record.employeeName.isNotEmpty
                                 ? record.employeeName
-                                : (currentEmp?.fullName.isNotEmpty == true ? currentEmp!.fullName : 'Ariya J')));
+                                : (currentEmp?.fullName.isNotEmpty == true ? currentEmp!.fullName : 'Employee')));
 
                     final displayId = matchingEmp != null && matchingEmp.employeeId.isNotEmpty
                         ? matchingEmp.employeeId

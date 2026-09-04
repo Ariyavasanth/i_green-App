@@ -228,9 +228,9 @@ class Employee {
     this.workLocation = '',
     this.workScheduleType = 'Fixed Schedule',
     this.reportingManagerTitle = 'Managing Director',
-    this.adminName = 'Saravanan G S',
-    this.coordinatorName = 'Admin Team',
-    this.coordinatorPhone = '8760098789',
+    this.adminName = '',
+    this.coordinatorName = '',
+    this.coordinatorPhone = '',
     this.weeklyOffDay = '',
     this.teamName = '',
     this.disciplinaryRecords = '',
@@ -958,13 +958,13 @@ class Employee {
           : 'Managing Director',
       adminName: (map['admin_name'] as String?)?.isNotEmpty == true
           ? map['admin_name'] as String
-          : 'Saravanan G S',
+          : '',
       coordinatorName: (map['coordinator_name'] as String?)?.isNotEmpty == true
           ? map['coordinator_name'] as String
-          : 'Admin Team',
+          : '',
       coordinatorPhone: (map['coordinator_phone'] as String?)?.isNotEmpty == true
           ? map['coordinator_phone'] as String
-          : '8760098789',
+          : '',
       weeklyOffDay: map['weekly_off_day'] as String? ?? '',
       teamName: map['team_name'] as String? ?? '',
       disciplinaryRecords: map['disciplinary_records'] as String? ?? '',

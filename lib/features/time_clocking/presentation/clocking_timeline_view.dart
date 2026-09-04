@@ -820,7 +820,7 @@ class _ClockingTimelineViewState extends ConsumerState<ClockingTimelineView> {
       return Column(
         children: entries.map((entry) {
           final emp = _findEmployee(entry.employeeId, allEmployees);
-          final empName = emp != null ? emp.fullName : (entry.employeeId.isNotEmpty ? entry.employeeId : 'Saravanan G S');
+          final empName = emp != null ? emp.fullName : (entry.employeeId.isNotEmpty ? entry.employeeId : 'Unassigned');
           final empDept = emp?.department ?? 'Staff';
           final color = _getActivityColor(entry.entryType);
           final icon = _getActivityIcon(entry.entryType);
@@ -980,7 +980,7 @@ class _ClockingTimelineViewState extends ConsumerState<ClockingTimelineView> {
           ],
           rows: entries.map((entry) {
             final emp = _findEmployee(entry.employeeId, allEmployees);
-            final empName = emp != null ? emp.fullName : (entry.employeeId.isNotEmpty ? entry.employeeId : 'Saravanan G S');
+            final empName = emp != null ? emp.fullName : (entry.employeeId.isNotEmpty ? entry.employeeId : 'Unassigned');
             final empDept = emp?.department ?? 'Staff';
             final color = _getActivityColor(entry.entryType);
             final icon = _getActivityIcon(entry.entryType);

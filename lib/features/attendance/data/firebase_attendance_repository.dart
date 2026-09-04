@@ -98,12 +98,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
             : (int.tryParse(docEmpIdRaw?.toString() ?? '') ?? 0);
         final docEmpCode = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
 
-        final matchesEmp = employeeId == 0 ||
-            employeeId == 1 ||
-            docEmpIdNum == employeeId ||
-            data['employee_id']?.toString() == employeeId.toString() ||
-            docEmpCode == 'EMP-0001' ||
-            docEmpCode == 'EMP-1140';
+        final matchesEmp = (employeeId != 0 && docEmpIdNum == employeeId) ||
+            (employeeId == 0) ||
+            data['employee_id']?.toString() == employeeId.toString();
 
         if (matchesEmp) {
           firestoreList.add(AttendanceRecord.fromMap(data));
@@ -167,12 +164,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
             : (int.tryParse(docEmpIdRaw?.toString() ?? '') ?? 0);
         final docEmpCode = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
 
-        final matchesEmp = employeeId == 0 ||
-            employeeId == 1 ||
-            docEmpIdNum == employeeId ||
-            data['employee_id']?.toString() == employeeId.toString() ||
-            docEmpCode == 'EMP-0001' ||
-            docEmpCode == 'EMP-1140';
+        final matchesEmp = (employeeId != 0 && docEmpIdNum == employeeId) ||
+            (employeeId == 0) ||
+            data['employee_id']?.toString() == employeeId.toString();
 
         final docDate = (data['date'] ?? '').toString();
         final normDocDate = _normalizeDateKey(docDate);
@@ -290,7 +284,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
           final data = doc.data();
           final idNum = data['id'] is int ? data['id'] : (int.tryParse(data['id']?.toString() ?? '') ?? 0);
           final codeStr = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
-          if (idNum == employeeId || data['id']?.toString() == employeeId.toString() || codeStr == 'EMP-0001' || employeeId == 1) {
+          if ((employeeId != 0 && idNum == employeeId) || data['id']?.toString() == employeeId.toString()) {
             employee = Employee.fromMap(data);
             break;
           }
@@ -732,13 +726,8 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
             docDateStr.startsWith(date) ||
             docDateStr.contains(date) ||
             (rawDate != null && rawDate.toString().contains(date));
-        final isEmpMatch = employeeId == 0 ||
-            employeeId == 1 ||
-            docEmpIdNum == employeeId ||
-            data['employee_id']?.toString() == employeeId.toString() ||
-            docEmpCode == 'EMP-0001' ||
-            docEmpCode == 'EMP-1140' ||
-            (docEmpIdNum == 0 && docEmpCode.contains('EMP-'));
+        final isEmpMatch = (employeeId != 0 && docEmpIdNum == employeeId) ||
+            data['employee_id']?.toString() == employeeId.toString();
 
         if (isDateMatch && isEmpMatch && statusStr == 'approved') {
           approvedMins += (data['duration_minutes'] as num?)?.toInt() ?? 0;
@@ -757,7 +746,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       final isPm = clean.contains('PM');
       final isAm = clean.contains('AM');
       final digits = clean.replaceAll(RegExp(r'[^0-9:]'), '');
-      final parts = digits.split(':');
+      final parts = digits.split(':').where((p) => p.trim().isNotEmpty).toList();
       if (parts.isNotEmpty) {
         int hours = int.tryParse(parts[0]) ?? 9;
         final minutes = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;

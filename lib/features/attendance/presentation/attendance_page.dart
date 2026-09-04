@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../domain/attendance_record.dart';
+import '../domain/attendance_settings.dart';
 import '../domain/attendance_status_helper.dart';
 import 'widgets/attendance_details_dialog.dart';
 import '../../employee/domain/employee.dart';
@@ -3068,12 +3069,18 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         final hasCheckedIn = todayRecord != null && todayRecord.effectiveCheckInTime.isNotEmpty;
         final hasCheckedOut = todayRecord != null && todayRecord.checkOutTime.isNotEmpty;
 
+        final settings = ref.watch(attendanceSettingsProvider).valueOrNull ?? AttendanceSettings.defaults();
+        final gracePeriodMinutes = settings.gracePeriodMinutes;
         final now = DateTime.now();
         final expectedInTimeOfDay = _getEmployeeInTime(employee);
+        final expectedOutTimeOfDay = _getEmployeeOutTime(employee);
         final officialStartTime = DateTime(now.year, now.month, now.day, expectedInTimeOfDay.hour, expectedInTimeOfDay.minute);
-        final lateCutoffTime = officialStartTime;
+        final gracePeriodEndTime = officialStartTime.add(Duration(minutes: gracePeriodMinutes));
         final officialTimeStr = _formatTimeOfDayLabel(expectedInTimeOfDay);
-        final isLate = now.isAfter(lateCutoffTime) && !hasCheckedIn;
+        final officialOutTimeStr = expectedOutTimeOfDay != null ? _formatTimeOfDayLabel(expectedOutTimeOfDay) : '';
+        final graceTimeStr = _formatTimeOfDayLabel(TimeOfDay.fromDateTime(gracePeriodEndTime));
+        final isWithinGracePeriod = !hasCheckedIn && now.isAfter(officialStartTime) && !now.isAfter(gracePeriodEndTime);
+        final isLate = now.isAfter(gracePeriodEndTime) && !hasCheckedIn;
 
         final myRequestsAsync = ref.watch(myPermissionRequestsProvider(employee.id));
         PermissionRequest? todayApprovedPermission;
@@ -3146,17 +3153,25 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                               ? 'Approved Permission: ${todayApprovedPermission!.fromTime} – ${todayApprovedPermission!.toTime}'
                               : hasPendingPermission
                                   ? 'Permission Pending: ${todayPendingPermission!.fromTime} – ${todayPendingPermission!.toTime}'
-                                  : isLate
-                                      ? 'You are late today. Please apply for permission or check in directly.'
-                                      : 'Expected Check-in Time: $officialTimeStr',
+                                  : hasCheckedIn
+                                      ? (hasCheckedOut
+                                          ? 'Shift completed: ${todayRecord.effectiveCheckInTime} – ${todayRecord.checkOutTime}'
+                                          : 'Checked in at ${todayRecord.effectiveCheckInTime}${officialOutTimeStr.isNotEmpty ? " • Expected Check-out: $officialOutTimeStr" : ""}')
+                                      : isWithinGracePeriod
+                                          ? 'Grace period active until $graceTimeStr. Check in on time!'
+                                          : isLate
+                                              ? 'You are late today. Please apply for permission or check in directly.'
+                                              : (officialOutTimeStr.isNotEmpty
+                                                  ? 'Expected Shift: $officialTimeStr – $officialOutTimeStr'
+                                                  : 'Expected Check-in Time: $officialTimeStr'),
                           style: TextStyle(
                             fontSize: 11,
-                            fontWeight: (isLate && !hasApprovedPermission && !hasPendingPermission) ? FontWeight.w600 : FontWeight.w500,
-                            color: hasApprovedPermission
+                            fontWeight: (isLate && !hasCheckedIn && !hasApprovedPermission && !hasPendingPermission) ? FontWeight.w600 : FontWeight.w500,
+                            color: hasApprovedPermission || isWithinGracePeriod
                                 ? const Color(0xFF15803D)
                                 : hasPendingPermission
                                     ? const Color(0xFFB45309)
-                                    : isLate
+                                    : (isLate && !hasCheckedIn)
                                         ? const Color(0xFFC2410C)
                                         : AppColors.textSecondary,
                           ),
@@ -3316,6 +3331,40 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                     ],
                   ),
                 ),
+              ] else if (!hasCheckedIn && isWithinGracePeriod) ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0FDF4),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFBBF7D0)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.timer_outlined, size: 20, color: Color(0xFF16A34A)),
+                          SizedBox(width: 8),
+                          Text(
+                            'Grace Period Active',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: Color(0xFF15803D),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'You have a $gracePeriodMinutes-minute grace period until $graceTimeStr to check in without being marked Late.',
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF166534), fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                ),
               ] else if (!hasCheckedIn && isLate) ...[
                 Container(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -3340,7 +3389,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Official expected time is $officialTimeStr.',
+                        'Official expected time was $officialTimeStr (Grace period ended at $graceTimeStr).',
                         style: const TextStyle(fontSize: 12, color: Color(0xFF9A3412), fontWeight: FontWeight.w500),
                       ),
                       const SizedBox(height: 10),
@@ -4005,8 +4054,8 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         final isPm = inTimeStr.toUpperCase().contains('PM');
         final isAm = inTimeStr.toUpperCase().contains('AM');
         final digits = inTimeStr.replaceAll(RegExp(r'[^0-9:]'), '');
-        final parts = digits.split(':');
-        if (parts.length == 2) {
+        final parts = digits.split(':').where((p) => p.trim().isNotEmpty).toList();
+        if (parts.length >= 2) {
           int h = int.parse(parts[0]);
           int m = int.parse(parts[1]);
           if (isPm && h < 12) h += 12;
@@ -4016,6 +4065,26 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       } catch (_) {}
     }
     return const TimeOfDay(hour: 9, minute: 30);
+  }
+
+  TimeOfDay? _getEmployeeOutTime(Employee emp) {
+    final outTimeStr = emp.outTime.trim();
+    if (outTimeStr.isNotEmpty) {
+      try {
+        final isPm = outTimeStr.toUpperCase().contains('PM');
+        final isAm = outTimeStr.toUpperCase().contains('AM');
+        final digits = outTimeStr.replaceAll(RegExp(r'[^0-9:]'), '');
+        final parts = digits.split(':').where((p) => p.trim().isNotEmpty).toList();
+        if (parts.length >= 2) {
+          int h = int.parse(parts[0]);
+          int m = int.parse(parts[1]);
+          if (isPm && h < 12) h += 12;
+          if (isAm && h == 12) h = 0;
+          return TimeOfDay(hour: h, minute: m);
+        }
+      } catch (_) {}
+    }
+    return null;
   }
 
   String _formatTimeOfDayLabel(TimeOfDay tod) {
