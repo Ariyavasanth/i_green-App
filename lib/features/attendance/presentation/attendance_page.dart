@@ -3105,12 +3105,13 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         final hasApprovedPermission = todayApprovedPermission != null;
         final hasPendingPermission = todayPendingPermission != null;
 
-        if (hasCheckedIn && todayRecord.status.toLowerCase() == 'late' && hasApprovedPermission) {
+        if (hasCheckedIn && (todayRecord.status.toLowerCase() == 'late' || todayRecord.status.toLowerCase() == 'absent') && hasApprovedPermission) {
           WidgetsBinding.instance.addPostFrameCallback((_) async {
             final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
             await ref.read(attendanceRepositoryProvider).recalculateAttendanceForDate(employee.id, todayStr);
             ref.invalidate(todayAttendanceRecordProvider(employee.id));
             ref.invalidate(attendanceRecordsProvider(employee.id));
+            ref.invalidate(allAttendanceRecordsProvider);
           });
         }
 

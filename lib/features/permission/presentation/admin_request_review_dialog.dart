@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../leave/providers/leave_providers.dart';
 import '../../employee/providers/employee_providers.dart';
+import '../../attendance/providers/attendance_providers.dart';
 import '../domain/permission_enums.dart';
 import '../domain/permission_request.dart';
 import '../providers/permission_providers.dart';
@@ -53,6 +54,9 @@ class _AdminRequestReviewDialogState extends ConsumerState<AdminRequestReviewDia
 
       ref.invalidate(myPermissionRequestsProvider(widget.request.employeeId));
       ref.invalidate(employeePermissionBalanceProvider(widget.request.employeeId));
+      ref.invalidate(todayAttendanceRecordProvider(widget.request.employeeId));
+      ref.invalidate(attendanceRecordsProvider(widget.request.employeeId));
+      ref.invalidate(allAttendanceRecordsProvider);
 
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -145,6 +149,9 @@ class _AdminRequestReviewDialogState extends ConsumerState<AdminRequestReviewDia
       if (!mounted) return;
       ref.invalidate(myPermissionRequestsProvider(widget.request.employeeId));
       ref.invalidate(employeePermissionBalanceProvider(widget.request.employeeId));
+      ref.invalidate(todayAttendanceRecordProvider(widget.request.employeeId));
+      ref.invalidate(attendanceRecordsProvider(widget.request.employeeId));
+      ref.invalidate(allAttendanceRecordsProvider);
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;

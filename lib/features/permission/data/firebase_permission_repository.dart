@@ -213,8 +213,20 @@ class FirebasePermissionRepository implements PermissionRepository {
         DateTime? dt;
         if (rawDate is Timestamp) {
           dt = rawDate.toDate();
+        } else if (rawDate is DateTime) {
+          dt = rawDate;
         } else if (rawDate is String) {
           dt = DateTime.tryParse(rawDate);
+          if (dt == null) {
+            final parts = rawDate.split(RegExp(r'[-/]'));
+            if (parts.length == 3) {
+              if (parts[0].length == 4) {
+                dt = DateTime.tryParse('${parts[0]}-${parts[1].padLeft(2, '0')}-${parts[2].padLeft(2, '0')}');
+              } else if (parts[2].length == 4) {
+                dt = DateTime.tryParse('${parts[2]}-${parts[1].padLeft(2, '0')}-${parts[0].padLeft(2, '0')}');
+              }
+            }
+          }
         }
         if (empId > 0 && dt != null) {
           final dateStr = '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
@@ -267,8 +279,20 @@ class FirebasePermissionRepository implements PermissionRepository {
         DateTime? dt;
         if (rawDate is Timestamp) {
           dt = rawDate.toDate();
+        } else if (rawDate is DateTime) {
+          dt = rawDate;
         } else if (rawDate is String) {
           dt = DateTime.tryParse(rawDate);
+          if (dt == null) {
+            final parts = rawDate.split(RegExp(r'[-/]'));
+            if (parts.length == 3) {
+              if (parts[0].length == 4) {
+                dt = DateTime.tryParse('${parts[0]}-${parts[1].padLeft(2, '0')}-${parts[2].padLeft(2, '0')}');
+              } else if (parts[2].length == 4) {
+                dt = DateTime.tryParse('${parts[2]}-${parts[1].padLeft(2, '0')}-${parts[0].padLeft(2, '0')}');
+              }
+            }
+          }
         }
         if (empId > 0 && dt != null) {
           final dateStr = '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
