@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import '../domain/clock_entry.dart';
 import '../providers/clocking_providers.dart';
@@ -244,6 +246,7 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
     String selectedActivity = 'General Work';
     final TextEditingController notesController = TextEditingController();
 
+    if (!context.mounted) return;
     final result = await showDialog<bool>(
       context: context,
       builder: (context) {
@@ -344,6 +347,16 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
     );
 
     if (result == true) {
+      if (selectedActivity.toLowerCase().contains('lunch')) {
+        if (!context.mounted) return;
+        final isInside = await _verifyGeofenceAndAlert(
+          context,
+          empIdInt,
+          failureMessage: 'Please return to the office premises to start your lunch break.',
+        );
+        if (!isInside) return;
+      }
+
       final repo = ref.read(clockingRepositoryProvider);
       final now = DateTime.now();
 
@@ -356,6 +369,13 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
       );
 
       await repo.startClockEntry(entry);
+      final timeStr = DateFormat('HH:mm:ss').format(now);
+      await attendanceRepo.startActivitySession(
+        employeeId: empIdInt,
+        date: today,
+        activityType: selectedActivity,
+        time: timeStr,
+      );
       _refreshData();
 
       if (context.mounted) {
@@ -368,6 +388,88 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
         );
       }
     }
+  }
+
+  Future<bool> _verifyGeofenceAndAlert(BuildContext context, int empIdInt, {required String failureMessage}) async {
+    try {
+      if (!kIsWeb) {
+        final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        if (!serviceEnabled) {
+          if (context.mounted) {
+            _showGeofenceDialog(context, 'Location services are turned off on this device. Please enable GPS.');
+          }
+          return false;
+        }
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        if (context.mounted) {
+          _showGeofenceDialog(context, 'Location permission is required to verify office premises.');
+        }
+        return false;
+      }
+
+      final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      final attendanceRepo = ref.read(attendanceRepositoryProvider);
+      final isInside = await attendanceRepo.verifyLocationWithinGeofence(
+        employeeId: empIdInt,
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
+
+      if (!isInside) {
+        if (context.mounted) {
+          _showGeofenceDialog(context, failureMessage);
+        }
+        return false;
+      }
+      return true;
+    } catch (e) {
+      if (context.mounted) {
+        _showGeofenceDialog(context, failureMessage);
+      }
+      return false;
+    }
+  }
+
+  void _showGeofenceDialog(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.location_off_rounded, color: Colors.orange, size: 24),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Lunch Break',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          message,
+          style: const TextStyle(fontSize: 14, color: Color(0xFF334155)),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF9CC70A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildActivityOption({
@@ -389,38 +491,73 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
           width: isSelected ? 1.5 : 1,
         ),
       ),
-      child: RadioListTile<String>(
-        value: value,
-        groupValue: groupValue,
-        onChanged: onChanged,
-        activeColor: const Color(0xFF9CC70A),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-        title: Row(
-          children: [
-            Icon(icon, size: 18, color: isSelected ? const Color(0xFF414A51) : const Color(0xFF64748B)),
-            const SizedBox(width: 8),
-            Text(
-              title,
-              style: TextStyle(
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                fontSize: 14,
-                color: const Color(0xFF1E293B),
+      child: Material(
+        color: Colors.transparent,
+        child: RadioListTile<String>(
+          value: value,
+          groupValue: groupValue,
+          onChanged: onChanged,
+          activeColor: const Color(0xFF9CC70A),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+          title: Row(
+            children: [
+              Icon(icon, size: 18, color: isSelected ? const Color(0xFF414A51) : const Color(0xFF64748B)),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                  fontSize: 14,
+                  color: const Color(0xFF1E293B),
+                ),
               ),
-            ),
-          ],
-        ),
-        subtitle: Text(
-          subtitle,
-          style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+            ],
+          ),
+          subtitle: Text(
+            subtitle,
+            style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+          ),
         ),
       ),
     );
   }
 
   Future<void> _stopActivity(BuildContext context) async {
-    if (widget.employeeId.trim().isEmpty) return;
+    final empId = widget.employeeId.trim();
+    if (empId.isEmpty) return;
+
     final repo = ref.read(clockingRepositoryProvider);
-    await repo.clockOutActiveEntry(widget.employeeId.trim());
+    final activeEntry = await repo.getActiveEntry(empId);
+    if (activeEntry != null && activeEntry.entryType.toLowerCase().contains('lunch')) {
+      final digits = empId.replaceAll(RegExp(r'[^0-9]'), '');
+      final empIdInt = int.tryParse(digits) ?? 0;
+      if (empIdInt != 0) {
+        if (!context.mounted) return;
+        final isInside = await _verifyGeofenceAndAlert(
+          context,
+          empIdInt,
+          failureMessage: 'Please return to the office premises to end your lunch break.',
+        );
+        if (!isInside) return;
+      }
+    }
+
+    await repo.clockOutActiveEntry(empId);
+
+    final digits = empId.replaceAll(RegExp(r'[^0-9]'), '');
+    final empIdInt = int.tryParse(digits) ?? 0;
+    if (empIdInt != 0) {
+      final now = DateTime.now();
+      final timeStr = DateFormat('HH:mm:ss').format(now);
+      final dateStr = DateFormat('yyyy-MM-dd').format(now);
+      final attendanceRepo = ref.read(attendanceRepositoryProvider);
+      await attendanceRepo.stopActivitySession(
+        employeeId: empIdInt,
+        date: dateStr,
+        time: timeStr,
+      );
+    }
+
     _refreshData();
 
     if (context.mounted) {
@@ -445,6 +582,13 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
     ref.invalidate(totalBreakHoursProvider((employeeId: widget.employeeId.trim(), date: today)));
     ref.invalidate(tasksProvider);
     ref.invalidate(taskProjectHoursProvider);
+
+    final digits = widget.employeeId.trim().replaceAll(RegExp(r'[^0-9]'), '');
+    final empIdInt = int.tryParse(digits) ?? 0;
+    if (empIdInt != 0) {
+      ref.invalidate(todayAttendanceRecordProvider(empIdInt));
+      ref.invalidate(attendanceRecordsProvider(empIdInt));
+    }
   }
 
   IconData _getActivityIcon(String type) {
@@ -556,6 +700,7 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
           entriesAsync: entriesAsync,
           tasksAsync: ref.watch(tasksProvider((assignedTo: widget.employeeId.trim(), projectOrOfficeCode: null, status: null))),
           odAsync: empInt > 0 ? ref.watch(allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: empInt))) : const AsyncValue.data([]),
+          attendanceRecordAsync: empInt > 0 ? ref.watch(todayAttendanceRecordProvider(empInt)) : null,
           empId: widget.employeeId.trim(),
           primaryColor: primaryColor,
           secondaryColor: secondaryColor,
@@ -564,10 +709,42 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
     );
   }
 
+  DateTime? _parseSessionTime(String dateStr, String timeStr) {
+    if (timeStr.trim().isEmpty) return null;
+    try {
+      final parts = timeStr.trim().split(':');
+      if (parts.length >= 2) {
+        final hourPart = parts[0].replaceAll(RegExp(r'\D'), '');
+        final minPart = parts[1].replaceAll(RegExp(r'\D'), '');
+        int h = int.tryParse(hourPart) ?? 0;
+        final m = int.tryParse(minPart) ?? 0;
+        final upper = timeStr.toUpperCase();
+        if (upper.contains('PM') && h < 12) h += 12;
+        if (upper.contains('AM') && h == 12) h = 0;
+        final dParts = dateStr.split(RegExp(r'[-/]'));
+        if (dParts.length == 3) {
+          int y, mo, day;
+          if (dParts[0].length == 4) {
+            y = int.parse(dParts[0]);
+            mo = int.parse(dParts[1]);
+            day = int.parse(dParts[2]);
+          } else {
+            day = int.parse(dParts[0]);
+            mo = int.parse(dParts[1]);
+            y = int.parse(dParts[2]);
+          }
+          return DateTime(y, mo, day, h, m);
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Widget _buildCombinedActivitiesList({
     required AsyncValue<List<ClockEntry>> entriesAsync,
     required AsyncValue<List<TaskItem>> tasksAsync,
     required AsyncValue<List<OnDutyAssignment>> odAsync,
+    AsyncValue<dynamic>? attendanceRecordAsync,
     required String empId,
     required Color primaryColor,
     required Color secondaryColor,
@@ -639,6 +816,44 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
         isRunning: e.isActive,
         icon: _getActivityIcon(e.entryType),
       ));
+    }
+
+    // Merge sessions from attendance record for full consistency
+    final attRecord = attendanceRecordAsync?.valueOrNull;
+    if (attRecord != null) {
+      for (final s in attRecord.sessions) {
+        final tLower = s.type.toLowerCase();
+        if (tLower == 'office' || tLower == 'od') continue;
+
+        DateTime? sStart = _parseSessionTime(attRecord.date, s.checkInTime);
+        DateTime? sEnd = s.checkOutTime.isNotEmpty ? _parseSessionTime(attRecord.date, s.checkOutTime) : null;
+        if (sStart == null) continue;
+
+        final isDuplicate = combinedList.any((c) =>
+            c.type == 'CLOCKING' &&
+            c.title.toLowerCase() == s.type.toLowerCase() &&
+            c.startTime.difference(sStart).inMinutes.abs() <= 2);
+
+        if (!isDuplicate) {
+          final startStr = DateFormat('hh:mm a').format(sStart);
+          final endStr = sEnd != null ? DateFormat('hh:mm a').format(sEnd) : (s.isActive ? 'Running' : '');
+          final durMins = s.effectiveDurationMinutes;
+          final durText = durMins > 0
+              ? (durMins >= 60 ? '${durMins ~/ 60} hr ${durMins % 60} min' : '$durMins min')
+              : (s.isActive ? '${DateTime.now().difference(sStart).inMinutes} min' : '--');
+
+          combinedList.add(CombinedActivityItem(
+            title: s.type,
+            subtitle: endStr.isNotEmpty ? '$startStr → $endStr' : startStr,
+            type: 'CLOCKING',
+            startTime: sStart,
+            endTime: sEnd,
+            durationText: durText,
+            isRunning: s.isActive,
+            icon: _getActivityIcon(s.type),
+          ));
+        }
+      }
     }
 
     for (final t in empTasks) {

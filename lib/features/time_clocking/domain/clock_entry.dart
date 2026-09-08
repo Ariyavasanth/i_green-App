@@ -55,15 +55,21 @@ class ClockEntry {
 
   factory ClockEntry.fromMap(Map<String, dynamic> map) {
     return ClockEntry(
-      id: map['id'] as String,
-      employeeId: map['employee_id'] as String? ?? '',
-      entryType: map['entry_type'] as String? ?? 'WORK',
-      startTime: map['start_time'] != null
-          ? DateTime.tryParse(map['start_time'] as String) ?? DateTime.now()
-          : DateTime.now(),
-      endTime: map['end_time'] != null ? DateTime.tryParse(map['end_time'] as String) : null,
-      notes: map['notes'] as String?,
+      id: (map['id'] ?? '').toString(),
+      employeeId: (map['employee_id'] ?? '').toString(),
+      entryType: (map['entry_type'] ?? 'WORK').toString(),
+      startTime: _parseDateTime(map['start_time']),
+      endTime: map['end_time'] != null ? _parseDateTime(map['end_time']) : null,
+      notes: map['notes']?.toString(),
     );
+  }
+
+  static DateTime _parseDateTime(dynamic val) {
+    if (val == null) return DateTime.now();
+    if (val is DateTime) return val;
+    if (val is int) return DateTime.fromMillisecondsSinceEpoch(val);
+    final str = val.toString().trim();
+    return DateTime.tryParse(str) ?? DateTime.now();
   }
 
   ClockEntry copyWith({

@@ -21,6 +21,18 @@ class FirebaseClockingRepository implements ClockingRepository {
   CollectionReference<Map<String, dynamic>>? get _clockingRef =>
       _firestore?.collection('time_clockings');
 
+  bool _matchesEmployee(dynamic docEmpId, String? targetEmpId) {
+    if (targetEmpId == null || targetEmpId.trim().isEmpty) return true;
+    final t = targetEmpId.trim().toLowerCase();
+    final docStr = (docEmpId ?? '').toString().trim().toLowerCase();
+    if (docStr.isEmpty) return false;
+    if (docStr == t) return true;
+    final tDigits = t.replaceAll(RegExp(r'\D'), '');
+    final docDigits = docStr.replaceAll(RegExp(r'\D'), '');
+    if (tDigits.isNotEmpty && tDigits == docDigits) return true;
+    return false;
+  }
+
   @override
   Future<List<ClockEntry>> getClockEntries({
     String? employeeId,
@@ -29,15 +41,20 @@ class FirebaseClockingRepository implements ClockingRepository {
     final List<ClockEntry> result = [];
     try {
       if (_clockingRef != null) {
-        Query<Map<String, dynamic>> query = _clockingRef!;
-
-        if (employeeId != null && employeeId.isNotEmpty) {
-          query = query.where('employee_id', isEqualTo: employeeId);
+        final snapshot = await _clockingRef!.get().timeout(const Duration(seconds: 5));
+        for (final doc in snapshot.docs) {
+          try {
+            final data = doc.data();
+            final docEmpId = data['employee_id'];
+            if (_matchesEmployee(docEmpId, employeeId)) {
+              final map = Map<String, dynamic>.from(data);
+              if (!map.containsKey('id') || map['id'] == null || map['id'].toString().isEmpty) {
+                map['id'] = doc.id;
+              }
+              result.add(ClockEntry.fromMap(map));
+            }
+          } catch (_) {}
         }
-
-        final snapshot = await query.get().timeout(const Duration(seconds: 1));
-        final firestoreEntries = snapshot.docs.map((doc) => ClockEntry.fromMap(doc.data())).toList();
-        result.addAll(firestoreEntries);
       }
     } catch (_) {}
 
@@ -68,7 +85,7 @@ class FirebaseClockingRepository implements ClockingRepository {
     DateTime? date,
   }) {
     return _fallbackEntries.where((e) {
-      if (employeeId != null && employeeId.isNotEmpty && e.employeeId != employeeId) {
+      if (employeeId != null && employeeId.isNotEmpty && !_matchesEmployee(e.employeeId, employeeId)) {
         return false;
       }
       if (date != null) {
@@ -85,19 +102,27 @@ class FirebaseClockingRepository implements ClockingRepository {
   Future<ClockEntry?> getActiveEntry(String employeeId) async {
     try {
       if (_clockingRef != null) {
-        final snapshot = await _clockingRef!
-            .where('employee_id', isEqualTo: employeeId)
-            .where('end_time', isNull: true)
-            .get()
-            .timeout(const Duration(seconds: 1));
-
-        if (snapshot.docs.isNotEmpty) {
-          return ClockEntry.fromMap(snapshot.docs.first.data());
+        final snapshot = await _clockingRef!.get().timeout(const Duration(seconds: 5));
+        for (final doc in snapshot.docs) {
+          try {
+            final data = doc.data();
+            final docEmpId = data['employee_id'];
+            if (_matchesEmployee(docEmpId, employeeId)) {
+              final map = Map<String, dynamic>.from(data);
+              if (!map.containsKey('id') || map['id'] == null || map['id'].toString().isEmpty) {
+                map['id'] = doc.id;
+              }
+              final entry = ClockEntry.fromMap(map);
+              if (entry.isActive) {
+                return entry;
+              }
+            }
+          } catch (_) {}
         }
       }
     } catch (_) {}
 
-    final activeFallback = _fallbackEntries.where((e) => e.employeeId == employeeId && e.isActive).toList();
+    final activeFallback = _fallbackEntries.where((e) => _matchesEmployee(e.employeeId, employeeId) && e.isActive).toList();
     if (activeFallback.isNotEmpty) {
       return activeFallback.last;
     }
@@ -108,12 +133,19 @@ class FirebaseClockingRepository implements ClockingRepository {
   Future<List<ClockEntry>> getAllActiveEntries() async {
     try {
       if (_clockingRef != null) {
-        final snapshot = await _clockingRef!
-            .where('end_time', isNull: true)
-            .get()
-            .timeout(const Duration(seconds: 1));
-
-        return snapshot.docs.map((doc) => ClockEntry.fromMap(doc.data())).toList();
+        final snapshot = await _clockingRef!.get().timeout(const Duration(seconds: 5));
+        final List<ClockEntry> active = [];
+        for (final doc in snapshot.docs) {
+          try {
+            final map = Map<String, dynamic>.from(doc.data());
+            if (!map.containsKey('id') || map['id'] == null || map['id'].toString().isEmpty) {
+              map['id'] = doc.id;
+            }
+            final entry = ClockEntry.fromMap(map);
+            if (entry.isActive) active.add(entry);
+          } catch (_) {}
+        }
+        return active;
       }
     } catch (_) {}
 
@@ -125,7 +157,7 @@ class FirebaseClockingRepository implements ClockingRepository {
     await clockOutActiveEntry(entry.employeeId, time: entry.startTime);
     try {
       if (_clockingRef != null) {
-        await _clockingRef!.doc(entry.id).set(entry.toMap()).timeout(const Duration(seconds: 1));
+        await _clockingRef!.doc(entry.id).set(entry.toMap()).timeout(const Duration(seconds: 5));
       }
     } catch (_) {}
     _fallbackEntries.removeWhere((e) => e.id == entry.id);
@@ -134,25 +166,26 @@ class FirebaseClockingRepository implements ClockingRepository {
 
   @override
   Future<void> clockOutActiveEntry(String employeeId, {DateTime? time}) async {
-    final clockOutTime = (time ?? DateTime.now()).toIso8601String();
+    final clockOutDateTime = time ?? DateTime.now();
+    final clockOutTime = clockOutDateTime.toIso8601String();
     try {
       if (_clockingRef != null) {
-        final snapshot = await _clockingRef!
-            .where('employee_id', isEqualTo: employeeId)
-            .where('end_time', isNull: true)
-            .get()
-            .timeout(const Duration(seconds: 1));
-
+        final snapshot = await _clockingRef!.get().timeout(const Duration(seconds: 5));
         for (final doc in snapshot.docs) {
-          await doc.reference.update({'end_time': clockOutTime});
+          final data = doc.data();
+          final docEmpId = data['employee_id'];
+          final endTimeVal = data['end_time'];
+          final isNullOrEmpty = endTimeVal == null || endTimeVal.toString().trim().isEmpty;
+          if (_matchesEmployee(docEmpId, employeeId) && isNullOrEmpty) {
+            await doc.reference.update({'end_time': clockOutTime});
+          }
         }
       }
     } catch (_) {}
 
-    final clockOutDateTime = time ?? DateTime.now();
     for (int i = 0; i < _fallbackEntries.length; i++) {
       final e = _fallbackEntries[i];
-      if (e.employeeId == employeeId && e.isActive) {
+      if (_matchesEmployee(e.employeeId, employeeId) && e.isActive) {
         _fallbackEntries[i] = e.copyWith(endTime: clockOutDateTime);
       }
     }
@@ -163,7 +196,7 @@ class FirebaseClockingRepository implements ClockingRepository {
     final clockOutTime = endTime.toIso8601String();
     try {
       if (_clockingRef != null) {
-        await _clockingRef!.doc(id).update({'end_time': clockOutTime}).timeout(const Duration(seconds: 1));
+        await _clockingRef!.doc(id).update({'end_time': clockOutTime}).timeout(const Duration(seconds: 5));
       }
     } catch (_) {}
 

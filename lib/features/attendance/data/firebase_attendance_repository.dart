@@ -234,6 +234,178 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
   }
 
   @override
+  Future<bool> verifyLocationWithinGeofence({
+    required int employeeId,
+    required double latitude,
+    required double longitude,
+  }) async {
+    try {
+      final settings = await getAttendanceSettings();
+      final loc = await _resolveEffectiveLocation(employeeId: employeeId, globalSettings: settings);
+      final requireGps = loc['requireGps'] as bool? ?? false;
+      final targetLat = loc['targetLat'] as double? ?? 0.0;
+      final targetLng = loc['targetLng'] as double? ?? 0.0;
+      final targetRadius = loc['targetRadius'] as int? ?? 100;
+
+      if (!requireGps || (targetLat == 0.0 && targetLng == 0.0)) {
+        return true;
+      }
+
+      final distance = _distanceInMeters(
+        startLatitude: targetLat,
+        startLongitude: targetLng,
+        endLatitude: latitude,
+        endLongitude: longitude,
+      );
+
+      return distance <= targetRadius;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  @override
+  Future<void> startActivitySession({
+    required int employeeId,
+    required String date,
+    required String activityType,
+    required String time,
+  }) async {
+    final normDate = _normalizeDateKey(date);
+    final docId = '${employeeId}_${normDate.replaceAll('-', '')}';
+    final existingRecord = await getAttendanceRecordForDate(employeeId, date);
+    if (existingRecord == null) return;
+
+    List<AttendanceSession> updatedSessions = List<AttendanceSession>.from(existingRecord.sessions);
+
+    // If there's an active session, close it with the current activity start time
+    final activeIndex = updatedSessions.indexWhere((s) => s.isActive);
+    if (activeIndex != -1) {
+      final activeSession = updatedSessions[activeIndex];
+      int sessionDurationMinutes = 0;
+      double sessionDurationHours = 0.0;
+      final inMin = _parseMinutes(activeSession.checkInTime);
+      final outMin = _parseMinutes(time);
+      if (inMin != null && outMin != null && outMin >= inMin) {
+        sessionDurationMinutes = outMin - inMin;
+        sessionDurationHours = double.parse((sessionDurationMinutes / 60.0).toStringAsFixed(2));
+      }
+      updatedSessions[activeIndex] = activeSession.copyWith(
+        checkOutTime: time,
+        durationHours: sessionDurationHours,
+        durationMinutes: sessionDurationMinutes,
+      );
+    } else if (updatedSessions.isEmpty && existingRecord.checkInTime.isNotEmpty && existingRecord.checkOutTime.isEmpty) {
+      // Legacy active session
+      int sessionDurationMinutes = 0;
+      double sessionDurationHours = 0.0;
+      final inMin = _parseMinutes(existingRecord.checkInTime);
+      final outMin = _parseMinutes(time);
+      if (inMin != null && outMin != null && outMin >= inMin) {
+        sessionDurationMinutes = outMin - inMin;
+        sessionDurationHours = double.parse((sessionDurationMinutes / 60.0).toStringAsFixed(2));
+      }
+      updatedSessions.add(AttendanceSession(
+        id: 'session_1',
+        type: 'office',
+        checkInTime: existingRecord.checkInTime,
+        checkOutTime: time,
+        durationHours: sessionDurationHours,
+        durationMinutes: sessionDurationMinutes,
+      ));
+    }
+
+    // Add new activity session
+    final newSessionIndex = updatedSessions.length + 1;
+    final sessionUuid = 'session_${DateTime.now().millisecondsSinceEpoch}_$newSessionIndex';
+    updatedSessions.add(AttendanceSession(
+      id: sessionUuid,
+      type: activityType,
+      checkInTime: time,
+      checkOutTime: '',
+      createdAt: DateTime.now().toIso8601String(),
+    ));
+
+    final updatedRecord = existingRecord.copyWith(
+      sessions: updatedSessions,
+    );
+
+    try {
+      await _recordsRef.doc(docId).set(updatedRecord.toMap(), SetOptions(merge: true));
+      if (existingRecord.employeeCode.isNotEmpty) {
+        await _recordsRef
+            .doc('${existingRecord.employeeCode}_${normDate.replaceAll('-', '')}')
+            .set(updatedRecord.toMap(), SetOptions(merge: true));
+      }
+    } catch (_) {}
+    _localMemoryCache['${employeeId}_$date'] = updatedRecord;
+    _localMemoryCache['${employeeId}_$normDate'] = updatedRecord;
+    _localMemoryCache[docId] = updatedRecord;
+  }
+
+  @override
+  Future<void> stopActivitySession({
+    required int employeeId,
+    required String date,
+    required String time,
+  }) async {
+    final normDate = _normalizeDateKey(date);
+    final docId = '${employeeId}_${normDate.replaceAll('-', '')}';
+    final existingRecord = await getAttendanceRecordForDate(employeeId, date);
+    if (existingRecord == null) return;
+
+    List<AttendanceSession> updatedSessions = List<AttendanceSession>.from(existingRecord.sessions);
+
+    // If there's an active session, close it
+    final activeIndex = updatedSessions.indexWhere((s) => s.isActive);
+    if (activeIndex != -1) {
+      final activeSession = updatedSessions[activeIndex];
+      int sessionDurationMinutes = 0;
+      double sessionDurationHours = 0.0;
+      final inMin = _parseMinutes(activeSession.checkInTime);
+      final outMin = _parseMinutes(time);
+      if (inMin != null && outMin != null && outMin >= inMin) {
+        sessionDurationMinutes = outMin - inMin;
+        sessionDurationHours = double.parse((sessionDurationMinutes / 60.0).toStringAsFixed(2));
+      }
+      updatedSessions[activeIndex] = activeSession.copyWith(
+        checkOutTime: time,
+        durationHours: sessionDurationHours,
+        durationMinutes: sessionDurationMinutes,
+      );
+    }
+
+    // Resume regular Office session if employee hasn't checked out for the day
+    if (existingRecord.checkOutTime.isEmpty) {
+      final newSessionIndex = updatedSessions.length + 1;
+      final sessionUuid = 'session_${DateTime.now().millisecondsSinceEpoch}_$newSessionIndex';
+      updatedSessions.add(AttendanceSession(
+        id: sessionUuid,
+        type: 'office',
+        checkInTime: time,
+        checkOutTime: '',
+        createdAt: DateTime.now().toIso8601String(),
+      ));
+    }
+
+    final updatedRecord = existingRecord.copyWith(
+      sessions: updatedSessions,
+    );
+
+    try {
+      await _recordsRef.doc(docId).set(updatedRecord.toMap(), SetOptions(merge: true));
+      if (existingRecord.employeeCode.isNotEmpty) {
+        await _recordsRef
+            .doc('${existingRecord.employeeCode}_${normDate.replaceAll('-', '')}')
+            .set(updatedRecord.toMap(), SetOptions(merge: true));
+      }
+    } catch (_) {}
+    _localMemoryCache['${employeeId}_$date'] = updatedRecord;
+    _localMemoryCache['${employeeId}_$normDate'] = updatedRecord;
+    _localMemoryCache[docId] = updatedRecord;
+  }
+
+  @override
   Future<AttendanceVerificationResult> verifyAttendance({
     required int employeeId,
     required String date,

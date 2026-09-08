@@ -111,4 +111,20 @@ abstract class AttendanceRepository {
   Future<void> autoResolveMissingCheckOuts({int? employeeId});
   Future<void> recalculateAttendanceForDate(int employeeId, String date);
   Future<void> clearAllAttendanceRecords();
+  Future<bool> verifyLocationWithinGeofence({
+    required int employeeId,
+    required double latitude,
+    required double longitude,
+  });
+  Future<void> startActivitySession({
+    required int employeeId,
+    required String date,
+    required String activityType,
+    required String time,
+  });
+  Future<void> stopActivitySession({
+    required int employeeId,
+    required String date,
+    required String time,
+  });
 }

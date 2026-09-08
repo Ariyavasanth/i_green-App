@@ -57,13 +57,13 @@ class HrmsModuleScreen extends ConsumerWidget {
       _SubModule('Site Visit\nAttendance Mgmt', Icons.pin_drop_outlined,
           '/site-visit-attendance-management', Color(0xFF636E72)),
     ],
-    'LEAVE & PERMISSION': [
+    'LEAVE': [
       _SubModule('Leave\nManagement', Icons.event_note, '/leave-management',
           Color(0xFF00CEC9)),
-      _SubModule(
-          'Permission', Icons.access_time_filled_outlined, '/permission', Color(0xFFFDAA5D)),
-      _SubModule('Permission\nManagement', Icons.more_time_outlined,
-          '/permission-management', Color(0xFFE84393)),
+      // _SubModule(
+      //     'Permission', Icons.access_time_filled_outlined, '/permission', Color(0xFFFDAA5D)),
+      // _SubModule('Permission\nManagement', Icons.more_time_outlined,
+      //     '/permission-management', Color(0xFFE84393)),
     ],
     'SALARY & ASSETS': [
       _SubModule('Salary\nSettings', Icons.request_quote_outlined,

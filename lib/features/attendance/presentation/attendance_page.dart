@@ -469,10 +469,47 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
             final idx = entry.key;
             final session = entry.value;
             final isOd = session.isOd;
-            final badgeBg = isOd ? const Color(0xFFDCFCE7) : const Color(0xFFF1F5F9);
-            final badgeText = isOd ? const Color(0xFF15803D) : const Color(0xFF475569);
-            final typeLabel = isOd ? 'On Duty' : 'Office';
-            final icon = isOd ? Icons.badge_outlined : Icons.apartment_rounded;
+            final lowerType = session.type.toLowerCase();
+            final isLunch = lowerType.contains('lunch');
+            final isBreak = lowerType.contains('break') || lowerType.contains('tea') || lowerType.contains('coffee');
+            final isMeeting = lowerType.contains('meeting');
+
+            final Color badgeBg;
+            final Color badgeText;
+            final String typeLabel;
+            final IconData icon;
+
+            if (isOd) {
+              badgeBg = const Color(0xFFDCFCE7);
+              badgeText = const Color(0xFF15803D);
+              typeLabel = 'On Duty';
+              icon = Icons.badge_outlined;
+            } else if (isLunch) {
+              badgeBg = const Color(0xFFFEF3C7);
+              badgeText = const Color(0xFFB45309);
+              typeLabel = 'Lunch';
+              icon = Icons.restaurant_outlined;
+            } else if (isBreak) {
+              badgeBg = const Color(0xFFFEF3C7);
+              badgeText = const Color(0xFFB45309);
+              typeLabel = session.type.isNotEmpty ? session.type : 'Break';
+              icon = Icons.coffee_outlined;
+            } else if (isMeeting) {
+              badgeBg = const Color(0xFFE0F2FE);
+              badgeText = const Color(0xFF0369A1);
+              typeLabel = 'Meeting';
+              icon = Icons.groups_outlined;
+            } else if (session.isOffice) {
+              badgeBg = const Color(0xFFF1F5F9);
+              badgeText = const Color(0xFF475569);
+              typeLabel = 'Office';
+              icon = Icons.apartment_rounded;
+            } else {
+              badgeBg = const Color(0xFFF1F5F9);
+              badgeText = const Color(0xFF475569);
+              typeLabel = session.type.isNotEmpty ? session.type : 'Office';
+              icon = Icons.work_outline;
+            }
 
             final durationDisplay = session.isActive
                 ? 'Active'
@@ -3338,31 +3375,17 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          hasApprovedPermission
-                              ? 'Approved Permission: ${todayApprovedPermission!.fromTime} – ${todayApprovedPermission!.toTime}'
-                              : hasPendingPermission
-                                  ? 'Permission Pending: ${todayPendingPermission!.fromTime} – ${todayPendingPermission!.toTime}'
-                                  : hasCheckedIn
-                                      ? (hasCheckedOut
-                                          ? 'Shift completed: ${todayRecord.effectiveCheckInTime} – ${todayRecord.checkOutTime}'
-                                          : 'Checked in at ${todayRecord.effectiveCheckInTime}${officialOutTimeStr.isNotEmpty ? " • Expected Check-out: $officialOutTimeStr" : ""}')
-                                      : isWithinGracePeriod
-                                          ? 'Grace period active until $graceTimeStr. Check in on time!'
-                                          : isLate
-                                              ? 'You are late today. Please apply for permission or check in directly.'
-                                              : (officialOutTimeStr.isNotEmpty
-                                                  ? 'Expected Shift: $officialTimeStr – $officialOutTimeStr'
-                                                  : 'Expected Check-in Time: $officialTimeStr'),
-                          style: TextStyle(
+                          hasCheckedIn
+                              ? (hasCheckedOut
+                                  ? 'Shift completed: ${todayRecord.effectiveCheckInTime} – ${todayRecord.checkOutTime}'
+                                  : 'Checked in at ${todayRecord.effectiveCheckInTime}${officialOutTimeStr.isNotEmpty ? " • Expected Check-out: $officialOutTimeStr" : ""}')
+                              : (officialOutTimeStr.isNotEmpty
+                                  ? 'Expected Shift: $officialTimeStr – $officialOutTimeStr'
+                                  : 'Expected Check-in Time: $officialTimeStr'),
+                          style: const TextStyle(
                             fontSize: 11,
-                            fontWeight: (isLate && !hasCheckedIn && !hasApprovedPermission && !hasPendingPermission) ? FontWeight.w600 : FontWeight.w500,
-                            color: hasApprovedPermission || isWithinGracePeriod
-                                ? const Color(0xFF15803D)
-                                : hasPendingPermission
-                                    ? const Color(0xFFB45309)
-                                    : (isLate && !hasCheckedIn)
-                                        ? const Color(0xFFC2410C)
-                                        : AppColors.textSecondary,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textSecondary,
                           ),
                         ),
                       ],
@@ -3373,249 +3396,6 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                 ],
               ),
               const SizedBox(height: 16),
-
-              // Render Approved / Pending Permission Card OR Late Arrival Warning Banner
-              if (!hasCheckedIn && hasApprovedPermission) ...[
-                Builder(builder: (_) {
-                  final isExpired = _isCurrentTimeAfterPermissionEnd(todayApprovedPermission!);
-                  if (isExpired) {
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFF7ED),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFFFD8A8)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Row(
-                            children: [
-                              Icon(Icons.warning_amber_rounded, color: Color(0xFFE65100), size: 20),
-                              SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'Approved Permission Expired',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                    color: Color(0xFFC2410C),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Late Arrival • ${_formatMinutesToHours(todayApprovedPermission!.durationMinutes)} (${todayApprovedPermission!.fromTime} – ${todayApprovedPermission!.toTime})',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B)),
-                          ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'Permission window has ended. Check-in will require permission or mark as late.',
-                            style: TextStyle(fontSize: 12, color: Color(0xFF9A3412), fontWeight: FontWeight.w500),
-                          ),
-                          const SizedBox(height: 10),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFC2410C),
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              ),
-                              onPressed: () {
-                                final nowTod = TimeOfDay.now();
-                                context.go('/permission/apply', extra: {
-                                  'fromTime': _parsePermissionTime(todayApprovedPermission!.toTime) ?? expectedInTimeOfDay,
-                                  'toTime': nowTod,
-                                });
-                              },
-                              child: const Text('Apply Permission', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF0FDF4),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFBBF7D0)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 20),
-                            SizedBox(width: 8),
-                            Text(
-                              'Permission Approved',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                                color: Color(0xFF15803D),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '${todayApprovedPermission!.permissionType.label} • ${_formatMinutesToHours(todayApprovedPermission!.durationMinutes)} (${todayApprovedPermission!.fromTime} – ${todayApprovedPermission!.toTime})',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B)),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'You have an approved permission. You can check in when you arrive.',
-                          style: TextStyle(fontSize: 12, color: Color(0xFF166534), fontWeight: FontWeight.w500),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-              ] else if (!hasCheckedIn && hasPendingPermission) ...[
-                Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFFBEB),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFFDE68A)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.hourglass_top_rounded, color: Color(0xFFD97706), size: 20),
-                          SizedBox(width: 8),
-                          Text(
-                            'Permission Pending',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              color: Color(0xFFB45309),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${todayPendingPermission!.permissionType.label} • ${_formatMinutesToHours(todayPendingPermission!.durationMinutes)} (${todayPendingPermission!.fromTime} – ${todayPendingPermission!.toTime})',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B)),
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Your request is pending admin review. You can check in when you arrive.',
-                        style: TextStyle(fontSize: 12, color: Color(0xFF92400E), fontWeight: FontWeight.w500),
-                      ),
-                    ],
-                  ),
-                ),
-              ] else if (!hasCheckedIn && isWithinGracePeriod) ...[
-                Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF0FDF4),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFBBF7D0)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.timer_outlined, size: 20, color: Color(0xFF16A34A)),
-                          SizedBox(width: 8),
-                          Text(
-                            'Grace Period Active',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              color: Color(0xFF15803D),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'You have a $gracePeriodMinutes-minute grace period until $graceTimeStr to check in without being marked Late.',
-                        style: const TextStyle(fontSize: 12, color: Color(0xFF166534), fontWeight: FontWeight.w500),
-                      ),
-                    ],
-                  ),
-                ),
-              ] else if (!hasCheckedIn && isLate) ...[
-                Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF7ED),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFFFD8A8)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.warning_amber_rounded, size: 20, color: Color(0xFFE65100)),
-                          SizedBox(width: 8),
-                          Text(
-                            'Late Arrival Alert',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFFC2410C)),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Official expected time was $officialTimeStr (Grace period ended at $graceTimeStr).',
-                        style: const TextStyle(fontSize: 12, color: Color(0xFF9A3412), fontWeight: FontWeight.w500),
-                      ),
-                      const SizedBox(height: 10),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFC2410C),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          onPressed: () {
-                            final nowTod = TimeOfDay.now();
-                            final inTod = expectedInTimeOfDay ?? const TimeOfDay(hour: 9, minute: 0);
-                            final nowMins = nowTod.hour * 60 + nowTod.minute;
-                            final expMins = inTod.hour * 60 + inTod.minute;
-                            final toTod = nowMins > expMins
-                                ? nowTod
-                                : TimeOfDay(
-                                    hour: (inTod.hour + ((inTod.minute + 30) ~/ 60)) % 24,
-                                    minute: (inTod.minute + 30) % 60,
-                                  );
-                            context.go('/permission/apply', extra: {
-                              'fromTime': inTod,
-                              'toTime': toTod,
-                            });
-                          },
-                          child: const Text('Apply for Permission', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
 
               // Primary Action Button (Single Dynamic Button in Brand Color)
               if (!hasCheckedIn) ...[
@@ -3631,39 +3411,11 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    onPressed: () {
-                      if (hasApprovedPermission) {
-                        final isExpired = _isCurrentTimeAfterPermissionEnd(todayApprovedPermission!);
-                        if (isExpired) {
-                          _showPermissionExpiredCheckInDialog(
-                            today: today,
-                            todayRecord: todayRecord,
-                            permission: todayApprovedPermission!,
-                            officialTimeStr: officialTimeStr,
-                            expectedInTimeOfDay: expectedInTimeOfDay,
-                          );
-                        } else {
-                          _openVerificationDialog(
-                            date: today,
-                            isCheckOut: false,
-                            existingRecord: todayRecord,
-                          );
-                        }
-                      } else if (hasPendingPermission || !isLate) {
-                        _openVerificationDialog(
-                          date: today,
-                          isCheckOut: false,
-                          existingRecord: todayRecord,
-                        );
-                      } else {
-                        _showLateCheckInDialog(
-                          today: today,
-                          todayRecord: todayRecord,
-                          officialTimeStr: officialTimeStr,
-                          expectedInTimeOfDay: expectedInTimeOfDay,
-                        );
-                      }
-                    },
+                    onPressed: () => _openVerificationDialog(
+                      date: today,
+                      isCheckOut: false,
+                      existingRecord: todayRecord,
+                    ),
                     icon: const Icon(Icons.fingerprint, size: 22),
                     label: const Text(
                       'Check In Attendance',

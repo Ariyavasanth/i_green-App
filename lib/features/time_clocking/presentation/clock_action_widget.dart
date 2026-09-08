@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import '../domain/clock_entry.dart';
 import '../providers/clocking_providers.dart';
@@ -14,6 +16,88 @@ class ClockActionWidget extends ConsumerWidget {
 
   final String employeeId;
   final VoidCallback? onClockChanged;
+
+  Future<bool> _verifyGeofenceAndAlert(BuildContext context, WidgetRef ref, int empIdInt, {required String failureMessage}) async {
+    try {
+      if (!kIsWeb) {
+        final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        if (!serviceEnabled) {
+          if (context.mounted) {
+            _showGeofenceDialog(context, 'Location services are turned off on this device. Please enable GPS.');
+          }
+          return false;
+        }
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        if (context.mounted) {
+          _showGeofenceDialog(context, 'Location permission is required to verify office premises.');
+        }
+        return false;
+      }
+
+      final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      final attendanceRepo = ref.read(attendanceRepositoryProvider);
+      final isInside = await attendanceRepo.verifyLocationWithinGeofence(
+        employeeId: empIdInt,
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
+
+      if (!isInside) {
+        if (context.mounted) {
+          _showGeofenceDialog(context, failureMessage);
+        }
+        return false;
+      }
+      return true;
+    } catch (e) {
+      if (context.mounted) {
+        _showGeofenceDialog(context, failureMessage);
+      }
+      return false;
+    }
+  }
+
+  void _showGeofenceDialog(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.location_off_rounded, color: Colors.orange, size: 24),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Lunch Break',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          message,
+          style: const TextStyle(fontSize: 14, color: Color(0xFF334155)),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF9CC70A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _startActivity(BuildContext context, WidgetRef ref, String type, {String? notes}) async {
     final attendanceRepo = ref.read(attendanceRepositoryProvider);
@@ -102,20 +186,42 @@ class ClockActionWidget extends ConsumerWidget {
       return;
     }
 
+    if (type.toLowerCase().contains('lunch')) {
+      if (!context.mounted) return;
+      final isInside = await _verifyGeofenceAndAlert(
+        context,
+        ref,
+        empIdInt,
+        failureMessage: 'Please return to the office premises to start your lunch break.',
+      );
+      if (!isInside) return;
+    }
+
     final repo = ref.read(clockingRepositoryProvider);
+    final now = DateTime.now();
     final entry = ClockEntry(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: now.millisecondsSinceEpoch.toString(),
       employeeId: employeeId,
       entryType: type,
-      startTime: DateTime.now(),
+      startTime: now,
       notes: notes,
     );
 
     await repo.startClockEntry(entry);
+    final timeStr = DateFormat('HH:mm:ss').format(now);
+    await attendanceRepo.startActivitySession(
+      employeeId: empIdInt,
+      date: today,
+      activityType: type,
+      time: timeStr,
+    );
+
     ref.invalidate(activeClockEntryProvider);
     ref.invalidate(clockEntriesProvider);
     ref.invalidate(totalWorkHoursProvider);
     ref.invalidate(totalBreakHoursProvider);
+    ref.invalidate(todayAttendanceRecordProvider(empIdInt));
+    ref.invalidate(attendanceRecordsProvider(empIdInt));
 
     if (onClockChanged != null) onClockChanged!();
 
@@ -132,12 +238,45 @@ class ClockActionWidget extends ConsumerWidget {
 
   Future<void> _clockOut(BuildContext context, WidgetRef ref) async {
     final repo = ref.read(clockingRepositoryProvider);
+    final activeEntry = await repo.getActiveEntry(employeeId);
+    final digits = employeeId.trim().replaceAll(RegExp(r'[^0-9]'), '');
+    final empIdInt = int.tryParse(digits) ?? 0;
+
+    if (activeEntry != null && activeEntry.entryType.toLowerCase().contains('lunch')) {
+      if (empIdInt != 0) {
+        if (!context.mounted) return;
+        final isInside = await _verifyGeofenceAndAlert(
+          context,
+          ref,
+          empIdInt,
+          failureMessage: 'Please return to the office premises to end your lunch break.',
+        );
+        if (!isInside) return;
+      }
+    }
+
     await repo.clockOutActiveEntry(employeeId);
+
+    if (empIdInt != 0) {
+      final now = DateTime.now();
+      final timeStr = DateFormat('HH:mm:ss').format(now);
+      final dateStr = DateFormat('yyyy-MM-dd').format(now);
+      final attendanceRepo = ref.read(attendanceRepositoryProvider);
+      await attendanceRepo.stopActivitySession(
+        employeeId: empIdInt,
+        date: dateStr,
+        time: timeStr,
+      );
+    }
 
     ref.invalidate(activeClockEntryProvider);
     ref.invalidate(clockEntriesProvider);
     ref.invalidate(totalWorkHoursProvider);
     ref.invalidate(totalBreakHoursProvider);
+    if (empIdInt != 0) {
+      ref.invalidate(todayAttendanceRecordProvider(empIdInt));
+      ref.invalidate(attendanceRecordsProvider(empIdInt));
+    }
 
     if (onClockChanged != null) onClockChanged!();
 
