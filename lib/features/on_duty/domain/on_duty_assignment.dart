@@ -6,8 +6,13 @@ class OnDutyAssignment {
     required this.odType,
     required this.purpose,
     required this.destination,
+    this.destinationName = '',
+    this.destinationAddress = '',
+    this.destinationLatitude,
+    this.destinationLongitude,
+    this.destinationRadius = 100,
     required this.date,
-    required this.plannedStartTime,
+    this.plannedStartTime = '',
     this.plannedEndTime,
     this.actualStartTime,
     this.actualEndTime,
@@ -31,6 +36,11 @@ class OnDutyAssignment {
   final String odType; // 'Customer Visit', 'Branch Visit', 'External Meeting', 'Govt Office', 'Field Work', 'Other'
   final String purpose;
   final String destination;
+  final String destinationName;
+  final String destinationAddress;
+  final double? destinationLatitude;
+  final double? destinationLongitude;
+  final int destinationRadius; // Allowed geofence radius in meters (default 100)
   final String date; // 'dd-MM-yyyy'
   final String plannedStartTime; // '10:00 AM'
   final String? plannedEndTime; // '04:00 PM'
@@ -49,6 +59,17 @@ class OnDutyAssignment {
   final String afterCompletionOption; // 'RETURN_TO_OFFICE', 'CHECKOUT_FROM_OD'
   final String createdAt;
 
+  /// Effective target coordinates for destination
+  double? get effectiveDestinationLatitude => destinationLatitude ?? endLatitude;
+  double? get effectiveDestinationLongitude => destinationLongitude ?? endLongitude;
+
+  /// Effective display name for destination
+  String get effectiveDestinationTitle {
+    if (destinationName.isNotEmpty) return destinationName;
+    if (destination.isNotEmpty) return destination;
+    return 'Site Destination';
+  }
+
   Map<String, dynamic> toMap() => {
         if (id != 0) 'id': id,
         'employee_id': employeeId,
@@ -56,6 +77,11 @@ class OnDutyAssignment {
         'od_type': odType,
         'purpose': purpose,
         'destination': destination,
+        if (destinationName.isNotEmpty) 'destination_name': destinationName,
+        if (destinationAddress.isNotEmpty) 'destination_address': destinationAddress,
+        if (effectiveDestinationLatitude != null) 'destination_latitude': effectiveDestinationLatitude,
+        if (effectiveDestinationLongitude != null) 'destination_longitude': effectiveDestinationLongitude,
+        'destination_radius': destinationRadius,
         'date': date,
         'planned_start_time': plannedStartTime,
         'planned_end_time': plannedEndTime,
@@ -63,8 +89,8 @@ class OnDutyAssignment {
         'actual_end_time': actualEndTime,
         'start_latitude': startLatitude,
         'start_longitude': startLongitude,
-        'end_latitude': endLatitude,
-        'end_longitude': endLongitude,
+        'end_latitude': endLatitude ?? effectiveDestinationLatitude,
+        'end_longitude': endLongitude ?? effectiveDestinationLongitude,
         'start_photo': startPhoto,
         'end_photo': endPhoto,
         'status': status,
@@ -93,13 +119,31 @@ class OnDutyAssignment {
       opt = 'RETURN_TO_OFFICE';
     }
 
+    final destLat = (map['destination_latitude'] as num?)?.toDouble() ??
+        (map['end_latitude'] as num?)?.toDouble();
+    final destLng = (map['destination_longitude'] as num?)?.toDouble() ??
+        (map['end_longitude'] as num?)?.toDouble();
+    final destRadius = (map['destination_radius'] as num?)?.toInt() ?? 100;
+
+    final destName = map['destination_name']?.toString() ?? '';
+    final destAddress = map['destination_address']?.toString() ?? '';
+    final destStr = map['destination']?.toString() ??
+        map['destination_location']?.toString() ??
+        map['from_location']?.toString() ??
+        (destName.isNotEmpty ? destName : '');
+
     return OnDutyAssignment(
       id: parseId(map['id']),
       employeeId: parseId(map['employee_id']),
       employeeName: map['employee_name']?.toString() ?? '',
       odType: map['od_type']?.toString() ?? map['task']?.toString() ?? 'Customer Visit',
       purpose: map['purpose']?.toString() ?? map['task']?.toString() ?? '',
-      destination: map['destination']?.toString() ?? map['destination_location']?.toString() ?? map['from_location']?.toString() ?? '',
+      destination: destStr,
+      destinationName: destName.isNotEmpty ? destName : destStr,
+      destinationAddress: destAddress,
+      destinationLatitude: destLat,
+      destinationLongitude: destLng,
+      destinationRadius: destRadius > 0 ? destRadius : 100,
       date: map['date']?.toString() ?? '',
       plannedStartTime: map['planned_start_time']?.toString() ?? map['assigned_time']?.toString() ?? '',
       plannedEndTime: map['planned_end_time']?.toString(),
@@ -107,8 +151,8 @@ class OnDutyAssignment {
       actualEndTime: map['actual_end_time']?.toString() ?? map['completed_time']?.toString(),
       startLatitude: (map['start_latitude'] as num?)?.toDouble() ?? (map['from_latitude'] as num?)?.toDouble(),
       startLongitude: (map['start_longitude'] as num?)?.toDouble() ?? (map['from_longitude'] as num?)?.toDouble(),
-      endLatitude: (map['end_latitude'] as num?)?.toDouble() ?? (map['destination_latitude'] as num?)?.toDouble(),
-      endLongitude: (map['end_longitude'] as num?)?.toDouble() ?? (map['destination_longitude'] as num?)?.toDouble(),
+      endLatitude: (map['end_latitude'] as num?)?.toDouble() ?? destLat,
+      endLongitude: (map['end_longitude'] as num?)?.toDouble() ?? destLng,
       startPhoto: map['start_photo']?.toString(),
       endPhoto: map['end_photo']?.toString() ?? map['photo_proof_path']?.toString(),
       status: rawStatus,
@@ -127,6 +171,11 @@ class OnDutyAssignment {
     String? odType,
     String? purpose,
     String? destination,
+    String? destinationName,
+    String? destinationAddress,
+    double? destinationLatitude,
+    double? destinationLongitude,
+    int? destinationRadius,
     String? date,
     String? plannedStartTime,
     String? plannedEndTime,
@@ -152,6 +201,11 @@ class OnDutyAssignment {
       odType: odType ?? this.odType,
       purpose: purpose ?? this.purpose,
       destination: destination ?? this.destination,
+      destinationName: destinationName ?? this.destinationName,
+      destinationAddress: destinationAddress ?? this.destinationAddress,
+      destinationLatitude: destinationLatitude ?? this.destinationLatitude,
+      destinationLongitude: destinationLongitude ?? this.destinationLongitude,
+      destinationRadius: destinationRadius ?? this.destinationRadius,
       date: date ?? this.date,
       plannedStartTime: plannedStartTime ?? this.plannedStartTime,
       plannedEndTime: plannedEndTime ?? this.plannedEndTime,

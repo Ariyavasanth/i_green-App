@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../core/theme/app_colors.dart';
 import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
 import '../domain/on_duty_assignment.dart';
@@ -652,24 +651,43 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                           item.date,
                           style: TextStyle(fontSize: 12, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
                         ),
-                        const SizedBox(width: 12),
-                        Icon(Icons.access_time, size: 14, color: Colors.grey.shade500),
-                        const SizedBox(width: 4),
-                        Text(
-                          item.plannedStartTime,
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-                        ),
-                        if (item.plannedEndTime != null && item.plannedEndTime!.isNotEmpty) ...[
-                          Text(' - ${item.plannedEndTime}', style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                        if (item.actualStartTime != null && item.actualStartTime!.isNotEmpty) ...[
+                          const SizedBox(width: 12),
+                          Icon(Icons.access_time, size: 14, color: Colors.grey.shade500),
+                          const SizedBox(width: 4),
+                          Text(
+                            item.actualStartTime!,
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                          ),
+                          if (item.actualEndTime != null && item.actualEndTime!.isNotEmpty) ...[
+                            Text(' - ${item.actualEndTime}', style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                          ],
+                        ] else if (item.plannedStartTime.isNotEmpty) ...[
+                          const SizedBox(width: 12),
+                          Icon(Icons.access_time, size: 14, color: Colors.grey.shade500),
+                          const SizedBox(width: 4),
+                          Text(
+                            item.plannedStartTime,
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                          ),
+                          if (item.plannedEndTime != null && item.plannedEndTime!.isNotEmpty) ...[
+                            Text(' - ${item.plannedEndTime}', style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                          ],
                         ],
                       ],
                     ),
                     Row(
                       children: [
-                        if (item.startLatitude != null && item.startLongitude != null)
+                        if (item.effectiveDestinationLatitude != null && item.effectiveDestinationLongitude != null)
                           IconButton(
                             icon: const Icon(Icons.map_outlined, size: 18, color: Color(0xFF414A51)),
-                            tooltip: 'View Location',
+                            tooltip: 'View Destination on Map',
+                            onPressed: () => _openMap(item.effectiveDestinationLatitude!, item.effectiveDestinationLongitude!),
+                          )
+                        else if (item.startLatitude != null && item.startLongitude != null)
+                          IconButton(
+                            icon: const Icon(Icons.map_outlined, size: 18, color: Color(0xFF414A51)),
+                            tooltip: 'View Start Location',
                             onPressed: () => _openMap(item.startLatitude!, item.startLongitude!),
                           ),
                         const Icon(Icons.chevron_right, size: 20, color: Colors.grey),

@@ -77,6 +77,37 @@ abstract class AttendanceRepository {
     required String message,
   });
   Future<List<Map<String, dynamic>>> getAttendanceAttempts();
+  Future<AttendanceVerificationResult> startOdAttendanceSession({
+    required int employeeId,
+    required String employeeName,
+    String employeeCode = '',
+    required String date,
+    required String time,
+    required int assignmentId,
+    String purpose = '',
+    String destination = '',
+    String destinationAddress = '',
+    double? latitude,
+    double? longitude,
+    double? destinationLatitude,
+    double? destinationLongitude,
+    int destinationRadius = 100,
+    String notes = '',
+  });
+  Future<AttendanceVerificationResult> completeOdAttendanceSession({
+    required int employeeId,
+    required String employeeName,
+    String employeeCode = '',
+    required String date,
+    required String time,
+    required int assignmentId,
+    double? latitude,
+    double? longitude,
+    double? destinationLatitude,
+    double? destinationLongitude,
+    int destinationRadius = 100,
+    String afterCompletionOption = 'RETURN_TO_OFFICE',
+  });
   Future<void> autoResolveMissingCheckOuts({int? employeeId});
   Future<void> recalculateAttendanceForDate(int employeeId, String date);
   Future<void> clearAllAttendanceRecords();

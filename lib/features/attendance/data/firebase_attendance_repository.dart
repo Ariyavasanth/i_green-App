@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../domain/attendance_record.dart';
+import '../domain/attendance_session.dart';
 import '../domain/attendance_settings.dart';
 import '../domain/attendance_repository.dart';
 import '../../employee/domain/employee.dart';
@@ -368,19 +369,218 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         }
       }
 
-      await markAttendance(
-        employeeId: employeeId,
-        employeeName: employeeName,
-        employeeCode: employee?.employeeId ?? '',
-        date: date,
-        time: time,
-        verificationStatus: result.verificationStatus,
-        similarityScore: score,
-        status: status,
-        notes: notes,
-      );
+      if (isDynamic) {
+        await markAttendance(
+          employeeId: employeeId,
+          employeeName: employeeName,
+          employeeCode: employee?.employeeId ?? '',
+          date: date,
+          time: time,
+          verificationStatus: result.verificationStatus,
+          similarityScore: score,
+          status: status,
+          notes: notes,
+        );
+      } else {
+        final sessionResult = await _startOfficeAttendanceSession(
+          employeeId: employeeId,
+          employeeName: employeeName,
+          employeeCode: employee?.employeeId ?? '',
+          date: date,
+          time: time,
+          verificationStatus: result.verificationStatus,
+          similarityScore: score,
+          status: status,
+          notes: notes,
+          currentLatitude: currentLatitude,
+          currentLongitude: currentLongitude,
+        );
+        if (!sessionResult.allowed) {
+          return sessionResult;
+        }
+      }
     }
     return result;
+  }
+
+  Future<AttendanceVerificationResult> _startOfficeAttendanceSession({
+    required int employeeId,
+    required String employeeName,
+    String employeeCode = '',
+    required String date,
+    required String time,
+    required String verificationStatus,
+    required double similarityScore,
+    required String status,
+    String notes = '',
+    required double currentLatitude,
+    required double currentLongitude,
+  }) async {
+    final normDate = _normalizeDateKey(date);
+    final docId = '${employeeId}_${normDate.replaceAll('-', '')}';
+
+    // 1. Fetch existing attendance record for this date
+    AttendanceRecord? existingRecord = await getAttendanceRecordForDate(employeeId, date);
+
+    // 2. Check if an active session already exists
+    if (existingRecord != null) {
+      final bool hasActiveSession = existingRecord.sessions.any((s) => s.isActive);
+      final bool hasLegacyActiveSession = existingRecord.sessions.isEmpty &&
+          existingRecord.checkInTime.isNotEmpty &&
+          existingRecord.checkOutTime.isEmpty;
+
+      if (hasActiveSession || hasLegacyActiveSession) {
+        final activeSession = existingRecord.sessions.where((s) => s.isActive).firstOrNull;
+        final isOd = activeSession?.isOd ?? false;
+        return AttendanceVerificationResult(
+          allowed: false,
+          similarityScore: similarityScore,
+          verificationStatus: isOd ? 'OD Session Active' : 'Already Checked In',
+          message: isOd
+              ? 'You have an active On-Duty session. Please complete On-Duty before checking in at the office.'
+              : 'You already have an active check-in session.',
+          capturedImagePath: '',
+        );
+      }
+    }
+
+    // 3. Create the new session
+    final newSessionIndex = (existingRecord?.sessions.length ?? 0) + 1;
+    final sessionUuid = 'session_${DateTime.now().millisecondsSinceEpoch}_$newSessionIndex';
+    final newSession = AttendanceSession(
+      id: sessionUuid,
+      type: 'office',
+      checkInTime: time,
+      checkOutTime: '',
+      checkInVerificationStatus: verificationStatus,
+      checkOutVerificationStatus: '',
+      checkInSimilarityScore: similarityScore,
+      checkOutSimilarityScore: 0.0,
+      checkInLatitude: currentLatitude,
+      checkInLongitude: currentLongitude,
+      checkInMethod: 'Face + Geofence',
+      checkOutMethod: '',
+      durationHours: 0.0,
+      durationMinutes: 0,
+      notes: notes,
+      createdAt: DateTime.now().toIso8601String(),
+    );
+
+    // 4. Update or create the AttendanceRecord
+    List<AttendanceSession> updatedSessions = [];
+    if (existingRecord != null) {
+      updatedSessions = List<AttendanceSession>.from(existingRecord.sessions);
+      if (updatedSessions.isEmpty &&
+          existingRecord.checkInTime.isNotEmpty &&
+          existingRecord.checkOutTime.isNotEmpty) {
+        // Preserve legacy single session
+        updatedSessions.add(AttendanceSession(
+          id: 'session_legacy_1',
+          checkInTime: existingRecord.checkInTime,
+          checkOutTime: existingRecord.checkOutTime,
+          checkInVerificationStatus: existingRecord.checkInVerificationStatus.isNotEmpty
+              ? existingRecord.checkInVerificationStatus
+              : existingRecord.verificationStatus,
+          checkOutVerificationStatus: existingRecord.checkOutVerificationStatus,
+          checkInSimilarityScore: existingRecord.checkInSimilarityScore > 0
+              ? existingRecord.checkInSimilarityScore
+              : existingRecord.similarityScore,
+          checkOutSimilarityScore: existingRecord.checkOutSimilarityScore,
+          durationHours: existingRecord.totalHours,
+          durationMinutes: (existingRecord.totalHours * 60).round(),
+          notes: existingRecord.notes,
+          createdAt: existingRecord.markedAt,
+        ));
+      }
+      updatedSessions.add(newSession);
+    } else {
+      updatedSessions.add(newSession);
+    }
+
+    final AttendanceRecord updatedRecord;
+    if (existingRecord != null) {
+      updatedRecord = existingRecord.copyWith(
+        employeeCode: employeeCode.isNotEmpty ? employeeCode : existingRecord.employeeCode,
+        employeeName: employeeName.isNotEmpty ? employeeName : existingRecord.employeeName,
+        time: existingRecord.time.isNotEmpty ? existingRecord.time : time,
+        checkInTime: existingRecord.checkInTime.isNotEmpty ? existingRecord.checkInTime : time,
+        checkOutTime: existingRecord.checkOutTime,
+        status: (existingRecord.status == 'Absent' || existingRecord.status == 'Late')
+            ? existingRecord.status
+            : status,
+        verificationStatus: existingRecord.verificationStatus.isNotEmpty
+            ? existingRecord.verificationStatus
+            : verificationStatus,
+        similarityScore: existingRecord.similarityScore > 0
+            ? existingRecord.similarityScore
+            : similarityScore,
+        checkInVerificationStatus: existingRecord.checkInVerificationStatus.isNotEmpty
+            ? existingRecord.checkInVerificationStatus
+            : verificationStatus,
+        checkInSimilarityScore: existingRecord.checkInSimilarityScore > 0
+            ? existingRecord.checkInSimilarityScore
+            : similarityScore,
+        totalHours: existingRecord.totalHours,
+        notes: existingRecord.notes.isNotEmpty ? existingRecord.notes : notes,
+        markedAt: existingRecord.markedAt.isNotEmpty
+            ? existingRecord.markedAt
+            : DateTime.now().toIso8601String(),
+        sessions: updatedSessions,
+      );
+    } else {
+      updatedRecord = AttendanceRecord(
+        id: employeeId * 10000 + DateTime.now().millisecondsSinceEpoch % 10000,
+        employeeId: employeeId,
+        employeeCode: employeeCode,
+        employeeName: employeeName,
+        date: normDate,
+        time: time,
+        checkInTime: time,
+        checkOutTime: '',
+        status: status,
+        verificationStatus: verificationStatus,
+        similarityScore: similarityScore,
+        checkInVerificationStatus: verificationStatus,
+        checkInSimilarityScore: similarityScore,
+        totalHours: 0.0,
+        notes: notes,
+        markedAt: DateTime.now().toIso8601String(),
+        sessions: updatedSessions,
+      );
+    }
+
+    // 5. Update Firestore first, then local cache upon success
+    try {
+      await _recordsRef.doc(docId).set(updatedRecord.toMap(), SetOptions(merge: true));
+      if (employeeCode.isNotEmpty) {
+        await _recordsRef
+            .doc('${employeeCode}_${normDate.replaceAll('-', '')}')
+            .set(updatedRecord.toMap(), SetOptions(merge: true));
+      }
+    } catch (_) {
+      return AttendanceVerificationResult(
+        allowed: false,
+        similarityScore: similarityScore,
+        verificationStatus: 'Failed',
+        message: 'Failed to record check-in. Please try again.',
+        capturedImagePath: '',
+      );
+    }
+
+    _localMemoryCache['${employeeId}_$date'] = updatedRecord;
+    _localMemoryCache['${employeeId}_$normDate'] = updatedRecord;
+    if (employeeCode.isNotEmpty) {
+      _localMemoryCache['${employeeCode}_$date'] = updatedRecord;
+      _localMemoryCache['${employeeCode}_$normDate'] = updatedRecord;
+    }
+
+    return AttendanceVerificationResult(
+      allowed: true,
+      similarityScore: similarityScore,
+      verificationStatus: verificationStatus,
+      message: 'Check in successful.',
+      capturedImagePath: '',
+    );
   }
 
   @override
@@ -410,7 +610,8 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       endLatitude: currentLatitude,
       endLongitude: currentLongitude,
     );
-    final withinRadius = !requireGps || distance <= targetRadius;
+    final bool effectiveRequireGps = requireGps && (targetLat != 0 || targetLng != 0);
+    final withinRadius = !effectiveRequireGps || distance <= targetRadius;
     final message = !withinRadius
         ? (isSite
             ? 'You are not at your site location. Please go to your site location to check out.'
@@ -425,9 +626,615 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     );
     await logAttendanceAttempt(employeeId: employeeId, employeeName: employeeName, date: date, time: time, verificationStatus: 'CheckOut ${result.verificationStatus}', similarityScore: score, message: result.message);
     if (result.allowed) {
-      await checkOut(employeeId: employeeId, date: date, checkOutTime: time, verificationStatus: result.verificationStatus, similarityScore: score);
+      Employee? employee;
+      try {
+        final snap = await _firestore.collection('employees').get();
+        for (final doc in snap.docs) {
+          final data = Map<String, dynamic>.from(doc.data());
+          final docId = doc.id;
+          final docIdNum = int.tryParse(docId.replaceAll(RegExp(r'\D'), '')) ?? 0;
+          final idNum = data['id'] is int ? data['id'] : (int.tryParse(data['id']?.toString() ?? '') ?? 0);
+          final codeStr = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
+          final codeNum = int.tryParse(codeStr.replaceAll(RegExp(r'\D'), '')) ?? 0;
+
+          final matches = (employeeId != 0 && (idNum == employeeId || docIdNum == employeeId || codeNum == employeeId)) ||
+              docId == employeeId.toString() ||
+              data['id']?.toString() == employeeId.toString() ||
+              data['employee_id']?.toString() == employeeId.toString();
+
+          if (matches) {
+            if (!data.containsKey('id') || data['id'] == null || data['id'] == 0) {
+              data['id'] = (docIdNum != 0) ? docIdNum : (docId.hashCode & 0x7FFFFFFF);
+            }
+            employee = Employee.fromMap(data);
+            break;
+          }
+        }
+      } catch (_) {}
+
+      final isDynamic = employee?.isDynamicEmployee ?? false;
+
+      if (isDynamic) {
+        await checkOut(
+          employeeId: employeeId,
+          date: date,
+          checkOutTime: time,
+          verificationStatus: result.verificationStatus,
+          similarityScore: score,
+        );
+      } else {
+        final sessionResult = await _completeOfficeAttendanceSession(
+          employeeId: employeeId,
+          employeeName: employeeName,
+          employeeCode: employee?.employeeId ?? '',
+          date: date,
+          time: time,
+          verificationStatus: result.verificationStatus,
+          similarityScore: score,
+          currentLatitude: currentLatitude,
+          currentLongitude: currentLongitude,
+        );
+        if (!sessionResult.allowed) {
+          return sessionResult;
+        }
+      }
     }
     return result;
+  }
+
+  Future<AttendanceVerificationResult> _completeOfficeAttendanceSession({
+    required int employeeId,
+    required String employeeName,
+    String employeeCode = '',
+    required String date,
+    required String time,
+    required String verificationStatus,
+    required double similarityScore,
+    double? currentLatitude,
+    double? currentLongitude,
+  }) async {
+    final normDate = _normalizeDateKey(date);
+    final docId = '${employeeId}_${normDate.replaceAll('-', '')}';
+
+    // 1. Fetch existing attendance record for this date
+    AttendanceRecord? existingRecord = await getAttendanceRecordForDate(employeeId, date);
+
+    if (existingRecord == null) {
+      return AttendanceVerificationResult(
+        allowed: false,
+        similarityScore: similarityScore,
+        verificationStatus: 'No Active Session',
+        message: 'No active check-in session found.',
+        capturedImagePath: '',
+      );
+    }
+
+    // 2. Locate the active session
+    List<AttendanceSession> updatedSessions = List<AttendanceSession>.from(existingRecord.sessions);
+    int activeIndex = updatedSessions.indexWhere((s) => s.isActive);
+
+    // Backward compatibility for legacy records with checkInTime but no sessions array
+    if (activeIndex == -1 &&
+        updatedSessions.isEmpty &&
+        existingRecord.checkInTime.isNotEmpty &&
+        existingRecord.checkOutTime.isEmpty) {
+      final legacySession = AttendanceSession(
+        id: 'session_legacy_1',
+        checkInTime: existingRecord.checkInTime,
+        checkOutTime: '',
+        checkInVerificationStatus: existingRecord.checkInVerificationStatus.isNotEmpty
+            ? existingRecord.checkInVerificationStatus
+            : existingRecord.verificationStatus,
+        checkOutVerificationStatus: '',
+        checkInSimilarityScore: existingRecord.checkInSimilarityScore > 0
+            ? existingRecord.checkInSimilarityScore
+            : existingRecord.similarityScore,
+        checkOutSimilarityScore: 0.0,
+        checkInLatitude: null,
+        checkInLongitude: null,
+        checkInMethod: 'Face + Geofence',
+        checkOutMethod: '',
+        durationHours: 0.0,
+        durationMinutes: 0,
+        notes: existingRecord.notes,
+        createdAt: existingRecord.markedAt,
+      );
+      updatedSessions.add(legacySession);
+      activeIndex = 0;
+    }
+
+    // 3. If no active session found, reject checkout safely
+    if (activeIndex == -1) {
+      return AttendanceVerificationResult(
+        allowed: false,
+        similarityScore: similarityScore,
+        verificationStatus: 'No Active Session',
+        message: 'No active check-in session found.',
+        capturedImagePath: '',
+      );
+    }
+
+    // 4. Complete only the active session
+    final activeSession = updatedSessions[activeIndex];
+    if (activeSession.isOd) {
+      return AttendanceVerificationResult(
+        allowed: false,
+        similarityScore: similarityScore,
+        verificationStatus: 'Active Session is OD',
+        message: 'The active session is an On-Duty session. Please complete On-Duty from the OD card.',
+        capturedImagePath: '',
+      );
+    }
+
+    int sessionDurationMinutes = 0;
+    double sessionDurationHours = 0.0;
+
+    final inMin = _parseMinutes(activeSession.checkInTime);
+    final outMin = _parseMinutes(time);
+    if (inMin != null && outMin != null && outMin >= inMin) {
+      sessionDurationMinutes = outMin - inMin;
+      sessionDurationHours = double.parse((sessionDurationMinutes / 60.0).toStringAsFixed(2));
+    }
+
+    final completedSession = activeSession.copyWith(
+      checkOutTime: time,
+      checkOutVerificationStatus: verificationStatus,
+      checkOutSimilarityScore: similarityScore,
+      checkOutLatitude: currentLatitude,
+      checkOutLongitude: currentLongitude,
+      checkOutMethod: 'Face + Geofence',
+      durationHours: sessionDurationHours,
+      durationMinutes: sessionDurationMinutes,
+    );
+    updatedSessions[activeIndex] = completedSession;
+
+    // 5. Calculate total daily hours as the sum of all completed sessions
+    double totalDailyHours = 0.0;
+    for (final session in updatedSessions) {
+      if (session.isCompleted) {
+        totalDailyHours += session.effectiveDurationHours;
+      }
+    }
+    totalDailyHours = double.parse(totalDailyHours.toStringAsFixed(2));
+
+    // 6. Update the AttendanceRecord preserving top-level legacy fields
+    final updatedRecord = existingRecord.copyWith(
+      employeeCode: employeeCode.isNotEmpty ? employeeCode : existingRecord.employeeCode,
+      employeeName: employeeName.isNotEmpty ? employeeName : existingRecord.employeeName,
+      checkOutTime: time,
+      checkOutVerificationStatus: verificationStatus,
+      checkOutSimilarityScore: similarityScore,
+      totalHours: totalDailyHours,
+      sessions: updatedSessions,
+    );
+
+    // 7. Update Firestore first, then local cache upon success
+    try {
+      await _recordsRef.doc(docId).set(updatedRecord.toMap(), SetOptions(merge: true));
+      if (employeeCode.isNotEmpty) {
+        await _recordsRef
+            .doc('${employeeCode}_${normDate.replaceAll('-', '')}')
+            .set(updatedRecord.toMap(), SetOptions(merge: true));
+      }
+      if (existingRecord.employeeCode.isNotEmpty && existingRecord.employeeCode != employeeCode) {
+        await _recordsRef
+            .doc('${existingRecord.employeeCode}_${normDate.replaceAll('-', '')}')
+            .set(updatedRecord.toMap(), SetOptions(merge: true));
+      }
+    } catch (_) {
+      return AttendanceVerificationResult(
+        allowed: false,
+        similarityScore: similarityScore,
+        verificationStatus: 'Failed',
+        message: 'Failed to record check-out. Please try again.',
+        capturedImagePath: '',
+      );
+    }
+
+    _localMemoryCache['${employeeId}_$date'] = updatedRecord;
+    _localMemoryCache['${employeeId}_$normDate'] = updatedRecord;
+    if (employeeCode.isNotEmpty) {
+      _localMemoryCache['${employeeCode}_$date'] = updatedRecord;
+      _localMemoryCache['${employeeCode}_$normDate'] = updatedRecord;
+    }
+    if (existingRecord.employeeCode.isNotEmpty) {
+      _localMemoryCache['${existingRecord.employeeCode}_$date'] = updatedRecord;
+      _localMemoryCache['${existingRecord.employeeCode}_$normDate'] = updatedRecord;
+    }
+
+    return AttendanceVerificationResult(
+      allowed: true,
+      similarityScore: similarityScore,
+      verificationStatus: verificationStatus,
+      message: 'Check out successful.',
+      capturedImagePath: '',
+    );
+  }
+
+  @override
+  Future<AttendanceVerificationResult> startOdAttendanceSession({
+    required int employeeId,
+    required String employeeName,
+    String employeeCode = '',
+    required String date,
+    required String time,
+    required int assignmentId,
+    String purpose = '',
+    String destination = '',
+    String destinationAddress = '',
+    double? latitude,
+    double? longitude,
+    double? destinationLatitude,
+    double? destinationLongitude,
+    int destinationRadius = 100,
+    String notes = '',
+  }) async {
+    final normDate = _normalizeDateKey(date);
+    final docId = '${employeeId}_${normDate.replaceAll('-', '')}';
+
+    // 1. Validate that the assignment exists and is not cancelled/rejected
+    if (assignmentId > 0) {
+      try {
+        final assignDoc = await _firestore.collection('on_duty_assignments').doc(assignmentId.toString()).get();
+        if (assignDoc.exists && assignDoc.data() != null) {
+          final assignData = assignDoc.data()!;
+          final assignStatus = (assignData['status'] ?? '').toString().toUpperCase();
+          if (assignStatus == 'CANCELLED' || assignStatus == 'REJECTED') {
+            return const AttendanceVerificationResult(
+              allowed: false,
+              similarityScore: 1.0,
+              verificationStatus: 'Invalid Assignment',
+              message: 'This On-Duty assignment has been cancelled or rejected.',
+              capturedImagePath: '',
+            );
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 2. Fetch existing attendance record
+    AttendanceRecord? existingRecord = await getAttendanceRecordForDate(employeeId, date);
+
+    // 3. Mutual exclusion check
+    if (existingRecord != null) {
+      final bool hasActiveSession = existingRecord.sessions.any((s) => s.isActive);
+      final bool hasLegacyActiveSession = existingRecord.sessions.isEmpty &&
+          existingRecord.checkInTime.isNotEmpty &&
+          existingRecord.checkOutTime.isEmpty;
+
+      if (hasActiveSession || hasLegacyActiveSession) {
+        final activeSession = existingRecord.sessions.where((s) => s.isActive).firstOrNull;
+        final isOffice = activeSession?.isOffice ?? true;
+        return AttendanceVerificationResult(
+          allowed: false,
+          similarityScore: 1.0,
+          verificationStatus: isOffice ? 'Office Session Active' : 'OD Session Active',
+          message: isOffice
+              ? 'You are currently checked in at the office. Please check out before starting On-Duty.'
+              : 'You already have an active On-Duty session in progress.',
+          capturedImagePath: '',
+        );
+      }
+    }
+
+    // 4. Determine status if first check-in of the day
+    String status = existingRecord?.status ?? 'Present';
+    String initialNotes = notes.isNotEmpty
+        ? notes
+        : 'On Duty: ${purpose.isNotEmpty ? purpose : "Field Duty"}${destination.isNotEmpty ? " ($destination)" : ""}';
+
+    // 5. Create new OD session
+    final newSessionIndex = (existingRecord?.sessions.length ?? 0) + 1;
+    final sessionUuid = 'session_${DateTime.now().millisecondsSinceEpoch}_$newSessionIndex';
+    final newSession = AttendanceSession(
+      id: sessionUuid,
+      type: 'od',
+      checkInTime: time,
+      checkOutTime: '',
+      checkInVerificationStatus: 'OD Verified',
+      checkOutVerificationStatus: '',
+      checkInSimilarityScore: 1.0,
+      checkOutSimilarityScore: 0.0,
+      checkInLatitude: latitude,
+      checkInLongitude: longitude,
+      destinationLatitude: destinationLatitude,
+      destinationLongitude: destinationLongitude,
+      destinationRadius: destinationRadius > 0 ? destinationRadius : 100,
+      checkInMethod: 'OD GPS + Photo',
+      checkOutMethod: '',
+      assignmentId: assignmentId,
+      purpose: purpose,
+      destination: destination,
+      destinationAddress: destinationAddress,
+      durationHours: 0.0,
+      durationMinutes: 0,
+      notes: initialNotes,
+      createdAt: DateTime.now().toIso8601String(),
+    );
+
+    // 6. Update or create the AttendanceRecord
+    List<AttendanceSession> updatedSessions = [];
+    if (existingRecord != null) {
+      updatedSessions = List<AttendanceSession>.from(existingRecord.sessions);
+      if (updatedSessions.isEmpty &&
+          existingRecord.checkInTime.isNotEmpty &&
+          existingRecord.checkOutTime.isNotEmpty) {
+        // Preserve legacy single session
+        updatedSessions.add(AttendanceSession(
+          id: 'session_legacy_1',
+          type: 'office',
+          checkInTime: existingRecord.checkInTime,
+          checkOutTime: existingRecord.checkOutTime,
+          checkInVerificationStatus: existingRecord.checkInVerificationStatus.isNotEmpty
+              ? existingRecord.checkInVerificationStatus
+              : existingRecord.verificationStatus,
+          checkOutVerificationStatus: existingRecord.checkOutVerificationStatus,
+          checkInSimilarityScore: existingRecord.checkInSimilarityScore > 0
+              ? existingRecord.checkInSimilarityScore
+              : existingRecord.similarityScore,
+          checkOutSimilarityScore: existingRecord.checkOutSimilarityScore,
+          durationHours: existingRecord.totalHours,
+          durationMinutes: (existingRecord.totalHours * 60).round(),
+          notes: existingRecord.notes,
+          createdAt: existingRecord.markedAt,
+        ));
+      }
+      updatedSessions.add(newSession);
+    } else {
+      updatedSessions.add(newSession);
+    }
+
+    final AttendanceRecord updatedRecord;
+    if (existingRecord != null) {
+      updatedRecord = existingRecord.copyWith(
+        employeeCode: employeeCode.isNotEmpty ? employeeCode : existingRecord.employeeCode,
+        employeeName: employeeName.isNotEmpty ? employeeName : existingRecord.employeeName,
+        time: existingRecord.time.isNotEmpty ? existingRecord.time : time,
+        checkInTime: existingRecord.checkInTime.isNotEmpty ? existingRecord.checkInTime : time,
+        checkOutTime: existingRecord.checkOutTime,
+        status: (existingRecord.status == 'Absent' || existingRecord.status == 'Late')
+            ? existingRecord.status
+            : status,
+        verificationStatus: existingRecord.verificationStatus.isNotEmpty
+            ? existingRecord.verificationStatus
+            : 'OD Verified',
+        similarityScore: existingRecord.similarityScore > 0
+            ? existingRecord.similarityScore
+            : 1.0,
+        totalHours: existingRecord.totalHours,
+        notes: existingRecord.notes.isNotEmpty ? existingRecord.notes : initialNotes,
+        markedAt: existingRecord.markedAt.isNotEmpty
+            ? existingRecord.markedAt
+            : DateTime.now().toIso8601String(),
+        sessions: updatedSessions,
+      );
+    } else {
+      updatedRecord = AttendanceRecord(
+        id: employeeId * 10000 + DateTime.now().millisecondsSinceEpoch % 10000,
+        employeeId: employeeId,
+        employeeCode: employeeCode,
+        employeeName: employeeName,
+        date: normDate,
+        time: time,
+        checkInTime: time,
+        checkOutTime: '',
+        status: status,
+        verificationStatus: 'OD Verified',
+        similarityScore: 1.0,
+        checkInVerificationStatus: 'OD Verified',
+        checkInSimilarityScore: 1.0,
+        totalHours: 0.0,
+        notes: initialNotes,
+        markedAt: DateTime.now().toIso8601String(),
+        sessions: updatedSessions,
+      );
+    }
+
+    try {
+      await _recordsRef.doc(docId).set(updatedRecord.toMap(), SetOptions(merge: true));
+      if (employeeCode.isNotEmpty) {
+        await _recordsRef
+            .doc('${employeeCode}_${normDate.replaceAll('-', '')}')
+            .set(updatedRecord.toMap(), SetOptions(merge: true));
+      }
+    } catch (_) {
+      return const AttendanceVerificationResult(
+        allowed: false,
+        similarityScore: 1.0,
+        verificationStatus: 'Failed',
+        message: 'Failed to record On-Duty session. Please try again.',
+        capturedImagePath: '',
+      );
+    }
+
+    _localMemoryCache['${employeeId}_$date'] = updatedRecord;
+    _localMemoryCache['${employeeId}_$normDate'] = updatedRecord;
+    if (employeeCode.isNotEmpty) {
+      _localMemoryCache['${employeeCode}_$date'] = updatedRecord;
+      _localMemoryCache['${employeeCode}_$normDate'] = updatedRecord;
+    }
+
+    return const AttendanceVerificationResult(
+      allowed: true,
+      similarityScore: 1.0,
+      verificationStatus: 'OD Verified',
+      message: 'On-Duty session started.',
+      capturedImagePath: '',
+    );
+  }
+
+  @override
+  Future<AttendanceVerificationResult> completeOdAttendanceSession({
+    required int employeeId,
+    required String employeeName,
+    String employeeCode = '',
+    required String date,
+    required String time,
+    required int assignmentId,
+    double? latitude,
+    double? longitude,
+    double? destinationLatitude,
+    double? destinationLongitude,
+    int destinationRadius = 100,
+    String afterCompletionOption = 'RETURN_TO_OFFICE',
+  }) async {
+    final normDate = _normalizeDateKey(date);
+    final docId = '${employeeId}_${normDate.replaceAll('-', '')}';
+
+    AttendanceRecord? existingRecord = await getAttendanceRecordForDate(employeeId, date);
+    if (existingRecord == null) {
+      return const AttendanceVerificationResult(
+        allowed: false,
+        similarityScore: 1.0,
+        verificationStatus: 'No Active Session',
+        message: 'No active On-Duty session found.',
+        capturedImagePath: '',
+      );
+    }
+
+    List<AttendanceSession> updatedSessions = List<AttendanceSession>.from(existingRecord.sessions);
+    int activeIndex = updatedSessions.indexWhere((s) => s.isActive && (s.isOd || s.assignmentId == assignmentId));
+
+    // Fallback: any active session
+    if (activeIndex == -1) {
+      activeIndex = updatedSessions.indexWhere((s) => s.isActive);
+    }
+
+    if (activeIndex == -1) {
+      return const AttendanceVerificationResult(
+        allowed: false,
+        similarityScore: 1.0,
+        verificationStatus: 'No Active Session',
+        message: 'No active On-Duty session found.',
+        capturedImagePath: '',
+      );
+    }
+
+    final activeSession = updatedSessions[activeIndex];
+
+    // Destination Geofence verification
+    final targetLat = destinationLatitude ?? activeSession.destinationLatitude;
+    final targetLng = destinationLongitude ?? activeSession.destinationLongitude;
+    final targetRadius = destinationRadius > 0
+        ? destinationRadius
+        : (activeSession.destinationRadius > 0 ? activeSession.destinationRadius : 100);
+
+    if (targetLat != null && targetLng != null && targetLat != 0 && targetLng != 0) {
+      if (latitude == null || longitude == null || latitude == 0 || longitude == 0) {
+        return const AttendanceVerificationResult(
+          allowed: false,
+          similarityScore: 1.0,
+          verificationStatus: 'GPS Required',
+          message: 'GPS location is required to verify destination arrival.',
+          capturedImagePath: '',
+        );
+      }
+
+      final distance = _distanceInMeters(
+        startLatitude: targetLat,
+        startLongitude: targetLng,
+        endLatitude: latitude,
+        endLongitude: longitude,
+      );
+
+      if (distance > targetRadius) {
+        final distRounded = distance.round();
+        return AttendanceVerificationResult(
+          allowed: false,
+          similarityScore: 1.0,
+          verificationStatus: 'Outside Destination',
+          message: 'You are not at the selected destination. Please reach the destination before completing OD. (Distance: ${distRounded}m, Allowed: within ${targetRadius}m)',
+          capturedImagePath: '',
+        );
+      }
+    }
+
+    int sessionDurationMinutes = 0;
+    double sessionDurationHours = 0.0;
+
+    final inMin = _parseMinutes(activeSession.checkInTime);
+    final outMin = _parseMinutes(time);
+    if (inMin != null && outMin != null && outMin >= inMin) {
+      sessionDurationMinutes = outMin - inMin;
+      sessionDurationHours = double.parse((sessionDurationMinutes / 60.0).toStringAsFixed(2));
+    }
+
+    final completedSession = activeSession.copyWith(
+      checkOutTime: time,
+      checkOutVerificationStatus: 'OD Completed',
+      checkOutSimilarityScore: 1.0,
+      checkOutLatitude: latitude,
+      checkOutLongitude: longitude,
+      destinationLatitude: targetLat,
+      destinationLongitude: targetLng,
+      destinationRadius: targetRadius,
+      checkOutMethod: 'OD GPS Capture',
+      durationHours: sessionDurationHours,
+      durationMinutes: sessionDurationMinutes,
+    );
+    updatedSessions[activeIndex] = completedSession;
+
+    // Calculate total daily hours as the sum of all completed sessions (Office + OD)
+    double totalDailyHours = 0.0;
+    for (final session in updatedSessions) {
+      if (session.isCompleted) {
+        totalDailyHours += session.effectiveDurationHours;
+      }
+    }
+    totalDailyHours = double.parse(totalDailyHours.toStringAsFixed(2));
+
+    final isCheckoutFromOd = afterCompletionOption.toUpperCase().contains('CHECKOUT');
+
+    final updatedRecord = existingRecord.copyWith(
+      employeeCode: employeeCode.isNotEmpty ? employeeCode : existingRecord.employeeCode,
+      employeeName: employeeName.isNotEmpty ? employeeName : existingRecord.employeeName,
+      checkOutTime: isCheckoutFromOd ? time : existingRecord.checkOutTime,
+      checkOutVerificationStatus: isCheckoutFromOd ? 'OD Location Verified' : existingRecord.checkOutVerificationStatus,
+      checkOutSimilarityScore: isCheckoutFromOd ? 1.0 : existingRecord.checkOutSimilarityScore,
+      totalHours: totalDailyHours,
+      sessions: updatedSessions,
+    );
+
+    try {
+      await _recordsRef.doc(docId).set(updatedRecord.toMap(), SetOptions(merge: true));
+      if (employeeCode.isNotEmpty) {
+        await _recordsRef
+            .doc('${employeeCode}_${normDate.replaceAll('-', '')}')
+            .set(updatedRecord.toMap(), SetOptions(merge: true));
+      }
+      if (existingRecord.employeeCode.isNotEmpty && existingRecord.employeeCode != employeeCode) {
+        await _recordsRef
+            .doc('${existingRecord.employeeCode}_${normDate.replaceAll('-', '')}')
+            .set(updatedRecord.toMap(), SetOptions(merge: true));
+      }
+    } catch (_) {
+      return const AttendanceVerificationResult(
+        allowed: false,
+        similarityScore: 1.0,
+        verificationStatus: 'Failed',
+        message: 'Failed to complete On-Duty session. Please try again.',
+        capturedImagePath: '',
+      );
+    }
+
+    _localMemoryCache['${employeeId}_$date'] = updatedRecord;
+    _localMemoryCache['${employeeId}_$normDate'] = updatedRecord;
+    if (employeeCode.isNotEmpty) {
+      _localMemoryCache['${employeeCode}_$date'] = updatedRecord;
+      _localMemoryCache['${employeeCode}_$normDate'] = updatedRecord;
+    }
+    if (existingRecord.employeeCode.isNotEmpty) {
+      _localMemoryCache['${existingRecord.employeeCode}_$date'] = updatedRecord;
+      _localMemoryCache['${existingRecord.employeeCode}_$normDate'] = updatedRecord;
+    }
+
+    return const AttendanceVerificationResult(
+      allowed: true,
+      similarityScore: 1.0,
+      verificationStatus: 'OD Completed',
+      message: 'On-Duty session completed.',
+      capturedImagePath: '',
+    );
   }
 
   String _normalizeDateKey(String dateStr) {

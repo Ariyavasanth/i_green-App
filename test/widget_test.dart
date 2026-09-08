@@ -7,6 +7,8 @@ import 'package:flutter_application_1/app.dart';
 void main() {
   testWidgets('renders shell properly', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: BooksApp()));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
     expect(find.byType(MaterialApp), findsOneWidget);

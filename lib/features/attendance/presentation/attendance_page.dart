@@ -327,6 +327,21 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
           children: [
             // Today's Status Banner Card
             _buildTodayBannerCard(currentEmp, todayAttendanceAsync),
+
+            // Today's Work Sessions Breakdown (Step 15: UI)
+            todayAttendanceAsync.when(
+              loading: () => const SizedBox.shrink(),
+              error: (_, __) => const SizedBox.shrink(),
+              data: (todayRec) {
+                if (todayRec == null || todayRec.sessions.isEmpty) return const SizedBox.shrink();
+                return Column(
+                  children: [
+                    const SizedBox(height: 16),
+                    _buildTodaySessionsBreakdownCard(todayRec),
+                  ],
+                );
+              },
+            ),
             const SizedBox(height: 24),
 
             // This Month Overview Card
@@ -385,7 +400,169 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     );
   }
 
+  Widget _buildTodaySessionsBreakdownCard(AttendanceRecord record) {
+    if (record.sessions.isEmpty) return const SizedBox.shrink();
 
+    final totalMinutes = record.sessions.fold<int>(0, (sum, s) => sum + s.durationMinutes);
+    final totalDisplay = '${totalMinutes ~/ 60}h ${(totalMinutes % 60).toString().padLeft(2, '0')}m';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.timeline_rounded, color: Color(0xFF414A51), size: 18),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                "Today's Work Sessions",
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E293B),
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.4)),
+                ),
+                child: Text(
+                  'Total $totalDisplay',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF414A51),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+          const SizedBox(height: 12),
+          ...record.sessions.asMap().entries.map((entry) {
+            final idx = entry.key;
+            final session = entry.value;
+            final isOd = session.isOd;
+            final badgeBg = isOd ? const Color(0xFFDCFCE7) : const Color(0xFFF1F5F9);
+            final badgeText = isOd ? const Color(0xFF15803D) : const Color(0xFF475569);
+            final typeLabel = isOd ? 'On Duty' : 'Office';
+            final icon = isOd ? Icons.badge_outlined : Icons.apartment_rounded;
+
+            final durationDisplay = session.isActive
+                ? 'Active'
+                : '${session.durationMinutes ~/ 60}h ${(session.durationMinutes % 60).toString().padLeft(2, '0')}m';
+
+            final timeRange = session.checkOutTime.isNotEmpty
+                ? '${session.checkInTime} → ${session.checkOutTime}'
+                : '${session.checkInTime} → Active';
+
+            return Padding(
+              padding: EdgeInsets.only(bottom: idx < record.sessions.length - 1 ? 10 : 0),
+              child: Row(
+                children: [
+                  // Type badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: badgeBg,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(icon, size: 13, color: badgeText),
+                        const SizedBox(width: 4),
+                        Text(
+                          typeLabel,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: badgeText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  // Time range and subtitle if OD
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          timeRange,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1E293B),
+                          ),
+                        ),
+                        if (isOd && session.destination != null && session.destination!.isNotEmpty)
+                          Text(
+                            session.destination!,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF64748B),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                      ],
+                    ),
+                  ),
+                  // Duration chip
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: session.isActive ? const Color(0xFFFEF3C7) : const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: session.isActive ? const Color(0xFFFCD34D) : const Color(0xFFE2E8F0),
+                      ),
+                    ),
+                    child: Text(
+                      durationDisplay,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: session.isActive ? const Color(0xFF92400E) : const Color(0xFF334155),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
 
   Widget _buildMonthOverviewCard(List<AttendanceRecord> records, List<LeaveRequest> leaves) {
     final now = DateTime.now();

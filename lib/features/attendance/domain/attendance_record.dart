@@ -1,3 +1,5 @@
+import 'attendance_session.dart';
+
 class AttendanceRecord {
   const AttendanceRecord({
     required this.id,
@@ -18,6 +20,7 @@ class AttendanceRecord {
     this.totalHours = 0.0,
     this.notes = '',
     this.markedAt = '',
+    this.sessions = const [],
   });
 
   final int id;
@@ -38,6 +41,7 @@ class AttendanceRecord {
   final double totalHours;
   final String notes;
   final String markedAt;
+  final List<AttendanceSession> sessions;
 
   String get effectiveCheckInTime => checkInTime.isNotEmpty ? checkInTime : time;
   String get effectiveCheckInVerification =>
@@ -68,6 +72,7 @@ class AttendanceRecord {
     double? totalHours,
     String? notes,
     String? markedAt,
+    List<AttendanceSession>? sessions,
   }) {
     return AttendanceRecord(
       id: id ?? this.id,
@@ -88,6 +93,7 @@ class AttendanceRecord {
       totalHours: totalHours ?? this.totalHours,
       notes: notes ?? this.notes,
       markedAt: markedAt ?? this.markedAt,
+      sessions: sessions ?? this.sessions,
     );
   }
 
@@ -110,6 +116,7 @@ class AttendanceRecord {
         'total_hours': totalHours,
         'notes': notes,
         'marked_at': markedAt,
+        if (sessions.isNotEmpty) 'sessions': sessions.map((s) => s.toMap()).toList(),
       };
 
   factory AttendanceRecord.fromMap(Map<String, dynamic> map) {
@@ -123,6 +130,14 @@ class AttendanceRecord {
     final rawEmpId = map['employee_id'] is int
         ? map['employee_id'] as int
         : (int.tryParse(map['employee_id']?.toString() ?? '') ?? 0);
+
+    final rawSessions = map['sessions'];
+    final List<AttendanceSession> parsedSessions = (rawSessions is List)
+        ? rawSessions
+            .whereType<Map>()
+            .map((s) => AttendanceSession.fromMap(Map<String, dynamic>.from(s)))
+            .toList()
+        : const [];
 
     return AttendanceRecord(
       id: map['id'] as int? ?? 0,
@@ -143,6 +158,8 @@ class AttendanceRecord {
       totalHours: (map['total_hours'] as num?)?.toDouble() ?? 0.0,
       notes: map['notes'] as String? ?? '',
       markedAt: map['marked_at'] as String? ?? '',
+      sessions: parsedSessions,
     );
   }
 }
+
