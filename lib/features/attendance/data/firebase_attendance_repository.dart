@@ -1357,12 +1357,34 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
     final isCheckoutFromOd = afterCompletionOption.toUpperCase().contains('CHECKOUT');
 
+    if (!isCheckoutFromOd) {
+      // Start a new active office session because employee has returned to office
+      final officeSessionUuid = 'session_${DateTime.now().millisecondsSinceEpoch}_${updatedSessions.length + 1}';
+      updatedSessions.add(AttendanceSession(
+        id: officeSessionUuid,
+        type: 'office',
+        checkInTime: time,
+        checkOutTime: '',
+        checkInVerificationStatus: 'Returned to Office',
+        checkOutVerificationStatus: '',
+        checkInSimilarityScore: 1.0,
+        checkOutSimilarityScore: 0.0,
+        checkInLatitude: latitude,
+        checkInLongitude: longitude,
+        checkInMethod: 'OD Return to Office',
+        durationHours: 0.0,
+        durationMinutes: 0,
+        notes: 'Resumed office shift after returning from On-Duty',
+        createdAt: DateTime.now().toIso8601String(),
+      ));
+    }
+
     final updatedRecord = existingRecord.copyWith(
       employeeCode: employeeCode.isNotEmpty ? employeeCode : existingRecord.employeeCode,
       employeeName: employeeName.isNotEmpty ? employeeName : existingRecord.employeeName,
-      checkOutTime: isCheckoutFromOd ? time : existingRecord.checkOutTime,
-      checkOutVerificationStatus: isCheckoutFromOd ? 'OD Location Verified' : existingRecord.checkOutVerificationStatus,
-      checkOutSimilarityScore: isCheckoutFromOd ? 1.0 : existingRecord.checkOutSimilarityScore,
+      checkOutTime: isCheckoutFromOd ? time : '',
+      checkOutVerificationStatus: isCheckoutFromOd ? 'OD Location Verified' : '',
+      checkOutSimilarityScore: isCheckoutFromOd ? 1.0 : 0.0,
       totalHours: totalDailyHours,
       sessions: updatedSessions,
     );

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -529,12 +530,31 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
         label = 'Assigned';
         icon = Icons.schedule;
         break;
+      case 'TRAVELING_TO_DESTINATION':
+        bg = Colors.orange.shade50;
+        fg = Colors.orange.shade900;
+        label = 'Traveling to Site';
+        icon = Icons.directions_car_rounded;
+        break;
+      case 'REACHED_DESTINATION':
       case 'IN_PROGRESS':
       case 'ACTIVE':
+        bg = const Color(0xFFF0FDF4);
+        fg = const Color(0xFF16A34A);
+        label = status.toUpperCase() == 'REACHED_DESTINATION' ? 'At Site (Working)' : 'Running';
+        icon = Icons.engineering_rounded;
+        break;
+      case 'WORK_COMPLETED':
+        bg = const Color(0xFFF1F5F9);
+        fg = const Color(0xFF414A51);
+        label = 'OD work completed';
+        icon = Icons.task_alt;
+        break;
+      case 'RETURNING_TO_OFFICE':
         bg = Colors.blue.shade50;
-        fg = Colors.blue.shade800;
-        label = 'Running';
-        icon = Icons.play_circle_fill;
+        fg = const Color(0xFF2563EB);
+        label = 'Return office from site';
+        icon = Icons.directions_car_filled_rounded;
         break;
       case 'COMPLETED':
         bg = const Color(0xFF9CC70A).withValues(alpha: 0.15);
@@ -545,7 +565,7 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
       default:
         bg = Colors.grey.shade100;
         fg = Colors.grey.shade800;
-        label = status;
+        label = status.replaceAll('_', ' ');
         icon = Icons.info;
     }
 
@@ -576,13 +596,15 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
 
     final hasStartGps = assignment.startLatitude != null && assignment.startLongitude != null;
     final hasEndGps = assignment.endLatitude != null && assignment.endLongitude != null;
+    final hasReachedPhoto = assignment.effectiveReachedPhoto != null;
+    final hasWorkPhoto = assignment.effectiveWorkPhoto != null;
 
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 500),
+          constraints: const BoxConstraints(maxWidth: 540),
           child: Padding(
             padding: const EdgeInsets.all(24.0),
             child: SingleChildScrollView(
@@ -594,7 +616,7 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
-                        'OD Details',
+                        'OD Tracking Details',
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
                       ),
                       IconButton(
@@ -610,10 +632,26 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                   _detailRow('Destination', '📍 ${assignment.destination}', isBold: true),
                   _detailRow('Date', assignment.date),
                   _detailRow('Planned Time', '${assignment.plannedStartTime}${assignment.plannedEndTime != null ? " → ${assignment.plannedEndTime}" : ""}'),
-                  _detailRow('Actual Start Time', assignment.actualStartTime ?? '--'),
-                  _detailRow('Actual End Time', assignment.actualEndTime ?? '--'),
-                  _detailRow('Duration', durationStr, isBold: true),
+                  if (assignment.travelStartTime != null || assignment.actualStartTime != null)
+                    _detailRow('Departure / Start Time', assignment.travelStartTime ?? assignment.actualStartTime!),
+                  if (assignment.reachedTime != null)
+                    _detailRow('Arrived at site', assignment.reachedTime!),
+                  if (assignment.workCompletedTime != null)
+                    _detailRow('OD work completed', assignment.workCompletedTime!),
+                  if (assignment.returnStartTime != null)
+                    _detailRow('Return office from site', assignment.returnStartTime!),
+                  if (assignment.actualEndTime != null || assignment.officeReachedTime != null)
+                    _detailRow('Reached time to office', assignment.actualEndTime ?? assignment.officeReachedTime!),
+                  
+                  if (assignment.travelToSiteDurationMinutes > 0)
+                    _detailRow('Travel to Site', '${assignment.travelToSiteDurationMinutes} mins'),
+                  if (assignment.onSiteWorkDurationMinutes > 0)
+                    _detailRow('On-Site Work', '${assignment.onSiteWorkDurationMinutes} mins'),
+                  if (assignment.returnTravelDurationMinutes > 0)
+                    _detailRow('Return Travel', '${assignment.returnTravelDurationMinutes} mins'),
+                  _detailRow('Total Duration', durationStr, isBold: true),
                   _detailRow('Assigned By', assignment.assignedBy),
+                  _detailRow('After OD', assignment.isReturnToOfficeOption ? 'Return to Office' : 'Checkout from OD Location'),
                   if (assignment.notes.isNotEmpty)
                     _detailRow('Notes', assignment.notes),
                   const SizedBox(height: 12),
@@ -672,6 +710,43 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                         ),
                     ],
                   ),
+
+                  // Photo proofs
+                  if (hasReachedPhoto || hasWorkPhoto) ...[
+                    const SizedBox(height: 12),
+                    const Divider(),
+                    const SizedBox(height: 6),
+                    const Text('Verification Photos', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        if (hasReachedPhoto)
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Arrival Photo Proof:', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                                const SizedBox(height: 4),
+                                _buildPhotoWidget(assignment.effectiveReachedPhoto!),
+                              ],
+                            ),
+                          ),
+                        if (hasReachedPhoto && hasWorkPhoto) const SizedBox(width: 10),
+                        if (hasWorkPhoto)
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Work Photo Proof:', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                                const SizedBox(height: 4),
+                                _buildPhotoWidget(assignment.effectiveWorkPhoto!),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+
                   const SizedBox(height: 12),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -711,6 +786,28 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildPhotoWidget(String photoStr) {
+    try {
+      if (photoStr.startsWith('data:image/')) {
+        final clean = photoStr.replaceFirst(RegExp(r'data:image/[^;]+;base64,'), '');
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.memory(base64Decode(clean), height: 110, width: double.infinity, fit: BoxFit.cover),
+        );
+      } else if (photoStr.startsWith('http')) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.network(photoStr, height: 110, width: double.infinity, fit: BoxFit.cover),
+        );
+      }
+    } catch (_) {}
+    return Container(
+      height: 110,
+      decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(8)),
+      child: const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
     );
   }
 

@@ -22,6 +22,26 @@ class OnDutyAssignment {
     this.endLongitude,
     this.startPhoto,
     this.endPhoto,
+    this.travelStartTime,
+    this.reachedTime,
+    this.reachedPhoto,
+    this.workCompletedTime,
+    this.workPhoto,
+    this.returnStartTime,
+    this.officeReachedTime,
+    this.startTripLatitude,
+    this.startTripLongitude,
+    this.reachedLatitude,
+    this.reachedLongitude,
+    this.workEndLatitude,
+    this.workEndLongitude,
+    this.returnLatitude,
+    this.returnLongitude,
+    this.officeLatitude,
+    this.officeLongitude,
+    this.travelToSiteDurationMinutes = 0,
+    this.onSiteWorkDurationMinutes = 0,
+    this.returnTravelDurationMinutes = 0,
     required this.status,
     this.notes = '',
     required this.assignedBy,
@@ -52,12 +72,55 @@ class OnDutyAssignment {
   final double? endLongitude;
   final String? startPhoto;
   final String? endPhoto;
-  final String status; // 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'
+
+  // Multi-step State Machine Timestamps & Photos
+  final String? travelStartTime; // Step 1: Start OD Trip clicked
+  final String? reachedTime; // Step 2: Reached site clicked
+  final String? reachedPhoto; // Live camera photo when reached
+  final String? workCompletedTime; // Step 3: Complete OD work clicked
+  final String? workPhoto; // Proof of work photo
+  final String? returnStartTime; // Step 4: Return to office clicked
+  final String? officeReachedTime; // Step 5: Came to office confirmed
+
+  // Multi-step GPS Coordinates
+  final double? startTripLatitude;
+  final double? startTripLongitude;
+  final double? reachedLatitude;
+  final double? reachedLongitude;
+  final double? workEndLatitude;
+  final double? workEndLongitude;
+  final double? returnLatitude;
+  final double? returnLongitude;
+  final double? officeLatitude;
+  final double? officeLongitude;
+
+  // Segment Durations (in minutes)
+  final int travelToSiteDurationMinutes;
+  final int onSiteWorkDurationMinutes;
+  final int returnTravelDurationMinutes;
+
+  final String status; // 'ASSIGNED', 'TRAVELING_TO_DESTINATION', 'IN_PROGRESS', 'REACHED_DESTINATION', 'WORK_COMPLETED', 'RETURNING_TO_OFFICE', 'COMPLETED', 'CANCELLED'
   final String notes;
   final String assignedBy;
   final int durationMinutes;
   final String afterCompletionOption; // 'RETURN_TO_OFFICE', 'CHECKOUT_FROM_OD'
   final String createdAt;
+
+  /// Status helpers
+  bool get isAssigned => status == 'ASSIGNED';
+  bool get isTravelingToDestination =>
+      status == 'TRAVELING_TO_DESTINATION' || (status == 'IN_PROGRESS' && reachedTime == null);
+  bool get isReachedDestination => status == 'REACHED_DESTINATION';
+  bool get isWorkCompleted => status == 'WORK_COMPLETED';
+  bool get isReturningToOffice => status == 'RETURNING_TO_OFFICE';
+  bool get isCompleted => status == 'COMPLETED';
+  bool get isCancelled => status == 'CANCELLED';
+
+  bool get isOngoing =>
+      status != 'COMPLETED' && status != 'CANCELLED' && status != 'REJECTED';
+
+  bool get isReturnToOfficeOption =>
+      afterCompletionOption == 'RETURN_TO_OFFICE';
 
   /// Effective target coordinates for destination
   double? get effectiveDestinationLatitude => destinationLatitude ?? endLatitude;
@@ -69,6 +132,33 @@ class OnDutyAssignment {
     if (destination.isNotEmpty) return destination;
     return 'Site Destination';
   }
+
+  /// Effective status display label derived from status & progress milestones
+  String get effectiveStatusLabel {
+    final s = status.toUpperCase();
+    if (s == 'COMPLETED') return 'Completed';
+    if (s == 'CANCELLED') return 'Cancelled';
+    if (s == 'RETURNING_TO_OFFICE' || (returnStartTime != null && officeReachedTime == null)) {
+      return 'Return office from site';
+    }
+    if (s == 'WORK_COMPLETED' || (workCompletedTime != null && returnStartTime == null)) {
+      return 'OD work completed';
+    }
+    if (s == 'REACHED_DESTINATION' || (reachedTime != null && workCompletedTime == null)) {
+      return 'Arrived at site';
+    }
+    if (s == 'TRAVELING_TO_DESTINATION' || (travelStartTime != null && reachedTime == null)) {
+      return 'Traveling to Site';
+    }
+    if (s == 'ASSIGNED') return 'Assigned';
+    return s.replaceAll('_', ' ');
+  }
+
+  /// Effective arrival photo
+  String? get effectiveReachedPhoto => reachedPhoto ?? startPhoto;
+
+  /// Effective completion photo
+  String? get effectiveWorkPhoto => workPhoto ?? endPhoto;
 
   Map<String, dynamic> toMap() => {
         if (id != 0) 'id': id,
@@ -85,14 +175,34 @@ class OnDutyAssignment {
         'date': date,
         'planned_start_time': plannedStartTime,
         'planned_end_time': plannedEndTime,
-        'actual_start_time': actualStartTime,
-        'actual_end_time': actualEndTime,
-        'start_latitude': startLatitude,
-        'start_longitude': startLongitude,
+        'actual_start_time': actualStartTime ?? travelStartTime,
+        'actual_end_time': actualEndTime ?? officeReachedTime ?? workCompletedTime,
+        'start_latitude': startLatitude ?? startTripLatitude,
+        'start_longitude': startLongitude ?? startTripLongitude,
         'end_latitude': endLatitude ?? effectiveDestinationLatitude,
         'end_longitude': endLongitude ?? effectiveDestinationLongitude,
-        'start_photo': startPhoto,
-        'end_photo': endPhoto,
+        'start_photo': startPhoto ?? reachedPhoto,
+        'end_photo': endPhoto ?? workPhoto,
+        'travel_start_time': travelStartTime,
+        'reached_time': reachedTime,
+        'reached_photo': reachedPhoto,
+        'work_completed_time': workCompletedTime,
+        'work_photo': workPhoto,
+        'return_start_time': returnStartTime,
+        'office_reached_time': officeReachedTime,
+        'start_trip_latitude': startTripLatitude,
+        'start_trip_longitude': startTripLongitude,
+        'reached_latitude': reachedLatitude,
+        'reached_longitude': reachedLongitude,
+        'work_end_latitude': workEndLatitude,
+        'work_end_longitude': workEndLongitude,
+        'return_latitude': returnLatitude,
+        'return_longitude': returnLongitude,
+        'office_latitude': officeLatitude,
+        'office_longitude': officeLongitude,
+        'travel_to_site_duration_minutes': travelToSiteDurationMinutes,
+        'on_site_work_duration_minutes': onSiteWorkDurationMinutes,
+        'return_travel_duration_minutes': returnTravelDurationMinutes,
         'status': status,
         'notes': notes,
         'assigned_by': assignedBy,
@@ -147,14 +257,34 @@ class OnDutyAssignment {
       date: map['date']?.toString() ?? '',
       plannedStartTime: map['planned_start_time']?.toString() ?? map['assigned_time']?.toString() ?? '',
       plannedEndTime: map['planned_end_time']?.toString(),
-      actualStartTime: map['actual_start_time']?.toString() ?? map['started_time']?.toString(),
-      actualEndTime: map['actual_end_time']?.toString() ?? map['completed_time']?.toString(),
+      actualStartTime: map['actual_start_time']?.toString() ?? map['travel_start_time']?.toString() ?? map['started_time']?.toString(),
+      actualEndTime: map['actual_end_time']?.toString() ?? map['office_reached_time']?.toString() ?? map['completed_time']?.toString(),
       startLatitude: (map['start_latitude'] as num?)?.toDouble() ?? (map['from_latitude'] as num?)?.toDouble(),
       startLongitude: (map['start_longitude'] as num?)?.toDouble() ?? (map['from_longitude'] as num?)?.toDouble(),
       endLatitude: (map['end_latitude'] as num?)?.toDouble() ?? destLat,
       endLongitude: (map['end_longitude'] as num?)?.toDouble() ?? destLng,
-      startPhoto: map['start_photo']?.toString(),
-      endPhoto: map['end_photo']?.toString() ?? map['photo_proof_path']?.toString(),
+      startPhoto: map['start_photo']?.toString() ?? map['reached_photo']?.toString(),
+      endPhoto: map['end_photo']?.toString() ?? map['work_photo']?.toString() ?? map['photo_proof_path']?.toString(),
+      travelStartTime: map['travel_start_time']?.toString() ?? map['actual_start_time']?.toString(),
+      reachedTime: map['reached_time']?.toString(),
+      reachedPhoto: map['reached_photo']?.toString() ?? map['start_photo']?.toString(),
+      workCompletedTime: map['work_completed_time']?.toString(),
+      workPhoto: map['work_photo']?.toString() ?? map['end_photo']?.toString(),
+      returnStartTime: map['return_start_time']?.toString(),
+      officeReachedTime: map['office_reached_time']?.toString() ?? map['actual_end_time']?.toString(),
+      startTripLatitude: (map['start_trip_latitude'] as num?)?.toDouble() ?? (map['start_latitude'] as num?)?.toDouble(),
+      startTripLongitude: (map['start_trip_longitude'] as num?)?.toDouble() ?? (map['start_longitude'] as num?)?.toDouble(),
+      reachedLatitude: (map['reached_latitude'] as num?)?.toDouble() ?? destLat,
+      reachedLongitude: (map['reached_longitude'] as num?)?.toDouble() ?? destLng,
+      workEndLatitude: (map['work_end_latitude'] as num?)?.toDouble(),
+      workEndLongitude: (map['work_end_longitude'] as num?)?.toDouble(),
+      returnLatitude: (map['return_latitude'] as num?)?.toDouble(),
+      returnLongitude: (map['return_longitude'] as num?)?.toDouble(),
+      officeLatitude: (map['office_latitude'] as num?)?.toDouble(),
+      officeLongitude: (map['office_longitude'] as num?)?.toDouble(),
+      travelToSiteDurationMinutes: parseId(map['travel_to_site_duration_minutes']),
+      onSiteWorkDurationMinutes: parseId(map['on_site_work_duration_minutes']),
+      returnTravelDurationMinutes: parseId(map['return_travel_duration_minutes']),
       status: rawStatus,
       notes: map['notes']?.toString() ?? map['instructions']?.toString() ?? '',
       assignedBy: map['assigned_by']?.toString() ?? 'Admin',
@@ -187,6 +317,26 @@ class OnDutyAssignment {
     double? endLongitude,
     String? startPhoto,
     String? endPhoto,
+    String? travelStartTime,
+    String? reachedTime,
+    String? reachedPhoto,
+    String? workCompletedTime,
+    String? workPhoto,
+    String? returnStartTime,
+    String? officeReachedTime,
+    double? startTripLatitude,
+    double? startTripLongitude,
+    double? reachedLatitude,
+    double? reachedLongitude,
+    double? workEndLatitude,
+    double? workEndLongitude,
+    double? returnLatitude,
+    double? returnLongitude,
+    double? officeLatitude,
+    double? officeLongitude,
+    int? travelToSiteDurationMinutes,
+    int? onSiteWorkDurationMinutes,
+    int? returnTravelDurationMinutes,
     String? status,
     String? notes,
     String? assignedBy,
@@ -217,6 +367,26 @@ class OnDutyAssignment {
       endLongitude: endLongitude ?? this.endLongitude,
       startPhoto: startPhoto ?? this.startPhoto,
       endPhoto: endPhoto ?? this.endPhoto,
+      travelStartTime: travelStartTime ?? this.travelStartTime,
+      reachedTime: reachedTime ?? this.reachedTime,
+      reachedPhoto: reachedPhoto ?? this.reachedPhoto,
+      workCompletedTime: workCompletedTime ?? this.workCompletedTime,
+      workPhoto: workPhoto ?? this.workPhoto,
+      returnStartTime: returnStartTime ?? this.returnStartTime,
+      officeReachedTime: officeReachedTime ?? this.officeReachedTime,
+      startTripLatitude: startTripLatitude ?? this.startTripLatitude,
+      startTripLongitude: startTripLongitude ?? this.startTripLongitude,
+      reachedLatitude: reachedLatitude ?? this.reachedLatitude,
+      reachedLongitude: reachedLongitude ?? this.reachedLongitude,
+      workEndLatitude: workEndLatitude ?? this.workEndLatitude,
+      workEndLongitude: workEndLongitude ?? this.workEndLongitude,
+      returnLatitude: returnLatitude ?? this.returnLatitude,
+      returnLongitude: returnLongitude ?? this.returnLongitude,
+      officeLatitude: officeLatitude ?? this.officeLatitude,
+      officeLongitude: officeLongitude ?? this.officeLongitude,
+      travelToSiteDurationMinutes: travelToSiteDurationMinutes ?? this.travelToSiteDurationMinutes,
+      onSiteWorkDurationMinutes: onSiteWorkDurationMinutes ?? this.onSiteWorkDurationMinutes,
+      returnTravelDurationMinutes: returnTravelDurationMinutes ?? this.returnTravelDurationMinutes,
       status: status ?? this.status,
       notes: notes ?? this.notes,
       assignedBy: assignedBy ?? this.assignedBy,

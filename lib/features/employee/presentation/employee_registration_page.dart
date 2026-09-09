@@ -2039,6 +2039,49 @@ class _EmployeeRegistrationPageState
     }
   }
 
+  Future<void> _selectTime(
+    TextEditingController controller, {
+    String? tabName,
+  }) async {
+    TimeOfDay initialTime = TimeOfDay.now();
+    if (controller.text.trim().isNotEmpty) {
+      try {
+        final text = controller.text.trim().toUpperCase();
+        final match = RegExp(r'^(\d{1,2}):(\d{2})\s*(AM|PM)?$').firstMatch(text);
+        if (match != null) {
+          int hour = int.parse(match.group(1)!);
+          final minute = int.parse(match.group(2)!);
+          final period = match.group(3);
+          if (period == 'PM' && hour < 12) hour += 12;
+          if (period == 'AM' && hour == 12) hour = 0;
+          initialTime = TimeOfDay(hour: hour, minute: minute);
+        }
+      } catch (_) {}
+    }
+
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
+    );
+
+    if (picked != null) {
+      final hour = picked.hourOfPeriod == 0 ? 12 : picked.hourOfPeriod;
+      final minute = picked.minute.toString().padLeft(2, '0');
+      final period = picked.period == DayPeriod.am ? 'AM' : 'PM';
+      final formatted = '${hour.toString().padLeft(2, '0')}:$minute$period';
+      controller.text = formatted;
+      if (tabName != null) {
+        _markTabUnsaved(tabName);
+      }
+    }
+  }
+
   void _removeProfileImage() {
     setState(() {
       _profileImageBytes = null;
@@ -4304,10 +4347,11 @@ class _EmployeeRegistrationPageState
                   placeholder: 'e.g. Sunday',
                 ),
                 if (_workScheduleType == 'Fixed Schedule')
-                  _buildTextField(
+                  _buildTimePickerField(
                     'In Time',
                     _inTimeController,
                     placeholder: 'e.g. 09:00 AM',
+                    tabName: 'Job & Admin Details',
                   )
                 else
                   _buildTextField(
@@ -4322,10 +4366,11 @@ class _EmployeeRegistrationPageState
               isMobile: isMobile,
               children: [
                 if (_workScheduleType == 'Fixed Schedule')
-                  _buildTextField(
+                  _buildTimePickerField(
                     'Out Time',
                     _outTimeController,
                     placeholder: 'e.g. 06:00 PM',
+                    tabName: 'Job & Admin Details',
                   ),
                 _buildDropdown(
                   'Leave Type',
@@ -7021,6 +7066,61 @@ class _EmployeeRegistrationPageState
             suffixIcon: const Icon(
               Icons.calendar_today_outlined,
               size: 14,
+              color: Colors.black54,
+            ),
+            suffixIconConstraints: const BoxConstraints(minWidth: 28),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(
+                color: Color(0xFFD0D5DD),
+                width: 0.8,
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(
+                color: Color(0xFFD0D5DD),
+                width: 0.8,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppColors.active, width: 1.2),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTimePickerField(
+    String label,
+    TextEditingController controller, {
+    String? placeholder,
+    String? tabName,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildLabelWithRequiredStar(label),
+        const SizedBox(height: 5),
+        TextFormField(
+          controller: controller,
+          readOnly: true,
+          onTap: () => _selectTime(controller, tabName: tabName),
+          style: const TextStyle(fontSize: 12, color: Colors.black87),
+          decoration: InputDecoration(
+            hintText: placeholder ?? 'hh:mm a',
+            hintStyle: const TextStyle(fontSize: 12, color: Colors.black38),
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+            suffixIcon: const Icon(
+              Icons.access_time_rounded,
+              size: 16,
               color: Colors.black54,
             ),
             suffixIconConstraints: const BoxConstraints(minWidth: 28),

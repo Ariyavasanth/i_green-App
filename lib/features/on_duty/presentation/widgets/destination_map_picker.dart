@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
@@ -490,72 +491,15 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> {
             ),
             child: Stack(
               children: [
-                // Real Google Maps Static Imagery
+                // Real Street & Satellite Map Tiles
                 Positioned.fill(
-                  child: Image.network(
-                    _buildGoogleMapsUrl(width: 600, height: 360),
-                    fit: BoxFit.cover,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Container(
-                        color: const Color(0xFFF1F5F9),
-                        child: Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.5,
-                                  color: widget.primaryColor,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Loading Google Maps...',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: widget.darkTextColor,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      // Graceful fallback if offline or API quota
-                      return Stack(
-                        children: [
-                          CustomPaint(
-                            size: const Size(double.infinity, 200),
-                            painter: _MapCanvasPainter(
-                              lat: _selectedLat ?? 12.9249,
-                              lng: _selectedLng ?? 80.1000,
-                              radius: _selectedRadius,
-                              primaryColor: widget.primaryColor,
-                            ),
-                          ),
-                          Positioned(
-                            bottom: 8,
-                            left: 8,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.65),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Text(
-                                'Preview Mode',
-                                style: TextStyle(color: Colors.white, fontSize: 10),
-                              ),
-                            ),
-                          ),
-                        ],
-                      );
-                    },
+                  child: _RealTileMapWidget(
+                    lat: _selectedLat ?? 12.9249,
+                    lng: _selectedLng ?? 80.1000,
+                    zoom: _zoomLevel,
+                    mapType: _mapType,
+                    primaryColor: widget.primaryColor,
+                    radius: _selectedRadius,
                   ),
                 ),
 
@@ -1059,5 +1003,115 @@ class _MapCanvasPainter extends CustomPainter {
         oldDelegate.lng != lng ||
         oldDelegate.radius != radius ||
         oldDelegate.primaryColor != primaryColor;
+  }
+}
+
+/// Renders live street map tiles and satellite tiles without needing any API key
+class _RealTileMapWidget extends StatelessWidget {
+  final double lat;
+  final double lng;
+  final double zoom;
+  final String mapType;
+  final Color primaryColor;
+  final int radius;
+
+  const _RealTileMapWidget({
+    required this.lat,
+    required this.lng,
+    required this.zoom,
+    required this.mapType,
+    required this.primaryColor,
+    required this.radius,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final height = constraints.maxHeight;
+        final z = zoom.round().clamp(2, 19);
+        final n = math.pow(2.0, z).toDouble();
+        final latRad = (lat.clamp(-85.0511, 85.0511)) * math.pi / 180.0;
+        final exactX = (lng + 180.0) / 360.0 * n;
+        final exactY = (1.0 - math.log(math.tan(latRad) + 1.0 / math.cos(latRad)) / math.pi) / 2.0 * n;
+
+        final centerTileX = exactX.floor();
+        final centerTileY = exactY.floor();
+        final offsetX = (exactX - centerTileX) * 256.0;
+        final offsetY = (exactY - centerTileY) * 256.0;
+
+        final centerX = width / 2.0;
+        final centerY = height / 2.0;
+
+        final List<Widget> tiles = [];
+        for (int dx = -2; dx <= 2; dx++) {
+          for (int dy = -2; dy <= 2; dy++) {
+            final tileX = (centerTileX + dx) % n.toInt();
+            final tileY = centerTileY + dy;
+            if (tileY < 0 || tileY >= n) continue;
+
+            final posX = centerX + (dx * 256.0) - offsetX;
+            final posY = centerY + (dy * 256.0) - offsetY;
+
+            // Only render tiles that intersect the viewport
+            if (posX + 256 < 0 || posX > width || posY + 256 < 0 || posY > height) continue;
+
+            final tileUrl = _getTileUrl(z, tileX, tileY, mapType);
+
+            tiles.add(
+              Positioned(
+                left: posX,
+                top: posY,
+                width: 256,
+                height: 256,
+                child: Image.network(
+                  tileUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                ),
+              ),
+            );
+          }
+        }
+
+        return Stack(
+          children: [
+            // Base background
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _MapCanvasPainter(
+                  lat: lat,
+                  lng: lng,
+                  radius: radius,
+                  primaryColor: primaryColor,
+                ),
+              ),
+            ),
+            // Live map tiles
+            ClipRect(
+              child: Stack(
+                children: tiles,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _getTileUrl(int z, int x, int y, String mapType) {
+    if (mapType == 'satellite') {
+      // Esri World Imagery (High-res satellite tiles, public & free)
+      return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/$z/$y/$x';
+    } else if (mapType == 'terrain') {
+      // OpenTopoMap
+      return 'https://a.tile.opentopomap.org/$z/$x/$y.png';
+    } else {
+      // CartoDB Voyager / OpenStreetMap standard crisp street map
+      final subdomains = ['a', 'b', 'c', 'd'];
+      final s = subdomains[(x + y).abs() % subdomains.length];
+      return 'https://$s.basemaps.cartocdn.com/rastertiles/voyager/$z/$x/$y.png';
+    }
   }
 }

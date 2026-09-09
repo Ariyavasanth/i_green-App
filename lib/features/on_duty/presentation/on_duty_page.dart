@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -60,6 +61,30 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
     );
   }
 
+  String _formatStatusLabel(String status) {
+    switch (status.toUpperCase()) {
+      case 'TRAVELING_TO_DESTINATION':
+        return 'Traveling to Site';
+      case 'REACHED_DESTINATION':
+        return 'Arrived at site';
+      case 'WORK_COMPLETED':
+        return 'OD work completed';
+      case 'RETURNING_TO_OFFICE':
+        return 'Return office from site';
+      case 'IN_PROGRESS':
+      case 'ACTIVE':
+        return 'In Progress';
+      case 'ASSIGNED':
+        return 'Assigned';
+      case 'COMPLETED':
+        return 'Completed';
+      case 'CANCELLED':
+        return 'Cancelled';
+      default:
+        return status.replaceAll('_', ' ');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentEmp = ref.watch(currentEmployeeProvider);
@@ -102,7 +127,7 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
               isMobile ? 12 : 24,
               isMobile ? 12 : 20,
               isMobile ? 12 : 24,
-              80,
+              100,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -239,7 +264,7 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'View admin-assigned tasks and submit your On-Duty requests.',
+                  'Track assigned OD tasks with 5-stage live state verification.',
                   style: TextStyle(
                     fontSize: 13,
                     color: Colors.grey.shade600,
@@ -269,14 +294,14 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
 
   Widget _buildKpiGrid(List<OnDutyAssignment> list, bool isMobile) {
     final total = list.length;
-    final inProgress = list.where((x) => x.status == 'IN_PROGRESS' || x.status == 'ACTIVE').length;
+    final inProgress = list.where((x) => x.isOngoing && x.status != 'ASSIGNED').length;
     final assigned = list.where((x) => x.status == 'ASSIGNED').length;
     final completed = list.where((x) => x.status == 'COMPLETED').length;
 
     final cards = [
       _buildStatCard('Total ODs', total.toString(), Icons.assignment_outlined, const Color(0xFF414A51)),
       _buildStatCard('Assigned', assigned.toString(), Icons.schedule, const Color(0xFF3B82F6)),
-      _buildStatCard('In Progress', inProgress.toString(), Icons.pending_actions, const Color(0xFFF59E0B)),
+      _buildStatCard('Active / En Route', inProgress.toString(), Icons.pending_actions, const Color(0xFFF59E0B)),
       _buildStatCard('Completed', completed.toString(), Icons.task_alt, const Color(0xFF10B981)),
     ];
 
@@ -533,7 +558,8 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
   }
 
   Widget _buildAssignmentCard(OnDutyAssignment item, Employee currentEmp, bool isMobile) {
-    final statusColor = _getStatusColor(item.status);
+    final statusLabel = item.effectiveStatusLabel;
+    final statusColor = _getStatusColor(item);
 
     return Container(
       decoration: BoxDecoration(
@@ -603,7 +629,7 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        item.status.replaceAll('_', ' '),
+                        statusLabel,
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -678,6 +704,11 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                     ),
                     Row(
                       children: [
+                        if (item.effectiveReachedPhoto != null || item.effectiveWorkPhoto != null)
+                          const Padding(
+                            padding: EdgeInsets.only(right: 6),
+                            child: Icon(Icons.photo_camera_rounded, size: 16, color: Color(0xFF16A34A)),
+                          ),
                         if (item.effectiveDestinationLatitude != null && item.effectiveDestinationLongitude != null)
                           IconButton(
                             icon: const Icon(Icons.map_outlined, size: 18, color: Color(0xFF414A51)),
@@ -703,20 +734,24 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
     );
   }
 
-  Color _getStatusColor(String status) {
-    switch (status.toUpperCase()) {
-      case 'IN_PROGRESS':
-      case 'ACTIVE':
-        return const Color(0xFFF59E0B);
-      case 'COMPLETED':
-        return const Color(0xFF10B981);
-      case 'ASSIGNED':
-        return const Color(0xFF3B82F6);
-      case 'CANCELLED':
-        return const Color(0xFFEF4444);
-      default:
-        return const Color(0xFF64748B);
+  Color _getStatusColor(OnDutyAssignment item) {
+    final s = item.status.toUpperCase();
+    if (s == 'COMPLETED') return const Color(0xFF10B981);
+    if (s == 'RETURNING_TO_OFFICE' || (item.returnStartTime != null && item.officeReachedTime == null)) {
+      return const Color(0xFF3B82F6);
     }
+    if (s == 'WORK_COMPLETED' || (item.workCompletedTime != null && item.returnStartTime == null)) {
+      return const Color(0xFF414A51);
+    }
+    if (s == 'REACHED_DESTINATION' || (item.reachedTime != null && item.workCompletedTime == null)) {
+      return const Color(0xFF16A34A);
+    }
+    if (s == 'TRAVELING_TO_DESTINATION' || (item.travelStartTime != null && item.reachedTime == null)) {
+      return const Color(0xFFD97706);
+    }
+    if (s == 'ASSIGNED') return const Color(0xFF3B82F6);
+    if (s == 'CANCELLED') return const Color(0xFFEF4444);
+    return const Color(0xFF64748B);
   }
 
   Widget _buildEmptyListState() {
@@ -750,54 +785,140 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
   void _showDetailsDialog(OnDutyAssignment item) {
     showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 540),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.business_center, color: Color(0xFF414A51), size: 22),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            item.odType,
+                            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        icon: const Icon(Icons.close, size: 20),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 20),
+                  _buildDetailRow('Purpose', item.purpose),
+                  _buildDetailRow('Destination', item.destination),
+                  _buildDetailRow('Date', item.date),
+                  _buildDetailRow('Planned Time', '${item.plannedStartTime}${item.plannedEndTime != null ? " - ${item.plannedEndTime}" : ""}'),
+                  if (item.travelStartTime != null || item.actualStartTime != null)
+                    _buildDetailRow('Departure / Start Time', item.travelStartTime ?? item.actualStartTime!),
+                  if (item.reachedTime != null) _buildDetailRow('Arrived at site', item.reachedTime!),
+                  if (item.workCompletedTime != null) _buildDetailRow('OD work completed', item.workCompletedTime!),
+                  if (item.returnStartTime != null) _buildDetailRow('Return office from site', item.returnStartTime!),
+                  if (item.actualEndTime != null || item.officeReachedTime != null)
+                    _buildDetailRow('Reached time to office', item.actualEndTime ?? item.officeReachedTime!),
+                  if (item.travelToSiteDurationMinutes > 0)
+                    _buildDetailRow('Travel to Site Duration', '${item.travelToSiteDurationMinutes} Minutes'),
+                  if (item.onSiteWorkDurationMinutes > 0)
+                    _buildDetailRow('On-Site Work Duration', '${item.onSiteWorkDurationMinutes} Minutes'),
+                  if (item.returnTravelDurationMinutes > 0)
+                    _buildDetailRow('Return Travel Duration', '${item.returnTravelDurationMinutes} Minutes'),
+                  if (item.durationMinutes > 0) _buildDetailRow('Total Trip Duration', '${item.durationMinutes} Minutes'),
+                  _buildDetailRow('Status', _formatStatusLabel(item.status)),
+                  _buildDetailRow('Assigned By', item.assignedBy),
+                  if (item.afterCompletionOption.isNotEmpty)
+                    _buildDetailRow('After Completion', item.afterCompletionOption == 'CHECKOUT_FROM_OD' ? 'Check-out directly from OD' : 'Return to Office'),
+                  if (item.notes.isNotEmpty) _buildDetailRow('Notes / Instructions', item.notes),
+
+                  // Photos preview if available
+                  if (item.effectiveReachedPhoto != null || item.effectiveWorkPhoto != null) ...[
+                    const SizedBox(height: 12),
+                    const Divider(height: 1),
+                    const SizedBox(height: 10),
+                    const Text('Photo Verifications', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B))),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        if (item.effectiveReachedPhoto != null)
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Arrival Proof:', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                                const SizedBox(height: 4),
+                                _buildPhotoPreview(item.effectiveReachedPhoto!),
+                              ],
+                            ),
+                          ),
+                        if (item.effectiveReachedPhoto != null && item.effectiveWorkPhoto != null)
+                          const SizedBox(width: 10),
+                        if (item.effectiveWorkPhoto != null)
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Work Proof:', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                                const SizedBox(height: 4),
+                                _buildPhotoPreview(item.effectiveWorkPhoto!),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      child: const Text('Close', style: TextStyle(color: Color(0xFF414A51), fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
               ),
-              child: const Icon(Icons.business_center, color: Color(0xFF414A51), size: 22),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                item.odType,
-                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildDetailRow('Purpose', item.purpose),
-              _buildDetailRow('Destination', item.destination),
-              _buildDetailRow('Date', item.date),
-              _buildDetailRow('Planned Time', '${item.plannedStartTime}${item.plannedEndTime != null ? " - ${item.plannedEndTime}" : ""}'),
-              if (item.actualStartTime != null) _buildDetailRow('Actual Start Time', item.actualStartTime!),
-              if (item.actualEndTime != null) _buildDetailRow('Actual End Time', item.actualEndTime!),
-              if (item.durationMinutes > 0) _buildDetailRow('Total Duration', '${item.durationMinutes} Minutes'),
-              _buildDetailRow('Status', item.status),
-              _buildDetailRow('Assigned By', item.assignedBy),
-              if (item.afterCompletionOption.isNotEmpty)
-                _buildDetailRow('After Completion', item.afterCompletionOption == 'CHECKOUT_FROM_OD' ? 'Check-out directly from OD' : 'Return to Office'),
-              if (item.notes.isNotEmpty) _buildDetailRow('Notes / Instructions', item.notes),
-            ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Close', style: TextStyle(color: Color(0xFF414A51), fontWeight: FontWeight.bold)),
-          ),
-        ],
       ),
+    );
+  }
+
+  Widget _buildPhotoPreview(String photoStr) {
+    try {
+      if (photoStr.startsWith('data:image/')) {
+        final clean = photoStr.replaceFirst(RegExp(r'data:image/[^;]+;base64,'), '');
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.memory(base64Decode(clean), height: 100, width: double.infinity, fit: BoxFit.cover),
+        );
+      } else if (photoStr.startsWith('http')) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.network(photoStr, height: 100, width: double.infinity, fit: BoxFit.cover),
+        );
+      }
+    } catch (_) {}
+    return Container(
+      height: 100,
+      decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(8)),
+      child: const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
     );
   }
 

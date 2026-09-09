@@ -18,14 +18,14 @@ class FirebaseOnDutyRepository implements OnDutyRepository {
     String? date,
   }) async {
     try {
-      Query<Map<String, dynamic>> query =
-          _collection.where('employee_id', isEqualTo: employeeId);
-      if (date != null && date.isNotEmpty) {
-        query = query.where('date', isEqualTo: date);
-      }
-      final snapshot = await query.get();
+      final snapshot = await _collection.get();
       final items = snapshot.docs
           .map((doc) => OnDutyAssignment.fromMap({...doc.data(), 'id': int.tryParse(doc.id) ?? doc.data()['id'] ?? 0}))
+          .where((item) {
+            final matchesEmp = item.employeeId == employeeId || employeeId == 0;
+            final matchesDate = date == null || date.isEmpty || item.date == date;
+            return matchesEmp && matchesDate;
+          })
           .toList();
       items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return items;
@@ -41,26 +41,30 @@ class FirebaseOnDutyRepository implements OnDutyRepository {
     int? employeeId,
   }) async {
     try {
-      Query<Map<String, dynamic>> query = _collection;
-
-      if (date != null && date.isNotEmpty) {
-        query = query.where('date', isEqualTo: date);
-      }
-      if (employeeId != null && employeeId != 0) {
-        query = query.where('employee_id', isEqualTo: employeeId);
-      }
-
-      final snapshot = await query.get();
+      final snapshot = await _collection.get();
       var items = snapshot.docs
           .map((doc) => OnDutyAssignment.fromMap({...doc.data(), 'id': int.tryParse(doc.id) ?? doc.data()['id'] ?? 0}))
           .toList();
+
+      if (date != null && date.isNotEmpty) {
+        items = items.where((item) => item.date == date).toList();
+      }
+
+      if (employeeId != null && employeeId != 0) {
+        items = items.where((item) => item.employeeId == employeeId).toList();
+      }
 
       if (statusFilter != null && statusFilter.isNotEmpty && statusFilter != 'All') {
         final filterUpper = statusFilter.toUpperCase();
         items = items.where((item) {
           final s = item.status.toUpperCase();
-          if (filterUpper == 'IN_PROGRESS') {
-            return s == 'IN_PROGRESS' || s == 'ACTIVE';
+          if (filterUpper == 'IN_PROGRESS' || filterUpper == 'ACTIVE') {
+            return s == 'IN_PROGRESS' ||
+                s == 'ACTIVE' ||
+                s == 'TRAVELING_TO_DESTINATION' ||
+                s == 'REACHED_DESTINATION' ||
+                s == 'WORK_COMPLETED' ||
+                s == 'RETURNING_TO_OFFICE';
           }
           return s == filterUpper;
         }).toList();
@@ -83,15 +87,33 @@ class FirebaseOnDutyRepository implements OnDutyRepository {
           .where((item) {
             final s = item.status.toUpperCase();
             final matchesEmp = item.employeeId == employeeId || employeeId == 0;
-            return matchesEmp && (s == 'IN_PROGRESS' || s == 'ASSIGNED' || s == 'ACTIVE');
+            final isOngoing = s == 'ASSIGNED' ||
+                s == 'TRAVELING_TO_DESTINATION' ||
+                s == 'IN_PROGRESS' ||
+                s == 'ACTIVE' ||
+                s == 'REACHED_DESTINATION' ||
+                s == 'WORK_COMPLETED' ||
+                s == 'RETURNING_TO_OFFICE';
+            return matchesEmp && isOngoing;
           })
           .toList();
 
       if (activeItems.isEmpty) return null;
 
+      // Prioritize active running states over assigned
       activeItems.sort((a, b) {
-        final rankA = (a.status == 'IN_PROGRESS' || a.status == 'ACTIVE') ? 1 : 2;
-        final rankB = (b.status == 'IN_PROGRESS' || b.status == 'ACTIVE') ? 1 : 2;
+        int getRank(String status) {
+          final s = status.toUpperCase();
+          if (s == 'REACHED_DESTINATION') return 1;
+          if (s == 'RETURNING_TO_OFFICE') return 2;
+          if (s == 'TRAVELING_TO_DESTINATION' || s == 'IN_PROGRESS' || s == 'ACTIVE') return 3;
+          if (s == 'WORK_COMPLETED') return 4;
+          if (s == 'ASSIGNED') return 5;
+          return 6;
+        }
+
+        final rankA = getRank(a.status);
+        final rankB = getRank(b.status);
         if (rankA != rankB) return rankA.compareTo(rankB);
         return b.createdAt.compareTo(a.createdAt);
       });
@@ -106,8 +128,15 @@ class FirebaseOnDutyRepository implements OnDutyRepository {
   Future<OnDutyAssignment?> getAssignmentById(int id) async {
     try {
       final doc = await _collection.doc(id.toString()).get();
-      if (!doc.exists || doc.data() == null) return null;
-      return OnDutyAssignment.fromMap({...doc.data()!, 'id': id});
+      if (doc.exists && doc.data() != null) {
+        return OnDutyAssignment.fromMap({...doc.data()!, 'id': id});
+      }
+      final snapshot = await _collection.get();
+      for (final d in snapshot.docs) {
+        final item = OnDutyAssignment.fromMap({...d.data(), 'id': int.tryParse(d.id) ?? d.data()['id'] ?? 0});
+        if (item.id == id) return item;
+      }
+      return null;
     } catch (_) {
       return null;
     }
@@ -149,7 +178,7 @@ class FirebaseOnDutyRepository implements OnDutyRepository {
       };
       if (actualStartTime != null) updates['actual_start_time'] = actualStartTime;
       if (actualEndTime != null) updates['actual_end_time'] = actualEndTime;
-      if (status.toUpperCase() == 'IN_PROGRESS') {
+      if (status.toUpperCase() == 'IN_PROGRESS' || status.toUpperCase() == 'TRAVELING_TO_DESTINATION') {
         if (latitude != null) updates['start_latitude'] = latitude;
         if (longitude != null) updates['start_longitude'] = longitude;
         if (photoPath != null) updates['start_photo'] = photoPath;

@@ -160,6 +160,42 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
     super.dispose();
   }
 
+  Future<void> _selectTime(TextEditingController controller) async {
+    TimeOfDay initialTime = TimeOfDay.now();
+    if (controller.text.trim().isNotEmpty) {
+      try {
+        final text = controller.text.trim().toUpperCase();
+        final match = RegExp(r'^(\d{1,2}):(\d{2})\s*(AM|PM)?$').firstMatch(text);
+        if (match != null) {
+          int hour = int.parse(match.group(1)!);
+          final minute = int.parse(match.group(2)!);
+          final period = match.group(3);
+          if (period == 'PM' && hour < 12) hour += 12;
+          if (period == 'AM' && hour == 12) hour = 0;
+          initialTime = TimeOfDay(hour: hour, minute: minute);
+        }
+      } catch (_) {}
+    }
+
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
+    );
+
+    if (picked != null) {
+      final hour = picked.hourOfPeriod == 0 ? 12 : picked.hourOfPeriod;
+      final minute = picked.minute.toString().padLeft(2, '0');
+      final period = picked.period == DayPeriod.am ? 'AM' : 'PM';
+      controller.text = '${hour.toString().padLeft(2, '0')}:$minute$period';
+    }
+  }
+
   Future<void> _pickBloodGroupDocFile() async {
     try {
       final res = await FilePicker.pickFiles(
@@ -666,10 +702,13 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                   child2: _workScheduleType == 'Fixed Schedule'
                       ? TextFormField(
                           controller: _inTimeController,
+                          readOnly: true,
+                          onTap: () => _selectTime(_inTimeController),
                           decoration: const InputDecoration(
                             labelText: 'In Time',
                             hintText: '09:00 AM',
                             border: OutlineInputBorder(),
+                            suffixIcon: Icon(Icons.access_time_rounded),
                           ),
                         )
                       : TextFormField(
@@ -687,10 +726,13 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                     isMobile: isMobile,
                     child1: TextFormField(
                       controller: _outTimeController,
+                      readOnly: true,
+                      onTap: () => _selectTime(_outTimeController),
                       decoration: const InputDecoration(
                         labelText: 'Out Time',
                         hintText: '06:00 PM',
                         border: OutlineInputBorder(),
+                        suffixIcon: Icon(Icons.access_time_rounded),
                       ),
                     ),
                     child2: const SizedBox.shrink(),
