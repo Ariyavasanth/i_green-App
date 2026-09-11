@@ -104,9 +104,9 @@ class AttendanceTableView extends StatelessWidget {
       cells: [
         DataCell(Text(record.date, style: const TextStyle(fontWeight: FontWeight.w600))),
         DataCell(Text(record.employeeName, style: const TextStyle(fontWeight: FontWeight.bold))),
-        DataCell(Text(record.effectiveCheckInTime.isNotEmpty ? record.effectiveCheckInTime : '--:--')),
-        DataCell(Text(record.checkOutTime.isNotEmpty ? record.checkOutTime : '--:--')),
-        DataCell(Text(record.totalHours > 0 ? '${record.totalHours} hrs' : '--')),
+        DataCell(Text(record.effectiveCheckInTime.isNotEmpty ? record.formattedCheckInTime : '--:--')),
+        DataCell(Text(record.checkOutTime.isNotEmpty ? record.formattedCheckOutTime : '--:--')),
+        DataCell(Text(record.totalHours > 0 || record.sessions.isNotEmpty ? record.formattedTotalHours : '--')),
         DataCell(
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),

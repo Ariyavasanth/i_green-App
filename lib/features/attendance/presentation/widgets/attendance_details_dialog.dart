@@ -263,7 +263,7 @@ class AttendanceDetailsDialog extends StatelessWidget {
                           Expanded(
                             child: _buildDetailMetric(
                               label: 'Check-in',
-                              value: record?.effectiveCheckInTime.isNotEmpty == true ? record!.effectiveCheckInTime : '--:--',
+                              value: record?.effectiveCheckInTime.isNotEmpty == true ? record!.formattedCheckInTime : '--:--',
                               icon: Icons.login,
                               iconColor: const Color(0xFF16A34A),
                             ),
@@ -272,7 +272,7 @@ class AttendanceDetailsDialog extends StatelessWidget {
                           Expanded(
                             child: _buildDetailMetric(
                               label: 'Check-out',
-                              value: record?.checkOutTime.isNotEmpty == true ? record!.checkOutTime : '--:--',
+                              value: record?.checkOutTime.isNotEmpty == true ? record!.formattedCheckOutTime : '--:--',
                               icon: Icons.logout,
                               iconColor: const Color(0xFFEA580C),
                             ),
@@ -287,7 +287,9 @@ class AttendanceDetailsDialog extends StatelessWidget {
                           Expanded(
                             child: _buildDetailMetric(
                               label: 'Working Hours',
-                              value: record != null && record!.totalHours > 0 ? '${record!.totalHours.toStringAsFixed(1)} hrs' : '0.0 hrs',
+                              value: record != null && (record!.totalHours > 0 || record!.sessions.isNotEmpty)
+                                  ? record!.formattedTotalHours
+                                  : '--',
                               icon: Icons.access_time,
                               iconColor: const Color(0xFF0284C7),
                             ),

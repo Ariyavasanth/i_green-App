@@ -1,3 +1,5 @@
+import 'on_duty_site.dart';
+
 class OnDutyAssignment {
   const OnDutyAssignment({
     required this.id,
@@ -11,6 +13,7 @@ class OnDutyAssignment {
     this.destinationLatitude,
     this.destinationLongitude,
     this.destinationRadius = 100,
+    this.sites = const [],
     required this.date,
     this.plannedStartTime = '',
     this.plannedEndTime,
@@ -61,6 +64,7 @@ class OnDutyAssignment {
   final double? destinationLatitude;
   final double? destinationLongitude;
   final int destinationRadius; // Allowed geofence radius in meters (default 100)
+  final List<OnDutySite> sites;
   final String date; // 'dd-MM-yyyy'
   final String plannedStartTime; // '10:00 AM'
   final String? plannedEndTime; // '04:00 PM'
@@ -122,12 +126,42 @@ class OnDutyAssignment {
   bool get isReturnToOfficeOption =>
       afterCompletionOption == 'RETURN_TO_OFFICE';
 
+  /// Sequential Site Visit Helpers
+  OnDutySite? get currentSite {
+    if (sites.isEmpty) return null;
+    for (final site in sites) {
+      if (!site.isCompleted) return site;
+    }
+    return sites.last;
+  }
+
+  int get currentSiteIndex {
+    if (sites.isEmpty) return 0;
+    final idx = sites.indexWhere((s) => !s.isCompleted);
+    return idx != -1 ? idx : (sites.length - 1);
+  }
+
+  bool get allSitesCompleted {
+    if (sites.isEmpty) return true;
+    return sites.every((s) => s.isCompleted);
+  }
+
+  bool canStartSite(int index) {
+    if (index < 0 || index >= sites.length) return false;
+    if (index == 0) return true;
+    return sites[index - 1].isCompleted;
+  }
+
   /// Effective target coordinates for destination
-  double? get effectiveDestinationLatitude => destinationLatitude ?? endLatitude;
-  double? get effectiveDestinationLongitude => destinationLongitude ?? endLongitude;
+  double? get effectiveDestinationLatitude => currentSite?.latitude ?? destinationLatitude ?? endLatitude;
+  double? get effectiveDestinationLongitude => currentSite?.longitude ?? destinationLongitude ?? endLongitude;
+  int get effectiveDestinationRadius => currentSite?.radius ?? destinationRadius;
 
   /// Effective display name for destination
   String get effectiveDestinationTitle {
+    if (currentSite != null && currentSite!.effectiveName.isNotEmpty) {
+      return currentSite!.effectiveName;
+    }
     if (destinationName.isNotEmpty) return destinationName;
     if (destination.isNotEmpty) return destination;
     return 'Site Destination';
@@ -140,6 +174,16 @@ class OnDutyAssignment {
     if (s == 'CANCELLED') return 'Cancelled';
     if (s == 'RETURNING_TO_OFFICE' || (returnStartTime != null && officeReachedTime == null)) {
       return 'Return office from site';
+    }
+    if (sites.isNotEmpty) {
+      final active = currentSite;
+      if (active != null) {
+        final siteNum = currentSiteIndex + 1;
+        if (active.isCompleted && allSitesCompleted) return 'All Sites Completed';
+        if (active.isReached) return 'Arrived at Site $siteNum (${active.effectiveName})';
+        if (active.isTraveling) return 'Traveling to Site $siteNum (${active.effectiveName})';
+        if (active.isPending) return 'Site $siteNum Pending (${active.effectiveName})';
+      }
     }
     if (s == 'WORK_COMPLETED' || (workCompletedTime != null && returnStartTime == null)) {
       return 'OD work completed';
@@ -155,10 +199,10 @@ class OnDutyAssignment {
   }
 
   /// Effective arrival photo
-  String? get effectiveReachedPhoto => reachedPhoto ?? startPhoto;
+  String? get effectiveReachedPhoto => currentSite?.reachedPhoto ?? reachedPhoto ?? startPhoto;
 
   /// Effective completion photo
-  String? get effectiveWorkPhoto => workPhoto ?? endPhoto;
+  String? get effectiveWorkPhoto => currentSite?.workPhoto ?? workPhoto ?? endPhoto;
 
   Map<String, dynamic> toMap() => {
         if (id != 0) 'id': id,
@@ -172,6 +216,7 @@ class OnDutyAssignment {
         if (effectiveDestinationLatitude != null) 'destination_latitude': effectiveDestinationLatitude,
         if (effectiveDestinationLongitude != null) 'destination_longitude': effectiveDestinationLongitude,
         'destination_radius': destinationRadius,
+        'sites': sites.map((s) => s.toMap()).toList(),
         'date': date,
         'planned_start_time': plannedStartTime,
         'planned_end_time': plannedEndTime,
@@ -242,6 +287,42 @@ class OnDutyAssignment {
         map['from_location']?.toString() ??
         (destName.isNotEmpty ? destName : '');
 
+    List<OnDutySite> parsedSites = [];
+    if (map['sites'] != null && map['sites'] is List) {
+      final rawSitesList = map['sites'] as List;
+      parsedSites = rawSitesList
+          .map((item) => OnDutySite.fromMap(Map<String, dynamic>.from(item)))
+          .toList();
+    }
+
+    // Legacy fallback: if sites list is empty but single destination info exists, create 1 site
+    if (parsedSites.isEmpty && (destStr.isNotEmpty || destName.isNotEmpty || destLat != null)) {
+      parsedSites = [
+        OnDutySite(
+          siteId: '1',
+          siteName: destName.isNotEmpty ? destName : destStr,
+          purpose: map['purpose']?.toString() ?? '',
+          destination: destStr,
+          destinationAddress: destAddress,
+          latitude: destLat,
+          longitude: destLng,
+          radius: destRadius > 0 ? destRadius : 100,
+          status: rawStatus == 'COMPLETED'
+              ? 'COMPLETED'
+              : (rawStatus == 'REACHED_DESTINATION'
+                  ? 'REACHED'
+                  : (rawStatus == 'TRAVELING_TO_DESTINATION' || rawStatus == 'IN_PROGRESS'
+                      ? 'TRAVELING'
+                      : 'PENDING')),
+          travelStartTime: map['travel_start_time']?.toString(),
+          reachedTime: map['reached_time']?.toString(),
+          reachedPhoto: map['reached_photo']?.toString() ?? map['start_photo']?.toString(),
+          workCompletedTime: map['work_completed_time']?.toString(),
+          workPhoto: map['work_photo']?.toString() ?? map['end_photo']?.toString(),
+        )
+      ];
+    }
+
     return OnDutyAssignment(
       id: parseId(map['id']),
       employeeId: parseId(map['employee_id']),
@@ -254,6 +335,7 @@ class OnDutyAssignment {
       destinationLatitude: destLat,
       destinationLongitude: destLng,
       destinationRadius: destRadius > 0 ? destRadius : 100,
+      sites: parsedSites,
       date: map['date']?.toString() ?? '',
       plannedStartTime: map['planned_start_time']?.toString() ?? map['assigned_time']?.toString() ?? '',
       plannedEndTime: map['planned_end_time']?.toString(),
@@ -306,6 +388,7 @@ class OnDutyAssignment {
     double? destinationLatitude,
     double? destinationLongitude,
     int? destinationRadius,
+    List<OnDutySite>? sites,
     String? date,
     String? plannedStartTime,
     String? plannedEndTime,
@@ -356,6 +439,7 @@ class OnDutyAssignment {
       destinationLatitude: destinationLatitude ?? this.destinationLatitude,
       destinationLongitude: destinationLongitude ?? this.destinationLongitude,
       destinationRadius: destinationRadius ?? this.destinationRadius,
+      sites: sites ?? this.sites,
       date: date ?? this.date,
       plannedStartTime: plannedStartTime ?? this.plannedStartTime,
       plannedEndTime: plannedEndTime ?? this.plannedEndTime,

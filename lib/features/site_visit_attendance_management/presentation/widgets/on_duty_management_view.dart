@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../on_duty/domain/on_duty_assignment.dart';
+import '../../../on_duty/domain/on_duty_site.dart';
 import '../../../on_duty/providers/on_duty_providers.dart';
 import '../../../on_duty/presentation/assign_on_duty_dialog.dart';
 
@@ -289,7 +290,9 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                                 ),
                                 DataCell(
                                   Text(
-                                    '📍 ${item.destination}',
+                                    item.sites.isNotEmpty
+                                        ? '📍 Sites (${item.sites.length}): ${item.sites.map((s) => s.effectiveName).join(" → ")}'
+                                        : '📍 ${item.destination}',
                                     style: const TextStyle(fontWeight: FontWeight.w600),
                                   ),
                                 ),
@@ -432,20 +435,22 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
               const Divider(height: 18),
 
               // Destination
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('📍 ', style: TextStyle(fontSize: 13)),
-                  Expanded(
-                    child: Text(
-                      item.destination,
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF414A51)),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('📍 ', style: TextStyle(fontSize: 13)),
+                                  Expanded(
+                                    child: Text(
+                                      item.sites.isNotEmpty
+                                          ? 'Sites (${item.sites.length}): ${item.sites.map((s) => s.effectiveName).join(" → ")}'
+                                          : item.destination,
+                                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF414A51)),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
               const SizedBox(height: 10),
 
               // Planned Time & Duration Box
@@ -590,198 +595,326 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
   }
 
   void _showDetailsDialog(BuildContext context, OnDutyAssignment assignment) {
-    final durationStr = assignment.durationMinutes > 0
-        ? '${(assignment.durationMinutes ~/ 60).toString().padLeft(2, '0')}h ${(assignment.durationMinutes % 60).toString().padLeft(2, '0')}m'
-        : '--';
+    final displaySites = assignment.sites.isNotEmpty
+        ? assignment.sites
+        : [
+            OnDutySite(
+              siteId: '1',
+              siteName: assignment.destinationName.isNotEmpty ? assignment.destinationName : assignment.destination,
+              purpose: assignment.purpose,
+              destination: assignment.destination,
+              destinationAddress: assignment.destinationAddress,
+              radius: assignment.destinationRadius,
+              status: assignment.isCompleted ? 'COMPLETED' : assignment.status,
+              reachedTime: assignment.reachedTime,
+              reachedPhoto: assignment.effectiveReachedPhoto,
+              workCompletedTime: assignment.workCompletedTime,
+              workPhoto: assignment.effectiveWorkPhoto,
+            ),
+          ];
 
     final hasStartGps = assignment.startLatitude != null && assignment.startLongitude != null;
     final hasEndGps = assignment.endLatitude != null && assignment.endLongitude != null;
-    final hasReachedPhoto = assignment.effectiveReachedPhoto != null;
-    final hasWorkPhoto = assignment.effectiveWorkPhoto != null;
 
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        clipBehavior: Clip.antiAlias,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 540),
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Top Header Banner
+                Container(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF8FAFC),
+                    border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+                  ),
+                  child: Row(
                     children: [
-                      const Text(
-                        'OD Tracking Details',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF9CC70A).withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.business_center, color: Color(0xFF414A51), size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              assignment.employeeName,
+                              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${assignment.odType} • ${assignment.date}',
+                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
                       ),
                       IconButton(
                         onPressed: () => Navigator.of(ctx).pop(),
-                        icon: const Icon(Icons.close),
+                        icon: const Icon(Icons.close, size: 22, color: Color(0xFF64748B)),
                       ),
                     ],
                   ),
-                  const Divider(height: 20),
-                  _detailRow('Employee', assignment.employeeName, isBold: true),
-                  _detailRow('OD Type', assignment.odType),
-                  _detailRow('Purpose', assignment.purpose),
-                  _detailRow('Destination', '📍 ${assignment.destination}', isBold: true),
-                  _detailRow('Date', assignment.date),
-                  _detailRow('Planned Time', '${assignment.plannedStartTime}${assignment.plannedEndTime != null ? " → ${assignment.plannedEndTime}" : ""}'),
-                  if (assignment.travelStartTime != null || assignment.actualStartTime != null)
-                    _detailRow('Departure / Start Time', assignment.travelStartTime ?? assignment.actualStartTime!),
-                  if (assignment.reachedTime != null)
-                    _detailRow('Arrived at site', assignment.reachedTime!),
-                  if (assignment.workCompletedTime != null)
-                    _detailRow('OD work completed', assignment.workCompletedTime!),
-                  if (assignment.returnStartTime != null)
-                    _detailRow('Return office from site', assignment.returnStartTime!),
-                  if (assignment.actualEndTime != null || assignment.officeReachedTime != null)
-                    _detailRow('Reached time to office', assignment.actualEndTime ?? assignment.officeReachedTime!),
-                  
-                  if (assignment.travelToSiteDurationMinutes > 0)
-                    _detailRow('Travel to Site', '${assignment.travelToSiteDurationMinutes} mins'),
-                  if (assignment.onSiteWorkDurationMinutes > 0)
-                    _detailRow('On-Site Work', '${assignment.onSiteWorkDurationMinutes} mins'),
-                  if (assignment.returnTravelDurationMinutes > 0)
-                    _detailRow('Return Travel', '${assignment.returnTravelDurationMinutes} mins'),
-                  _detailRow('Total Duration', durationStr, isBold: true),
-                  _detailRow('Assigned By', assignment.assignedBy),
-                  _detailRow('After OD', assignment.isReturnToOfficeOption ? 'Return to Office' : 'Checkout from OD Location'),
-                  if (assignment.notes.isNotEmpty)
-                    _detailRow('Notes', assignment.notes),
-                  const SizedBox(height: 12),
-                  const Divider(),
-                  const SizedBox(height: 8),
+                ),
 
-                  // GPS Start Location
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Start Location', style: TextStyle(fontSize: 13, color: Colors.grey)),
-                          const SizedBox(height: 2),
-                          Text(
-                            hasStartGps
-                                ? '${assignment.startLatitude!.toStringAsFixed(4)}, ${assignment.startLongitude!.toStringAsFixed(4)}'
-                                : 'Not Captured',
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
-                          ),
-                        ],
-                      ),
-                      if (hasStartGps)
-                        TextButton.icon(
-                          onPressed: () => _openMap(assignment.startLatitude!, assignment.startLongitude!, label: 'Start Location'),
-                          icon: const Icon(Icons.map_outlined, size: 16, color: Color(0xFF2563EB)),
-                          label: const Text('📍 View Map', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
+                      // OD SUMMARY Header
+                      const Text(
+                        'OD SUMMARY',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.8,
+                          color: Color(0xFF64748B),
                         ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-
-                  // GPS End Location
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('End Location', style: TextStyle(fontSize: 13, color: Colors.grey)),
-                          const SizedBox(height: 2),
-                          Text(
-                            hasEndGps
-                                ? '${assignment.endLatitude!.toStringAsFixed(4)}, ${assignment.endLongitude!.toStringAsFixed(4)}'
-                                : 'Not Captured',
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
-                          ),
-                        ],
                       ),
-                      if (hasEndGps)
-                        TextButton.icon(
-                          onPressed: () => _openMap(assignment.endLatitude!, assignment.endLongitude!, label: 'End Location'),
-                          icon: const Icon(Icons.map_outlined, size: 16, color: Color(0xFF2563EB)),
-                          label: const Text('📍 View Map', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
-                        ),
-                    ],
-                  ),
+                      const SizedBox(height: 10),
 
-                  // Photo proofs
-                  if (hasReachedPhoto || hasWorkPhoto) ...[
-                    const SizedBox(height: 12),
-                    const Divider(),
-                    const SizedBox(height: 6),
-                    const Text('Verification Photos', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        if (hasReachedPhoto)
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('Arrival Photo Proof:', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                                const SizedBox(height: 4),
-                                _buildPhotoWidget(assignment.effectiveReachedPhoto!),
-                              ],
+                      // 3-Column Summary Card Grid
+                      Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  Text(
+                                    '${displaySites.length} ${displaySites.length == 1 ? "Site" : "Sites"}',
+                                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text('Visits', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                                ],
+                              ),
                             ),
-                          ),
-                        if (hasReachedPhoto && hasWorkPhoto) const SizedBox(width: 10),
-                        if (hasWorkPhoto)
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('Work Photo Proof:', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                                const SizedBox(height: 4),
-                                _buildPhotoWidget(assignment.effectiveWorkPhoto!),
-                              ],
+                            Container(height: 28, width: 1, color: const Color(0xFFCBD5E1)),
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      _buildStatusBadge(assignment.status),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text('Status', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                                ],
+                              ),
                             ),
-                          ),
+                            Container(height: 28, width: 1, color: const Color(0xFFCBD5E1)),
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  Text(
+                                    assignment.durationMinutes > 0
+                                        ? '${assignment.durationMinutes} min'
+                                        : (assignment.actualStartTime?.isNotEmpty == true
+                                            ? assignment.actualStartTime!
+                                            : (assignment.plannedStartTime.isNotEmpty ? assignment.plannedStartTime : '--')),
+                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    assignment.durationMinutes > 0 ? 'Duration' : 'Start Time',
+                                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      if (assignment.purpose.isNotEmpty) ...[
+                        const SizedBox(height: 14),
+                        Text('Purpose', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
+                        const SizedBox(height: 2),
+                        Text(
+                          assignment.purpose,
+                          style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                        ),
                       ],
-                    ),
-                  ],
 
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Status', style: TextStyle(fontSize: 13, color: Colors.grey)),
-                      _buildStatusBadge(assignment.status),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.of(ctx).pop();
-                          showDialog(
-                            context: context,
-                            builder: (dialogCtx) => AssignOnDutyDialog(existingAssignment: assignment),
+                      if (assignment.assignedBy.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Text('Assigned By: ', style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600)),
+                            Text(assignment.assignedBy, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
+                          ],
+                        ),
+                      ],
+
+                      if (assignment.notes.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Text('Notes / Instructions', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
+                        const SizedBox(height: 2),
+                        Text(
+                          assignment.notes,
+                          style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
+                        ),
+                      ],
+
+                      const SizedBox(height: 20),
+                      const Divider(height: 1),
+                      const SizedBox(height: 16),
+
+                      // SITE VISITS Section Header
+                      const Text(
+                        'SITE VISITS',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.8,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Vertical Timeline for Sites
+                      ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: displaySites.length,
+                        itemBuilder: (context, idx) {
+                          final site = displaySites[idx];
+                          final isLast = idx == displaySites.length - 1;
+
+                          return _buildMgmtTimelineSiteCard(
+                            context: ctx,
+                            site: site,
+                            siteIndex: idx + 1,
+                            isLastSite: isLast,
+                            assignment: assignment,
                           );
                         },
-                        icon: const Icon(Icons.edit_outlined, size: 16, color: Color(0xFF2563EB)),
-                        label: const Text('Edit OD', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
                       ),
-                      ElevatedButton(
-                        onPressed: () => Navigator.of(ctx).pop(),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF9CC70A),
-                          foregroundColor: const Color(0xFF414A51),
+
+                      // GPS Locations if captured
+                      if (hasStartGps || hasEndGps) ...[
+                        const SizedBox(height: 10),
+                        const Divider(height: 1),
+                        const SizedBox(height: 14),
+                        const Text(
+                          'GPS TRACKING LOCATIONS',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8, color: Color(0xFF64748B)),
                         ),
-                        child: const Text('Close', style: TextStyle(fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 10),
+                        if (hasStartGps)
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('Start Location GPS', style: TextStyle(fontSize: 11.5, color: Colors.grey)),
+                                  Text(
+                                    '${assignment.startLatitude!.toStringAsFixed(4)}, ${assignment.startLongitude!.toStringAsFixed(4)}',
+                                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                                  ),
+                                ],
+                              ),
+                              TextButton.icon(
+                                onPressed: () => _openMap(assignment.startLatitude!, assignment.startLongitude!, label: 'Start Location'),
+                                icon: const Icon(Icons.map_outlined, size: 16, color: Color(0xFF2563EB)),
+                                label: const Text('📍 View Map', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold, fontSize: 12)),
+                              ),
+                            ],
+                          ),
+                        if (hasEndGps) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('End Location GPS', style: TextStyle(fontSize: 11.5, color: Colors.grey)),
+                                  Text(
+                                    '${assignment.endLatitude!.toStringAsFixed(4)}, ${assignment.endLongitude!.toStringAsFixed(4)}',
+                                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                                  ),
+                                ],
+                              ),
+                              TextButton.icon(
+                                onPressed: () => _openMap(assignment.endLatitude!, assignment.endLongitude!, label: 'End Location'),
+                                icon: const Icon(Icons.map_outlined, size: 16, color: Color(0xFF2563EB)),
+                                label: const Text('📍 View Map', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold, fontSize: 12)),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+
+                      const SizedBox(height: 10),
+                      const Divider(height: 1),
+                      const SizedBox(height: 16),
+
+                      // RETURN TO OFFICE Section
+                      _buildMgmtReturnToOfficeSection(assignment),
+
+                      const SizedBox(height: 20),
+
+                      // Bottom Action Buttons
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.of(ctx).pop();
+                              showDialog(
+                                context: context,
+                                builder: (dialogCtx) => AssignOnDutyDialog(existingAssignment: assignment),
+                              );
+                            },
+                            icon: const Icon(Icons.edit_outlined, size: 16, color: Color(0xFF2563EB)),
+                            label: const Text('Edit OD', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Color(0xFF2563EB)),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            ),
+                          ),
+                          ElevatedButton(
+                            onPressed: () => Navigator.of(ctx).pop(),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF9CC70A),
+                              foregroundColor: const Color(0xFF414A51),
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              elevation: 0,
+                            ),
+                            child: const Text('Close', style: TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -789,49 +922,589 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
     );
   }
 
-  Widget _buildPhotoWidget(String photoStr) {
-    try {
-      if (photoStr.startsWith('data:image/')) {
-        final clean = photoStr.replaceFirst(RegExp(r'data:image/[^;]+;base64,'), '');
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.memory(base64Decode(clean), height: 110, width: double.infinity, fit: BoxFit.cover),
-        );
-      } else if (photoStr.startsWith('http')) {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.network(photoStr, height: 110, width: double.infinity, fit: BoxFit.cover),
-        );
-      }
-    } catch (_) {}
-    return Container(
-      height: 110,
-      decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(8)),
-      child: const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
-    );
-  }
+  Widget _buildMgmtTimelineSiteCard({
+    required BuildContext context,
+    required OnDutySite site,
+    required int siteIndex,
+    required bool isLastSite,
+    OnDutyAssignment? assignment,
+  }) {
+    final bool isCompleted = site.isCompleted;
+    final Color nodeColor = isCompleted
+        ? const Color(0xFF16A34A)
+        : (site.isReached ? const Color(0xFF3B82F6) : (site.isTraveling ? const Color(0xFFD97706) : const Color(0xFF94A3B8)));
 
-  Widget _detailRow(String label, String value, {bool isBold = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5.0),
+    return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey)),
-          const SizedBox(width: 16),
+          SizedBox(
+            width: 24,
+            child: Column(
+              children: [
+                Container(
+                  margin: const EdgeInsets.only(top: 4),
+                  width: 18,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    color: nodeColor,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: nodeColor.withValues(alpha: 0.3),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: isCompleted
+                        ? const Icon(Icons.check, size: 12, color: Colors.white)
+                        : Text(
+                            '$siteIndex',
+                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                  ),
+                ),
+                Expanded(
+                  child: Container(
+                    width: 2,
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    color: isCompleted ? const Color(0xFF86EFAC) : const Color(0xFFE2E8F0),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+
           Expanded(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-                color: const Color(0xFF414A51),
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 20),
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: isCompleted ? const Color(0xFFF0FDF4).withValues(alpha: 0.5) : Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: isCompleted ? const Color(0xFF86EFAC) : const Color(0xFFE2E8F0),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            site.effectiveName,
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: isCompleted ? const Color(0xFFDCFCE7) : const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (isCompleted) ...[
+                                const Icon(Icons.check_circle, size: 12, color: Color(0xFF16A34A)),
+                                const SizedBox(width: 4),
+                              ],
+                              Text(
+                                site.status.toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: isCompleted ? const Color(0xFF15803D) : const Color(0xFF1D4ED8),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    if (site.purpose.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(site.purpose, style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700, fontWeight: FontWeight.w500)),
+                    ],
+
+                    if (site.destinationAddress.isNotEmpty || site.destination.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.location_on_outlined, size: 14, color: Color(0xFF64748B)),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              site.destinationAddress.isNotEmpty ? site.destinationAddress : site.destination,
+                              style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.radar_outlined, size: 13, color: Color(0xFF414A51)),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Geofence Radius: ${site.radius}m',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF414A51)),
+                        ),
+                      ],
+                    ),
+
+                    if (site.reachedTime != null || site.workCompletedTime != null) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Row(
+                          children: [
+                            if (site.reachedTime != null) ...[
+                              Icon(Icons.login, size: 14, color: Colors.green.shade700),
+                              const SizedBox(width: 4),
+                              Text(
+                                site.reachedTime!,
+                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                              ),
+                              const SizedBox(width: 4),
+                              Text('Arrived', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                            ],
+                            if (site.reachedTime != null && site.workCompletedTime != null)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 8),
+                                child: Text('→', style: TextStyle(color: Colors.grey)),
+                              ),
+                            if (site.workCompletedTime != null) ...[
+                              Icon(Icons.task_alt, size: 14, color: Colors.green.shade700),
+                              const SizedBox(width: 4),
+                              Text(
+                                site.workCompletedTime!,
+                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                              ),
+                              const SizedBox(width: 4),
+                              Text('Completed', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    _buildSiteLocationProofsBox(site: site, siteIndex: siteIndex, assignment: assignment),
+
+                    if (site.reachedPhoto != null || site.workPhoto != null) ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          if (site.reachedPhoto != null)
+                            Expanded(
+                              child: _buildMgmtPhotoThumbnail(context, 'Arrival Proof', site.reachedPhoto!),
+                            ),
+                          if (site.reachedPhoto != null && site.workPhoto != null)
+                            const SizedBox(width: 10),
+                          if (site.workPhoto != null)
+                            Expanded(
+                              child: _buildMgmtPhotoThumbnail(context, 'Work Proof', site.workPhoto!),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSiteLocationProofsBox({
+    required OnDutySite site,
+    required int siteIndex,
+    OnDutyAssignment? assignment,
+  }) {
+    final startLat = site.startLatitude ?? (siteIndex == 1 ? assignment?.startTripLatitude ?? assignment?.startLatitude : null);
+    final startLng = site.startLongitude ?? (siteIndex == 1 ? assignment?.startTripLongitude ?? assignment?.startLongitude : null);
+
+    final reachedLat = site.reachedLatitude ?? (siteIndex == 1 ? assignment?.reachedLatitude : null);
+    final reachedLng = site.reachedLongitude ?? (siteIndex == 1 ? assignment?.reachedLongitude : null);
+
+    final endLat = site.workEndLatitude ?? (siteIndex == 1 ? assignment?.workEndLatitude : null);
+    final endLng = site.workEndLongitude ?? (siteIndex == 1 ? assignment?.workEndLongitude : null);
+
+    final hasAnyLocation = (startLat != null && startLng != null) ||
+        (reachedLat != null && reachedLng != null) ||
+        (endLat != null && endLng != null);
+
+    if (!hasAnyLocation) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.my_location, size: 13, color: Color(0xFF414A51)),
+              SizedBox(width: 4),
+              Text(
+                'STAGE GPS LOCATIONS',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.6,
+                  color: Color(0xFF414A51),
+                ),
+              ),
+            ],
+          ),
+          if (startLat != null && startLng != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.navigation_outlined, size: 14, color: Color(0xFFD97706)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Started Location',
+                        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
+                      ),
+                      Text(
+                        '${startLat.toStringAsFixed(5)}, ${startLng.toStringAsFixed(5)}',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                      ),
+                    ],
+                  ),
+                ),
+                InkWell(
+                  onTap: () => _openMap(startLat, startLng, label: 'Started Location - Site $siteIndex'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.map_outlined, size: 12, color: Color(0xFF2563EB)),
+                        SizedBox(width: 3),
+                        Text('Map', style: TextStyle(fontSize: 10.5, color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (reachedLat != null && reachedLng != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.location_on, size: 14, color: Color(0xFF2563EB)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Reached Location',
+                        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF1D4ED8)),
+                      ),
+                      Text(
+                        '${reachedLat.toStringAsFixed(5)}, ${reachedLng.toStringAsFixed(5)}',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                      ),
+                    ],
+                  ),
+                ),
+                InkWell(
+                  onTap: () => _openMap(reachedLat, reachedLng, label: 'Reached Location - Site $siteIndex'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.map_outlined, size: 12, color: Color(0xFF2563EB)),
+                        SizedBox(width: 3),
+                        Text('Map', style: TextStyle(fontSize: 10.5, color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (endLat != null && endLng != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.check_circle_outline, size: 14, color: Color(0xFF16A34A)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Completed Location',
+                        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF15803D)),
+                      ),
+                      Text(
+                        '${endLat.toStringAsFixed(5)}, ${endLng.toStringAsFixed(5)}',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                      ),
+                    ],
+                  ),
+                ),
+                InkWell(
+                  onTap: () => _openMap(endLat, endLng, label: 'Completed Location - Site $siteIndex'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.map_outlined, size: 12, color: Color(0xFF2563EB)),
+                        SizedBox(width: 3),
+                        Text('Map', style: TextStyle(fontSize: 10.5, color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMgmtReturnToOfficeSection(OnDutyAssignment assignment) {
+    final bool isCheckoutDirect = assignment.afterCompletionOption == 'CHECKOUT_FROM_OD';
+    final bool hasReturned = assignment.officeReachedTime != null || assignment.actualEndTime != null || assignment.isCompleted;
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 24,
+            child: Column(
+              children: [
+                Container(
+                  margin: const EdgeInsets.only(top: 4),
+                  width: 18,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    color: hasReturned ? const Color(0xFF16A34A) : Colors.grey.shade400,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    hasReturned ? Icons.check : (isCheckoutDirect ? Icons.logout : Icons.business),
+                    size: 11,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isCheckoutDirect ? 'OD DIRECT CHECK-OUT' : 'RETURN TO OFFICE',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5, color: Color(0xFF64748B)),
+                  ),
+                  const SizedBox(height: 4),
+                  if (hasReturned) ...[
+                    Row(
+                      children: [
+                        const Icon(Icons.check_circle, size: 16, color: Color(0xFF16A34A)),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            isCheckoutDirect
+                                ? 'Completed & Checked out directly from OD'
+                                : 'Returned to office${assignment.officeReachedTime != null ? " at ${assignment.officeReachedTime}" : (assignment.actualEndTime != null ? " at ${assignment.actualEndTime}" : "")}',
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ] else ...[
+                    Row(
+                      children: [
+                        Icon(Icons.pending_actions, size: 16, color: Colors.amber.shade800),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            isCheckoutDirect ? 'Check-out pending after completion' : 'Return to office pending',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade800),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMgmtPhotoThumbnail(BuildContext context, String label, String photoStr) {
+    Widget imageWidget;
+    try {
+      if (photoStr.startsWith('data:image/')) {
+        final clean = photoStr.replaceFirst(RegExp(r'data:image/[^;]+;base64,'), '');
+        imageWidget = Image.memory(base64Decode(clean), fit: BoxFit.cover);
+      } else if (photoStr.startsWith('http')) {
+        imageWidget = Image.network(photoStr, fit: BoxFit.cover);
+      } else {
+        imageWidget = Container(
+          color: Colors.grey.shade200,
+          child: const Center(child: Icon(Icons.broken_image, color: Colors.grey, size: 24)),
+        );
+      }
+    } catch (_) {
+      imageWidget = Container(
+        color: Colors.grey.shade200,
+        child: const Center(child: Icon(Icons.broken_image, color: Colors.grey, size: 24)),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700),
+        ),
+        const SizedBox(height: 4),
+        GestureDetector(
+          onTap: () => _showMgmtImagePreviewDialog(context, photoStr),
+          child: Container(
+            height: 90,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFCBD5E1)),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(9),
+              child: Stack(
+                children: [
+                  Positioned.fill(child: imageWidget),
+                  Positioned(
+                    right: 6,
+                    bottom: 6,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.zoom_in, color: Colors.white, size: 14),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showMgmtImagePreviewDialog(BuildContext context, String photoStr) {
+    Widget img;
+    try {
+      if (photoStr.startsWith('data:image/')) {
+        final clean = photoStr.replaceFirst(RegExp(r'data:image/[^;]+;base64,'), '');
+        img = Image.memory(base64Decode(clean), fit: BoxFit.contain);
+      } else if (photoStr.startsWith('http')) {
+        img = Image.network(photoStr, fit: BoxFit.contain);
+      } else {
+        img = const Icon(Icons.broken_image, color: Colors.white, size: 64);
+      }
+    } catch (_) {
+      img = const Icon(Icons.broken_image, color: Colors.white, size: 64);
+    }
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            InteractiveViewer(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: img,
+              ),
+            ),
+            Positioned(
+              top: 10,
+              right: 10,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.6),
+                  shape: BoxShape.circle,
+                ),
+                child: IconButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  icon: const Icon(Icons.close, color: Colors.white, size: 22),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

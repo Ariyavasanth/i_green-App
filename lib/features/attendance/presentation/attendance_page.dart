@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -37,6 +38,50 @@ class AttendancePage extends ConsumerStatefulWidget {
 class _AttendancePageState extends ConsumerState<AttendancePage> {
   int _currentTabIndex = 0;
   DateTime _focusedMonth = DateTime.now();
+
+  Timer? _liveClockTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _startLiveClockTimer();
+  }
+
+  void _startLiveClockTimer() {
+    _liveClockTimer?.cancel();
+    _liveClockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
+  DateTime? _parseCheckInTimeToDateTime(String timeStr) {
+    if (timeStr.isEmpty) return null;
+    final now = DateTime.now();
+    final formats = ['HH:mm:ss', 'hh:mm:ss a', 'hh:mm a', 'HH:mm', 'h:mm a', 'h:mm:ss a'];
+    for (final fmt in formats) {
+      try {
+        final parsed = DateFormat(fmt).parse(timeStr);
+        return DateTime(now.year, now.month, now.day, parsed.hour, parsed.minute, parsed.second);
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  String _getLiveClockDisplay(String checkInTimeStr) {
+    final checkInDt = _parseCheckInTimeToDateTime(checkInTimeStr);
+    if (checkInDt == null) return '--:--:--';
+    final now = DateTime.now();
+    var diff = now.difference(checkInDt);
+    if (diff.isNegative) diff = Duration.zero;
+
+    final hours = diff.inHours;
+    final minutes = diff.inMinutes.remainder(60);
+    final seconds = diff.inSeconds.remainder(60);
+
+    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
 
   // Leave List Filter State
   String _statusFilter = 'All';
@@ -91,6 +136,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
 
   @override
   void dispose() {
+    _liveClockTimer?.cancel();
     _reasonController.dispose();
     super.dispose();
   }
@@ -516,8 +562,8 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                 : '${session.durationMinutes ~/ 60}h ${(session.durationMinutes % 60).toString().padLeft(2, '0')}m';
 
             final timeRange = session.checkOutTime.isNotEmpty
-                ? '${session.checkInTime} → ${session.checkOutTime}'
-                : '${session.checkInTime} → Active';
+                ? '${session.formattedCheckInTime} → ${session.formattedCheckOutTime}'
+                : '${session.formattedCheckInTime} → Active';
 
             return Padding(
               padding: EdgeInsets.only(bottom: idx < record.sessions.length - 1 ? 10 : 0),
@@ -916,8 +962,8 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         status = att.status.isNotEmpty ? att.status : 'Present';
         checkIn = att.effectiveCheckInTime;
         checkOut = att.checkOutTime;
-        if (att.totalHours > 0) {
-          duration = '${att.totalHours} hrs';
+        if (att.totalHours > 0 || att.sessions.isNotEmpty) {
+          duration = att.formattedTotalHours;
         }
         note = att.notes;
       } else if (leave != null) {
@@ -1174,8 +1220,8 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                     style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
                   ),
                   Text(
-                    hasCheckOut && rec != null && rec.totalHours > 0
-                        ? '${rec.totalHours} hrs'
+                    hasCheckOut && (rec.totalHours > 0 || rec.sessions.isNotEmpty)
+                        ? rec.formattedTotalHours
                         : '-- : --',
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B)),
                   ),
@@ -3377,8 +3423,8 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                         Text(
                           hasCheckedIn
                               ? (hasCheckedOut
-                                  ? 'Shift completed: ${todayRecord.effectiveCheckInTime} – ${todayRecord.checkOutTime}'
-                                  : 'Checked in at ${todayRecord.effectiveCheckInTime}${officialOutTimeStr.isNotEmpty ? " • Expected Check-out: $officialOutTimeStr" : ""}')
+                                  ? 'Shift completed: ${todayRecord.formattedCheckInTime} – ${todayRecord.formattedCheckOutTime}'
+                                  : 'Checked in at ${todayRecord.formattedCheckInTime}${officialOutTimeStr.isNotEmpty ? " • Expected Check-out: $officialOutTimeStr" : ""}')
                               : (officialOutTimeStr.isNotEmpty
                                   ? 'Expected Shift: $officialTimeStr – $officialOutTimeStr'
                                   : 'Expected Check-in Time: $officialTimeStr'),
@@ -3487,7 +3533,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                       icon: Icons.login,
                       iconColor: const Color(0xFF2E7D32),
                       label: 'Check In',
-                      value: hasCheckedIn ? todayRecord.effectiveCheckInTime : '--:--',
+                      value: hasCheckedIn ? todayRecord.formattedCheckInTime : '--:--',
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -3496,18 +3542,20 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                       icon: Icons.logout,
                       iconColor: const Color(0xFFC62828),
                       label: 'Check Out',
-                      value: hasCheckedOut ? todayRecord.checkOutTime : '--:--',
+                      value: hasCheckedOut ? todayRecord.formattedCheckOutTime : '--:--',
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: _buildCompactStatChip(
-                      icon: Icons.timelapse,
-                      iconColor: AppColors.active,
-                      label: 'Work Hrs',
-                      value: todayRecord != null && todayRecord.totalHours > 0
-                          ? '${todayRecord.totalHours} hrs'
-                          : '--',
+                      icon: hasCheckedIn && !hasCheckedOut ? Icons.timer_outlined : Icons.timelapse,
+                      iconColor: hasCheckedIn && !hasCheckedOut ? const Color(0xFF9CC70A) : AppColors.active,
+                      label: hasCheckedIn && !hasCheckedOut ? 'Live Clock' : 'Work Hrs',
+                      value: hasCheckedIn && !hasCheckedOut
+                          ? _getLiveClockDisplay(todayRecord.effectiveCheckInTime)
+                          : (todayRecord != null && (todayRecord.totalHours > 0 || todayRecord.sessions.isNotEmpty)
+                              ? todayRecord.formattedTotalHours
+                              : '--'),
                     ),
                   ),
                 ],
@@ -4734,7 +4782,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
     try {
       final now = DateTime.now();
       final dateKey = _formatKey(widget.date);
-      final time = DateFormat('HH:mm:ss').format(now);
+      final time = DateFormat('hh:mm:ss a').format(now);
 
       await widget.attendanceRepository.unmarkAttendance(
         employeeId: widget.currentEmployee.id,

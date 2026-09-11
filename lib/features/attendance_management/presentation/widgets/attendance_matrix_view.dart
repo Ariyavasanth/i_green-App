@@ -336,7 +336,7 @@ class AttendanceMatrixView extends StatelessWidget {
     String codeStr = statusInfo?.code ?? '-';
 
     final tooltipMsg = record != null
-        ? '${emp.fullName} (${emp.employeeId.isNotEmpty ? emp.employeeId : "EMP-${emp.id}"})\nDate: $dateStr\nStatus: ${statusInfo?.label ?? record.status}\nIn: ${record.effectiveCheckInTime}\nOut: ${record.checkOutTime.isNotEmpty ? record.checkOutTime : "--:--"}\nHours: ${record.totalHours} hrs'
+        ? '${emp.fullName} (${emp.employeeId.isNotEmpty ? emp.employeeId : "EMP-${emp.id}"})\nDate: $dateStr\nStatus: ${statusInfo?.label ?? record.status}\nIn: ${record.formattedCheckInTime}\nOut: ${record.checkOutTime.isNotEmpty ? record.formattedCheckOutTime : "--:--"}\nHours: ${record.formattedTotalHours}'
         : '${emp.fullName}\nDate: $dateStr\nStatus: ${statusInfo?.label ?? "Not Marked"}';
 
     return Tooltip(

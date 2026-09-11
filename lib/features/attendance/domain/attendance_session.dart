@@ -1,3 +1,5 @@
+import 'attendance_record.dart';
+
 class AttendanceSession {
   const AttendanceSession({
     this.id = '',
@@ -34,6 +36,20 @@ class AttendanceSession {
 
   final String checkInTime;
   final String checkOutTime;
+
+  String get formattedCheckInTime => formatToLocal12HourTime(checkInTime);
+  String get formattedCheckOutTime => formatToLocal12HourTime(checkOutTime);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    if (invocation.memberName == #formattedCheckInTime) {
+      return formattedCheckInTime;
+    }
+    if (invocation.memberName == #formattedCheckOutTime) {
+      return formattedCheckOutTime;
+    }
+    return super.noSuchMethod(invocation);
+  }
   final String checkInVerificationStatus;
   final String checkOutVerificationStatus;
   final double checkInSimilarityScore;

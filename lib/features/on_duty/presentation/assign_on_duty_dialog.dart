@@ -9,8 +9,9 @@ import '../../employee/providers/employee_providers.dart';
 import '../../task_management/providers/task_providers.dart';
 import '../../time_clocking/providers/clocking_providers.dart';
 import '../domain/on_duty_assignment.dart';
+import '../domain/on_duty_site.dart';
 import '../providers/on_duty_providers.dart';
-import 'widgets/destination_map_picker.dart';
+import 'widgets/add_site_dialog.dart';
 
 class AssignOnDutyDialog extends ConsumerStatefulWidget {
   const AssignOnDutyDialog({
@@ -38,7 +39,7 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
   final _notesController = TextEditingController();
   String _afterCompletionOption = 'RETURN_TO_OFFICE';
 
-  SelectedDestination? _destination;
+  List<OnDutySite> _addedSites = [];
   bool _isSubmitting = false;
 
   static const _odTypes = [
@@ -68,14 +69,18 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
         'last_name': '',
       });
 
-      if (existing.effectiveDestinationLatitude != null && existing.effectiveDestinationLongitude != null) {
-        _destination = SelectedDestination(
-          name: existing.destinationName.isNotEmpty ? existing.destinationName : existing.destination,
-          address: existing.destinationAddress,
-          latitude: existing.effectiveDestinationLatitude!,
-          longitude: existing.effectiveDestinationLongitude!,
+      _addedSites = List<OnDutySite>.from(existing.sites);
+      if (_addedSites.isEmpty && existing.effectiveDestinationLatitude != null) {
+        _addedSites.add(OnDutySite(
+          siteId: '1',
+          siteName: existing.effectiveDestinationTitle,
+          purpose: existing.purpose,
+          destination: existing.destination,
+          destinationAddress: existing.destinationAddress,
+          latitude: existing.effectiveDestinationLatitude,
+          longitude: existing.effectiveDestinationLongitude,
           radius: existing.destinationRadius > 0 ? existing.destinationRadius : 100,
-        );
+        ));
       }
 
       try {
@@ -366,7 +371,7 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
                 ),
                 const SizedBox(height: 16),
 
-                // 3. Purpose
+                // 3. Overall Purpose
                 const Text(
                   'Purpose *',
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: darkTextColor),
@@ -393,15 +398,198 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
                 ),
                 const SizedBox(height: 16),
 
-                // 4. Interactive Destination Selector & Map Picker
-                DestinationMapPicker(
-                  initialDestination: _destination,
-                  primaryColor: primaryColor,
-                  darkTextColor: darkTextColor,
-                  onDestinationSelected: (dest) {
-                    setState(() => _destination = dest);
-                  },
+                // 4. Added Sites Section (+ Add Site)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Added Sites *',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: darkTextColor),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        final newSite = await showDialog<OnDutySite>(
+                          context: context,
+                          builder: (ctx) => AddSiteDialog(siteNumber: _addedSites.length + 1),
+                        );
+                        if (newSite != null) {
+                          setState(() {
+                            _addedSites.add(newSite);
+                          });
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        foregroundColor: darkTextColor,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: const Icon(Icons.add_location_alt_rounded, size: 16),
+                      label: const Text('+ Add Site', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 8),
+                if (_addedSites.isEmpty)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                    ),
+                    child: const Column(
+                      children: [
+                        Icon(Icons.add_location_alt_outlined, size: 32, color: Color(0xFF94A3B8)),
+                        SizedBox(height: 6),
+                        Text(
+                          'No sites added yet.',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Click "+ Add Site" above to add visit destinations.',
+                          style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _addedSites.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (ctx, index) {
+                      final site = _addedSites[index];
+                      final isFirst = index == 0;
+                      final isLocked = !isFirst && _addedSites[index - 1].isPending;
+
+                      return Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isLocked ? Colors.grey.shade50 : Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: isLocked ? Colors.grey.shade300 : primaryColor.withValues(alpha: 0.6),
+                            width: isLocked ? 1.0 : 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 28,
+                              height: 28,
+                              decoration: BoxDecoration(
+                                color: isLocked ? Colors.grey.shade300 : primaryColor,
+                                shape: BoxShape.circle,
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                '${index + 1}',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: isLocked ? Colors.grey.shade700 : darkTextColor,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          site.effectiveName,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: isLocked ? Colors.grey.shade600 : darkTextColor,
+                                          ),
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: site.isCompleted
+                                              ? Colors.green.shade100
+                                              : (isLocked ? Colors.grey.shade200 : primaryColor.withValues(alpha: 0.2)),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          site.isCompleted
+                                              ? 'Completed ✓'
+                                              : (isLocked ? 'Locked' : 'Pending'),
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: site.isCompleted
+                                                ? Colors.green.shade800
+                                                : (isLocked ? Colors.grey.shade600 : darkTextColor),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (site.purpose.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Purpose: ${site.purpose}',
+                                      style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                                    ),
+                                  ],
+                                  if (site.destinationAddress.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      site.destinationAddress,
+                                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Geofence Radius: ${site.radius}m',
+                                    style: TextStyle(fontSize: 11, color: primaryColor.withValues(alpha: 0.9), fontWeight: FontWeight.w600),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (widget.existingAssignment == null || widget.existingAssignment!.isAssigned) ...[
+                              IconButton(
+                                icon: const Icon(Icons.edit_outlined, size: 18, color: Color(0xFF64748B)),
+                                onPressed: () async {
+                                  final edited = await showDialog<OnDutySite>(
+                                    context: context,
+                                    builder: (ctx) => AddSiteDialog(siteNumber: index + 1, existingSite: site),
+                                  );
+                                  if (edited != null) {
+                                    setState(() {
+                                      _addedSites[index] = edited;
+                                    });
+                                  }
+                                },
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                                onPressed: () {
+                                  setState(() {
+                                    _addedSites.removeAt(index);
+                                  });
+                                },
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                 const SizedBox(height: 16),
 
                 // 5. Date Selector
@@ -590,15 +778,17 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
   Future<void> _handleStartOdDirectly() async {
     if (!_formKey.currentState!.validate() || _selectedEmployee == null) return;
 
-    if (_destination == null) {
+    if (_addedSites.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select and apply a destination before starting OD.'),
+          content: Text('Please add at least one site destination before starting OD.'),
           backgroundColor: Colors.orange,
         ),
       );
       return;
     }
+
+    final primarySite = _addedSites.first;
 
     final empIdInt = _selectedEmployee!.id > 0 ? _selectedEmployee!.id : 1;
     final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
@@ -612,42 +802,65 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
     final isOfficeActive = activeSession != null && activeSession.isOffice;
 
     if (isOfficeActive) {
+      bool shouldAutoCheckOut = false;
       if (mounted) {
-        await showDialog(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Row(
-              children: [
-                Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 24),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Office Check-Out Required',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+        shouldAutoCheckOut = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                title: const Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 24),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Office Check-Out Required',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                      ),
+                    ),
+                  ],
+                ),
+                content: const Text(
+                  'You are currently checked in at the Office. Would you like to check out of the office now and start your On-Duty session?',
+                  style: TextStyle(fontSize: 14, color: Color(0xFF334155)),
+                ),
+                actions: [
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: OutlinedButton.styleFrom(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      side: const BorderSide(color: Color(0xFFCBD5E1)),
+                    ),
+                    child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
                   ),
-                ),
-              ],
-            ),
-            content: const Text(
-              'You are currently checked in at the Office. Please check out of the office before starting your On-Duty session.',
-              style: TextStyle(fontSize: 14, color: Color(0xFF334155)),
-            ),
-            actions: [
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF9CC70A),
-                  foregroundColor: const Color(0xFF414A51),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF9CC70A),
+                      foregroundColor: const Color(0xFF414A51),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      elevation: 0,
+                    ),
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Check-Out & Continue', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ],
               ),
-            ],
-          ),
-        );
+            ) ??
+            false;
       }
-      return;
+
+      if (shouldAutoCheckOut) {
+        final nowTimeStr = DateFormat('hh:mm a').format(DateTime.now());
+        await attendanceRepo.checkOut(
+          employeeId: empIdInt,
+          date: todayStr,
+          checkOutTime: nowTimeStr,
+          verificationStatus: 'AUTO_OFFICE_CHECKOUT_FOR_OD',
+          similarityScore: 1.0,
+        );
+      } else {
+        return;
+      }
     }
 
     // 2. Check if another task or clocking activity is running
@@ -707,6 +920,18 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
       final nowTime24 = '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}:${DateTime.now().second.toString().padLeft(2, '0')}';
 
       final repo = ref.read(onDutyRepositoryProvider);
+
+      // Set first site as traveling
+      final updatedSites = List<OnDutySite>.from(_addedSites);
+      if (updatedSites.isNotEmpty) {
+        updatedSites[0] = updatedSites[0].copyWith(
+          status: 'TRAVELING',
+          travelStartTime: nowStr,
+          startLatitude: position?.latitude,
+          startLongitude: position?.longitude,
+        );
+      }
+
       final newAssignment = OnDutyAssignment(
         id: 0,
         employeeId: _selectedEmployee!.id,
@@ -715,12 +940,13 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
             : _getEmployeeLabel(_selectedEmployee!),
         odType: _selectedOdType,
         purpose: _purposeController.text.trim(),
-        destination: _destination!.name,
-        destinationName: _destination!.name,
-        destinationAddress: _destination!.address,
-        destinationLatitude: _destination!.latitude,
-        destinationLongitude: _destination!.longitude,
-        destinationRadius: _destination!.radius,
+        destination: primarySite.effectiveName,
+        destinationName: primarySite.effectiveName,
+        destinationAddress: primarySite.destinationAddress,
+        destinationLatitude: primarySite.latitude,
+        destinationLongitude: primarySite.longitude,
+        destinationRadius: primarySite.radius,
+        sites: updatedSites,
         date: DateFormat('dd-MM-yyyy').format(DateTime.now()),
         actualStartTime: nowStr,
         travelStartTime: nowStr,
@@ -745,14 +971,14 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
         time: nowTime24,
         assignmentId: createdId > 0 ? createdId : DateTime.now().millisecondsSinceEpoch,
         purpose: _purposeController.text.trim(),
-        destination: _destination!.name,
-        destinationAddress: _destination!.address,
+        destination: primarySite.effectiveName,
+        destinationAddress: primarySite.destinationAddress,
         latitude: position?.latitude,
         longitude: position?.longitude,
-        destinationLatitude: _destination!.latitude,
-        destinationLongitude: _destination!.longitude,
-        destinationRadius: _destination!.radius,
-        notes: 'On Duty: $_selectedOdType (${_destination!.name})',
+        destinationLatitude: primarySite.latitude,
+        destinationLongitude: primarySite.longitude,
+        destinationRadius: primarySite.radius,
+        notes: 'On Duty: $_selectedOdType (${primarySite.effectiveName})',
       );
 
       if (!sessionResult.allowed) {
@@ -797,15 +1023,17 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
   Future<void> _submitAssignment() async {
     if (!_formKey.currentState!.validate() || _selectedEmployee == null) return;
 
-    if (_destination == null) {
+    if (_addedSites.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select and apply a destination.'),
+          content: Text('Please add at least one site destination.'),
           backgroundColor: Colors.orange,
         ),
       );
       return;
     }
+
+    final primarySite = _addedSites.first;
 
     setState(() => _isSubmitting = true);
 
@@ -822,12 +1050,13 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
               : _getEmployeeLabel(_selectedEmployee!),
           odType: _selectedOdType,
           purpose: _purposeController.text.trim(),
-          destination: _destination!.name,
-          destinationName: _destination!.name,
-          destinationAddress: _destination!.address,
-          destinationLatitude: _destination!.latitude,
-          destinationLongitude: _destination!.longitude,
-          destinationRadius: _destination!.radius,
+          destination: primarySite.effectiveName,
+          destinationName: primarySite.effectiveName,
+          destinationAddress: primarySite.destinationAddress,
+          destinationLatitude: primarySite.latitude,
+          destinationLongitude: primarySite.longitude,
+          destinationRadius: primarySite.radius,
+          sites: _addedSites,
           date: dateStr,
           notes: _notesController.text.trim(),
           afterCompletionOption: _afterCompletionOption,
@@ -846,12 +1075,13 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
               : _getEmployeeLabel(_selectedEmployee!),
           odType: _selectedOdType,
           purpose: _purposeController.text.trim(),
-          destination: _destination!.name,
-          destinationName: _destination!.name,
-          destinationAddress: _destination!.address,
-          destinationLatitude: _destination!.latitude,
-          destinationLongitude: _destination!.longitude,
-          destinationRadius: _destination!.radius,
+          destination: primarySite.effectiveName,
+          destinationName: primarySite.effectiveName,
+          destinationAddress: primarySite.destinationAddress,
+          destinationLatitude: primarySite.latitude,
+          destinationLongitude: primarySite.longitude,
+          destinationRadius: primarySite.radius,
+          sites: _addedSites,
           date: dateStr,
           status: 'ASSIGNED',
           notes: _notesController.text.trim(),

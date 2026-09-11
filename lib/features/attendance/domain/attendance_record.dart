@@ -1,4 +1,49 @@
+import 'package:intl/intl.dart';
 import 'attendance_session.dart';
+
+String formatToLocal12HourTime(String timeStr, {bool forceSeconds = false}) {
+  final trimmed = timeStr.trim();
+  if (trimmed.isEmpty ||
+      trimmed == '--:--' ||
+      trimmed == '--:--:--' ||
+      trimmed == '--' ||
+      trimmed.toLowerCase() == 'active' ||
+      trimmed.toLowerCase() == 'running') {
+    return trimmed;
+  }
+
+  try {
+    if (trimmed.contains('T')) {
+      final dt = DateTime.tryParse(trimmed);
+      if (dt != null) {
+        return DateFormat(forceSeconds ? 'hh:mm:ss a' : 'hh:mm a').format(dt.toLocal());
+      }
+    }
+
+    final formats = [
+      'HH:mm:ss',
+      'HH:mm',
+      'hh:mm:ss a',
+      'hh:mm a',
+      'h:mm:ss a',
+      'h:mm a',
+      'H:m:s',
+      'H:m',
+    ];
+
+    for (final fmt in formats) {
+      try {
+        final parsed = DateFormat(fmt).parse(trimmed);
+        final hasSecondsInInput = trimmed.split(':').length >= 3 && !trimmed.contains(' ');
+        final useSeconds = forceSeconds || hasSecondsInInput;
+        final outFmt = useSeconds ? 'hh:mm:ss a' : 'hh:mm a';
+        return DateFormat(outFmt).format(parsed);
+      } catch (_) {}
+    }
+  } catch (_) {}
+
+  return trimmed;
+}
 
 class AttendanceRecord {
   const AttendanceRecord({
@@ -44,6 +89,19 @@ class AttendanceRecord {
   final List<AttendanceSession> sessions;
 
   String get effectiveCheckInTime => checkInTime.isNotEmpty ? checkInTime : time;
+  String get formattedCheckInTime => formatToLocal12HourTime(effectiveCheckInTime);
+  String get formattedCheckOutTime => formatToLocal12HourTime(checkOutTime);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    if (invocation.memberName == #formattedCheckInTime) {
+      return formattedCheckInTime;
+    }
+    if (invocation.memberName == #formattedCheckOutTime) {
+      return formattedCheckOutTime;
+    }
+    return super.noSuchMethod(invocation);
+  }
   String get effectiveCheckInVerification =>
       checkInVerificationStatus.isNotEmpty ? checkInVerificationStatus : verificationStatus;
   double get effectiveCheckInSimilarity =>
@@ -51,6 +109,42 @@ class AttendanceRecord {
   bool get isMissingCheckOut => status == 'Missing Check-Out';
   bool get requiresCorrection =>
       isMissingCheckOut || (effectiveCheckInTime.isNotEmpty && checkOutTime.isEmpty && status != 'Absent' && status != 'On Leave');
+
+  String get formattedTotalHours {
+    int totalSeconds = 0;
+    if (sessions.isNotEmpty) {
+      totalSeconds = sessions.fold<int>(0, (sum, s) {
+        if (s.durationMinutes > 0) {
+          return sum + (s.durationMinutes * 60);
+        }
+        return sum;
+      });
+    }
+
+    if (totalSeconds == 0 && totalHours > 0) {
+      totalSeconds = (totalHours * 3600).round();
+    }
+
+    if (totalSeconds <= 0) return '--';
+
+    final h = totalSeconds ~/ 3600;
+    final m = (totalSeconds % 3600) ~/ 60;
+    final s = totalSeconds % 60;
+
+    if (h > 0 && m > 0) {
+      return '${h}hr ${m}min';
+    } else if (h > 0 && m == 0) {
+      return '${h}hr';
+    } else if (m > 0 && s > 0) {
+      return '${m}m ${s}s';
+    } else if (m > 0) {
+      return '${m}min';
+    } else if (s > 0) {
+      return '${s}s';
+    } else {
+      return '--';
+    }
+  }
 
 
   AttendanceRecord copyWith({
