@@ -40,6 +40,7 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
   String _afterCompletionOption = 'RETURN_TO_OFFICE';
 
   List<OnDutySite> _addedSites = [];
+  bool _startOdFromHome = false;
   bool _isSubmitting = false;
 
   static const _odTypes = [
@@ -62,6 +63,7 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
       _purposeController.text = existing.purpose;
       _notesController.text = existing.notes;
       _afterCompletionOption = existing.afterCompletionOption;
+      _startOdFromHome = existing.startOdFromHome;
       _selectedEmployee = Employee.fromMap({
         'id': existing.employeeId,
         'employee_id': existing.employeeId > 0 ? 'EMP-${existing.employeeId.toString().padLeft(3, '0')}' : '',
@@ -200,6 +202,13 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
 
     final isToday = DateFormat('yyyy-MM-dd').format(_selectedDate) == DateFormat('yyyy-MM-dd').format(DateTime.now());
     final isImmediateStartAction = widget.isSelfRequest && isToday && widget.existingAssignment == null;
+
+    final empIdInt = _selectedEmployee != null && _selectedEmployee!.id > 0 ? _selectedEmployee!.id : 1;
+    final todayRecord = ref.watch(todayAttendanceRecordProvider(empIdInt)).valueOrNull;
+    final bool isAlreadyCheckedIn = isToday &&
+        todayRecord != null &&
+        (todayRecord.checkInTime.isNotEmpty || todayRecord.sessions.any((s) => s.checkInTime.isNotEmpty));
+    final bool effectiveStartFromHome = isAlreadyCheckedIn ? false : _startOdFromHome;
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
@@ -634,6 +643,61 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
                 ),
                 const SizedBox(height: 16),
 
+                // 5b. Start OD from Home Toggle
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isAlreadyCheckedIn ? Colors.grey.shade100 : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: isAlreadyCheckedIn ? Colors.grey.shade300 : const Color(0xFFE2E8F0)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'OD Starts from Home',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: isAlreadyCheckedIn ? Colors.grey.shade600 : darkTextColor,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              isAlreadyCheckedIn
+                                  ? 'Disabled: Employee is already checked in for today'
+                                  : (_startOdFromHome
+                                      ? 'Bypasses office geofence & auto checks-in using live GPS'
+                                      : 'Standard office geofence check-in rule'),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isAlreadyCheckedIn ? Colors.orange.shade800 : const Color(0xFF64748B),
+                                fontWeight: isAlreadyCheckedIn ? FontWeight.w600 : FontWeight.normal,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Switch(
+                        value: effectiveStartFromHome,
+                        activeColor: primaryColor,
+                        onChanged: isAlreadyCheckedIn
+                            ? null
+                            : (val) {
+                                setState(() {
+                                  _startOdFromHome = val;
+                                });
+                              },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
                 // 6. After OD Completion Option
                 const Text(
                   'After OD Completion',
@@ -957,6 +1021,7 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
         status: 'TRAVELING_TO_DESTINATION',
         notes: _notesController.text.trim(),
         afterCompletionOption: _afterCompletionOption,
+        startOdFromHome: _startOdFromHome,
         assignedBy: 'Self (Employee Request)',
         createdAt: DateTime.now().toIso8601String(),
       );
@@ -978,6 +1043,7 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
         destinationLatitude: primarySite.latitude,
         destinationLongitude: primarySite.longitude,
         destinationRadius: primarySite.radius,
+        startOdFromHome: _startOdFromHome,
         notes: 'On Duty: $_selectedOdType (${primarySite.effectiveName})',
       );
 
@@ -1060,6 +1126,7 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
           date: dateStr,
           notes: _notesController.text.trim(),
           afterCompletionOption: _afterCompletionOption,
+          startOdFromHome: _startOdFromHome,
         );
         await repo.updateAssignment(updated);
       } else {
@@ -1086,6 +1153,7 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
           status: 'ASSIGNED',
           notes: _notesController.text.trim(),
           afterCompletionOption: _afterCompletionOption,
+          startOdFromHome: _startOdFromHome,
           assignedBy: assignedByVal,
           createdAt: DateTime.now().toIso8601String(),
         );

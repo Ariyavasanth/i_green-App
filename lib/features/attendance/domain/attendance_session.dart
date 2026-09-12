@@ -1,4 +1,4 @@
-import 'attendance_record.dart';
+import '../../../core/utils/time_formatter.dart';
 
 class AttendanceSession {
   const AttendanceSession({
@@ -37,8 +37,8 @@ class AttendanceSession {
   final String checkInTime;
   final String checkOutTime;
 
-  String get formattedCheckInTime => formatToLocal12HourTime(checkInTime);
-  String get formattedCheckOutTime => formatToLocal12HourTime(checkOutTime);
+  String get formattedCheckInTime => TimeFormatter.formatToLocal12HourTime(checkInTime);
+  String get formattedCheckOutTime => TimeFormatter.formatToLocal12HourTime(checkOutTime);
 
   @override
   dynamic noSuchMethod(Invocation invocation) {

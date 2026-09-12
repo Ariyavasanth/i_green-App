@@ -50,6 +50,7 @@ class OnDutyAssignment {
     required this.assignedBy,
     this.durationMinutes = 0,
     this.afterCompletionOption = 'RETURN_TO_OFFICE',
+    this.startOdFromHome = false,
     required this.createdAt,
   });
 
@@ -108,6 +109,7 @@ class OnDutyAssignment {
   final String assignedBy;
   final int durationMinutes;
   final String afterCompletionOption; // 'RETURN_TO_OFFICE', 'CHECKOUT_FROM_OD'
+  final bool startOdFromHome;
   final String createdAt;
 
   /// Status helpers
@@ -253,6 +255,7 @@ class OnDutyAssignment {
         'assigned_by': assignedBy,
         'duration_minutes': durationMinutes,
         'after_completion_option': afterCompletionOption,
+        'start_od_from_home': startOdFromHome,
         'created_at': createdAt,
       };
 
@@ -356,8 +359,8 @@ class OnDutyAssignment {
       officeReachedTime: map['office_reached_time']?.toString() ?? map['actual_end_time']?.toString(),
       startTripLatitude: (map['start_trip_latitude'] as num?)?.toDouble() ?? (map['start_latitude'] as num?)?.toDouble(),
       startTripLongitude: (map['start_trip_longitude'] as num?)?.toDouble() ?? (map['start_longitude'] as num?)?.toDouble(),
-      reachedLatitude: (map['reached_latitude'] as num?)?.toDouble() ?? destLat,
-      reachedLongitude: (map['reached_longitude'] as num?)?.toDouble() ?? destLng,
+      reachedLatitude: (map['reached_latitude'] as num?)?.toDouble(),
+      reachedLongitude: (map['reached_longitude'] as num?)?.toDouble(),
       workEndLatitude: (map['work_end_latitude'] as num?)?.toDouble(),
       workEndLongitude: (map['work_end_longitude'] as num?)?.toDouble(),
       returnLatitude: (map['return_latitude'] as num?)?.toDouble(),
@@ -372,6 +375,7 @@ class OnDutyAssignment {
       assignedBy: map['assigned_by']?.toString() ?? 'Admin',
       durationMinutes: parseId(map['duration_minutes']),
       afterCompletionOption: opt,
+      startOdFromHome: map['start_od_from_home'] == true || map['start_from_home'] == true,
       createdAt: map['created_at']?.toString() ?? map['createdAt']?.toString() ?? '',
     );
   }
@@ -425,6 +429,7 @@ class OnDutyAssignment {
     String? assignedBy,
     int? durationMinutes,
     String? afterCompletionOption,
+    bool? startOdFromHome,
     String? createdAt,
   }) {
     return OnDutyAssignment(
@@ -476,6 +481,7 @@ class OnDutyAssignment {
       assignedBy: assignedBy ?? this.assignedBy,
       durationMinutes: durationMinutes ?? this.durationMinutes,
       afterCompletionOption: afterCompletionOption ?? this.afterCompletionOption,
+      startOdFromHome: startOdFromHome ?? this.startOdFromHome,
       createdAt: createdAt ?? this.createdAt,
     );
   }

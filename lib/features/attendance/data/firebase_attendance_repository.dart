@@ -194,7 +194,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
           final updatedRec = rec.copyWith(
             sessions: updatedSessions,
             checkOutTime: finalHasActive ? '' : rec.checkOutTime,
-            status: finalHasActive ? 'Present' : rec.status,
+            status: finalHasActive ? (rec.status.isNotEmpty ? rec.status : 'Present') : rec.status,
           );
           await doc.reference.set(updatedRec.toMap(), SetOptions(merge: true));
           _localMemoryCache['${rec.employeeId}_$normDate'] = updatedRec;
@@ -230,7 +230,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         final inTimeStr = (data['check_in_time'] ?? data['time'] ?? '').toString().trim();
 
         if (normDate == todayStr && checkOutTime.isEmpty && status == 'Missing Check-Out') {
-          await doc.reference.set({'status': 'Present'}, SetOptions(merge: true));
+          await doc.reference.set({'status': data['status'] == 'Late' ? 'Late' : 'Present'}, SetOptions(merge: true));
           continue;
         }
 
@@ -321,7 +321,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       if (recordSnap.exists && recordSnap.data() != null) {
         final rec = AttendanceRecord.fromMap(recordSnap.data()!);
         if (rec.status == 'Missing Check-Out' && rec.checkOutTime.trim().isEmpty && _normalizeDateKey(rec.date) == todayNormDate) {
-          return rec.copyWith(status: 'Present');
+          return rec.copyWith(status: rec.status == 'Late' ? 'Late' : 'Present');
         }
         return rec;
       }
@@ -650,11 +650,12 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       String notes = '';
 
       final isDynamic = employee?.isDynamicEmployee ?? false;
-      final schedIn = scheduledCheckInTime.trim().isNotEmpty
+      String schedIn = scheduledCheckInTime.trim().isNotEmpty
           ? scheduledCheckInTime.trim()
           : (employee?.inTime.trim().isNotEmpty == true
               ? employee!.inTime.trim()
               : '');
+      if (schedIn.isEmpty) schedIn = '09:00 AM';
 
       final scheduledMinutes = _parseMinutes(schedIn);
 
@@ -698,16 +699,11 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
           notes = (totalApprovedMins > 0 || maxApprovedToMinutes > 0)
               ? 'Present (Authorized Permission)'
               : 'On time';
-        } else if (netUnauthorizedDelay <= settings.lateLimitMinutes) {
+        } else {
           status = 'Late';
           notes = (totalApprovedMins > 0 || maxApprovedToMinutes > 0)
               ? 'Late = $netUnauthorizedDelay mins unauthorized after permission'
               : 'Late = $netUnauthorizedDelay minutes';
-        } else {
-          status = 'Absent';
-          notes = (totalApprovedMins > 0 || maxApprovedToMinutes > 0)
-              ? 'Absent (Exceeds late limit cutoff after permission)'
-              : 'Absent (Exceeds late limit cutoff of ${settings.lateLimitMinutes} mins)';
         }
       }
 
@@ -1209,6 +1205,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     double? destinationLatitude,
     double? destinationLongitude,
     int destinationRadius = 100,
+    bool startOdFromHome = false,
     String notes = '',
   }) async {
     final normDate = _normalizeDateKey(date);
@@ -1279,11 +1276,53 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       }
     }
 
-    // 4. Determine status - On Duty is always Present!
-    String status = (existingRecord?.status == 'Late') ? 'Late' : 'Present';
+    // 4. Determine status (Present vs Late based on scheduled check-in time)
+    Employee? employee;
+    try {
+      final snap = await _firestore.collection('employees').get();
+      for (final doc in snap.docs) {
+        final data = Map<String, dynamic>.from(doc.data());
+        final dId = doc.id;
+        final dIdNum = int.tryParse(dId.replaceAll(RegExp(r'\D'), '')) ?? 0;
+        final idNum = data['id'] is int ? data['id'] : (int.tryParse(data['id']?.toString() ?? '') ?? 0);
+        final codeStr = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
+        final codeNum = int.tryParse(codeStr.replaceAll(RegExp(r'\D'), '')) ?? 0;
+
+        final matches = (employeeId != 0 && (idNum == employeeId || dIdNum == employeeId || codeNum == employeeId)) ||
+            dId == employeeId.toString() ||
+            data['id']?.toString() == employeeId.toString() ||
+            data['employee_id']?.toString() == employeeId.toString();
+
+        if (matches) {
+          if (!data.containsKey('id') || data['id'] == null || data['id'] == 0) {
+            data['id'] = (dIdNum != 0) ? dIdNum : (dId.hashCode & 0x7FFFFFFF);
+          }
+          employee = Employee.fromMap(data);
+          break;
+        }
+      }
+    } catch (_) {}
+
+    final isDynamic = employee?.isDynamicEmployee ?? false;
+    final settings = await getAttendanceSettings();
+    String schedIn = employee?.inTime.trim().isNotEmpty == true ? employee!.inTime.trim() : '';
+    if (schedIn.isEmpty) schedIn = '09:00 AM';
+    final scheduledMinutes = _parseMinutes(schedIn);
+
+    String calculatedStatus = 'Present';
+    if (!isDynamic && scheduledMinutes != null) {
+      final checkInMin = _parseMinutes(time) ?? (DateTime.now().hour * 60 + DateTime.now().minute);
+      final effectiveAllowedMinutes = scheduledMinutes + settings.gracePeriodMinutes;
+      if (checkInMin > effectiveAllowedMinutes) {
+        calculatedStatus = 'Late';
+      }
+    }
+
+    String status = (existingRecord?.status == 'Late' || calculatedStatus == 'Late') ? 'Late' : 'Present';
+    final odVerStatus = startOdFromHome ? 'OD Starts from Home' : 'OD Verified';
     String initialNotes = notes.isNotEmpty
         ? notes
-        : 'On Duty: ${purpose.isNotEmpty ? purpose : "Field Duty"}${destination.isNotEmpty ? " ($destination)" : ""}';
+        : '${startOdFromHome ? "OD Starts from Home" : "On Duty"}: ${purpose.isNotEmpty ? purpose : "Field Duty"}${destination.isNotEmpty ? " ($destination)" : ""}';
 
     // 5. Create new OD session
     final newSessionIndex = updatedSessions.length + 1;
@@ -1293,7 +1332,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       type: 'od',
       checkInTime: time,
       checkOutTime: '',
-      checkInVerificationStatus: 'OD Verified',
+      checkInVerificationStatus: odVerStatus,
       checkOutVerificationStatus: '',
       checkInSimilarityScore: 1.0,
       checkOutSimilarityScore: 0.0,
@@ -1302,7 +1341,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       destinationLatitude: destinationLatitude,
       destinationLongitude: destinationLongitude,
       destinationRadius: destinationRadius > 0 ? destinationRadius : 100,
-      checkInMethod: 'OD GPS + Photo',
+      checkInMethod: startOdFromHome ? 'OD Starts from Home (GPS)' : 'OD GPS + Photo',
       checkOutMethod: '',
       assignmentId: assignmentId,
       purpose: purpose,
@@ -1352,7 +1391,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         status: status,
         verificationStatus: existingRecord.verificationStatus.isNotEmpty
             ? existingRecord.verificationStatus
-            : 'OD Verified',
+            : odVerStatus,
         similarityScore: existingRecord.similarityScore > 0
             ? existingRecord.similarityScore
             : 1.0,
@@ -1374,9 +1413,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         checkInTime: time,
         checkOutTime: '',
         status: status,
-        verificationStatus: 'OD Verified',
+        verificationStatus: odVerStatus,
         similarityScore: 1.0,
-        checkInVerificationStatus: 'OD Verified',
+        checkInVerificationStatus: odVerStatus,
         checkInSimilarityScore: 1.0,
         totalHours: 0.0,
         notes: initialNotes,
@@ -1775,7 +1814,15 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     String updatedNotes = record.notes;
 
     if (isOdRelated) {
-      finalStatus = (record.status == 'Late') ? 'Late' : 'Present';
+      String schedIn = employee?.inTime.trim().isNotEmpty == true ? employee!.inTime.trim() : '09:00 AM';
+      final schedMins = _parseMinutes(schedIn);
+      final checkInMins = _parseMinutes(record.effectiveCheckInTime);
+      final settings = await getAttendanceSettings();
+      bool isLateCheckIn = false;
+      if (!isDynamic && schedMins != null && checkInMins != null) {
+        isLateCheckIn = checkInMins > (schedMins + settings.gracePeriodMinutes);
+      }
+      finalStatus = (record.status == 'Late' || isLateCheckIn) ? 'Late' : 'Present';
       if (updatedNotes.isEmpty) {
         updatedNotes = 'On Duty Active';
       }
@@ -1908,7 +1955,15 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
           record.verificationStatus.contains('OD');
 
       if (isOdRelated) {
-        status = (record.status == 'Late') ? 'Late' : 'Present';
+        String schedIn = employee?.inTime.trim().isNotEmpty == true ? employee!.inTime.trim() : '09:00 AM';
+        final schedMins = _parseMinutes(schedIn);
+        final checkInMins = _parseMinutes(record.effectiveCheckInTime);
+        final settings = await getAttendanceSettings();
+        bool isLateCheckIn = false;
+        if (!isDynamic && schedMins != null && checkInMins != null) {
+          isLateCheckIn = checkInMins > (schedMins + settings.gracePeriodMinutes);
+        }
+        status = (record.status == 'Late' || isLateCheckIn) ? 'Late' : 'Present';
       } else if (shortfallMins == 0) {
         if (isDynamic) {
           status = 'Completed';
@@ -2150,7 +2205,16 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
           record.verificationStatus.contains('OD');
 
       if (isOdRelated) {
-        newStatus = (record.status == 'Late') ? 'Late' : 'Present';
+        if (checkInMinutes != null && scheduledMinutes != null) {
+          final netUnauthorizedDelay = checkInMinutes - (scheduledMinutes + settings.gracePeriodMinutes);
+          if (netUnauthorizedDelay > 0) {
+            newStatus = 'Late';
+          } else {
+            newStatus = (record.status == 'Late') ? 'Late' : 'Present';
+          }
+        } else {
+          newStatus = (record.status == 'Late') ? 'Late' : 'Present';
+        }
         if (newNotes.isEmpty) newNotes = 'On Duty Active';
       } else if (isDynamic || scheduledMinutes == null || checkInMinutes == null) {
         if (record.checkOutTime.trim().isEmpty) {
@@ -2187,16 +2251,11 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
             newNotes = (totalApprovedMins > 0 || maxApprovedToMinutes > 0)
                 ? 'Present (Authorized Permission)'
                 : 'On time';
-          } else if (netUnauthorizedDelay <= settings.lateLimitMinutes) {
+          } else {
             newStatus = 'Late';
             newNotes = (totalApprovedMins > 0 || maxApprovedToMinutes > 0)
                 ? 'Late = $netUnauthorizedDelay mins unauthorized after permission'
                 : 'Late = $netUnauthorizedDelay minutes';
-          } else {
-            newStatus = 'Absent';
-            newNotes = (totalApprovedMins > 0 || maxApprovedToMinutes > 0)
-                ? 'Absent (Exceeds late limit cutoff after permission)'
-                : 'Absent (Exceeds late limit cutoff of ${settings.lateLimitMinutes} mins)';
           }
         } else {
           final checkOutTime = record.checkOutTime.trim();

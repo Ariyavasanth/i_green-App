@@ -92,6 +92,7 @@ abstract class AttendanceRepository {
     double? destinationLatitude,
     double? destinationLongitude,
     int destinationRadius = 100,
+    bool startOdFromHome = false,
     String notes = '',
   });
   Future<AttendanceVerificationResult> completeOdAttendanceSession({

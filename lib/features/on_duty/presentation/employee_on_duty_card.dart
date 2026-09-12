@@ -368,7 +368,10 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
           destinationLatitude: site.latitude,
           destinationLongitude: site.longitude,
           destinationRadius: site.radius,
-          notes: 'On Duty Site 1: ${site.effectiveName}',
+          startOdFromHome: widget.assignment.startOdFromHome,
+          notes: widget.assignment.startOdFromHome
+              ? 'OD Starts from Home Site 1: ${site.effectiveName}'
+              : 'On Duty Site 1: ${site.effectiveName}',
         );
       }
 
@@ -888,6 +891,10 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                 _buildMetaRow(Icons.person_outline, 'Employee', assignment.employeeName, isBold: true),
                 const SizedBox(height: 6),
                 _buildMetaRow(Icons.lightbulb_outline, 'OD Purpose', assignment.purpose, isBold: true),
+                if (assignment.startOdFromHome) ...[
+                  const SizedBox(height: 6),
+                  _buildMetaRow(Icons.home_outlined, 'Start Mode', 'OD Starts from Home (Auto Check-In)', isBold: true),
+                ],
                 const SizedBox(height: 14),
 
                 // Added Sites Sequential Section
