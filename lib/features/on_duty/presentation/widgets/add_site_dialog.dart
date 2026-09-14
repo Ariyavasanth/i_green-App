@@ -24,9 +24,9 @@ class _AddSiteDialogState extends State<AddSiteDialog> {
   late final TextEditingController _notesController;
 
   SelectedDestination? _destination;
-  int _selectedRadius = 100;
+  int _selectedRadius = 200;
 
-  static const _radiusOptions = [50, 100, 200, 500];
+  static const _radiusOptions = [200, 500];
 
   @override
   void initState() {
@@ -37,7 +37,7 @@ class _AddSiteDialogState extends State<AddSiteDialog> {
     _notesController = TextEditingController(text: existing?.notes ?? '');
 
     if (existing != null) {
-      _selectedRadius = existing.radius > 0 ? existing.radius : 100;
+      _selectedRadius = existing.radius > 0 ? existing.radius : 200;
       if (existing.latitude != null && existing.longitude != null) {
         _destination = SelectedDestination(
           name: existing.destinationName.isNotEmpty ? existing.destinationName : existing.destination,
@@ -59,20 +59,10 @@ class _AddSiteDialogState extends State<AddSiteDialog> {
   }
 
   Future<void> _pickDestinationOnMap() async {
-    final result = await showDialog<SelectedDestination>(
-      context: context,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Container(
-          width: 500,
-          height: 600,
-          padding: const EdgeInsets.all(16),
-          child: DestinationMapPicker(
-            initialDestination: _destination,
-            onDestinationSelected: (dest) {
-              Navigator.of(ctx).pop(dest);
-            },
-          ),
+    final result = await Navigator.of(context).push<SelectedDestination>(
+      MaterialPageRoute(
+        builder: (ctx) => DestinationMapPickerScreen(
+          initialDestination: _destination,
         ),
       ),
     );

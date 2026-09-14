@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 
 import '../../attendance/providers/attendance_providers.dart';
+import '../../attendance_settings/providers/attendance_settings_providers.dart';
 import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
 import '../../task_management/providers/task_providers.dart';
@@ -218,46 +219,52 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
         padding: const EdgeInsets.all(20.0),
         child: Form(
           key: _formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Dialog Header
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: primaryColor.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(Icons.pin_drop_outlined, color: darkTextColor, size: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Fixed Dialog Header (Stays pinned when scrolling)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: primaryColor.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        const SizedBox(width: 10),
-                        Text(
-                          widget.existingAssignment != null
-                              ? 'Edit On Duty'
-                              : (widget.isSelfRequest ? 'Start On-Duty' : 'Assign On-Duty'),
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: darkTextColor,
-                          ),
+                        child: const Icon(Icons.pin_drop_outlined, color: darkTextColor, size: 20),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        widget.existingAssignment != null
+                            ? 'Edit On Duty'
+                            : (widget.isSelfRequest ? 'Start On-Duty' : 'Assign On-Duty'),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: darkTextColor,
                         ),
-                      ],
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close, size: 20, color: Color(0xFF64748B)),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-                const Divider(height: 20, color: Color(0xFFE2E8F0)),
-                const SizedBox(height: 6),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 20, color: Color(0xFF64748B)),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const Divider(height: 20, color: Color(0xFFE2E8F0)),
+
+              // Scrollable Form Fields Body
+              Flexible(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
 
                 // 1. Select Employee / Self Request Display
                 const Text(
@@ -684,7 +691,10 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
                       ),
                       Switch(
                         value: effectiveStartFromHome,
-                        activeColor: primaryColor,
+                        activeTrackColor: primaryColor,
+                        activeThumbColor: Colors.white,
+                        inactiveTrackColor: const Color(0xFFCBD5E1),
+                        inactiveThumbColor: Colors.white,
                         onChanged: isAlreadyCheckedIn
                             ? null
                             : (val) {
@@ -741,6 +751,25 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
                           style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                         ),
                         value: 'CHECKOUT_FROM_OD',
+                        groupValue: _afterCompletionOption,
+                        activeColor: primaryColor,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                        dense: true,
+                        onChanged: (val) {
+                          if (val != null) setState(() => _afterCompletionOption = val);
+                        },
+                      ),
+                      const Divider(height: 1, indent: 10, endIndent: 10, color: Color(0xFFE2E8F0)),
+                      RadioListTile<String>(
+                        title: const Text(
+                          'Assign Next OD',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: darkTextColor),
+                        ),
+                        subtitle: const Text(
+                          'Assign or start another OD from current OD location after finishing (Geofence verified)',
+                          style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                        ),
+                        value: 'ASSIGN_NEXT_OD',
                         groupValue: _afterCompletionOption,
                         activeColor: primaryColor,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 10),
@@ -835,8 +864,11 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
             ),
           ),
         ),
-      ),
-    );
+      ],
+    ),
+  ),
+),
+);
   }
 
   Future<void> _handleStartOdDirectly() async {
@@ -864,6 +896,106 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
 
     final activeSession = todayRecord?.sessions.where((s) => s.isActive).firstOrNull;
     final isOfficeActive = activeSession != null && activeSession.isOffice;
+    final isAlreadyCheckedIn = todayRecord != null &&
+        (todayRecord.checkInTime.isNotEmpty || todayRecord.sessions.any((s) => s.checkInTime.isNotEmpty));
+
+    // 2. Fetch live GPS position & check proximity to office
+    final position = await _getGpsPosition();
+    final settings = ref.read(attendanceSettingsProvider).valueOrNull;
+
+    bool isNearOffice = false;
+    if (position != null && settings != null && settings.officeLatitude != 0 && settings.officeLongitude != 0) {
+      final distanceToOffice = Geolocator.distanceBetween(
+        position.latitude,
+        position.longitude,
+        settings.officeLatitude,
+        settings.officeLongitude,
+      );
+      final allowedRadius = settings.allowedAttendanceRadiusMeters > 0 ? settings.allowedAttendanceRadiusMeters : 100;
+      if (distanceToOffice <= (allowedRadius * 2.5).clamp(100.0, 300.0)) {
+        isNearOffice = true;
+      }
+    }
+
+    // RULE 1: If user is near office but NOT checked in at office -> Must check in at office first!
+    if (isNearOffice && !isOfficeActive && !isAlreadyCheckedIn) {
+      if (mounted) {
+        await showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.business_rounded, color: Colors.orange, size: 24),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Office Check-In Required',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                  ),
+                ),
+              ],
+            ),
+            content: const Text(
+              'You are starting On-Duty near the office. Please check in at the office first before starting your On-Duty session.',
+              style: TextStyle(fontSize: 14, color: Color(0xFF334155)),
+            ),
+            actions: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF9CC70A),
+                  foregroundColor: const Color(0xFF414A51),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
+
+    // RULE 2: If user is NOT checked in at office & NOT near office -> Must turn ON 'Start from Home' toggle!
+    if (!isOfficeActive && !isAlreadyCheckedIn && !_startOdFromHome) {
+      if (mounted) {
+        await showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.home_rounded, color: Colors.orange, size: 24),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Enable "OD Starts from Home"',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                  ),
+                ),
+              ],
+            ),
+            content: const Text(
+              'You are not checked in at the office. Please turn ON the "OD Starts from Home" toggle before starting your On-Duty session.',
+              style: TextStyle(fontSize: 14, color: Color(0xFF334155)),
+            ),
+            actions: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF9CC70A),
+                  foregroundColor: const Color(0xFF414A51),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
 
     if (isOfficeActive) {
       bool shouldAutoCheckOut = false;
@@ -1028,32 +1160,35 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
 
       final createdId = await repo.createAssignment(newAssignment);
 
-      // Start OD Attendance Session
-      final sessionResult = await attendanceRepo.startOdAttendanceSession(
-        employeeId: empIdInt,
-        employeeName: _selectedEmployee!.fullName,
-        date: todayStr,
-        time: nowTime24,
-        assignmentId: createdId > 0 ? createdId : DateTime.now().millisecondsSinceEpoch,
-        purpose: _purposeController.text.trim(),
-        destination: primarySite.effectiveName,
-        destinationAddress: primarySite.destinationAddress,
-        latitude: position?.latitude,
-        longitude: position?.longitude,
-        destinationLatitude: primarySite.latitude,
-        destinationLongitude: primarySite.longitude,
-        destinationRadius: primarySite.radius,
-        startOdFromHome: _startOdFromHome,
-        notes: 'On Duty: $_selectedOdType (${primarySite.effectiveName})',
-      );
+      // Start OD Attendance Session only if NOT starting from home.
+      // For first OD starting from home, check-in will be recorded when the employee reaches the OD site.
+      if (!_startOdFromHome) {
+        final sessionResult = await attendanceRepo.startOdAttendanceSession(
+          employeeId: empIdInt,
+          employeeName: _selectedEmployee!.fullName,
+          date: todayStr,
+          time: nowTime24,
+          assignmentId: createdId > 0 ? createdId : DateTime.now().millisecondsSinceEpoch,
+          purpose: _purposeController.text.trim(),
+          destination: primarySite.effectiveName,
+          destinationAddress: primarySite.destinationAddress,
+          latitude: position?.latitude,
+          longitude: position?.longitude,
+          destinationLatitude: primarySite.latitude,
+          destinationLongitude: primarySite.longitude,
+          destinationRadius: primarySite.radius,
+          startOdFromHome: false,
+          notes: 'On Duty: $_selectedOdType (${primarySite.effectiveName})',
+        );
 
-      if (!sessionResult.allowed) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(sessionResult.message), backgroundColor: Colors.red),
-          );
+        if (!sessionResult.allowed) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(sessionResult.message), backgroundColor: Colors.red),
+            );
+          }
+          return;
         }
-        return;
       }
 
       ref.invalidate(allOnDutyAssignmentsProvider);

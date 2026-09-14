@@ -32,4 +32,26 @@ abstract class OnDutyRepository {
   });
 
   Future<void> deleteAssignment(int id);
+
+  Future<void> postponeAssignment({
+    required int id,
+    required String nextDate,
+    String? notes,
+  });
+
+  Future<void> markAsCompleted({
+    required int id,
+    required String purposeDetails,
+    required List<String> photos,
+    double? latitude,
+    double? longitude,
+  });
+
+  Future<void> markAsNotCompleted({
+    required int id,
+    required String reason,
+    required List<String> photos,
+    double? latitude,
+    double? longitude,
+  });
 }

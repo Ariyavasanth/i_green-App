@@ -55,16 +55,22 @@ class FirebaseOnDutyRepository implements OnDutyRepository {
       }
 
       if (statusFilter != null && statusFilter.isNotEmpty && statusFilter != 'All') {
-        final filterUpper = statusFilter.toUpperCase();
+        final filterUpper = statusFilter.toUpperCase().replaceAll(' ', '_');
         items = items.where((item) {
           final s = item.status.toUpperCase();
-          if (filterUpper == 'IN_PROGRESS' || filterUpper == 'ACTIVE') {
+          if (filterUpper == 'IN_PROGRESS') {
             return s == 'IN_PROGRESS' ||
                 s == 'ACTIVE' ||
                 s == 'TRAVELING_TO_DESTINATION' ||
                 s == 'REACHED_DESTINATION' ||
                 s == 'WORK_COMPLETED' ||
                 s == 'RETURNING_TO_OFFICE';
+          }
+          if (filterUpper == 'ACTIVE') {
+            return s == 'ASSIGNED' || s == 'ACTIVE' || s == 'TRAVELING_TO_DESTINATION' || s == 'REACHED_DESTINATION';
+          }
+          if (filterUpper == 'NOT_COMPLETED') {
+            return s == 'NOT_COMPLETED' || s == 'CANCELLED';
           }
           return s == filterUpper;
         }).toList();
@@ -197,6 +203,116 @@ class FirebaseOnDutyRepository implements OnDutyRepository {
   Future<void> deleteAssignment(int id) async {
     try {
       await _collection.doc(id.toString()).delete();
+    } catch (_) {}
+  }
+
+  @override
+  Future<void> postponeAssignment({
+    required int id,
+    required String nextDate,
+    String? notes,
+  }) async {
+    try {
+      final assignment = await getAssignmentById(id);
+      if (assignment == null) return;
+
+      final resetSites = assignment.sites.map((s) => s.copyWith(
+        status: 'PENDING',
+        travelStartTime: null,
+        reachedTime: null,
+        reachedPhoto: null,
+        workCompletedTime: null,
+        workPhoto: null,
+        workPhotos: [],
+      )).toList();
+
+      final postponeLog = 'Postponed to $nextDate${notes != null && notes.isNotEmpty ? ": $notes" : ""}';
+      final updatedNotes = assignment.notes.isNotEmpty
+          ? '${assignment.notes} | $postponeLog'
+          : postponeLog;
+
+      final updated = assignment.copyWith(
+        date: nextDate,
+        status: 'ASSIGNED',
+        travelStartTime: null,
+        reachedTime: null,
+        reachedPhoto: null,
+        workCompletedTime: null,
+        workPhoto: null,
+        workPhotos: [],
+        returnStartTime: null,
+        officeReachedTime: null,
+        actualStartTime: null,
+        actualEndTime: null,
+        sites: resetSites,
+        notes: updatedNotes,
+      );
+
+      await updateAssignment(updated);
+    } catch (_) {}
+  }
+
+  @override
+  Future<void> markAsCompleted({
+    required int id,
+    required String purposeDetails,
+    required List<String> photos,
+    double? latitude,
+    double? longitude,
+  }) async {
+    try {
+      final assignment = await getAssignmentById(id);
+      if (assignment == null) return;
+
+      final nowStr = '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}';
+      final updatedNotes = purposeDetails.isNotEmpty
+          ? (assignment.notes.isNotEmpty ? '${assignment.notes} | Details: $purposeDetails' : purposeDetails)
+          : assignment.notes;
+
+      final updated = assignment.copyWith(
+        status: 'COMPLETED',
+        actualEndTime: nowStr,
+        workCompletedTime: nowStr,
+        workPhoto: photos.isNotEmpty ? photos.first : null,
+        workPhotos: photos,
+        notes: updatedNotes,
+        endLatitude: latitude ?? assignment.endLatitude,
+        endLongitude: longitude ?? assignment.endLongitude,
+      );
+
+      await updateAssignment(updated);
+    } catch (_) {}
+  }
+
+  @override
+  Future<void> markAsNotCompleted({
+    required int id,
+    required String reason,
+    required List<String> photos,
+    double? latitude,
+    double? longitude,
+  }) async {
+    try {
+      final assignment = await getAssignmentById(id);
+      if (assignment == null) return;
+
+      final nowStr = '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}';
+      final updatedNotes = reason.isNotEmpty
+          ? (assignment.notes.isNotEmpty ? '${assignment.notes} | Not Completed Reason: $reason' : 'Reason: $reason')
+          : assignment.notes;
+
+      final updated = assignment.copyWith(
+        status: 'NOT_COMPLETED',
+        actualEndTime: nowStr,
+        workCompletedTime: nowStr,
+        workPhoto: photos.isNotEmpty ? photos.first : null,
+        workPhotos: photos,
+        notes: updatedNotes,
+        endLatitude: latitude ?? assignment.endLatitude,
+        endLongitude: longitude ?? assignment.endLongitude,
+      );
+
+      await updateAssignment(updated);
     } catch (_) {}
   }
 }

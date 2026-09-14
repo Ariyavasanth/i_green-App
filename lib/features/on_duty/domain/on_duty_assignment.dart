@@ -29,7 +29,8 @@ class OnDutyAssignment {
     this.reachedTime,
     this.reachedPhoto,
     this.workCompletedTime,
-    this.workPhoto,
+    String? workPhoto,
+    this.workPhotos = const [],
     this.returnStartTime,
     this.officeReachedTime,
     this.startTripLatitude,
@@ -52,7 +53,7 @@ class OnDutyAssignment {
     this.afterCompletionOption = 'RETURN_TO_OFFICE',
     this.startOdFromHome = false,
     required this.createdAt,
-  });
+  }) : _workPhoto = workPhoto;
 
   final int id;
   final int employeeId;
@@ -83,7 +84,9 @@ class OnDutyAssignment {
   final String? reachedTime; // Step 2: Reached site clicked
   final String? reachedPhoto; // Live camera photo when reached
   final String? workCompletedTime; // Step 3: Complete OD work clicked
-  final String? workPhoto; // Proof of work photo
+  final String? _workPhoto; // Proof of work photo
+  String? get workPhoto => _workPhoto ?? (workPhotos.isNotEmpty ? workPhotos.first : null);
+  final List<String> workPhotos; // Proof of work photos (1 to 4)
   final String? returnStartTime; // Step 4: Return to office clicked
   final String? officeReachedTime; // Step 5: Came to office confirmed
 
@@ -120,13 +123,27 @@ class OnDutyAssignment {
   bool get isWorkCompleted => status == 'WORK_COMPLETED';
   bool get isReturningToOffice => status == 'RETURNING_TO_OFFICE';
   bool get isCompleted => status == 'COMPLETED';
+  bool get isNotCompleted => status == 'NOT_COMPLETED';
   bool get isCancelled => status == 'CANCELLED';
 
   bool get isOngoing =>
-      status != 'COMPLETED' && status != 'CANCELLED' && status != 'REJECTED';
+      status != 'COMPLETED' && status != 'NOT_COMPLETED' && status != 'CANCELLED' && status != 'REJECTED';
 
   bool get isReturnToOfficeOption =>
       afterCompletionOption == 'RETURN_TO_OFFICE';
+  bool get isAssignNextOdOption =>
+      afterCompletionOption == 'ASSIGN_NEXT_OD';
+
+  String? get notCompletedReason {
+    if (notes.isEmpty) return null;
+    if (notes.contains('Not Completed Reason:')) {
+      return notes.split('Not Completed Reason:').last.trim();
+    }
+    if (notes.contains('Reason:')) {
+      return notes.split('Reason:').last.trim();
+    }
+    return notes;
+  }
 
   /// Sequential Site Visit Helpers
   OnDutySite? get currentSite {
@@ -173,6 +190,7 @@ class OnDutyAssignment {
   String get effectiveStatusLabel {
     final s = status.toUpperCase();
     if (s == 'COMPLETED') return 'Completed';
+    if (s == 'NOT_COMPLETED') return 'Not Completed';
     if (s == 'CANCELLED') return 'Cancelled';
     if (s == 'RETURNING_TO_OFFICE' || (returnStartTime != null && officeReachedTime == null)) {
       return 'Return office from site';
@@ -206,6 +224,17 @@ class OnDutyAssignment {
   /// Effective completion photo
   String? get effectiveWorkPhoto => currentSite?.workPhoto ?? workPhoto ?? endPhoto;
 
+  /// Effective completion proof photos list
+  List<String> get effectiveWorkPhotos {
+    if (currentSite != null && currentSite!.effectiveWorkPhotos.isNotEmpty) {
+      return currentSite!.effectiveWorkPhotos;
+    }
+    if (workPhotos.isNotEmpty) return workPhotos;
+    if (workPhoto != null && workPhoto!.isNotEmpty) return [workPhoto!];
+    if (endPhoto != null && endPhoto!.isNotEmpty) return [endPhoto!];
+    return [];
+  }
+
   Map<String, dynamic> toMap() => {
         if (id != 0) 'id': id,
         'employee_id': employeeId,
@@ -235,6 +264,7 @@ class OnDutyAssignment {
         'reached_photo': reachedPhoto,
         'work_completed_time': workCompletedTime,
         'work_photo': workPhoto,
+        if (workPhotos.isNotEmpty) 'work_photos': workPhotos,
         'return_start_time': returnStartTime,
         'office_reached_time': officeReachedTime,
         'start_trip_latitude': startTripLatitude,
@@ -271,7 +301,9 @@ class OnDutyAssignment {
     }
 
     var opt = map['after_completion_option']?.toString() ?? 'RETURN_TO_OFFICE';
-    if (opt.contains('Checkout') || opt.contains('CHECKOUT')) {
+    if (opt.contains('ASSIGN_NEXT') || opt.contains('Assign Next')) {
+      opt = 'ASSIGN_NEXT_OD';
+    } else if (opt.contains('Checkout') || opt.contains('CHECKOUT')) {
       opt = 'CHECKOUT_FROM_OD';
     } else {
       opt = 'RETURN_TO_OFFICE';
@@ -326,6 +358,13 @@ class OnDutyAssignment {
       ];
     }
 
+    List<String> parsedWorkPhotos = [];
+    if (map['work_photos'] != null && map['work_photos'] is List) {
+      parsedWorkPhotos = (map['work_photos'] as List).map((x) => x.toString()).where((x) => x.isNotEmpty).toList();
+    } else if (map['work_photo'] != null && map['work_photo'].toString().isNotEmpty) {
+      parsedWorkPhotos = [map['work_photo'].toString()];
+    }
+
     return OnDutyAssignment(
       id: parseId(map['id']),
       employeeId: parseId(map['employee_id']),
@@ -354,7 +393,8 @@ class OnDutyAssignment {
       reachedTime: map['reached_time']?.toString(),
       reachedPhoto: map['reached_photo']?.toString() ?? map['start_photo']?.toString(),
       workCompletedTime: map['work_completed_time']?.toString(),
-      workPhoto: map['work_photo']?.toString() ?? map['end_photo']?.toString(),
+      workPhoto: map['work_photo']?.toString() ?? map['end_photo']?.toString() ?? (parsedWorkPhotos.isNotEmpty ? parsedWorkPhotos.first : null),
+      workPhotos: parsedWorkPhotos,
       returnStartTime: map['return_start_time']?.toString(),
       officeReachedTime: map['office_reached_time']?.toString() ?? map['actual_end_time']?.toString(),
       startTripLatitude: (map['start_trip_latitude'] as num?)?.toDouble() ?? (map['start_latitude'] as num?)?.toDouble(),
@@ -409,6 +449,7 @@ class OnDutyAssignment {
     String? reachedPhoto,
     String? workCompletedTime,
     String? workPhoto,
+    List<String>? workPhotos,
     String? returnStartTime,
     String? officeReachedTime,
     double? startTripLatitude,
@@ -461,6 +502,7 @@ class OnDutyAssignment {
       reachedPhoto: reachedPhoto ?? this.reachedPhoto,
       workCompletedTime: workCompletedTime ?? this.workCompletedTime,
       workPhoto: workPhoto ?? this.workPhoto,
+      workPhotos: workPhotos ?? this.workPhotos,
       returnStartTime: returnStartTime ?? this.returnStartTime,
       officeReachedTime: officeReachedTime ?? this.officeReachedTime,
       startTripLatitude: startTripLatitude ?? this.startTripLatitude,

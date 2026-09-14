@@ -15,7 +15,7 @@ class _SubModule {
   final Color color;
 }
 
-class HrmsModuleScreen extends ConsumerWidget {
+class HrmsModuleScreen extends ConsumerStatefulWidget {
   const HrmsModuleScreen({super.key});
 
   static const _sections = <String, List<_SubModule>>{
@@ -39,8 +39,8 @@ class HrmsModuleScreen extends ConsumerWidget {
       _SubModule('Attendance\nSettings', Icons.tune_outlined,
           '/attendance-settings', Color(0xFF636E72)),
       _SubModule(
-          'On-Duty', Icons.business_center_outlined, '/on-duty', Color(0xFFFDAA5D)),
-      _SubModule('On-Duty\nManagement', Icons.business_center,
+          'My On Duty', Icons.business_center_outlined, '/on-duty', Color(0xFFFDAA5D)),
+      _SubModule('On Duty\nManagement', Icons.business_center,
           '/on-duty-management', Color(0xFFE84393)),
     ],
     'TASKS & CLOCKING': [
@@ -60,10 +60,6 @@ class HrmsModuleScreen extends ConsumerWidget {
     'LEAVE': [
       _SubModule('Leave\nManagement', Icons.event_note, '/leave-management',
           Color(0xFF00CEC9)),
-      // _SubModule(
-      //     'Permission', Icons.access_time_filled_outlined, '/permission', Color(0xFFFDAA5D)),
-      // _SubModule('Permission\nManagement', Icons.more_time_outlined,
-      //     '/permission-management', Color(0xFFE84393)),
     ],
     'SALARY & ASSETS': [
       _SubModule('Salary\nSettings', Icons.request_quote_outlined,
@@ -104,14 +100,28 @@ class HrmsModuleScreen extends ConsumerWidget {
   };
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HrmsModuleScreen> createState() => _HrmsModuleScreenState();
+}
+
+class _HrmsModuleScreenState extends ConsumerState<HrmsModuleScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final employee = ref.watch(currentEmployeeProvider);
     final employeeName = employee?.firstName ?? '';
 
     final isSuper = employee == null || employee.isSuperAdmin;
     final permittedSections = <String, List<_SubModule>>{};
 
-    for (final entry in _sections.entries) {
+    for (final entry in HrmsModuleScreen._sections.entries) {
       final allowedItems = entry.value.where((m) {
         if (isSuper) return true;
         final cleanLabel = m.label.replaceAll('\n', ' ');
@@ -120,6 +130,22 @@ class HrmsModuleScreen extends ConsumerWidget {
 
       if (allowedItems.isNotEmpty) {
         permittedSections[entry.key] = allowedItems;
+      }
+    }
+
+    final filteredSections = <String, List<_SubModule>>{};
+    final query = _searchQuery.trim().toLowerCase();
+
+    for (final entry in permittedSections.entries) {
+      final matches = entry.value.where((m) {
+        if (query.isEmpty) return true;
+        final cleanLabel = m.label.replaceAll('\n', ' ').toLowerCase();
+        final sectionName = entry.key.toLowerCase();
+        return cleanLabel.contains(query) || sectionName.contains(query);
+      }).toList();
+
+      if (matches.isNotEmpty) {
+        filteredSections[entry.key] = matches;
       }
     }
 
@@ -177,46 +203,150 @@ class HrmsModuleScreen extends ConsumerWidget {
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.all(20),
                       children: [
-                        for (final entry in permittedSections.entries) ...[
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8, top: 8),
-                            child: Text(
-                              entry.key,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.primary,
-                                letterSpacing: 1.2,
+                        // ── Search Bar ──
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: TextField(
+                            controller: _searchController,
+                            onChanged: (val) => setState(() => _searchQuery = val),
+                            decoration: InputDecoration(
+                              hintText: 'Search icons (e.g. Attendance, Leave, Employee...)',
+                              hintStyle: const TextStyle(
+                                fontSize: 13.5,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w400,
+                              ),
+                              prefixIcon: const Icon(
+                                Icons.search_rounded,
+                                color: Color(0xFF9CC70A),
+                                size: 20,
+                              ),
+                              suffixIcon: _searchQuery.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.textSecondary),
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        setState(() => _searchQuery = '');
+                                      },
+                                    )
+                                  : null,
+                              filled: true,
+                              fillColor: Colors.white,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: const BorderSide(color: Color(0xFFE5E8E2), width: 1),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: const BorderSide(color: Color(0xFFE5E8E2), width: 1),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: const BorderSide(color: Color(0xFF9CC70A), width: 1.5),
                               ),
                             ),
                           ),
-                          LayoutBuilder(
-                            builder: (context, constraints) {
-                              final crossAxisCount = constraints.maxWidth > 800
-                                  ? 6
-                                  : constraints.maxWidth > 500
-                                      ? 4
-                                      : 3;
-                              return GridView.count(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                crossAxisCount: crossAxisCount,
-                                mainAxisSpacing: 12,
-                                crossAxisSpacing: 12,
-                                childAspectRatio: 0.85,
-                                children: entry.value
-                                    .map((m) => SubModuleCard(
-                                          label: m.label,
-                                          icon: m.icon,
-                                          color: m.color,
-                                          onTap: () => context.go(m.route),
-                                        ))
-                                    .toList(),
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 8),
-                        ],
+                        ),
+
+                        if (filteredSections.isEmpty && _searchQuery.isNotEmpty)
+                          Center(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: const Color(0xFF9CC70A).withValues(alpha: 0.1),
+                                    ),
+                                    child: const Icon(
+                                      Icons.search_off_rounded,
+                                      size: 40,
+                                      color: Color(0xFF9CC70A),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'No icons found for "$_searchQuery"',
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  const Text(
+                                    'Try searching with a different keyword like "Attendance", "Employee", or "Leave".',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  OutlinedButton.icon(
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() => _searchQuery = '');
+                                    },
+                                    icon: const Icon(Icons.refresh_rounded, size: 16),
+                                    label: const Text('Clear Search'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: const Color(0xFF9CC70A),
+                                      side: const BorderSide(color: Color(0xFF9CC70A)),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        else
+                          for (final entry in filteredSections.entries) ...[
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8, top: 8),
+                              child: Text(
+                                entry.key,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.primary,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                            ),
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                final crossAxisCount = constraints.maxWidth > 800
+                                    ? 6
+                                    : constraints.maxWidth > 500
+                                        ? 4
+                                        : 3;
+                                return GridView.count(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  crossAxisCount: crossAxisCount,
+                                  mainAxisSpacing: 12,
+                                  crossAxisSpacing: 12,
+                                  childAspectRatio: 0.85,
+                                  children: entry.value
+                                      .map((m) => SubModuleCard(
+                                            label: m.label,
+                                            icon: m.icon,
+                                            color: m.color,
+                                            onTap: () => context.go(m.route),
+                                          ))
+                                      .toList(),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 8),
+                          ],
                       ],
                     ),
             ),
@@ -224,6 +354,5 @@ class HrmsModuleScreen extends ConsumerWidget {
         ],
       ),
     );
-
   }
 }

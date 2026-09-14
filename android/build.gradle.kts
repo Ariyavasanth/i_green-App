@@ -30,16 +30,7 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
-subprojects {
-    afterEvaluate {
-        if (plugins.hasPlugin("com.android.application") || plugins.hasPlugin("com.android.library")) {
-            configure<com.android.build.gradle.BaseExtension> {
-                lintOptions.isCheckReleaseBuilds = false
-                lintOptions.isAbortOnError = false
-            }
-        }
-    }
-}
+
 
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)

@@ -94,8 +94,8 @@ String? _getRequiredPermissionForPath(String path) {
   if (path == '/attendance') return 'Attendance';
   if (path == '/attendance-settings') return 'Attendance Settings';
   if (path == '/attendance-management') return 'Attendance Management';
-  if (path == '/on-duty' || path == '/my-on-duty') return 'On-Duty';
-  if (path == '/on-duty-management') return 'On-Duty Management';
+  if (path == '/on-duty' || path == '/my-on-duty') return 'My On Duty';
+  if (path == '/on-duty-management') return 'On Duty Management';
   if (path == '/my-tasks') return 'My Tasks';
   if (path == '/time-clocking') return 'Time Clocking';
   if (path == '/tasks-and-timesheets') return 'Tasks and Clocking Management';

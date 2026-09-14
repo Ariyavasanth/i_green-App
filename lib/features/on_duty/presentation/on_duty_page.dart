@@ -100,6 +100,15 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
       );
     }
 
+    final todayStr = DateFormat('dd-MM-yyyy').format(DateTime.now());
+    final todayAssignmentsAsync = ref.watch(
+      allOnDutyAssignmentsProvider((
+        date: todayStr,
+        statusFilter: null,
+        employeeId: currentEmp.id,
+      )),
+    );
+
     final dateStr = _selectedDate != null ? DateFormat('dd-MM-yyyy').format(_selectedDate!) : null;
     final assignmentsAsync = ref.watch(
       allOnDutyAssignmentsProvider((
@@ -134,10 +143,10 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // KPI Stat Cards
-                assignmentsAsync.when(
-                  data: (list) => _buildKpiGrid(list, isMobile),
-                  loading: () => const SizedBox.shrink(),
-                  error: (_, __) => const SizedBox.shrink(),
+                todayAssignmentsAsync.when(
+                  data: (todayList) => _buildKpiGrid(todayList, isMobile),
+                  loading: () => _buildKpiGrid([], isMobile),
+                  error: (_, _) => _buildKpiGrid([], isMobile),
                 ),
                 const SizedBox(height: 16),
 
@@ -153,7 +162,7 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                     return const SizedBox.shrink();
                   },
                   loading: () => const SizedBox.shrink(),
-                  error: (_, __) => const SizedBox.shrink(),
+                  error: (_, _) => const SizedBox.shrink(),
                 ),
 
                 // Filter & Search Controls
@@ -192,7 +201,7 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: filtered.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      separatorBuilder: (_, _) => const SizedBox(height: 12),
                       itemBuilder: (ctx, i) => _buildAssignmentCard(filtered[i], currentEmp, isMobile),
                     );
                   },
@@ -217,15 +226,18 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
   }
 
   Widget _buildKpiGrid(List<OnDutyAssignment> list, bool isMobile) {
-    final total = list.length;
-    final inProgress = list.where((x) => x.isOngoing && x.status != 'ASSIGNED').length;
-    final assigned = list.where((x) => x.status == 'ASSIGNED').length;
-    final completed = list.where((x) => x.status == 'COMPLETED').length;
+    final todayStr = DateFormat('dd-MM-yyyy').format(DateTime.now());
+    final todayList = list.where((x) => x.date == todayStr).toList();
+
+    final total = todayList.length;
+    final inProgress = todayList.where((x) => x.isOngoing && x.status != 'ASSIGNED').length;
+    final assigned = todayList.where((x) => x.status == 'ASSIGNED').length;
+    final completed = todayList.where((x) => x.status == 'COMPLETED').length;
 
     final cards = [
       _buildStatCard('Total ODs', total.toString(), Icons.assignment_outlined, const Color(0xFF414A51)),
       _buildStatCard('Assigned', assigned.toString(), Icons.schedule, const Color(0xFF3B82F6)),
-      _buildStatCard('Active / En Route', inProgress.toString(), Icons.pending_actions, const Color(0xFFF59E0B)),
+      _buildStatCard('Active', inProgress.toString(), Icons.pending_actions, const Color(0xFFF59E0B)),
       _buildStatCard('Completed', completed.toString(), Icons.task_alt, const Color(0xFF10B981)),
     ];
 
@@ -735,6 +747,38 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (item.notes.contains('Postponed to')) ...[
+                        () {
+                          final logs = item.notes
+                              .split(RegExp(r'\s*\|\s*|\r?\n'))
+                              .map((e) => e.trim())
+                              .where((e) => e.startsWith('Postponed to'))
+                              .toList();
+                          final logText = logs.isNotEmpty ? logs.last : 'Postponed';
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.shade50,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.amber.shade300),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.event_repeat_rounded, size: 18, color: Colors.amber.shade900),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Task $logText',
+                                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }(),
+                      ],
+
                       // OD SUMMARY
                       const Text(
                         'OD SUMMARY',
@@ -749,7 +793,7 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
 
                       // 3-Column Summary Card Grid
                       Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF8FAFC),
                           borderRadius: BorderRadius.circular(14),
@@ -762,10 +806,10 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                                 children: [
                                   Text(
                                     '${displaySites.length} ${displaySites.length == 1 ? "Site" : "Sites"}',
-                                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
                                   ),
                                   const SizedBox(height: 2),
-                                  Text('Visits', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                                  Text('Visits', style: TextStyle(fontSize: 10.5, color: Colors.grey.shade600)),
                                 ],
                               ),
                             ),
@@ -778,21 +822,21 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                                     children: [
                                       Icon(
                                         item.isCompleted ? Icons.check_circle : Icons.pie_chart_outline,
-                                        size: 14,
+                                        size: 13,
                                         color: statusColor,
                                       ),
-                                      const SizedBox(width: 4),
+                                      const SizedBox(width: 3),
                                       Flexible(
                                         child: Text(
                                           statusLabel,
-                                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: statusColor),
+                                          style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: statusColor),
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                     ],
                                   ),
                                   const SizedBox(height: 2),
-                                  Text('Status', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                                  Text('Status', style: TextStyle(fontSize: 10.5, color: Colors.grey.shade600)),
                                 ],
                               ),
                             ),
@@ -806,12 +850,12 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                                         : (item.actualStartTime?.isNotEmpty == true
                                             ? item.actualStartTime!
                                             : (item.plannedStartTime.isNotEmpty ? item.plannedStartTime : '--')),
-                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
                                     item.durationMinutes > 0 ? 'Duration' : 'Start Time',
-                                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                    style: TextStyle(fontSize: 10.5, color: Colors.grey.shade600),
                                   ),
                                 ],
                               ),
@@ -833,11 +877,40 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                       if (item.notes.isNotEmpty) ...[
                         const SizedBox(height: 10),
                         Text('Instructions / Notes', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
-                        const SizedBox(height: 2),
-                        Text(
-                          item.notes,
-                          style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
-                        ),
+                        const SizedBox(height: 4),
+                        ...item.notes
+                            .split(RegExp(r'\s*\|\s*|\r?\n'))
+                            .map((e) => e.trim())
+                            .where((e) => e.isNotEmpty)
+                            .map(
+                              (note) => Padding(
+                                padding: const EdgeInsets.only(top: 2, bottom: 2),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '• ',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.grey.shade700,
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Text(
+                                        note,
+                                        style: TextStyle(
+                                          fontSize: 12.5,
+                                          color: Colors.grey.shade800,
+                                          height: 1.35,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                       ],
 
                       const SizedBox(height: 20),
@@ -1063,32 +1136,42 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
-                        child: Row(
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             if (site.reachedTime != null) ...[
-                              Icon(Icons.login, size: 14, color: Colors.green.shade700),
-                              const SizedBox(width: 4),
-                              Text(
-                                site.reachedTime!,
-                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.login, size: 14, color: Colors.green.shade700),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    site.reachedTime!,
+                                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text('Arrived', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                                ],
                               ),
-                              const SizedBox(width: 4),
-                              Text('Arrived', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
                             ],
                             if (site.reachedTime != null && site.workCompletedTime != null)
-                              const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 8),
-                                child: Text('→', style: TextStyle(color: Colors.grey)),
-                              ),
+                              const Text('→', style: TextStyle(color: Colors.grey)),
                             if (site.workCompletedTime != null) ...[
-                              Icon(Icons.task_alt, size: 14, color: Colors.green.shade700),
-                              const SizedBox(width: 4),
-                              Text(
-                                site.workCompletedTime!,
-                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.task_alt, size: 14, color: Colors.green.shade700),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    site.workCompletedTime!,
+                                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text('Completed', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                                ],
                               ),
-                              const SizedBox(width: 4),
-                              Text('Completed', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
                             ],
                           ],
                         ),
@@ -1098,20 +1181,38 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                     _buildSiteLocationProofsBox(site: site, siteIndex: siteIndex, assignment: assignment),
 
                     // Photo Proof Thumbnails
-                    if (site.reachedPhoto != null || site.workPhoto != null) ...[
+                    if (site.reachedPhoto != null || site.effectiveWorkPhotos.isNotEmpty) ...[
                       const SizedBox(height: 12),
-                      Row(
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (site.reachedPhoto != null)
-                            Expanded(
-                              child: _buildPhotoThumbnail(context, 'Arrival Proof', site.reachedPhoto!),
+                          if (site.reachedPhoto != null) ...[
+                            _buildPhotoThumbnail(context, 'Arrival Proof', site.reachedPhoto!),
+                            const SizedBox(height: 8),
+                          ],
+                          if (site.effectiveWorkPhotos.isNotEmpty) ...[
+                            Text(
+                              'Work Proof Photos (${site.effectiveWorkPhotos.length}):',
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF15803D)),
                             ),
-                          if (site.reachedPhoto != null && site.workPhoto != null)
-                            const SizedBox(width: 10),
-                          if (site.workPhoto != null)
-                            Expanded(
-                              child: _buildPhotoThumbnail(context, 'Work Proof', site.workPhoto!),
+                            const SizedBox(height: 6),
+                            SizedBox(
+                              height: 118,
+                              child: ListView.separated(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: site.effectiveWorkPhotos.length,
+                                separatorBuilder: (_, _) => const SizedBox(width: 8),
+                                itemBuilder: (ctx, pIdx) => SizedBox(
+                                  width: 80,
+                                  child: _buildPhotoThumbnail(
+                                    context,
+                                    'Proof ${pIdx + 1}',
+                                    site.effectiveWorkPhotos[pIdx],
+                                  ),
+                                ),
+                              ),
                             ),
+                          ],
                         ],
                       ),
                     ],
@@ -1307,7 +1408,18 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
 
   Widget _buildReturnToOfficeSection(OnDutyAssignment item) {
     final bool isCheckoutDirect = item.afterCompletionOption == 'CHECKOUT_FROM_OD';
+    final bool isAssignNextOd = item.isAssignNextOdOption;
     final bool hasReturned = item.officeReachedTime != null || item.actualEndTime != null || item.isCompleted;
+
+    final String sectionTitle = isAssignNextOd
+        ? 'ASSIGN NEXT OD'
+        : (isCheckoutDirect ? 'OD DIRECT CHECK-OUT' : 'RETURN TO OFFICE');
+
+    final IconData iconData = hasReturned
+        ? Icons.check
+        : (isAssignNextOd
+            ? Icons.add_location_alt
+            : (isCheckoutDirect ? Icons.logout : Icons.business));
 
     return IntrinsicHeight(
       child: Row(
@@ -1326,7 +1438,7 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    hasReturned ? Icons.check : (isCheckoutDirect ? Icons.logout : Icons.business),
+                    iconData,
                     size: 11,
                     color: Colors.white,
                   ),
@@ -1347,7 +1459,7 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    isCheckoutDirect ? 'OD DIRECT CHECK-OUT' : 'RETURN TO OFFICE',
+                    sectionTitle,
                     style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5, color: Color(0xFF64748B)),
                   ),
                   const SizedBox(height: 4),
@@ -1358,9 +1470,11 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            isCheckoutDirect
-                                ? 'Completed & Checked out directly from OD'
-                                : 'Returned to office${item.officeReachedTime != null ? " at ${item.officeReachedTime}" : (item.actualEndTime != null ? " at ${item.actualEndTime}" : "")}',
+                            isAssignNextOd
+                                ? 'Completed & Next OD assignment ready'
+                                : (isCheckoutDirect
+                                    ? 'Completed & Checked out directly from OD'
+                                    : 'Returned to office${item.officeReachedTime != null ? " at ${item.officeReachedTime}" : (item.actualEndTime != null ? " at ${item.actualEndTime}" : "")}'),
                             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
                           ),
                         ),
@@ -1373,7 +1487,9 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            isCheckoutDirect ? 'Check-out pending after completion' : 'Return to office pending',
+                            isAssignNextOd
+                                ? 'Assign next OD pending after completion'
+                                : (isCheckoutDirect ? 'Check-out pending after completion' : 'Return to office pending'),
                             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade800),
                           ),
                         ),

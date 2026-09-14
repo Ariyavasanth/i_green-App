@@ -66,6 +66,48 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Today's OD KPI Cards & Report Button Section
+            assignmentsAsync.when(
+              data: (allAssignments) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        "Today's OD Summary",
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: () => _showTodayOdReportDialog(context, allAssignments),
+                        icon: const Icon(Icons.assessment_outlined, size: 16),
+                        label: const Text(
+                          "Today's OD Report",
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF414A51),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          elevation: 0,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  _buildTodayKpiGrid(allAssignments),
+                  const SizedBox(height: 16),
+                ],
+              ),
+              loading: () => const SizedBox.shrink(),
+              error: (_, _) => const SizedBox.shrink(),
+            ),
+
             // Streamlined Filters Bar
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -118,9 +160,10 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                             style: const TextStyle(fontSize: 13, color: Color(0xFF414A51), fontWeight: FontWeight.w500),
                             items: const [
                               DropdownMenuItem(value: 'All', child: Text('Status: All')),
-                              DropdownMenuItem(value: 'ASSIGNED', child: Text('🟡 Assigned')),
-                              DropdownMenuItem(value: 'IN_PROGRESS', child: Text('🔵 Running')),
+                              DropdownMenuItem(value: 'ACTIVE', child: Text('🟡 Active')),
+                              DropdownMenuItem(value: 'IN_PROGRESS', child: Text('🔵 In Progress')),
                               DropdownMenuItem(value: 'COMPLETED', child: Text('🟢 Completed')),
+                              DropdownMenuItem(value: 'NOT_COMPLETED', child: Text('🔴 Not Completed')),
                             ],
                             onChanged: (val) {
                               if (val != null) setState(() => _selectedStatus = val);
@@ -167,7 +210,7 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
             ),
             const SizedBox(height: 16),
 
-            // Assignments Table
+            // Assignments Table & Today's OD KPI Section
             assignmentsAsync.when(
               loading: () => const Center(
                 child: Padding(
@@ -178,6 +221,7 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
               error: (e, _) => Center(child: Text('Error loading On-Duty assignments: $e')),
               data: (allAssignments) {
                 final filtered = allAssignments.where((item) {
+                  final matchesDate = item.date == dateStr;
                   final matchSearch = _searchQuery.isEmpty ||
                       item.employeeName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
                       item.purpose.toLowerCase().contains(_searchQuery.toLowerCase()) ||
@@ -185,11 +229,26 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                       item.destination.toLowerCase().contains(_searchQuery.toLowerCase());
 
                   final statusUpper = item.status.toUpperCase();
-                  final matchStatus = _selectedStatus == 'All' ||
-                      statusUpper == _selectedStatus ||
-                      (_selectedStatus == 'IN_PROGRESS' && statusUpper == 'ACTIVE');
+                  bool matchStatus = false;
+                  if (_selectedStatus == 'All') {
+                    matchStatus = true;
+                  } else if (_selectedStatus == 'ACTIVE') {
+                    matchStatus = (statusUpper == 'ASSIGNED' || statusUpper == 'ACTIVE');
+                  } else if (_selectedStatus == 'IN_PROGRESS') {
+                    matchStatus = (statusUpper == 'IN_PROGRESS' ||
+                        statusUpper == 'TRAVELING_TO_DESTINATION' ||
+                        statusUpper == 'REACHED_DESTINATION' ||
+                        statusUpper == 'WORK_COMPLETED' ||
+                        statusUpper == 'RETURNING_TO_OFFICE');
+                  } else if (_selectedStatus == 'COMPLETED') {
+                    matchStatus = (statusUpper == 'COMPLETED');
+                  } else if (_selectedStatus == 'NOT_COMPLETED') {
+                    matchStatus = (statusUpper == 'NOT_COMPLETED' || statusUpper == 'CANCELLED');
+                  } else {
+                    matchStatus = (statusUpper == _selectedStatus);
+                  }
 
-                  return matchSearch && matchStatus;
+                  return matchesDate && matchSearch && matchStatus;
                 }).toList();
 
                 if (filtered.isEmpty) {
@@ -347,10 +406,58 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
   );
 }
 
+  String? _getPostponedLog(String notes) {
+    if (notes.isEmpty) return null;
+    final logs = notes
+        .split(RegExp(r'\s*\|\s*|\r?\n'))
+        .map((e) => e.trim())
+        .where((e) => e.startsWith('Postponed to'))
+        .toList();
+    return logs.isNotEmpty ? logs.last : null;
+  }
+
+  Widget _buildTimeMetricColumn(String label, String value, Color valueColor) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: valueColor),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
+
   Widget _buildMobileCard(OnDutyAssignment item) {
-    final durationStr = item.durationMinutes > 0
-        ? '${item.durationMinutes ~/ 60}h ${item.durationMinutes % 60}m'
-        : (item.status == 'IN_PROGRESS' || item.status == 'ACTIVE' ? 'Running' : '--');
+    final postponedLog = _getPostponedLog(item.notes);
+
+    final displaySites = item.sites.isNotEmpty
+        ? item.sites
+        : [
+            OnDutySite(
+              siteId: '1',
+              siteName: item.destinationName.isNotEmpty ? item.destinationName : item.destination,
+              purpose: item.purpose,
+              destination: item.destination,
+              destinationAddress: item.destinationAddress,
+              radius: item.destinationRadius,
+              status: item.isCompleted ? 'COMPLETED' : item.status,
+              travelStartTime: item.travelStartTime ?? item.actualStartTime,
+              reachedTime: item.reachedTime,
+              workCompletedTime: item.workCompletedTime ?? item.actualEndTime,
+              travelDurationMinutes: item.travelToSiteDurationMinutes,
+              workDurationMinutes: item.onSiteWorkDurationMinutes > 0 ? item.onSiteWorkDurationMinutes : item.durationMinutes,
+            ),
+          ];
 
     return Card(
       elevation: 0,
@@ -370,6 +477,7 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
               // Header: Name & Status
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
                     child: Text(
@@ -400,9 +508,9 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                   _buildStatusBadge(item.status),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
 
-              // Badges: OD Type & Date
+              // Badges: OD Type & Date & Optional Postponed Chip
               Wrap(
                 spacing: 8,
                 runSpacing: 6,
@@ -432,89 +540,118 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                   ),
                 ],
               ),
-              const Divider(height: 18),
 
-              // Destination
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text('📍 ', style: TextStyle(fontSize: 13)),
-                                  Expanded(
-                                    child: Text(
-                                      item.sites.isNotEmpty
-                                          ? 'Sites (${item.sites.length}): ${item.sites.map((s) => s.effectiveName).join(" → ")}'
-                                          : item.destination,
-                                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF414A51)),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-              const SizedBox(height: 10),
-
-              // Planned Time & Duration Box
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Planned Time', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${item.plannedStartTime}${item.plannedEndTime != null ? " → ${item.plannedEndTime}" : ""}',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF414A51)),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(height: 24, width: 1, color: Colors.grey.shade300),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Duration', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-                          const SizedBox(height: 2),
-                          Text(
-                            durationStr,
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              if (item.actualStartTime != null || item.actualEndTime != null) ...[
+              // Postponed Banner if Task Was Postponed
+              if (postponedLog != null) ...[
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    if (item.actualStartTime != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.amber.shade300),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.event_repeat_rounded, size: 15, color: Colors.amber.shade900),
+                      const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          'Started: ${item.actualStartTime}',
-                          style: TextStyle(fontSize: 11, color: Colors.blue.shade800, fontWeight: FontWeight.w500),
+                          'Task $postponedLog',
+                          style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    if (item.actualEndTime != null)
-                      Expanded(
-                        child: Text(
-                          'Ended: ${item.actualEndTime}',
-                          style: TextStyle(fontSize: 11, color: Colors.green.shade800, fontWeight: FontWeight.w500),
-                        ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ],
+              const Divider(height: 18),
+
+              // Site Breakdown Cards
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: displaySites.asMap().entries.map((entry) {
+                  final idx = entry.key;
+                  final site = entry.value;
+
+                  final siteNameStr = displaySites.length > 1
+                      ? 'Site ${idx + 1}: ${site.effectiveName}'
+                      : site.effectiveName;
+
+                  final startTimeStr = site.travelStartTime ?? (idx == 0 ? item.actualStartTime : null) ?? '--';
+                  final reachedTimeStr = site.reachedTime ?? (idx == 0 ? item.reachedTime : null) ?? '--';
+                  final completedTimeStr = site.workCompletedTime ?? (idx == 0 ? item.actualEndTime : null) ?? '--';
+
+                  final totalMinutes = site.travelDurationMinutes + site.workDurationMinutes > 0
+                      ? site.travelDurationMinutes + site.workDurationMinutes
+                      : (idx == 0 ? item.durationMinutes : 0);
+
+                  final durationText = totalMinutes > 0
+                      ? '${totalMinutes ~/ 60 > 0 ? "${totalMinutes ~/ 60}h " : ""}${totalMinutes % 60}m'
+                      : (site.isCompleted || item.isCompleted
+                          ? 'Done'
+                          : (site.isReached || site.isTraveling || item.isOngoing ? 'Running' : '--'));
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '📍 $siteNameStr',
+                                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: site.isCompleted
+                                    ? Colors.green.shade50
+                                    : (site.isReached || site.isTraveling ? Colors.orange.shade50 : Colors.grey.shade100),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                site.status.replaceAll('_', ' '),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: site.isCompleted
+                                      ? Colors.green.shade700
+                                      : (site.isReached || site.isTraveling ? Colors.orange.shade800 : Colors.grey.shade700),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(child: _buildTimeMetricColumn('Start Time', startTimeStr, Colors.blue.shade800)),
+                            Expanded(child: _buildTimeMetricColumn('Reached Time', reachedTimeStr, Colors.amber.shade900)),
+                            Expanded(child: _buildTimeMetricColumn('Completed Time', completedTimeStr, Colors.green.shade800)),
+                            Expanded(child: _buildTimeMetricColumn('Duration', durationText, const Color(0xFF414A51))),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
             ],
           ),
         ),
@@ -689,7 +826,7 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
 
                       // 3-Column Summary Card Grid
                       Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF8FAFC),
                           borderRadius: BorderRadius.circular(14),
@@ -702,10 +839,10 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                                 children: [
                                   Text(
                                     '${displaySites.length} ${displaySites.length == 1 ? "Site" : "Sites"}',
-                                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
                                   ),
                                   const SizedBox(height: 2),
-                                  Text('Visits', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                                  Text('Visits', style: TextStyle(fontSize: 10.5, color: Colors.grey.shade600)),
                                 ],
                               ),
                             ),
@@ -716,11 +853,14 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      _buildStatusBadge(assignment.status),
+                                      FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        child: _buildStatusBadge(assignment.status),
+                                      ),
                                     ],
                                   ),
                                   const SizedBox(height: 2),
-                                  Text('Status', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                                  Text('Status', style: TextStyle(fontSize: 10.5, color: Colors.grey.shade600)),
                                 ],
                               ),
                             ),
@@ -734,12 +874,12 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                                         : (assignment.actualStartTime?.isNotEmpty == true
                                             ? assignment.actualStartTime!
                                             : (assignment.plannedStartTime.isNotEmpty ? assignment.plannedStartTime : '--')),
-                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
                                     assignment.durationMinutes > 0 ? 'Duration' : 'Start Time',
-                                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                    style: TextStyle(fontSize: 10.5, color: Colors.grey.shade600),
                                   ),
                                 ],
                               ),
@@ -771,11 +911,40 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                       if (assignment.notes.isNotEmpty) ...[
                         const SizedBox(height: 10),
                         Text('Notes / Instructions', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
-                        const SizedBox(height: 2),
-                        Text(
-                          assignment.notes,
-                          style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
-                        ),
+                        const SizedBox(height: 4),
+                        ...assignment.notes
+                            .split(RegExp(r'\s*\|\s*|\r?\n'))
+                            .map((e) => e.trim())
+                            .where((e) => e.isNotEmpty)
+                            .map(
+                              (note) => Padding(
+                                padding: const EdgeInsets.only(top: 2, bottom: 2),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '• ',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.grey.shade700,
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Text(
+                                        note,
+                                        style: TextStyle(
+                                          fontSize: 12.5,
+                                          color: Colors.grey.shade800,
+                                          height: 1.35,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                       ],
 
                       const SizedBox(height: 20),
@@ -1071,32 +1240,42 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
-                        child: Row(
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             if (site.reachedTime != null) ...[
-                              Icon(Icons.login, size: 14, color: Colors.green.shade700),
-                              const SizedBox(width: 4),
-                              Text(
-                                site.reachedTime!,
-                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.login, size: 14, color: Colors.green.shade700),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    site.reachedTime!,
+                                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text('Arrived', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                                ],
                               ),
-                              const SizedBox(width: 4),
-                              Text('Arrived', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
                             ],
                             if (site.reachedTime != null && site.workCompletedTime != null)
-                              const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 8),
-                                child: Text('→', style: TextStyle(color: Colors.grey)),
-                              ),
+                              const Text('→', style: TextStyle(color: Colors.grey)),
                             if (site.workCompletedTime != null) ...[
-                              Icon(Icons.task_alt, size: 14, color: Colors.green.shade700),
-                              const SizedBox(width: 4),
-                              Text(
-                                site.workCompletedTime!,
-                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.task_alt, size: 14, color: Colors.green.shade700),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    site.workCompletedTime!,
+                                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text('Completed', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                                ],
                               ),
-                              const SizedBox(width: 4),
-                              Text('Completed', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
                             ],
                           ],
                         ),
@@ -1314,7 +1493,18 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
 
   Widget _buildMgmtReturnToOfficeSection(OnDutyAssignment assignment) {
     final bool isCheckoutDirect = assignment.afterCompletionOption == 'CHECKOUT_FROM_OD';
+    final bool isAssignNextOd = assignment.isAssignNextOdOption;
     final bool hasReturned = assignment.officeReachedTime != null || assignment.actualEndTime != null || assignment.isCompleted;
+
+    final String sectionTitle = isAssignNextOd
+        ? 'ASSIGN NEXT OD'
+        : (isCheckoutDirect ? 'OD DIRECT CHECK-OUT' : 'RETURN TO OFFICE');
+
+    final IconData iconData = hasReturned
+        ? Icons.check
+        : (isAssignNextOd
+            ? Icons.add_location_alt
+            : (isCheckoutDirect ? Icons.logout : Icons.business));
 
     return IntrinsicHeight(
       child: Row(
@@ -1333,7 +1523,7 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    hasReturned ? Icons.check : (isCheckoutDirect ? Icons.logout : Icons.business),
+                    iconData,
                     size: 11,
                     color: Colors.white,
                   ),
@@ -1354,7 +1544,7 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    isCheckoutDirect ? 'OD DIRECT CHECK-OUT' : 'RETURN TO OFFICE',
+                    sectionTitle,
                     style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5, color: Color(0xFF64748B)),
                   ),
                   const SizedBox(height: 4),
@@ -1365,9 +1555,11 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            isCheckoutDirect
-                                ? 'Completed & Checked out directly from OD'
-                                : 'Returned to office${assignment.officeReachedTime != null ? " at ${assignment.officeReachedTime}" : (assignment.actualEndTime != null ? " at ${assignment.actualEndTime}" : "")}',
+                            isAssignNextOd
+                                ? 'Completed & Next OD assignment ready'
+                                : (isCheckoutDirect
+                                    ? 'Completed & Checked out directly from OD'
+                                    : 'Returned to office${assignment.officeReachedTime != null ? " at ${assignment.officeReachedTime}" : (assignment.actualEndTime != null ? " at ${assignment.actualEndTime}" : "")}'),
                             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
                           ),
                         ),
@@ -1380,7 +1572,9 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            isCheckoutDirect ? 'Check-out pending after completion' : 'Return to office pending',
+                            isAssignNextOd
+                                ? 'Assign next OD pending after completion'
+                                : (isCheckoutDirect ? 'Check-out pending after completion' : 'Return to office pending'),
                             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade800),
                           ),
                         ),
@@ -1506,6 +1700,348 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildTodayKpiGrid(List<OnDutyAssignment> allAssignments) {
+    final todayStr = DateFormat('dd-MM-yyyy').format(DateTime.now());
+    final todayList = allAssignments.where((item) => item.date == todayStr).toList();
+
+    final totalCount = todayList.length;
+    final completedCount = todayList.where((item) => item.status.toUpperCase() == 'COMPLETED').length;
+    final notCompletedCount = todayList.where((item) => item.status.toUpperCase() == 'NOT_COMPLETED' || item.status.toUpperCase() == 'CANCELLED').length;
+    final activeCount = todayList.where((item) {
+      final s = item.status.toUpperCase();
+      return s == 'ASSIGNED' || s == 'ACTIVE';
+    }).length;
+    final inProgressCount = todayList.where((item) {
+      final s = item.status.toUpperCase();
+      return s == 'IN_PROGRESS' || s == 'TRAVELING_TO_DESTINATION' || s == 'REACHED_DESTINATION' || s == 'WORK_COMPLETED' || s == 'RETURNING_TO_OFFICE';
+    }).length;
+
+    return Column(
+      children: [
+        // Row 1: Total OD & Completed
+        Row(
+          children: [
+            Expanded(
+              child: _buildKpiCard('Total OD', '$totalCount', Icons.business_center_outlined, const Color(0xFF414A51), const Color(0xFFF1F5F9)),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _buildKpiCard('Completed', '$completedCount', Icons.check_circle_outline, const Color(0xFF16A34A), const Color(0xFFDCFCE7)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+
+        // Row 2: Not Completed & Active
+        Row(
+          children: [
+            Expanded(
+              child: _buildKpiCard('Not Completed', '$notCompletedCount', Icons.cancel_outlined, const Color(0xFFDC2626), const Color(0xFFFEE2E2)),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _buildKpiCard('Active', '$activeCount', Icons.bolt_outlined, const Color(0xFFD97706), const Color(0xFFFEF3C7)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+
+        // Row 3: In Progress (100% Expandable Full Width)
+        Row(
+          children: [
+            Expanded(
+              child: _buildKpiCard('In Progress', '$inProgressCount', Icons.directions_run_outlined, const Color(0xFF2563EB), const Color(0xFFDBEAFE), isFullWidth: true),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildKpiCard(String label, String value, IconData icon, Color accentColor, Color bgColor, {bool isFullWidth = false}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: isFullWidth
+          ? Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: bgColor,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(icon, size: 18, color: accentColor),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: accentColor,
+                  ),
+                ),
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: bgColor,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(icon, size: 16, color: accentColor),
+                    ),
+                    Text(
+                      value,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: accentColor,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF64748B),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+    );
+  }
+
+  void _showTodayOdReportDialog(BuildContext context, List<OnDutyAssignment> allAssignments) {
+    final todayStr = DateFormat('dd-MM-yyyy').format(DateTime.now());
+    final todayList = allAssignments.where((item) => item.date == todayStr).toList();
+
+    final totalCount = todayList.length;
+    final completedCount = todayList.where((item) => item.status.toUpperCase() == 'COMPLETED').length;
+    final notCompletedCount = todayList.where((item) => item.status.toUpperCase() == 'NOT_COMPLETED' || item.status.toUpperCase() == 'CANCELLED').length;
+    final activeCount = todayList.where((item) {
+      final s = item.status.toUpperCase();
+      return s == 'ASSIGNED' || s == 'ACTIVE';
+    }).length;
+    final inProgressCount = todayList.where((item) {
+      final s = item.status.toUpperCase();
+      return s == 'IN_PROGRESS' || s == 'TRAVELING_TO_DESTINATION' || s == 'REACHED_DESTINATION' || s == 'WORK_COMPLETED' || s == 'RETURNING_TO_OFFICE';
+    }).length;
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600, maxHeight: 700),
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.assessment_outlined, color: Color(0xFF9CC70A), size: 26),
+                        const SizedBox(width: 10),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              "Today's On Duty Report",
+                              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                            ),
+                            Text(
+                              'Date: $todayStr',
+                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                // Summary Badges Container
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildReportBadge('Total', '$totalCount', const Color(0xFF414A51)),
+                      _buildReportBadge('Completed', '$completedCount', const Color(0xFF16A34A)),
+                      _buildReportBadge('Not Completed', '$notCompletedCount', const Color(0xFFDC2626)),
+                      _buildReportBadge('Active', '$activeCount', const Color(0xFFD97706)),
+                      _buildReportBadge('In Progress', '$inProgressCount', const Color(0xFF2563EB)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Employee OD Details',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: todayList.isEmpty
+                      ? Center(
+                          child: Text(
+                            'No OD records found for today ($todayStr)',
+                            style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                          ),
+                        )
+                      : ListView.separated(
+                          itemCount: todayList.length,
+                          separatorBuilder: (_, _) => const Divider(height: 1),
+                          itemBuilder: (ctx, idx) {
+                            final item = todayList[idx];
+                            final isComp = item.status.toUpperCase() == 'COMPLETED';
+                            final isNotComp = item.status.toUpperCase() == 'NOT_COMPLETED' || item.status.toUpperCase() == 'CANCELLED';
+
+                            return ListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                              leading: CircleAvatar(
+                                backgroundColor: isComp
+                                    ? const Color(0xFFDCFCE7)
+                                    : (isNotComp ? const Color(0xFFFEE2E2) : const Color(0xFFE0F2FE)),
+                                child: Icon(
+                                  isComp
+                                      ? Icons.check
+                                      : (isNotComp ? Icons.close : Icons.directions_run),
+                                  color: isComp
+                                      ? const Color(0xFF16A34A)
+                                      : (isNotComp ? const Color(0xFFDC2626) : const Color(0xFF0284C7)),
+                                  size: 18,
+                                ),
+                              ),
+                              title: Text(
+                                item.employeeName,
+                                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${item.odType} • Destination: ${item.effectiveDestinationTitle}',
+                                    style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+                                  ),
+                                  if (item.purpose.isNotEmpty)
+                                    Text(
+                                      'Purpose/Reason: ${item.purpose}',
+                                      style: TextStyle(fontSize: 11.5, color: Colors.grey.shade700, fontStyle: FontStyle.italic),
+                                    ),
+                                  if (item.effectiveWorkPhotos.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Text(
+                                        '📷 ${item.effectiveWorkPhotos.length} Photo(s) Attached',
+                                        style: const TextStyle(fontSize: 11, color: Color(0xFF16A34A), fontWeight: FontWeight.w600),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              trailing: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: isComp
+                                      ? const Color(0xFFDCFCE7)
+                                      : (isNotComp ? const Color(0xFFFEE2E2) : const Color(0xFFFEF3C7)),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  item.effectiveStatusLabel,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: isComp
+                                        ? const Color(0xFF15803D)
+                                        : (isNotComp ? const Color(0xFFB91C1C) : const Color(0xFFB45309)),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: OutlinedButton.styleFrom(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: const Text('Close'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReportBadge(String label, String count, Color color) {
+    return Column(
+      children: [
+        Text(count, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
+        const SizedBox(height: 2),
+        Text(label, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w500, color: Color(0xFF64748B))),
+      ],
     );
   }
 }
