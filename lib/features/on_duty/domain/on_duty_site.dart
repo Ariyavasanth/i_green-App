@@ -52,10 +52,11 @@ class OnDutySite {
   final int workDurationMinutes;
   final String notes;
 
-  bool get isPending => status == 'PENDING';
-  bool get isTraveling => status == 'TRAVELING';
-  bool get isReached => status == 'REACHED';
-  bool get isCompleted => status == 'COMPLETED';
+  bool get isPending => status == 'PENDING' && !isTraveling && !isReached && !isCompleted && !isNotCompleted;
+  bool get isTraveling => (status == 'TRAVELING' || status == 'IN_PROGRESS') && !isReached && !isCompleted && !isNotCompleted;
+  bool get isReached => (status == 'REACHED' || status == 'ARRIVED' || (reachedPhoto != null && reachedPhoto!.isNotEmpty) || (reachedTime != null && reachedTime!.isNotEmpty)) && !isCompleted && !isNotCompleted;
+  bool get isCompleted => status == 'COMPLETED' || status == 'WORK_COMPLETED';
+  bool get isNotCompleted => status == 'NOT_COMPLETED' || status == 'CANCELLED';
 
   String get effectiveName {
     if (siteName.trim().isNotEmpty) return siteName.trim();

@@ -61,6 +61,7 @@ dependencies:
   flutter_webrtc: ^1.6.0
   flutter_svg: ^2.0.10+1
   google_fonts: ^6.2.1
+  google_maps_flutter: ^2.10.0
 
 
 dev_dependencies:

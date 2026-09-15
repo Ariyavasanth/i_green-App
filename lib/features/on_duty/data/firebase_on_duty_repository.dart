@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import '../domain/on_duty_assignment.dart';
 import '../domain/on_duty_repository.dart';
+import '../domain/on_duty_site.dart';
 
 /// Firebase Firestore implementation for OnDutyRepository.
 class FirebaseOnDutyRepository implements OnDutyRepository {
@@ -58,16 +60,18 @@ class FirebaseOnDutyRepository implements OnDutyRepository {
         final filterUpper = statusFilter.toUpperCase().replaceAll(' ', '_');
         items = items.where((item) {
           final s = item.status.toUpperCase();
+          if (filterUpper == 'COMPLETED') {
+            return s == 'COMPLETED' || s == 'WORK_COMPLETED' || item.allSitesCompleted;
+          }
           if (filterUpper == 'IN_PROGRESS') {
-            return s == 'IN_PROGRESS' ||
+            return (s == 'IN_PROGRESS' ||
                 s == 'ACTIVE' ||
                 s == 'TRAVELING_TO_DESTINATION' ||
                 s == 'REACHED_DESTINATION' ||
-                s == 'WORK_COMPLETED' ||
-                s == 'RETURNING_TO_OFFICE';
+                s == 'RETURNING_TO_OFFICE') && s != 'COMPLETED' && !item.allSitesCompleted;
           }
           if (filterUpper == 'ACTIVE') {
-            return s == 'ASSIGNED' || s == 'ACTIVE' || s == 'TRAVELING_TO_DESTINATION' || s == 'REACHED_DESTINATION';
+            return (s == 'ASSIGNED' || s == 'ACTIVE' || s == 'TRAVELING_TO_DESTINATION' || s == 'REACHED_DESTINATION') && s != 'COMPLETED' && !item.allSitesCompleted;
           }
           if (filterUpper == 'NOT_COMPLETED') {
             return s == 'NOT_COMPLETED' || s == 'CANCELLED';
@@ -93,13 +97,12 @@ class FirebaseOnDutyRepository implements OnDutyRepository {
           .where((item) {
             final s = item.status.toUpperCase();
             final matchesEmp = item.employeeId == employeeId || employeeId == 0;
-            final isOngoing = s == 'ASSIGNED' ||
+            final isOngoing = (s == 'ASSIGNED' ||
                 s == 'TRAVELING_TO_DESTINATION' ||
                 s == 'IN_PROGRESS' ||
                 s == 'ACTIVE' ||
                 s == 'REACHED_DESTINATION' ||
-                s == 'WORK_COMPLETED' ||
-                s == 'RETURNING_TO_OFFICE';
+                s == 'RETURNING_TO_OFFICE') && s != 'COMPLETED' && !item.allSitesCompleted;
             return matchesEmp && isOngoing;
           })
           .toList();
@@ -163,7 +166,28 @@ class FirebaseOnDutyRepository implements OnDutyRepository {
   @override
   Future<void> updateAssignment(OnDutyAssignment assignment) async {
     try {
-      await _collection.doc(assignment.id.toString()).set(assignment.toMap(), SetOptions(merge: true));
+      final docData = assignment.toMap();
+
+      if (assignment.id > 0) {
+        await _collection.doc(assignment.id.toString()).set(docData, SetOptions(merge: true));
+        return;
+      }
+
+      final snapshot = await _collection.get();
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final rawDocId = doc.id;
+        final docIdNum = int.tryParse(rawDocId) ?? (data['id'] is int ? data['id'] : int.tryParse(data['id']?.toString() ?? '0') ?? 0);
+
+        final matchesId = assignment.id > 0 && (docIdNum == assignment.id || rawDocId == assignment.id.toString());
+
+        if (matchesId) {
+          final targetId = assignment.id > 0 ? assignment.id : (docIdNum > 0 ? docIdNum : assignment.id);
+          final mergedData = assignment.copyWith(id: targetId).toMap();
+          await doc.reference.set(mergedData, SetOptions(merge: true));
+          break;
+        }
+      }
     } catch (_) {}
   }
 
@@ -264,10 +288,22 @@ class FirebaseOnDutyRepository implements OnDutyRepository {
       final assignment = await getAssignmentById(id);
       if (assignment == null) return;
 
-      final nowStr = '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}';
+      final nowStr = DateFormat('hh:mm a').format(DateTime.now());
       final updatedNotes = purposeDetails.isNotEmpty
           ? (assignment.notes.isNotEmpty ? '${assignment.notes} | Details: $purposeDetails' : purposeDetails)
           : assignment.notes;
+
+      final sitesList = List<OnDutySite>.from(assignment.effectiveSites);
+      for (int i = 0; i < sitesList.length; i++) {
+        sitesList[i] = sitesList[i].copyWith(
+          status: 'COMPLETED',
+          workCompletedTime: sitesList[i].workCompletedTime ?? nowStr,
+          workPhoto: sitesList[i].workPhoto ?? (photos.isNotEmpty ? photos.first : null),
+          workPhotos: sitesList[i].workPhotos.isNotEmpty ? sitesList[i].workPhotos : photos,
+          workEndLatitude: sitesList[i].workEndLatitude ?? latitude,
+          workEndLongitude: sitesList[i].workEndLongitude ?? longitude,
+        );
+      }
 
       final updated = assignment.copyWith(
         status: 'COMPLETED',
@@ -278,6 +314,9 @@ class FirebaseOnDutyRepository implements OnDutyRepository {
         notes: updatedNotes,
         endLatitude: latitude ?? assignment.endLatitude,
         endLongitude: longitude ?? assignment.endLongitude,
+        workEndLatitude: latitude ?? assignment.workEndLatitude,
+        workEndLongitude: longitude ?? assignment.workEndLongitude,
+        sites: sitesList,
       );
 
       await updateAssignment(updated);
@@ -296,10 +335,26 @@ class FirebaseOnDutyRepository implements OnDutyRepository {
       final assignment = await getAssignmentById(id);
       if (assignment == null) return;
 
-      final nowStr = '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}';
+      final nowStr = DateFormat('hh:mm a').format(DateTime.now());
       final updatedNotes = reason.isNotEmpty
           ? (assignment.notes.isNotEmpty ? '${assignment.notes} | Not Completed Reason: $reason' : 'Reason: $reason')
           : assignment.notes;
+
+      final sitesList = List<OnDutySite>.from(assignment.effectiveSites);
+      if (sitesList.isNotEmpty) {
+        final activeIdx = assignment.currentSiteIndex;
+        if (activeIdx < sitesList.length) {
+          sitesList[activeIdx] = sitesList[activeIdx].copyWith(
+            status: 'NOT_COMPLETED',
+            workCompletedTime: nowStr,
+            workPhoto: photos.isNotEmpty ? photos.first : null,
+            workPhotos: photos,
+            workEndLatitude: latitude ?? sitesList[activeIdx].workEndLatitude,
+            workEndLongitude: longitude ?? sitesList[activeIdx].workEndLongitude,
+            notes: reason.isNotEmpty ? reason : sitesList[activeIdx].notes,
+          );
+        }
+      }
 
       final updated = assignment.copyWith(
         status: 'NOT_COMPLETED',
@@ -310,6 +365,9 @@ class FirebaseOnDutyRepository implements OnDutyRepository {
         notes: updatedNotes,
         endLatitude: latitude ?? assignment.endLatitude,
         endLongitude: longitude ?? assignment.endLongitude,
+        workEndLatitude: latitude ?? assignment.workEndLatitude,
+        workEndLongitude: longitude ?? assignment.workEndLongitude,
+        sites: sitesList,
       );
 
       await updateAssignment(updated);

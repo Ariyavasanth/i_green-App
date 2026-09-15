@@ -372,7 +372,7 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       IconButton(
-                                        icon: const Icon(Icons.edit_outlined, color: Color(0xFF2563EB), size: 18),
+                                        icon: const Icon(Icons.edit_outlined, color: Color(0xFF414A51), size: 18),
                                         tooltip: 'Edit OD',
                                         onPressed: () {
                                           showDialog(
@@ -493,7 +493,7 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                   ),
                   const SizedBox(width: 4),
                   IconButton(
-                    icon: const Icon(Icons.edit_outlined, color: Color(0xFF2563EB), size: 18),
+                    icon: const Icon(Icons.edit_outlined, color: Color(0xFF414A51), size: 18),
                     tooltip: 'Edit OD',
                     constraints: const BoxConstraints(),
                     padding: const EdgeInsets.all(4),
@@ -693,8 +693,8 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
         icon = Icons.task_alt;
         break;
       case 'RETURNING_TO_OFFICE':
-        bg = Colors.blue.shade50;
-        fg = const Color(0xFF2563EB);
+        bg = const Color(0xFF9CC70A).withValues(alpha: 0.15);
+        fg = const Color(0xFF414A51);
         label = 'Return office from site';
         icon = Icons.directions_car_filled_rounded;
         break;
@@ -751,7 +751,7 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
           ];
 
     final hasStartGps = assignment.startLatitude != null && assignment.startLongitude != null;
-    final hasEndGps = assignment.endLatitude != null && assignment.endLongitude != null;
+    final hasEndGps = assignment.endLatitude != null && assignment.endLongitude != null && assignment.isCompleted;
 
     showDialog(
       context: context,
@@ -1008,8 +1008,8 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                               ),
                               TextButton.icon(
                                 onPressed: () => _openMap(assignment.startLatitude!, assignment.startLongitude!, label: 'Start Location'),
-                                icon: const Icon(Icons.map_outlined, size: 16, color: Color(0xFF2563EB)),
-                                label: const Text('📍 View Map', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold, fontSize: 12)),
+                                icon: const Icon(Icons.map_outlined, size: 16, color: Color(0xFF414A51)),
+                                label: const Text('📍 View Map', style: TextStyle(color: Color(0xFF414A51), fontWeight: FontWeight.bold, fontSize: 12)),
                               ),
                             ],
                           ),
@@ -1030,8 +1030,8 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                               ),
                               TextButton.icon(
                                 onPressed: () => _openMap(assignment.endLatitude!, assignment.endLongitude!, label: 'End Location'),
-                                icon: const Icon(Icons.map_outlined, size: 16, color: Color(0xFF2563EB)),
-                                label: const Text('📍 View Map', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold, fontSize: 12)),
+                                icon: const Icon(Icons.map_outlined, size: 16, color: Color(0xFF414A51)),
+                                label: const Text('📍 View Map', style: TextStyle(color: Color(0xFF414A51), fontWeight: FontWeight.bold, fontSize: 12)),
                               ),
                             ],
                           ),
@@ -1059,10 +1059,10 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                                 builder: (dialogCtx) => AssignOnDutyDialog(existingAssignment: assignment),
                               );
                             },
-                            icon: const Icon(Icons.edit_outlined, size: 16, color: Color(0xFF2563EB)),
-                            label: const Text('Edit OD', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
+                            icon: const Icon(Icons.edit_outlined, size: 16, color: Color(0xFF414A51)),
+                            label: const Text('Edit OD', style: TextStyle(color: Color(0xFF414A51), fontWeight: FontWeight.bold)),
                             style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Color(0xFF2563EB)),
+                              side: const BorderSide(color: Color(0xFF414A51)),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                             ),
@@ -1099,103 +1099,55 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
     OnDutyAssignment? assignment,
   }) {
     final bool isCompleted = site.isCompleted;
-    final Color nodeColor = isCompleted
-        ? const Color(0xFF16A34A)
-        : (site.isReached ? const Color(0xFF3B82F6) : (site.isTraveling ? const Color(0xFFD97706) : const Color(0xFF94A3B8)));
 
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 24,
-            child: Column(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isCompleted ? const Color(0xFFF0FDF4).withValues(alpha: 0.5) : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isCompleted ? const Color(0xFF86EFAC) : const Color(0xFFE2E8F0),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Container(
-                  margin: const EdgeInsets.only(top: 4),
-                  width: 18,
-                  height: 18,
-                  decoration: BoxDecoration(
-                    color: nodeColor,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: nodeColor.withValues(alpha: 0.3),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Center(
-                    child: isCompleted
-                        ? const Icon(Icons.check, size: 12, color: Colors.white)
-                        : Text(
-                            '$siteIndex',
-                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                          ),
+                Expanded(
+                  child: Text(
+                    site.effectiveName,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
                   ),
                 ),
-                Expanded(
-                  child: Container(
-                    width: 2,
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    color: isCompleted ? const Color(0xFF86EFAC) : const Color(0xFFE2E8F0),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: isCompleted ? const Color(0xFFDCFCE7) : const Color(0xFFECFCCB),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (isCompleted) ...[
+                        const Icon(Icons.check_circle, size: 12, color: Color(0xFF16A34A)),
+                        const SizedBox(width: 4),
+                      ],
+                      Text(
+                        site.status.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                          color: isCompleted ? const Color(0xFF15803D) : const Color(0xFF414A51),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(width: 12),
-
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 20),
-              child: Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: isCompleted ? const Color(0xFFF0FDF4).withValues(alpha: 0.5) : Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: isCompleted ? const Color(0xFF86EFAC) : const Color(0xFFE2E8F0),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            site.effectiveName,
-                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: isCompleted ? const Color(0xFFDCFCE7) : const Color(0xFFEFF6FF),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (isCompleted) ...[
-                                const Icon(Icons.check_circle, size: 12, color: Color(0xFF16A34A)),
-                                const SizedBox(width: 4),
-                              ],
-                              Text(
-                                site.status.toUpperCase(),
-                                style: TextStyle(
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.bold,
-                                  color: isCompleted ? const Color(0xFF15803D) : const Color(0xFF1D4ED8),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
 
                     if (site.purpose.isNotEmpty) ...[
                       const SizedBox(height: 4),
@@ -1304,12 +1256,8 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                   ],
                 ),
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+            );
+          }
 
   Widget _buildSiteLocationProofsBox({
     required OnDutySite site,

@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
-import 'package:flutter/gestures.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
@@ -88,7 +89,11 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
 
   bool _isSearching = false;
   bool _isLocatingUser = false;
+  bool _hasLocationPermission = true;
   List<Map<String, dynamic>> _suggestions = [];
+
+  // Places API session token (reused per search session)
+  String? _sessionToken;
 
   // Currently selected / draft location
   String _selectedName = '';
@@ -98,43 +103,37 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
   int _selectedRadius = 200;
   bool _isApplied = false;
 
-  // Map view state & smooth camera zoom animation
+  // Native Google Map controller & state
+  GoogleMapController? _googleMapController;
   static const String _envApiKey = String.fromEnvironment(
     'GOOGLE_MAPS_API_KEY',
-    defaultValue: String.fromEnvironment('MAPS_API_KEY', defaultValue: ''),
+    defaultValue: String.fromEnvironment('MAPS_API_KEY', defaultValue: 'AIzaSyAUjhxMMfOFsi6mmwz2mn0ADjfLKnUY4wk'),
   );
   String get _googleMapsApiKey => (widget.apiKey?.isNotEmpty == true) ? widget.apiKey! : _envApiKey;
-  String _mapType = 'roadmap'; // roadmap, satellite, hybrid, terrain
+  String _mapType = 'roadmap'; // roadmap, satellite, terrain
   double _zoomLevel = 15.0;
-  double _baseScaleZoom = 15.0;
-  Offset? _lastTapPosition;
-  final List<int> _radiusOptions = [200, 500];
+  final List<int> _radiusOptions = [50, 100, 200, 500];
 
   late AnimationController _zoomAnimationController;
-  Animation<double>? _zoomAnimation;
 
   void _animateZoomTo(double targetZoom) {
-    final double startZoom = _zoomLevel;
-    final double endZoom = targetZoom.clamp(10.0, 20.0);
-    if ((startZoom - endZoom).abs() < 0.001) return;
+    _zoomLevel = targetZoom.clamp(10.0, 20.0);
+    if (_googleMapController != null && _selectedLat != null && _selectedLng != null) {
+      _googleMapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(LatLng(_selectedLat!, _selectedLng!), _zoomLevel),
+      );
+    }
+    if (mounted) setState(() {});
+  }
 
-    _zoomAnimationController.stop();
-    _zoomAnimationController.reset();
-
-    _zoomAnimation = Tween<double>(begin: startZoom, end: endZoom).animate(
-      CurvedAnimation(
-        parent: _zoomAnimationController,
-        curve: Curves.easeOutCubic,
-      ),
-    )..addListener(() {
-        if (mounted && _zoomAnimation != null) {
-          setState(() {
-            _zoomLevel = _zoomAnimation!.value;
-          });
-        }
-      });
-
-    _zoomAnimationController.forward();
+  MapType _getGoogleMapType(String mapType) {
+    if (mapType == 'satellite') {
+      return MapType.satellite;
+    } else if (mapType == 'terrain') {
+      return MapType.terrain;
+    } else {
+      return MapType.normal;
+    }
   }
 
   Future<void> _openInGoogleMaps() async {
@@ -188,11 +187,12 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
       setState(() {
         _suggestions = [];
         _isSearching = false;
+        _sessionToken = null;
       });
       return;
     }
 
-    _debounceTimer = Timer(const Duration(milliseconds: 400), () {
+    _debounceTimer = Timer(const Duration(milliseconds: 350), () {
       _performPlaceSearch(query.trim());
     });
   }
@@ -203,12 +203,15 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
       return;
     }
 
+    // Generate session token for search session if missing
+    _sessionToken ??= '${DateTime.now().millisecondsSinceEpoch}_${math.Random().nextInt(99999)}';
+
     setState(() => _isSearching = true);
 
     try {
       final List<Map<String, dynamic>> results = [];
 
-      // 1. Check if user pasted direct coordinates or a Google Maps link
+      // 1. Direct coordinates check
       final latLngRegExp = RegExp(r'(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)');
       final coordMatch = latLngRegExp.firstMatch(query);
       if (coordMatch != null) {
@@ -217,7 +220,7 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
         if (parsedLat != null && parsedLng != null) {
           results.add({
             'name': 'Pasted Location ($parsedLat, $parsedLng)',
-            'address': 'Direct coordinates from input/link',
+            'address': 'Direct coordinates',
             'place_id': null,
             'lat': parsedLat,
             'lng': parsedLng,
@@ -227,7 +230,7 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
 
       final encoded = Uri.encodeComponent(query);
 
-      // 2. Query Google Places Autocomplete API if API key is configured
+      // 2. Query Google Places Autocomplete API with session token, location bias & region preference
       if (_googleMapsApiKey.isNotEmpty) {
         try {
           String locationBias = '';
@@ -236,7 +239,7 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
           }
 
           final autocompleteUrl = Uri.parse(
-            'https://maps.googleapis.com/maps/api/place/autocomplete/json?input=$encoded$locationBias&key=$_googleMapsApiKey',
+            'https://maps.googleapis.com/maps/api/place/autocomplete/json?input=$encoded$locationBias&components=country:in&sessiontoken=$_sessionToken&key=$_googleMapsApiKey',
           );
 
           final autoResp = await http.get(autocompleteUrl).timeout(const Duration(seconds: 4));
@@ -268,13 +271,10 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
         } catch (_) {}
       }
 
-      // 3. Photon Autocomplete & OpenStreetMap Nominatim Live Places Search Fallback
+      // 3. Fallback Autocomplete (Photon & Nominatim)
       if (results.length < 5) {
-        // 3a. Query Photon Autocomplete API (OpenStreetMap-based type-ahead search engine)
         try {
-          final photonUrl = Uri.parse(
-            'https://photon.komoot.io/api/?q=$encoded&limit=10',
-          );
+          final photonUrl = Uri.parse('https://photon.komoot.io/api/?q=$encoded&limit=8');
           final photonResp = await http.get(photonUrl).timeout(const Duration(seconds: 4));
           if (photonResp.statusCode == 200) {
             final Map<String, dynamic> photonData = jsonDecode(photonResp.body);
@@ -297,7 +297,7 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
                 if (props['state'] != null) addrComponents.add(props['state'].toString());
                 if (props['country'] != null) addrComponents.add(props['country'].toString());
 
-                final String secondaryAddress = addrComponents.isNotEmpty ? addrComponents.join(', ') : 'Location in ${props['country'] ?? "India"}';
+                final String secondaryAddress = addrComponents.isNotEmpty ? addrComponents.join(', ') : 'Location';
 
                 if (lat != null && lng != null && name.isNotEmpty) {
                   final bool isDuplicate = results.any((r) =>
@@ -321,10 +321,9 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
       }
 
       if (results.length < 5) {
-        // 3b. Query OpenStreetMap Nominatim with dedupe=0 & limit=10
         try {
           final nomUrl = Uri.parse(
-            'https://nominatim.openstreetmap.org/search?format=json&q=$encoded&addressdetails=1&limit=10&dedupe=0',
+            'https://nominatim.openstreetmap.org/search?format=json&q=$encoded&addressdetails=1&limit=8&dedupe=0',
           );
           final nomResp = await http.get(
             nomUrl,
@@ -398,7 +397,7 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
 
     _searchFocusNode.unfocus();
 
-    // 1. Direct coordinates available (e.g. pasted coordinates or Nominatim results)
+    // 1. Direct coordinates available
     if (item['lat'] != null && item['lng'] != null) {
       final double lat = (item['lat'] as num).toDouble();
       final double lng = (item['lng'] as num).toDouble();
@@ -414,13 +413,21 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
         _suggestions = [];
         _zoomLevel = 16.0;
         _isApplied = false;
+        _sessionToken = null;
       });
+
+      _googleMapController?.animateCamera(
+        CameraUpdate.newLatLngZoom(LatLng(lat, lng), 16.0),
+      );
       return;
     }
 
-    // 2. Place ID available -> Fetch Place Details on-demand when tapped
+    // 2. Fetch Place Details on-demand passing session token to close session
     final placeId = item['place_id']?.toString();
     if (placeId != null && placeId.isNotEmpty) {
+      final activeSessionToken = _sessionToken;
+      _sessionToken = null; // Reset for next search session
+
       setState(() {
         _isSearching = true;
         _searchController.text = item['name'].toString();
@@ -434,8 +441,9 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
         String address = item['address'].toString();
 
         if (_googleMapsApiKey.isNotEmpty) {
+          String tokenParam = activeSessionToken != null ? '&sessiontoken=$activeSessionToken' : '';
           final detailsUrl = Uri.parse(
-            'https://maps.googleapis.com/maps/api/place/details/json?place_id=$placeId&fields=geometry,name,formatted_address&key=$_googleMapsApiKey',
+            'https://maps.googleapis.com/maps/api/place/details/json?place_id=$placeId&fields=geometry,name,formatted_address$tokenParam&key=$_googleMapsApiKey',
           );
           final resp = await http.get(detailsUrl).timeout(const Duration(seconds: 5));
           if (resp.statusCode == 200) {
@@ -457,7 +465,7 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
           }
         }
 
-        // OpenStreetMap Nominatim Geocoding fallback if lat/lng is still null
+        // OpenStreetMap Nominatim Geocoding fallback if lat/lng is null
         if ((lat == null || lng == null) && name.isNotEmpty) {
           try {
             final nomUrl = Uri.parse(
@@ -489,6 +497,10 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
             _zoomLevel = 16.0;
             _isApplied = false;
           });
+
+          _googleMapController?.animateCamera(
+            CameraUpdate.newLatLngZoom(LatLng(lat, lng), 16.0),
+          );
         } else if (mounted) {
           setState(() => _isSearching = false);
           ScaffoldMessenger.of(context).showSnackBar(
@@ -513,36 +525,40 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
     try {
       Position? position;
 
-      // 1. Query real hardware GPS position via Geolocator
       try {
         final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-        if (!serviceEnabled) {
-          // Location services disabled, fallback below
-        }
-        var permission = await Geolocator.checkPermission();
-        if (permission == LocationPermission.denied) {
-          permission = await Geolocator.requestPermission();
-        }
-
-        if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
-          try {
-            position = await Geolocator.getCurrentPosition(
-              locationSettings: const LocationSettings(
-                accuracy: LocationAccuracy.medium,
-                timeLimit: Duration(seconds: 4),
-              ),
-            );
-          } catch (_) {}
-
-          // Fallback to last known ONLY if getCurrentPosition timed out or returned null
-          if (position == null) {
-            position = await Geolocator.getLastKnownPosition();
+        if (serviceEnabled) {
+          var permission = await Geolocator.checkPermission();
+          if (permission == LocationPermission.denied) {
+            permission = await Geolocator.requestPermission();
           }
+
+          if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
+            try {
+              position = await Geolocator.getCurrentPosition(
+                locationSettings: const LocationSettings(
+                  accuracy: LocationAccuracy.medium,
+                  timeLimit: Duration(seconds: 4),
+                ),
+              );
+            } catch (_) {}
+
+            position ??= await Geolocator.getLastKnownPosition();
+          } else {
+            _hasLocationPermission = false;
+          }
+        } else {
+          _hasLocationPermission = false;
         }
-      } catch (_) {}
+      } catch (_) {
+        _hasLocationPermission = false;
+      }
 
       if (position != null && mounted) {
         await _applyGpsCoordinates(position.latitude, position.longitude);
+        _googleMapController?.animateCamera(
+          CameraUpdate.newLatLngZoom(LatLng(position.latitude, position.longitude), 16.0),
+        );
         if (!isAuto && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Updated to current GPS location'), duration: Duration(seconds: 2)),
@@ -551,13 +567,12 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
         return;
       }
 
-      // 2. Multi-Provider IP Geolocation Fallback (useful for Windows Desktop or when hardware GPS is unavailable)
+      // IP Geolocation Fallback
       double? ipLat;
       double? ipLng;
       String ipCity = '';
       String ipRegion = '';
 
-      // Provider A: ipapi.co
       try {
         final ipUrl = Uri.parse('https://ipapi.co/json/');
         final ipResp = await http.get(ipUrl).timeout(const Duration(seconds: 4));
@@ -570,7 +585,6 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
         }
       } catch (_) {}
 
-      // Provider B: ip-api.com fallback if Provider A failed
       if (ipLat == null || ipLng == null) {
         try {
           final ipUrl2 = Uri.parse('http://ip-api.com/json/');
@@ -587,6 +601,9 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
 
       if (ipLat != null && ipLng != null && mounted) {
         await _applyGpsCoordinates(ipLat, ipLng);
+        _googleMapController?.animateCamera(
+          CameraUpdate.newLatLngZoom(LatLng(ipLat, ipLng), 15.0),
+        );
         if (!isAuto && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -600,15 +617,13 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
 
       if (!isAuto && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not determine current location. Please use search or enter coordinates.'),
-          ),
+          const SnackBar(content: Text('Location service unavailable. You can search or drag map to select location.')),
         );
       }
     } catch (e) {
       if (!isAuto && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Location error: $e')),
+          SnackBar(content: Text('Location notice: $e')),
         );
       }
     } finally {
@@ -620,7 +635,7 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
     String name = 'Current Location';
     String addr = 'Lat: ${lat.toStringAsFixed(6)}, Lng: ${lng.toStringAsFixed(6)}';
 
-    // 1. Reverse Geocode via Google Maps API if key exists
+    // 1. Google Reverse Geocoding
     if (_googleMapsApiKey.isNotEmpty) {
       try {
         final url = Uri.parse(
@@ -642,7 +657,7 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
       } catch (_) {}
     }
 
-    // 2. OpenStreetMap Nominatim Reverse Geocoding Fallback if Google API key is missing or failed
+    // 2. OpenStreetMap Nominatim Reverse Geocoding Fallback
     if (name == 'Current Location' || name.startsWith('Current GPS Location')) {
       try {
         final nomUrl = Uri.parse(
@@ -671,7 +686,9 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
         _selectedLng = lng;
         _selectedName = name;
         _selectedAddress = addr;
-        _searchController.text = name;
+        if (!_searchFocusNode.hasFocus) {
+          _searchController.text = name;
+        }
         _isApplied = false;
       });
     }
@@ -765,6 +782,9 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
         _selectedAddress = 'Exact Coordinates: ${result['lat']!.toStringAsFixed(6)}, ${result['lng']!.toStringAsFixed(6)}';
         _isApplied = false;
       });
+      _googleMapController?.animateCamera(
+        CameraUpdate.newLatLngZoom(LatLng(result['lat']!, result['lng']!), 16.0),
+      );
     }
   }
 
@@ -800,6 +820,9 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
     final newLat = (curLat + latDelta).clamp(-50.0, 50.0);
     final newLng = (curLng + lngDelta).clamp(-180.0, 180.0);
     _applyGpsCoordinates(newLat, newLng);
+    _googleMapController?.animateCamera(
+      CameraUpdate.newLatLngZoom(LatLng(newLat, newLng), _zoomLevel),
+    );
   }
 
   Widget _buildArrowNudgeBtn({required IconData icon, required VoidCallback onPressed, String? tooltip}) {
@@ -869,33 +892,61 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
       }
 
       return Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
+        backgroundColor: const Color(0xFFE2E8F0),
         body: SafeArea(
           child: Stack(
             children: [
-              Column(
-                children: [
-                  // 1. Top Search Header with Back Button
-                  _buildFullScreenTopHeader(context),
-
-                  // 2. Full-Screen Interactive Map Canvas
-                  Expanded(
-                    child: _buildInteractiveMapCanvas(),
-                  ),
-
-                  // 3. Bottom Target Destination & Geofence Control Sheet
-                  _buildBottomControlSheet(),
-                ],
+              // 1. Full-Screen Interactive Map Canvas (Background)
+              Positioned.fill(
+                child: _buildInteractiveMapCanvas(),
               ),
 
-              // 4. Floating Autocomplete Search Suggestions Dropdown Overlay
+              // 2. Floating Top Search Card (Overlaying Map)
+              Positioned(
+                top: 12,
+                left: 12,
+                right: 12,
+                child: _buildFloatingSearchCard(context),
+              ),
+
+              // 3. Floating Autocomplete Search Suggestions Dropdown Overlay
               if (_suggestions.isNotEmpty)
                 Positioned(
-                  top: 105,
+                  top: 72,
                   left: 12,
                   right: 12,
                   child: _buildSuggestionsOverlay(),
                 ),
+
+              // 4. Floating Map Type Controls (Top Right overlay under search card)
+              if (_suggestions.isEmpty)
+                Positioned(
+                  top: 74,
+                  right: 12,
+                  child: _buildFloatingMapTypeSwitcher(),
+                ),
+
+              // 5. Floating Controls Column on Right (Current Location + Zoom Buttons)
+              Positioned(
+                bottom: 220,
+                right: 12,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildFloatingLocationButton(),
+                    const SizedBox(height: 10),
+                    _buildFloatingZoomControls(),
+                  ],
+                ),
+              ),
+
+              // 6. Floating Bottom Target Destination & Geofence Control Sheet Card
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: _buildBottomControlSheet(),
+              ),
             ],
           ),
         ),
@@ -906,246 +957,140 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
       return _buildAppliedSummary();
     }
 
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return SizedBox(
+      height: 600,
+      child: Stack(
         children: [
-          _buildEmbeddedSearchHeader(),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 220,
-            child: _buildInteractiveMapCanvas(fixedHeight: 220),
+          Positioned.fill(
+            child: _buildInteractiveMapCanvas(),
           ),
-          const SizedBox(height: 10),
-          _buildBottomControlSheet(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFullScreenTopHeader(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(6, 6, 14, 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+          Positioned(
+            top: 12,
+            left: 12,
+            right: 12,
+            child: _buildFloatingSearchCard(context),
           ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF414A51)),
-                onPressed: () => Navigator.of(context).pop(),
-                tooltip: 'Back',
-              ),
-              const Text(
-                'Search Destination',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF414A51),
-                ),
-              ),
-              const Spacer(),
-              if (_selectedLat != null && _selectedLng != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: widget.primaryColor.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    '${_selectedLat!.toStringAsFixed(3)}, ${_selectedLng!.toStringAsFixed(3)}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: widget.darkTextColor,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          TextField(
-            controller: _searchController,
-            focusNode: _searchFocusNode,
-            onChanged: _onSearchChanged,
-            decoration: InputDecoration(
-              hintText: 'Search customer, site, address, landmark...',
-              hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-              prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Color(0xFF64748B)),
-              suffixIcon: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_isSearching)
-                    const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF9CC70A)),
-                      ),
-                    )
-                  else if (_searchController.text.isNotEmpty)
-                    IconButton(
-                      icon: const Icon(Icons.clear, size: 18, color: Color(0xFF94A3B8)),
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() => _suggestions = []);
-                      },
-                    ),
-                  IconButton(
-                    icon: _isLocatingUser
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF414A51)),
-                          )
-                        : const Icon(Icons.my_location_rounded, size: 20, color: Color(0xFF414A51)),
-                    tooltip: 'Use My Current Location',
-                    onPressed: _isLocatingUser ? null : _fetchCurrentGpsLocation,
-                  ),
-                ],
-              ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              filled: true,
-              fillColor: const Color(0xFFF8FAFC),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: widget.primaryColor, width: 1.5),
-              ),
+          if (_suggestions.isNotEmpty)
+            Positioned(
+              top: 72,
+              left: 12,
+              right: 12,
+              child: _buildSuggestionsOverlay(),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmbeddedSearchHeader() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(Icons.search_rounded, size: 18, color: Color(0xFF414A51)),
-            const SizedBox(width: 6),
-            const Text(
-              'Search Destination *',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF414A51),
-              ),
+          if (_suggestions.isEmpty)
+            Positioned(
+              top: 74,
+              right: 12,
+              child: _buildFloatingMapTypeSwitcher(),
             ),
-            const Spacer(),
-            if (_selectedLat != null)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: widget.primaryColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  '${_selectedLat!.toStringAsFixed(3)}, ${_selectedLng!.toStringAsFixed(3)}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: widget.darkTextColor,
-                  ),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        TextField(
-          controller: _searchController,
-          focusNode: _searchFocusNode,
-          onChanged: _onSearchChanged,
-          decoration: InputDecoration(
-            hintText: 'Search customer, site, address, landmark...',
-            hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-            prefixIcon: const Icon(Icons.location_searching_rounded, size: 20, color: Color(0xFF64748B)),
-            suffixIcon: Row(
+          Positioned(
+            bottom: 220,
+            right: 12,
+            child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (_isSearching)
-                  const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF9CC70A)),
-                    ),
-                  )
-                else if (_searchController.text.isNotEmpty)
-                  IconButton(
-                    icon: const Icon(Icons.clear, size: 18, color: Color(0xFF94A3B8)),
-                    onPressed: () {
-                      _searchController.clear();
-                      setState(() => _suggestions = []);
-                    },
-                  ),
-                IconButton(
-                  icon: _isLocatingUser
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF414A51)),
-                        )
-                      : const Icon(Icons.my_location_rounded, size: 20, color: Color(0xFF414A51)),
-                  tooltip: 'Use My Current Location',
-                  onPressed: _isLocatingUser ? null : _fetchCurrentGpsLocation,
-                ),
+                _buildFloatingLocationButton(),
+                const SizedBox(height: 10),
+                _buildFloatingZoomControls(),
               ],
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            filled: true,
-            fillColor: Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: widget.primaryColor, width: 1.5),
-            ),
           ),
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: _buildBottomControlSheet(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Floating Google Maps style search bar card
+  Widget _buildFloatingSearchCard(BuildContext context) {
+    return Material(
+      elevation: 6,
+      borderRadius: BorderRadius.circular(12),
+      color: Colors.white,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFCBD5E1), width: 0.8),
         ),
-        if (_suggestions.isNotEmpty) _buildSuggestionsOverlay(),
-      ],
+        child: Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF414A51), size: 22),
+              onPressed: () => Navigator.of(context).pop(),
+              tooltip: 'Back',
+            ),
+            Expanded(
+              child: TextField(
+                controller: _searchController,
+                focusNode: _searchFocusNode,
+                onChanged: _onSearchChanged,
+                style: const TextStyle(fontSize: 14, color: Color(0xFF1E293B)),
+                decoration: const InputDecoration(
+                  hintText: 'Search destination, site, place...',
+                  hintStyle: TextStyle(fontSize: 13.5, color: Color(0xFF94A3B8)),
+                  border: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(vertical: 10),
+                  isDense: true,
+                ),
+              ),
+            ),
+            if (_isSearching)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2.2, color: Color(0xFF9CC70A)),
+                ),
+              )
+            else if (_searchController.text.isNotEmpty)
+              IconButton(
+                icon: const Icon(Icons.clear_rounded, size: 18, color: Color(0xFF94A3B8)),
+                onPressed: () {
+                  _searchController.clear();
+                  setState(() {
+                    _suggestions = [];
+                    _sessionToken = null;
+                  });
+                },
+                tooltip: 'Clear search',
+              ),
+            IconButton(
+              icon: _isLocatingUser
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF414A51)),
+                    )
+                  : const Icon(Icons.my_location_rounded, size: 20, color: Color(0xFF414A51)),
+              tooltip: 'Current GPS Location',
+              onPressed: _isLocatingUser ? null : _fetchCurrentGpsLocation,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
   Widget _buildSuggestionsOverlay() {
     return Material(
       elevation: 8,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(12),
       color: Colors.white,
       child: Container(
         constraints: const BoxConstraints(maxHeight: 280),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: const Color(0xFFE2E8F0)),
         ),
         child: ListView.separated(
@@ -1192,315 +1137,211 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
     );
   }
 
-  Widget _buildInteractiveMapCanvas({double? fixedHeight}) {
-    return LayoutBuilder(
-      builder: (ctx, constraints) {
-        final mapWidth = constraints.maxWidth;
-        final mapHeight = constraints.maxHeight > 0 ? constraints.maxHeight : (fixedHeight ?? 300.0);
+  Widget _buildFloatingMapTypeSwitcher() {
+    return Material(
+      elevation: 4,
+      borderRadius: BorderRadius.circular(8),
+      color: Colors.white.withValues(alpha: 0.95),
+      child: Container(
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.95),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFCBD5E1)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildMapTypeTab('Map', 'roadmap'),
+            _buildMapTypeTab('Satellite', 'satellite'),
+            _buildMapTypeTab('Terrain', 'terrain'),
+          ],
+        ),
+      ),
+    );
+  }
 
-        return Container(
-          height: fixedHeight,
-          width: double.infinity,
-          decoration: const BoxDecoration(
-            color: Color(0xFFE2E8F0),
+  Widget _buildFloatingLocationButton() {
+    return Material(
+      elevation: 5,
+      shape: const CircleBorder(),
+      color: Colors.white,
+      child: InkWell(
+        onTap: _isLocatingUser ? null : () => _fetchCurrentGpsLocation(),
+        customBorder: const CircleBorder(),
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: _isLocatingUser
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF414A51)),
+                )
+              : const Icon(Icons.gps_fixed_rounded, size: 20, color: Color(0xFF414A51)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFloatingZoomControls() {
+    return Material(
+      elevation: 5,
+      borderRadius: BorderRadius.circular(8),
+      color: Colors.white,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.add_rounded, size: 20, color: Color(0xFF414A51)),
+            tooltip: 'Zoom In',
+            onPressed: () => _animateZoomTo(_zoomLevel + 0.5),
+            constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
+            padding: EdgeInsets.zero,
           ),
-          child: Stack(
-            children: [
-              // Layer 1: Interactive Map Canvas (Pan, Pinch, Tap Location)
-              Positioned.fill(
-                child: Listener(
-                  onPointerSignal: (pointerSignal) {
-                    if (pointerSignal is PointerScrollEvent) {
-                      if (pointerSignal.scrollDelta.dy < 0) {
-                        _animateZoomTo(_zoomLevel + 0.5);
-                      } else if (pointerSignal.scrollDelta.dy > 0) {
-                        _animateZoomTo(_zoomLevel - 0.5);
-                      }
-                    }
-                  },
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTapDown: (details) {
-                      _lastTapPosition = details.localPosition;
-                    },
-                    onTap: () {
-                      final tapPos = _lastTapPosition;
-                      if (tapPos == null) return;
+          const Divider(height: 1, thickness: 1, color: Color(0xFFE2E8F0)),
+          IconButton(
+            icon: const Icon(Icons.remove_rounded, size: 20, color: Color(0xFF414A51)),
+            tooltip: 'Zoom Out',
+            onPressed: () => _animateZoomTo(_zoomLevel - 0.5),
+            constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
+            padding: EdgeInsets.zero,
+          ),
+        ],
+      ),
+    );
+  }
 
-                      double curLat = _selectedLat ?? 13.0827;
-                      double curLng = _selectedLng ?? 80.2707;
-                      if (curLat >= 55.0 || curLat <= -55.0) {
-                        curLat = 13.0827;
-                        curLng = 80.2707;
-                      }
+  Widget _buildInteractiveMapCanvas() {
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      color: const Color(0xFFE2E8F0),
+      child: Stack(
+        children: [
+          // Layer 1: Guaranteed Interactive Google Map Renderer Engine
+          Positioned.fill(
+            child: _RealTileMapWidget(
+              lat: _selectedLat ?? 13.0827,
+              lng: _selectedLng ?? 80.2707,
+              zoom: _zoomLevel,
+              mapType: _mapType,
+              radius: _selectedRadius,
+              primaryColor: widget.primaryColor,
+              onCameraMoved: (newLat, newLng, newZoom) {
+                setState(() {
+                  _selectedLat = newLat;
+                  _selectedLng = newLng;
+                  _zoomLevel = newZoom;
+                });
+              },
+              onCameraIdle: () {
+                _debounceTimer?.cancel();
+                _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+                  if (mounted && _selectedLat != null && _selectedLng != null) {
+                    _applyGpsCoordinates(_selectedLat!, _selectedLng!);
+                  }
+                });
+              },
+            ),
+          ),
 
-                      final double cosFactor = math.cos(curLat * math.pi / 180.0).abs().clamp(0.3, 1.0);
-                      final double metersPerPixel = 156543.03392 * cosFactor / math.pow(2.0, _zoomLevel);
-
-                      final double dx = tapPos.dx - (mapWidth / 2.0);
-                      final double dy = tapPos.dy - (mapHeight / 2.0);
-
-                      final double latShift = -(dy * metersPerPixel) / 111320.0;
-                      final double lngShift = (dx * metersPerPixel) / (111320.0 * cosFactor);
-
-                      final double newLat = (curLat + latShift).clamp(-50.0, 50.0);
-                      final double newLng = (curLng + lngShift).clamp(-180.0, 180.0);
-
-                      _applyGpsCoordinates(newLat, newLng);
-                    },
-                    onScaleStart: (details) {
-                      _baseScaleZoom = _zoomLevel;
-                    },
-                    onScaleUpdate: (details) {
-                      // Multi-finger pinch to zoom
-                      if (details.pointerCount > 1 && (details.scale - 1.0).abs() > 0.015) {
-                        final double zoomDelta = (math.log(details.scale) / math.ln2) * 0.6;
-                        final double newZoom = (_baseScaleZoom + zoomDelta).clamp(10.0, 20.0);
-                        if ((newZoom - _zoomLevel).abs() > 0.01) {
-                          setState(() => _zoomLevel = newZoom);
-                        }
-                      }
-
-                      // Pan / drag map (single finger or mouse drag)
-                      if (details.focalPointDelta != Offset.zero) {
-                        double curLat = _selectedLat ?? 13.0827;
-                        double curLng = _selectedLng ?? 80.2707;
-                        if (curLat >= 55.0 || curLat <= -55.0) {
-                          curLat = 13.0827;
-                          curLng = 80.2707;
-                        }
-
-                        final double cosFactor = math.cos(curLat * math.pi / 180.0).abs().clamp(0.3, 1.0);
-                        final double metersPerPixel = 156543.03392 * cosFactor / math.pow(2.0, _zoomLevel);
-
-                        final double latShift = (details.focalPointDelta.dy * metersPerPixel) / 111320.0;
-                        final double lngShift = (details.focalPointDelta.dx * metersPerPixel) / (111320.0 * cosFactor);
-
-                        setState(() {
-                          _selectedLat = (curLat + latShift).clamp(-50.0, 50.0);
-                          _selectedLng = (curLng + lngShift).clamp(-180.0, 180.0);
-                          _isApplied = false;
-                        });
-                      }
-                    },
-                    onScaleEnd: (details) {
-                      _debounceTimer?.cancel();
-                      _debounceTimer = Timer(const Duration(milliseconds: 350), () {
-                        if (mounted && _selectedLat != null && _selectedLng != null) {
-                          _applyGpsCoordinates(_selectedLat!, _selectedLng!);
-                        }
-                      });
-                    },
-                    onDoubleTap: () {
-                      _animateZoomTo(_zoomLevel + 0.5);
-                    },
-                    child: _RealTileMapWidget(
-                      lat: _selectedLat ?? 13.0827,
-                      lng: _selectedLng ?? 80.2707,
-                      zoom: _zoomLevel,
-                      mapType: _mapType,
-                      primaryColor: widget.primaryColor,
-                      radius: _selectedRadius,
-                    ),
-                  ),
-                ),
-              ),
-
-              // Layer 2: Geofence Circle Overlay
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: CustomPaint(
-                    painter: _GeofenceCirclePainter(
-                      radius: _selectedRadius,
-                      primaryColor: widget.primaryColor,
-                    ),
-                  ),
-                ),
-              ),
-
-              // Layer 3: Map Pin Marker in Center
-              IgnorePointer(
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF414A51),
-                          borderRadius: BorderRadius.circular(6),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.3),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Text(
-                          _selectedName.isNotEmpty ? _selectedName : 'Selected Destination',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      const Icon(
-                        Icons.location_pin,
-                        size: 38,
-                        color: Color(0xFFDC2626),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Layer 4: Top Left Radius Badge
-              Positioned(
-                top: 12,
-                left: 12,
-                child: IgnorePointer(
-                  child: Container(
+          // Layer 2: Fixed Destination Pin at Screen Center
+          IgnorePointer(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.92),
+                      color: const Color(0xFF414A51),
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFFCBD5E1)),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.08),
+                          color: Colors.black.withValues(alpha: 0.3),
                           blurRadius: 4,
+                          offset: const Offset(0, 2),
                         ),
                       ],
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.radar, size: 14, color: widget.darkTextColor),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Radius: $_selectedRadius m',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF334155),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              // Layer 5: Top Right Map Type Switcher
-              Positioned(
-                top: 12,
-                right: 12,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.95),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFCBD5E1)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.1),
-                        blurRadius: 4,
+                    child: Text(
+                      _selectedName.isNotEmpty ? _selectedName : 'Target Location',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
                       ),
-                    ],
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildMapTypeTab('Map', 'roadmap'),
-                      _buildMapTypeTab('Satellite', 'satellite'),
-                      _buildMapTypeTab('Terrain', 'terrain'),
-                    ],
+                  const SizedBox(height: 2),
+                  const Icon(
+                    Icons.location_pin,
+                    size: 38,
+                    color: Color(0xFFDC2626),
                   ),
-                ),
+                ],
               ),
+            ),
+          ),
 
-              // Layer 6: Bottom Left Open Google Maps Link
-              Positioned(
-                bottom: 12,
-                left: 12,
-                child: InkWell(
-                  onTap: _openInGoogleMaps,
+          // Layer 3: Open in Google Maps Floating Button (Bottom Left over map)
+          Positioned(
+            bottom: 220,
+            left: 12,
+            child: InkWell(
+              onTap: _openInGoogleMaps,
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.92),
                   borderRadius: BorderRadius.circular(6),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.92),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFFCBD5E1)),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 3,
-                        ),
-                      ],
+                  border: Border.all(color: const Color(0xFFCBD5E1)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 3,
                     ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.open_in_new, size: 13, color: Color(0xFF2563EB)),
-                        SizedBox(width: 4),
-                        Text(
-                          'Open Google Maps',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF2563EB),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  ],
                 ),
-              ),
-
-              // Layer 7: Bottom Right Zoom Controls (+ / -)
-              Positioned(
-                bottom: 12,
-                right: 12,
-                child: Column(
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    _buildMapIconButton(
-                      icon: Icons.add,
-                      tooltip: 'Zoom In',
-                      onPressed: () => _animateZoomTo(_zoomLevel + 0.5),
-                    ),
-                    const SizedBox(height: 4),
-                    _buildMapIconButton(
-                      icon: Icons.remove,
-                      tooltip: 'Zoom Out',
-                      onPressed: () => _animateZoomTo(_zoomLevel - 0.5),
+                    Icon(Icons.open_in_new_rounded, size: 13, color: Color(0xFF414A51)),
+                    SizedBox(width: 4),
+                    Text(
+                      'Open Google Maps',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF414A51),
+                      ),
                     ),
                   ],
                 ),
               ),
-            ],
+            ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
+  /// Bottom Target Destination & Geofence Control Sheet Overlay
   Widget _buildBottomControlSheet() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 10,
-            offset: const Offset(0, -3),
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 12,
+            offset: const Offset(0, -4),
           ),
         ],
       ),
@@ -1508,7 +1349,20 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Target Destination Pin Panel
+          // Drag handle bar
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFCBD5E1),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Target Destination Pin Header Card
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
@@ -1524,15 +1378,19 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Target Destination Pin',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                      Text(
+                        _selectedName.isNotEmpty ? _selectedName : 'Selected Target Location',
+                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        _selectedLat != null && _selectedLng != null
-                            ? '${_selectedLat!.toStringAsFixed(5)}, ${_selectedLng!.toStringAsFixed(5)}'
-                            : 'Select location on map',
+                        _selectedAddress.isNotEmpty
+                            ? _selectedAddress
+                            : (_selectedLat != null && _selectedLng != null
+                                ? '${_selectedLat!.toStringAsFixed(5)}, ${_selectedLng!.toStringAsFixed(5)}'
+                                : 'Select location on map'),
                         style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -1587,7 +1445,7 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                   icon: const Icon(Icons.tune_rounded, size: 13, color: Color(0xFF414A51)),
-                  label: const Text('Advanced', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
+                  label: const Text('Edit', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
                 ),
               ],
             ),
@@ -1595,11 +1453,11 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
 
           const SizedBox(height: 10),
 
-          // Allowed Geofence Radius Selector
+          // Allowed Geofence Radius Selector (50m, 100m, 200m, 500m)
           Row(
             children: [
               const Text(
-                'Allowed Geofence Radius:',
+                'Allowed Radius:',
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
               ),
               const SizedBox(width: 8),
@@ -1651,7 +1509,7 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
               style: ElevatedButton.styleFrom(
                 backgroundColor: widget.primaryColor,
                 foregroundColor: widget.darkTextColor,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.symmetric(vertical: 13),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 elevation: 2,
               ),
@@ -1690,29 +1548,6 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
     );
   }
 
-  Widget _buildMapIconButton({required IconData icon, required VoidCallback onPressed, String? tooltip}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(6),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.15),
-            blurRadius: 3,
-          ),
-        ],
-      ),
-      child: IconButton(
-        icon: Icon(icon, size: 16, color: const Color(0xFF414A51)),
-        tooltip: tooltip,
-        onPressed: onPressed,
-        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-        padding: EdgeInsets.zero,
-      ),
-    );
-  }
-
-  // 5. Applied Destination Summary State
   Widget _buildAppliedSummary() {
     return Container(
       width: double.infinity,
@@ -1802,11 +1637,11 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.map_outlined, size: 14, color: Color(0xFF2563EB)),
+                    Icon(Icons.map_outlined, size: 14, color: Color(0xFF414A51)),
                     SizedBox(width: 4),
                     Text(
                       'View on Map',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF2563EB)),
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
                     ),
                   ],
                 ),
@@ -1819,213 +1654,178 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
   }
 }
 
-/// Geofence circle overlay painter centered on the map
-class _GeofenceCirclePainter extends CustomPainter {
-  _GeofenceCirclePainter({
-    required this.radius,
-    required this.primaryColor,
-  });
-
-  final int radius;
-  final Color primaryColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2 + 10);
-    final double visualRadius = (radius / 500.0 * 60).clamp(28.0, 75.0);
-
-    final geofenceFill = Paint()
-      ..color = primaryColor.withValues(alpha: 0.22)
-      ..style = PaintingStyle.fill;
-
-    final geofenceBorder = Paint()
-      ..color = primaryColor
-      ..strokeWidth = 2.5
-      ..style = PaintingStyle.stroke;
-
-    canvas.drawCircle(center, visualRadius, geofenceFill);
-    canvas.drawCircle(center, visualRadius, geofenceBorder);
-  }
-
-  @override
-  bool shouldRepaint(covariant _GeofenceCirclePainter oldDelegate) {
-    return oldDelegate.radius != radius || oldDelegate.primaryColor != primaryColor;
-  }
-}
-
-/// Fallback custom painter for interactive vector map preview if offline
-class _MapCanvasPainter extends CustomPainter {
-  _MapCanvasPainter({
-    required this.lat,
-    required this.lng,
-    required this.radius,
-    required this.primaryColor,
-  });
-
-  final double lat;
-  final double lng;
-  final int radius;
-  final Color primaryColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final bgPaint = Paint()..color = const Color(0xFFE2E8F0);
-    canvas.drawRect(Offset.zero & size, bgPaint);
-
-    final roadPaint = Paint()
-      ..color = Colors.white
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke;
-
-    final roadPaint2 = Paint()
-      ..color = const Color(0xFFCBD5E1)
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
-
-    canvas.drawLine(Offset(0, size.height * 0.4), Offset(size.width, size.height * 0.4), roadPaint);
-    canvas.drawLine(Offset(0, size.height * 0.75), Offset(size.width, size.height * 0.75), roadPaint);
-    canvas.drawLine(Offset(size.width * 0.3, 0), Offset(size.width * 0.3, size.height), roadPaint);
-    canvas.drawLine(Offset(size.width * 0.7, 0), Offset(size.width * 0.7, size.height), roadPaint);
-    canvas.drawLine(Offset(0, size.height * 0.2), Offset(size.width, size.height * 0.8), roadPaint2);
-
-    final greenAreaPaint = Paint()..color = const Color(0xFFDCFCE7);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.width * 0.05, size.height * 0.08, size.width * 0.2, size.height * 0.25),
-        const Radius.circular(8),
-      ),
-      greenAreaPaint,
-    );
-
-    final center = Offset(size.width / 2, size.height / 2 + 10);
-    final double visualRadius = (radius / 500.0 * 60).clamp(28.0, 75.0);
-
-    final geofenceFill = Paint()
-      ..color = primaryColor.withValues(alpha: 0.18)
-      ..style = PaintingStyle.fill;
-
-    final geofenceBorder = Paint()
-      ..color = primaryColor
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-
-    canvas.drawCircle(center, visualRadius, geofenceFill);
-    canvas.drawCircle(center, visualRadius, geofenceBorder);
-  }
-
-  @override
-  bool shouldRepaint(covariant _MapCanvasPainter oldDelegate) {
-    return oldDelegate.lat != lat ||
-        oldDelegate.lng != lng ||
-        oldDelegate.radius != radius ||
-        oldDelegate.primaryColor != primaryColor;
-  }
-}
-
-/// Renders live street map tiles and satellite tiles without needing any API key
-class _RealTileMapWidget extends StatelessWidget {
-  final double lat;
-  final double lng;
-  final double zoom;
-  final String mapType;
-  final Color primaryColor;
-  final int radius;
-
+class _RealTileMapWidget extends StatefulWidget {
   const _RealTileMapWidget({
     required this.lat,
     required this.lng,
     required this.zoom,
     required this.mapType,
-    required this.primaryColor,
     required this.radius,
+    required this.primaryColor,
+    required this.onCameraMoved,
+    required this.onCameraIdle,
   });
+
+  final double lat;
+  final double lng;
+  final double zoom;
+  final String mapType;
+  final int radius;
+  final Color primaryColor;
+  final Function(double newLat, double newLng, double newZoom) onCameraMoved;
+  final VoidCallback onCameraIdle;
+
+  @override
+  State<_RealTileMapWidget> createState() => _RealTileMapWidgetState();
+}
+
+class _RealTileMapWidgetState extends State<_RealTileMapWidget> {
+  double _baseScale = 1.0;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
-      builder: (context, constraints) {
+      builder: (ctx, constraints) {
         final width = constraints.maxWidth;
         final height = constraints.maxHeight;
-        final z = zoom.round().clamp(2, 19);
-        final n = math.pow(2.0, z).toDouble();
-        final latRad = (lat.clamp(-85.0511, 85.0511)) * math.pi / 180.0;
-        final exactX = (lng + 180.0) / 360.0 * n;
-        final exactY = (1.0 - math.log(math.tan(latRad) + 1.0 / math.cos(latRad)) / math.pi) / 2.0 * n;
 
-        final centerTileX = exactX.floor();
-        final centerTileY = exactY.floor();
-        final offsetX = (exactX - centerTileX) * 256.0;
-        final offsetY = (exactY - centerTileY) * 256.0;
+        final double zoom = widget.zoom;
+        final double lat = widget.lat;
+        final double lng = widget.lng;
 
-        final centerX = width / 2.0;
-        final centerY = height / 2.0;
+        final int z = zoom.floor().clamp(2, 19);
+        final double tileSize = 256.0 * math.pow(2, zoom - z);
 
-        final List<Widget> tiles = [];
-        for (int dx = -2; dx <= 2; dx++) {
-          for (int dy = -2; dy <= 2; dy++) {
-            final tileX = (centerTileX + dx) % n.toInt();
-            final tileY = centerTileY + dy;
-            if (tileY < 0 || tileY >= n) continue;
+        final double sinLat = math.sin(lat * math.pi / 180.0);
+        final double worldX = ((lng + 180.0) / 360.0) * math.pow(2, z);
+        final double worldY = ((0.5 - math.log((1.0 + sinLat) / (1.0 - sinLat)) / (4.0 * math.pi))) * math.pow(2, z);
 
-            final posX = centerX + (dx * 256.0) - offsetX;
-            final posY = centerY + (dy * 256.0) - offsetY;
+        final int centerTileX = worldX.floor();
+        final int centerTileY = worldY.floor();
 
-            // Only render tiles that intersect the viewport
-            if (posX + 256 < 0 || posX > width || posY + 256 < 0 || posY > height) continue;
+        final int numTilesX = (width / tileSize).ceil() + 2;
+        final int numTilesY = (height / tileSize).ceil() + 2;
 
-            final tileUrl = _getTileUrl(z, tileX, tileY, mapType);
+        final int startX = centerTileX - (numTilesX / 2).floor();
+        final int startY = centerTileY - (numTilesY / 2).floor();
 
-            tiles.add(
+        String lyrs = 'm';
+        if (widget.mapType == 'satellite') {
+          lyrs = 'y';
+        } else if (widget.mapType == 'terrain') {
+          lyrs = 'p';
+        }
+
+        final List<Widget> tileWidgets = [];
+
+        for (int x = startX; x <= startX + numTilesX; x++) {
+          for (int y = startY; y <= startY + numTilesY; y++) {
+            if (y < 0 || y >= (1 << z)) continue;
+            final int wrappedX = (x % (1 << z) + (1 << z)) % (1 << z);
+
+            final double left = (width / 2.0) + (x - worldX) * tileSize;
+            final double top = (height / 2.0) + (y - worldY) * tileSize;
+
+            tileWidgets.add(
               Positioned(
-                left: posX,
-                top: posY,
-                width: 256,
-                height: 256,
+                left: left,
+                top: top,
+                width: tileSize + 0.5,
+                height: tileSize + 0.5,
                 child: Image.network(
-                  tileUrl,
+                  'https://mt1.google.com/vt/lyrs=$lyrs&x=$wrappedX&y=$y&z=$z',
                   fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                  errorBuilder: (_, __, ___) => Container(color: const Color(0xFFE2E8F0)),
                 ),
               ),
             );
           }
         }
 
-        return Stack(
-          children: [
-            // Base background
-            Positioned.fill(
-              child: CustomPaint(
-                painter: _MapCanvasPainter(
-                  lat: lat,
-                  lng: lng,
-                  radius: radius,
-                  primaryColor: primaryColor,
+        return GestureDetector(
+          onDoubleTap: () {
+            widget.onCameraMoved(lat, lng, (zoom + 1.0).clamp(3.0, 19.0));
+            widget.onCameraIdle();
+          },
+          onScaleStart: (_) {
+            _baseScale = 1.0;
+          },
+          onScaleUpdate: (details) {
+            if (details.scale != 1.0) {
+              final double newZoom = (zoom + (details.scale > _baseScale ? 0.08 : -0.08)).clamp(3.0, 19.0);
+              _baseScale = details.scale;
+              widget.onCameraMoved(lat, lng, newZoom);
+            } else if (details.focalPointDelta != Offset.zero) {
+              final double metersPerPixel = (156543.03392 * math.cos(lat * math.pi / 180.0)) / math.pow(2, zoom);
+              final double latDelta = (details.focalPointDelta.dy * metersPerPixel) / 111320.0;
+              final double lngDelta = -(details.focalPointDelta.dx * metersPerPixel) / (111320.0 * math.cos(lat * math.pi / 180.0));
+
+              final double newLat = (lat + latDelta).clamp(-85.0, 85.0);
+              final double newLng = (lng + lngDelta).clamp(-180.0, 180.0);
+              widget.onCameraMoved(newLat, newLng, zoom);
+            }
+          },
+          onScaleEnd: (_) {
+            widget.onCameraIdle();
+          },
+          child: Stack(
+            children: [
+              ...tileWidgets,
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _GeofenceCirclePainter(
+                    radiusMeters: widget.radius.toDouble(),
+                    zoom: zoom,
+                    lat: lat,
+                    primaryColor: widget.primaryColor,
+                  ),
                 ),
               ),
-            ),
-            // Live map tiles
-            ClipRect(
-              child: Stack(
-                children: tiles,
-              ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
   }
+}
 
-  String _getTileUrl(int z, int x, int y, String mapType) {
-    if (mapType == 'satellite') {
-      // Official Google Maps Satellite tile server
-      return 'https://mt1.google.com/vt/lyrs=s&x=$x&y=$y&z=$z';
-    } else if (mapType == 'terrain') {
-      // Official Google Maps Terrain tile server
-      return 'https://mt1.google.com/vt/lyrs=p&x=$x&y=$y&z=$z';
-    } else {
-      // Official Google Maps Standard Roadmap tile server
-      return 'https://mt1.google.com/vt/lyrs=m&x=$x&y=$y&z=$z';
-    }
+class _GeofenceCirclePainter extends CustomPainter {
+  _GeofenceCirclePainter({
+    required this.radiusMeters,
+    required this.zoom,
+    required this.lat,
+    required this.primaryColor,
+  });
+
+  final double radiusMeters;
+  final double zoom;
+  final double lat;
+  final Color primaryColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final double metersPerPixel = (156543.03392 * math.cos(lat * math.pi / 180.0)) / math.pow(2, zoom);
+    final double radiusPixels = radiusMeters / metersPerPixel;
+
+    final fillPaint = Paint()
+      ..color = primaryColor.withValues(alpha: 0.22)
+      ..style = PaintingStyle.fill;
+
+    final strokePaint = Paint()
+      ..color = primaryColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+
+    canvas.drawCircle(center, radiusPixels, fillPaint);
+    canvas.drawCircle(center, radiusPixels, strokePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _GeofenceCirclePainter oldDelegate) {
+    return oldDelegate.radiusMeters != radiusMeters ||
+        oldDelegate.zoom != zoom ||
+        oldDelegate.lat != lat ||
+        oldDelegate.primaryColor != primaryColor;
   }
 }

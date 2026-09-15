@@ -83,8 +83,10 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
           final s = updatedSessions[i];
           if (s.isActive && (s.isOd || s.type == 'od')) {
             Map<String, dynamic>? matchingAssignment;
-            if (s.assignmentId != null && s.assignmentId! > 0 && completedAssignments.containsKey(s.assignmentId!)) {
-              matchingAssignment = completedAssignments[s.assignmentId!];
+            if (s.assignmentId != null && s.assignmentId! > 0) {
+              if (completedAssignments.containsKey(s.assignmentId!)) {
+                matchingAssignment = completedAssignments[s.assignmentId!];
+              }
             } else {
               final key = '${rec.employeeId}_$normDate';
               if (completedByEmpDate.containsKey(key)) {
@@ -152,8 +154,10 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
           if (lastCompletedOd != null) {
             Map<String, dynamic>? matchingAssignment;
-            if (lastCompletedOd.assignmentId != null && lastCompletedOd.assignmentId! > 0 && completedAssignments.containsKey(lastCompletedOd.assignmentId!)) {
-              matchingAssignment = completedAssignments[lastCompletedOd.assignmentId!];
+            if (lastCompletedOd.assignmentId != null && lastCompletedOd.assignmentId! > 0) {
+              if (completedAssignments.containsKey(lastCompletedOd.assignmentId!)) {
+                matchingAssignment = completedAssignments[lastCompletedOd.assignmentId!];
+              }
             } else {
               final key = '${rec.employeeId}_$normDate';
               if (completedByEmpDate.containsKey(key)) {
@@ -163,7 +167,8 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
             final option = (matchingAssignment?['after_completion_option'] ?? 'RETURN_TO_OFFICE').toString().toUpperCase();
             final isCheckoutFromOd = option.contains('CHECKOUT');
-            if (!isCheckoutFromOd) {
+            final isAssignNextOd = option.contains('ASSIGN_NEXT');
+            if (!isCheckoutFromOd && !isAssignNextOd) {
               final officeCheckIn = lastCompletedOd.checkOutTime.isNotEmpty
                   ? lastCompletedOd.checkOutTime
                   : lastCompletedOd.checkInTime;
@@ -1512,10 +1517,13 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         ? destinationRadius
         : (activeSession.destinationRadius > 0 ? activeSession.destinationRadius : 100);
 
-    // Destination Geofence verification - enforce ONLY when checking out directly from OD
-    final isCheckoutFromOd = afterCompletionOption.toUpperCase().contains('CHECKOUT');
+    // Destination Geofence verification - enforce when checking out directly from OD or assigning next OD
+    final optionUpper = afterCompletionOption.toUpperCase();
+    final isCheckoutFromOd = optionUpper.contains('CHECKOUT');
+    final isAssignNextOd = optionUpper.contains('ASSIGN_NEXT');
+    final isGeofenceRequired = isCheckoutFromOd || isAssignNextOd;
 
-    if (isCheckoutFromOd && targetLat != null && targetLng != null && targetLat != 0 && targetLng != 0) {
+    if (isGeofenceRequired && targetLat != null && targetLng != null && targetLat != 0 && targetLng != 0) {
       if (latitude == null || longitude == null || latitude == 0 || longitude == 0) {
         return const AttendanceVerificationResult(
           allowed: false,
@@ -1579,7 +1587,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     }
     totalDailyHours = double.parse(totalDailyHours.toStringAsFixed(2));
 
-    if (!isCheckoutFromOd) {
+    if (!isCheckoutFromOd && !isAssignNextOd) {
       final hasActiveOffice = updatedSessions.any((s) => s.isActive);
       if (!hasActiveOffice) {
         // Start a new active office session because employee has returned to office

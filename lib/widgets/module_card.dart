@@ -187,7 +187,7 @@ class _ModuleCardState extends State<ModuleCard>
                     ),
                   ),
                 ],
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 // Bottom Meta or Coming Soon Badge
                 if (widget.comingSoon)
                   Container(

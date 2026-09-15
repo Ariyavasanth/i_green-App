@@ -28,7 +28,9 @@ android {
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
-        versionName = flutter.versionName
+        val propKey = project.findProperty("MAPS_API_KEY")?.toString()
+        val validKey = if (propKey != null && propKey.isNotEmpty() && propKey != "DEFAULT_KEY") propKey else "AIzaSyAUjhxMMfOFsi6mmwz2mn0ADjfLKnUY4wk"
+        manifestPlaceholders["MAPS_API_KEY"] = validKey
     }
 
     buildTypes {

@@ -146,29 +146,64 @@ class OnDutyAssignment {
   }
 
   /// Sequential Site Visit Helpers
+  List<OnDutySite> get effectiveSites {
+    if (sites.isNotEmpty) return sites;
+    if (destination.isNotEmpty || destinationName.isNotEmpty || destinationLatitude != null) {
+      return [
+        OnDutySite(
+          siteId: '1',
+          siteName: destinationName.isNotEmpty ? destinationName : destination,
+          purpose: purpose,
+          destination: destination,
+          destinationAddress: destinationAddress,
+          latitude: destinationLatitude,
+          longitude: destinationLongitude,
+          radius: destinationRadius > 0 ? destinationRadius : 100,
+          status: status == 'COMPLETED'
+              ? 'COMPLETED'
+              : (status == 'REACHED_DESTINATION'
+                  ? 'REACHED'
+                  : (status == 'TRAVELING_TO_DESTINATION' || status == 'IN_PROGRESS'
+                      ? 'TRAVELING'
+                      : 'PENDING')),
+          travelStartTime: travelStartTime,
+          reachedTime: reachedTime,
+          reachedPhoto: reachedPhoto ?? startPhoto,
+          workCompletedTime: workCompletedTime,
+          workPhoto: workPhoto ?? endPhoto,
+        )
+      ];
+    }
+    return sites;
+  }
+
   OnDutySite? get currentSite {
-    if (sites.isEmpty) return null;
-    for (final site in sites) {
+    final list = effectiveSites;
+    if (list.isEmpty) return null;
+    for (final site in list) {
       if (!site.isCompleted) return site;
     }
-    return sites.last;
+    return list.last;
   }
 
   int get currentSiteIndex {
-    if (sites.isEmpty) return 0;
-    final idx = sites.indexWhere((s) => !s.isCompleted);
-    return idx != -1 ? idx : (sites.length - 1);
+    final list = effectiveSites;
+    if (list.isEmpty) return 0;
+    final idx = list.indexWhere((s) => !s.isCompleted);
+    return idx != -1 ? idx : (list.length - 1);
   }
 
   bool get allSitesCompleted {
-    if (sites.isEmpty) return true;
-    return sites.every((s) => s.isCompleted);
+    final list = effectiveSites;
+    if (list.isEmpty) return true;
+    return list.every((s) => s.isCompleted);
   }
 
   bool canStartSite(int index) {
-    if (index < 0 || index >= sites.length) return false;
+    final list = effectiveSites;
+    if (index < 0 || index >= list.length) return false;
     if (index == 0) return true;
-    return sites[index - 1].isCompleted;
+    return list[index - 1].isCompleted;
   }
 
   /// Effective target coordinates for destination
@@ -192,26 +227,31 @@ class OnDutyAssignment {
     if (s == 'COMPLETED') return 'Completed';
     if (s == 'NOT_COMPLETED') return 'Not Completed';
     if (s == 'CANCELLED') return 'Cancelled';
+    if (s == 'WORK_COMPLETED' || allSitesCompleted) return 'Completed';
     if (s == 'RETURNING_TO_OFFICE' || (returnStartTime != null && officeReachedTime == null)) {
       return 'Return office from site';
     }
+    if (s == 'REACHED_DESTINATION') return 'Arrived at site';
+    if (s == 'TRAVELING_TO_DESTINATION') return 'Traveling to Site';
+
     if (sites.isNotEmpty) {
       final active = currentSite;
       if (active != null) {
         final siteNum = currentSiteIndex + 1;
-        if (active.isCompleted && allSitesCompleted) return 'All Sites Completed';
+        if (active.isCompleted && allSitesCompleted) return 'Completed';
         if (active.isReached) return 'Arrived at Site $siteNum (${active.effectiveName})';
         if (active.isTraveling) return 'Traveling to Site $siteNum (${active.effectiveName})';
         if (active.isPending) return 'Site $siteNum Pending (${active.effectiveName})';
       }
     }
-    if (s == 'WORK_COMPLETED' || (workCompletedTime != null && returnStartTime == null)) {
-      return 'OD work completed';
+
+    if (workCompletedTime != null && workCompletedTime!.isNotEmpty) {
+      return 'Completed';
     }
-    if (s == 'REACHED_DESTINATION' || (reachedTime != null && workCompletedTime == null)) {
+    if (reachedTime != null && reachedTime!.isNotEmpty) {
       return 'Arrived at site';
     }
-    if (s == 'TRAVELING_TO_DESTINATION' || (travelStartTime != null && reachedTime == null)) {
+    if (travelStartTime != null && travelStartTime!.isNotEmpty) {
       return 'Traveling to Site';
     }
     if (s == 'ASSIGNED') return 'Assigned';
@@ -363,6 +403,42 @@ class OnDutyAssignment {
       parsedWorkPhotos = (map['work_photos'] as List).map((x) => x.toString()).where((x) => x.isNotEmpty).toList();
     } else if (map['work_photo'] != null && map['work_photo'].toString().isNotEmpty) {
       parsedWorkPhotos = [map['work_photo'].toString()];
+    }
+
+    final topReachedPhoto = map['reached_photo']?.toString() ?? map['start_photo']?.toString();
+    final topReachedTime = map['reached_time']?.toString();
+
+    if (parsedSites.isNotEmpty) {
+      for (int i = 0; i < parsedSites.length; i++) {
+        final s = parsedSites[i];
+        if (!s.isCompleted) {
+          final isFirstSiteOrSingle = i == 0 || parsedSites.length == 1;
+          final hasTopReached = isFirstSiteOrSingle &&
+              ((topReachedPhoto != null && topReachedPhoto.isNotEmpty) ||
+                  (topReachedTime != null && topReachedTime.isNotEmpty));
+
+          if (rawStatus == 'REACHED_DESTINATION' ||
+              (s.reachedPhoto != null && s.reachedPhoto!.isNotEmpty) ||
+              (s.reachedTime != null && s.reachedTime!.isNotEmpty) ||
+              hasTopReached) {
+            parsedSites[i] = s.copyWith(
+              status: (s.status == 'PENDING' || s.status == 'TRAVELING' || s.status == 'IN_PROGRESS')
+                  ? 'REACHED'
+                  : s.status,
+              reachedPhoto: (s.reachedPhoto != null && s.reachedPhoto!.isNotEmpty)
+                  ? s.reachedPhoto
+                  : (isFirstSiteOrSingle ? topReachedPhoto : null),
+              reachedTime: (s.reachedTime != null && s.reachedTime!.isNotEmpty)
+                  ? s.reachedTime
+                  : (isFirstSiteOrSingle ? topReachedTime : null),
+            );
+            if (rawStatus == 'TRAVELING_TO_DESTINATION' || rawStatus == 'IN_PROGRESS' || rawStatus == 'ASSIGNED') {
+              rawStatus = 'REACHED_DESTINATION';
+            }
+          }
+          break;
+        }
+      }
     }
 
     return OnDutyAssignment(

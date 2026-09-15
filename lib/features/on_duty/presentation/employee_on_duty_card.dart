@@ -34,6 +34,9 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
   bool _isActionLoading = false;
   bool _isCheckingGps = false;
 
+  OnDutyAssignment? _localAssignment;
+  OnDutyAssignment get _assignment => _localAssignment ?? widget.assignment;
+
   // Real-time Geofence validation state
   double? _distanceToDestinationMeters;
   bool _isAtDestination = false;
@@ -48,13 +51,59 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
   @override
   void didUpdateWidget(covariant EmployeeOnDutyCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.assignment.status != widget.assignment.status ||
-        oldWidget.assignment.actualStartTime != widget.assignment.actualStartTime ||
-        oldWidget.assignment.reachedTime != widget.assignment.reachedTime ||
-        oldWidget.assignment.returnStartTime != widget.assignment.returnStartTime ||
-        oldWidget.assignment.sites != widget.assignment.sites) {
+    if (oldWidget.assignment != widget.assignment) {
+      _localAssignment = _mergeAssignments(widget.assignment, _localAssignment);
       _initCardState();
     }
+  }
+
+  OnDutyAssignment _mergeAssignments(OnDutyAssignment remote, OnDutyAssignment? local) {
+    if (local == null) return remote;
+
+    int getRank(String s) {
+      final u = s.toUpperCase();
+      if (u == 'COMPLETED') return 6;
+      if (u == 'RETURNING_TO_OFFICE') return 5;
+      if (u == 'WORK_COMPLETED') return 4;
+      if (u == 'REACHED_DESTINATION') return 3;
+      if (u == 'TRAVELING_TO_DESTINATION' || u == 'IN_PROGRESS' || u == 'ACTIVE') return 2;
+      if (u == 'ASSIGNED') return 1;
+      return 0;
+    }
+
+    final localRank = getRank(local.status);
+    final remoteRank = getRank(remote.status);
+    final effectiveStatus = localRank > remoteRank ? local.status : remote.status;
+
+    final mergedSites = List<OnDutySite>.from(remote.sites.isNotEmpty ? remote.sites : local.sites);
+    for (int i = 0; i < mergedSites.length && i < local.sites.length; i++) {
+      final localSite = local.sites[i];
+      final remoteSite = mergedSites[i];
+      if ((localSite.isReached || localSite.isCompleted || localSite.reachedPhoto != null) && !remoteSite.isCompleted) {
+        mergedSites[i] = remoteSite.copyWith(
+          status: localSite.status,
+          reachedTime: localSite.reachedTime ?? remoteSite.reachedTime,
+          reachedPhoto: localSite.reachedPhoto ?? remoteSite.reachedPhoto,
+          reachedLatitude: localSite.reachedLatitude ?? remoteSite.reachedLatitude,
+          reachedLongitude: localSite.reachedLongitude ?? remoteSite.reachedLongitude,
+          workCompletedTime: localSite.workCompletedTime ?? remoteSite.workCompletedTime,
+          workPhoto: localSite.workPhoto ?? remoteSite.workPhoto,
+          workPhotos: localSite.workPhotos.isNotEmpty ? localSite.workPhotos : remoteSite.workPhotos,
+        );
+      }
+    }
+
+    return (localRank > remoteRank ? local : remote).copyWith(
+      status: effectiveStatus,
+      reachedTime: local.reachedTime ?? remote.reachedTime,
+      reachedPhoto: local.reachedPhoto ?? remote.reachedPhoto,
+      reachedLatitude: local.reachedLatitude ?? remote.reachedLatitude,
+      reachedLongitude: local.reachedLongitude ?? remote.reachedLongitude,
+      workCompletedTime: local.workCompletedTime ?? remote.workCompletedTime,
+      workPhoto: local.workPhoto ?? remote.workPhoto,
+      workPhotos: local.workPhotos.isNotEmpty ? local.workPhotos : remote.workPhotos,
+      sites: mergedSites,
+    );
   }
 
   @override
@@ -68,7 +117,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
     _timer?.cancel();
     _gpsCheckTimer?.cancel();
 
-    final status = widget.assignment.status;
+    final status = _assignment.status;
     if (status == 'TRAVELING_TO_DESTINATION' ||
         status == 'IN_PROGRESS' ||
         status == 'ACTIVE' ||
@@ -93,17 +142,17 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
 
   void _startLiveTimer() {
     _timer?.cancel();
-    final status = widget.assignment.status;
+    final status = _assignment.status;
     DateTime startTime;
 
-    final activeSite = widget.assignment.currentSite;
+    final activeSite = _assignment.currentSite;
 
     if (status == 'REACHED_DESTINATION') {
-      startTime = _parseTimeString(activeSite?.reachedTime ?? widget.assignment.reachedTime ?? widget.assignment.actualStartTime);
+      startTime = _parseTimeString(activeSite?.reachedTime ?? _assignment.reachedTime ?? _assignment.actualStartTime);
     } else if (status == 'RETURNING_TO_OFFICE') {
-      startTime = _parseTimeString(widget.assignment.returnStartTime);
+      startTime = _parseTimeString(_assignment.returnStartTime);
     } else {
-      startTime = _parseTimeString(activeSite?.travelStartTime ?? widget.assignment.travelStartTime ?? widget.assignment.actualStartTime);
+      startTime = _parseTimeString(activeSite?.travelStartTime ?? _assignment.travelStartTime ?? _assignment.actualStartTime);
     }
 
     _activeElapsed = DateTime.now().difference(startTime);
@@ -122,7 +171,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
   void _startPeriodicGpsCheck() {
     _gpsCheckTimer?.cancel();
     _gpsCheckTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (mounted && widget.assignment.isOngoing) {
+      if (mounted && _assignment.isOngoing) {
         _checkDestinationGeofence(silent: true);
       }
     });
@@ -172,10 +221,10 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
         return;
       }
 
-      final targetLat = widget.assignment.effectiveDestinationLatitude;
-      final targetLng = widget.assignment.effectiveDestinationLongitude;
-      final targetRadius = widget.assignment.effectiveDestinationRadius > 0
-          ? widget.assignment.effectiveDestinationRadius
+      final targetLat = _assignment.effectiveDestinationLatitude;
+      final targetLng = _assignment.effectiveDestinationLongitude;
+      final targetRadius = _assignment.effectiveDestinationRadius > 0
+          ? _assignment.effectiveDestinationRadius
           : 100;
 
       if (targetLat != null && targetLng != null && targetLat != 0 && targetLng != 0) {
@@ -356,10 +405,11 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
       final nowStr = DateFormat('hh:mm a').format(DateTime.now());
       final nowTime24 = '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}:${DateTime.now().second.toString().padLeft(2, '0')}';
 
-      final sitesList = List<OnDutySite>.from(widget.assignment.sites);
-      final site = sitesList[siteIndex];
+      final sitesList = List<OnDutySite>.from(_assignment.effectiveSites);
+      final targetIndex = siteIndex < sitesList.length ? siteIndex : 0;
+      final site = sitesList[targetIndex];
 
-      sitesList[siteIndex] = site.copyWith(
+      sitesList[targetIndex] = site.copyWith(
         status: 'TRAVELING',
         travelStartTime: nowStr,
         startLatitude: position?.latitude,
@@ -406,6 +456,12 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
       final repo = ref.read(onDutyRepositoryProvider);
       await repo.updateAssignment(updated);
 
+      if (mounted) {
+        setState(() {
+          _localAssignment = updated;
+        });
+      }
+
       _invalidateProviders();
       _startLiveTimer();
       _checkDestinationGeofence();
@@ -431,7 +487,8 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
   }
 
   Future<void> _handleReachedSite(int siteIndex) async {
-    final site = widget.assignment.sites[siteIndex];
+    final currentSites = _assignment.effectiveSites;
+    final site = siteIndex < currentSites.length ? currentSites[siteIndex] : currentSites.first;
 
     setState(() => _isActionLoading = true);
     try {
@@ -448,11 +505,11 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
         return;
       }
 
-      final targetLat = site.latitude ?? widget.assignment.destinationLatitude;
-      final targetLng = site.longitude ?? widget.assignment.destinationLongitude;
+      final targetLat = site.latitude ?? _assignment.destinationLatitude;
+      final targetLng = site.longitude ?? _assignment.destinationLongitude;
       final targetRadius = site.radius > 0
           ? site.radius
-          : (widget.assignment.destinationRadius > 0 ? widget.assignment.destinationRadius : 100);
+          : (_assignment.destinationRadius > 0 ? _assignment.destinationRadius : 100);
 
       if (targetLat != null && targetLng != null && targetLat != 0 && targetLng != 0) {
         final distMeters = Geolocator.distanceBetween(
@@ -464,7 +521,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
 
         if (distMeters > targetRadius) {
           if (mounted) {
-            showDialog<void>(
+            final confirmProceed = await showDialog<bool>(
               context: context,
               builder: (ctx) => AlertDialog(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -474,7 +531,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Geofence Validation Failed',
+                        'Geofence Distance Warning',
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
                       ),
                     ),
@@ -485,7 +542,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'You are not physically at ${site.effectiveName}. You must be within ${targetRadius}m of the site to mark as Reached.',
+                      'You are ${distMeters.round()}m away from ${site.effectiveName} (Allowed radius: ${targetRadius}m).',
                       style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
                     ),
                     const SizedBox(height: 12),
@@ -516,23 +573,38 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                         ],
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Would you like to capture live arrival photo proof to verify site arrival anyway?',
+                      style: TextStyle(fontSize: 12.5, color: Color(0xFF475569), fontWeight: FontWeight.w500),
+                    ),
                   ],
                 ),
                 actions: [
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: OutlinedButton.styleFrom(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      side: const BorderSide(color: Color(0xFFCBD5E1)),
+                    ),
+                    child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                  ),
                   ElevatedButton(
-                    onPressed: () => Navigator.pop(ctx),
+                    onPressed: () => Navigator.pop(ctx, true),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF414A51),
-                      foregroundColor: Colors.white,
+                      backgroundColor: const Color(0xFF9CC70A),
+                      foregroundColor: const Color(0xFF414A51),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
-                    child: const Text('OK'),
+                    child: const Text('Proceed & Take Photo', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
             );
+            if (confirmProceed != true) return;
+          } else {
+            return;
           }
-          return;
         }
       }
 
@@ -549,19 +621,19 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
       final nowStr = DateFormat('hh:mm a').format(DateTime.now());
 
       // For first OD started from home, record attendance check-in NOW upon reaching site location
-      if (siteIndex == 0 && widget.assignment.startOdFromHome) {
+      if (siteIndex == 0 && _assignment.startOdFromHome) {
         final attendanceRepo = ref.read(attendanceRepositoryProvider);
-        final empIdInt = widget.assignment.employeeId > 0 ? widget.assignment.employeeId : 1;
+        final empIdInt = _assignment.employeeId > 0 ? _assignment.employeeId : 1;
         final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
         final nowTime24 = '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}:${DateTime.now().second.toString().padLeft(2, '0')}';
 
         await attendanceRepo.startOdAttendanceSession(
           employeeId: empIdInt,
-          employeeName: widget.assignment.employeeName,
+          employeeName: _assignment.employeeName,
           date: todayStr,
           time: nowTime24,
-          assignmentId: widget.assignment.id,
-          purpose: site.purpose.isNotEmpty ? site.purpose : widget.assignment.purpose,
+          assignmentId: _assignment.id,
+          purpose: site.purpose.isNotEmpty ? site.purpose : _assignment.purpose,
           destination: site.effectiveName,
           destinationAddress: site.destinationAddress,
           latitude: position.latitude,
@@ -574,8 +646,8 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
         );
       }
 
-      final sitesList = List<OnDutySite>.from(widget.assignment.sites);
-      sitesList[siteIndex] = site.copyWith(
+      final sitesList = List<OnDutySite>.from(_assignment.effectiveSites);
+      final updatedSite = site.copyWith(
         status: 'REACHED',
         reachedTime: nowStr,
         reachedPhoto: photo,
@@ -583,7 +655,13 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
         reachedLongitude: position.longitude,
       );
 
-      final updated = widget.assignment.copyWith(
+      if (siteIndex < sitesList.length) {
+        sitesList[siteIndex] = updatedSite;
+      } else {
+        sitesList.add(updatedSite);
+      }
+
+      final updated = _assignment.copyWith(
         status: 'REACHED_DESTINATION',
         reachedTime: nowStr,
         reachedPhoto: photo,
@@ -594,6 +672,12 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
 
       final repo = ref.read(onDutyRepositoryProvider);
       await repo.updateAssignment(updated);
+
+      if (mounted) {
+        setState(() {
+          _localAssignment = updated;
+        });
+      }
 
       _invalidateProviders();
       _startLiveTimer();
@@ -666,9 +750,25 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
     setState(() => _isActionLoading = true);
     try {
       final position = await _getGpsPosition();
+      final empIdInt = _assignment.employeeId > 0 ? _assignment.employeeId : 1;
+      final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final nowTime24 = '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}:${DateTime.now().second.toString().padLeft(2, '0')}';
+
+      final attendanceRepo = ref.read(attendanceRepositoryProvider);
+      await attendanceRepo.completeOdAttendanceSession(
+        employeeId: empIdInt,
+        employeeName: _assignment.employeeName,
+        date: todayStr,
+        time: nowTime24,
+        assignmentId: _assignment.id,
+        latitude: position?.latitude,
+        longitude: position?.longitude,
+        afterCompletionOption: 'NOT_COMPLETED',
+      );
+
       final repo = ref.read(onDutyRepositoryProvider);
       await repo.markAsNotCompleted(
-        id: widget.assignment.id,
+        id: _assignment.id,
         reason: result.text,
         photos: result.photos,
         latitude: position?.latitude,
@@ -820,7 +920,8 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
   }
 
   Future<void> _handleCompleteSiteWork(int siteIndex) async {
-    final site = widget.assignment.sites[siteIndex];
+    final currentSites = _assignment.effectiveSites;
+    final site = siteIndex < currentSites.length ? currentSites[siteIndex] : currentSites.first;
 
     final dynamic result = await showDialog<dynamic>(
       context: context,
@@ -846,8 +947,8 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
       final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
       final nowTime24 = '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}:${DateTime.now().second.toString().padLeft(2, '0')}';
 
-      final sitesList = List<OnDutySite>.from(widget.assignment.sites);
-      sitesList[siteIndex] = site.copyWith(
+      final sitesList = List<OnDutySite>.from(_assignment.effectiveSites);
+      final updatedSite = site.copyWith(
         status: 'COMPLETED',
         workCompletedTime: nowStr,
         workPhoto: photos.first,
@@ -856,38 +957,50 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
         workEndLongitude: position?.longitude,
       );
 
-      final allCompleted = sitesList.every((s) => s.isCompleted);
-      final isReturnToOffice = widget.assignment.isReturnToOfficeOption;
+      if (siteIndex < sitesList.length) {
+        sitesList[siteIndex] = updatedSite;
+      } else {
+        sitesList.add(updatedSite);
+      }
 
-      if (allCompleted && !isReturnToOffice) {
-        // Direct checkout option
+      final allCompleted = sitesList.every((s) => s.isCompleted);
+
+      if (allCompleted) {
         final attendanceRepo = ref.read(attendanceRepositoryProvider);
         await attendanceRepo.completeOdAttendanceSession(
           employeeId: empIdInt,
-          employeeName: widget.assignment.employeeName,
+          employeeName: _assignment.employeeName,
           date: todayStr,
           time: nowTime24,
-          assignmentId: widget.assignment.id,
+          assignmentId: _assignment.id,
           latitude: position?.latitude,
           longitude: position?.longitude,
           destinationLatitude: site.latitude,
           destinationLongitude: site.longitude,
           destinationRadius: site.radius,
-          afterCompletionOption: 'CHECKOUT_FROM_OD',
+          afterCompletionOption: _assignment.afterCompletionOption,
         );
 
-        final updated = widget.assignment.copyWith(
+        final updated = _assignment.copyWith(
           status: 'COMPLETED',
-          purpose: purposeDetails.isNotEmpty ? purposeDetails : widget.assignment.purpose,
+          purpose: purposeDetails.isNotEmpty ? purposeDetails : _assignment.purpose,
           workCompletedTime: nowStr,
           workPhoto: photos.first,
           workPhotos: photos,
           actualEndTime: nowStr,
+          workEndLatitude: position?.latitude,
+          workEndLongitude: position?.longitude,
           sites: sitesList,
         );
 
         final repo = ref.read(onDutyRepositoryProvider);
         await repo.updateAssignment(updated);
+
+        if (mounted) {
+          setState(() {
+            _localAssignment = updated;
+          });
+        }
 
         _invalidateProviders();
         _timer?.cancel();
@@ -896,16 +1009,14 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('All site visits finished with ${photos.length} photo proof(s)! Checked out directly.'),
+              content: Text('On-Duty work completed with ${photos.length} photo proof(s)! Marked as Completed ✓'),
               backgroundColor: const Color(0xFF16A34A),
             ),
           );
         }
       } else {
-        final newStatus = allCompleted ? 'WORK_COMPLETED' : 'IN_PROGRESS';
-
-        final updated = widget.assignment.copyWith(
-          status: newStatus,
+        final updated = _assignment.copyWith(
+          status: 'IN_PROGRESS',
           workCompletedTime: nowStr,
           workPhoto: photos.first,
           workPhotos: photos,
@@ -915,14 +1026,20 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
         final repo = ref.read(onDutyRepositoryProvider);
         await repo.updateAssignment(updated);
 
+        if (mounted) {
+          setState(() {
+            _localAssignment = updated;
+          });
+        }
+
         _invalidateProviders();
 
         if (mounted) {
-          final snackMsg = allCompleted
-              ? 'All sites completed ✓ Return to Office is now available.'
-              : 'Site ${siteIndex + 1} (${site.effectiveName}) completed with ${photos.length} photo proof(s)!';
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(snackMsg), backgroundColor: const Color(0xFF16A34A)),
+            SnackBar(
+              content: Text('Site ${siteIndex + 1} (${site.effectiveName}) completed!'),
+              backgroundColor: const Color(0xFF16A34A),
+            ),
           );
         }
       }
@@ -1171,7 +1288,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
   }
 
   Widget _buildSequentialOdCard() {
-    final assignment = widget.assignment;
+    final assignment = _assignment;
     final sites = assignment.sites;
     final primaryColor = const Color(0xFF9CC70A);
     final darkAccent = const Color(0xFF414A51);
@@ -1329,12 +1446,12 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                         decoration: BoxDecoration(
                           color: site.isCompleted
                               ? Colors.green.shade50
-                              : (isCurrentActive ? primaryColor.withValues(alpha: 0.1) : (isLocked ? Colors.grey.shade100 : Colors.white)),
+                              : (site.isNotCompleted ? Colors.red.shade50 : (isCurrentActive ? primaryColor.withValues(alpha: 0.1) : (isLocked ? Colors.grey.shade100 : Colors.white))),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: site.isCompleted
                                 ? Colors.green.shade400
-                                : (isCurrentActive ? primaryColor : (isLocked ? Colors.grey.shade300 : primaryColor.withValues(alpha: 0.5))),
+                                : (site.isNotCompleted ? Colors.red.shade400 : (isCurrentActive ? primaryColor : (isLocked ? Colors.grey.shade300 : primaryColor.withValues(alpha: 0.5)))),
                             width: isCurrentActive ? 2.0 : 1.0,
                           ),
                         ),
@@ -1343,22 +1460,6 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                           children: [
                             Row(
                               children: [
-                                Container(
-                                  width: 26,
-                                  height: 26,
-                                  decoration: BoxDecoration(
-                                    color: site.isCompleted
-                                        ? Colors.green
-                                        : (isCurrentActive ? primaryColor : (isLocked ? Colors.grey : darkAccent)),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: Text(
-                                    '${index + 1}',
-                                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1384,25 +1485,31 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                                   decoration: BoxDecoration(
                                     color: site.isCompleted
                                         ? Colors.green.shade100
-                                        : (isCurrentActive
-                                            ? primaryColor.withValues(alpha: 0.25)
-                                            : (isLocked ? Colors.grey.shade200 : Colors.blue.shade50)),
+                                        : (site.isNotCompleted
+                                            ? Colors.red.shade100
+                                            : (isCurrentActive
+                                                ? primaryColor.withValues(alpha: 0.25)
+                                                : (isLocked ? Colors.grey.shade200 : const Color(0xFFF1F5F9)))),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
                                     site.isCompleted
                                         ? 'Completed ✓'
-                                        : (isCurrentActive
-                                            ? (site.isReached ? 'Arrived' : (site.isTraveling ? 'Traveling' : 'Active'))
-                                            : (isLocked ? 'Locked 🔒' : 'Pending')),
+                                        : (site.isNotCompleted
+                                            ? 'Not Completed ✕'
+                                            : (isCurrentActive
+                                                ? (site.isReached ? 'Arrived' : (site.isTraveling ? 'Traveling' : 'Active'))
+                                                : (isLocked ? 'Locked 🔒' : 'Pending'))),
                                     style: TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.bold,
                                       color: site.isCompleted
                                           ? Colors.green.shade800
-                                          : (isCurrentActive
-                                              ? darkAccent
-                                              : (isLocked ? Colors.grey.shade700 : Colors.blue.shade900)),
+                                          : (site.isNotCompleted
+                                              ? Colors.red.shade800
+                                              : (isCurrentActive
+                                                  ? darkAccent
+                                                  : (isLocked ? Colors.grey.shade700 : darkAccent))),
                                     ),
                                   ),
                                 ),
@@ -1411,114 +1518,124 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
 
                             _buildSiteLocationProofsBox(site: site, siteIndex: index + 1, assignment: widget.assignment),
 
-                            // Action Button for active/current site
-                            if (!allDone && canStart && !site.isCompleted) ...[
+                             // Action Button for active/current site
+                            if (!allDone && canStart && !site.isCompleted && !site.isNotCompleted) ...[
                               const SizedBox(height: 10),
-                              if (site.isPending) ...[
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: ElevatedButton.icon(
-                                        onPressed: _isActionLoading ? null : () => _handleStartSiteTrip(index),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: primaryColor,
-                                          foregroundColor: darkAccent,
-                                          padding: const EdgeInsets.symmetric(vertical: 10),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                        ),
-                                        icon: const Icon(Icons.directions_car, size: 18),
-                                        label: Text(
-                                          'Start Site ${index + 1}',
-                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    OutlinedButton.icon(
-                                      onPressed: _isActionLoading ? null : () => _handleNotCompletedSiteWork(index),
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: const Color(0xFFDC2626),
-                                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                        side: const BorderSide(color: Color(0xFFEF4444)),
-                                      ),
-                                      icon: const Icon(Icons.cancel_outlined, size: 16),
-                                      label: const Text('Not Completed', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                    ),
-                                  ],
-                                ),
-                              ] else if (site.isTraveling) ...[
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: ElevatedButton.icon(
-                                        onPressed: _isActionLoading ? null : () => _handleReachedSite(index),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: primaryColor,
-                                          foregroundColor: darkAccent,
-                                          padding: const EdgeInsets.symmetric(vertical: 10),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                        ),
-                                        icon: const Icon(Icons.camera_alt, size: 18),
-                                        label: Text(
-                                          'Reached Site ${index + 1}',
-                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                              () {
+                                final isSiteReached = site.isReached ||
+                                    site.reachedPhoto != null ||
+                                    site.reachedTime != null ||
+                                    site.status == 'REACHED' ||
+                                    site.status == 'ARRIVED' ||
+                                    (index == 0 && (assignment.status == 'REACHED_DESTINATION' || assignment.reachedPhoto != null || assignment.reachedTime != null));
+
+                                final isSiteTraveling = site.isTraveling ||
+                                    site.travelStartTime != null ||
+                                    site.status == 'TRAVELING' ||
+                                    site.status == 'IN_PROGRESS' ||
+                                    assignment.status == 'TRAVELING_TO_DESTINATION';
+
+                                if (isSiteReached) {
+                                  return Row(
+                                    children: [
+                                      Expanded(
+                                        child: ElevatedButton.icon(
+                                          onPressed: _isActionLoading ? null : () => _handleCompleteSiteWork(index),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFF16A34A),
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(vertical: 11),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                          ),
+                                          icon: const Icon(Icons.check_circle_outline, size: 18),
+                                          label: const Text(
+                                            'Completed',
+                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    OutlinedButton.icon(
-                                      onPressed: _isActionLoading ? null : () => _handleNotCompletedSiteWork(index),
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: const Color(0xFFDC2626),
-                                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                        side: const BorderSide(color: Color(0xFFEF4444)),
-                                      ),
-                                      icon: const Icon(Icons.cancel_outlined, size: 16),
-                                      label: const Text('Not Completed', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                    ),
-                                  ],
-                                ),
-                              ] else if (site.isReached) ...[
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: ElevatedButton.icon(
-                                        onPressed: _isActionLoading ? null : () => _handleCompleteSiteWork(index),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFF16A34A),
-                                          foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(vertical: 11),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                        ),
-                                        icon: const Icon(Icons.check_circle_outline, size: 18),
-                                        label: const Text(
-                                          'Completed',
-                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: ElevatedButton.icon(
+                                      const SizedBox(width: 8),
+                                      OutlinedButton.icon(
                                         onPressed: _isActionLoading ? null : () => _handleNotCompletedSiteWork(index),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFFDC2626),
-                                          foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(vertical: 11),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: const Color(0xFFDC2626),
+                                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                          side: const BorderSide(color: Color(0xFFEF4444)),
                                         ),
-                                        icon: const Icon(Icons.cancel_outlined, size: 18),
-                                        label: const Text(
-                                          'Not Completed',
-                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                        icon: const Icon(Icons.cancel_outlined, size: 16),
+                                        label: const Text('Not Completed', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                      ),
+                                    ],
+                                  );
+                                } else if (isSiteTraveling) {
+                                  return Row(
+                                    children: [
+                                      Expanded(
+                                        child: ElevatedButton.icon(
+                                          onPressed: _isActionLoading ? null : () => _handleReachedSite(index),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: primaryColor,
+                                            foregroundColor: darkAccent,
+                                            padding: const EdgeInsets.symmetric(vertical: 10),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                          ),
+                                          icon: const Icon(Icons.camera_alt, size: 18),
+                                          label: Text(
+                                            'Reached Site ${index + 1}',
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                      const SizedBox(width: 8),
+                                      OutlinedButton.icon(
+                                        onPressed: _isActionLoading ? null : () => _handleNotCompletedSiteWork(index),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: const Color(0xFFDC2626),
+                                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                          side: const BorderSide(color: Color(0xFFEF4444)),
+                                        ),
+                                        icon: const Icon(Icons.cancel_outlined, size: 16),
+                                        label: const Text('Not Completed', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                      ),
+                                    ],
+                                  );
+                                } else {
+                                  return Row(
+                                    children: [
+                                      Expanded(
+                                        child: ElevatedButton.icon(
+                                          onPressed: _isActionLoading ? null : () => _handleStartSiteTrip(index),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: primaryColor,
+                                            foregroundColor: darkAccent,
+                                            padding: const EdgeInsets.symmetric(vertical: 10),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                          ),
+                                          icon: const Icon(Icons.directions_car, size: 18),
+                                          label: Text(
+                                            'Start Site ${index + 1}',
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      OutlinedButton.icon(
+                                        onPressed: _isActionLoading ? null : () => _handleNotCompletedSiteWork(index),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: const Color(0xFFDC2626),
+                                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                          side: const BorderSide(color: Color(0xFFEF4444)),
+                                        ),
+                                        icon: const Icon(Icons.cancel_outlined, size: 16),
+                                        label: const Text('Not Completed', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                      ),
+                                    ],
+                                  );
+                                }
+                              }(),
                             ],
                           ],
                         ),
@@ -1927,9 +2044,9 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.map_outlined, size: 12, color: Color(0xFF2563EB)),
+                        Icon(Icons.map_outlined, size: 12, color: Color(0xFF414A51)),
                         SizedBox(width: 3),
-                        Text('Map', style: TextStyle(fontSize: 10.5, color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
+                        Text('Map', style: TextStyle(fontSize: 10.5, color: Color(0xFF414A51), fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),
@@ -1941,7 +2058,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
             const SizedBox(height: 6),
             Row(
               children: [
-                const Icon(Icons.location_on, size: 14, color: Color(0xFF2563EB)),
+                const Icon(Icons.location_on, size: 14, color: Color(0xFF414A51)),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Column(
@@ -1949,7 +2066,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                     children: [
                       const Text(
                         'Reached Location',
-                        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF1D4ED8)),
+                        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
                       ),
                       Text(
                         '${reachedLat.toStringAsFixed(5)}, ${reachedLng.toStringAsFixed(5)}',
@@ -1970,9 +2087,9 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.map_outlined, size: 12, color: Color(0xFF2563EB)),
+                        Icon(Icons.map_outlined, size: 12, color: Color(0xFF414A51)),
                         SizedBox(width: 3),
-                        Text('Map', style: TextStyle(fontSize: 10.5, color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
+                        Text('Map', style: TextStyle(fontSize: 10.5, color: Color(0xFF414A51), fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),
@@ -1980,19 +2097,27 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
               ],
             ),
           ],
-          if (endLat != null && endLng != null) ...[
+          if (endLat != null && endLng != null && (site.isCompleted || site.isNotCompleted || widget.assignment.isCompleted || widget.assignment.isNotCompleted)) ...[
             const SizedBox(height: 6),
             Row(
               children: [
-                const Icon(Icons.check_circle_outline, size: 14, color: Color(0xFF16A34A)),
+                Icon(
+                  (site.isNotCompleted || widget.assignment.isNotCompleted) ? Icons.cancel_outlined : Icons.check_circle_outline,
+                  size: 14,
+                  color: (site.isNotCompleted || widget.assignment.isNotCompleted) ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
+                ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Completed Location',
-                        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF15803D)),
+                      Text(
+                        (site.isNotCompleted || widget.assignment.isNotCompleted) ? 'Not Completed Location' : 'Completed Location',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                          color: (site.isNotCompleted || widget.assignment.isNotCompleted) ? const Color(0xFFDC2626) : const Color(0xFF15803D),
+                        ),
                       ),
                       Text(
                         '${endLat.toStringAsFixed(5)}, ${endLng.toStringAsFixed(5)}',
@@ -2013,9 +2138,9 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.map_outlined, size: 12, color: Color(0xFF2563EB)),
+                        Icon(Icons.map_outlined, size: 12, color: Color(0xFF414A51)),
                         SizedBox(width: 3),
-                        Text('Map', style: TextStyle(fontSize: 10.5, color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
+                        Text('Map', style: TextStyle(fontSize: 10.5, color: Color(0xFF414A51), fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),

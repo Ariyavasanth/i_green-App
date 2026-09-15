@@ -3547,15 +3547,21 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: _buildCompactStatChip(
-                      icon: hasCheckedIn && !hasCheckedOut ? Icons.timer_outlined : Icons.timelapse,
-                      iconColor: hasCheckedIn && !hasCheckedOut ? const Color(0xFF9CC70A) : AppColors.active,
-                      label: hasCheckedIn && !hasCheckedOut ? 'Live Clock' : 'Work Hrs',
-                      value: hasCheckedIn && !hasCheckedOut
-                          ? _getLiveClockDisplay(todayRecord.effectiveCheckInTime)
-                          : (todayRecord != null && (todayRecord.totalHours > 0 || todayRecord.sessions.isNotEmpty)
-                              ? todayRecord.formattedTotalHours
-                              : '--'),
+                    child: Builder(
+                      builder: (context) {
+                        final hasActiveSession = todayRecord != null && todayRecord.sessions.any((s) => s.isActive);
+                        final showLiveClock = hasCheckedIn && !hasCheckedOut && hasActiveSession;
+                        return _buildCompactStatChip(
+                          icon: showLiveClock ? Icons.timer_outlined : Icons.timelapse,
+                          iconColor: showLiveClock ? const Color(0xFF9CC70A) : AppColors.active,
+                          label: showLiveClock ? 'Live Clock' : 'Work Hrs',
+                          value: showLiveClock
+                              ? _getLiveClockDisplay(todayRecord.effectiveCheckInTime)
+                              : (todayRecord != null && (todayRecord.totalHours > 0 || todayRecord.sessions.isNotEmpty)
+                                  ? todayRecord.formattedTotalHours
+                                  : '--'),
+                        );
+                      },
                     ),
                   ),
                 ],

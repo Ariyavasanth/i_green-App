@@ -621,8 +621,8 @@ class _WorkspaceSection extends StatelessWidget {
                   : width > 550
                       ? 1.35
                       : width < 360
-                          ? 1.85
-                          : 2.1;
+                          ? 1.65
+                          : 1.85;
 
               return GridView.count(
                 shrinkWrap: true,

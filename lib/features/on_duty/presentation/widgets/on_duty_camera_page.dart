@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'package:camera/camera.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class OnDutyCameraPage extends StatefulWidget {
   const OnDutyCameraPage({
@@ -34,21 +35,36 @@ class _OnDutyCameraPageState extends State<OnDutyCameraPage> {
 
   Future<void> _initCamera() async {
     try {
+      final status = await Permission.camera.request();
+      if (status.isDenied || status.isPermanentlyDenied) {
+        if (mounted) {
+          setState(() {
+            _errorMessage = 'Camera permission was denied. Please allow camera access in device Settings to capture live arrival proof.';
+            _isInitializing = false;
+          });
+        }
+        return;
+      }
+
       _cameras = await availableCameras();
       if (_cameras.isEmpty) {
-        setState(() {
-          _errorMessage = 'No camera device found.';
-          _isInitializing = false;
-        });
+        if (mounted) {
+          setState(() {
+            _errorMessage = 'No live camera device detected on this phone.';
+            _isInitializing = false;
+          });
+        }
         return;
       }
 
       await _setupCameraController(_cameras[_selectedCameraIndex]);
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Unable to access camera: $e';
-        _isInitializing = false;
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Unable to initialize live camera ($e).';
+          _isInitializing = false;
+        });
+      }
     }
   }
 
@@ -75,7 +91,7 @@ class _OnDutyCameraPageState extends State<OnDutyCameraPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = 'Error initializing camera: $e';
+        _errorMessage = 'Error initializing live camera preview: $e';
         _isInitializing = false;
       });
     }
@@ -89,54 +105,59 @@ class _OnDutyCameraPageState extends State<OnDutyCameraPage> {
 
   Future<void> _capturePhoto() async {
     if (_isCapturing) return;
+    setState(() => _isCapturing = true);
 
-    if (_controller != null && _controller!.value.isInitialized) {
-      setState(() => _isCapturing = true);
-      try {
+    try {
+      if (_controller != null && _controller!.value.isInitialized) {
         final file = await _controller!.takePicture();
         final bytes = await file.readAsBytes();
-        final ext = file.name.toLowerCase().endsWith('.png') ? 'png' : 'jpeg';
+        List<int> compressedBytes = bytes;
+        try {
+          final decoded = img.decodeImage(bytes);
+          if (decoded != null) {
+            final resized = img.copyResize(
+              decoded,
+              width: decoded.width > 800 ? 800 : decoded.width,
+            );
+            compressedBytes = img.encodeJpg(resized, quality: 70);
+          }
+        } catch (_) {}
+        final base64Image = 'data:image/jpeg;base64,${base64Encode(compressedBytes)}';
+        if (mounted) {
+          Navigator.of(context).pop(base64Image);
+          return;
+        }
+      }
+    } catch (e) {
+      // Fall through to system camera fallback if custom camera fails
+    }
+
+    // System Camera Fallback (Live Photo only)
+    try {
+      final picker = ImagePicker();
+      final image = await picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 50,
+        maxWidth: 1000,
+        maxHeight: 1000,
+      );
+      if (image != null) {
+        final bytes = await image.readAsBytes();
+        final ext = image.name.toLowerCase().endsWith('.png') ? 'png' : 'jpeg';
         final base64Image = 'data:image/$ext;base64,${base64Encode(bytes)}';
         if (mounted) {
           Navigator.of(context).pop(base64Image);
+          return;
         }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to take photo: $e'), backgroundColor: Colors.red),
-          );
-        }
-      } finally {
-        if (mounted) setState(() => _isCapturing = false);
       }
-    } else {
-      // Direct camera fallback for platforms without CameraController support
-      setState(() => _isCapturing = true);
-      try {
-        final picker = ImagePicker();
-        final image = await picker.pickImage(
-          source: ImageSource.camera,
-          imageQuality: 40,
-          maxWidth: 800,
-          maxHeight: 800,
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open live camera: $e'), backgroundColor: Colors.red),
         );
-        if (image != null) {
-          final bytes = await image.readAsBytes();
-          final ext = image.name.toLowerCase().endsWith('.png') ? 'png' : 'jpeg';
-          final base64Image = 'data:image/$ext;base64,${base64Encode(bytes)}';
-          if (mounted) {
-            Navigator.of(context).pop(base64Image);
-          }
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Could not open camera: $e'), backgroundColor: Colors.red),
-          );
-        }
-      } finally {
-        if (mounted) setState(() => _isCapturing = false);
       }
+    } finally {
+      if (mounted) setState(() => _isCapturing = false);
     }
   }
 
@@ -150,200 +171,188 @@ class _OnDutyCameraPageState extends State<OnDutyCameraPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Top Bar
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              color: Colors.black.withValues(alpha: 0.8),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    backgroundColor: Colors.white24,
-                    radius: 20,
-                    child: IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.title,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          widget.subtitle,
-                          style: const TextStyle(
-                            color: Color(0xFF9CC70A),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (_cameras.length > 1)
-                    IconButton(
-                      icon: const Icon(Icons.flip_camera_ios, color: Colors.white, size: 24),
-                      tooltip: 'Switch Camera',
-                      onPressed: _isInitializing || _isCapturing ? null : _switchCamera,
-                    ),
-                ],
-              ),
-            ),
+      body: Stack(
+        children: [
+          // 1. Edge-to-Edge Full Screen Live Camera Preview
+          Positioned.fill(
+            child: _buildCameraPreview(),
+          ),
 
-            // Camera Viewfinder View
-            Expanded(
-              child: Stack(
-                fit: StackFit.expand,
-                alignment: Alignment.center,
-                children: [
-                  if (_errorMessage != null)
-                    Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24.0),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.videocam_off, size: 54, color: Colors.white54),
-                            const SizedBox(height: 14),
-                            Text(
-                              _errorMessage!,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(color: Colors.white70, fontSize: 14),
-                            ),
-                            const SizedBox(height: 20),
-                            ElevatedButton.icon(
-                              onPressed: _isCapturing ? null : _capturePhoto,
-                              icon: const Icon(Icons.camera_alt),
-                              label: const Text('Launch System Camera'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF9CC70A),
-                                foregroundColor: const Color(0xFF414A51),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  else if (_isInitializing || _controller == null || !_controller!.value.isInitialized)
-                    const Center(
-                      child: CircularProgressIndicator(color: Color(0xFF9CC70A)),
-                    )
-                  else
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: AspectRatio(
-                        aspectRatio: _controller!.value.aspectRatio,
-                        child: CameraPreview(_controller!),
-                      ),
-                    ),
-
-                  // Overlay Guideline Box
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: Container(
-                        margin: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: const Color(0xFF9CC70A).withValues(alpha: 0.6),
-                            width: 2,
-                          ),
-                        ),
-                      ),
-                    ),
+          // 4. Floating Top Navigation & Title Bar
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.85),
+                      Colors.transparent,
+                    ],
                   ),
-
-                  // Watermark / Live Badge
-                  Positioned(
-                    top: 36,
-                    left: 36,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.6),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFF9CC70A), width: 1),
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: Colors.white.withValues(alpha: 0.25),
+                      radius: 20,
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 22),
+                        onPressed: () => Navigator.of(context).pop(),
+                        tooltip: 'Back',
                       ),
-                      child: const Row(
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.fiber_manual_record, color: Colors.red, size: 10),
-                          SizedBox(width: 6),
                           Text(
-                            'LIVE CAMERA',
-                            style: TextStyle(
+                            widget.title,
+                            style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 10.5,
+                              fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
                             ),
+                          ),
+                          Text(
+                            widget.subtitle,
+                            style: const TextStyle(
+                              color: Color(0xFF9CC70A),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Bottom Shutter Controls
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
-              color: Colors.black,
-              child: Column(
-                children: [
-                  const Text(
-                    'Position yourself / site work within frame',
-                    style: TextStyle(color: Colors.white60, fontSize: 12),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      GestureDetector(
-                        onTap: _isCapturing || _isInitializing ? null : _capturePhoto,
-                        child: Container(
-                          width: 74,
-                          height: 74,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 4),
-                            color: const Color(0xFF9CC70A),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF9CC70A).withValues(alpha: 0.4),
-                                blurRadius: 14,
-                                spreadRadius: 2,
-                              ),
-                            ],
-                          ),
-                          child: Center(
-                            child: _isCapturing
-                                ? const CircularProgressIndicator(color: Color(0xFF414A51), strokeWidth: 3)
-                                : const Icon(Icons.camera_alt, color: Color(0xFF414A51), size: 34),
-                          ),
+                    if (_cameras.length > 1)
+                      CircleAvatar(
+                        backgroundColor: Colors.white.withValues(alpha: 0.25),
+                        radius: 20,
+                        child: IconButton(
+                          icon: const Icon(Icons.flip_camera_ios_rounded, color: Colors.white, size: 20),
+                          tooltip: 'Flip Camera',
+                          onPressed: _isInitializing || _isCapturing ? null : _switchCamera,
                         ),
                       ),
-                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // 5. Floating Bottom Shutter Bar
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).padding.bottom + 20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.9),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GestureDetector(
+                    onTap: _isCapturing || _isInitializing ? null : _capturePhoto,
+                    child: Container(
+                      width: 78,
+                      height: 78,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 4),
+                        color: const Color(0xFF9CC70A),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF9CC70A).withValues(alpha: 0.5),
+                            blurRadius: 18,
+                            spreadRadius: 3,
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: _isCapturing
+                            ? const CircularProgressIndicator(color: Color(0xFF414A51), strokeWidth: 3.5)
+                            : const Icon(Icons.camera_alt_rounded, color: Color(0xFF414A51), size: 36),
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCameraPreview() {
+    if (_errorMessage != null) {
+      return Container(
+        color: const Color(0xFF1E293B),
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.videocam_off_rounded, size: 64, color: Colors.white54),
+              const SizedBox(height: 16),
+              Text(
+                _errorMessage!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70, fontSize: 14),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: _isCapturing ? null : _capturePhoto,
+                icon: const Icon(Icons.camera_alt_rounded),
+                label: const Text('Open System Live Camera'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF9CC70A),
+                  foregroundColor: const Color(0xFF414A51),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ],
+          ),
         ),
+      );
+    }
+
+    if (_isInitializing || _controller == null || !_controller!.value.isInitialized) {
+      return Container(
+        color: Colors.black,
+        child: const Center(
+          child: CircularProgressIndicator(color: Color(0xFF9CC70A)),
+        ),
+      );
+    }
+
+    final mediaSize = MediaQuery.of(context).size;
+    final scale = 1 / (_controller!.value.aspectRatio * mediaSize.aspectRatio);
+
+    return Transform.scale(
+      scale: scale < 1.0 ? 1 / scale : scale,
+      child: Center(
+        child: CameraPreview(_controller!),
       ),
     );
   }
