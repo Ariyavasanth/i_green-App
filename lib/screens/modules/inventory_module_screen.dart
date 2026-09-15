@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../features/employee/providers/employee_providers.dart';
+import '../../widgets/app_background_wrapper.dart';
 import '../../widgets/module_card.dart';
 
 class _SubModule {
@@ -20,37 +21,37 @@ class InventoryModuleScreen extends ConsumerStatefulWidget {
   static const _sections = <String, List<_SubModule>>{
     'STOCK': [
       _SubModule(
-          'Items', Icons.inventory_2_outlined, '/items', Color(0xFF2196F3)),
+          'Items', Icons.inventory_2_outlined, '/items', Color(0xFF2563EB)),
       _SubModule('Inventory\nAdjustments', Icons.tune_outlined,
-          '/inventory-adjustments', Color(0xFF00B894)),
+          '/inventory-adjustments', Color(0xFF10B981)),
     ],
     'SALES': [
       _SubModule(
-          'Customers', Icons.people_outline, '/customers', Color(0xFF6C5CE7)),
+          'Customers', Icons.people_outline, '/customers', Color(0xFF8B5CF6)),
       _SubModule(
-          'Quotes', Icons.request_quote_outlined, '/quotes', Color(0xFFE17055)),
+          'Quotes', Icons.request_quote_outlined, '/quotes', Color(0xFFF59E0B)),
       _SubModule('Sales\nOrders', Icons.shopping_cart_outlined, '/sales-orders',
-          Color(0xFF0984E3)),
+          Color(0xFF0284C7)),
       _SubModule(
-          'Invoices', Icons.receipt_long_outlined, '/invoices', Color(0xFF00CEC9)),
+          'Invoices', Icons.receipt_long_outlined, '/invoices', Color(0xFF06B6D4)),
       _SubModule('Delivery\nChallans', Icons.local_shipping_outlined,
-          '/delivery-challans', Color(0xFFFDAA5D)),
+          '/delivery-challans', Color(0xFFF97316)),
       _SubModule('Payments\nReceived', Icons.payments_outlined,
-          '/payments-received', Color(0xFFE84393)),
+          '/payments-received', Color(0xFFEC4899)),
       _SubModule('Credit\nNotes', Icons.assignment_return_outlined,
-          '/credit-notes', Color(0xFF636E72)),
+          '/credit-notes', Color(0xFF64748B)),
       _SubModule('e-Way\nBills', Icons.qr_code_outlined, '/e-way-bills',
-          Color(0xFF6C5CE7)),
+          Color(0xFF7C3AED)),
     ],
     'PURCHASE': [
       _SubModule(
-          'Vendors', Icons.storefront_outlined, '/vendors', Color(0xFF0984E3)),
+          'Vendors', Icons.storefront_outlined, '/vendors', Color(0xFF0D9488)),
       _SubModule('Expenses', Icons.account_balance_wallet_outlined, '/expenses',
-          Color(0xFF00B894)),
+          Color(0xFFEF4444)),
       _SubModule('Purchase\nOrders', Icons.shopping_bag_outlined,
-          '/purchase-orders', Color(0xFFE17055)),
+          '/purchase-orders', Color(0xFFD97706)),
       _SubModule(
-          'Bills', Icons.receipt_outlined, '/bills', Color(0xFF636E72)),
+          'Bills', Icons.receipt_outlined, '/bills', Color(0xFF4F46E5)),
     ],
   };
 
@@ -106,7 +107,8 @@ class _InventoryModuleScreenState extends ConsumerState<InventoryModuleScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6F3),
-      body: Column(
+      body: AppBackgroundWrapper(
+        child: Column(
         children: [
           ModuleScreenHeader(
             title: 'INVENTORY',
@@ -308,6 +310,7 @@ class _InventoryModuleScreenState extends ConsumerState<InventoryModuleScreen> {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }

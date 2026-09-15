@@ -178,9 +178,11 @@ class FirebaseSiteVisitAttendanceRepository implements SiteVisitAttendanceReposi
       TaskSnapshot uploadTask;
       if (bytes != null && bytes.isNotEmpty) {
         uploadTask = await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
-      } else {
+      } else if (!kIsWeb) {
         final file = File(localImagePath);
         uploadTask = await ref.putFile(file, SettableMetadata(contentType: 'image/jpeg'));
+      } else {
+        return SiteVisitPhotoAsset(url: localImagePath, publicId: '');
       }
 
       final remoteUrl = await uploadTask.ref.getDownloadURL();
@@ -193,11 +195,12 @@ class FirebaseSiteVisitAttendanceRepository implements SiteVisitAttendanceReposi
   int _docIdToInt(String docId) => int.tryParse(docId.replaceAll(RegExp(r'\D'), '')) ?? (docId.hashCode & 0x7fffffff);
 
   Future<void> _deleteLocalPhotoIfPresent(String photoUrl) async {
-    if (photoUrl.isEmpty) return;
-    final file = File(photoUrl);
-    if (!await file.exists()) return;
+    if (kIsWeb || photoUrl.isEmpty) return;
     try {
-      await file.delete();
+      final file = File(photoUrl);
+      if (await file.exists()) {
+        await file.delete();
+      }
     } catch (_) {
       // Best effort cleanup only.
     }

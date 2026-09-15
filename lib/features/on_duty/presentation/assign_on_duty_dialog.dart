@@ -884,15 +884,22 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
       return;
     }
 
-    final primarySite = _addedSites.first;
+    if (_selectedEmployee!.id <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Invalid employee selection. Please select a valid employee profile.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
-    final empIdInt = _selectedEmployee!.id > 0 ? _selectedEmployee!.id : 1;
+    final empIdInt = _selectedEmployee!.id;
     final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final attendanceRepo = ref.read(attendanceRepositoryProvider);
 
     // 1. Check if employee is currently checked in at the Office
-    final todayRecord = await attendanceRepo.getAttendanceRecordForDate(empIdInt, todayStr) ??
-        await attendanceRepo.getAttendanceRecordForDate(1, todayStr);
+    final todayRecord = await attendanceRepo.getAttendanceRecordForDate(empIdInt, todayStr);
 
     final activeSession = todayRecord?.sessions.where((s) => s.isActive).firstOrNull;
     final isOfficeActive = activeSession != null && activeSession.isOffice;
@@ -1111,11 +1118,22 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
     setState(() => _isSubmitting = true);
 
     try {
+      final primarySite = _addedSites.first;
       final position = await _getGpsPosition();
       final nowStr = DateFormat('hh:mm a').format(DateTime.now());
       final nowTime24 = '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}:${DateTime.now().second.toString().padLeft(2, '0')}';
 
       final repo = ref.read(onDutyRepositoryProvider);
+
+      // Auto-complete previous active OD assignment when starting a new OD session
+      final existingActiveAssignment = await repo.getActiveAssignmentForEmployee(_selectedEmployee!.id);
+      if (existingActiveAssignment != null) {
+        await repo.updateAssignmentStatus(
+          id: existingActiveAssignment.id,
+          status: 'COMPLETED',
+          actualEndTime: nowStr,
+        );
+      }
 
       // Set first site as traveling
       final updatedSites = List<OnDutySite>.from(_addedSites);

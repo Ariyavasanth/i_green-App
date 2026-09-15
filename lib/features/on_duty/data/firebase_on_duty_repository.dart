@@ -61,17 +61,13 @@ class FirebaseOnDutyRepository implements OnDutyRepository {
         items = items.where((item) {
           final s = item.status.toUpperCase();
           if (filterUpper == 'COMPLETED') {
-            return s == 'COMPLETED' || s == 'WORK_COMPLETED' || item.allSitesCompleted;
+            return s == 'COMPLETED';
           }
           if (filterUpper == 'IN_PROGRESS') {
-            return (s == 'IN_PROGRESS' ||
-                s == 'ACTIVE' ||
-                s == 'TRAVELING_TO_DESTINATION' ||
-                s == 'REACHED_DESTINATION' ||
-                s == 'RETURNING_TO_OFFICE') && s != 'COMPLETED' && !item.allSitesCompleted;
+            return item.isOngoing && s != 'ASSIGNED';
           }
           if (filterUpper == 'ACTIVE') {
-            return (s == 'ASSIGNED' || s == 'ACTIVE' || s == 'TRAVELING_TO_DESTINATION' || s == 'REACHED_DESTINATION') && s != 'COMPLETED' && !item.allSitesCompleted;
+            return item.isOngoing;
           }
           if (filterUpper == 'NOT_COMPLETED') {
             return s == 'NOT_COMPLETED' || s == 'CANCELLED';
@@ -95,15 +91,8 @@ class FirebaseOnDutyRepository implements OnDutyRepository {
       final activeItems = snapshot.docs
           .map((doc) => OnDutyAssignment.fromMap({...doc.data(), 'id': int.tryParse(doc.id) ?? doc.data()['id'] ?? 0}))
           .where((item) {
-            final s = item.status.toUpperCase();
             final matchesEmp = item.employeeId == employeeId || employeeId == 0;
-            final isOngoing = (s == 'ASSIGNED' ||
-                s == 'TRAVELING_TO_DESTINATION' ||
-                s == 'IN_PROGRESS' ||
-                s == 'ACTIVE' ||
-                s == 'REACHED_DESTINATION' ||
-                s == 'RETURNING_TO_OFFICE') && s != 'COMPLETED' && !item.allSitesCompleted;
-            return matchesEmp && isOngoing;
+            return matchesEmp && item.isOngoing;
           })
           .toList();
 
@@ -113,10 +102,10 @@ class FirebaseOnDutyRepository implements OnDutyRepository {
       activeItems.sort((a, b) {
         int getRank(String status) {
           final s = status.toUpperCase();
-          if (s == 'REACHED_DESTINATION') return 1;
-          if (s == 'RETURNING_TO_OFFICE') return 2;
-          if (s == 'TRAVELING_TO_DESTINATION' || s == 'IN_PROGRESS' || s == 'ACTIVE') return 3;
-          if (s == 'WORK_COMPLETED') return 4;
+          if (s == 'RETURNING_TO_OFFICE') return 1;
+          if (s == 'WORK_COMPLETED') return 2;
+          if (s == 'REACHED_DESTINATION') return 3;
+          if (s == 'TRAVELING_TO_DESTINATION' || s == 'IN_PROGRESS' || s == 'ACTIVE') return 4;
           if (s == 'ASSIGNED') return 5;
           return 6;
         }

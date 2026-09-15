@@ -129,6 +129,8 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
           onRefresh: () async {
             ref.invalidate(allOnDutyAssignmentsProvider);
             ref.invalidate(activeOnDutyAssignmentProvider(currentEmp.id));
+            ref.invalidate(activeOnDutyAssignmentProvider(1));
+            ref.invalidate(activeOnDutyAssignmentProvider(0));
             await Future.delayed(const Duration(milliseconds: 300));
           },
           child: SingleChildScrollView(
@@ -150,62 +152,55 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // Active Live On-Duty Card
-                activeOnDutyAsync.when(
-                  data: (activeOD) {
-                    if (activeOD != null) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: EmployeeOnDutyCard(assignment: activeOD),
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  },
-                  loading: () => const SizedBox.shrink(),
-                  error: (_, _) => const SizedBox.shrink(),
-                ),
+                // Active Live On-Duty Card (Smooth rendering without flickering)
+                () {
+                  final activeOD = activeOnDutyAsync.valueOrNull;
+                  if (activeOD != null && activeOD.isOngoing) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: EmployeeOnDutyCard(assignment: activeOD),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                }(),
 
                 // Filter & Search Controls
                 _buildFilterBar(isMobile),
                 const SizedBox(height: 16),
 
-                // History / Assignments List
-                assignmentsAsync.when(
-                  loading: () => const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(40),
-                      child: CircularProgressIndicator(color: Color(0xFF9CC70A)),
-                    ),
-                  ),
-                  error: (err, _) => Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Text('Error loading On-Duty records: $err'),
-                    ),
-                  ),
-                  data: (assignments) {
-                    final filtered = assignments.where((item) {
-                      if (_searchQuery.trim().isEmpty) return true;
-                      final q = _searchQuery.toLowerCase();
-                      return item.purpose.toLowerCase().contains(q) ||
-                          item.destination.toLowerCase().contains(q) ||
-                          item.odType.toLowerCase().contains(q) ||
-                          item.notes.toLowerCase().contains(q);
-                    }).toList();
-
-                    if (filtered.isEmpty) {
-                      return _buildEmptyListState();
-                    }
-
-                    return ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: filtered.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 12),
-                      itemBuilder: (ctx, i) => _buildAssignmentCard(filtered[i], currentEmp, isMobile),
+                // History / Assignments List (Smooth rendering without flickering)
+                () {
+                  final assignments = assignmentsAsync.valueOrNull ?? assignmentsAsync.asData?.value;
+                  if (assignments == null && assignmentsAsync.isLoading) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(40),
+                        child: CircularProgressIndicator(color: Color(0xFF9CC70A)),
+                      ),
                     );
-                  },
-                ),
+                  }
+                  final list = assignments ?? [];
+                  final filtered = list.where((item) {
+                    if (_searchQuery.trim().isEmpty) return true;
+                    final q = _searchQuery.toLowerCase();
+                    return item.purpose.toLowerCase().contains(q) ||
+                        item.destination.toLowerCase().contains(q) ||
+                        item.odType.toLowerCase().contains(q) ||
+                        item.notes.toLowerCase().contains(q);
+                  }).toList();
+
+                  if (filtered.isEmpty) {
+                    return _buildEmptyListState();
+                  }
+
+                  return ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
+                    itemBuilder: (ctx, i) => _buildAssignmentCard(filtered[i], currentEmp, isMobile),
+                  );
+                }(),
               ],
             ),
           ),
@@ -1186,9 +1181,21 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
     final endLat = site.workEndLatitude ?? (siteIndex == 1 ? assignment?.workEndLatitude : null);
     final endLng = site.workEndLongitude ?? (siteIndex == 1 ? assignment?.workEndLongitude : null);
 
+    final retLat = siteIndex == 1 ? assignment?.returnLatitude : null;
+    final retLng = siteIndex == 1 ? assignment?.returnLongitude : null;
+
+    final offLat = siteIndex == 1 ? assignment?.officeLatitude : null;
+    final offLng = siteIndex == 1 ? assignment?.officeLongitude : null;
+
+    final startTimeStr = site.travelStartTime ?? (siteIndex == 1 ? (assignment?.travelStartTime ?? assignment?.actualStartTime) : null);
+    final reachedTimeStr = site.reachedTime ?? (siteIndex == 1 ? assignment?.reachedTime : null);
+    final completedTimeStr = site.workCompletedTime ?? (siteIndex == 1 ? (assignment?.workCompletedTime ?? assignment?.actualEndTime) : null);
+
     final hasAnyLocation = (startLat != null && startLng != null) ||
         (reachedLat != null && reachedLng != null) ||
-        (endLat != null && endLng != null);
+        (endLat != null && endLng != null) ||
+        (retLat != null && retLng != null) ||
+        (offLat != null && offLng != null);
 
     if (!hasAnyLocation) return const SizedBox.shrink();
 
@@ -1228,9 +1235,9 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Started Location',
-                        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
+                      Text(
+                        'Started Location${startTimeStr != null && startTimeStr.isNotEmpty ? " ($startTimeStr)" : ""}',
+                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
                       ),
                       Text(
                         '${startLat.toStringAsFixed(5)}, ${startLng.toStringAsFixed(5)}',
@@ -1271,9 +1278,9 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Reached Location',
-                        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                      Text(
+                        'Reached Location${reachedTimeStr != null && reachedTimeStr.isNotEmpty ? " ($reachedTimeStr)" : ""}',
+                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
                       ),
                       Text(
                         '${reachedLat.toStringAsFixed(5)}, ${reachedLng.toStringAsFixed(5)}',
@@ -1314,9 +1321,9 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Completed Location',
-                        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF15803D)),
+                      Text(
+                        'Completed Location${completedTimeStr != null && completedTimeStr.isNotEmpty ? " ($completedTimeStr)" : ""}',
+                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF15803D)),
                       ),
                       Text(
                         '${endLat.toStringAsFixed(5)}, ${endLng.toStringAsFixed(5)}',
@@ -1327,6 +1334,92 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                 ),
                 InkWell(
                   onTap: () => _openMap(endLat, endLng),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.map_outlined, size: 12, color: Color(0xFF414A51)),
+                        SizedBox(width: 3),
+                        Text('Map', style: TextStyle(fontSize: 10.5, color: Color(0xFF414A51), fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (assignment?.returnLatitude != null && assignment?.returnLongitude != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.directions_car_rounded, size: 14, color: Color(0xFF2563EB)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Return Started Location${assignment?.returnStartTime != null ? " (${assignment?.returnStartTime})" : ""}',
+                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF1D4ED8)),
+                      ),
+                      Text(
+                        '${assignment!.returnLatitude!.toStringAsFixed(5)}, ${assignment.returnLongitude!.toStringAsFixed(5)}',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                      ),
+                    ],
+                  ),
+                ),
+                InkWell(
+                  onTap: () => _openMap(assignment.returnLatitude!, assignment.returnLongitude!),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.map_outlined, size: 12, color: Color(0xFF414A51)),
+                        SizedBox(width: 3),
+                        Text('Map', style: TextStyle(fontSize: 10.5, color: Color(0xFF414A51), fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (assignment?.officeLatitude != null && assignment?.officeLongitude != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.location_city_rounded, size: 14, color: Color(0xFF16A34A)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Office Reached Location${assignment?.officeReachedTime != null ? " (${assignment?.officeReachedTime})" : ""}',
+                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF15803D)),
+                      ),
+                      Text(
+                        '${assignment!.officeLatitude!.toStringAsFixed(5)}, ${assignment.officeLongitude!.toStringAsFixed(5)}',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                      ),
+                    ],
+                  ),
+                ),
+                InkWell(
+                  onTap: () => _openMap(assignment.officeLatitude!, assignment.officeLongitude!),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
@@ -1440,6 +1533,20 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                           ),
                         ),
                       ],
+                    ),
+                  ],
+                  if (item.returnStartTime != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      '• Return Trip Started: ${item.returnStartTime}',
+                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF2563EB), fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                  if (item.officeReachedTime != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      '• Office Arrival Confirmed: ${item.officeReachedTime}',
+                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF16A34A), fontWeight: FontWeight.w600),
                     ),
                   ],
                   const SizedBox(height: 6),

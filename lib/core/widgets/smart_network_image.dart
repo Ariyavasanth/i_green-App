@@ -1,10 +1,11 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'smart_network_image_stub.dart'
     if (dart.library.html) 'smart_network_image_web.dart';
 
-/// A cross-platform network image widget that uses native HTML <img> tags
-/// on Web to bypass XHR CORS restrictions for Firebase Storage URLs.
+/// A cross-platform image widget that handles network URLs (HTTP/HTTPS),
+/// Data URLs (base64), Blob URLs, and local file paths (mobile/desktop).
 class SmartNetworkImage extends StatelessWidget {
   final String url;
   final BoxFit fit;
@@ -36,7 +37,7 @@ class SmartNetworkImage extends StatelessWidget {
       } catch (_) {}
     }
 
-    if (kIsWeb && (path.startsWith('http://') || path.startsWith('https://'))) {
+    if (kIsWeb && (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('blob:'))) {
       return getWebNetworkImage(
         path: path,
         fit: fit,
@@ -45,12 +46,31 @@ class SmartNetworkImage extends StatelessWidget {
       );
     }
 
-    return Image.network(
-      path,
-      fit: fit,
-      filterQuality: FilterQuality.high,
-      errorBuilder: (_, __, ___) => errorBuilder(context),
-    );
+    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('blob:')) {
+      return Image.network(
+        path,
+        fit: fit,
+        filterQuality: FilterQuality.high,
+        errorBuilder: (_, __, ___) => errorBuilder(context),
+      );
+    }
+
+    if (!kIsWeb) {
+      try {
+        final file = File(path);
+        if (file.existsSync()) {
+          return Image.file(
+            file,
+            fit: fit,
+            filterQuality: FilterQuality.high,
+            errorBuilder: (_, __, ___) => errorBuilder(context),
+          );
+        }
+      } catch (_) {}
+    }
+
+    return errorBuilder(context);
   }
 }
+
 

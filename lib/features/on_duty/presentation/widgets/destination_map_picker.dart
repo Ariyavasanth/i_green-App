@@ -1154,7 +1154,6 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
           children: [
             _buildMapTypeTab('Map', 'roadmap'),
             _buildMapTypeTab('Satellite', 'satellite'),
-            _buildMapTypeTab('Terrain', 'terrain'),
           ],
         ),
       ),
@@ -1364,88 +1363,97 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
 
           // Target Destination Pin Header Card
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.location_on_rounded, size: 20, color: Color(0xFFDC2626)),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _selectedName.isNotEmpty ? _selectedName : 'Selected Target Location',
-                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                Row(
+                  children: [
+                    const Icon(Icons.location_on_rounded, size: 20, color: Color(0xFFDC2626)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _selectedName.isNotEmpty ? _selectedName : 'Selected Target Location',
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _selectedAddress.isNotEmpty
+                                ? _selectedAddress
+                                : (_selectedLat != null && _selectedLng != null
+                                    ? '${_selectedLat!.toStringAsFixed(5)}, ${_selectedLng!.toStringAsFixed(5)}'
+                                    : 'Select location on map'),
+                            style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _selectedAddress.isNotEmpty
-                            ? _selectedAddress
-                            : (_selectedLat != null && _selectedLng != null
-                                ? '${_selectedLat!.toStringAsFixed(5)}, ${_selectedLng!.toStringAsFixed(5)}'
-                                : 'Select location on map'),
-                        style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 4),
-                // Arrow Nudge Controls
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFCBD5E1)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildArrowNudgeBtn(
-                        icon: Icons.arrow_back_rounded,
-                        tooltip: 'Nudge Left (West)',
-                        onPressed: () => _nudgeLocation(0.0, -0.0001),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Arrow Nudge Controls
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFCBD5E1)),
                       ),
-                      _buildArrowNudgeBtn(
-                        icon: Icons.arrow_upward_rounded,
-                        tooltip: 'Nudge Up (North)',
-                        onPressed: () => _nudgeLocation(0.0001, 0.0),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildArrowNudgeBtn(
+                            icon: Icons.arrow_back_rounded,
+                            tooltip: 'Nudge Left (West)',
+                            onPressed: () => _nudgeLocation(0.0, -0.0001),
+                          ),
+                          _buildArrowNudgeBtn(
+                            icon: Icons.arrow_upward_rounded,
+                            tooltip: 'Nudge Up (North)',
+                            onPressed: () => _nudgeLocation(0.0001, 0.0),
+                          ),
+                          _buildArrowNudgeBtn(
+                            icon: Icons.arrow_downward_rounded,
+                            tooltip: 'Nudge Down (South)',
+                            onPressed: () => _nudgeLocation(-0.0001, 0.0),
+                          ),
+                          _buildArrowNudgeBtn(
+                            icon: Icons.arrow_forward_rounded,
+                            tooltip: 'Nudge Right (East)',
+                            onPressed: () => _nudgeLocation(0.0, 0.0001),
+                          ),
+                        ],
                       ),
-                      _buildArrowNudgeBtn(
-                        icon: Icons.arrow_downward_rounded,
-                        tooltip: 'Nudge Down (South)',
-                        onPressed: () => _nudgeLocation(-0.0001, 0.0),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _showManualCoordinatesDialog,
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        side: const BorderSide(color: Color(0xFFCBD5E1)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
-                      _buildArrowNudgeBtn(
-                        icon: Icons.arrow_forward_rounded,
-                        tooltip: 'Nudge Right (East)',
-                        onPressed: () => _nudgeLocation(0.0, 0.0001),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 4),
-                OutlinedButton.icon(
-                  onPressed: _showManualCoordinatesDialog,
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    side: const BorderSide(color: Color(0xFFCBD5E1)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  icon: const Icon(Icons.tune_rounded, size: 13, color: Color(0xFF414A51)),
-                  label: const Text('Edit', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
+                      icon: const Icon(Icons.tune_rounded, size: 14, color: Color(0xFF414A51)),
+                      label: const Text('Edit', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
+                    ),
+                  ],
                 ),
               ],
             ),

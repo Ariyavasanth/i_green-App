@@ -26,15 +26,25 @@ class TimeFormatter {
       }
 
       final formats = [
-        'HH:mm:ss',
-        'HH:mm',
         'hh:mm:ss a',
         'hh:mm a',
         'h:mm:ss a',
         'h:mm a',
+        'HH:mm:ss',
+        'HH:mm',
         'H:m:s',
         'H:m',
       ];
+
+      for (final fmt in formats) {
+        try {
+          final parsed = DateFormat(fmt).parseStrict(trimmed);
+          final hasSecondsInInput = trimmed.split(':').length >= 3 && !trimmed.contains(' ');
+          final useSeconds = forceSeconds || hasSecondsInInput;
+          final outFmt = useSeconds ? 'hh:mm:ss a' : 'hh:mm a';
+          return DateFormat(outFmt).format(parsed);
+        } catch (_) {}
+      }
 
       for (final fmt in formats) {
         try {

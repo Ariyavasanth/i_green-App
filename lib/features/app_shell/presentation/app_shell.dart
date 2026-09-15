@@ -9,6 +9,7 @@ import '../../../core/storage/sidebar_state_storage.dart';
 import '../../../core/storage/sidebar_state_storage_factory.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/visual_effects.dart';
+import '../../../widgets/app_background_wrapper.dart';
 import '../../../widgets/navigation/sidebar_drawer.dart';
 import '../../authentication/providers/authentication_providers.dart';
 import '../../books/providers/books_providers.dart';
@@ -377,7 +378,9 @@ class AppShell extends ConsumerWidget {
                             child: SafeArea(
                               top: false,
                               bottom: true,
-                              child: child,
+                              child: (currentLocation == '/home' || currentLocation == '/module-dashboard')
+                                  ? child
+                                  : AppBackgroundWrapper(child: child),
                             ),
                           ),
                         ],

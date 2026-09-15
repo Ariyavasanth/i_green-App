@@ -606,16 +606,6 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                             color: Color(0xFF1E293B),
                           ),
                         ),
-                        if (isOd && session.destination != null && session.destination!.isNotEmpty)
-                          Text(
-                            session.destination!,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: Color(0xFF64748B),
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
                       ],
                     ),
                   ),

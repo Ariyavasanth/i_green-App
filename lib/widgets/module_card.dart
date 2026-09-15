@@ -125,16 +125,30 @@ class _ModuleCardState extends State<ModuleCard>
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Container(
-                      width: 46,
-                      height: 46,
+                      width: 48,
+                      height: 48,
                       decoration: BoxDecoration(
-                        color: widget.color.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12),
+                        gradient: LinearGradient(
+                          colors: [
+                            widget.color,
+                            Color.alphaBlend(Colors.black.withValues(alpha: 0.18), widget.color),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: widget.color.withValues(alpha: 0.35),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
                       child: Center(
                         child: Icon(
                           widget.icon,
-                          color: widget.color,
+                          color: Colors.white,
                           size: 24,
                         ),
                       ),
@@ -266,6 +280,7 @@ class _SubModuleCardState extends State<SubModuleCard>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scale;
+  bool _isHovered = false;
 
   @override
   void initState() {
@@ -274,7 +289,7 @@ class _SubModuleCardState extends State<SubModuleCard>
       vsync: this,
       duration: const Duration(milliseconds: 100),
     );
-    _scale = Tween<double>(begin: 1.0, end: 0.93).animate(
+    _scale = Tween<double>(begin: 1.0, end: 0.95).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
   }
@@ -287,70 +302,108 @@ class _SubModuleCardState extends State<SubModuleCard>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _scale,
-      builder: (context, child) => Transform.scale(
-        scale: _scale.value,
-        child: child,
-      ),
-      child: GestureDetector(
-        onTapDown: (_) => _controller.forward(),
-        onTapUp: (_) {
-          _controller.reverse();
-          widget.onTap();
-        },
-        onTapCancel: () => _controller.reverse(),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: AppColors.divider,
-              width: 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+    final primaryColor = widget.color;
+    final secondaryColor = Color.alphaBlend(
+      Colors.black.withValues(alpha: 0.18),
+      widget.color,
+    );
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: AnimatedBuilder(
+        animation: _scale,
+        builder: (context, child) => Transform.scale(
+          scale: _scale.value,
+          child: child,
+        ),
+        child: GestureDetector(
+          onTapDown: (_) => _controller.forward(),
+          onTapUp: (_) {
+            _controller.reverse();
+            widget.onTap();
+          },
+          onTapCancel: () => _controller.reverse(),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            transform: Matrix4.translationValues(0, _isHovered ? -3 : 0, 0),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: _isHovered
+                    ? primaryColor.withValues(alpha: 0.5)
+                    : const Color(0xFFE2E8F0),
+                width: _isHovered ? 1.5 : 1,
               ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: widget.color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                if (_isHovered) ...[
+                  BoxShadow(
+                    color: primaryColor.withValues(alpha: 0.22),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
                   ),
-                  child: Icon(
-                    widget.icon,
-                    color: widget.color,
-                    size: 22,
+                ] else ...[
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Flexible(
-                  child: Text(
-                    widget.label,
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                      height: 1.2,
+                ],
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [primaryColor, secondaryColor],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: primaryColor.withValues(alpha: 0.38),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Icon(
+                        widget.icon,
+                        color: Colors.white,
+                        size: 24,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 10),
+                  Flexible(
+                    child: Text(
+                      widget.label,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1E293B),
+                        height: 1.2,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -368,6 +421,7 @@ class ModuleScreenHeader extends StatelessWidget {
     required this.onBack,
     this.employeeName,
     this.onProfile,
+    this.actions,
     super.key,
   });
 
@@ -377,6 +431,7 @@ class ModuleScreenHeader extends StatelessWidget {
   final VoidCallback onBack;
   final String? employeeName;
   final VoidCallback? onProfile;
+  final List<Widget>? actions;
 
   @override
   Widget build(BuildContext context) {
@@ -403,13 +458,27 @@ class ModuleScreenHeader extends StatelessWidget {
             ),
             const SizedBox(width: 4),
             Container(
-              width: 36,
-              height: 36,
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10),
+                gradient: LinearGradient(
+                  colors: [
+                    color,
+                    Color.alphaBlend(Colors.black.withValues(alpha: 0.18), color),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(11),
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
               ),
-              child: Icon(icon, color: color, size: 20),
+              child: Icon(icon, color: Colors.white, size: 20),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -422,7 +491,9 @@ class ModuleScreenHeader extends StatelessWidget {
                 ),
               ),
             ),
-            if (employeeName != null)
+            if (actions != null) ...actions!,
+            if (employeeName != null) ...[
+              if (actions != null && actions!.isNotEmpty) const SizedBox(width: 8),
               GestureDetector(
                 onTap: onProfile,
                 child: Row(
@@ -465,6 +536,7 @@ class ModuleScreenHeader extends StatelessWidget {
                   ],
                 ),
               ),
+            ],
           ],
         ),
       ),

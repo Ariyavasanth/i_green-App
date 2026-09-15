@@ -52,8 +52,11 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
   void didUpdateWidget(covariant EmployeeOnDutyCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.assignment != widget.assignment) {
+      final prevStatus = _assignment.status;
       _localAssignment = _mergeAssignments(widget.assignment, _localAssignment);
-      _initCardState();
+      if (prevStatus != _assignment.status || oldWidget.assignment.id != widget.assignment.id) {
+        _initCardState();
+      }
     }
   }
 
@@ -309,14 +312,17 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
   }
 
   void _invalidateProviders() {
-    ref.invalidate(activeOnDutyAssignmentProvider);
+    final empId = widget.assignment.employeeId;
+    ref.invalidate(activeOnDutyAssignmentProvider(empId));
+    ref.invalidate(activeOnDutyAssignmentProvider(1));
+    ref.invalidate(activeOnDutyAssignmentProvider(0));
     ref.invalidate(allOnDutyAssignmentsProvider);
     ref.invalidate(employeeOnDutyAssignmentsProvider);
     ref.invalidate(attendanceRecordsProvider);
     ref.invalidate(todayAttendanceRecordProvider);
-    ref.invalidate(todayAttendanceRecordProvider(widget.assignment.employeeId));
+    ref.invalidate(todayAttendanceRecordProvider(empId));
     ref.invalidate(todayAttendanceRecordProvider(1));
-    ref.invalidate(attendanceRecordsProvider(widget.assignment.employeeId));
+    ref.invalidate(attendanceRecordsProvider(empId));
     ref.invalidate(attendanceRecordsProvider(1));
     ref.invalidate(allAttendanceRecordsProvider);
   }
@@ -763,7 +769,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
         assignmentId: _assignment.id,
         latitude: position?.latitude,
         longitude: position?.longitude,
-        afterCompletionOption: 'NOT_COMPLETED',
+        afterCompletionOption: _assignment.afterCompletionOption,
       );
 
       final repo = ref.read(onDutyRepositoryProvider);
@@ -966,30 +972,39 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
       final allCompleted = sitesList.every((s) => s.isCompleted);
 
       if (allCompleted) {
-        final attendanceRepo = ref.read(attendanceRepositoryProvider);
-        await attendanceRepo.completeOdAttendanceSession(
-          employeeId: empIdInt,
-          employeeName: _assignment.employeeName,
-          date: todayStr,
-          time: nowTime24,
-          assignmentId: _assignment.id,
-          latitude: position?.latitude,
-          longitude: position?.longitude,
-          destinationLatitude: site.latitude,
-          destinationLongitude: site.longitude,
-          destinationRadius: site.radius,
-          afterCompletionOption: _assignment.afterCompletionOption,
-        );
+        final isReturnToOffice = _assignment.isReturnToOfficeOption;
+
+        if (!isReturnToOffice) {
+          final attendanceRepo = ref.read(attendanceRepositoryProvider);
+          await attendanceRepo.completeOdAttendanceSession(
+            employeeId: empIdInt,
+            employeeName: _assignment.employeeName,
+            date: todayStr,
+            time: nowTime24,
+            assignmentId: _assignment.id,
+            latitude: position?.latitude,
+            longitude: position?.longitude,
+            destinationLatitude: site.latitude,
+            destinationLongitude: site.longitude,
+            destinationRadius: site.radius,
+            afterCompletionOption: _assignment.afterCompletionOption,
+          );
+        }
+
+        final nextStatus = isReturnToOffice ? 'WORK_COMPLETED' : 'COMPLETED';
 
         final updated = _assignment.copyWith(
-          status: 'COMPLETED',
+          status: nextStatus,
           purpose: purposeDetails.isNotEmpty ? purposeDetails : _assignment.purpose,
           workCompletedTime: nowStr,
           workPhoto: photos.first,
           workPhotos: photos,
-          actualEndTime: nowStr,
+          actualEndTime: isReturnToOffice ? null : nowStr,
           workEndLatitude: position?.latitude,
           workEndLongitude: position?.longitude,
+          returnStartTime: isReturnToOffice ? nowStr : _assignment.returnStartTime,
+          returnLatitude: isReturnToOffice ? position?.latitude : _assignment.returnLatitude,
+          returnLongitude: isReturnToOffice ? position?.longitude : _assignment.returnLongitude,
           sites: sitesList,
         );
 
@@ -1065,9 +1080,9 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
 
       final updated = widget.assignment.copyWith(
         status: 'RETURNING_TO_OFFICE',
-        returnStartTime: nowStr,
-        returnLatitude: position?.latitude,
-        returnLongitude: position?.longitude,
+        returnStartTime: widget.assignment.returnStartTime ?? nowStr,
+        returnLatitude: widget.assignment.returnLatitude ?? position?.latitude,
+        returnLongitude: widget.assignment.returnLongitude ?? position?.longitude,
       );
 
       final repo = ref.read(onDutyRepositoryProvider);
@@ -1189,29 +1204,19 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
       final empIdInt = widget.assignment.employeeId > 0 ? widget.assignment.employeeId : 1;
       final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
-      final attendanceRepo = ref.read(attendanceRepositoryProvider);
-      final result = await attendanceRepo.completeOdAttendanceSession(
-        employeeId: empIdInt,
-        employeeName: widget.assignment.employeeName,
-        date: todayStr,
-        time: nowTime24,
-        assignmentId: widget.assignment.id,
-        latitude: position?.latitude,
-        longitude: position?.longitude,
-        afterCompletionOption: 'RETURN_TO_OFFICE',
-      );
-
-      if (!result.allowed) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to complete OD attendance: ${result.message}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        return;
-      }
+      try {
+        final attendanceRepo = ref.read(attendanceRepositoryProvider);
+        await attendanceRepo.completeOdAttendanceSession(
+          employeeId: empIdInt,
+          employeeName: widget.assignment.employeeName,
+          date: todayStr,
+          time: nowTime24,
+          assignmentId: widget.assignment.id,
+          latitude: position?.latitude,
+          longitude: position?.longitude,
+          afterCompletionOption: widget.assignment.afterCompletionOption,
+        );
+      } catch (_) {}
 
       final updated = widget.assignment.copyWith(
         status: 'COMPLETED',
@@ -1225,6 +1230,12 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
 
       final repo = ref.read(onDutyRepositoryProvider);
       await repo.updateAssignment(updated);
+
+      if (mounted) {
+        setState(() {
+          _localAssignment = updated;
+        });
+      }
 
       _invalidateProviders();
       _timer?.cancel();
@@ -1275,7 +1286,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
 
   @override
   Widget build(BuildContext context) {
-    final status = widget.assignment.status;
+    final status = _assignment.status;
 
     if (status == 'COMPLETED') {
       return _buildCompletedCard();
@@ -1313,54 +1324,88 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Banner Header
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: darkAccent,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(14),
-                topRight: Radius.circular(14),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.directions_car_filled_rounded, color: primaryColor, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'ON-DUTY: ${assignment.odType.toUpperCase()}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+          // Dynamic Header Banner matching reference design
+          () {
+            final currentSite = assignment.effectiveSites.isNotEmpty && assignment.currentSiteIndex < assignment.effectiveSites.length
+                ? assignment.effectiveSites[assignment.currentSiteIndex]
+                : null;
+            
+            Color headerBg = darkAccent;
+            IconData headerIcon = Icons.directions_car_filled_rounded;
+            String headerTitle = 'ON-DUTY: ${assignment.odType.toUpperCase()}';
+
+            if (isReturnPhase) {
+              headerBg = const Color(0xFF2563EB); // Blue
+              headerIcon = Icons.directions_car_rounded;
+              headerTitle = 'RETURNING TO OFFICE';
+            } else if (allDone) {
+              headerBg = const Color(0xFF414A51); // Dark Accent
+              headerIcon = Icons.check_circle_rounded;
+              headerTitle = 'OD WORK COMPLETED';
+            } else if (currentSite?.isReached == true) {
+              headerBg = const Color(0xFF16A34A); // Green
+              headerIcon = Icons.groups_rounded;
+              headerTitle = 'WORKING ON SITE';
+            } else if (currentSite?.isTraveling == true || assignment.status == 'TRAVELING_TO_DESTINATION') {
+              headerBg = const Color(0xFFB45309); // Amber / Brown Orange (Image 2)
+              headerIcon = Icons.directions_car_rounded;
+              headerTitle = 'TRAVELING TO DESTINATION';
+            }
+
+            return Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: headerBg,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(14),
+                  topRight: Radius.circular(14),
                 ),
-                if (assignment.isOngoing && !assignment.isAssigned) ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: primaryColor.withValues(alpha: 0.25),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.timer_outlined, size: 13, color: Colors.white),
-                        const SizedBox(width: 4),
-                        Text(
-                          _formatTimerDisplay(_activeElapsed),
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
-                        ),
-                      ],
+              ),
+              child: Row(
+                children: [
+                  Icon(headerIcon, color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      headerTitle,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        letterSpacing: 0.5,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  if (assignment.isOngoing && !assignment.isAssigned) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: (allDone && !isReturnPhase)
+                          ? const Text(
+                              'Step 4 of 5',
+                              style: TextStyle(color: Color(0xFF9CC70A), fontWeight: FontWeight.bold, fontSize: 11),
+                            )
+                          : Row(
+                              children: [
+                                const Icon(Icons.timer_outlined, size: 13, color: Colors.white),
+                                const SizedBox(width: 4),
+                                Text(
+                                  _formatTimerDisplay(_activeElapsed),
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ],
                 ],
-              ],
-            ),
-          ),
+              ),
+            );
+          }(),
 
           // Details Body
           Padding(
@@ -1549,8 +1594,8 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                                           ),
                                           icon: const Icon(Icons.check_circle_outline, size: 18),
                                           label: const Text(
-                                            'Completed',
-                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                            '[ 3. COMPLETE OD WORK (PHOTO PROOF) ]',
+                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                                           ),
                                         ),
                                       ),
@@ -1569,35 +1614,69 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                                     ],
                                   );
                                 } else if (isSiteTraveling) {
-                                  return Row(
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Expanded(
-                                        child: ElevatedButton.icon(
-                                          onPressed: _isActionLoading ? null : () => _handleReachedSite(index),
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: primaryColor,
-                                            foregroundColor: darkAccent,
-                                            padding: const EdgeInsets.symmetric(vertical: 10),
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                          ),
-                                          icon: const Icon(Icons.camera_alt, size: 18),
-                                          label: Text(
-                                            'Reached Site ${index + 1}',
-                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                          ),
+                                      Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFEF3C7),
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: const Color(0xFFFDE68A)),
+                                        ),
+                                        child: const Row(
+                                          children: [
+                                            Icon(Icons.navigation_rounded, color: Color(0xFFB45309), size: 18),
+                                            SizedBox(width: 8),
+                                            Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'En Route to Site',
+                                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
+                                                ),
+                                                Text(
+                                                  'Tracking GPS coordinates...',
+                                                  style: TextStyle(fontSize: 11, color: Color(0xFF92400E)),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                      const SizedBox(width: 8),
-                                      OutlinedButton.icon(
-                                        onPressed: _isActionLoading ? null : () => _handleNotCompletedSiteWork(index),
-                                        style: OutlinedButton.styleFrom(
-                                          foregroundColor: const Color(0xFFDC2626),
-                                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                          side: const BorderSide(color: Color(0xFFEF4444)),
-                                        ),
-                                        icon: const Icon(Icons.cancel_outlined, size: 16),
-                                        label: const Text('Not Completed', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                      const SizedBox(height: 10),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: ElevatedButton.icon(
+                                              onPressed: _isActionLoading ? null : () => _handleReachedSite(index),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: primaryColor,
+                                                foregroundColor: darkAccent,
+                                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                              ),
+                                              icon: const Icon(Icons.camera_alt, size: 18),
+                                              label: const Text(
+                                                '[ 2. I HAVE REACHED (CAPTURE PHOTO) ]',
+                                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          OutlinedButton.icon(
+                                            onPressed: _isActionLoading ? null : () => _handleNotCompletedSiteWork(index),
+                                            style: OutlinedButton.styleFrom(
+                                              foregroundColor: const Color(0xFFDC2626),
+                                              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                              side: const BorderSide(color: Color(0xFFEF4444)),
+                                            ),
+                                            icon: const Icon(Icons.cancel_outlined, size: 16),
+                                            label: const Text('Not Completed', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   );
@@ -1615,7 +1694,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                                           ),
                                           icon: const Icon(Icons.directions_car, size: 18),
                                           label: Text(
-                                            'Start Site ${index + 1}',
+                                            '[ 1. START SITE ${index + 1} TRIP ]',
                                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                                           ),
                                         ),
@@ -1647,39 +1726,53 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
 
                 // Return to Office -> Checkout section once all sites are completed
                 if (allDone) ...[
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF0FDF4),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF86EFAC)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 20),
-                            SizedBox(width: 8),
-                            Text(
-                              'All Planned Sites Completed ✓',
-                              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Color(0xFF14532D)),
+                  if (assignment.isReturnToOfficeOption && !isReturnPhase) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFFDE68A)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.info_outline, color: Color(0xFFB45309), size: 20),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Work finished. Please click "Return to Office" when you head back.',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF92400E)),
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          assignment.isReturnToOfficeOption
-                              ? 'Please return to office location to complete final check-out.'
-                              : (assignment.isAssignNextOdOption
-                                  ? 'You can now assign your next OD from this location.'
-                                  : 'You can now complete checkout directly.'),
-                          style: const TextStyle(fontSize: 12, color: Color(0xFF166534)),
-                        ),
-                      ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 14),
+                    const SizedBox(height: 14),
+                  ] else if (!assignment.isReturnToOfficeOption) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0FDF4),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF86EFAC)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              assignment.isAssignNextOdOption
+                                  ? 'You can now assign your next OD from this location.'
+                                  : 'You can now complete checkout directly from OD location.',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF166534)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
 
                   if (assignment.isReturnToOfficeOption) ...[
                     if (!isReturnPhase) ...[
@@ -1695,8 +1788,8 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                           ),
                           icon: const Icon(Icons.directions_car_filled, size: 20),
                           label: const Text(
-                            'Return to Office',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            '[ 4. RETURN TO OFFICE ]',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
                           ),
                         ),
                       ),
@@ -1713,8 +1806,8 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                           ),
                           icon: const Icon(Icons.location_city, size: 20),
                           label: const Text(
-                            'Reached Office - Checkout',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            '[ 5. CAME TO OFFICE (CONFIRM ARRIVAL) ]',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
                           ),
                         ),
                       ),
@@ -1979,6 +2072,10 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
     final endLat = site.workEndLatitude ?? (siteIndex == 1 ? assignment?.workEndLatitude : null);
     final endLng = site.workEndLongitude ?? (siteIndex == 1 ? assignment?.workEndLongitude : null);
 
+    final startTimeStr = site.travelStartTime ?? (siteIndex == 1 ? (assignment?.travelStartTime ?? assignment?.actualStartTime) : null);
+    final reachedTimeStr = site.reachedTime ?? (siteIndex == 1 ? assignment?.reachedTime : null);
+    final completedTimeStr = site.workCompletedTime ?? (siteIndex == 1 ? (assignment?.workCompletedTime ?? assignment?.actualEndTime) : null);
+
     final hasAnyLocation = (startLat != null && startLng != null) ||
         (reachedLat != null && reachedLng != null) ||
         (endLat != null && endLng != null);
@@ -2021,9 +2118,9 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Started Location',
-                        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
+                      Text(
+                        'Started Location${startTimeStr != null && startTimeStr.isNotEmpty ? " ($startTimeStr)" : ""}',
+                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
                       ),
                       Text(
                         '${startLat.toStringAsFixed(5)}, ${startLng.toStringAsFixed(5)}',
@@ -2064,9 +2161,9 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Reached Location',
-                        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                      Text(
+                        'Reached Location${reachedTimeStr != null && reachedTimeStr.isNotEmpty ? " ($reachedTimeStr)" : ""}',
+                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
                       ),
                       Text(
                         '${reachedLat.toStringAsFixed(5)}, ${reachedLng.toStringAsFixed(5)}',
@@ -2112,7 +2209,7 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        (site.isNotCompleted || widget.assignment.isNotCompleted) ? 'Not Completed Location' : 'Completed Location',
+                        '${(site.isNotCompleted || widget.assignment.isNotCompleted) ? "Not Completed Location" : "Completed Location"}${completedTimeStr != null && completedTimeStr.isNotEmpty ? " ($completedTimeStr)" : ""}',
                         style: TextStyle(
                           fontSize: 10.5,
                           fontWeight: FontWeight.bold,
@@ -2128,6 +2225,92 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                 ),
                 InkWell(
                   onTap: () => _openMap(endLat, endLng),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.map_outlined, size: 12, color: Color(0xFF414A51)),
+                        SizedBox(width: 3),
+                        Text('Map', style: TextStyle(fontSize: 10.5, color: Color(0xFF414A51), fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (widget.assignment.returnLatitude != null && widget.assignment.returnLongitude != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(Icons.directions_car_rounded, size: 14, color: Color(0xFF2563EB)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Return Started Location${widget.assignment.returnStartTime != null ? " (${widget.assignment.returnStartTime})" : ""}',
+                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF1D4ED8)),
+                      ),
+                      Text(
+                        '${widget.assignment.returnLatitude!.toStringAsFixed(5)}, ${widget.assignment.returnLongitude!.toStringAsFixed(5)}',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                      ),
+                    ],
+                  ),
+                ),
+                InkWell(
+                  onTap: () => _openMap(widget.assignment.returnLatitude!, widget.assignment.returnLongitude!),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.map_outlined, size: 12, color: Color(0xFF414A51)),
+                        SizedBox(width: 3),
+                        Text('Map', style: TextStyle(fontSize: 10.5, color: Color(0xFF414A51), fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (widget.assignment.officeLatitude != null && widget.assignment.officeLongitude != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(Icons.location_city_rounded, size: 14, color: Color(0xFF16A34A)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Office Reached Location${widget.assignment.officeReachedTime != null ? " (${widget.assignment.officeReachedTime})" : ""}',
+                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF15803D)),
+                      ),
+                      Text(
+                        '${widget.assignment.officeLatitude!.toStringAsFixed(5)}, ${widget.assignment.officeLongitude!.toStringAsFixed(5)}',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                      ),
+                    ],
+                  ),
+                ),
+                InkWell(
+                  onTap: () => _openMap(widget.assignment.officeLatitude!, widget.assignment.officeLongitude!),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
@@ -2207,6 +2390,13 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
           final bytes = base64Decode(data.substring(commaIdx + 1));
           return Image.memory(bytes, fit: BoxFit.cover);
         }
+      }
+      if (!data.startsWith('http://') && !data.startsWith('https://') && !data.startsWith('assets/')) {
+        try {
+          final cleanData = data.contains(',') ? data.split(',').last : data;
+          final bytes = base64Decode(cleanData.trim());
+          return Image.memory(bytes, fit: BoxFit.cover);
+        } catch (_) {}
       }
       return Image.network(
         data,

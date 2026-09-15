@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/smart_network_image.dart';
 import '../../attendance/domain/attendance_record.dart';
 import '../../attendance/domain/attendance_status_helper.dart';
 import '../../attendance/presentation/widgets/attendance_details_dialog.dart';
@@ -2709,44 +2709,20 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
       );
     }
 
-    Widget imageChild;
-    if (photoUrl.startsWith('http://') || photoUrl.startsWith('https://')) {
-      imageChild = Image.network(
-        photoUrl,
-        width: width,
-        height: height,
+    Widget imageChild = SizedBox(
+      width: width,
+      height: height,
+      child: SmartNetworkImage(
+        url: photoUrl,
         fit: BoxFit.cover,
-        errorBuilder: (ctx, err, stack) => Container(
+        errorBuilder: (_) => Container(
           width: width,
           height: height,
           color: const Color(0xFFF1F5F9),
           child: const Icon(Icons.broken_image_outlined, size: 20, color: Colors.grey),
         ),
-      );
-    } else {
-      final file = File(photoUrl);
-      if (file.existsSync()) {
-        imageChild = Image.file(
-          file,
-          width: width,
-          height: height,
-          fit: BoxFit.cover,
-          errorBuilder: (ctx, err, stack) => Container(
-            width: width,
-            height: height,
-            color: const Color(0xFFF1F5F9),
-            child: const Icon(Icons.broken_image_outlined, size: 20, color: Colors.grey),
-          ),
-        );
-      } else {
-        imageChild = Container(
-          width: width,
-          height: height,
-          color: const Color(0xFFF1F5F9),
-          child: const Icon(Icons.image_not_supported_outlined, size: 20, color: Colors.grey),
-        );
-      }
-    }
+      ),
+    );
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),

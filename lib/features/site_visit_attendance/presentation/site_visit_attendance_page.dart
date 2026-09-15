@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
@@ -9,6 +10,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/smart_network_image.dart';
 import '../../employee/domain/employee.dart';
 import '../../leave/domain/leave_request.dart';
 import '../../leave/domain/leave_type.dart';
@@ -110,27 +112,16 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: InteractiveViewer(
-                  child: photoUrl.startsWith('http')
-                      ? Image.network(
-                          photoUrl,
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(20),
-                              child: Text('Failed to load photo', style: TextStyle(color: Colors.white)),
-                            ),
-                          ),
-                        )
-                      : Image.file(
-                          File(photoUrl),
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(20),
-                              child: Text('Failed to load photo', style: TextStyle(color: Colors.white)),
-                            ),
-                          ),
-                        ),
+                  child: SmartNetworkImage(
+                    url: photoUrl,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_) => const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(20),
+                        child: Text('Failed to load photo', style: TextStyle(color: Colors.white)),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -691,17 +682,18 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
                       child: Container(
                         height: 140,
                         width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: Colors.black12,
-                          image: DecorationImage(
-                            image: firstVisit!.photoUrl.startsWith('http')
-                                ? NetworkImage(firstVisit.photoUrl)
-                                : FileImage(File(firstVisit.photoUrl)) as ImageProvider,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
+                        color: Colors.black12,
                         child: Stack(
                           children: [
+                            Positioned.fill(
+                              child: SmartNetworkImage(
+                                url: firstVisit!.photoUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_) => const Center(
+                                  child: Icon(Icons.broken_image_outlined, color: Colors.white),
+                                ),
+                              ),
+                            ),
                             Positioned(
                               bottom: 8,
                               left: 8,
@@ -713,9 +705,12 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
                                 ),
                                 child: const Row(
                                   children: [
-                                    Icon(Icons.camera_alt, color: Colors.white, size: 14),
+                                    Icon(Icons.zoom_in, color: Colors.white, size: 14),
                                     SizedBox(width: 4),
-                                    Text('Photo Captured (Tap to view)', style: TextStyle(color: Colors.white, fontSize: 11)),
+                                    Text(
+                                      'Tap to enlarge photo',
+                                      style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -1230,17 +1225,11 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
                 color: const Color(0xFFF1F5F9),
                 child: visit.photoUrl.isEmpty
                     ? const Icon(Icons.image_outlined, color: AppColors.textSecondary)
-                    : (visit.photoUrl.startsWith('http')
-                        ? Image.network(
-                            visit.photoUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: AppColors.textSecondary),
-                          )
-                        : Image.file(
-                            File(visit.photoUrl),
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: AppColors.textSecondary),
-                          )),
+                    : SmartNetworkImage(
+                        url: visit.photoUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_) => const Icon(Icons.broken_image_outlined, color: AppColors.textSecondary),
+                      ),
               ),
             ),
           ),

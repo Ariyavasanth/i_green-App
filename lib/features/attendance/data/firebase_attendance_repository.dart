@@ -1,5 +1,5 @@
 import 'dart:math';
-
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
@@ -195,11 +195,27 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         }
 
         if (modified) {
+          final settings = await getAttendanceSettings();
+          final isOdSession = _isOdRecord(rec);
+          String syncStatus = 'Present';
+          if (!isOdSession) {
+            final empObj = await _getEmployeeById(rec.employeeId);
+            final checkInMins = _parseMinutes(rec.effectiveCheckInTime);
+            final schedIn = empObj?.inTime.trim() ?? '';
+            final schedInMins = schedIn.isNotEmpty ? _parseMinutes(schedIn) : null;
+            if (checkInMins != null && schedInMins != null) {
+              if (checkInMins > (schedInMins + settings.gracePeriodMinutes)) {
+                syncStatus = 'Late';
+              }
+            }
+          }
           final finalHasActive = updatedSessions.any((sess) => sess.isActive);
           final updatedRec = rec.copyWith(
             sessions: updatedSessions,
             checkOutTime: finalHasActive ? '' : rec.checkOutTime,
-            status: finalHasActive ? (rec.status.isNotEmpty ? rec.status : 'Present') : rec.status,
+            status: (isOdSession && rec.checkOutTime.trim().isEmpty)
+                ? 'Present'
+                : (finalHasActive ? syncStatus : (rec.status == 'Late' ? syncStatus : rec.status)),
           );
           await doc.reference.set(updatedRec.toMap(), SetOptions(merge: true));
           _localMemoryCache['${rec.employeeId}_$normDate'] = updatedRec;
@@ -235,7 +251,25 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         final inTimeStr = (data['check_in_time'] ?? data['time'] ?? '').toString().trim();
 
         if (normDate == todayStr && checkOutTime.isEmpty && status == 'Missing Check-Out') {
-          await doc.reference.set({'status': data['status'] == 'Late' ? 'Late' : 'Present'}, SetOptions(merge: true));
+          final isOd = (data['notes'] ?? '').toString().toLowerCase().contains('on duty') ||
+              (data['verification_status'] ?? '').toString().toLowerCase().contains('od') ||
+              (data['sessions'] as List?)?.any((s) => (s['type'] ?? '').toString().toLowerCase() == 'od') == true;
+
+          if (isOd) {
+            await doc.reference.set({'status': 'Present'}, SetOptions(merge: true));
+            continue;
+          }
+
+          final settings = await getAttendanceSettings();
+          final empObj = await _getEmployeeById(docEmpIdNum);
+          final checkInMins = _parseMinutes(inTimeStr);
+          final schedIn = empObj?.inTime.trim() ?? '';
+          final schedInMins = schedIn.isNotEmpty ? _parseMinutes(schedIn) : null;
+          bool isLate = false;
+          if (checkInMins != null && schedInMins != null) {
+            isLate = checkInMins > (schedInMins + settings.gracePeriodMinutes);
+          }
+          await doc.reference.set({'status': isLate ? 'Late' : 'Present'}, SetOptions(merge: true));
           continue;
         }
 
@@ -325,8 +359,47 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       final recordSnap = await _recordsRef.doc(docId).get();
       if (recordSnap.exists && recordSnap.data() != null) {
         final rec = AttendanceRecord.fromMap(recordSnap.data()!);
+
+        if (_isOdRecord(rec) && rec.checkOutTime.trim().isEmpty) {
+          final updatedRec = rec.copyWith(status: 'Present');
+          if (rec.status != 'Present') {
+            await _recordsRef.doc(docId).set({'status': 'Present'}, SetOptions(merge: true));
+          }
+          _localMemoryCache['${rec.employeeId}_$normDate'] = updatedRec;
+          _localMemoryCache['${rec.employeeId}_${rec.date}'] = updatedRec;
+          return updatedRec;
+        }
+
+        if (rec.checkOutTime.trim().isEmpty && rec.effectiveCheckInTime.isNotEmpty) {
+          final settings = await getAttendanceSettings();
+          final empObj = await _getEmployeeById(employeeId);
+          final checkInMins = _parseMinutes(rec.effectiveCheckInTime);
+          final schedIn = empObj?.inTime.trim() ?? '';
+          final schedInMins = schedIn.isNotEmpty ? _parseMinutes(schedIn) : null;
+          bool isLate = false;
+          if (checkInMins != null && schedInMins != null) {
+            isLate = checkInMins > (schedInMins + settings.gracePeriodMinutes);
+          }
+          final dynamicStatus = isLate ? 'Late' : 'Present';
+          final updatedRec = rec.copyWith(status: dynamicStatus);
+          if (rec.status != dynamicStatus && rec.status != 'Missing Check-Out') {
+            await _recordsRef.doc(docId).set({'status': dynamicStatus}, SetOptions(merge: true));
+          }
+          _localMemoryCache['${rec.employeeId}_$normDate'] = updatedRec;
+          _localMemoryCache['${rec.employeeId}_${rec.date}'] = updatedRec;
+          return updatedRec;
+        }
         if (rec.status == 'Missing Check-Out' && rec.checkOutTime.trim().isEmpty && _normalizeDateKey(rec.date) == todayNormDate) {
-          return rec.copyWith(status: rec.status == 'Late' ? 'Late' : 'Present');
+          final settings = await getAttendanceSettings();
+          final empObj = await _getEmployeeById(employeeId);
+          final checkInMins = _parseMinutes(rec.effectiveCheckInTime);
+          final schedIn = empObj?.inTime.trim() ?? '';
+          final schedInMins = schedIn.isNotEmpty ? _parseMinutes(schedIn) : null;
+          bool isLate = false;
+          if (checkInMins != null && schedInMins != null) {
+            isLate = checkInMins > (schedInMins + settings.gracePeriodMinutes);
+          }
+          return rec.copyWith(status: isLate ? 'Late' : 'Present');
         }
         return rec;
       }
@@ -848,9 +921,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         time: existingRecord.time.isNotEmpty ? existingRecord.time : time,
         checkInTime: existingRecord.checkInTime.isNotEmpty ? existingRecord.checkInTime : time,
         checkOutTime: existingRecord.checkOutTime,
-        status: (existingRecord.status == 'Absent' || existingRecord.status == 'Late')
-            ? existingRecord.status
-            : status,
+        status: status,
         verificationStatus: existingRecord.verificationStatus.isNotEmpty
             ? existingRecord.verificationStatus
             : verificationStatus,
@@ -1265,65 +1336,29 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
               durationHours: sessHours,
             );
           } else if (s.isOd) {
-            hasActiveOd = true;
+            // Auto close active previous OD session when starting a new OD session
+            final inMin = _parseMinutes(s.checkInTime);
+            final outMin = _parseMinutes(time);
+            int sessMins = 0;
+            double sessHours = 0.0;
+            if (inMin != null && outMin != null && outMin >= inMin) {
+              sessMins = outMin - inMin;
+              sessHours = double.parse((sessMins / 60.0).toStringAsFixed(2));
+            }
+            updatedSessions[i] = s.copyWith(
+              checkOutTime: time,
+              checkOutVerificationStatus: 'Auto Checked Out for New OD',
+              durationMinutes: sessMins,
+              durationHours: sessHours,
+            );
           }
         }
-      }
-
-      if (hasActiveOd) {
-        return const AttendanceVerificationResult(
-          allowed: false,
-          similarityScore: 1.0,
-          verificationStatus: 'OD Session Active',
-          message: 'You already have an active On-Duty session in progress.',
-          capturedImagePath: '',
-        );
       }
     }
 
     // 4. Determine status (Present vs Late based on scheduled check-in time)
-    Employee? employee;
-    try {
-      final snap = await _firestore.collection('employees').get();
-      for (final doc in snap.docs) {
-        final data = Map<String, dynamic>.from(doc.data());
-        final dId = doc.id;
-        final dIdNum = int.tryParse(dId.replaceAll(RegExp(r'\D'), '')) ?? 0;
-        final idNum = data['id'] is int ? data['id'] : (int.tryParse(data['id']?.toString() ?? '') ?? 0);
-        final codeStr = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
-        final codeNum = int.tryParse(codeStr.replaceAll(RegExp(r'\D'), '')) ?? 0;
-
-        final matches = (employeeId != 0 && (idNum == employeeId || dIdNum == employeeId || codeNum == employeeId)) ||
-            dId == employeeId.toString() ||
-            data['id']?.toString() == employeeId.toString() ||
-            data['employee_id']?.toString() == employeeId.toString();
-
-        if (matches) {
-          if (!data.containsKey('id') || data['id'] == null || data['id'] == 0) {
-            data['id'] = (dIdNum != 0) ? dIdNum : (dId.hashCode & 0x7FFFFFFF);
-          }
-          employee = Employee.fromMap(data);
-          break;
-        }
-      }
-    } catch (_) {}
-
-    final isDynamic = employee?.isDynamicEmployee ?? false;
-    final settings = await getAttendanceSettings();
-    String schedIn = employee?.inTime.trim().isNotEmpty == true ? employee!.inTime.trim() : '';
-    if (schedIn.isEmpty) schedIn = '09:00 AM';
-    final scheduledMinutes = _parseMinutes(schedIn);
-
-    String calculatedStatus = 'Present';
-    if (!isDynamic && scheduledMinutes != null) {
-      final checkInMin = _parseMinutes(time) ?? (DateTime.now().hour * 60 + DateTime.now().minute);
-      final effectiveAllowedMinutes = scheduledMinutes + settings.gracePeriodMinutes;
-      if (checkInMin > effectiveAllowedMinutes) {
-        calculatedStatus = 'Late';
-      }
-    }
-
-    String status = (existingRecord?.status == 'Late' || calculatedStatus == 'Late') ? 'Late' : 'Present';
+    final employee = await _getEmployeeById(employeeId);
+    String status = 'Present';
     final odVerStatus = startOdFromHome ? 'OD Starts from Home' : 'OD Verified';
     String initialNotes = notes.isNotEmpty
         ? notes
@@ -1578,16 +1613,28 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     );
     updatedSessions[activeIndex] = completedSession;
 
-    // Calculate total daily hours as the sum of all completed sessions (Office + OD)
-    double totalDailyHours = 0.0;
-    for (final session in updatedSessions) {
-      if (session.isCompleted) {
-        totalDailyHours += session.effectiveDurationHours;
+    if (isCheckoutFromOd) {
+      // Close any other active sessions in updatedSessions so none are left running
+      for (int i = 0; i < updatedSessions.length; i++) {
+        if (updatedSessions[i].isActive) {
+          final inM = _parseMinutes(updatedSessions[i].checkInTime);
+          final outM = _parseMinutes(time);
+          int sMins = 0;
+          double sHrs = 0.0;
+          if (inM != null && outM != null && outM >= inM) {
+            sMins = outM - inM;
+            sHrs = double.parse((sMins / 60.0).toStringAsFixed(2));
+          }
+          updatedSessions[i] = updatedSessions[i].copyWith(
+            checkOutTime: time,
+            checkOutVerificationStatus: 'OD Checkout Closed Session',
+            checkOutSimilarityScore: 1.0,
+            durationHours: sHrs,
+            durationMinutes: sMins,
+          );
+        }
       }
-    }
-    totalDailyHours = double.parse(totalDailyHours.toStringAsFixed(2));
-
-    if (!isCheckoutFromOd && !isAssignNextOd) {
+    } else if (!isAssignNextOd) {
       final hasActiveOffice = updatedSessions.any((s) => s.isActive);
       if (!hasActiveOffice) {
         // Start a new active office session because employee has returned to office
@@ -1612,12 +1659,22 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       }
     }
 
+    // Calculate total daily hours as the sum of all completed sessions (Office + OD)
+    double totalDailyHours = 0.0;
+    for (final session in updatedSessions) {
+      if (session.isCompleted) {
+        totalDailyHours += session.effectiveDurationHours;
+      }
+    }
+    totalDailyHours = double.parse(totalDailyHours.toStringAsFixed(2));
+
     final updatedRecord = existingRecord.copyWith(
       employeeCode: employeeCode.isNotEmpty ? employeeCode : existingRecord.employeeCode,
       employeeName: employeeName.isNotEmpty ? employeeName : existingRecord.employeeName,
       checkOutTime: isCheckoutFromOd ? time : '',
       checkOutVerificationStatus: isCheckoutFromOd ? 'OD Location Verified' : '',
       checkOutSimilarityScore: isCheckoutFromOd ? 1.0 : 0.0,
+      status: isCheckoutFromOd ? 'Checked Out' : existingRecord.status,
       totalHours: totalDailyHours,
       sessions: updatedSessions,
     );
@@ -1756,32 +1813,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       } catch (_) {}
     }
 
-    Employee? employee;
-    try {
-      final snap = await _firestore.collection('employees').get();
-      for (final doc in snap.docs) {
-        final data = Map<String, dynamic>.from(doc.data());
-        final dId = doc.id;
-        final dIdNum = int.tryParse(dId.replaceAll(RegExp(r'\D'), '')) ?? 0;
-        final idNum = data['id'] is int ? data['id'] : (int.tryParse(data['id']?.toString() ?? '') ?? 0);
-        final codeStr = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
-        final codeNum = int.tryParse(codeStr.replaceAll(RegExp(r'\D'), '')) ?? 0;
-
-        final matches = (employeeId != 0 && (idNum == employeeId || dIdNum == employeeId || codeNum == employeeId)) ||
-            dId == employeeId.toString() ||
-            data['id']?.toString() == employeeId.toString() ||
-            data['employee_id']?.toString() == employeeId.toString();
-
-        if (matches) {
-          if (!data.containsKey('id') || data['id'] == null || data['id'] == 0) {
-            data['id'] = (dIdNum != 0) ? dIdNum : (dId.hashCode & 0x7FFFFFFF);
-          }
-          employee = Employee.fromMap(data);
-          break;
-        }
-      }
-    } catch (_) {}
-
+    final employee = await _getEmployeeById(employeeId);
     final isDynamic = employee?.isDynamicEmployee ?? false;
     final requiredHours = (employee?.requiredWorkingHours ?? 0) > 0
         ? employee!.requiredWorkingHours
@@ -1813,24 +1845,15 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       );
     }
 
-    final bool isOdRelated = verificationStatus.contains('OD') ||
-        verificationStatus == 'AUTO_OFFICE_CHECKOUT_FOR_OD' ||
-        updatedSessions.any((s) => s.isOd) ||
-        record.notes.contains('On Duty');
+    final bool isOdRelated = _isOdRecord(record) ||
+        verificationStatus.contains('OD') ||
+        verificationStatus == 'AUTO_OFFICE_CHECKOUT_FOR_OD';
 
     String finalStatus = record.status;
     String updatedNotes = record.notes;
 
-    if (isOdRelated) {
-      String schedIn = employee?.inTime.trim().isNotEmpty == true ? employee!.inTime.trim() : '09:00 AM';
-      final schedMins = _parseMinutes(schedIn);
-      final checkInMins = _parseMinutes(record.effectiveCheckInTime);
-      final settings = await getAttendanceSettings();
-      bool isLateCheckIn = false;
-      if (!isDynamic && schedMins != null && checkInMins != null) {
-        isLateCheckIn = checkInMins > (schedMins + settings.gracePeriodMinutes);
-      }
-      finalStatus = (record.status == 'Late' || isLateCheckIn) ? 'Late' : 'Present';
+    if (isOdRelated && checkOutTime.trim().isEmpty) {
+      finalStatus = 'Present';
       if (updatedNotes.isEmpty) {
         updatedNotes = 'On Duty Active';
       }
@@ -1925,14 +1948,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         }
       } catch (_) {}
 
-      Employee? employee;
-      try {
-        final empSnap = await _firestore.collection('employees').where('id', isEqualTo: record.employeeId).limit(1).get();
-        if (empSnap.docs.isNotEmpty) {
-          employee = Employee.fromMap(empSnap.docs.first.data());
-        }
-      } catch (_) {}
-
+      final employee = await _getEmployeeById(record.employeeId);
       final isDynamic = employee?.isDynamicEmployee ?? false;
       final requiredHours = (employee?.requiredWorkingHours ?? 0) > 0
           ? employee!.requiredWorkingHours
@@ -1958,20 +1974,10 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       }
       final isLateCheckout = empOutMin != null && empOutMin > 0 && outMin > empOutMin;
 
-      final bool isOdRelated = record.sessions.any((s) => s.isOd) ||
-          record.notes.contains('On Duty') ||
-          record.verificationStatus.contains('OD');
+      final bool isOdRelated = _isOdRecord(record);
 
-      if (isOdRelated) {
-        String schedIn = employee?.inTime.trim().isNotEmpty == true ? employee!.inTime.trim() : '09:00 AM';
-        final schedMins = _parseMinutes(schedIn);
-        final checkInMins = _parseMinutes(record.effectiveCheckInTime);
-        final settings = await getAttendanceSettings();
-        bool isLateCheckIn = false;
-        if (!isDynamic && schedMins != null && checkInMins != null) {
-          isLateCheckIn = checkInMins > (schedMins + settings.gracePeriodMinutes);
-        }
-        status = (record.status == 'Late' || isLateCheckIn) ? 'Late' : 'Present';
+      if (isOdRelated && outTime.trim().isEmpty) {
+        status = 'Present';
       } else if (shortfallMins == 0) {
         if (isDynamic) {
           status = 'Completed';
@@ -2124,6 +2130,52 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     return total;
   }
 
+  bool _isOdRecord(AttendanceRecord rec) {
+    return rec.sessions.any((s) => s.isOd || s.type.toLowerCase() == 'od' || s.checkInMethod.toLowerCase().contains('od')) ||
+        rec.notes.toLowerCase().contains('on duty') ||
+        rec.verificationStatus.toLowerCase().contains('od') ||
+        rec.checkInVerificationStatus.toLowerCase().contains('od');
+  }
+
+  Future<Employee?> _getEmployeeById(dynamic employeeIdentifier) async {
+    if (employeeIdentifier == null) return null;
+    final idStr = employeeIdentifier.toString().trim();
+    if (idStr.isEmpty || idStr == '0') return null;
+
+    final idNum = int.tryParse(idStr.replaceAll(RegExp(r'\D'), '')) ?? 0;
+    final idUpper = idStr.toUpperCase();
+
+    try {
+      final snap = await _firestore.collection('employees').get();
+      for (final doc in snap.docs) {
+        final data = Map<String, dynamic>.from(doc.data());
+        final docId = doc.id;
+        final docIdNum = int.tryParse(docId.replaceAll(RegExp(r'\D'), '')) ?? 0;
+        final dataIdNum = data['id'] is int ? data['id'] : (int.tryParse(data['id']?.toString() ?? '') ?? 0);
+        final codeStr = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
+        final codeNum = int.tryParse(codeStr.replaceAll(RegExp(r'\D'), '')) ?? 0;
+
+        final matches = (idNum != 0 && (dataIdNum == idNum || docIdNum == idNum || codeNum == idNum)) ||
+            docId.toUpperCase() == idUpper ||
+            data['id']?.toString().toUpperCase() == idUpper ||
+            data['employee_id']?.toString().toUpperCase() == idUpper ||
+            codeStr == idUpper ||
+            (idUpper.startsWith('EMP-') && codeStr == idUpper) ||
+            ('EMP-$idNum' == codeStr && idNum != 0);
+
+        if (matches) {
+          if (!data.containsKey('id') || data['id'] == null || data['id'] == 0) {
+            data['id'] = (docIdNum != 0) ? docIdNum : (idNum != 0 ? idNum : (docId.hashCode & 0x7FFFFFFF));
+          }
+          return Employee.fromMap(data);
+        }
+      }
+    } catch (e, stackTrace) {
+      debugPrint('Employee lookup failed for identifier $employeeIdentifier: $e\n$stackTrace');
+    }
+    return null;
+  }
+
   int? _parseMinutes(String timeStr) {
     if (timeStr.trim().isEmpty) return null;
     try {
@@ -2162,32 +2214,18 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       final inTime = record.effectiveCheckInTime.trim();
       if (inTime.isEmpty) return;
 
-      Employee? employee;
-      try {
-        final snap = await _firestore.collection('employees').get();
-        for (final doc in snap.docs) {
-          final data = Map<String, dynamic>.from(doc.data());
-          final dId = doc.id;
-          final dIdNum = int.tryParse(dId.replaceAll(RegExp(r'\D'), '')) ?? 0;
-          final idNum = data['id'] is int ? data['id'] : (int.tryParse(data['id']?.toString() ?? '') ?? 0);
-          final codeStr = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
-          final codeNum = int.tryParse(codeStr.replaceAll(RegExp(r'\D'), '')) ?? 0;
+      if (_isOdRecord(record) && record.checkOutTime.trim().isEmpty) {
+        final updatedRec = record.copyWith(
+          status: 'Present',
+          notes: record.notes.isNotEmpty ? record.notes : 'On Duty Active',
+        );
+        _localMemoryCache['${employeeId}_$normDate'] = updatedRec;
+        _localMemoryCache['${employeeId}_$date'] = updatedRec;
+        await docRef.set(updatedRec.toMap(), SetOptions(merge: true));
+        return;
+      }
 
-          final matches = (employeeId != 0 && (idNum == employeeId || dIdNum == employeeId || codeNum == employeeId)) ||
-              dId == employeeId.toString() ||
-              data['id']?.toString() == employeeId.toString() ||
-              data['employee_id']?.toString() == employeeId.toString();
-
-          if (matches) {
-            if (!data.containsKey('id') || data['id'] == null || data['id'] == 0) {
-              data['id'] = (dIdNum != 0) ? dIdNum : (dId.hashCode & 0x7FFFFFFF);
-            }
-            employee = Employee.fromMap(data);
-            break;
-          }
-        }
-      } catch (_) {}
-
+      final Employee? employee = await _getEmployeeById(employeeId);
       final isDynamic = employee?.isDynamicEmployee ?? false;
       final settings = await getAttendanceSettings();
       final approvedPermissions = await _getApprovedPermissions(
@@ -2196,35 +2234,14 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         employeeCode: employee?.employeeId ?? record.employeeCode,
       );
 
-      String schedIn = '';
-      if (employee != null && employee.inTime.trim().isNotEmpty) {
-        schedIn = employee.inTime.trim();
-      }
-      if (schedIn.isEmpty) schedIn = '09:00 AM';
-
-      final scheduledMinutes = _parseMinutes(schedIn);
+      final String schedIn = employee?.inTime.trim() ?? '';
+      final scheduledMinutes = schedIn.isNotEmpty ? _parseMinutes(schedIn) : null;
       final checkInMinutes = _parseMinutes(inTime);
 
       String newStatus = record.status;
       String newNotes = record.notes;
 
-      final bool isOdRelated = record.sessions.any((s) => s.isOd) ||
-          record.notes.contains('On Duty') ||
-          record.verificationStatus.contains('OD');
-
-      if (isOdRelated) {
-        if (checkInMinutes != null && scheduledMinutes != null) {
-          final netUnauthorizedDelay = checkInMinutes - (scheduledMinutes + settings.gracePeriodMinutes);
-          if (netUnauthorizedDelay > 0) {
-            newStatus = 'Late';
-          } else {
-            newStatus = (record.status == 'Late') ? 'Late' : 'Present';
-          }
-        } else {
-          newStatus = (record.status == 'Late') ? 'Late' : 'Present';
-        }
-        if (newNotes.isEmpty) newNotes = 'On Duty Active';
-      } else if (isDynamic || scheduledMinutes == null || checkInMinutes == null) {
+      if (isDynamic || scheduledMinutes == null || checkInMinutes == null) {
         if (record.checkOutTime.trim().isEmpty) {
           newStatus = 'Present';
           newNotes = 'Flexible schedule';
