@@ -5,6 +5,7 @@ import '../data/firebase_asset_assignment_repository.dart';
 import '../domain/asset_assignment.dart';
 import '../domain/asset_assignment_repository.dart';
 import '../domain/asset_transfer_request.dart';
+import '../domain/asset_return_request.dart';
 import '../../leave/providers/leave_providers.dart';
 import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
@@ -69,6 +70,24 @@ final myIncomingAssetTransferRequestsProvider = FutureProvider<List<AssetTransfe
         (name.isNotEmpty && request.toEmployeeName.trim().toLowerCase() == name);
   }).toList();
 });
+
+final assetReturnRequestsProvider = FutureProvider<List<AssetReturnRequest>>((ref) async {
+  return ref.watch(assetAssignmentRepositoryProvider).getReturnRequests();
+});
+
+final myAssetReturnRequestsProvider = FutureProvider<List<AssetReturnRequest>>((ref) async {
+  final requests = await ref.watch(assetReturnRequestsProvider.future);
+  final employee = ref.watch(myAssetSelectedEmployeeProvider) ?? ref.watch(currentEmployeeProvider);
+  if (employee == null) return const [];
+  final code = employee.employeeId.trim().toLowerCase();
+  final name = employee.fullName.trim().toLowerCase();
+  return requests.where((request) {
+    return (employee.id > 0 && request.employeeId == employee.id) ||
+        (code.isNotEmpty && request.employeeCode.trim().toLowerCase() == code) ||
+        (name.isNotEmpty && request.employeeName.trim().toLowerCase() == name);
+  }).toList();
+});
+
 
 final assetAllColumnsProvider = Provider<List<String>>((ref) => const [
   'S.No',

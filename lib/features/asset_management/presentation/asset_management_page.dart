@@ -9,6 +9,7 @@ import '../../asset_settings/providers/asset_settings_providers.dart';
 import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
 import '../domain/asset_assignment.dart';
+import '../domain/asset_return_request.dart';
 import '../providers/asset_management_providers.dart';
 import 'widgets/asset_column_selection_dialog.dart';
 import 'widgets/custom_date_range_picker_dialog.dart';
@@ -65,6 +66,7 @@ class AssetItemFormData {
 
 class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
   final TextEditingController _searchController = TextEditingController();
+  int _adminSelectedTab = 0;
 
   String _getResolvedEmployeeName(AssetAssignment record, List<Employee> employees) {
     if (employees.isNotEmpty) {
@@ -1289,6 +1291,7 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
 
   Widget _buildDesktopView(BuildContext context) {
     final assignmentsAsync = ref.watch(assetAssignmentsProvider);
+    final returnRequestsAsync = ref.watch(assetReturnRequestsProvider);
     final employeesAsync = ref.watch(employeesProvider);
     final assetTypesAsync = ref.watch(assetTypesProvider);
 
@@ -1301,6 +1304,8 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
 
     final employees = employeesAsync.asData?.value ?? [];
     final assetTypes = assetTypesAsync.asData?.value ?? [];
+    final returnRequests = returnRequestsAsync.asData?.value ?? [];
+    final pendingReturnsCount = returnRequests.where((r) => r.status == 'Pending').length;
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
@@ -1373,9 +1378,68 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
-            // Desktop Main Table Box
+            // Desktop Tab Switching Row
+            Row(
+              children: [
+                ChoiceChip(
+                  label: const Text('Asset Assignments'),
+                  selected: _adminSelectedTab == 0,
+                  selectedColor: AppColors.active,
+                  backgroundColor: Colors.white,
+                  labelStyle: TextStyle(
+                    color: _adminSelectedTab == 0 ? Colors.white : AppColors.textPrimary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  onSelected: (_) => setState(() => _adminSelectedTab = 0),
+                ),
+                const SizedBox(width: 10),
+                ChoiceChip(
+                  label: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Return Requests'),
+                      if (pendingReturnsCount > 0) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: _adminSelectedTab == 1 ? Colors.white : const Color(0xFFDC2626),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '$pendingReturnsCount',
+                            style: TextStyle(
+                              color: _adminSelectedTab == 1 ? const Color(0xFFDC2626) : Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  selected: _adminSelectedTab == 1,
+                  selectedColor: const Color(0xFFDC2626),
+                  backgroundColor: Colors.white,
+                  labelStyle: TextStyle(
+                    color: _adminSelectedTab == 1 ? Colors.white : AppColors.textPrimary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  onSelected: (_) => setState(() => _adminSelectedTab = 1),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            if (_adminSelectedTab == 1)
+              SizedBox(
+                height: 600,
+                child: _buildReturnRequestsView(context, returnRequests, employees),
+              )
+            else
+              // Desktop Main Table Box
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
@@ -1857,6 +1921,7 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
 
   Widget _buildMobileView(BuildContext context) {
     final assignmentsAsync = ref.watch(assetAssignmentsProvider);
+    final returnRequestsAsync = ref.watch(assetReturnRequestsProvider);
     final employeesAsync = ref.watch(employeesProvider);
     final assetTypesAsync = ref.watch(assetTypesProvider);
 
@@ -1868,6 +1933,8 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
 
     final employees = employeesAsync.asData?.value ?? [];
     final assetTypes = assetTypesAsync.asData?.value ?? [];
+    final returnRequests = returnRequestsAsync.asData?.value ?? [];
+    final pendingReturnsCount = returnRequests.where((r) => r.status == 'Pending').length;
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
@@ -1961,9 +2028,70 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
             ),
             const Divider(height: 1),
 
+            // Navigation Sub-Header (Assignments vs Return Requests)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: Colors.white,
+              child: Row(
+                children: [
+                  ChoiceChip(
+                    label: const Text('Assignments'),
+                    selected: _adminSelectedTab == 0,
+                    selectedColor: AppColors.active,
+                    backgroundColor: const Color(0xFFF1F5F9),
+                    labelStyle: TextStyle(
+                      color: _adminSelectedTab == 0 ? Colors.white : AppColors.textPrimary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12.5,
+                    ),
+                    onSelected: (_) => setState(() => _adminSelectedTab = 0),
+                  ),
+                  const SizedBox(width: 8),
+                  ChoiceChip(
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('Return Requests'),
+                        if (pendingReturnsCount > 0) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: _adminSelectedTab == 1 ? Colors.white : const Color(0xFFDC2626),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '$pendingReturnsCount',
+                              style: TextStyle(
+                                color: _adminSelectedTab == 1 ? const Color(0xFFDC2626) : Colors.white,
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    selected: _adminSelectedTab == 1,
+                    selectedColor: const Color(0xFFDC2626),
+                    backgroundColor: const Color(0xFFF1F5F9),
+                    labelStyle: TextStyle(
+                      color: _adminSelectedTab == 1 ? Colors.white : AppColors.textPrimary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12.5,
+                    ),
+                    onSelected: (_) => setState(() => _adminSelectedTab = 1),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+
             // Content Area
             Expanded(
-              child: assignmentsAsync.when(
+              child: _adminSelectedTab == 1
+                  ? _buildReturnRequestsView(context, returnRequests, employees)
+                  : assignmentsAsync.when(
                 loading: () => const Center(
                   child: Padding(
                     padding: EdgeInsets.all(40),
@@ -2272,6 +2400,210 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
     );
   }
 
+  Widget _buildReturnRequestsView(BuildContext context, List<AssetReturnRequest> requests, List<Employee> employees) {
+    if (requests.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(40),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.assignment_return_outlined, size: 48, color: AppColors.textSecondary),
+              SizedBox(height: 12),
+              Text('No asset return requests found.', style: TextStyle(fontSize: 14, color: AppColors.textSecondary)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: requests.length,
+      itemBuilder: (context, index) {
+        final req = requests[index];
+        final isPending = req.status == 'Pending';
+        final isApproved = req.status == 'Approved';
+        final statusColor = isPending
+            ? const Color(0xFFFF9800)
+            : (isApproved ? const Color(0xFF9CC70A) : const Color(0xFFDC2626));
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.divider),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.assignment_return_outlined, color: statusColor, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          req.assetName.isNotEmpty ? req.assetName : req.assetTypeName,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textPrimary),
+                        ),
+                        if (req.serialNumber.isNotEmpty)
+                          Text('Serial No: ${req.serialNumber}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: statusColor.withOpacity(0.4)),
+                    ),
+                    child: Text(
+                      req.status,
+                      style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(height: 20),
+              Row(
+                children: [
+                  const Icon(Icons.person_outlined, size: 14, color: AppColors.textSecondary),
+                  const SizedBox(width: 6),
+                  Text('Employee: ', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                  Expanded(
+                    child: Text(
+                      '${req.employeeName}${req.employeeCode.isNotEmpty ? ' (${req.employeeCode})' : ''}',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  const Icon(Icons.calendar_today_outlined, size: 14, color: AppColors.textSecondary),
+                  const SizedBox(width: 6),
+                  Text('Request Date: ', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                  Expanded(
+                    child: Text(req.requestDate, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  ),
+                ],
+              ),
+              if (req.reason.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Text(
+                    'Reason: ${req.reason}',
+                    style: const TextStyle(fontSize: 12, color: AppColors.textPrimary, fontStyle: FontStyle.italic),
+                  ),
+                ),
+              ],
+              if (isPending) ...[
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFDC2626),
+                        side: const BorderSide(color: Color(0xFFFCA5A5)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () async {
+                        try {
+                          await ref.read(assetAssignmentRepositoryProvider).respondToReturnRequest(req, approve: false);
+                          ref.refresh(assetReturnRequestsProvider);
+                          ref.refresh(assetAssignmentsProvider);
+                          ref.refresh(myAssetReturnRequestsProvider);
+                          ref.refresh(myAssetAssignmentsProvider);
+
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Return request rejected.')),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error rejecting request: $e')),
+                            );
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.close, size: 16),
+                      label: const Text('Reject'),
+                    ),
+                    const SizedBox(width: 10),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF9CC70A),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () async {
+                        try {
+                          await ref.read(assetAssignmentRepositoryProvider).respondToReturnRequest(req, approve: true);
+                          ref.refresh(assetReturnRequestsProvider);
+                          ref.refresh(assetAssignmentsProvider);
+                          ref.refresh(myAssetReturnRequestsProvider);
+                          ref.refresh(myAssetAssignmentsProvider);
+
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Return request approved. Asset status updated to Returned.'),
+                                backgroundColor: Color(0xFF9CC70A),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error approving request: $e')),
+                            );
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.check, size: 16),
+                      label: const Text('Approve Return'),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildFilterChip({
     required String label,
     required bool isSelected,
@@ -2297,4 +2629,5 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
     );
   }
 }
+
 

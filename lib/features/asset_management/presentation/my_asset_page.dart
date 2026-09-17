@@ -8,6 +8,7 @@ import '../../employee/providers/employee_providers.dart';
 import '../../leave/providers/leave_providers.dart';
 import '../domain/asset_assignment.dart';
 import '../domain/asset_transfer_request.dart';
+import '../domain/asset_return_request.dart';
 import '../providers/asset_management_providers.dart';
 
 class MyAssetPage extends ConsumerStatefulWidget {
@@ -601,6 +602,159 @@ class _MyAssetPageState extends ConsumerState<MyAssetPage> {
     reasonController.dispose();
   }
 
+  Future<void> _showReturnDialog(AssetAssignment asset) async {
+    final formKey = GlobalKey<FormState>();
+    final reasonController = TextEditingController();
+    bool isSubmitting = false;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: const [
+                  Icon(Icons.assignment_return_outlined, color: Color(0xFFDC2626), size: 24),
+                  SizedBox(width: 10),
+                  Text('Return Asset Request', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                ],
+              ),
+              content: SizedBox(
+                width: 480,
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              asset.assetName.isNotEmpty ? asset.assetName : asset.assetTypeName,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                            if (asset.serialNumber.isNotEmpty)
+                              Text('Serial No: ${asset.serialNumber}',
+                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: reasonController,
+                        maxLines: 3,
+                        decoration: InputDecoration(
+                          labelText: 'Return Reason / Condition Notes *',
+                          hintText: 'Enter reason for returning asset (e.g. project completed, damaged, upgrading)',
+                          alignLabelWithHint: true,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        validator: (val) {
+                          if (val == null || val.trim().isEmpty) {
+                            return 'Please enter return reason';
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                OutlinedButton(
+                  onPressed: isSubmitting ? null : () => Navigator.pop(dialogCtx),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFDC2626),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          if (!formKey.currentState!.validate()) return;
+                          setDialogState(() => isSubmitting = true);
+
+                          try {
+                            final currentEmp = ref.read(myAssetSelectedEmployeeProvider) ?? ref.read(currentEmployeeProvider);
+                            final empId = currentEmp?.id ?? asset.employeeId;
+                            final empName = (currentEmp != null && currentEmp.fullName.trim().isNotEmpty) ? currentEmp.fullName : asset.employeeName;
+                            final empCode = (currentEmp != null && currentEmp.employeeId.trim().isNotEmpty) ? currentEmp.employeeId : asset.employeeCode;
+
+                            final returnReq = AssetReturnRequest(
+                              id: 0,
+                              assetAssignmentId: asset.id,
+                              assetName: asset.assetName.isNotEmpty ? asset.assetName : asset.assetTypeName,
+                              assetTypeName: asset.assetTypeName,
+                              serialNumber: asset.serialNumber,
+                              employeeId: empId,
+                              employeeName: empName,
+                              employeeCode: empCode,
+                              requestDate: DateFormat('yyyy-MM-dd').format(DateTime.now()),
+                              reason: reasonController.text.trim(),
+                              status: 'Pending',
+                            );
+
+                            await ref.read(assetAssignmentRepositoryProvider).createReturnRequest(returnReq);
+                            ref.refresh(assetReturnRequestsProvider);
+                            ref.refresh(myAssetReturnRequestsProvider);
+
+                            if (ctx.mounted) {
+                              Navigator.pop(ctx);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: const [
+                                      Icon(Icons.check_circle, color: Colors.white),
+                                      SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text('Return request submitted. Waiting for admin approval.'),
+                                      ),
+                                    ],
+                                  ),
+                                  backgroundColor: const Color(0xFF9CC70A),
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setDialogState(() => isSubmitting = false);
+                            if (ctx.mounted) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                SnackBar(content: Text('Error submitting return request: $e')),
+                              );
+                            }
+                          }
+                        },
+                  icon: isSubmitting
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Icon(Icons.send_outlined, size: 18),
+                  label: const Text('Submit Return Request'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    reasonController.dispose();
+  }
+
   void _showAssetDetailsDialog(AssetAssignment asset) {
     final statusColor = _getStatusColor(asset.status);
 
@@ -1148,51 +1302,73 @@ class _MyAssetPageState extends ConsumerState<MyAssetPage> {
 
   Widget _buildAssetCard(AssetAssignment asset, List<Employee> employees) {
     final statusColor = _getStatusColor(asset.status);
-    final iconData = _getAssetIcon(asset.assetTypeName);
+    final returnRequestsAsync = ref.watch(assetReturnRequestsProvider);
+    final returnRequests = returnRequestsAsync.asData?.value ?? [];
+    final pendingReturnReq = returnRequests.where(
+      (r) => r.assetAssignmentId == asset.id && r.status == 'Pending',
+    ).firstOrNull;
+    final isReturned = asset.status == 'Returned';
 
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: Colors.grey[200]!),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(14.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            // Header Row: Icon + Asset Name + Status Badge
+            // Top Row: Asset Icon, Name/Type, Status Badge
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: const Color(0xFF9CC70A).withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(iconData, color: const Color(0xFF9CC70A), size: 24),
+                  child: Icon(
+                    _getAssetIcon(asset.assetTypeName),
+                    color: const Color(0xFF414A51),
+                    size: 24,
+                  ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         asset.assetName.isNotEmpty ? asset.assetName : asset.assetTypeName,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF212121)),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 2),
                       Text(
                         asset.assetTypeName,
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
@@ -1254,6 +1430,30 @@ class _MyAssetPageState extends ConsumerState<MyAssetPage> {
               ),
             ),
 
+            if (pendingReturnReq != null) ...[
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFFFCA5A5)),
+                ),
+                child: Row(
+                  children: const [
+                    Icon(Icons.hourglass_top_outlined, size: 14, color: Color(0xFFDC2626)),
+                    SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Return Request Pending Approval',
+                        style: TextStyle(fontSize: 11, color: Color(0xFFDC2626), fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
             if (asset.status == 'Maintenance' && asset.maintenanceReturnDate != null) ...[
               const SizedBox(height: 4),
               Row(
@@ -1274,7 +1474,7 @@ class _MyAssetPageState extends ConsumerState<MyAssetPage> {
 
             const SizedBox(height: 8),
 
-            // Action Buttons Row: Maintenance | Transfer | Details
+            // Action Buttons Row: Maintenance | Transfer | Return | Details
             Row(
               children: [
                 Expanded(
@@ -1283,28 +1483,72 @@ class _MyAssetPageState extends ConsumerState<MyAssetPage> {
                       foregroundColor: const Color(0xFFFF9800),
                       side: const BorderSide(color: Color(0xFFFFCC80)),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
                     ),
                     onPressed: () => _showMaintenanceDialog(asset),
-                    icon: const Icon(Icons.build_outlined, size: 14),
-                    label: const Text('Maintenance', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    icon: const Icon(Icons.build_outlined, size: 13),
+                    label: const Text('Maintenance', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
                   ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 4),
                 Expanded(
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFF9CC70A),
                       side: const BorderSide(color: Color(0xFFC5E1A5)),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
                     ),
                     onPressed: () => _showTransferDialog(asset, employees),
-                    icon: const Icon(Icons.swap_horiz_outlined, size: 14),
-                    label: const Text('Transfer', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    icon: const Icon(Icons.swap_horiz_outlined, size: 13),
+                    label: const Text('Transfer', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
                   ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: isReturned
+                          ? Colors.grey
+                          : const Color(0xFFDC2626),
+                      side: BorderSide(
+                        color: isReturned
+                            ? Colors.grey.shade300
+                            : const Color(0xFFFCA5A5),
+                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                      backgroundColor: pendingReturnReq != null ? const Color(0xFFFEF2F2) : null,
+                    ),
+                    onPressed: isReturned
+                        ? null
+                        : () {
+                            if (pendingReturnReq != null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: const Text('A return request for this asset is already pending admin approval.'),
+                                  backgroundColor: const Color(0xFFDC2626),
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                              );
+                              return;
+                            }
+                            _showReturnDialog(asset);
+                          },
+                    icon: Icon(
+                      pendingReturnReq != null ? Icons.hourglass_top_outlined : Icons.assignment_return_outlined,
+                      size: 13,
+                    ),
+                    label: Text(
+                      isReturned
+                          ? 'Returned'
+                          : (pendingReturnReq != null ? 'Pending' : 'Return'),
+                      style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
                 IconButton(
                   tooltip: 'View Details',
                   style: IconButton.styleFrom(
@@ -1312,7 +1556,7 @@ class _MyAssetPageState extends ConsumerState<MyAssetPage> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                   onPressed: () => _showAssetDetailsDialog(asset),
-                  icon: const Icon(Icons.info_outline, size: 16, color: Color(0xFF414A51)),
+                  icon: const Icon(Icons.info_outline, size: 15, color: Color(0xFF414A51)),
                 ),
               ],
             ),

@@ -1,5 +1,6 @@
 import 'asset_assignment.dart';
 import 'asset_transfer_request.dart';
+import 'asset_return_request.dart';
 
 abstract interface class AssetAssignmentRepository {
   Future<List<AssetAssignment>> getAssignments();
@@ -10,4 +11,8 @@ abstract interface class AssetAssignmentRepository {
   Future<List<AssetTransferRequest>> getTransferRequests();
   Future<AssetTransferRequest> createTransferRequest(AssetTransferRequest request);
   Future<void> respondToTransferRequest(AssetTransferRequest request, {required bool approve});
+  Future<List<AssetReturnRequest>> getReturnRequests();
+  Future<AssetReturnRequest> createReturnRequest(AssetReturnRequest request);
+  Future<void> respondToReturnRequest(AssetReturnRequest request, {required bool approve});
 }
+

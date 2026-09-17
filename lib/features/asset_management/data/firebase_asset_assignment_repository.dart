@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../domain/asset_assignment.dart';
 import '../domain/asset_assignment_repository.dart';
 import '../domain/asset_transfer_request.dart';
+import '../domain/asset_return_request.dart';
 
 class FirebaseAssetAssignmentRepository implements AssetAssignmentRepository {
   final FirebaseFirestore _firestore;
@@ -14,6 +15,8 @@ class FirebaseAssetAssignmentRepository implements AssetAssignmentRepository {
       _firestore.collection('asset_assignments');
   CollectionReference<Map<String, dynamic>> get _transferRef =>
       _firestore.collection('asset_transfer_requests');
+  CollectionReference<Map<String, dynamic>> get _returnRef =>
+      _firestore.collection('asset_return_requests');
 
   @override
   Future<List<AssetAssignment>> getAssignments() async {
@@ -161,4 +164,50 @@ class FirebaseAssetAssignmentRepository implements AssetAssignmentRepository {
       });
     });
   }
+
+  @override
+  Future<List<AssetReturnRequest>> getReturnRequests() async {
+    try {
+      final snapshot = await _returnRef.get();
+      final requests = snapshot.docs.map((d) => AssetReturnRequest.fromMap(d.data(), d.id)).toList();
+      requests.sort((a, b) => (b.createdAt ?? '').compareTo(a.createdAt ?? ''));
+      return requests;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  @override
+  Future<AssetReturnRequest> createReturnRequest(AssetReturnRequest request) async {
+    final doc = _returnRef.doc();
+    final created = request.copyWith(
+      id: request.id == 0 ? doc.id.hashCode & 0x7fffffff : request.id,
+      createdAt: DateTime.now().toIso8601String(),
+    );
+    await doc.set(created.toMap());
+    return created;
+  }
+
+  @override
+  Future<void> respondToReturnRequest(AssetReturnRequest request, {required bool approve}) async {
+    final requestQuery = await _returnRef.where('id', isEqualTo: request.id).limit(1).get();
+    if (requestQuery.docs.isEmpty) throw StateError('Return request was not found.');
+    final requestDoc = requestQuery.docs.first.reference;
+    final assignmentQuery = await _ref.where('id', isEqualTo: request.assetAssignmentId).limit(1).get();
+    if (approve && assignmentQuery.docs.isEmpty) throw StateError('Asset assignment was not found.');
+
+    await _firestore.runTransaction((transaction) async {
+      if (approve) {
+        transaction.update(assignmentQuery.docs.first.reference, {
+          'status': 'Returned',
+          'updated_at': FieldValue.serverTimestamp(),
+        });
+      }
+      transaction.update(requestDoc, {
+        'status': approve ? 'Approved' : 'Rejected',
+        'responded_at': DateTime.now().toIso8601String(),
+      });
+    });
+  }
 }
+
