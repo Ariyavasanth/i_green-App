@@ -646,6 +646,9 @@ class _EmployeeRegistrationPageState
 
   List<String> _validateExperienceTab() {
     final errors = <String>[];
+    if (_isExperienceMandatory && _experienceList.isEmpty) {
+      errors.add('At least one work experience entry is required');
+    }
     for (int i = 0; i < _experienceList.length; i++) {
       final exp = _experienceList[i];
       if (exp.companyName.trim().isEmpty) {
@@ -1878,8 +1881,28 @@ class _EmployeeRegistrationPageState
               widget.acceptedLinkId!,
             );
 
+        final List<RegistrationLink> links = await ref.read(
+          registrationLinksProvider.future,
+        );
+        final matchingLinks = links
+            .where((l) => l.linkId == widget.acceptedLinkId)
+            .toList();
+
         if (candidateResponse != null && mounted) {
           _populateFromEmployee(candidateResponse.employeeData);
+          if (matchingLinks.isNotEmpty) {
+            final link = matchingLinks.first;
+            _isExperienceMandatory = link.isExperienceMandatory;
+            if (_organizationName.isEmpty && link.organizationName.isNotEmpty) {
+              _organizationName = link.organizationName;
+            }
+            if (_department.isEmpty && link.department.isNotEmpty) {
+              _department = link.department;
+            }
+            if (_designation.isEmpty && link.designation.isNotEmpty) {
+              _designation = link.designation;
+            }
+          }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
@@ -1890,17 +1913,21 @@ class _EmployeeRegistrationPageState
             ),
           );
         } else {
-          final List<RegistrationLink> links = await ref.read(
-            registrationLinksProvider.future,
-          );
           final List<Employee> allEmps = await ref.read(
             allEmployeesProvider.future,
           );
-          final matchingLinks = links
-              .where((l) => l.linkId == widget.acceptedLinkId)
-              .toList();
           if (matchingLinks.isNotEmpty && mounted) {
             final link = matchingLinks.first;
+            _isExperienceMandatory = link.isExperienceMandatory;
+            if (link.organizationName.isNotEmpty) {
+              _organizationName = link.organizationName;
+            }
+            if (link.department.isNotEmpty) {
+              _department = link.department;
+            }
+            if (link.designation.isNotEmpty) {
+              _designation = link.designation;
+            }
             final matchedEmployee = _findMatchingEmployee(link, allEmps);
             if (matchedEmployee != null) {
               _selectedAcceptedEmpId = matchedEmployee.id;
@@ -1966,8 +1993,28 @@ class _EmployeeRegistrationPageState
             await repo.getCandidateResponseByLinkId(widget.linkId) ??
             await repo.getCandidateResponseByCandidateId(widget.linkId);
 
+        final List<RegistrationLink> links = await ref.read(
+          registrationLinksProvider.future,
+        );
+        final matchingLinks = links
+            .where((l) => l.linkId == widget.linkId)
+            .toList();
+
         if (candidateResponse != null && mounted) {
           _populateFromEmployee(candidateResponse.employeeData);
+          if (matchingLinks.isNotEmpty) {
+            final link = matchingLinks.first;
+            _isExperienceMandatory = link.isExperienceMandatory;
+            if (_organizationName.isEmpty && link.organizationName.isNotEmpty) {
+              _organizationName = link.organizationName;
+            }
+            if (_department.isEmpty && link.department.isNotEmpty) {
+              _department = link.department;
+            }
+            if (_designation.isEmpty && link.designation.isNotEmpty) {
+              _designation = link.designation;
+            }
+          }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
@@ -1978,18 +2025,21 @@ class _EmployeeRegistrationPageState
             ),
           );
         } else {
-          final List<RegistrationLink> links = await ref.read(
-            registrationLinksProvider.future,
-          );
           final List<Employee> allEmps = await ref.read(
             allEmployeesProvider.future,
           );
-          final matchingLinks = links
-              .where((l) => l.linkId == widget.linkId)
-              .toList();
           if (matchingLinks.isNotEmpty && mounted) {
             final link = matchingLinks.first;
             _isExperienceMandatory = link.isExperienceMandatory;
+            if (link.organizationName.isNotEmpty) {
+              _organizationName = link.organizationName;
+            }
+            if (link.department.isNotEmpty) {
+              _department = link.department;
+            }
+            if (link.designation.isNotEmpty) {
+              _designation = link.designation;
+            }
             final matchedEmployee = _findMatchingEmployee(link, allEmps);
             if (matchedEmployee != null) {
               _selectedAcceptedEmpId = matchedEmployee.id;
@@ -3260,7 +3310,11 @@ class _EmployeeRegistrationPageState
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(tab),
+                Text(
+                  tab == 'Experience' && _isExperienceMandatory
+                      ? 'Experience *'
+                      : tab,
+                ),
                 if (showGreenCheck) ...[
                   const SizedBox(width: 5),
                   const Icon(
@@ -5265,22 +5319,26 @@ class _EmployeeRegistrationPageState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              children: const [
+              children: [
                 Text(
-                  'Work Experience History',
-                  style: TextStyle(
+                  _isExperienceMandatory
+                      ? 'Work Experience History *'
+                      : 'Work Experience History',
+                  style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                     color: Colors.black87,
                   ),
                 ),
-                SizedBox(width: 8),
+                const SizedBox(width: 8),
                 Text(
-                  '(Optional for Freshers)',
+                  _isExperienceMandatory
+                      ? '(Mandatory for this registration)'
+                      : '(Optional for Freshers)',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
-                    color: Colors.grey,
+                    color: _isExperienceMandatory ? Colors.red : Colors.grey,
                     fontStyle: FontStyle.italic,
                   ),
                 ),

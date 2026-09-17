@@ -10,6 +10,7 @@ class RegistrationLink {
     this.employeeId = '',
     this.organizationName = '',
     this.department = '',
+    this.designation = '',
     this.submittedDate = '',
     this.submittedBy = '',
     this.isExperienceMandatory = false,
@@ -25,6 +26,7 @@ class RegistrationLink {
   final String employeeId;
   final String organizationName;
   final String department;
+  final String designation;
   final String submittedDate;
   final String submittedBy;
   final bool isExperienceMandatory;
@@ -63,6 +65,7 @@ class RegistrationLink {
       'employee_id': employeeId,
       'organization_name': organizationName,
       'department': department,
+      'designation': designation,
       'submitted_date': submittedDate,
       'submitted_by': submittedBy,
       'is_experience_mandatory': isExperienceMandatory,
@@ -90,6 +93,7 @@ class RegistrationLink {
       employeeId: map['employee_id']?.toString() ?? '',
       organizationName: map['organization_name']?.toString() ?? '',
       department: map['department']?.toString() ?? '',
+      designation: map['designation']?.toString() ?? map['designation_name']?.toString() ?? '',
       submittedDate: map['submitted_date']?.toString() ?? '',
       submittedBy: map['submitted_by']?.toString() ?? '',
       isExperienceMandatory: map['is_experience_mandatory'] as bool? ??
@@ -108,6 +112,7 @@ class RegistrationLink {
     String? employeeId,
     String? organizationName,
     String? department,
+    String? designation,
     String? submittedDate,
     String? submittedBy,
     bool? isExperienceMandatory,
@@ -123,6 +128,7 @@ class RegistrationLink {
       employeeId: employeeId ?? this.employeeId,
       organizationName: organizationName ?? this.organizationName,
       department: department ?? this.department,
+      designation: designation ?? this.designation,
       submittedDate: submittedDate ?? this.submittedDate,
       submittedBy: submittedBy ?? this.submittedBy,
       isExperienceMandatory: isExperienceMandatory ?? this.isExperienceMandatory,

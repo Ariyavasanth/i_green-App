@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../domain/employee.dart';
 import '../../domain/registration_link.dart';
 import '../../providers/employee_providers.dart';
 
@@ -24,6 +25,7 @@ class _AddEmployeeLinkDialogState
   final _generatedByController = TextEditingController(text: 'HR Admin');
   String? _selectedOrg;
   String? _selectedDept;
+  String? _selectedDesignation;
   late final TextEditingController _baseUrlController;
 
   RegistrationLink? _generatedLink;
@@ -63,6 +65,7 @@ class _AddEmployeeLinkDialogState
         generatedBy: _generatedByController.text.trim(),
         organizationName: _selectedOrg ?? '',
         department: _selectedDept ?? '',
+        designation: _selectedDesignation ?? '',
         isExperienceMandatory: _isExperienceMandatory,
       );
       ref.invalidate(registrationLinksProvider);
@@ -221,6 +224,7 @@ class _AddEmployeeLinkDialogState
                           setState(() {
                             _selectedOrg = val;
                             _selectedDept = null;
+                            _selectedDesignation = null;
                           });
                         },
                       );
@@ -243,7 +247,46 @@ class _AddEmployeeLinkDialogState
                         placeholder: 'Select Target Department',
                         searchHint: 'Search department...',
                         onChanged: (val) {
-                          setState(() => _selectedDept = val);
+                          setState(() {
+                            _selectedDept = val;
+                            _selectedDesignation = null;
+                          });
+                        },
+                      );
+                    },
+                  ),
+              const SizedBox(height: 12),
+              ref.watch(allDesignationsProvider).when(
+                    loading: () => const SizedBox(height: 48, child: Center(child: LinearProgressIndicator())),
+                    error: (_, __) => const SizedBox.shrink(),
+                    data: (desigs) {
+                      var filteredDesigs = desigs;
+                      if (_selectedOrg != null && _selectedOrg!.isNotEmpty) {
+                        filteredDesigs = filteredDesigs
+                            .where((d) => d.organizationName.isEmpty || d.organizationName == _selectedOrg)
+                            .toList();
+                      }
+                      if (_selectedDept != null && _selectedDept!.isNotEmpty) {
+                        filteredDesigs = filteredDesigs
+                            .where((d) => d.departmentName.isEmpty || d.departmentName == _selectedDept)
+                            .toList();
+                      }
+                      final desigNames = filteredDesigs
+                          .map((d) => d.designationName)
+                          .where((s) => s.isNotEmpty)
+                          .toSet()
+                          .toList();
+                      if (desigNames.isEmpty) {
+                        desigNames.addAll(Employee.designationOptions);
+                      }
+                      return AppSearchableDropdown<String>(
+                        label: 'Target Designation (Optional)',
+                        value: _selectedDesignation,
+                        items: desigNames,
+                        placeholder: 'Select Target Designation',
+                        searchHint: 'Search designation...',
+                        onChanged: (val) {
+                          setState(() => _selectedDesignation = val);
                         },
                       );
                     },

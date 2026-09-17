@@ -32,6 +32,7 @@ abstract class EmployeeRepository {
     required String generatedBy,
     String? organizationName,
     String? department,
+    String? designation,
     bool isExperienceMandatory = false,
   });
   Future<List<RegistrationLink>> getRegistrationLinks();
