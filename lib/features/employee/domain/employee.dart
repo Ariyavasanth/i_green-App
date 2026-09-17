@@ -140,11 +140,17 @@ class Employee {
     this.postalCode = '',
     this.country = 'India',
     this.permanentAddress = '',
+    this.permanentState = '',
     this.permanentCity = '',
+    this.permanentDistrict = '',
+    this.permanentPincode = '',
     this.permanentCountry = 'India',
     this.sameAsPermanent = false,
     this.presentAddress = '',
+    this.presentState = '',
     this.presentCity = '',
+    this.presentDistrict = '',
+    this.presentPincode = '',
     this.presentCountry = 'India',
     this.educationDegree = '',
     this.educationInstitution = '',
@@ -643,11 +649,17 @@ class Employee {
   final String country;
 
   final String permanentAddress;
+  final String permanentState;
   final String permanentCity;
+  final String permanentDistrict;
+  final String permanentPincode;
   final String permanentCountry;
   final bool sameAsPermanent;
   final String presentAddress;
+  final String presentState;
   final String presentCity;
+  final String presentDistrict;
+  final String presentPincode;
   final String presentCountry;
 
   final String educationDegree;
@@ -825,11 +837,17 @@ class Employee {
       'postal_code': postalCode,
       'country': country,
       'permanent_address': permanentAddress,
+      'permanent_state': permanentState,
       'permanent_city': permanentCity,
+      'permanent_district': permanentDistrict,
+      'permanent_pincode': permanentPincode,
       'permanent_country': permanentCountry,
       'same_as_permanent': sameAsPermanent ? 1 : 0,
       'present_address': presentAddress,
+      'present_state': presentState,
       'present_city': presentCity,
+      'present_district': presentDistrict,
+      'present_pincode': presentPincode,
       'present_country': presentCountry,
       'education_degree': educationDegree,
       'education_institution': educationInstitution,
@@ -964,11 +982,17 @@ class Employee {
       postalCode: map['postal_code'] as String? ?? '',
       country: map['country'] as String? ?? 'India',
       permanentAddress: map['permanent_address'] as String? ?? '',
+      permanentState: (map['permanent_state'] ?? map['permanentState']) as String? ?? '',
       permanentCity: map['permanent_city'] as String? ?? '',
+      permanentDistrict: (map['permanent_district'] ?? map['permanentDistrict']) as String? ?? '',
+      permanentPincode: (map['permanent_pincode'] ?? map['permanentPincode'] ?? map['postal_code']) as String? ?? '',
       permanentCountry: map['permanent_country'] as String? ?? 'India',
       sameAsPermanent: map['same_as_permanent'] == 1 || map['same_as_permanent'] == true,
       presentAddress: map['present_address'] as String? ?? '',
+      presentState: (map['present_state'] ?? map['presentState']) as String? ?? '',
       presentCity: map['present_city'] as String? ?? '',
+      presentDistrict: (map['present_district'] ?? map['presentDistrict']) as String? ?? '',
+      presentPincode: (map['present_pincode'] ?? map['presentPincode']) as String? ?? '',
       presentCountry: map['present_country'] as String? ?? 'India',
       educationDegree: map['education_degree'] as String? ?? '',
       educationInstitution: map['education_institution'] as String? ?? '',
@@ -1192,11 +1216,17 @@ class Employee {
     String? postalCode,
     String? country,
     String? permanentAddress,
+    String? permanentState,
     String? permanentCity,
+    String? permanentDistrict,
+    String? permanentPincode,
     String? permanentCountry,
     bool? sameAsPermanent,
     String? presentAddress,
+    String? presentState,
     String? presentCity,
+    String? presentDistrict,
+    String? presentPincode,
     String? presentCountry,
     String? educationDegree,
     String? educationInstitution,
@@ -1319,11 +1349,17 @@ class Employee {
       postalCode: postalCode ?? this.postalCode,
       country: country ?? this.country,
       permanentAddress: permanentAddress ?? this.permanentAddress,
+      permanentState: permanentState ?? this.permanentState,
       permanentCity: permanentCity ?? this.permanentCity,
+      permanentDistrict: permanentDistrict ?? this.permanentDistrict,
+      permanentPincode: permanentPincode ?? this.permanentPincode,
       permanentCountry: permanentCountry ?? this.permanentCountry,
       sameAsPermanent: sameAsPermanent ?? this.sameAsPermanent,
       presentAddress: presentAddress ?? this.presentAddress,
+      presentState: presentState ?? this.presentState,
       presentCity: presentCity ?? this.presentCity,
+      presentDistrict: presentDistrict ?? this.presentDistrict,
+      presentPincode: presentPincode ?? this.presentPincode,
       presentCountry: presentCountry ?? this.presentCountry,
       educationDegree: educationDegree ?? this.educationDegree,
       educationInstitution: educationInstitution ?? this.educationInstitution,

@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/location_data.dart';
 import '../domain/employee.dart';
 import '../domain/registration_link.dart';
 import '../domain/candidate_response.dart';
@@ -106,12 +107,22 @@ class _EmployeeRegistrationPageState
 
   // Tab 2: Address
   final _permAddressController = TextEditingController();
+  String _permCountry = 'India';
+  String _permState = 'Tamil Nadu';
   final _permCityController = TextEditingController();
-  final _permCountryController = TextEditingController(text: 'India');
+  final _permPincodeController = TextEditingController();
+  final _permDistrictController = TextEditingController();
+  String? _permPincodeError;
+
   bool _sameAsPermanent = false;
+
   final _presAddressController = TextEditingController();
+  String _presCountry = 'India';
+  String _presState = 'Tamil Nadu';
   final _presCityController = TextEditingController();
-  final _presCountryController = TextEditingController(text: 'India');
+  final _presPincodeController = TextEditingController();
+  final _presDistrictController = TextEditingController();
+  String? _presPincodeError;
 
   // Tab 3: Education
   final _eduDegreeController = TextEditingController();
@@ -546,18 +557,37 @@ class _EmployeeRegistrationPageState
     if (_permAddressController.text.trim().isEmpty) {
       errors.add('Permanent Address is required');
     }
+    if (_permCountry.trim().isEmpty) {
+      errors.add('Permanent Country is required');
+    }
+    if (_permState.trim().isEmpty) {
+      errors.add('Permanent State is required');
+    }
     final permCity = _permCityController.text.trim();
     if (permCity.isEmpty) {
       errors.add('Permanent City is required');
     } else if (RegExp(r'[0-9]').hasMatch(permCity)) {
       errors.add('Permanent City name cannot contain numbers');
     }
-    if (_permCountryController.text.trim().isEmpty) {
-      errors.add('Permanent Country is required');
+    final permPin = _permPincodeController.text.trim();
+    if (permPin.isEmpty) {
+      errors.add('Permanent Pincode is required');
+    } else {
+      final pinRes = LocationDataHelper.lookupPincode(permPin, _permCountry);
+      if (!pinRes.isValid) {
+        errors.add('Permanent Pincode: ${pinRes.errorMessage ?? "Invalid pincode for $_permCountry."}');
+      }
     }
+
     if (!_sameAsPermanent) {
       if (_presAddressController.text.trim().isEmpty) {
         errors.add('Present Address is required');
+      }
+      if (_presCountry.trim().isEmpty) {
+        errors.add('Present Country is required');
+      }
+      if (_presState.trim().isEmpty) {
+        errors.add('Present State is required');
       }
       final presCity = _presCityController.text.trim();
       if (presCity.isEmpty) {
@@ -565,8 +595,14 @@ class _EmployeeRegistrationPageState
       } else if (RegExp(r'[0-9]').hasMatch(presCity)) {
         errors.add('Present City name cannot contain numbers');
       }
-      if (_presCountryController.text.trim().isEmpty) {
-        errors.add('Present Country is required');
+      final presPin = _presPincodeController.text.trim();
+      if (presPin.isEmpty) {
+        errors.add('Present Pincode is required');
+      } else {
+        final pinRes = LocationDataHelper.lookupPincode(presPin, _presCountry);
+        if (!pinRes.isValid) {
+          errors.add('Present Pincode: ${pinRes.errorMessage ?? "Invalid pincode for $_presCountry."}');
+        }
       }
     }
     return errors;
@@ -1130,10 +1166,12 @@ class _EmployeeRegistrationPageState
       _esiNumberController,
       _permAddressController,
       _permCityController,
-      _permCountryController,
+      _permPincodeController,
+      _permDistrictController,
       _presAddressController,
       _presCityController,
-      _presCountryController,
+      _presPincodeController,
+      _presDistrictController,
       _originalDobController,
       _personalMobileController,
       _panController,
@@ -1228,10 +1266,12 @@ class _EmployeeRegistrationPageState
     // Address Tab
     addListenerTo(_permAddressController, 'Address');
     addListenerTo(_permCityController, 'Address');
-    addListenerTo(_permCountryController, 'Address');
+    addListenerTo(_permPincodeController, 'Address');
+    addListenerTo(_permDistrictController, 'Address');
     addListenerTo(_presAddressController, 'Address');
     addListenerTo(_presCityController, 'Address');
-    addListenerTo(_presCountryController, 'Address');
+    addListenerTo(_presPincodeController, 'Address');
+    addListenerTo(_presDistrictController, 'Address');
 
     // History Tab
     addListenerTo(_originalDobController, 'History');
@@ -1483,14 +1523,40 @@ class _EmployeeRegistrationPageState
       _siteRequireGpsVerification = emp.siteRequireGpsVerification;
 
       _permAddressController.text = emp.permanentAddress;
+      _permCountry = emp.permanentCountry.isNotEmpty ? emp.permanentCountry : 'India';
+      final permStates = LocationDataHelper.getStatesForCountry(_permCountry);
+      _permState = emp.permanentState.isNotEmpty && permStates.contains(emp.permanentState)
+          ? emp.permanentState
+          : (permStates.isNotEmpty ? permStates.first : '');
       _permCityController.text = emp.permanentCity;
-      if (emp.permanentCountry.isNotEmpty)
-        _permCountryController.text = emp.permanentCountry;
+      _permPincodeController.text = emp.permanentPincode.isNotEmpty ? emp.permanentPincode : emp.postalCode;
+      _permDistrictController.text = emp.permanentDistrict;
+      if (_permPincodeController.text.isNotEmpty && _permDistrictController.text.isEmpty) {
+        final pinRes = LocationDataHelper.lookupPincode(_permPincodeController.text, _permCountry);
+        if (pinRes.isValid && pinRes.district.isNotEmpty) {
+          _permDistrictController.text = pinRes.district;
+        }
+      }
+
       _sameAsPermanent = emp.sameAsPermanent;
       _presAddressController.text = emp.presentAddress;
+      _presCountry = emp.presentCountry.isNotEmpty ? emp.presentCountry : 'India';
+      final presStates = LocationDataHelper.getStatesForCountry(_presCountry);
+      _presState = emp.presentState.isNotEmpty && presStates.contains(emp.presentState)
+          ? emp.presentState
+          : (presStates.isNotEmpty ? presStates.first : '');
       _presCityController.text = emp.presentCity;
-      if (emp.presentCountry.isNotEmpty)
-        _presCountryController.text = emp.presentCountry;
+      _presPincodeController.text = emp.presentPincode;
+      _presDistrictController.text = emp.presentDistrict;
+      if (_presPincodeController.text.isNotEmpty && _presDistrictController.text.isEmpty) {
+        final pinRes = LocationDataHelper.lookupPincode(_presPincodeController.text, _presCountry);
+        if (pinRes.isValid && pinRes.district.isNotEmpty) {
+          _presDistrictController.text = pinRes.district;
+        }
+      }
+      if (_sameAsPermanent) {
+        _syncPresentWithPermanent();
+      }
 
       _originalDobController.text = emp.originalDob;
       final (personalCc, personalNum) = _parsePhoneAndCountryCode(
@@ -1951,10 +2017,12 @@ class _EmployeeRegistrationPageState
     _coordinatorPhoneController.dispose();
     _permAddressController.dispose();
     _permCityController.dispose();
-    _permCountryController.dispose();
+    _permPincodeController.dispose();
+    _permDistrictController.dispose();
     _presAddressController.dispose();
     _presCityController.dispose();
-    _presCountryController.dispose();
+    _presPincodeController.dispose();
+    _presDistrictController.dispose();
     _eduDegreeController.dispose();
     _eduInstController.dispose();
     _eduResultController.dispose();
@@ -2314,18 +2382,28 @@ class _EmployeeRegistrationPageState
         userType: _userType,
         contractEndDate: _contractEndDateController.text.trim(),
         permanentAddress: _permAddressController.text.trim(),
+        permanentState: _permState,
         permanentCity: _permCityController.text.trim(),
-        permanentCountry: _permCountryController.text.trim(),
+        permanentDistrict: _permDistrictController.text.trim(),
+        permanentPincode: _permPincodeController.text.trim(),
+        permanentCountry: _permCountry,
         sameAsPermanent: _sameAsPermanent,
         presentAddress: _sameAsPermanent
             ? _permAddressController.text.trim()
             : _presAddressController.text.trim(),
+        presentState: _sameAsPermanent ? _permState : _presState,
         presentCity: _sameAsPermanent
             ? _permCityController.text.trim()
             : _presCityController.text.trim(),
+        presentDistrict: _sameAsPermanent
+            ? _permDistrictController.text.trim()
+            : _presDistrictController.text.trim(),
+        presentPincode: _sameAsPermanent
+            ? _permPincodeController.text.trim()
+            : _presPincodeController.text.trim(),
         presentCountry: _sameAsPermanent
-            ? _permCountryController.text.trim()
-            : _presCountryController.text.trim(),
+            ? _permCountry
+            : _presCountry,
         educationListJson: jsonEncode(
           _educationList.map((e) => e.toMap()).toList(),
         ),
@@ -4419,8 +4497,83 @@ class _EmployeeRegistrationPageState
     );
   }
 
+  void _syncPresentWithPermanent() {
+    _presAddressController.text = _permAddressController.text;
+    _presCountry = _permCountry;
+    _presState = _permState;
+    _presCityController.text = _permCityController.text;
+    _presPincodeController.text = _permPincodeController.text;
+    _presDistrictController.text = _permDistrictController.text;
+    _presPincodeError = _permPincodeError;
+  }
+
+  void _onPermPincodeChanged(String val) {
+    final cleanVal = val.trim();
+    if (cleanVal.isEmpty) {
+      setState(() {
+        _permDistrictController.clear();
+        _permPincodeError = null;
+        if (_sameAsPermanent) _syncPresentWithPermanent();
+      });
+      return;
+    }
+    final res = LocationDataHelper.lookupPincode(cleanVal, _permCountry);
+    setState(() {
+      if (res.isValid) {
+        if (res.district.isNotEmpty) {
+          _permDistrictController.text = res.district;
+        }
+        if (res.state.isNotEmpty && LocationDataHelper.getStatesForCountry(_permCountry).contains(res.state)) {
+          _permState = res.state;
+        }
+        _permPincodeError = null;
+      } else {
+        _permDistrictController.clear();
+        _permPincodeError = res.errorMessage ?? 'Invalid pincode for $_permCountry';
+      }
+      if (_sameAsPermanent) _syncPresentWithPermanent();
+    });
+  }
+
+  void _onPresPincodeChanged(String val) {
+    if (_sameAsPermanent) return;
+    final cleanVal = val.trim();
+    if (cleanVal.isEmpty) {
+      setState(() {
+        _presDistrictController.clear();
+        _presPincodeError = null;
+      });
+      return;
+    }
+    final res = LocationDataHelper.lookupPincode(cleanVal, _presCountry);
+    setState(() {
+      if (res.isValid) {
+        if (res.district.isNotEmpty) {
+          _presDistrictController.text = res.district;
+        }
+        if (res.state.isNotEmpty && LocationDataHelper.getStatesForCountry(_presCountry).contains(res.state)) {
+          _presState = res.state;
+        }
+        _presPincodeError = null;
+      } else {
+        _presDistrictController.clear();
+        _presPincodeError = res.errorMessage ?? 'Invalid pincode for $_presCountry';
+      }
+    });
+  }
+
   // TAB 2: ADDRESS
   Widget _buildAddressTab(RegistrationLink link, bool isMobile) {
+    final permStates = LocationDataHelper.getStatesForCountry(_permCountry);
+    if (!permStates.contains(_permState)) {
+      _permState = permStates.isNotEmpty ? permStates.first : '';
+    }
+
+    final presStates = LocationDataHelper.getStatesForCountry(_presCountry);
+    if (!presStates.contains(_presState)) {
+      _presState = presStates.isNotEmpty ? presStates.first : '';
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Container(
@@ -4447,6 +4600,50 @@ class _EmployeeRegistrationPageState
               _permAddressController,
               placeholder: 'Address Details',
               maxLines: 2,
+              onChanged: (_) {
+                if (_sameAsPermanent) setState(_syncPresentWithPermanent);
+                _markTabUnsaved('Address');
+              },
+            ),
+            const SizedBox(height: 12),
+            _buildRow2or3(
+              isMobile: isMobile,
+              children: [
+                _buildDropdown(
+                  'Country *',
+                  _permCountry,
+                  LocationDataHelper.countries,
+                  (val) {
+                    if (val != null && val != _permCountry) {
+                      setState(() {
+                        _permCountry = val;
+                        final states = LocationDataHelper.getStatesForCountry(val);
+                        _permState = states.isNotEmpty ? states.first : '';
+                        _permCityController.clear();
+                        _permPincodeController.clear();
+                        _permDistrictController.clear();
+                        _permPincodeError = null;
+                        if (_sameAsPermanent) _syncPresentWithPermanent();
+                      });
+                      _markTabUnsaved('Address');
+                    }
+                  },
+                ),
+                _buildDropdown(
+                  'State *',
+                  _permState,
+                  LocationDataHelper.getStatesForCountry(_permCountry),
+                  (val) {
+                    if (val != null) {
+                      setState(() {
+                        _permState = val;
+                        if (_sameAsPermanent) _syncPresentWithPermanent();
+                      });
+                      _markTabUnsaved('Address');
+                    }
+                  },
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             _buildRow2or3(
@@ -4457,12 +4654,28 @@ class _EmployeeRegistrationPageState
                   _permCityController,
                   placeholder: 'City',
                   isName: true,
+                  onChanged: (_) {
+                    if (_sameAsPermanent) setState(_syncPresentWithPermanent);
+                    _markTabUnsaved('Address');
+                  },
                 ),
                 _buildTextField(
-                  'Country *',
-                  _permCountryController,
-                  placeholder: 'Country',
-                  isName: true,
+                  'Pincode *',
+                  _permPincodeController,
+                  placeholder: 'Pincode',
+                  isNumber: true,
+                  maxLength: 10,
+                  errorText: _permPincodeError,
+                  onChanged: (val) {
+                    _onPermPincodeChanged(val);
+                    _markTabUnsaved('Address');
+                  },
+                ),
+                _buildTextField(
+                  'District',
+                  _permDistrictController,
+                  placeholder: 'Auto-filled from Pincode',
+                  readOnly: true,
                 ),
               ],
             ),
@@ -4475,13 +4688,10 @@ class _EmployeeRegistrationPageState
                     setState(() {
                       _sameAsPermanent = val ?? false;
                       if (_sameAsPermanent) {
-                        _presAddressController.text =
-                            _permAddressController.text;
-                        _presCityController.text = _permCityController.text;
-                        _presCountryController.text =
-                            _permCountryController.text;
+                        _syncPresentWithPermanent();
                       }
                     });
+                    _markTabUnsaved('Address');
                   },
                 ),
                 const Text(
@@ -4505,6 +4715,48 @@ class _EmployeeRegistrationPageState
               _presAddressController,
               placeholder: 'Address Details',
               maxLines: 2,
+              readOnly: _sameAsPermanent,
+              onChanged: (_) => _markTabUnsaved('Address'),
+            ),
+            const SizedBox(height: 12),
+            _buildRow2or3(
+              isMobile: isMobile,
+              children: [
+                _buildDropdown(
+                  _sameAsPermanent ? 'Country' : 'Country *',
+                  _presCountry,
+                  LocationDataHelper.countries,
+                  _sameAsPermanent
+                      ? (val) {}
+                      : (val) {
+                          if (val != null && val != _presCountry) {
+                            setState(() {
+                              _presCountry = val;
+                              final states = LocationDataHelper.getStatesForCountry(val);
+                              _presState = states.isNotEmpty ? states.first : '';
+                              _presCityController.clear();
+                              _presPincodeController.clear();
+                              _presDistrictController.clear();
+                              _presPincodeError = null;
+                            });
+                            _markTabUnsaved('Address');
+                          }
+                        },
+                ),
+                _buildDropdown(
+                  _sameAsPermanent ? 'State' : 'State *',
+                  _presState,
+                  LocationDataHelper.getStatesForCountry(_presCountry),
+                  _sameAsPermanent
+                      ? (val) {}
+                      : (val) {
+                          if (val != null) {
+                            setState(() => _presState = val);
+                            _markTabUnsaved('Address');
+                          }
+                        },
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             _buildRow2or3(
@@ -4515,12 +4767,27 @@ class _EmployeeRegistrationPageState
                   _presCityController,
                   placeholder: 'City',
                   isName: true,
+                  readOnly: _sameAsPermanent,
+                  onChanged: (_) => _markTabUnsaved('Address'),
                 ),
                 _buildTextField(
-                  _sameAsPermanent ? 'Country' : 'Country *',
-                  _presCountryController,
-                  placeholder: 'Country',
-                  isName: true,
+                  _sameAsPermanent ? 'Pincode' : 'Pincode *',
+                  _presPincodeController,
+                  placeholder: 'Pincode',
+                  isNumber: true,
+                  maxLength: 10,
+                  readOnly: _sameAsPermanent,
+                  errorText: _presPincodeError,
+                  onChanged: (val) {
+                    _onPresPincodeChanged(val);
+                    _markTabUnsaved('Address');
+                  },
+                ),
+                _buildTextField(
+                  'District',
+                  _presDistrictController,
+                  placeholder: 'Auto-filled from Pincode',
+                  readOnly: true,
                 ),
               ],
             ),
@@ -6744,6 +7011,8 @@ class _EmployeeRegistrationPageState
     String? placeholder,
     int maxLines = 1,
     ValueChanged<String>? onChanged,
+    bool readOnly = false,
+    String? errorText,
     bool isNumber = false,
     bool isPhone = false,
     bool isPan = false,
@@ -6988,11 +7257,18 @@ class _EmployeeRegistrationPageState
             }
             return null;
           },
-          style: const TextStyle(fontSize: 12, color: Colors.black87),
+          readOnly: readOnly,
+          style: TextStyle(
+            fontSize: 12,
+            color: readOnly ? Colors.black54 : Colors.black87,
+          ),
           decoration: InputDecoration(
             hintText: dynamicPlaceholder,
             hintStyle: const TextStyle(fontSize: 12, color: Colors.black38),
             isDense: true,
+            errorText: errorText,
+            filled: readOnly,
+            fillColor: readOnly ? const Color(0xFFF2F4F7) : null,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 12,
               vertical: 10,
@@ -7015,14 +7291,17 @@ class _EmployeeRegistrationPageState
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(
-                color: Color(0xFFD0D5DD),
+              borderSide: BorderSide(
+                color: readOnly ? const Color(0xFFE4E7EC) : const Color(0xFFD0D5DD),
                 width: 0.8,
               ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppColors.active, width: 1.2),
+              borderSide: BorderSide(
+                color: readOnly ? const Color(0xFFE4E7EC) : AppColors.active,
+                width: 1.2,
+              ),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
@@ -7398,12 +7677,24 @@ class _EmployeeRegistrationPageState
                             _permAddressController.text,
                           ),
                           _buildPreviewField(
+                            'Permanent Country',
+                            _permCountry,
+                          ),
+                          _buildPreviewField(
+                            'Permanent State',
+                            _permState,
+                          ),
+                          _buildPreviewField(
                             'Permanent City',
                             _permCityController.text,
                           ),
                           _buildPreviewField(
-                            'Permanent Country',
-                            _permCountryController.text,
+                            'Permanent District',
+                            _permDistrictController.text,
+                          ),
+                          _buildPreviewField(
+                            'Permanent Pincode',
+                            _permPincodeController.text,
                           ),
                           _buildPreviewField(
                             'Present Address',
@@ -7412,16 +7703,34 @@ class _EmployeeRegistrationPageState
                                 : _presAddressController.text,
                           ),
                           _buildPreviewField(
+                            'Present Country',
+                            _sameAsPermanent
+                                ? _permCountry
+                                : _presCountry,
+                          ),
+                          _buildPreviewField(
+                            'Present State',
+                            _sameAsPermanent
+                                ? _permState
+                                : _presState,
+                          ),
+                          _buildPreviewField(
                             'Present City',
                             _sameAsPermanent
                                 ? _permCityController.text
                                 : _presCityController.text,
                           ),
                           _buildPreviewField(
-                            'Present Country',
+                            'Present District',
                             _sameAsPermanent
-                                ? _permCountryController.text
-                                : _presCountryController.text,
+                                ? _permDistrictController.text
+                                : _presDistrictController.text,
+                          ),
+                          _buildPreviewField(
+                            'Present Pincode',
+                            _sameAsPermanent
+                                ? _permPincodeController.text
+                                : _presPincodeController.text,
                           ),
                         ]),
                         const SizedBox(height: 20),
@@ -9394,18 +9703,28 @@ class _EmployeeRegistrationPageState
       bloodGroup: _bloodGroup,
       contractEndDate: _contractEndDateController.text.trim(),
       permanentAddress: _permAddressController.text.trim(),
+      permanentState: _permState,
       permanentCity: _permCityController.text.trim(),
-      permanentCountry: _permCountryController.text.trim(),
+      permanentDistrict: _permDistrictController.text.trim(),
+      permanentPincode: _permPincodeController.text.trim(),
+      permanentCountry: _permCountry,
       sameAsPermanent: _sameAsPermanent,
       presentAddress: _sameAsPermanent
           ? _permAddressController.text.trim()
           : _presAddressController.text.trim(),
+      presentState: _sameAsPermanent ? _permState : _presState,
       presentCity: _sameAsPermanent
           ? _permCityController.text.trim()
           : _presCityController.text.trim(),
+      presentDistrict: _sameAsPermanent
+          ? _permDistrictController.text.trim()
+          : _presDistrictController.text.trim(),
+      presentPincode: _sameAsPermanent
+          ? _permPincodeController.text.trim()
+          : _presPincodeController.text.trim(),
       presentCountry: _sameAsPermanent
-          ? _permCountryController.text.trim()
-          : _presCountryController.text.trim(),
+          ? _permCountry
+          : _presCountry,
       educationListJson: jsonEncode(
         _educationList.map((e) => e.toMap()).toList(),
       ),

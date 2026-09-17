@@ -213,7 +213,9 @@ class EmployeeDetailsDialog extends StatelessWidget {
   Widget _buildAddressTab() {
     final permAddr = employee.permanentAddress.isNotEmpty ? employee.permanentAddress : employee.street;
     final permCity = employee.permanentCity.isNotEmpty ? employee.permanentCity : employee.city;
+    final permState = employee.permanentState.isNotEmpty ? employee.permanentState : employee.state;
     final permCountry = employee.permanentCountry.isNotEmpty ? employee.permanentCountry : employee.country;
+    final permPincode = employee.permanentPincode.isNotEmpty ? employee.permanentPincode : employee.postalCode;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -221,16 +223,22 @@ class EmployeeDetailsDialog extends StatelessWidget {
         _buildSectionHeader('Permanent Contact Information'),
         _buildInfoGrid([
           _InfoItem('Address', permAddr),
-          _InfoItem('City', permCity),
           _InfoItem('Country', permCountry),
+          _InfoItem('State', permState),
+          _InfoItem('City', permCity),
+          _InfoItem('District', employee.permanentDistrict),
+          _InfoItem('Pincode', permPincode),
         ]),
         const SizedBox(height: 20),
         _buildSectionHeader('Present Contact Information'),
         _buildInfoGrid([
           _InfoItem('Same as Permanent', employee.sameAsPermanent ? 'Yes' : 'No'),
           _InfoItem('Address', employee.presentAddress),
-          _InfoItem('City', employee.presentCity),
           _InfoItem('Country', employee.presentCountry),
+          _InfoItem('State', employee.presentState),
+          _InfoItem('City', employee.presentCity),
+          _InfoItem('District', employee.presentDistrict),
+          _InfoItem('Pincode', employee.presentPincode),
         ]),
       ],
     );
