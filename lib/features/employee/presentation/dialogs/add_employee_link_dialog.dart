@@ -28,6 +28,7 @@ class _AddEmployeeLinkDialogState
 
   RegistrationLink? _generatedLink;
   bool _isGenerating = false;
+  bool _isExperienceMandatory = false;
 
   @override
   void initState() {
@@ -62,6 +63,7 @@ class _AddEmployeeLinkDialogState
         generatedBy: _generatedByController.text.trim(),
         organizationName: _selectedOrg ?? '',
         department: _selectedDept ?? '',
+        isExperienceMandatory: _isExperienceMandatory,
       );
       ref.invalidate(registrationLinksProvider);
       setState(() {
@@ -246,6 +248,44 @@ class _AddEmployeeLinkDialogState
                       );
                     },
                   ),
+              const SizedBox(height: 12),
+              InkWell(
+                onTap: () {
+                  setState(() {
+                    _isExperienceMandatory = !_isExperienceMandatory;
+                  });
+                },
+                borderRadius: BorderRadius.circular(6),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: Checkbox(
+                          value: _isExperienceMandatory,
+                          activeColor: AppColors.active,
+                          onChanged: (val) {
+                            setState(() {
+                              _isExperienceMandatory = val ?? false;
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Experience is Mandatory',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,

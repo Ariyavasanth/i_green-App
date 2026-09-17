@@ -104,6 +104,7 @@ class _EmployeeRegistrationPageState
   String _profileImageDataUrl = '';
   Uint8List? _profileImageBytes;
   bool _isProfileImageRemoved = false;
+  bool _isExperienceMandatory = false;
 
   // Tab 2: Address
   final _permAddressController = TextEditingController();
@@ -1239,6 +1240,29 @@ class _EmployeeRegistrationPageState
     }
   }
 
+  void _recalculateSpecialAllowance() {
+    if (_isPopulating) return;
+    final total = double.tryParse(_totalSalaryController.text.replaceAll(',', '').trim()) ?? 0.0;
+    final basic = double.tryParse(_basicPayController.text.replaceAll(',', '').trim()) ?? 0.0;
+    final hra = double.tryParse(_hraController.text.replaceAll(',', '').trim()) ?? 0.0;
+    final edu = double.tryParse(_eduAllowanceController.text.replaceAll(',', '').trim()) ?? 0.0;
+    final travel = double.tryParse(_travelAllowanceController.text.replaceAll(',', '').trim()) ?? 0.0;
+    final other = double.tryParse(_otherAllowanceController.text.replaceAll(',', '').trim()) ?? 0.0;
+
+    if (total > 0) {
+      double special = total - basic - hra - edu - travel - other;
+      if (special < 0) special = 0.0;
+      final newSpecialText = special.toStringAsFixed(2);
+      if (_specialAllowanceController.text != newSpecialText) {
+        _specialAllowanceController.text = newSpecialText;
+      }
+      final newPercentText = ((special / total) * 100).toStringAsFixed(1);
+      if (_specialAllowancePercentController.text != newPercentText) {
+        _specialAllowancePercentController.text = newPercentText;
+      }
+    }
+  }
+
   void _attachControllerListeners() {
     _snapshotSavedTexts();
     void addListenerTo(TextEditingController controller, String tabName) {
@@ -1252,6 +1276,13 @@ class _EmployeeRegistrationPageState
         }
       });
     }
+
+    _totalSalaryController.addListener(_recalculateSpecialAllowance);
+    _basicPayController.addListener(_recalculateSpecialAllowance);
+    _hraController.addListener(_recalculateSpecialAllowance);
+    _eduAllowanceController.addListener(_recalculateSpecialAllowance);
+    _travelAllowanceController.addListener(_recalculateSpecialAllowance);
+    _otherAllowanceController.addListener(_recalculateSpecialAllowance);
 
     // Personal Info Tab
     addListenerTo(_firstNameController, 'Personal Info');
@@ -1958,6 +1989,7 @@ class _EmployeeRegistrationPageState
               .toList();
           if (matchingLinks.isNotEmpty && mounted) {
             final link = matchingLinks.first;
+            _isExperienceMandatory = link.isExperienceMandatory;
             final matchedEmployee = _findMatchingEmployee(link, allEmps);
             if (matchedEmployee != null) {
               _selectedAcceptedEmpId = matchedEmployee.id;
@@ -2090,12 +2122,40 @@ class _EmployeeRegistrationPageState
   Future<void> _selectDate(
     TextEditingController controller, {
     String? tabName,
+    DateTime? firstDate,
+    DateTime? lastDate,
   }) async {
+    final now = DateTime.now();
+    final minDate = firstDate ?? DateTime(1950);
+    final maxDate = lastDate ?? DateTime(2100);
+
+    DateTime initial = now;
+    if (controller.text.trim().isNotEmpty) {
+      try {
+        final parts = controller.text.trim().split('-');
+        if (parts.length == 3) {
+          final day = int.parse(parts[0]);
+          final month = int.parse(parts[1]);
+          final year = int.parse(parts[2]);
+          final parsed = DateTime(year, month, day);
+          if (!parsed.isBefore(minDate) && !parsed.isAfter(maxDate)) {
+            initial = parsed;
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (initial.isBefore(minDate)) {
+      initial = minDate;
+    } else if (initial.isAfter(maxDate)) {
+      initial = maxDate;
+    }
+
     final picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(1950),
-      lastDate: DateTime(2100),
+      initialDate: initial,
+      firstDate: minDate,
+      lastDate: maxDate,
     );
     if (picked != null) {
       final formatted =
@@ -2241,6 +2301,23 @@ class _EmployeeRegistrationPageState
       final candidateErrors = _getAllCandidateFormErrors();
       if (candidateErrors.isNotEmpty) {
         _showSubmissionErrorSummaryDialog(candidateErrors);
+        return;
+      }
+
+      if (_isExperienceMandatory && _experienceList.isEmpty) {
+        final expTabIndex = _tabs.indexOf('Experience');
+        if (expTabIndex >= 0) {
+          _tabController.animateTo(expTabIndex);
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Work Experience is mandatory for this registration link. Please add at least one experience entry.',
+            ),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
+          ),
+        );
         return;
       }
 
@@ -2432,10 +2509,14 @@ class _EmployeeRegistrationPageState
         fatherName: _fatherNameController.text.trim(),
         motherName: _motherNameController.text.trim(),
         maritalStatus: _maritalStatus,
-        spouseName: _spouseNameController.text.trim(),
-        kids1Name: _kids1NameController.text.trim(),
-        kids2Name: _kids2NameController.text.trim(),
-        kids3Name: _kids3NameController.text.trim(),
+        spouseName:
+            _maritalStatus == 'Married' ? _spouseNameController.text.trim() : '',
+        kids1Name:
+            _maritalStatus == 'Married' ? _kids1NameController.text.trim() : '',
+        kids2Name:
+            _maritalStatus == 'Married' ? _kids2NameController.text.trim() : '',
+        kids3Name:
+            _maritalStatus == 'Married' ? _kids3NameController.text.trim() : '',
         hasCriminalCases: _hasCriminalCases,
         criminalCaseDetails: _hasCriminalCases
             ? _criminalCaseDetailsController.text.trim()
@@ -2838,6 +2919,7 @@ class _EmployeeRegistrationPageState
                   if (!_draftLoaded &&
                       (link.employeeId.isNotEmpty || link.linkId.isNotEmpty)) {
                     _draftLoaded = true;
+                    _isExperienceMandatory = link.isExperienceMandatory;
                     WidgetsBinding.instance.addPostFrameCallback((_) async {
                       try {
                         final repo = ref.read(employeeRepositoryProvider);
@@ -4348,6 +4430,7 @@ class _EmployeeRegistrationPageState
                         'Date Of Joining',
                         _joiningDateController,
                         placeholder: 'dd-mm-yyyy',
+                        firstDate: DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day),
                       ),
                     ],
                   ),
@@ -4485,6 +4568,7 @@ class _EmployeeRegistrationPageState
                   'Effective Date',
                   _leaveEffectiveDateController,
                   placeholder: 'dd-mm-yyyy',
+                  firstDate: DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day),
                 ),
               ],
             ),
@@ -5670,7 +5754,13 @@ class _EmployeeRegistrationPageState
                           groupValue: _maritalStatus,
                           onChanged: (val) {
                             if (val != null) {
-                              setState(() => _maritalStatus = val);
+                              setState(() {
+                                _maritalStatus = val;
+                                _spouseNameController.clear();
+                                _kids1NameController.clear();
+                                _kids2NameController.clear();
+                                _kids3NameController.clear();
+                              });
                               _markTabUnsaved('History');
                             }
                           },
@@ -5682,44 +5772,46 @@ class _EmployeeRegistrationPageState
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            _buildRow2or3(
-              isMobile: isMobile,
-              children: [
-                _buildTextField(
-                  'Spouse Name',
-                  _spouseNameController,
-                  placeholder: 'Spouse Name',
-                  isName: true,
-                ),
-                _buildTextField(
-                  'Kids1 Name',
-                  _kids1NameController,
-                  placeholder: 'Kids Name',
-                  isName: true,
-                ),
-                _buildTextField(
-                  'Kids2 Name',
-                  _kids2NameController,
-                  placeholder: 'Kids Name',
-                  isName: true,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _buildRow2or3(
-              isMobile: isMobile,
-              children: [
-                _buildTextField(
-                  'Kids3 Name',
-                  _kids3NameController,
-                  placeholder: 'Kids Name',
-                  isName: true,
-                ),
-                const SizedBox.shrink(),
-                const SizedBox.shrink(),
-              ],
-            ),
+            if (_maritalStatus == 'Married') ...[
+              const SizedBox(height: 12),
+              _buildRow2or3(
+                isMobile: isMobile,
+                children: [
+                  _buildTextField(
+                    'Spouse Name',
+                    _spouseNameController,
+                    placeholder: 'Spouse Name',
+                    isName: true,
+                  ),
+                  _buildTextField(
+                    'Kids1 Name',
+                    _kids1NameController,
+                    placeholder: 'Kids Name',
+                    isName: true,
+                  ),
+                  _buildTextField(
+                    'Kids2 Name',
+                    _kids2NameController,
+                    placeholder: 'Kids Name',
+                    isName: true,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _buildRow2or3(
+                isMobile: isMobile,
+                children: [
+                  _buildTextField(
+                    'Kids3 Name',
+                    _kids3NameController,
+                    placeholder: 'Kids Name',
+                    isName: true,
+                  ),
+                  const SizedBox.shrink(),
+                  const SizedBox.shrink(),
+                ],
+              ),
+            ],
             const SizedBox(height: 20),
             const Text(
               'Criminal Background Check :',
@@ -7322,6 +7414,8 @@ class _EmployeeRegistrationPageState
     String label,
     TextEditingController controller, {
     String? placeholder,
+    DateTime? firstDate,
+    DateTime? lastDate,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -7332,7 +7426,11 @@ class _EmployeeRegistrationPageState
         TextFormField(
           controller: controller,
           readOnly: true,
-          onTap: () => _selectDate(controller),
+          onTap: () => _selectDate(
+            controller,
+            firstDate: firstDate,
+            lastDate: lastDate,
+          ),
           style: const TextStyle(fontSize: 12, color: Colors.black87),
           decoration: InputDecoration(
             hintText: placeholder ?? 'dd-mm-yyyy',
@@ -7476,6 +7574,23 @@ class _EmployeeRegistrationPageState
   }
 
   void _showRegistrationPreviewDialog(RegistrationLink? link) {
+    if (_isExperienceMandatory && _experienceList.isEmpty) {
+      final expTabIndex = _tabs.indexOf('Experience');
+      if (expTabIndex >= 0) {
+        _tabController.animateTo(expTabIndex);
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Work Experience is mandatory for this registration link. Please add at least one experience entry.',
+          ),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+
     final candidateErrors = _getAllCandidateFormErrors();
     if (candidateErrors.isNotEmpty) {
       setState(() {
@@ -8840,9 +8955,10 @@ class _EmployeeRegistrationPageState
                   basis: '% of Total',
                   amountController: _specialAllowanceController,
                   percentController: _specialAllowancePercentController,
-                  placeholder: '21500.00',
+                  placeholder: '6250.00',
                   basisValue: totalSalary,
                   isMobile: isMobile,
+                  showPercentageField: false,
                 ),
                 _buildSalaryComponentRow(
                   label: 'Education Allowance',
@@ -9753,10 +9869,14 @@ class _EmployeeRegistrationPageState
       fatherName: _fatherNameController.text.trim(),
       motherName: _motherNameController.text.trim(),
       maritalStatus: _maritalStatus,
-      spouseName: _spouseNameController.text.trim(),
-      kids1Name: _kids1NameController.text.trim(),
-      kids2Name: _kids2NameController.text.trim(),
-      kids3Name: _kids3NameController.text.trim(),
+      spouseName:
+          _maritalStatus == 'Married' ? _spouseNameController.text.trim() : '',
+      kids1Name:
+          _maritalStatus == 'Married' ? _kids1NameController.text.trim() : '',
+      kids2Name:
+          _maritalStatus == 'Married' ? _kids2NameController.text.trim() : '',
+      kids3Name:
+          _maritalStatus == 'Married' ? _kids3NameController.text.trim() : '',
       hasCriminalCases: _hasCriminalCases,
       criminalCaseDetails: _hasCriminalCases
           ? _criminalCaseDetailsController.text.trim()

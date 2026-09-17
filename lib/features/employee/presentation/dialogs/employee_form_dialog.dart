@@ -610,10 +610,26 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                   ),
                   child2: TextFormField(
                     controller: _joiningDateController,
+                    readOnly: true,
                     decoration: const InputDecoration(
                       labelText: 'Joining Date (YYYY-MM-DD)',
                       border: OutlineInputBorder(),
+                      suffixIcon: Icon(Icons.calendar_today),
                     ),
+                    onTap: () async {
+                      final now = DateTime.now();
+                      final today = DateTime(now.year, now.month, now.day);
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: now,
+                        firstDate: today,
+                        lastDate: DateTime(2100),
+                      );
+                      if (picked != null) {
+                        _joiningDateController.text =
+                            '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+                      }
+                    },
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -762,10 +778,12 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                             suffixIcon: Icon(Icons.calendar_today),
                           ),
                           onTap: () async {
+                            final now = DateTime.now();
+                            final today = DateTime(now.year, now.month, now.day);
                             final picked = await showDatePicker(
                               context: context,
-                              initialDate: DateTime.now(),
-                              firstDate: DateTime(2000),
+                              initialDate: now,
+                              firstDate: today,
                               lastDate: DateTime(2100),
                             );
                             if (picked != null) {
@@ -784,10 +802,12 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                             suffixIcon: Icon(Icons.calendar_today),
                           ),
                           onTap: () async {
+                            final now = DateTime.now();
+                            final today = DateTime(now.year, now.month, now.day);
                             final picked = await showDatePicker(
                               context: context,
-                              initialDate: DateTime.now(),
-                              firstDate: DateTime(2000),
+                              initialDate: now,
+                              firstDate: today,
                               lastDate: DateTime(2100),
                             );
                             if (picked != null) {

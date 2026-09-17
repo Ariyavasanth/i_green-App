@@ -332,6 +332,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     required String generatedBy,
     String? organizationName,
     String? department,
+    bool isExperienceMandatory = false,
   }) async {
     final docRef = _registrationLinksRef.doc();
     final linkId = 'lnk_${docRef.id.substring(0, 8)}';
@@ -347,6 +348,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       linkStatus: 'Pending',
       organizationName: organizationName ?? '',
       department: department ?? '',
+      isExperienceMandatory: isExperienceMandatory,
     );
 
     final data = link.toMap();

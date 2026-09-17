@@ -356,10 +356,12 @@ class _CandidateConversionDialogState
                               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                             ),
                             onTap: () async {
+                              final now = DateTime.now();
+                              final today = DateTime(now.year, now.month, now.day);
                               final picked = await showDatePicker(
                                 context: context,
-                                initialDate: DateTime.now(),
-                                firstDate: DateTime(2000),
+                                initialDate: now,
+                                firstDate: today,
                                 lastDate: DateTime(2035),
                               );
                               if (picked != null) {

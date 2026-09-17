@@ -12,6 +12,7 @@ class RegistrationLink {
     this.department = '',
     this.submittedDate = '',
     this.submittedBy = '',
+    this.isExperienceMandatory = false,
   });
 
   final int id;
@@ -26,6 +27,7 @@ class RegistrationLink {
   final String department;
   final String submittedDate;
   final String submittedBy;
+  final bool isExperienceMandatory;
 
   String get fullUrl {
     try {
@@ -63,6 +65,7 @@ class RegistrationLink {
       'department': department,
       'submitted_date': submittedDate,
       'submitted_by': submittedBy,
+      'is_experience_mandatory': isExperienceMandatory,
     };
   }
 
@@ -89,6 +92,8 @@ class RegistrationLink {
       department: map['department']?.toString() ?? '',
       submittedDate: map['submitted_date']?.toString() ?? '',
       submittedBy: map['submitted_by']?.toString() ?? '',
+      isExperienceMandatory: map['is_experience_mandatory'] as bool? ??
+          (map['isExperienceMandatory'] as bool? ?? false),
     );
   }
 
@@ -105,6 +110,7 @@ class RegistrationLink {
     String? department,
     String? submittedDate,
     String? submittedBy,
+    bool? isExperienceMandatory,
   }) {
     return RegistrationLink(
       id: id ?? this.id,
@@ -119,6 +125,7 @@ class RegistrationLink {
       department: department ?? this.department,
       submittedDate: submittedDate ?? this.submittedDate,
       submittedBy: submittedBy ?? this.submittedBy,
+      isExperienceMandatory: isExperienceMandatory ?? this.isExperienceMandatory,
     );
   }
 }
