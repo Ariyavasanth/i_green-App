@@ -2011,10 +2011,26 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
                   final maintCount = allRecords.where((r) => r.status == 'Maintenance').length;
                   final returnedCount = allRecords.where((r) => r.status == 'Returned').length;
 
-                  // Group filtered records by employee
+                  // Group filtered records by employee (normalized by employee ID, code, or resolved name)
                   final Map<String, List<AssetAssignment>> groupedMap = {};
                   for (final rec in filtered) {
-                    final key = '${rec.employeeId}_${rec.employeeName}';
+                    String key = '';
+                    if (employees.isNotEmpty) {
+                      final match = employees.where((e) =>
+                        (e.id != 0 && e.id == rec.employeeId) ||
+                        (e.employeeId.trim().isNotEmpty && rec.employeeCode.trim().isNotEmpty && e.employeeId.trim().toLowerCase() == rec.employeeCode.trim().toLowerCase())
+                      ).firstOrNull;
+                      if (match != null) {
+                        key = 'emp_${match.id}_${match.employeeId.trim().toLowerCase()}';
+                      }
+                    }
+                    if (key.isEmpty && rec.employeeCode.trim().isNotEmpty) {
+                      key = 'code_${rec.employeeCode.trim().toLowerCase()}';
+                    }
+                    if (key.isEmpty) {
+                      final resolvedName = _getResolvedEmployeeName(rec, employees).trim().toLowerCase();
+                      key = 'name_$resolvedName';
+                    }
                     groupedMap.putIfAbsent(key, () => []).add(rec);
                   }
 
@@ -2095,64 +2111,76 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
                                   final empDisplayName = _getResolvedEmployeeName(first, employees);
                                   final initials = _getInitials(empDisplayName);
 
-                                  return Container(
-                                    margin: const EdgeInsets.only(bottom: 16),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(color: AppColors.divider),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withValues(alpha: 0.03),
-                                          blurRadius: 8,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        // Employee Header Row
-                                        Padding(
-                                          padding: const EdgeInsets.all(14),
-                                          child: Row(
-                                            children: [
-                                              CircleAvatar(
-                                                radius: 20,
-                                                backgroundColor: AppColors.active,
-                                                child: Text(
-                                                  initials,
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 13,
-                                                  ),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 12),
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(
-                                                      empDisplayName,
-                                                      style: const TextStyle(
-                                                        fontWeight: FontWeight.bold,
-                                                        fontSize: 15,
-                                                        color: AppColors.textPrimary,
-                                                      ),
-                                                    ),
-                                                    if (first.employeeCode.isNotEmpty)
-                                                      Text(
-                                                        first.employeeCode,
-                                                        style: const TextStyle(
-                                                          fontSize: 12,
-                                                          color: AppColors.textSecondary,
+                                                  final resolvedEmpCode = (() {
+                                                    if (first.employeeCode.trim().isNotEmpty) return first.employeeCode.trim();
+                                                    if (employees.isNotEmpty) {
+                                                      final match = employees.where((e) => e.id == first.employeeId).firstOrNull;
+                                                      if (match != null && match.employeeId.isNotEmpty) return match.employeeId;
+                                                    }
+                                                    for (final item in items) {
+                                                      if (item.employeeCode.trim().isNotEmpty) return item.employeeCode.trim();
+                                                    }
+                                                    return '';
+                                                  })();
+
+                                                  return Container(
+                                                    margin: const EdgeInsets.only(bottom: 16),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.white,
+                                                      borderRadius: BorderRadius.circular(16),
+                                                      border: Border.all(color: AppColors.divider),
+                                                      boxShadow: [
+                                                        BoxShadow(
+                                                          color: Colors.black.withValues(alpha: 0.03),
+                                                          blurRadius: 8,
+                                                          offset: const Offset(0, 2),
                                                         ),
-                                                      ),
-                                                  ],
-                                                ),
-                                              ),
+                                                      ],
+                                                    ),
+                                                    child: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        // Employee Header Row
+                                                        Padding(
+                                                          padding: const EdgeInsets.all(14),
+                                                          child: Row(
+                                                            children: [
+                                                              CircleAvatar(
+                                                                radius: 20,
+                                                                backgroundColor: AppColors.active,
+                                                                child: Text(
+                                                                  initials,
+                                                                  style: const TextStyle(
+                                                                    color: Colors.white,
+                                                                    fontWeight: FontWeight.bold,
+                                                                    fontSize: 13,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                              const SizedBox(width: 12),
+                                                              Expanded(
+                                                                child: Column(
+                                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                                  children: [
+                                                                    Text(
+                                                                      empDisplayName,
+                                                                      style: const TextStyle(
+                                                                        fontWeight: FontWeight.bold,
+                                                                        fontSize: 15,
+                                                                        color: AppColors.textPrimary,
+                                                                      ),
+                                                                    ),
+                                                                    if (resolvedEmpCode.isNotEmpty)
+                                                                      Text(
+                                                                        resolvedEmpCode,
+                                                                        style: const TextStyle(
+                                                                          fontSize: 12,
+                                                                          color: AppColors.textSecondary,
+                                                                        ),
+                                                                      ),
+                                                                  ],
+                                                                ),
+                                                              ),
                                               const Icon(Icons.chevron_right, color: AppColors.textSecondary),
                                             ],
                                           ),
