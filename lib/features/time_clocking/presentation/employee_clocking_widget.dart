@@ -9,6 +9,7 @@ import '../providers/clocking_providers.dart';
 import '../../task_management/domain/task_item.dart';
 import '../../task_management/providers/task_providers.dart';
 import '../../attendance/providers/attendance_providers.dart';
+import '../../attendance_management/providers/attendance_management_providers.dart';
 import '../../on_duty/domain/on_duty_assignment.dart';
 import '../../on_duty/providers/on_duty_providers.dart';
 import '../../on_duty/presentation/employee_on_duty_card.dart';
@@ -588,6 +589,9 @@ class _EmployeeClockingWidgetState extends ConsumerState<EmployeeClockingWidget>
     if (empIdInt != 0) {
       ref.invalidate(todayAttendanceRecordProvider(empIdInt));
       ref.invalidate(attendanceRecordsProvider(empIdInt));
+      ref.invalidate(allAttendanceRecordsProvider);
+      ref.invalidate(attendanceManagementStatsProvider);
+      ref.invalidate(attendanceManagementRecordsProvider);
     }
   }
 

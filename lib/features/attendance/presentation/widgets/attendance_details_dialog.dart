@@ -5,8 +5,11 @@ import '../../../employee/domain/employee.dart';
 import '../../domain/attendance_record.dart';
 import '../../domain/attendance_status_helper.dart';
 
-/// Read-only Attendance Details dialog displaying the 10 required sections
-/// using existing attendance record and status data without altering core rules.
+/// Read-only Attendance Details dialog displaying the comprehensive attendance breakdown:
+/// - Check-in / Check-out
+/// - Office, OD, Lunch (counted), Tea Break (counted), Meeting/Other hours
+/// - Total Working Hours, Required Working Hours, Shortfall
+/// - Status, Audit & Source Info
 class AttendanceDetailsDialog extends StatelessWidget {
   const AttendanceDetailsDialog({
     super.key,
@@ -77,7 +80,14 @@ class AttendanceDetailsDialog extends StatelessWidget {
   }
 
   String _resolveAttendanceSource() {
-    if (record == null) return 'No Record';
+    if (record == null) {
+      if (statusInfo == AttendanceStatusInfo.absent) return 'System Auto-Resolved (Absent)';
+      if (statusInfo == AttendanceStatusInfo.onLeave) return 'Approved Leave Application';
+      if (statusInfo == AttendanceStatusInfo.onDuty) return 'Approved OD Assignment';
+      if (statusInfo == AttendanceStatusInfo.weeklyOff) return 'Weekly Off Roster';
+      if (statusInfo == AttendanceStatusInfo.holiday) return 'Company Holiday Calendar';
+      return 'No Attendance Record';
+    }
     final ver = record!.effectiveCheckInVerification.trim();
     if (ver.isNotEmpty) return ver;
     final st = record!.verificationStatus.trim();
@@ -103,6 +113,16 @@ class AttendanceDetailsDialog extends StatelessWidget {
 
     final empCode = employee.employeeId.isNotEmpty ? employee.employeeId : 'EMP${employee.id.toString().padLeft(3, '0')}';
     final deptName = employee.department.isNotEmpty ? employee.department : 'General';
+    final reqHours = employee.requiredWorkingHours;
+
+    final isAbsent = status == AttendanceStatusInfo.absent;
+    final totalHoursStr = record != null
+        ? record!.formattedTotalHours
+        : (isAbsent ? '0hr' : '--');
+
+    final shortfallStr = record != null
+        ? record!.formattedShortfall(reqHours)
+        : (isAbsent ? '${reqHours.toStringAsFixed(1)}hr' : '0hr');
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -110,8 +130,8 @@ class AttendanceDetailsDialog extends StatelessWidget {
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxWidth: isMobile ? size.width * 0.95 : 520,
-          maxHeight: size.height * 0.88,
+          maxWidth: isMobile ? size.width * 0.95 : 540,
+          maxHeight: size.height * 0.90,
         ),
         child: Container(
           padding: EdgeInsets.all(isMobile ? 14 : 18),
@@ -206,7 +226,7 @@ class AttendanceDetailsDialog extends StatelessWidget {
                       ),
                       const SizedBox(height: 10),
 
-                      // 2. Date & 7. Status Header Bar
+                      // 2. Date & Status Header Bar
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         decoration: BoxDecoration(
@@ -257,7 +277,7 @@ class AttendanceDetailsDialog extends StatelessWidget {
                       ),
                       const SizedBox(height: 10),
 
-                      // 3. Check-in & 4. Check-out
+                      // 3. Check-in & Check-out Card
                       Row(
                         children: [
                           Expanded(
@@ -279,22 +299,141 @@ class AttendanceDetailsDialog extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 10),
 
-                      // 5. Working Hours & 6. Shift
+                      // 4. Session Hours Breakdown Card
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(Icons.pie_chart_outline, size: 14, color: Color(0xFF414A51)),
+                                SizedBox(width: 6),
+                                Text(
+                                  'SESSION HOURS BREAKDOWN',
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF64748B), letterSpacing: 0.5),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildMiniSessionBadge(
+                                    label: 'Office',
+                                    value: record != null ? record!.formattedOfficeHours : '--',
+                                    color: const Color(0xFF2563EB),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: _buildMiniSessionBadge(
+                                    label: 'OD',
+                                    value: record != null ? record!.formattedOdHours : '--',
+                                    color: const Color(0xFF0284C7),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: _buildMiniSessionBadge(
+                                    label: 'Lunch (Paid)',
+                                    value: record != null ? record!.formattedLunchHours : '--',
+                                    color: const Color(0xFFD97706),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildMiniSessionBadge(
+                                    label: 'Tea Break (Paid)',
+                                    value: record != null ? record!.formattedTeaBreakHours : '--',
+                                    color: const Color(0xFFCA8A04),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: _buildMiniSessionBadge(
+                                    label: 'Meeting / Other',
+                                    value: record != null ? record!.formattedMeetingOtherHours : '--',
+                                    color: const Color(0xFF7C3AED),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      // 5. Total Working Hours vs Required Hours Card
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF9CC70A).withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.35)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(Icons.timer_outlined, size: 14, color: Color(0xFF414A51)),
+                                SizedBox(width: 6),
+                                Text(
+                                  'HOURS & SHORTFALL CALCULATION',
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF414A51), letterSpacing: 0.5),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildSummaryMetric(
+                                    title: 'Total Working Hours',
+                                    value: totalHoursStr,
+                                    color: const Color(0xFF0F172A),
+                                  ),
+                                ),
+                                Container(width: 1, height: 28, color: const Color(0xFFCBD5E1)),
+                                Expanded(
+                                  child: _buildSummaryMetric(
+                                    title: 'Required Hours',
+                                    value: '${reqHours.toStringAsFixed(1)}hr',
+                                    color: const Color(0xFF64748B),
+                                  ),
+                                ),
+                                Container(width: 1, height: 28, color: const Color(0xFFCBD5E1)),
+                                Expanded(
+                                  child: _buildSummaryMetric(
+                                    title: 'Shortfall',
+                                    value: shortfallStr,
+                                    color: (record?.calculateShortfall(reqHours) ?? (isAbsent ? reqHours : 0)) > 0
+                                        ? const Color(0xFFDC2626)
+                                        : const Color(0xFF16A34A),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      // 6. Shift & Late Minutes
                       Row(
                         children: [
-                          Expanded(
-                            child: _buildDetailMetric(
-                              label: 'Working Hours',
-                              value: record != null && (record!.totalHours > 0 || record!.sessions.isNotEmpty)
-                                  ? record!.formattedTotalHours
-                                  : '--',
-                              icon: Icons.access_time,
-                              iconColor: const Color(0xFF0284C7),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
                           Expanded(
                             child: _buildDetailMetric(
                               label: 'Shift',
@@ -303,20 +442,14 @@ class AttendanceDetailsDialog extends StatelessWidget {
                               iconColor: const Color(0xFF6366F1),
                             ),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-
-                      // 8. Late Minutes Metric
-                      Row(
-                        children: [
+                          const SizedBox(width: 8),
                           Expanded(
                             child: _buildDetailMetric(
                               label: 'Late Minutes',
                               value: lateMins > 0
                                   ? '$lateMins mins late'
                                   : (status == AttendanceStatusInfo.late ? 'Late' : '0 mins (On Time)'),
-                              icon: Icons.timer_outlined,
+                              icon: Icons.access_time_filled,
                               iconColor: lateMins > 0 ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
                             ),
                           ),
@@ -324,7 +457,7 @@ class AttendanceDetailsDialog extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
 
-                      // 9. Attendance Source & 10. Location
+                      // 7. Attendance Source & Location
                       Row(
                         children: [
                           Expanded(
@@ -419,6 +552,44 @@ class AttendanceDetailsDialog extends StatelessWidget {
     );
   }
 
+  Widget _buildMiniSessionBadge({
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(fontSize: 9, color: color, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 2),
+          Text(value, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryMetric({
+    required String title,
+    required String value,
+    required Color color,
+  }) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(title, style: const TextStyle(fontSize: 9, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
+        const SizedBox(height: 2),
+        Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color)),
+      ],
+    );
+  }
+
   Widget _buildDetailMetric({
     required String label,
     required String value,
@@ -459,4 +630,3 @@ class AttendanceDetailsDialog extends StatelessWidget {
     );
   }
 }
-

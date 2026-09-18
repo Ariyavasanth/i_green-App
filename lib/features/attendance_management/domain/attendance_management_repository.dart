@@ -8,7 +8,15 @@ abstract class AttendanceManagementRepository {
     String? statusFilter,
   });
 
+  Stream<List<AttendanceRecord>> watchAllAttendanceRecords({
+    int? employeeId,
+    String? monthYear,
+    String? statusFilter,
+  });
+
   Future<AttendanceManagementStats> getAttendanceStats({String? date});
+
+  Stream<AttendanceManagementStats> watchAttendanceStats({String? date});
 
   Future<void> saveOrOverrideAttendance(AttendanceRecord record);
 

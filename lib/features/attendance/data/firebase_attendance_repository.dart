@@ -351,11 +351,11 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
   @override
   Future<AttendanceRecord?> getAttendanceRecordForDate(int employeeId, String date) async {
+    final normDate = _normalizeDateKey(date);
+    final docId = '${employeeId}_${normDate.replaceAll('-', '')}';
     try {
       await autoResolveMissingCheckOuts(employeeId: employeeId);
       final todayNormDate = _normalizeDateKey('${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}');
-      final normDate = _normalizeDateKey(date);
-      final docId = '${employeeId}_${normDate.replaceAll('-', '')}';
       final recordSnap = await _recordsRef.doc(docId).get();
       if (recordSnap.exists && recordSnap.data() != null) {
         final rec = AttendanceRecord.fromMap(recordSnap.data()!);
@@ -370,25 +370,6 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
           return updatedRec;
         }
 
-        if (rec.checkOutTime.trim().isEmpty && rec.effectiveCheckInTime.isNotEmpty) {
-          final settings = await getAttendanceSettings();
-          final empObj = await _getEmployeeById(employeeId);
-          final checkInMins = _parseMinutes(rec.effectiveCheckInTime);
-          final schedIn = empObj?.inTime.trim() ?? '';
-          final schedInMins = schedIn.isNotEmpty ? _parseMinutes(schedIn) : null;
-          bool isLate = false;
-          if (checkInMins != null && schedInMins != null) {
-            isLate = checkInMins > (schedInMins + settings.gracePeriodMinutes);
-          }
-          final dynamicStatus = isLate ? 'Late' : 'Present';
-          final updatedRec = rec.copyWith(status: dynamicStatus);
-          if (rec.status != dynamicStatus && rec.status != 'Missing Check-Out') {
-            await _recordsRef.doc(docId).set({'status': dynamicStatus}, SetOptions(merge: true));
-          }
-          _localMemoryCache['${rec.employeeId}_$normDate'] = updatedRec;
-          _localMemoryCache['${rec.employeeId}_${rec.date}'] = updatedRec;
-          return updatedRec;
-        }
         if (rec.status == 'Missing Check-Out' && rec.checkOutTime.trim().isEmpty && _normalizeDateKey(rec.date) == todayNormDate) {
           final settings = await getAttendanceSettings();
           final empObj = await _getEmployeeById(employeeId);
@@ -401,6 +382,10 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
           }
           return rec.copyWith(status: isLate ? 'Late' : 'Present');
         }
+        _localMemoryCache['${rec.employeeId}_$normDate'] = rec;
+        _localMemoryCache['${rec.employeeId}_${rec.date}'] = rec;
+        _localMemoryCache['${rec.employeeId}_$date'] = rec;
+        _localMemoryCache[docId] = rec;
         return rec;
       }
 
@@ -422,11 +407,15 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         final matchesDate = docDate == date || docDate.replaceAll('-', '') == date.replaceAll('-', '') || normDocDate == normDate;
 
         if (matchesEmp && matchesDate) {
-          return AttendanceRecord.fromMap(data);
+          final foundRec = AttendanceRecord.fromMap(data);
+          _localMemoryCache['${foundRec.employeeId}_$normDate'] = foundRec;
+          _localMemoryCache['${foundRec.employeeId}_${foundRec.date}'] = foundRec;
+          _localMemoryCache['${foundRec.employeeId}_$date'] = foundRec;
+          return foundRec;
         }
       }
     } catch (_) {}
-    return _localMemoryCache['${employeeId}_$date'];
+    return _localMemoryCache['${employeeId}_$date'] ?? _localMemoryCache['${employeeId}_$normDate'] ?? _localMemoryCache[docId];
   }
 
   @override
@@ -574,8 +563,17 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       createdAt: DateTime.now().toIso8601String(),
     ));
 
+    double totalDailyHours = 0.0;
+    for (final s in updatedSessions) {
+      if (s.isCompleted) {
+        totalDailyHours += s.effectiveDurationHours;
+      }
+    }
+    totalDailyHours = double.parse(totalDailyHours.toStringAsFixed(2));
+
     final updatedRecord = existingRecord.copyWith(
       sessions: updatedSessions,
+      totalHours: totalDailyHours > 0 ? totalDailyHours : existingRecord.totalHours,
     );
 
     try {
@@ -636,8 +634,17 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       ));
     }
 
+    double totalDailyHours = 0.0;
+    for (final s in updatedSessions) {
+      if (s.isCompleted) {
+        totalDailyHours += s.effectiveDurationHours;
+      }
+    }
+    totalDailyHours = double.parse(totalDailyHours.toStringAsFixed(2));
+
     final updatedRecord = existingRecord.copyWith(
       sessions: updatedSessions,
+      totalHours: totalDailyHours > 0 ? totalDailyHours : existingRecord.totalHours,
     );
 
     try {
@@ -1211,6 +1218,46 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     }
     totalDailyHours = double.parse(totalDailyHours.toStringAsFixed(2));
 
+    final employee = await _getEmployeeById(employeeId);
+    final isDynamic = employee?.isDynamicEmployee ?? false;
+    final requiredHours = (employee?.requiredWorkingHours ?? 0) > 0
+        ? employee!.requiredWorkingHours
+        : 9.0;
+
+    final shortfallHours = (requiredHours - totalDailyHours).clamp(0, requiredHours);
+    final shortfallMins = (shortfallHours * 60).ceil();
+    final approvedPermissionMins = await _getApprovedPermissionMinutes(employeeId, date);
+
+    String finalStatus = existingRecord.status;
+    String updatedNotes = existingRecord.notes;
+
+    if (shortfallMins == 0) {
+      if (isDynamic) {
+        finalStatus = 'Completed';
+        updatedNotes = 'Worked ${totalDailyHours.toStringAsFixed(1)} hrs (Completed ${requiredHours.toStringAsFixed(0)} hrs target)';
+      } else {
+        finalStatus = existingRecord.status == 'Late' ? 'Late' : 'Completed';
+        updatedNotes = 'Worked ${totalDailyHours.toStringAsFixed(1)} hrs (Completed shift)';
+      }
+    } else {
+      if (approvedPermissionMins >= shortfallMins) {
+        finalStatus = isDynamic ? 'Completed' : (existingRecord.status == 'Late' ? 'Late' : 'Completed');
+        updatedNotes = 'Authorized early checkout (covers ${shortfallMins} mins)';
+      } else if (approvedPermissionMins > 0) {
+        final unauthorizedMins = shortfallMins - approvedPermissionMins;
+        finalStatus = 'Insufficient hours';
+        updatedNotes = existingRecord.notes.isNotEmpty
+            ? '${existingRecord.notes} | Worked ${totalDailyHours.toStringAsFixed(1)} hrs (Partially authorized: ${approvedPermissionMins} mins authorized, ${unauthorizedMins} mins unauthorized)'
+            : 'Worked ${totalDailyHours.toStringAsFixed(1)} hrs (Partially authorized: ${approvedPermissionMins} mins authorized, ${unauthorizedMins} mins unauthorized)';
+      } else {
+        final unauthorizedMins = shortfallMins - approvedPermissionMins;
+        finalStatus = 'Insufficient hours';
+        updatedNotes = existingRecord.notes.isNotEmpty
+            ? '${existingRecord.notes} | Worked ${totalDailyHours.toStringAsFixed(1)} hrs (Insufficient hours, $unauthorizedMins mins unauthorized)'
+            : 'Worked ${totalDailyHours.toStringAsFixed(1)} hrs (Insufficient hours, $unauthorizedMins mins unauthorized)';
+      }
+    }
+
     // 6. Update the AttendanceRecord preserving top-level legacy fields
     final updatedRecord = existingRecord.copyWith(
       employeeCode: employeeCode.isNotEmpty ? employeeCode : existingRecord.employeeCode,
@@ -1219,6 +1266,8 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       checkOutVerificationStatus: verificationStatus,
       checkOutSimilarityScore: similarityScore,
       totalHours: totalDailyHours,
+      status: finalStatus,
+      notes: updatedNotes,
       sessions: updatedSessions,
     );
 
@@ -1659,7 +1708,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       }
     }
 
-    // Calculate total daily hours as the sum of all completed sessions (Office + OD)
+    // Calculate total daily hours as the sum of all completed sessions (Office + OD + Breaks)
     double totalDailyHours = 0.0;
     for (final session in updatedSessions) {
       if (session.isCompleted) {
@@ -1668,13 +1717,56 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     }
     totalDailyHours = double.parse(totalDailyHours.toStringAsFixed(2));
 
+    String finalStatus = existingRecord.status;
+    String updatedNotes = existingRecord.notes;
+
+    if (isCheckoutFromOd) {
+      final employee = await _getEmployeeById(employeeId);
+      final isDynamic = employee?.isDynamicEmployee ?? false;
+      final requiredHours = (employee?.requiredWorkingHours ?? 0) > 0
+          ? employee!.requiredWorkingHours
+          : 9.0;
+
+      final shortfallHours = (requiredHours - totalDailyHours).clamp(0, requiredHours);
+      final shortfallMins = (shortfallHours * 60).ceil();
+      final approvedPermissionMins = await _getApprovedPermissionMinutes(employeeId, date);
+
+      if (shortfallMins == 0) {
+        if (isDynamic) {
+          finalStatus = 'Completed';
+          updatedNotes = 'Worked ${totalDailyHours.toStringAsFixed(1)} hrs (Completed ${requiredHours.toStringAsFixed(0)} hrs target)';
+        } else {
+          finalStatus = existingRecord.status == 'Late' ? 'Late' : 'Completed';
+          updatedNotes = 'Worked ${totalDailyHours.toStringAsFixed(1)} hrs (Completed On-Duty shift)';
+        }
+      } else {
+        if (approvedPermissionMins >= shortfallMins) {
+          finalStatus = isDynamic ? 'Completed' : (existingRecord.status == 'Late' ? 'Late' : 'Completed');
+          updatedNotes = 'Authorized early checkout (covers ${shortfallMins} mins)';
+        } else if (approvedPermissionMins > 0) {
+          final unauthorizedMins = shortfallMins - approvedPermissionMins;
+          finalStatus = 'Insufficient hours';
+          updatedNotes = existingRecord.notes.isNotEmpty
+              ? '${existingRecord.notes} | Worked ${totalDailyHours.toStringAsFixed(1)} hrs (Partially authorized: ${approvedPermissionMins} mins authorized, ${unauthorizedMins} mins unauthorized)'
+              : 'Worked ${totalDailyHours.toStringAsFixed(1)} hrs (Partially authorized: ${approvedPermissionMins} mins authorized, ${unauthorizedMins} mins unauthorized)';
+        } else {
+          final unauthorizedMins = shortfallMins - approvedPermissionMins;
+          finalStatus = 'Insufficient hours';
+          updatedNotes = existingRecord.notes.isNotEmpty
+              ? '${existingRecord.notes} | Worked ${totalDailyHours.toStringAsFixed(1)} hrs (Insufficient hours, $unauthorizedMins mins unauthorized)'
+              : 'Worked ${totalDailyHours.toStringAsFixed(1)} hrs (Insufficient hours, $unauthorizedMins mins unauthorized)';
+        }
+      }
+    }
+
     final updatedRecord = existingRecord.copyWith(
       employeeCode: employeeCode.isNotEmpty ? employeeCode : existingRecord.employeeCode,
       employeeName: employeeName.isNotEmpty ? employeeName : existingRecord.employeeName,
       checkOutTime: isCheckoutFromOd ? time : '',
       checkOutVerificationStatus: isCheckoutFromOd ? 'OD Location Verified' : '',
       checkOutSimilarityScore: isCheckoutFromOd ? 1.0 : 0.0,
-      status: isCheckoutFromOd ? 'Checked Out' : existingRecord.status,
+      status: finalStatus,
+      notes: updatedNotes,
       totalHours: totalDailyHours,
       sessions: updatedSessions,
     );
@@ -1801,28 +1893,6 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     record ??= await getAttendanceRecordForDate(employeeId, date);
     if (record == null) return;
 
-    double hours = 0.0;
-    final inTime = record.effectiveCheckInTime;
-    if (inTime.isNotEmpty && checkOutTime.isNotEmpty) {
-      try {
-        final inMin = _parseMinutes(inTime);
-        final outMin = _parseMinutes(checkOutTime);
-        if (inMin != null && outMin != null && outMin > inMin) {
-          hours = double.parse(((outMin - inMin) / 60.0).toStringAsFixed(2));
-        }
-      } catch (_) {}
-    }
-
-    final employee = await _getEmployeeById(employeeId);
-    final isDynamic = employee?.isDynamicEmployee ?? false;
-    final requiredHours = (employee?.requiredWorkingHours ?? 0) > 0
-        ? employee!.requiredWorkingHours
-        : 9.0;
-
-    final shortfallHours = (requiredHours - hours).clamp(0, requiredHours);
-    final shortfallMins = (shortfallHours * 60).ceil();
-    final approvedPermissionMins = await _getApprovedPermissionMinutes(employeeId, date);
-
     // Update active session inside sessions list if present
     final List<AttendanceSession> updatedSessions = List<AttendanceSession>.from(record.sessions);
     final activeIdx = updatedSessions.indexWhere((s) => s.isActive);
@@ -1844,6 +1914,38 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         durationHours: sessHours,
       );
     }
+
+    double hours = 0.0;
+    if (updatedSessions.isNotEmpty) {
+      for (final s in updatedSessions) {
+        if (s.isCompleted) {
+          hours += s.effectiveDurationHours;
+        }
+      }
+      hours = double.parse(hours.toStringAsFixed(2));
+    }
+    if (hours == 0.0) {
+      final inTime = record.effectiveCheckInTime;
+      if (inTime.isNotEmpty && checkOutTime.isNotEmpty) {
+        try {
+          final inMin = _parseMinutes(inTime);
+          final outMin = _parseMinutes(checkOutTime);
+          if (inMin != null && outMin != null && outMin > inMin) {
+            hours = double.parse(((outMin - inMin) / 60.0).toStringAsFixed(2));
+          }
+        } catch (_) {}
+      }
+    }
+
+    final employee = await _getEmployeeById(employeeId);
+    final isDynamic = employee?.isDynamicEmployee ?? false;
+    final requiredHours = (employee?.requiredWorkingHours ?? 0) > 0
+        ? employee!.requiredWorkingHours
+        : 9.0;
+
+    final shortfallHours = (requiredHours - hours).clamp(0, requiredHours);
+    final shortfallMins = (shortfallHours * 60).ceil();
+    final approvedPermissionMins = await _getApprovedPermissionMinutes(employeeId, date);
 
     final bool isOdRelated = _isOdRecord(record) ||
         verificationStatus.contains('OD') ||
@@ -1931,11 +2033,19 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
   Future<void> adminSaveAttendance(AttendanceRecord record) async {
     final inTime = record.effectiveCheckInTime;
     final outTime = record.checkOutTime;
-    double hours = record.totalHours;
-    String status = record.status;
-    String notes = record.notes;
-
-    if (inTime.isNotEmpty && outTime.isNotEmpty) {
+    double hours = 0.0;
+    if (record.sessions.isNotEmpty) {
+      for (final s in record.sessions) {
+        if (s.isCompleted) {
+          hours += s.effectiveDurationHours;
+        }
+      }
+      hours = double.parse(hours.toStringAsFixed(2));
+    }
+    if (hours == 0.0 && record.totalHours > 0) {
+      hours = record.totalHours;
+    }
+    if (hours == 0.0 && inTime.isNotEmpty && outTime.isNotEmpty) {
       try {
         final inParts = inTime.split(':');
         final outParts = outTime.split(':');
@@ -1947,7 +2057,12 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
           }
         }
       } catch (_) {}
+    }
 
+    String status = record.status;
+    String notes = record.notes;
+
+    if (inTime.isNotEmpty && outTime.isNotEmpty) {
       final employee = await _getEmployeeById(record.employeeId);
       final isDynamic = employee?.isDynamicEmployee ?? false;
       final requiredHours = (employee?.requiredWorkingHours ?? 0) > 0
@@ -2284,10 +2399,23 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
           }
         } else {
           final checkOutTime = record.checkOutTime.trim();
-          double hours = record.totalHours;
-          final outMinutes = _parseMinutes(checkOutTime);
-          if (outMinutes != null && outMinutes > checkInMinutes) {
-            hours = double.parse(((outMinutes - checkInMinutes) / 60.0).toStringAsFixed(2));
+          double hours = 0.0;
+          if (record.sessions.isNotEmpty) {
+            for (final s in record.sessions) {
+              if (s.isCompleted) {
+                hours += s.effectiveDurationHours;
+              }
+            }
+            hours = double.parse(hours.toStringAsFixed(2));
+          }
+          if (hours == 0.0 && record.totalHours > 0) {
+            hours = record.totalHours;
+          }
+          if (hours == 0.0) {
+            final outMinutes = _parseMinutes(checkOutTime);
+            if (outMinutes != null && checkInMinutes != null && outMinutes > checkInMinutes) {
+              hours = double.parse(((outMinutes - checkInMinutes) / 60.0).toStringAsFixed(2));
+            }
           }
 
           final requiredHours = (employee?.requiredWorkingHours ?? 0) > 0
@@ -2313,6 +2441,20 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
             newStatus = 'Absent';
             newNotes = 'Worked ${hours.toStringAsFixed(1)} hrs (Exceeded late limit)';
           }
+
+          final updatedRec = record.copyWith(
+            status: newStatus,
+            notes: newNotes,
+            totalHours: hours,
+          );
+          _localMemoryCache['${employeeId}_$normDate'] = updatedRec;
+          _localMemoryCache['${employeeId}_$date'] = updatedRec;
+          if (record.employeeCode.isNotEmpty) {
+            _localMemoryCache['${record.employeeCode}_$normDate'] = updatedRec;
+            _localMemoryCache['${record.employeeCode}_$date'] = updatedRec;
+          }
+          await docRef.set(updatedRec.toMap(), SetOptions(merge: true));
+          return;
         }
       }
 

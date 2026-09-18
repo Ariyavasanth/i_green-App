@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../domain/clock_entry.dart';
 import '../providers/clocking_providers.dart';
 import '../../attendance/providers/attendance_providers.dart';
+import '../../attendance_management/providers/attendance_management_providers.dart';
 
 class ClockActionWidget extends ConsumerWidget {
   const ClockActionWidget({
@@ -222,6 +223,9 @@ class ClockActionWidget extends ConsumerWidget {
     ref.invalidate(totalBreakHoursProvider);
     ref.invalidate(todayAttendanceRecordProvider(empIdInt));
     ref.invalidate(attendanceRecordsProvider(empIdInt));
+    ref.invalidate(allAttendanceRecordsProvider);
+    ref.invalidate(attendanceManagementStatsProvider);
+    ref.invalidate(attendanceManagementRecordsProvider);
 
     if (onClockChanged != null) onClockChanged!();
 
@@ -276,6 +280,9 @@ class ClockActionWidget extends ConsumerWidget {
     if (empIdInt != 0) {
       ref.invalidate(todayAttendanceRecordProvider(empIdInt));
       ref.invalidate(attendanceRecordsProvider(empIdInt));
+      ref.invalidate(allAttendanceRecordsProvider);
+      ref.invalidate(attendanceManagementStatsProvider);
+      ref.invalidate(attendanceManagementRecordsProvider);
     }
 
     if (onClockChanged != null) onClockChanged!();

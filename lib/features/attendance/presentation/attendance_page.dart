@@ -26,6 +26,7 @@ import '../../permission/domain/permission_request.dart';
 import '../../permission/providers/permission_providers.dart';
 import '../../attendance_settings/providers/attendance_settings_providers.dart';
 import '../providers/attendance_providers.dart';
+import '../../attendance_management/providers/attendance_management_providers.dart';
 import '../../employee/providers/employee_providers.dart';
 
 class AttendancePage extends ConsumerStatefulWidget {
@@ -348,7 +349,11 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     ref.invalidate(myPermissionRequestsProvider(employeeId));
     ref.invalidate(activeOnDutyAssignmentProvider(employeeId));
     ref.invalidate(allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: null)));
+    ref.invalidate(attendanceAttemptsProvider);
+    ref.invalidate(attendanceManagementStatsProvider);
+    ref.invalidate(attendanceManagementRecordsProvider);
     await Future.delayed(const Duration(milliseconds: 300));
+    if (mounted) setState(() {});
   }
 
   // ==========================================
@@ -3568,23 +3573,17 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       return const SizedBox.shrink();
     }
     Color color;
-    switch (record.status) {
-      case 'Present':
-      case 'Completed':
-        color = const Color(0xFF2E7D32);
-        break;
-      case 'Late':
-      case 'Insufficient hours':
-        color = const Color(0xFFE65100);
-        break;
-      case 'Checked Out':
-        color = const Color(0xFF414A51);
-        break;
-      case 'Absent':
-        color = const Color(0xFFC62828);
-        break;
-      default:
-        color = AppColors.active;
+    final st = record.status.trim().toLowerCase();
+    if (st == 'present' || st == 'completed') {
+      color = const Color(0xFF2E7D32);
+    } else if (st == 'late' || st == 'insufficient hours' || st == 'insufficient') {
+      color = const Color(0xFFE65100);
+    } else if (st == 'checked out') {
+      color = const Color(0xFF414A51);
+    } else if (st == 'absent') {
+      color = const Color(0xFFC62828);
+    } else {
+      color = AppColors.active;
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -3781,7 +3780,9 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
   Widget _buildCalendar(List<AttendanceRecord> attendanceRecords, List<LeaveRequest> leaveRequests) {
     final attendanceMap = <String, AttendanceRecord>{};
     for (final rec in attendanceRecords) {
-      attendanceMap[rec.date] = rec;
+      final dt = _parseKey(rec.date);
+      final key = dt != null ? _formatKey(dt) : rec.date;
+      attendanceMap[key] = rec;
     }
 
     final today = DateTime.now();
@@ -4295,12 +4296,12 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     );
   }
 
-  void _openVerificationDialog({
+  Future<void> _openVerificationDialog({
     required DateTime date,
     required bool isCheckOut,
     AttendanceRecord? existingRecord,
-  }) {
-    showDialog(
+  }) async {
+    final result = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AttendanceVerificationDialog(
         date: date,
@@ -4309,13 +4310,19 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         attendanceRepository: ref.read(attendanceRepositoryProvider),
         currentEmployee: ref.read(currentEmployeeProvider)!,
         onAttendanceMarked: () {
-          final empId = ref.read(currentEmployeeProvider)!.id;
-          ref.invalidate(attendanceRecordsProvider(empId));
-          ref.invalidate(todayAttendanceRecordProvider(empId));
-          if (mounted) setState(() {});
+          final emp = ref.read(currentEmployeeProvider);
+          if (emp != null) {
+            _refreshAllData(emp.id);
+          }
         },
       ),
     );
+    if ((result == true || mounted)) {
+      final emp = ref.read(currentEmployeeProvider);
+      if (emp != null) {
+        await _refreshAllData(emp.id);
+      }
+    }
   }
 
   Widget _buildSalaryLopTab(Employee currentEmp, AsyncValue<List<LeaveRequest>> leaveRequestsAsync) {
@@ -4757,7 +4764,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
         SnackBar(content: Text('$actionTitle completed successfully!')),
       );
       widget.onAttendanceMarked();
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
       setState(() => _message = e.toString().replaceFirst('Exception: ', ''));
@@ -4799,7 +4806,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
         const SnackBar(content: Text('Attendance unmarked successfully.')),
       );
       widget.onAttendanceMarked();
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
       setState(() => _message = e.toString().replaceFirst('Exception: ', ''));

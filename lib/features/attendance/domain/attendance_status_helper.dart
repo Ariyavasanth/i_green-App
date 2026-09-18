@@ -32,6 +32,7 @@ class AttendanceStatusHelper {
     required AttendanceRecord? record,
     List<LeaveRequest>? leaves,
     List<OnDutyAssignment>? onDutyAssignments,
+    List<String>? holidays,
   }) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -42,26 +43,11 @@ class AttendanceStatusHelper {
     if (record != null) {
       final stLower = record.status.trim().toLowerCase();
 
-      if (stLower == 'present' || stLower == 'completed' || stLower == 'checked out') {
-        return AttendanceStatusInfo.present;
-      }
-      if (stLower == 'late') {
-        return AttendanceStatusInfo.late;
-      }
       if (stLower == 'absent') {
         return AttendanceStatusInfo.absent;
       }
-      if (stLower.contains('missing check-out') || stLower.contains('missing checkout') || stLower == 'mc') {
-        return AttendanceStatusInfo.missingCheckout;
-      }
-      if (stLower.contains('insufficient') || stLower == 'ih') {
-        return AttendanceStatusInfo.insufficientHours;
-      }
       if (stLower.contains('leave') || stLower == 'half day' || stLower == 'ol') {
         return AttendanceStatusInfo.onLeave;
-      }
-      if (stLower.contains('on duty') || stLower == 'od') {
-        return AttendanceStatusInfo.onDuty;
       }
       if (stLower.contains('holiday') || stLower == 'h') {
         return AttendanceStatusInfo.holiday;
@@ -69,22 +55,38 @@ class AttendanceStatusHelper {
       if (stLower.contains('weekly off') || stLower == 'wo') {
         return AttendanceStatusInfo.weeklyOff;
       }
+      if (stLower.contains('missing check-out') || stLower.contains('missing checkout') || stLower == 'mc') {
+        return AttendanceStatusInfo.missingCheckout;
+      }
+      if (stLower.contains('insufficient') || stLower == 'ih') {
+        return AttendanceStatusInfo.insufficientHours;
+      }
 
-      // If check-in is present but no check-out on a past day
+      // If check-in is present but no check-out on a past day -> Missing Check-Out
       if (targetDate.isBefore(today) &&
           record.effectiveCheckInTime.isNotEmpty &&
           record.checkOutTime.isEmpty) {
         return AttendanceStatusInfo.missingCheckout;
       }
 
+      if (stLower == 'late') {
+        return AttendanceStatusInfo.late;
+      }
+      if (stLower.contains('on duty') || stLower == 'od') {
+        return AttendanceStatusInfo.onDuty;
+      }
+      if (stLower == 'present' || stLower == 'completed' || stLower == 'checked out') {
+        return AttendanceStatusInfo.present;
+      }
+
       return AttendanceStatusInfo.present;
     }
 
-    // 2. Check Leave Requests
+    // 2. Check Leave Requests (Only Approved leaves resolve to On Leave)
     if (leaves != null && leaves.isNotEmpty) {
       for (final leave in leaves) {
         if (leave.employeeId == employee.id &&
-            (leave.status.toLowerCase() == 'approved' || leave.status.toLowerCase() == 'pending')) {
+            leave.status.trim().toLowerCase() == 'approved') {
           final fromDt = _parseDate(leave.fromDate);
           final toDt = _parseDate(leave.toDate) ?? fromDt;
           if (fromDt != null && toDt != null) {
@@ -101,7 +103,9 @@ class AttendanceStatusHelper {
     // 3. Check On Duty Assignments
     if (onDutyAssignments != null && onDutyAssignments.isNotEmpty) {
       for (final od in onDutyAssignments) {
-        if (od.employeeId == employee.id && od.status.toUpperCase() != 'CANCELLED') {
+        if (od.employeeId == employee.id &&
+            od.status.toUpperCase() != 'CANCELLED' &&
+            od.status.toUpperCase() != 'REJECTED') {
           if (od.date.trim() == dateStr) {
             return AttendanceStatusInfo.onDuty;
           }
@@ -122,7 +126,32 @@ class AttendanceStatusHelper {
       return AttendanceStatusInfo.weeklyOff;
     }
 
-    // 5. No record -> return null (renders '-')
+    // 5. Check Holidays
+    if (holidays != null && holidays.isNotEmpty) {
+      for (final h in holidays) {
+        if (h.trim() == dateStr) {
+          return AttendanceStatusInfo.holiday;
+        }
+        final hDt = _parseDate(h);
+        if (hDt != null && DateTime(hDt.year, hDt.month, hDt.day) == targetDate) {
+          return AttendanceStatusInfo.holiday;
+        }
+      }
+    }
+
+    // 6. Historical Past Working Day Check:
+    // If target date is before today and no record, leave, OD, weekly off, or holiday:
+    if (targetDate.isBefore(today)) {
+      if (employee.joiningDate.trim().isNotEmpty) {
+        final joinDt = _parseDate(employee.joiningDate);
+        if (joinDt != null && targetDate.isBefore(DateTime(joinDt.year, joinDt.month, joinDt.day))) {
+          return null; // Prior to joining
+        }
+      }
+      return AttendanceStatusInfo.absent;
+    }
+
+    // 7. Today or Future date with no attendance -> return null (renders '-')
     return null;
   }
 

@@ -136,7 +136,8 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
             checkOutVerificationStatus: correctedCheckOut.isNotEmpty ? 'Admin Correction (Firestore)' : '',
             checkInSimilarityScore: 1.0,
             checkOutSimilarityScore: correctedCheckOut.isNotEmpty ? 1.0 : 0.0,
-            totalHours: 0.0,
+            totalHours: record?.totalHours ?? 0.0,
+            sessions: record?.sessions ?? const [],
             notes: reason,
             markedAt: record?.markedAt ?? DateTime.now().toIso8601String(),
           );
@@ -863,8 +864,67 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                     children: [
                       AttendanceTableView(
                         records: filteredRecords,
+                        employees: employees,
+                        leaves: allLeaves,
+                        onDutyAssignments: allOnDuty,
                         onEdit: (record) => _openAdminStaticEntryDialog(record, record.employeeId, record.date),
                         onDelete: (record) => _handleDeleteStaticRecord(record),
+                        onRowTap: (record, emp) {
+                          final dateDt = DateTime.tryParse(record.date) ??
+                              (() {
+                                final parts = record.date.split('-');
+                                if (parts.length == 3) {
+                                  if (parts[0].length == 4) {
+                                    return DateTime.tryParse('${parts[0]}-${parts[1]}-${parts[2]}');
+                                  } else {
+                                    return DateTime.tryParse('${parts[2]}-${parts[1]}-${parts[0]}');
+                                  }
+                                }
+                                return null;
+                              })() ??
+                              DateTime.now();
+
+                          final statusInfo = emp != null
+                              ? AttendanceStatusHelper.resolveStatus(
+                                  employee: emp,
+                                  date: dateDt,
+                                  record: record,
+                                  leaves: allLeaves,
+                                  onDutyAssignments: allOnDuty,
+                                )
+                              : null;
+
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => AttendanceDetailsDialog(
+                              employee: emp ??
+                                  Employee(
+                                    id: record.employeeId,
+                                    employeeId: record.employeeCode,
+                                    firstName: record.employeeName,
+                                    lastName: '',
+                                    emailAddress: '',
+                                    phoneNumber: '',
+                                    gender: '',
+                                    dob: '',
+                                    organizationName: '',
+                                    department: 'General',
+                                    designation: '',
+                                    employmentType: '',
+                                    joiningDate: '',
+                                    status: 'Active',
+                                  ),
+                              date: dateDt,
+                              record: record,
+                              statusInfo: statusInfo,
+                              onEdit: () {
+                                if (emp != null) {
+                                  _openAttendanceCorrectionDialog(emp, dateDt, record, statusInfo);
+                                }
+                              },
+                            ),
+                          );
+                        },
                       ),
                       const SizedBox(height: 12),
                       _buildPaginationBar(filteredEmp.length, isMobile),

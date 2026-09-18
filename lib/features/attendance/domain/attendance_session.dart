@@ -89,14 +89,39 @@ class AttendanceSession {
   /// Returns true if the session has both check-in and check-out completed.
   bool get isCompleted => checkInTime.isNotEmpty && checkOutTime.isNotEmpty;
 
-  /// Helper to check if this is an Office session.
-  bool get isOffice => type.toLowerCase() == 'office';
+  /// Helper to check if this is an Office session (including General Work and Work).
+  bool get isOffice {
+    final t = type.trim().toLowerCase();
+    return t == 'office' || t == 'general work' || t == 'work';
+  }
 
   /// Helper to check if this is an On-Duty (OD) session.
-  bool get isOd => type.toLowerCase() == 'od';
+  bool get isOd {
+    final t = type.trim().toLowerCase();
+    return t == 'od' || t == 'on duty' || t == 'on-duty';
+  }
+
+  /// Helper to check if this is a Lunch session.
+  bool get isLunch {
+    final t = type.trim().toLowerCase();
+    return t.contains('lunch');
+  }
+
+  /// Helper to check if this is a Tea / Coffee Break session.
+  bool get isTeaBreak {
+    final t = type.trim().toLowerCase();
+    return (t.contains('tea') || t.contains('coffee') || t.contains('break')) && !isLunch;
+  }
+
+  /// Helper to check if this is a Meeting or Other activity session.
+  bool get isMeetingOrOther {
+    return !isOffice && !isOd && !isLunch && !isTeaBreak;
+  }
 
   /// Computes effective duration in hours if durationHours is not explicitly set.
+  /// Only completed sessions (with valid checkOutTime) contribute to duration.
   double get effectiveDurationHours {
+    if (!isCompleted && durationHours <= 0 && durationMinutes <= 0) return 0.0;
     if (durationHours > 0) return durationHours;
     if (durationMinutes > 0) return durationMinutes / 60.0;
     if (isCompleted) {
@@ -110,7 +135,9 @@ class AttendanceSession {
   }
 
   /// Computes effective duration in minutes if durationMinutes is not explicitly set.
+  /// Only completed sessions (with valid checkOutTime) contribute to duration.
   int get effectiveDurationMinutes {
+    if (!isCompleted && durationHours <= 0 && durationMinutes <= 0) return 0;
     if (durationMinutes > 0) return durationMinutes;
     if (durationHours > 0) return (durationHours * 60).round();
     if (isCompleted) {
@@ -123,7 +150,8 @@ class AttendanceSession {
     return 0;
   }
 
-  static int? _parseTimeToMinutes(String timeStr) {
+  /// Parses time strings (e.g. "09:30 AM", "09:30:00 AM", ISO strings) to minutes from midnight.
+  static int? parseTimeToMinutes(String timeStr) {
     try {
       final trimmed = timeStr.trim();
       if (trimmed.isEmpty) return null;
@@ -149,6 +177,8 @@ class AttendanceSession {
     } catch (_) {}
     return null;
   }
+
+  static int? _parseTimeToMinutes(String timeStr) => parseTimeToMinutes(timeStr);
 
   AttendanceSession copyWith({
     String? id,

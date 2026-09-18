@@ -8,12 +8,12 @@ final attendanceManagementRepositoryProvider = Provider<AttendanceManagementRepo
   (ref) => FirebaseAttendanceManagementRepository(),
 );
 
-final attendanceManagementStatsProvider = FutureProvider.family<AttendanceManagementStats, String?>(
-  (ref, date) => ref.watch(attendanceManagementRepositoryProvider).getAttendanceStats(date: date),
+final attendanceManagementStatsProvider = StreamProvider.family<AttendanceManagementStats, String?>(
+  (ref, date) => ref.watch(attendanceManagementRepositoryProvider).watchAttendanceStats(date: date),
 );
 
-final attendanceManagementRecordsProvider = FutureProvider.family<List<AttendanceRecord>, ({int? employeeId, String? monthYear, String? statusFilter})>(
-  (ref, query) => ref.watch(attendanceManagementRepositoryProvider).getAllAttendanceRecords(
+final attendanceManagementRecordsProvider = StreamProvider.family<List<AttendanceRecord>, ({int? employeeId, String? monthYear, String? statusFilter})>(
+  (ref, query) => ref.watch(attendanceManagementRepositoryProvider).watchAllAttendanceRecords(
         employeeId: query.employeeId,
         monthYear: query.monthYear,
         statusFilter: query.statusFilter,

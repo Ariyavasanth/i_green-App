@@ -70,12 +70,176 @@ class AttendanceRecord {
   bool get requiresCorrection =>
       isMissingCheckOut || (effectiveCheckInTime.isNotEmpty && checkOutTime.isEmpty && status != 'Absent' && status != 'On Leave');
 
+  static bool _isOfficeType(String type) {
+    final t = type.trim().toLowerCase();
+    return t == 'office' || t == 'general work' || t == 'work';
+  }
+
+  static bool _isOdType(String type) {
+    final t = type.trim().toLowerCase();
+    return t == 'od' || t == 'on duty' || t == 'on-duty';
+  }
+
+  static bool _isLunchType(String type) {
+    final t = type.trim().toLowerCase();
+    return t.contains('lunch');
+  }
+
+  static bool _isTeaBreakType(String type) {
+    final t = type.trim().toLowerCase();
+    return (t.contains('tea') || t.contains('coffee') || t.contains('break')) && !t.contains('lunch');
+  }
+
+  static bool _isMeetingOtherType(String type) {
+    return !_isOfficeType(type) && !_isOdType(type) && !_isLunchType(type) && !_isTeaBreakType(type);
+  }
+
+  /// Computes the total working hours by summing all valid completed sessions
+  /// (Office, OD, Lunch Break, Tea Break, Meeting, and other activity sessions).
+  /// Falls back to top-level check-in and check-out difference if sessions list is empty.
+  double get computedTotalHours {
+    if (sessions.isNotEmpty) {
+      double sum = 0.0;
+      for (final s in sessions) {
+        if (s.isCompleted) {
+          sum += s.effectiveDurationHours;
+        }
+      }
+      if (sum > 0) {
+        return double.parse(sum.toStringAsFixed(2));
+      }
+    }
+
+    if (totalHours > 0) return totalHours;
+
+    if (effectiveCheckInTime.isNotEmpty && checkOutTime.isNotEmpty) {
+      final inMins = AttendanceSession.parseTimeToMinutes(effectiveCheckInTime);
+      final outMins = AttendanceSession.parseTimeToMinutes(checkOutTime);
+      if (inMins != null && outMins != null && outMins > inMins) {
+        return double.parse(((outMins - inMins) / 60.0).toStringAsFixed(2));
+      }
+    }
+
+    return 0.0;
+  }
+
+  /// Computes total office session hours (includes General Work, Work, and Office).
+  /// Falls back to computedTotalHours if no sessions list is provided.
+  double get computedOfficeHours {
+    if (sessions.isNotEmpty) {
+      double sum = 0.0;
+      for (final s in sessions) {
+        if (s.isCompleted && (s.isOffice || _isOfficeType(s.type))) {
+          sum += s.effectiveDurationHours;
+        }
+      }
+      return double.parse(sum.toStringAsFixed(2));
+    }
+    return computedTotalHours;
+  }
+
+  /// Computes total OD (On Duty) session hours.
+  double get computedOdHours {
+    if (sessions.isNotEmpty) {
+      double sum = 0.0;
+      for (final s in sessions) {
+        if (s.isCompleted && (s.isOd || _isOdType(s.type))) {
+          sum += s.effectiveDurationHours;
+        }
+      }
+      return double.parse(sum.toStringAsFixed(2));
+    }
+    return 0.0;
+  }
+
+  /// Computes total Lunch Break session hours (counted toward Total Working Hours).
+  double get computedLunchHours {
+    if (sessions.isNotEmpty) {
+      double sum = 0.0;
+      for (final s in sessions) {
+        if (s.isCompleted && (s.isLunch || _isLunchType(s.type))) {
+          sum += s.effectiveDurationHours;
+        }
+      }
+      return double.parse(sum.toStringAsFixed(2));
+    }
+    return 0.0;
+  }
+
+  /// Computes total Tea Break session hours (counted toward Total Working Hours).
+  double get computedTeaBreakHours {
+    if (sessions.isNotEmpty) {
+      double sum = 0.0;
+      for (final s in sessions) {
+        if (s.isCompleted && (s.isTeaBreak || _isTeaBreakType(s.type))) {
+          sum += s.effectiveDurationHours;
+        }
+      }
+      return double.parse(sum.toStringAsFixed(2));
+    }
+    return 0.0;
+  }
+
+  /// Computes total Meeting & other activity session hours.
+  double get computedMeetingOtherHours {
+    if (sessions.isNotEmpty) {
+      double sum = 0.0;
+      for (final s in sessions) {
+        if (s.isCompleted && (s.isMeetingOrOther || _isMeetingOtherType(s.type))) {
+          sum += s.effectiveDurationHours;
+        }
+      }
+      return double.parse(sum.toStringAsFixed(2));
+    }
+    return 0.0;
+  }
+
+  /// Calculates shortfall against employee required working hours.
+  /// Shortfall is strictly 0.0 when computedTotalHours >= requiredHours (No Overtime).
+  double calculateShortfall([double requiredHours = 9.0]) {
+    final req = requiredHours > 0 ? requiredHours : 9.0;
+    final diff = req - computedTotalHours;
+    return diff > 0 ? double.parse(diff.toStringAsFixed(2)) : 0.0;
+  }
+
+  /// Formats any double hours into readable string (e.g. "8hr 30min", "45min", "--").
+  static String formatHours(double hours) {
+    if (hours <= 0) return '--';
+    final totalMinutes = (hours * 60).round();
+    final h = totalMinutes ~/ 60;
+    final m = totalMinutes % 60;
+    if (h > 0 && m > 0) {
+      return '${h}hr ${m}min';
+    } else if (h > 0 && m == 0) {
+      return '${h}hr';
+    } else if (m > 0) {
+      return '${m}min';
+    }
+    return '--';
+  }
+
+  String get formattedOfficeHours => formatHours(computedOfficeHours);
+  String get formattedOdHours => formatHours(computedOdHours);
+  String get formattedLunchHours => formatHours(computedLunchHours);
+  String get formattedTeaBreakHours => formatHours(computedTeaBreakHours);
+  String get formattedMeetingOtherHours => formatHours(computedMeetingOtherHours);
+
+  String formattedShortfall([double requiredHours = 9.0]) {
+    final sf = calculateShortfall(requiredHours);
+    if (sf <= 0) return '0hr';
+    return formatHours(sf);
+  }
+
   String get formattedTotalHours {
     int totalSeconds = 0;
     if (sessions.isNotEmpty) {
       totalSeconds = sessions.fold<int>(0, (sum, s) {
-        if (s.durationMinutes > 0) {
-          return sum + (s.durationMinutes * 60);
+        if (s.isCompleted) {
+          if (s.durationMinutes > 0) {
+            return sum + (s.durationMinutes * 60);
+          } else if (s.effectiveDurationMinutes > 0) {
+            return sum + (s.effectiveDurationMinutes * 60);
+          }
         }
         return sum;
       });
@@ -83,6 +247,14 @@ class AttendanceRecord {
 
     if (totalSeconds == 0 && totalHours > 0) {
       totalSeconds = (totalHours * 3600).round();
+    }
+
+    if (totalSeconds == 0 && effectiveCheckInTime.isNotEmpty && checkOutTime.isNotEmpty) {
+      final inMins = AttendanceSession.parseTimeToMinutes(effectiveCheckInTime);
+      final outMins = AttendanceSession.parseTimeToMinutes(checkOutTime);
+      if (inMins != null && outMins != null && outMins > inMins) {
+        totalSeconds = (outMins - inMins) * 60;
+      }
     }
 
     if (totalSeconds <= 0) return '--';

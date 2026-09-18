@@ -135,7 +135,7 @@ class AttendanceMatrixView extends StatelessWidget {
                         alignment: Alignment.centerLeft,
                         child: Row(
                           children: [
-                             _buildEmployeeAvatar(emp),
+                            _buildEmployeeAvatar(emp),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Column(
@@ -257,25 +257,6 @@ class AttendanceMatrixView extends StatelessWidget {
     );
   }
 
-  Widget _legendPill(String text, Color textColor, Color bgColor) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: textColor.withValues(alpha: 0.2)),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-          color: textColor,
-        ),
-      ),
-    );
-  }
-
   DateTime? _parseKey(String value) {
     if (value.isEmpty) return null;
     try {
@@ -315,7 +296,7 @@ class AttendanceMatrixView extends StatelessWidget {
     if (record == null && empNameLower.isNotEmpty) {
       record = recordMap['${empNameLower}_$dateStr'];
     }
-    // 3. Fallback: integer ID (only if no duplicate ID collision among listed employees)
+    // 3. Fallback: integer ID
     if (record == null && emp.id != 0) {
       final duplicateCount = employees.where((e) => e.id == emp.id).length;
       if (duplicateCount <= 1) {
@@ -335,9 +316,17 @@ class AttendanceMatrixView extends StatelessWidget {
     Color textColor = statusInfo?.textColor ?? const Color(0xFF94A3B8);
     String codeStr = statusInfo?.code ?? '-';
 
+    final reqHours = emp.requiredWorkingHours;
+    final totalHoursStr = record != null ? record.formattedTotalHours : (statusInfo == AttendanceStatusInfo.absent ? '0hr' : '--');
+    final shortfallStr = record != null
+        ? record.formattedShortfall(reqHours)
+        : (statusInfo == AttendanceStatusInfo.absent ? '${reqHours.toStringAsFixed(1)}hr' : '0hr');
+
     final tooltipMsg = record != null
-        ? '${emp.fullName} (${emp.employeeId.isNotEmpty ? emp.employeeId : "EMP-${emp.id}"})\nDate: $dateStr\nStatus: ${statusInfo?.label ?? record.status}\nIn: ${record.formattedCheckInTime}\nOut: ${record.checkOutTime.isNotEmpty ? record.formattedCheckOutTime : "--:--"}\nHours: ${record.formattedTotalHours}'
-        : '${emp.fullName}\nDate: $dateStr\nStatus: ${statusInfo?.label ?? "Not Marked"}';
+        ? '${emp.fullName} (${emp.employeeId.isNotEmpty ? emp.employeeId : "EMP-${emp.id}"})\nDate: $dateStr\nStatus: ${statusInfo?.label ?? record.status}\nIn: ${record.formattedCheckInTime}\nOut: ${record.checkOutTime.isNotEmpty ? record.formattedCheckOutTime : "--:--"}\nOffice: ${record.formattedOfficeHours}\nOD: ${record.formattedOdHours}\nLunch: ${record.formattedLunchHours}\nTea: ${record.formattedTeaBreakHours}\nMeeting/Other: ${record.formattedMeetingOtherHours}\nTotal Hours: $totalHoursStr\nReq Hours: ${reqHours.toStringAsFixed(1)}hr\nShortfall: $shortfallStr'
+        : (statusInfo == AttendanceStatusInfo.absent
+            ? '${emp.fullName}\nDate: $dateStr\nStatus: Absent\nTotal Hours: 0hr\nReq Hours: ${reqHours.toStringAsFixed(1)}hr\nShortfall: ${reqHours.toStringAsFixed(1)}hr'
+            : '${emp.fullName}\nDate: $dateStr\nStatus: ${statusInfo?.label ?? "Not Marked"}');
 
     return Tooltip(
       message: tooltipMsg,
@@ -446,4 +435,3 @@ class AttendanceMatrixView extends StatelessWidget {
     );
   }
 }
-
