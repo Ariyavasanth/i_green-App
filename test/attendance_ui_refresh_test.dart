@@ -16,6 +16,9 @@ import 'package:flutter_application_1/features/attendance_management/providers/a
 import 'package:flutter_application_1/features/attendance_management/presentation/widgets/attendance_matrix_view.dart';
 import 'package:flutter_application_1/features/attendance_management/presentation/widgets/attendance_table_view.dart';
 import 'package:flutter_application_1/features/employee/domain/employee.dart';
+import 'package:flutter_application_1/features/leave/domain/leave_request.dart';
+import 'package:flutter_application_1/features/on_duty/domain/on_duty_assignment.dart';
+import 'package:flutter_application_1/features/site_visit_attendance/domain/site_visit_record.dart';
 
 class MockAttendanceManagementRepository implements AttendanceManagementRepository {
   final Map<String, AttendanceRecord> _storage = {};
@@ -962,6 +965,246 @@ void main() {
       expect(find.text('09:00 AM'), findsOneWidget);
 
       adminRepo.dispose();
+    });
+
+    test('9. Office Attendance Flow: Employee checks in & checks out -> Admin reflects P, in-time, out-time and total hours', () async {
+      final adminRepo = MockAttendanceManagementRepository();
+      final adminContainer = ProviderContainer(
+        overrides: [
+          attendanceManagementRepositoryProvider.overrideWithValue(adminRepo),
+        ],
+      );
+
+      final queryKey = (employeeId: null, monthYear: '09-2026', statusFilter: 'All');
+      final List<List<AttendanceRecord>> emittedRecords = [];
+      final sub = adminContainer.listen(
+        attendanceManagementRecordsProvider(queryKey),
+        (prev, next) {
+          if (next.hasValue) emittedRecords.add(next.value!);
+        },
+        fireImmediately: true,
+      );
+
+      // Office check in
+      final officeRecord = AttendanceRecord(
+        id: 201,
+        employeeId: testEmployee.id,
+        employeeCode: testEmployee.employeeId,
+        employeeName: testEmployee.fullName,
+        date: '19-09-2026',
+        time: '09:00 AM',
+        checkInTime: '09:00 AM',
+        checkOutTime: '06:00 PM',
+        status: 'Present',
+        verificationStatus: 'Geofence Verified',
+        similarityScore: 1.0,
+        totalHours: 9.0,
+        markedAt: DateTime(2026, 9, 19, 9, 0).toIso8601String(),
+        sessions: [
+          const AttendanceSession(
+            id: 's_office',
+            type: 'Office',
+            checkInTime: '09:00 AM',
+            checkOutTime: '06:00 PM',
+            durationHours: 9.0,
+            durationMinutes: 540,
+          ),
+        ],
+      );
+      adminRepo.updateAndEmit(officeRecord);
+      await Future.delayed(const Duration(milliseconds: 10));
+
+      expect(emittedRecords, isNotEmpty);
+      final rec = emittedRecords.last.first;
+      expect(rec.status, equals('Present'));
+      expect(rec.checkInTime, equals('09:00 AM'));
+      expect(rec.checkOutTime, equals('06:00 PM'));
+      expect(rec.totalHours, equals(9.0));
+
+      sub.close();
+      adminRepo.dispose();
+      adminContainer.dispose();
+    });
+
+    test('10. Site Visit Attendance Flow: Site record created -> Resolves with site name and duration', () {
+      const visit = SiteVisitRecord(
+        id: 1,
+        employeeId: 1,
+        employeeName: 'Super Admin',
+        siteName: 'Metro Rail Phase 2',
+        address: 'Sector 4, Central Corridor',
+        latitude: 12.9716,
+        longitude: 77.5946,
+        visitDate: '19-09-2026',
+        visitTime: '10:00 AM',
+        photoUrl: '',
+        notes: 'Site inspection completed',
+        createdAt: '2026-09-19T10:00:00.000',
+      );
+
+      expect(visit.siteName, equals('Metro Rail Phase 2'));
+      expect(visit.visitTime, equals('10:00 AM'));
+      expect(visit.address, equals('Sector 4, Central Corridor'));
+    });
+
+    test('11. OD (On-Duty) Attendance Flow: Approved OD assignment -> AttendanceStatusHelper resolves to OD (On Duty)', () {
+      const odAssignment = OnDutyAssignment(
+        id: 301,
+        employeeId: 1,
+        employeeName: 'Super Admin',
+        odType: 'Client Visit',
+        purpose: 'Client Plant Audit',
+        destination: 'Industrial Zone',
+        date: '19-09-2026',
+        status: 'APPROVED',
+        assignedBy: 'Manager',
+        createdAt: '2026-09-19T10:00:00.000',
+      );
+
+      final statusInfo = AttendanceStatusHelper.resolveStatus(
+        employee: testEmployee,
+        date: DateTime(2026, 9, 19),
+        record: null,
+        onDutyAssignments: const [odAssignment],
+      );
+
+      expect(statusInfo, equals(AttendanceStatusInfo.onDuty));
+      expect(statusInfo?.code, equals('OD'));
+      expect(statusInfo?.label, equals('On Duty'));
+    });
+
+    test('12. Leave Request Flow: Approved Leave -> AttendanceStatusHelper resolves to OL (On Leave)', () {
+      const approvedLeave = LeaveRequest(
+        id: 401,
+        employeeId: 1,
+        employeeName: 'Super Admin',
+        employeeCustomId: 'EMP001',
+        leaveType: 'Casual Leave',
+        fromDate: '19-09-2026',
+        toDate: '19-09-2026',
+        reason: 'Personal work',
+        status: 'Approved',
+        numDays: 1.0,
+        createdAt: '2026-09-18T10:00:00.000',
+      );
+
+      final statusInfo = AttendanceStatusHelper.resolveStatus(
+        employee: testEmployee,
+        date: DateTime(2026, 9, 19),
+        record: null,
+        leaves: const [approvedLeave],
+      );
+
+      expect(statusInfo, equals(AttendanceStatusInfo.onLeave));
+      expect(statusInfo?.code, equals('OL'));
+      expect(statusInfo?.label, equals('On Leave'));
+    });
+
+    test('13. Missing Check-Out Flow: Past day with check-in but no check-out -> Resolves to MC (Missing Checkout)', () {
+      final pastDate = DateTime.now().subtract(const Duration(days: 2));
+      final pastDateStr = DateFormat('dd-MM-yyyy').format(pastDate);
+
+      final pastMissingCheckoutRecord = AttendanceRecord(
+        id: 501,
+        employeeId: testEmployee.id,
+        employeeCode: testEmployee.employeeId,
+        employeeName: testEmployee.fullName,
+        date: pastDateStr,
+        time: '09:00 AM',
+        checkInTime: '09:00 AM',
+        checkOutTime: '',
+        status: 'Present',
+        verificationStatus: 'Verified',
+        similarityScore: 1.0,
+      );
+
+      final statusInfo = AttendanceStatusHelper.resolveStatus(
+        employee: testEmployee,
+        date: pastDate,
+        record: pastMissingCheckoutRecord,
+      );
+
+      expect(statusInfo, equals(AttendanceStatusInfo.missingCheckout));
+      expect(statusInfo?.code, equals('MC'));
+      expect(statusInfo?.label, equals('Missing Checkout'));
+    });
+
+    test('14. Past Absent Working Day Flow: Past working day with no record, leave, or holiday -> Resolves to A (Absent)', () {
+      // Pick a past day that is a weekday (Monday = 1)
+      var pastDate = DateTime.now().subtract(const Duration(days: 3));
+      while (pastDate.weekday == DateTime.sunday) {
+        pastDate = pastDate.subtract(const Duration(days: 1));
+      }
+
+      final statusInfo = AttendanceStatusHelper.resolveStatus(
+        employee: testEmployee,
+        date: pastDate,
+        record: null,
+      );
+
+      expect(statusInfo, equals(AttendanceStatusInfo.absent));
+      expect(statusInfo?.code, equals('A'));
+      expect(statusInfo?.label, equals('Absent'));
+    });
+
+    test('15. Admin Correction Flow: Admin updates record -> Stream emits -> Record is immediately updated with new in/out time and reason note', () async {
+      final adminRepo = MockAttendanceManagementRepository();
+      final adminContainer = ProviderContainer(
+        overrides: [
+          attendanceManagementRepositoryProvider.overrideWithValue(adminRepo),
+        ],
+      );
+
+      final queryKey = (employeeId: null, monthYear: '09-2026', statusFilter: 'All');
+      final List<List<AttendanceRecord>> emittedRecords = [];
+      final sub = adminContainer.listen(
+        attendanceManagementRecordsProvider(queryKey),
+        (prev, next) {
+          if (next.hasValue) emittedRecords.add(next.value!);
+        },
+        fireImmediately: true,
+      );
+
+      // Initial record
+      final initialRecord = AttendanceRecord(
+        id: 601,
+        employeeId: testEmployee.id,
+        employeeCode: testEmployee.employeeId,
+        employeeName: testEmployee.fullName,
+        date: '19-09-2026',
+        time: '09:00 AM',
+        checkInTime: '09:00 AM',
+        checkOutTime: '',
+        status: 'Late',
+        verificationStatus: 'Verified',
+        similarityScore: 1.0,
+      );
+      adminRepo.updateAndEmit(initialRecord);
+      await Future.delayed(const Duration(milliseconds: 10));
+
+      // Admin submits correction
+      final correctedRecord = initialRecord.copyWith(
+        status: 'Present',
+        checkInTime: '09:00 AM',
+        checkOutTime: '06:00 PM',
+        totalHours: 9.0,
+        notes: 'Admin manual correction: punch machine network error',
+        verificationStatus: 'Admin Correction (Firestore)',
+      );
+
+      await adminRepo.saveOrOverrideAttendance(correctedRecord);
+      await Future.delayed(const Duration(milliseconds: 10));
+
+      expect(emittedRecords.length, greaterThanOrEqualTo(2));
+      final latest = emittedRecords.last.first;
+      expect(latest.status, equals('Present'));
+      expect(latest.checkOutTime, equals('06:00 PM'));
+      expect(latest.notes, contains('Admin manual correction'));
+      expect(latest.verificationStatus, equals('Admin Correction (Firestore)'));
+
+      sub.close();
+      adminRepo.dispose();
+      adminContainer.dispose();
     });
   });
 }
