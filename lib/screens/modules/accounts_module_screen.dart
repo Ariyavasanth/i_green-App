@@ -271,13 +271,18 @@ class _AccountsModuleScreenState extends ConsumerState<AccountsModuleScreen> {
                                     : constraints.maxWidth > 500
                                         ? 4
                                         : 3;
+                                final childAspectRatio = constraints.maxWidth > 800
+                                    ? 0.95
+                                    : constraints.maxWidth > 500
+                                        ? 0.82
+                                        : 0.72;
                                 return GridView.count(
                                   shrinkWrap: true,
                                   physics: const NeverScrollableScrollPhysics(),
                                   crossAxisCount: crossAxisCount,
                                   mainAxisSpacing: 12,
                                   crossAxisSpacing: 12,
-                                  childAspectRatio: 0.85,
+                                  childAspectRatio: childAspectRatio,
                                   children: entry.value
                                       .map((m) => SubModuleCard(
                                             label: m.label,

@@ -355,27 +355,27 @@ class _SubModuleCardState extends State<SubModuleCard>
               ],
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
-                    width: 50,
-                    height: 50,
+                    width: 42,
+                    height: 42,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [primaryColor, secondaryColor],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
-                          color: primaryColor.withValues(alpha: 0.38),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
+                          color: primaryColor.withValues(alpha: 0.32),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
                         ),
                       ],
                     ),
@@ -383,11 +383,11 @@ class _SubModuleCardState extends State<SubModuleCard>
                       child: Icon(
                         widget.icon,
                         color: Colors.white,
-                        size: 24,
+                        size: 21,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 6),
                   Flexible(
                     child: Text(
                       widget.label,
@@ -395,10 +395,10 @@ class _SubModuleCardState extends State<SubModuleCard>
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 11.5,
+                        fontSize: 11,
                         fontWeight: FontWeight.w700,
                         color: Color(0xFF1E293B),
-                        height: 1.2,
+                        height: 1.15,
                       ),
                     ),
                   ),
