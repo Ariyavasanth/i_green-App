@@ -33,8 +33,9 @@ class AttendanceStatusHelper {
     List<LeaveRequest>? leaves,
     List<OnDutyAssignment>? onDutyAssignments,
     List<String>? holidays,
+    DateTime? referenceDate,
   }) {
-    final now = DateTime.now();
+    final now = referenceDate ?? DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final targetDate = DateTime(date.year, date.month, date.day);
     final dateStr = '${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}';

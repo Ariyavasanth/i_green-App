@@ -29,9 +29,11 @@ import 'widgets/attendance_correction_dialog.dart';
 import 'widgets/attendance_audit_logs_embedded_view.dart';
 import 'widgets/attendance_matrix_view.dart';
 import 'widgets/attendance_table_view.dart';
+import 'widgets/monthly_attendance_result_view.dart';
 
 enum AttendanceCategoryTab {
   staticAttendance,
+  monthlyResult,
   siteVisitAttendance,
   attendanceSettings,
   auditLogs,
@@ -264,11 +266,12 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
         ? ref.watch(attendanceManagementStatsProvider(todayStr))
         : const AsyncValue<AttendanceManagementStats>.loading();
 
-    final staticRecordsAsync = _activeTab == AttendanceCategoryTab.staticAttendance
+    final staticRecordsAsync = (_activeTab == AttendanceCategoryTab.staticAttendance ||
+            _activeTab == AttendanceCategoryTab.monthlyResult)
         ? ref.watch(attendanceManagementRecordsProvider((
             employeeId: _selectedEmployeeId,
             monthYear: monthYearStr,
-            statusFilter: _selectedStatus,
+            statusFilter: _activeTab == AttendanceCategoryTab.monthlyResult ? 'All' : _selectedStatus,
           )))
         : const AsyncValue<List<AttendanceRecord>>.data([]);
 
@@ -632,6 +635,11 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
             label: 'Office / Site',
           ),
           _buildCategoryTabItem(
+            tab: AttendanceCategoryTab.monthlyResult,
+            icon: Icons.calendar_month_outlined,
+            label: 'Monthly Result',
+          ),
+          _buildCategoryTabItem(
             tab: AttendanceCategoryTab.siteVisitAttendance,
             icon: Icons.location_on_outlined,
             label: 'Site Visits',
@@ -774,6 +782,9 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
       case AttendanceCategoryTab.staticAttendance:
         return _buildStaticAttendanceView(isMobile, allEmployees, staticStatsAsync, staticRecordsAsync);
 
+      case AttendanceCategoryTab.monthlyResult:
+        return _buildMonthlyResultView(isMobile, allEmployees, staticRecordsAsync);
+
       case AttendanceCategoryTab.siteVisitAttendance:
         return _buildSiteVisitAttendanceView(isMobile, allEmployees, siteVisitsAsync);
 
@@ -783,6 +794,70 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
       case AttendanceCategoryTab.auditLogs:
         return const AttendanceAuditLogsEmbeddedView();
     }
+  }
+
+  Widget _buildMonthlyResultView(
+    bool isMobile,
+    List<Employee> allEmployees,
+    AsyncValue<List<AttendanceRecord>> recordsAsync,
+  ) {
+    final allLeaves = ref.watch(allLeaveRequestsProvider).valueOrNull;
+    final allOnDuty = ref.watch(allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: null))).valueOrNull;
+
+    return recordsAsync.when(
+      loading: () => const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 40),
+          child: CircularProgressIndicator(),
+        ),
+      ),
+      error: (e, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 40),
+          child: Text('Error loading monthly attendance records: $e'),
+        ),
+      ),
+      data: (records) {
+        return MonthlyAttendanceResultView(
+          focusedMonth: _focusedMonth,
+          onMonthChanged: (newMonth) {
+            setState(() {
+              _focusedMonth = newMonth;
+            });
+          },
+          employees: allEmployees,
+          selectedEmployeeId: _selectedEmployeeId,
+          onEmployeeChanged: (empId) {
+            setState(() {
+              _selectedEmployeeId = empId;
+            });
+          },
+          records: records,
+          leaves: allLeaves,
+          onDutyAssignments: allOnDuty,
+          isMobile: isMobile,
+          onRowTap: (dailyResult, emp) {
+            showDialog(
+              context: context,
+              builder: (ctx) => AttendanceDetailsDialog(
+                employee: emp,
+                date: dailyResult.date,
+                record: dailyResult.record,
+                statusInfo: dailyResult.statusInfo,
+                onEdit: () {
+                  _openAttendanceCorrectionDialog(
+                    emp,
+                    dailyResult.date,
+                    dailyResult.record,
+                    dailyResult.statusInfo,
+                  );
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Widget _buildActiveOnDutyBanner() {
@@ -863,6 +938,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                   return Column(
                     children: [
                       AttendanceTableView(
+                        isMobile: isMobile,
                         records: filteredRecords,
                         employees: employees,
                         leaves: allLeaves,
