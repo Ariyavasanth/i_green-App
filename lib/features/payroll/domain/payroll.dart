@@ -1,3 +1,5 @@
+import '../../attendance/domain/monthly_attendance_result.dart';
+
 class PayrollRecord {
   final int id;
   final int employeeId;
@@ -9,6 +11,23 @@ class PayrollRecord {
   final int lateDays;
   final int absentDays;
   final int leaveDays;
+
+  // Phase 2C Attendance Result Breakdown
+  final int onDutyCount;
+  final int weeklyOffCount;
+  final int holidayCount;
+  final int missingCheckoutCount;
+  final int insufficientHoursCount;
+  final int totalWorkingDays;
+  final double totalRequiredHours;
+  final double totalWorkingHours;
+  final double totalShortfallHours;
+
+  // Aliases for Phase 2C metric naming
+  int get presentCount => presentDays;
+  int get lateCount => lateDays;
+  int get absentCount => absentDays;
+  int get onLeaveCount => leaveDays;
 
   // Employee details at generation time
   final String designation;
@@ -79,6 +98,15 @@ class PayrollRecord {
     required this.lateDays,
     required this.absentDays,
     required this.leaveDays,
+    this.onDutyCount = 0,
+    this.weeklyOffCount = 0,
+    this.holidayCount = 0,
+    this.missingCheckoutCount = 0,
+    this.insufficientHoursCount = 0,
+    this.totalWorkingDays = 0,
+    this.totalRequiredHours = 0.0,
+    this.totalWorkingHours = 0.0,
+    this.totalShortfallHours = 0.0,
     this.designation = '',
     this.department = '',
     this.emailId = '',
@@ -123,6 +151,24 @@ class PayrollRecord {
     this.disputeComment = '',
   });
 
+  PayrollRecord copyWithAttendanceResult(MonthlyAttendanceResult attendance) {
+    return copyWith(
+      presentDays: attendance.presentCount,
+      lateDays: attendance.lateCount,
+      absentDays: attendance.absentCount,
+      leaveDays: attendance.onLeaveCount,
+      onDutyCount: attendance.onDutyCount,
+      weeklyOffCount: attendance.weeklyOffCount,
+      holidayCount: attendance.holidayCount,
+      missingCheckoutCount: attendance.missingCheckoutCount,
+      insufficientHoursCount: attendance.insufficientHoursCount,
+      totalWorkingDays: attendance.totalWorkingDays,
+      totalRequiredHours: attendance.totalRequiredHours,
+      totalWorkingHours: attendance.totalWorkingHours,
+      totalShortfallHours: attendance.totalShortfallHours,
+    );
+  }
+
   Map<String, dynamic> toMap() {
     return {
       if (id != 0) 'id': id,
@@ -133,6 +179,19 @@ class PayrollRecord {
       'late_days': lateDays,
       'absent_days': absentDays,
       'leave_days': leaveDays,
+      'present_count': presentDays,
+      'late_count': lateDays,
+      'absent_count': absentDays,
+      'on_leave_count': leaveDays,
+      'on_duty_count': onDutyCount,
+      'weekly_off_count': weeklyOffCount,
+      'holiday_count': holidayCount,
+      'missing_checkout_count': missingCheckoutCount,
+      'insufficient_hours_count': insufficientHoursCount,
+      'total_working_days': totalWorkingDays,
+      'total_required_hours': totalRequiredHours,
+      'total_working_hours': totalWorkingHours,
+      'total_shortfall_hours': totalShortfallHours,
       'designation': designation,
       'department': department,
       'email_id': emailId,
@@ -184,10 +243,19 @@ class PayrollRecord {
       employeeId: map['employee_id'] as int? ?? 0,
       employeeName: map['employee_name'] as String? ?? '',
       month: map['month'] as String? ?? '',
-      presentDays: map['present_days'] as int? ?? 0,
-      lateDays: map['late_days'] as int? ?? 0,
-      absentDays: map['absent_days'] as int? ?? 0,
-      leaveDays: map['leave_days'] as int? ?? 0,
+      presentDays: map['present_days'] as int? ?? map['present_count'] as int? ?? 0,
+      lateDays: map['late_days'] as int? ?? map['late_count'] as int? ?? 0,
+      absentDays: map['absent_days'] as int? ?? map['absent_count'] as int? ?? 0,
+      leaveDays: map['leave_days'] as int? ?? map['on_leave_count'] as int? ?? 0,
+      onDutyCount: map['on_duty_count'] as int? ?? 0,
+      weeklyOffCount: map['weekly_off_count'] as int? ?? 0,
+      holidayCount: map['holiday_count'] as int? ?? 0,
+      missingCheckoutCount: map['missing_checkout_count'] as int? ?? 0,
+      insufficientHoursCount: map['insufficient_hours_count'] as int? ?? 0,
+      totalWorkingDays: map['total_working_days'] as int? ?? 0,
+      totalRequiredHours: (map['total_required_hours'] as num?)?.toDouble() ?? 0.0,
+      totalWorkingHours: (map['total_working_hours'] as num?)?.toDouble() ?? 0.0,
+      totalShortfallHours: (map['total_shortfall_hours'] as num?)?.toDouble() ?? 0.0,
       designation: map['designation'] as String? ?? '',
       department: map['department'] as String? ?? '',
       emailId: map['email_id'] as String? ?? '',
@@ -242,6 +310,15 @@ class PayrollRecord {
     int? lateDays,
     int? absentDays,
     int? leaveDays,
+    int? onDutyCount,
+    int? weeklyOffCount,
+    int? holidayCount,
+    int? missingCheckoutCount,
+    int? insufficientHoursCount,
+    int? totalWorkingDays,
+    double? totalRequiredHours,
+    double? totalWorkingHours,
+    double? totalShortfallHours,
     String? designation,
     String? department,
     String? emailId,
@@ -294,6 +371,15 @@ class PayrollRecord {
       lateDays: lateDays ?? this.lateDays,
       absentDays: absentDays ?? this.absentDays,
       leaveDays: leaveDays ?? this.leaveDays,
+      onDutyCount: onDutyCount ?? this.onDutyCount,
+      weeklyOffCount: weeklyOffCount ?? this.weeklyOffCount,
+      holidayCount: holidayCount ?? this.holidayCount,
+      missingCheckoutCount: missingCheckoutCount ?? this.missingCheckoutCount,
+      insufficientHoursCount: insufficientHoursCount ?? this.insufficientHoursCount,
+      totalWorkingDays: totalWorkingDays ?? this.totalWorkingDays,
+      totalRequiredHours: totalRequiredHours ?? this.totalRequiredHours,
+      totalWorkingHours: totalWorkingHours ?? this.totalWorkingHours,
+      totalShortfallHours: totalShortfallHours ?? this.totalShortfallHours,
       designation: designation ?? this.designation,
       department: department ?? this.department,
       emailId: emailId ?? this.emailId,
@@ -401,20 +487,26 @@ class PayrollSettings {
     this.allowedLateDays = 3,
     this.workingDaysInMonth = 30.0,
     this.payrollStartDay = 20,
-    this.payrollEndDay = 21,
+    this.payrollEndDay = 20,
     this.processingDay = 21,
     this.paymentDay = 21,
   });
 
   PayrollPeriod getPayrollPeriod(int year, int month) {
-    final start = DateTime(year, month, payrollStartDay);
-    final nextMonthDate = DateTime(year, month + 1, 1);
-    final nextYear = nextMonthDate.year;
-    final nextMonth = nextMonthDate.month;
+    // 20th of previous month 00:00 through 20th of current month 00:00 exclusive.
+    // Example for September 2026 (year=2026, month=9):
+    //   startDate        = 20 Aug 2026 00:00
+    //   endDateExclusive = 20 Sep 2026 00:00
+    //   processingDate   = 21 Sep 2026
+    //   paymentDate      = 21 Sep 2026
+    final prevMonthDate = DateTime(year, month - 1, 1);
+    final prevYear = prevMonthDate.year;
+    final prevMonth = prevMonthDate.month;
 
-    final endExclusive = DateTime(nextYear, nextMonth, payrollEndDay + 1);
-    final processing = DateTime(nextYear, nextMonth, processingDay);
-    final payment = DateTime(nextYear, nextMonth, paymentDay);
+    final start = DateTime(prevYear, prevMonth, payrollStartDay);
+    final endExclusive = DateTime(year, month, payrollEndDay);
+    final processing = DateTime(year, month, processingDay);
+    final payment = DateTime(year, month, paymentDay);
 
     return PayrollPeriod(
       startDate: start,
@@ -446,7 +538,7 @@ class PayrollSettings {
       allowedLateDays: map['allowed_late_days'] as int? ?? 3,
       workingDaysInMonth: (map['working_days_in_month'] as num?)?.toDouble() ?? 30.0,
       payrollStartDay: startDay,
-      payrollEndDay: map['payroll_end_day'] as int? ?? 21,
+      payrollEndDay: map['payroll_end_day'] as int? ?? 20,
       processingDay: map['processing_day'] as int? ?? 21,
       paymentDay: map['payment_day'] as int? ?? 21,
     );

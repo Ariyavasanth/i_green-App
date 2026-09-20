@@ -9,8 +9,9 @@ import '../domain/permission_allowance.dart';
 import '../domain/leave_overlap_validator.dart';
 import '../../employee/domain/employee.dart';
 import '../../attendance/domain/attendance_record.dart';
-import '../../attendance/domain/attendance_status_helper.dart';
 import '../../on_duty/domain/on_duty_assignment.dart';
+import '../../attendance/domain/monthly_attendance_result.dart';
+import '../../payroll/domain/payroll.dart';
 
 /// Full Firestore implementation of LeaveRepository.
 /// Collections used:
@@ -288,7 +289,7 @@ class FirebaseLeaveRepository implements LeaveRepository {
         (item.status == 'Pending' || item.status == 'Approved'));
     final usedToday = active
         .where((item) => item.fromDate == request.fromDate)
-        .fold<double>(0, (sum, item) => sum + item.numDays * 8);
+        .fold<double>(0, (acc, item) => acc + item.numDays * 8);
     final allowance = await getPermissionAllowance(request.employeeId, requestDate);
     if (usedToday + requestedHours > allowance.dailyLimitHours + 0.0001) {
       throw Exception('The ${allowance.dailyLimitHours.toStringAsFixed(0)}-hour permission limit for this day has already been used.');
@@ -327,7 +328,7 @@ class FirebaseLeaveRepository implements LeaveRepository {
       }
       final date = _parsePermissionDate(item.fromDate);
       return date.year == month.year && date.month == month.month;
-    }).fold<double>(0, (sum, item) => sum + item.numDays * 8);
+    }).fold<double>(0, (acc, item) => acc + item.numDays * 8);
     return PermissionAllowance(
       monthlyLimitHours: monthlyLimit,
       dailyLimitHours: dailyLimit,
@@ -743,6 +744,7 @@ class FirebaseLeaveRepository implements LeaveRepository {
     int workingDays = 30,
     DateTime? startDate,
     DateTime? endDateExclusive,
+    PayrollSettings? settings,
   }) async {
     // 1. Fetch employee salary & profile
     double grossSalary = 0.0;
@@ -760,142 +762,112 @@ class FirebaseLeaveRepository implements LeaveRepository {
     final double perDaySalary =
         workingDays > 0 ? (grossSalary / workingDays) : 0.0;
 
-    double totalLopDays = 0;
-    double approvedDaysCount = 0;
+    // 2. Resolve payroll period date bounds
+    final pSettings = settings ?? const PayrollSettings();
+    final defaultPeriod = pSettings.getPayrollPeriod(year, month);
+    final effStart = startDate ?? defaultPeriod.startDate;
+    final effEndExclusive = endDateExclusive ?? defaultPeriod.endDateExclusive;
 
-    // Helper: checks if a date falls within [startDate, endDateExclusive) or matches month/year
+    // Helper: checks if a date string falls within [effStart, effEndExclusive) or matches month/year
     bool isDateInPeriod(String dateStr) {
-      if (startDate != null && endDateExclusive != null) {
-        try {
-          DateTime? parsed;
-          if (dateStr.contains('-')) {
-            final parts = dateStr.split('-');
-            if (parts[0].length == 4) {
-              parsed = DateTime.tryParse(dateStr);
-            } else if (parts.length >= 3) {
-              final day = int.tryParse(parts[0]);
-              final m = int.tryParse(parts[1]);
-              final y = int.tryParse(parts[2]);
-              if (day != null && m != null && y != null) {
-                parsed = DateTime(y, m, day);
-              }
-            }
-          } else if (dateStr.contains('/')) {
-            final parts = dateStr.split('/');
-            if (parts.length >= 3) {
-              final day = int.tryParse(parts[0]);
-              final m = int.tryParse(parts[1]);
-              final y = int.tryParse(parts[2]);
-              if (day != null && m != null && y != null) {
-                parsed = DateTime(y, m, day);
-              }
+      try {
+        DateTime? parsed;
+        if (dateStr.contains('-')) {
+          final parts = dateStr.split('-');
+          if (parts[0].length == 4) {
+            parsed = DateTime.tryParse(dateStr);
+          } else if (parts.length >= 3) {
+            final day = int.tryParse(parts[0]);
+            final m = int.tryParse(parts[1]);
+            final y = int.tryParse(parts[2]);
+            if (day != null && m != null && y != null) {
+              parsed = DateTime(y, m, day);
             }
           }
-          if (parsed != null) {
-            return (parsed.isAfter(startDate) || parsed.isAtSameMomentAs(startDate)) &&
-                parsed.isBefore(endDateExclusive);
+        } else if (dateStr.contains('/')) {
+          final parts = dateStr.split('/');
+          if (parts.length >= 3) {
+            final day = int.tryParse(parts[0]);
+            final m = int.tryParse(parts[1]);
+            final y = int.tryParse(parts[2]);
+            if (day != null && m != null && y != null) {
+              parsed = DateTime(y, m, day);
+            }
           }
-        } catch (_) {}
-      }
+        }
+        if (parsed != null) {
+          return (parsed.isAfter(effStart) || parsed.isAtSameMomentAs(effStart)) &&
+              parsed.isBefore(effEndExclusive);
+        }
+      } catch (_) {}
       final monthStr = month.toString().padLeft(2, '0');
       return dateStr.contains('-$monthStr-$year') || dateStr.contains('$year-$monthStr');
     }
 
-    // 2. Evaluate calendar dates in period using AttendanceStatusHelper
-    if (employee != null && startDate != null && endDateExclusive != null) {
-      // (i) Leaves
-      List<LeaveRequest> leaves = [];
-      try {
-        final leaveSnap = await _requestsRef
-            .where('employee_id', isEqualTo: employeeId)
-            .get();
-        leaves = leaveSnap.docs
-            .map((d) => _requestFromDoc(d.data(), d.id))
-            .toList();
+    // 3. Fetch attendance components for MonthlyAttendanceCalculator
+    List<LeaveRequest> leaves = [];
+    try {
+      final leaveSnap = await _requestsRef
+          .where('employee_id', isEqualTo: employeeId)
+          .get();
+      leaves = leaveSnap.docs
+          .map((d) => _requestFromDoc(d.data(), d.id))
+          .toList();
+    } catch (_) {}
 
-        for (final req in leaves) {
-          if (req.status.toLowerCase() == 'approved') {
-            for (final dStr in req.approvedDates) {
-              if (isDateInPeriod(dStr)) approvedDaysCount++;
-            }
-          }
-        }
-      } catch (_) {}
+    List<OnDutyAssignment> odAssignments = [];
+    try {
+      final odSnap = await _firestore
+          .collection('on_duty_assignments')
+          .where('employee_id', isEqualTo: employeeId)
+          .get();
+      odAssignments = odSnap.docs.map((doc) => OnDutyAssignment.fromMap(doc.data())).toList();
+    } catch (_) {}
 
-      // (ii) OD Assignments
-      List<OnDutyAssignment> odAssignments = [];
-      try {
-        final odSnap = await _firestore
-            .collection('on_duty_assignments')
-            .where('employee_id', isEqualTo: employeeId)
-            .get();
-        odAssignments = odSnap.docs.map((doc) => OnDutyAssignment.fromMap(doc.data())).toList();
-      } catch (_) {}
+    List<AttendanceRecord> attRecords = [];
+    try {
+      final attSnap = await _firestore
+          .collection('attendance_records')
+          .where('employee_id', isEqualTo: employeeId)
+          .get();
+      attRecords = attSnap.docs.map((doc) => AttendanceRecord.fromMap(doc.data())).toList();
+    } catch (_) {}
 
-      // (iii) Attendance Records Map
-      Map<String, AttendanceRecord> attMap = {};
-      try {
-        final attSnap = await _firestore
-            .collection('attendance_records')
-            .where('employee_id', isEqualTo: employeeId)
-            .get();
-        for (final doc in attSnap.docs) {
-          final rec = AttendanceRecord.fromMap(doc.data());
-          attMap[rec.date] = rec;
-        }
-      } catch (_) {}
+    List<String> holidays = [];
+    try {
+      holidays = await getHolidays();
+    } catch (_) {}
 
-      // Iterate dates in period
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
-      DateTime cursor = startDate;
-
-      while (cursor.isBefore(endDateExclusive)) {
-        final targetDate = DateTime(cursor.year, cursor.month, cursor.day);
-        final dateStr = '${cursor.day.toString().padLeft(2, '0')}-${cursor.month.toString().padLeft(2, '0')}-${cursor.year}';
-        final isoStr = '${cursor.year}-${cursor.month.toString().padLeft(2, '0')}-${cursor.day.toString().padLeft(2, '0')}';
-
-        final rec = attMap[dateStr] ?? attMap[isoStr];
-
-        final status = AttendanceStatusHelper.resolveStatus(
-          employee: employee,
-          date: cursor,
-          record: rec,
-          leaves: leaves,
-          onDutyAssignments: odAssignments,
-        );
-
-        if (targetDate.isBefore(today) || targetDate.isAtSameMomentAs(today)) {
-          if (status == AttendanceStatusInfo.absent || status == null) {
-            // Unrecorded scheduled workday (not weekly off, no leave, no OD) -> 1.0 LOP
-            totalLopDays += 1.0;
-          } else if (status == AttendanceStatusInfo.late) {
-            // Late = 0.5 LOP
-            totalLopDays += 0.5;
-          }
-          // Note: Missing Checkout (MC), Approved Leave, OD, Weekly Off -> 0 LOP
-        }
-
-        cursor = cursor.add(const Duration(days: 1));
-      }
-    } else {
-      // Fallback for unauthorized Late records if period dates are null
-      try {
-        final attSnap = await _firestore
-            .collection('attendance_records')
-            .where('employee_id', isEqualTo: employeeId)
-            .where('status', isEqualTo: 'Late')
-            .get();
-        for (final doc in attSnap.docs) {
-          final d = doc.data()['date']?.toString() ?? '';
-          if (isDateInPeriod(d)) {
-            totalLopDays += 0.5;
-          }
-        }
-      } catch (_) {}
+    // 4. Single Source of Truth: MonthlyAttendanceCalculator over exact payroll period
+    MonthlyAttendanceResult? attendanceResult;
+    if (employee != null) {
+      attendanceResult = MonthlyAttendanceCalculator.calculate(
+        employee: employee,
+        year: year,
+        month: month,
+        records: attRecords,
+        leaves: leaves,
+        onDutyAssignments: odAssignments,
+        holidays: holidays,
+        startDate: effStart,
+        endDateExclusive: effEndExclusive,
+        referenceDate: effEndExclusive.subtract(const Duration(seconds: 1)),
+      );
     }
 
+    // 5. Evaluate LOP Breakdown
+    final double absenceLopDays = attendanceResult?.absentCount.toDouble() ?? 0.0;
+    final double approvedDaysCount = attendanceResult?.onLeaveCount.toDouble() ?? 0.0;
+
+    // Configured Late Penalty: allowedLateDays grace days, then penaltyPerLateDay per excess late mark
+    final int lateCount = attendanceResult?.lateCount ?? 0;
+    final int allowedLate = pSettings.allowedLateDays;
+    final double penaltyPerLate = pSettings.penaltyPerLateDay;
+    final int penalizedLateCount = (lateCount - allowedLate).clamp(0, 9999);
+    final double lateLopDays = penalizedLateCount * penaltyPerLate;
+
     // (a) Manual Loss of Pay records
+    double manualLopDays = 0.0;
     try {
       final lopSnap = await _lopRef
           .where('employee_id', isEqualTo: employeeId)
@@ -904,12 +876,13 @@ class FirebaseLeaveRepository implements LeaveRepository {
       for (final doc in lopSnap.docs) {
         final date = doc.data()['date'] as String? ?? '';
         if (isDateInPeriod(date)) {
-          totalLopDays += 1.0;
+          manualLopDays += 1.0;
         }
       }
     } catch (_) {}
 
     // (b) Emergency Exception Permission Requests with LOP payroll treatment
+    double permissionLopDays = 0.0;
     try {
       final permSnap = await _firestore
           .collection('permission_requests')
@@ -922,11 +895,12 @@ class FirebaseLeaveRepository implements LeaveRepository {
         final d = data['date']?.toString() ?? '';
         if ((empIdNum == employeeId || empIdRaw?.toString() == employeeId.toString()) &&
             isDateInPeriod(d)) {
-          totalLopDays += 1.0;
+          permissionLopDays += 1.0;
         }
       }
     } catch (_) {}
 
+    final double totalLopDays = absenceLopDays + lateLopDays + manualLopDays + permissionLopDays;
     final double lopDeduction = perDaySalary * totalLopDays;
     final double payableSalary = grossSalary - lopDeduction;
 
@@ -956,5 +930,20 @@ class FirebaseLeaveRepository implements LeaveRepository {
       return tb.compareTo(ta);
     });
     return list;
+  }
+
+  @override
+  Future<List<String>> getHolidays() async {
+    try {
+      final hSnap = await _firestore.collection('holidays').get();
+      final List<String> list = [];
+      for (final doc in hSnap.docs) {
+        final d = doc.data()['date']?.toString();
+        if (d != null && d.isNotEmpty) list.add(d);
+      }
+      return list;
+    } catch (_) {
+      return [];
+    }
   }
 }

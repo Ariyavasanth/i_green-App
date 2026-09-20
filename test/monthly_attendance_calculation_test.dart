@@ -393,5 +393,174 @@ void main() {
       expect(day15.statusInfo, isNull);
       expect(day15.statusLabel, equals('Pending'));
     });
+
+    group('Custom Payroll Date Range (20th-to-20th) Tests', () {
+      test('A & B. 20th-to-20th range: 20 Aug 2026 -> 20 Sep 2026 exclusive boundary checks', () {
+        final startDate = DateTime(2026, 8, 20);
+        final endDateExclusive = DateTime(2026, 9, 20);
+
+        final records = [
+          // 19 Aug (outside before range - EXCLUDED)
+          const AttendanceRecord(
+            id: 1,
+            employeeId: 101,
+            employeeCode: 'EMP-101',
+            employeeName: 'Vikram Sharma',
+            date: '19-08-2026',
+            time: '09:00 AM',
+            checkInTime: '09:00 AM',
+            checkOutTime: '06:00 PM',
+            status: 'Present',
+            verificationStatus: 'Verified',
+            similarityScore: 1.0,
+            totalHours: 9.0,
+          ),
+          // 20 Aug (start of range - INCLUDED)
+          const AttendanceRecord(
+            id: 2,
+            employeeId: 101,
+            employeeCode: 'EMP-101',
+            employeeName: 'Vikram Sharma',
+            date: '20-08-2026',
+            time: '09:00 AM',
+            checkInTime: '09:00 AM',
+            checkOutTime: '06:00 PM',
+            status: 'Present',
+            verificationStatus: 'Verified',
+            similarityScore: 1.0,
+            totalHours: 9.0,
+          ),
+          // 19 Sep (end of range - INCLUDED)
+          const AttendanceRecord(
+            id: 3,
+            employeeId: 101,
+            employeeCode: 'EMP-101',
+            employeeName: 'Vikram Sharma',
+            date: '19-09-2026',
+            time: '09:00 AM',
+            checkInTime: '09:00 AM',
+            checkOutTime: '06:00 PM',
+            status: 'Present',
+            verificationStatus: 'Verified',
+            similarityScore: 1.0,
+            totalHours: 9.0,
+          ),
+          // 20 Sep (boundary - EXCLUDED)
+          const AttendanceRecord(
+            id: 4,
+            employeeId: 101,
+            employeeCode: 'EMP-101',
+            employeeName: 'Vikram Sharma',
+            date: '20-09-2026',
+            time: '09:00 AM',
+            checkInTime: '09:00 AM',
+            checkOutTime: '06:00 PM',
+            status: 'Present',
+            verificationStatus: 'Verified',
+            similarityScore: 1.0,
+            totalHours: 9.0,
+          ),
+        ];
+
+        final result = MonthlyAttendanceCalculator.calculate(
+          employee: testEmployee,
+          year: 2026,
+          month: 9,
+          records: records,
+          startDate: startDate,
+          endDateExclusive: endDateExclusive,
+          referenceDate: DateTime(2026, 9, 21),
+        );
+
+        // Verify total days in 20 Aug -> 20 Sep exclusive = 31 days
+        expect(result.totalDaysInMonth, equals(31));
+
+        // 20 Aug is present
+        final day20Aug = result.dailyResults.any((d) => d.dateStr == '20-08-2026' && d.statusInfo == AttendanceStatusInfo.present);
+        expect(day20Aug, isTrue);
+
+        // 19 Sep is present
+        final day19Sep = result.dailyResults.any((d) => d.dateStr == '19-09-2026' && d.statusInfo == AttendanceStatusInfo.present);
+        expect(day19Sep, isTrue);
+
+        // 19 Aug is NOT in dailyResults
+        final day19Aug = result.dailyResults.any((d) => d.dateStr == '19-08-2026');
+        expect(day19Aug, isFalse);
+
+        // 20 Sep is NOT in dailyResults
+        final day20Sep = result.dailyResults.any((d) => d.dateStr == '20-09-2026');
+        expect(day20Sep, isFalse);
+
+        // Present count only counts records inside range (20 Aug + 19 Sep = 2)
+        expect(result.presentCount, equals(2));
+      });
+
+      test('C, D, E, F. Weekly Off, Holiday, Required Hours, Working Hours, and Shortfall calculation inside custom range', () {
+        final startDate = DateTime(2026, 8, 20);
+        final endDateExclusive = DateTime(2026, 9, 20);
+        // Sundays between 20 Aug 2026 and 19 Sep 2026: Aug 23, Aug 30, Sep 6, Sep 13 (4 Sundays = 4 Weekly Offs)
+        final holidays = ['25-08-2026']; // 1 Holiday
+
+        // Total calendar days = 31
+        // Working days = 31 - 4 (WO) - 1 (H) = 26 working days
+        // Required Hours = 26 * 9.0 = 234.0 hrs
+
+        final records = [
+          // Employee worked 2 days of 9 hrs = 18 hrs
+          const AttendanceRecord(
+            id: 1,
+            employeeId: 101,
+            employeeCode: 'EMP-101',
+            employeeName: 'Vikram Sharma',
+            date: '20-08-2026',
+            time: '09:00 AM',
+            checkInTime: '09:00 AM',
+            checkOutTime: '06:00 PM',
+            status: 'Present',
+            verificationStatus: 'Verified',
+            similarityScore: 1.0,
+            totalHours: 9.0,
+          ),
+          const AttendanceRecord(
+            id: 2,
+            employeeId: 101,
+            employeeCode: 'EMP-101',
+            employeeName: 'Vikram Sharma',
+            date: '21-08-2026',
+            time: '09:00 AM',
+            checkInTime: '09:00 AM',
+            checkOutTime: '06:00 PM',
+            status: 'Present',
+            verificationStatus: 'Verified',
+            similarityScore: 1.0,
+            totalHours: 9.0,
+          ),
+        ];
+
+        final result = MonthlyAttendanceCalculator.calculate(
+          employee: testEmployee,
+          year: 2026,
+          month: 9,
+          records: records,
+          holidays: holidays,
+          startDate: startDate,
+          endDateExclusive: endDateExclusive,
+          referenceDate: DateTime(2026, 9, 21),
+        );
+
+        expect(result.weeklyOffCount, equals(4));
+        expect(result.holidayCount, equals(1));
+        expect(result.totalWorkingDays, equals(26));
+
+        // Required hours: 26 working days * 9.0 = 234.0 hrs
+        expect(result.totalRequiredHours, equals(234.0));
+
+        // Working hours: 2 days * 9.0 = 18.0 hrs
+        expect(result.totalWorkingHours, equals(18.0));
+
+        // Shortfall: 234.0 - 18.0 = 216.0 hrs
+        expect(result.totalShortfallHours, equals(216.0));
+      });
+    });
   });
 }

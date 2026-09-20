@@ -4,6 +4,7 @@ import 'leave_type.dart';
 import 'salary_calculation.dart';
 import 'permission_allowance.dart';
 import 'leave_overlap_validator.dart';
+import '../../payroll/domain/payroll.dart';
 
 abstract class LeaveRepository {
   Future<List<LeaveRequest>> getLeaveRequests(int employeeId);
@@ -36,6 +37,7 @@ abstract class LeaveRepository {
   Future<List<Map<String, dynamic>>> getEmployeeOverrides();
   Future<void> addEmployeeOverride(Map<String, dynamic> override);
   Future<void> deleteEmployeeOverride(int id);
+
   Future<SalaryCalculation> calculateSalaryAndLop(
     int employeeId,
     int year,
@@ -43,8 +45,10 @@ abstract class LeaveRepository {
     int workingDays = 30,
     DateTime? startDate,
     DateTime? endDateExclusive,
+    PayrollSettings? settings,
   });
   Future<List<Map<String, dynamic>>> getAuditLogs(int leaveRequestId);
   Future<PermissionAllowance> getPermissionAllowance(int employeeId, DateTime month);
+  Future<List<String>> getHolidays();
 }
 

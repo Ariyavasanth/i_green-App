@@ -223,13 +223,31 @@ class FirebasePayrollRepository implements PayrollRepository {
   Future<PayrollRecord> savePayrollRecord(PayrollRecord record) async {
     final docId = '${record.employeeId}_${record.month.replaceAll(' ', '_')}';
     
-    // Check if existing record is already PAID in Firestore -> REJECT ALL MUTATIONS
+    // Check if existing record is already PAID or PROCESSED in Firestore -> REJECT ALL MUTATIONS
     try {
-      final existingDoc = await _payrollsRef.doc(docId).get();
-      if (existingDoc.exists && existingDoc.data() != null) {
-        final existingStatus = (existingDoc.data()!['status'] as String? ?? '').trim().toUpperCase();
+      DocumentSnapshot<Map<String, dynamic>>? existingDoc = await _payrollsRef.doc(docId).get();
+      Map<String, dynamic>? data = existingDoc.exists ? existingDoc.data() : null;
+
+      if (data == null && record.id != 0) {
+        final snap = await _payrollsRef.where('id', isEqualTo: record.id).get();
+        if (snap.docs.isNotEmpty) {
+          existingDoc = snap.docs.first;
+          data = snap.docs.first.data();
+        }
+      }
+
+      if (data != null) {
+        final existingStatus = (data['status'] as String? ?? '').trim().toUpperCase();
         if (existingStatus == 'PAID') {
           throw Exception('This payroll record has been marked as PAID and is locked against all changes.');
+        }
+
+        if (existingStatus == 'PROCESSED') {
+          final incomingStatus = record.status.trim().toUpperCase();
+          final isExplicitPaidTransition = incomingStatus == 'PAID' && _payrollValuesMatch(data, record);
+          if (!isExplicitPaidTransition) {
+            throw Exception('This payroll record has been marked as PROCESSED and is locked against all changes.');
+          }
         }
       }
     } catch (e) {
@@ -280,9 +298,17 @@ class FirebasePayrollRepository implements PayrollRepository {
     try {
       final snap = await _payrollsRef.where('id', isEqualTo: id).get();
       for (final doc in snap.docs) {
+        final status = (doc.data()['status'] as String? ?? '').trim().toUpperCase();
+        if (status == 'PAID' || status == 'PROCESSED') {
+          throw Exception('Payroll record $id has status $status and is locked against deletion.');
+        }
         await doc.reference.delete();
       }
-    } catch (_) {}
+    } catch (e) {
+      if (e.toString().contains('locked against deletion')) {
+        rethrow;
+      }
+    }
   }
 
 
@@ -331,4 +357,17 @@ class FirebasePayrollRepository implements PayrollRepository {
     }
   }
 
+  bool _payrollValuesMatch(Map<String, dynamic> existingData, PayrollRecord record) {
+    final existingNet = (existingData['net_salary'] as num?)?.toDouble() ?? 0.0;
+    final existingBasic = (existingData['basic_pay'] as num?)?.toDouble() ?? 0.0;
+    final existingLop = (existingData['lop'] as num?)?.toDouble() ?? 0.0;
+    final existingPresent = existingData['present_days'] as int? ?? existingData['present_count'] as int? ?? 0;
+    final existingAbsent = existingData['absent_days'] as int? ?? existingData['absent_count'] as int? ?? 0;
+
+    return (record.netSalary - existingNet).abs() < 0.01 &&
+        (record.basicPay - existingBasic).abs() < 0.01 &&
+        (record.lop - existingLop).abs() < 0.01 &&
+        record.presentDays == existingPresent &&
+        record.absentDays == existingAbsent;
+  }
 }

@@ -167,12 +167,21 @@ class MonthlyAttendanceCalculator {
     List<OnDutyAssignment>? onDutyAssignments,
     List<String>? holidays,
     DateTime? referenceDate,
+    DateTime? startDate,
+    DateTime? endDateExclusive,
   }) {
-    final now = referenceDate ?? DateTime.now();
-    final lastDayOfMonth = DateTime(year, month + 1, 0, 23, 59, 59);
-    final effectiveRefDate = now.isAfter(lastDayOfMonth) ? DateTime(year, month + 1, 1) : now;
+    final start = startDate != null
+        ? DateTime(startDate.year, startDate.month, startDate.day)
+        : DateTime(year, month, 1);
+    final endExclusive = endDateExclusive != null
+        ? DateTime(endDateExclusive.year, endDateExclusive.month, endDateExclusive.day)
+        : DateTime(year, month + 1, 1);
 
-    final daysInMonth = DateTime(year, month + 1, 0).day;
+    final now = referenceDate ?? DateTime.now();
+    final periodEndInclusive = endExclusive.subtract(const Duration(seconds: 1));
+    final effectiveRefDate = now.isAfter(periodEndInclusive) ? endExclusive : now;
+
+    final totalDays = endExclusive.difference(start).inDays;
     final monthYear = '${month.toString().padLeft(2, '0')}-$year';
 
     final recordMap = <String, AttendanceRecord>{};
@@ -203,10 +212,11 @@ class MonthlyAttendanceCalculator {
     final dailyRequiredHours =
         employee.requiredWorkingHours > 0 ? employee.requiredWorkingHours : 9.0;
 
-    for (int day = 1; day <= daysInMonth; day++) {
-      final date = DateTime(year, month, day);
+    DateTime cursor = start;
+    while (cursor.isBefore(endExclusive)) {
+      final date = cursor;
       final dateStr =
-          '${day.toString().padLeft(2, '0')}-${month.toString().padLeft(2, '0')}-$year';
+          '${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}';
 
       final record = recordMap[dateStr];
 
@@ -282,6 +292,8 @@ class MonthlyAttendanceCalculator {
         workingHours: dayWorkingHours,
         shortfallHours: double.parse(shortfallForDay.toStringAsFixed(2)),
       ));
+
+      cursor = cursor.add(const Duration(days: 1));
     }
 
     totalWorkingHours = double.parse(totalWorkingHours.toStringAsFixed(2));
@@ -298,7 +310,7 @@ class MonthlyAttendanceCalculator {
       year: year,
       month: month,
       monthYear: monthYear,
-      totalDaysInMonth: daysInMonth,
+      totalDaysInMonth: totalDays,
       presentCount: presentCount,
       lateCount: lateCount,
       absentCount: absentCount,

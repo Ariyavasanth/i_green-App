@@ -1,8 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../authentication/providers/authentication_providers.dart';
-import '../../employee/domain/employee.dart';
-import '../../employee/providers/employee_providers.dart';
 export '../../employee/providers/employee_providers.dart' show currentEmployeeProvider;
 import '../data/firebase_leave_repository.dart';
 import '../domain/leave_repository.dart';
@@ -27,6 +24,10 @@ final allLeaveRequestsProvider = FutureProvider<List<LeaveRequest>>(
 
 final leaveTypesProvider = FutureProvider<List<LeaveType>>(
   (ref) => ref.watch(leaveRepositoryProvider).getLeaveTypes(),
+);
+
+final holidaysProvider = FutureProvider<List<String>>(
+  (ref) => ref.watch(leaveRepositoryProvider).getHolidays(),
 );
 
 final employeeOverridesProvider = FutureProvider<List<Map<String, dynamic>>>(

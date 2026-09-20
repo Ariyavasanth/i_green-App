@@ -10,11 +10,14 @@ import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
 import '../../attendance/providers/attendance_providers.dart';
 import '../../attendance/domain/attendance_record.dart';
-import '../../attendance/domain/attendance_status_helper.dart';
+import '../../attendance/domain/monthly_attendance_result.dart';
 import '../domain/payroll.dart';
 import '../providers/payroll_providers.dart';
+import '../../leave/domain/leave_request.dart';
 import '../../leave/providers/leave_providers.dart';
 import '../../loan/providers/loan_providers.dart';
+import '../../on_duty/domain/on_duty_assignment.dart';
+import '../../on_duty/providers/on_duty_providers.dart';
 
 class GeneratePayrollScreen extends ConsumerStatefulWidget {
   const GeneratePayrollScreen({required this.employeeId, super.key});
@@ -66,6 +69,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
   int _absentDays = 0;
   int _leaveDays = 3;
   int _totalDays = 30;
+  MonthlyAttendanceResult? _attendanceResult;
 
   @override
   void initState() {
@@ -229,7 +233,15 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     } catch (_) {}
   }
 
-  void _calculateAttendanceMetrics(Employee employee, dynamic attendanceRecords, String month, PayrollSettings settings) {
+  void _calculateAttendanceMetrics(
+    Employee employee,
+    dynamic attendanceRecords,
+    String month,
+    PayrollSettings settings, {
+    List<LeaveRequest>? leaves,
+    List<OnDutyAssignment>? onDutyAssignments,
+    List<String>? holidays,
+  }) {
     final now = DateTime.now();
     int year = now.year;
     int monthNum = now.month;
@@ -250,65 +262,39 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
 
     final period = settings.getPayrollPeriod(year, monthNum);
 
-    // Map records by date string
-    Map<String, dynamic> attMap = {};
-    if (attendanceRecords != null) {
+    List<AttendanceRecord> records = [];
+    if (attendanceRecords is List<AttendanceRecord>) {
+      records = attendanceRecords;
+    } else if (attendanceRecords is List) {
       for (final r in attendanceRecords) {
-        final dStr = r.date?.toString() ?? '';
-        attMap[dStr] = r;
+        if (r is AttendanceRecord) records.add(r);
       }
     }
 
-    int present = 0;
-    int late = 0;
-    int absent = 0;
-    int leave = 0;
+    final result = MonthlyAttendanceCalculator.calculate(
+      employee: employee,
+      year: year,
+      month: monthNum,
+      records: records,
+      leaves: leaves,
+      onDutyAssignments: onDutyAssignments,
+      holidays: holidays,
+      startDate: period.startDate,
+      endDateExclusive: period.endDateExclusive,
+    );
 
-    final today = DateTime(now.year, now.month, now.day);
-    DateTime cursor = period.startDate;
-
-    while (cursor.isBefore(period.endDateExclusive)) {
-      final targetDate = DateTime(cursor.year, cursor.month, cursor.day);
-      final dateStr = '${cursor.day.toString().padLeft(2, '0')}-${cursor.month.toString().padLeft(2, '0')}-${cursor.year}';
-      final isoStr = '${cursor.year}-${cursor.month.toString().padLeft(2, '0')}-${cursor.day.toString().padLeft(2, '0')}';
-
-      dynamic rawRec = attMap[dateStr] ?? attMap[isoStr];
-      AttendanceRecord? rec;
-      if (rawRec != null && rawRec is AttendanceRecord) {
-        rec = rawRec;
-      }
-
-      final status = AttendanceStatusHelper.resolveStatus(
-        employee: employee,
-        date: cursor,
-        record: rec,
-      );
-
-      if (targetDate.isBefore(today) || targetDate.isAtSameMomentAs(today)) {
-        if (status == AttendanceStatusInfo.present || status == AttendanceStatusInfo.onDuty) {
-          present++;
-        } else if (status == AttendanceStatusInfo.late) {
-          present++;
-          late++;
-        } else if (status == AttendanceStatusInfo.onLeave) {
-          leave++;
-        } else if (status == AttendanceStatusInfo.missingCheckout) {
-          present++;
-        } else if (status == AttendanceStatusInfo.absent || status == null) {
-          absent++;
+    if (_attendanceResult != result) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _attendanceResult = result;
+            _presentDays = result.presentCount;
+            _lateDays = result.lateCount;
+            _absentDays = result.absentCount;
+            _leaveDays = result.onLeaveCount;
+            _totalDays = result.totalWorkingDays;
+          });
         }
-      }
-
-      cursor = cursor.add(const Duration(days: 1));
-    }
-
-    if (mounted) {
-      setState(() {
-        _presentDays = present;
-        _lateDays = late;
-        _absentDays = absent;
-        _leaveDays = leave;
-        _totalDays = present + absent + leave;
       });
     }
   }
@@ -366,7 +352,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
 
     final period = settings.getPayrollPeriod(year, monthNum);
 
-    final record = PayrollRecord(
+    var record = PayrollRecord(
       id: 0,
       employeeId: employee.id,
       employeeName: employee.fullName,
@@ -422,6 +408,10 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
       paymentDate: period.paymentDateFormatted,
     );
 
+    if (_attendanceResult != null) {
+      record = record.copyWithAttendanceResult(_attendanceResult!);
+    }
+
     try {
       await ref.read(payrollRepositoryProvider).savePayrollRecord(record);
       ref.invalidate(payrollRecordsForMonthProvider);
@@ -475,11 +465,26 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
           }
           final employee = matching.first;
           final attendanceAsync = ref.watch(attendanceRecordsProvider(widget.employeeId));
+          final leavesAsync = ref.watch(leaveRequestsProvider(widget.employeeId));
+          final onDutyAsync = ref.watch(employeeOnDutyAssignmentsProvider((employeeId: widget.employeeId, date: null)));
+          final holidaysAsync = ref.watch(holidaysProvider);
 
           return settingsAsync.when(
             data: (settings) {
               _initializeValues(employee, settings, selectedMonth);
-              attendanceAsync.whenData((records) => _calculateAttendanceMetrics(employee, records, selectedMonth, settings));
+              final records = attendanceAsync.value ?? [];
+              final leaves = leavesAsync.value;
+              final onDuty = onDutyAsync.value;
+              final holidays = holidaysAsync.value ?? [];
+              _calculateAttendanceMetrics(
+                employee,
+                records,
+                selectedMonth,
+                settings,
+                leaves: leaves,
+                onDutyAssignments: onDuty,
+                holidays: holidays,
+              );
 
               return LayoutBuilder(
                 builder: (context, constraints) {
