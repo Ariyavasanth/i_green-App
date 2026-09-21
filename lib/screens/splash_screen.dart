@@ -24,6 +24,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   late Animation<double> _scalePop;
   late Animation<double> _slideIn;
   late Animation<double> _wheelRotation;
+  late Animation<double> _wheelOpacity;
 
   @override
   void initState() {
@@ -72,6 +73,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         parent: _controller,
         curve: const Interval(0.10, 0.58, curve: Curves.easeOutCubic),
       ),
+    );
+
+    _wheelOpacity = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.10, 0.18, curve: Curves.easeOut),
     );
 
     _controller.forward();
@@ -124,14 +130,17 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         top: _wheelTop,
         width: _wheelSize,
         height: _wheelSize,
-        child: Transform.rotate(
-          angle: _wheelRotation.value,
-          alignment: Alignment.center,
-          child: SvgPicture.asset(
-            'assets/logo_wheel.svg',
-            width: _wheelSize,
-            height: _wheelSize,
-            fit: BoxFit.contain,
+        child: Opacity(
+          opacity: _wheelOpacity.value.clamp(0.0, 1.0),
+          child: Transform.rotate(
+            angle: _wheelRotation.value,
+            alignment: Alignment.center,
+            child: SvgPicture.asset(
+              'assets/inner_wheel_rotating.svg',
+              width: _wheelSize,
+              height: _wheelSize,
+              fit: BoxFit.contain,
+            ),
           ),
         ),
       );
