@@ -233,7 +233,8 @@ class MonthlyAttendanceCalculator {
 
       final isWeeklyOff = statusInfo == AttendanceStatusInfo.weeklyOff;
       final isHoliday = statusInfo == AttendanceStatusInfo.holiday;
-      final isWorkingDay = !isWeeklyOff && !isHoliday;
+      final isBeforeJoining = statusInfo == AttendanceStatusInfo.beforeJoining;
+      final isWorkingDay = !isWeeklyOff && !isHoliday && !isBeforeJoining;
 
       if (isWorkingDay) {
         totalWorkingDays++;
@@ -272,6 +273,7 @@ class MonthlyAttendanceCalculator {
         case AttendanceStatusInfo.insufficientHours:
           insufficientHoursCount++;
           break;
+        case AttendanceStatusInfo.beforeJoining:
         case null:
           break;
       }

@@ -561,6 +561,103 @@ void main() {
         // Shortfall: 234.0 - 18.0 = 216.0 hrs
         expect(result.totalShortfallHours, equals(216.0));
       });
+
+      test('M. Mid-month Date of Joining (DOJ) excludes pre-joining dates from attendance and payroll metrics', () {
+        // Employee joined on 10 September 2026
+        const empJoinedSep10 = Employee(
+          id: 202,
+          employeeId: 'EMP-202',
+          firstName: 'Ananya',
+          lastName: 'Roy',
+          emailAddress: 'ananya@example.com',
+          phoneNumber: '9876543211',
+          gender: 'Female',
+          dob: '15-05-1996',
+          organizationName: 'IGreen',
+          department: 'Design',
+          designation: 'UI/UX Designer',
+          employmentType: 'Full-Time',
+          joiningDate: '10-09-2026',
+          status: 'Active',
+          requiredWorkingHours: 9.0,
+          weeklyOffDay: 'Sunday',
+        );
+
+        // Payroll Period: 20 August 2026 to 20 September 2026 (31 days)
+        final startDate = DateTime(2026, 8, 20);
+        final endDateExclusive = DateTime(2026, 9, 20);
+        final holidays = ['25-08-2026']; // Pre-joining holiday should NOT count
+
+        // Employee has attendance records for 10 Sep and 11 Sep only
+        final records = [
+          const AttendanceRecord(
+            id: 1,
+            employeeId: 202,
+            employeeCode: 'EMP-202',
+            employeeName: 'Ananya Roy',
+            date: '10-09-2026',
+            time: '09:00 AM',
+            checkInTime: '09:00 AM',
+            checkOutTime: '06:00 PM',
+            status: 'Present',
+            verificationStatus: 'Verified',
+            similarityScore: 1.0,
+            totalHours: 9.0,
+          ),
+          const AttendanceRecord(
+            id: 2,
+            employeeId: 202,
+            employeeCode: 'EMP-202',
+            employeeName: 'Ananya Roy',
+            date: '11-09-2026',
+            time: '09:00 AM',
+            checkInTime: '09:00 AM',
+            checkOutTime: '06:00 PM',
+            status: 'Present',
+            verificationStatus: 'Verified',
+            similarityScore: 1.0,
+            totalHours: 9.0,
+          ),
+        ];
+
+        final result = MonthlyAttendanceCalculator.calculate(
+          employee: empJoinedSep10,
+          year: 2026,
+          month: 9,
+          records: records,
+          holidays: holidays,
+          startDate: startDate,
+          endDateExclusive: endDateExclusive,
+          referenceDate: DateTime(2026, 9, 21),
+        );
+
+        // Verify pre-joining dates (20 Aug -> 9 Sep) are marked as Before Joining (BJ)
+        final preJoiningDays = result.dailyResults.where((d) => d.statusCode == 'BJ').toList();
+        expect(preJoiningDays.length, equals(21));
+
+        for (final day in preJoiningDays) {
+          expect(day.statusInfo, equals(AttendanceStatusInfo.beforeJoining));
+          expect(day.isWorkingDay, isFalse);
+          expect(day.requiredHours, equals(0.0));
+          expect(day.shortfallHours, equals(0.0));
+        }
+
+        // Active period (10 Sep -> 19 Sep): 10 days total
+        // Sunday 13 Sep = 1 Weekly Off
+        // 9 working days (10, 11, 12, 14, 15, 16, 17, 18, 19 Sep)
+        expect(result.presentCount, equals(2));
+        expect(result.weeklyOffCount, equals(1));
+        expect(result.holidayCount, equals(0)); // Pre-joining holiday excluded
+        expect(result.absentCount, equals(7)); // Only unrecorded working days AFTER DOJ count as absent
+        expect(result.totalWorkingDays, equals(9));
+
+        // Required hours = 9 working days * 9.0 = 81.0 hrs (NOT 234.0 hrs)
+        expect(result.totalRequiredHours, equals(81.0));
+        // Working hours = 2 * 9.0 = 18.0 hrs
+        expect(result.totalWorkingHours, equals(18.0));
+        // Shortfall = 81.0 - 18.0 = 63.0 hrs
+        expect(result.totalShortfallHours, equals(63.0));
+      });
     });
   });
 }

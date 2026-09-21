@@ -316,17 +316,20 @@ class AttendanceMatrixView extends StatelessWidget {
     Color textColor = statusInfo?.textColor ?? const Color(0xFF94A3B8);
     String codeStr = statusInfo?.code ?? '-';
 
-    final reqHours = emp.requiredWorkingHours;
+    final isBeforeJoining = statusInfo == AttendanceStatusInfo.beforeJoining;
+    final reqHours = isBeforeJoining ? 0.0 : emp.requiredWorkingHours;
     final totalHoursStr = record != null ? record.formattedTotalHours : (statusInfo == AttendanceStatusInfo.absent ? '0hr' : '--');
     final shortfallStr = record != null
         ? record.formattedShortfall(reqHours)
         : (statusInfo == AttendanceStatusInfo.absent ? '${reqHours.toStringAsFixed(1)}hr' : '0hr');
 
-    final tooltipMsg = record != null
-        ? '${emp.fullName} (${emp.employeeId.isNotEmpty ? emp.employeeId : "EMP-${emp.id}"})\nDate: $dateStr\nStatus: ${statusInfo?.label ?? record.status}\nIn: ${record.formattedCheckInTime}\nOut: ${record.checkOutTime.isNotEmpty ? record.formattedCheckOutTime : "--:--"}\nOffice: ${record.formattedOfficeHours}\nOD: ${record.formattedOdHours}\nLunch: ${record.formattedLunchHours}\nTea: ${record.formattedTeaBreakHours}\nMeeting/Other: ${record.formattedMeetingOtherHours}\nTotal Hours: $totalHoursStr\nReq Hours: ${reqHours.toStringAsFixed(1)}hr\nShortfall: $shortfallStr'
-        : (statusInfo == AttendanceStatusInfo.absent
-            ? '${emp.fullName}\nDate: $dateStr\nStatus: Absent\nTotal Hours: 0hr\nReq Hours: ${reqHours.toStringAsFixed(1)}hr\nShortfall: ${reqHours.toStringAsFixed(1)}hr'
-            : '${emp.fullName}\nDate: $dateStr\nStatus: ${statusInfo?.label ?? "Not Marked"}');
+    final tooltipMsg = isBeforeJoining
+        ? '${emp.fullName}\nDate: $dateStr\nStatus: Before Joining (Not Applicable)\nTotal Hours: 0hr\nReq Hours: 0.0hr\nShortfall: 0hr'
+        : (record != null
+            ? '${emp.fullName} (${emp.employeeId.isNotEmpty ? emp.employeeId : "EMP-${emp.id}"})\nDate: $dateStr\nStatus: ${statusInfo?.label ?? record.status}\nIn: ${record.formattedCheckInTime}\nOut: ${record.checkOutTime.isNotEmpty ? record.formattedCheckOutTime : "--:--"}\nOffice: ${record.formattedOfficeHours}\nOD: ${record.formattedOdHours}\nLunch: ${record.formattedLunchHours}\nTea: ${record.formattedTeaBreakHours}\nMeeting/Other: ${record.formattedMeetingOtherHours}\nTotal Hours: $totalHoursStr\nReq Hours: ${reqHours.toStringAsFixed(1)}hr\nShortfall: $shortfallStr'
+            : (statusInfo == AttendanceStatusInfo.absent
+                ? '${emp.fullName}\nDate: $dateStr\nStatus: Absent\nTotal Hours: 0hr\nReq Hours: ${reqHours.toStringAsFixed(1)}hr\nShortfall: ${reqHours.toStringAsFixed(1)}hr'
+                : '${emp.fullName}\nDate: $dateStr\nStatus: ${statusInfo?.label ?? "Not Marked"}'));
 
     return Tooltip(
       message: tooltipMsg,

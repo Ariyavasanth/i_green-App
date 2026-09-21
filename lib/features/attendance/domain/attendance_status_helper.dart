@@ -15,7 +15,8 @@ enum AttendanceStatusInfo {
   missingCheckout('MC', 'Missing Checkout', Color(0xFFF3E8FF), Color(0xFF9333EA)),
   insufficientHours('IH', 'Insufficient Hours', Color(0xFFFFEDD5), Color(0xFFD97706)),
   holiday('H', 'Holiday', Color(0xFFF3E8FF), Color(0xFF7C3AED)),
-  weeklyOff('WO', 'Weekly Off', Color(0xFFF1F5F9), Color(0xFF64748B));
+  weeklyOff('WO', 'Weekly Off', Color(0xFFF1F5F9), Color(0xFF64748B)),
+  beforeJoining('BJ', 'Before Joining', Color(0xFFF1F5F9), Color(0xFF94A3B8));
 
   final String code;
   final String label;
@@ -39,6 +40,18 @@ class AttendanceStatusHelper {
     final today = DateTime(now.year, now.month, now.day);
     final targetDate = DateTime(date.year, date.month, date.day);
     final dateStr = '${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}';
+
+    // 0. Date of Joining (DOJ) minimum valid attendance date check:
+    // Any date prior to employee.joiningDate MUST be treated as Before Joining.
+    if (employee.joiningDate.trim().isNotEmpty) {
+      final joinDt = _parseDate(employee.joiningDate);
+      if (joinDt != null) {
+        final cleanJoin = DateTime(joinDt.year, joinDt.month, joinDt.day);
+        if (targetDate.isBefore(cleanJoin)) {
+          return AttendanceStatusInfo.beforeJoining;
+        }
+      }
+    }
 
     // 1. If an explicit AttendanceRecord exists
     if (record != null) {
@@ -141,14 +154,7 @@ class AttendanceStatusHelper {
     }
 
     // 6. Historical Past Working Day Check:
-    // If target date is before today and no record, leave, OD, weekly off, or holiday:
     if (targetDate.isBefore(today)) {
-      if (employee.joiningDate.trim().isNotEmpty) {
-        final joinDt = _parseDate(employee.joiningDate);
-        if (joinDt != null && targetDate.isBefore(DateTime(joinDt.year, joinDt.month, joinDt.day))) {
-          return null; // Prior to joining
-        }
-      }
       return AttendanceStatusInfo.absent;
     }
 
