@@ -163,19 +163,63 @@ class AttendanceStatusHelper {
   }
 
   static DateTime? _parseDate(String val) {
-    if (val.trim().isEmpty) return null;
+    final cleaned = val.trim();
+    if (cleaned.isEmpty) return null;
+
     try {
-      final isoDate = DateTime.tryParse(val);
+      final isoDate = DateTime.tryParse(cleaned);
       if (isoDate != null) return isoDate;
-      final parts = val.split('-');
+
+      final patterns = [
+        'dd-MM-yyyy',
+        'dd/MM/yyyy',
+        'yyyy/MM/dd',
+        'yyyy-MM-dd',
+        'dd-MMM-yyyy',
+        'dd MMM yyyy',
+        'MMM dd, yyyy',
+        'dd-MMM-yy',
+      ];
+
+      for (final pattern in patterns) {
+        try {
+          final parsed = DateFormat(pattern).tryParse(cleaned);
+          if (parsed != null) return parsed;
+        } catch (_) {}
+      }
+
+      final parts = cleaned.replaceAll('/', '-').split('-');
       if (parts.length == 3) {
+        int year, month, day;
         if (parts[0].length == 4) {
-          return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+          year = int.parse(parts[0]);
+          month = _parseMonthToken(parts[1]);
+          day = int.parse(parts[2]);
         } else {
-          return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+          day = int.parse(parts[0]);
+          month = _parseMonthToken(parts[1]);
+          year = int.parse(parts[2].length == 2 ? '20${parts[2]}' : parts[2]);
         }
+        return DateTime(year, month, day);
       }
     } catch (_) {}
     return null;
+  }
+
+  static int _parseMonthToken(String token) {
+    final parsedInt = int.tryParse(token);
+    if (parsedInt != null) return parsedInt;
+
+    final lower = token.trim().toLowerCase();
+    const monthNames = [
+      'jan', 'feb', 'mar', 'apr', 'may', 'jun',
+      'jul', 'aug', 'sep', 'oct', 'nov', 'dec'
+    ];
+    for (int i = 0; i < monthNames.length; i++) {
+      if (lower.startsWith(monthNames[i])) {
+        return i + 1;
+      }
+    }
+    throw FormatException('Invalid month: $token');
   }
 }

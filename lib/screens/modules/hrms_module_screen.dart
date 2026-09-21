@@ -6,7 +6,6 @@ import '../../core/theme/app_background_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../features/employee/providers/employee_providers.dart';
 import '../../widgets/app_background_wrapper.dart';
-import '../../widgets/background_picker_modal.dart';
 import '../../widgets/module_card.dart';
 
 /// Data model for a sub-module item.
@@ -33,8 +32,6 @@ class HrmsModuleScreen extends ConsumerStatefulWidget {
           '/employee-management', Color(0xFF0984E3)),
       _SubModule(
           'Responses', Icons.rate_review_outlined, '/responses', Color(0xFFFF7675)),
-      _SubModule(
-          'Background\nImage', Icons.wallpaper_rounded, '/background-picker', Color(0xFF9CC70A)),
     ],
     'ATTENDANCE': [
       _SubModule(
@@ -137,7 +134,7 @@ class _HrmsModuleScreenState extends ConsumerState<HrmsModuleScreen> {
 
     for (final entry in HrmsModuleScreen._sections.entries) {
       final allowedItems = entry.value.where((m) {
-        if (isSuper || m.route == '/background-picker') return true;
+        if (isSuper) return true;
         final cleanLabel = m.label.replaceAll('\n', ' ');
         return employee.hasPermission(cleanLabel);
       }).toList();
@@ -359,13 +356,7 @@ class _HrmsModuleScreenState extends ConsumerState<HrmsModuleScreen> {
                                               label: m.label,
                                               icon: m.icon,
                                               color: m.color,
-                                              onTap: () {
-                                                if (m.route == '/background-picker') {
-                                                  BackgroundPickerModal.show(context);
-                                                } else {
-                                                  context.go(m.route);
-                                                }
-                                              },
+                                              onTap: () => context.go(m.route),
                                             ))
                                         .toList(),
                                   );

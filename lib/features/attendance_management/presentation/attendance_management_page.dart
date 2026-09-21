@@ -356,7 +356,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
               error: (_, __) => const SizedBox.shrink(),
             )
           else
-            _buildBottomNavBar(isMobile),
+            const SizedBox.shrink(),
         ],
       ),
     );
