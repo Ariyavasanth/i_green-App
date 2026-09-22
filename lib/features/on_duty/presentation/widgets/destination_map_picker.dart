@@ -105,11 +105,36 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
 
   // Native Google Map controller & state
   GoogleMapController? _googleMapController;
+  // static const String _previousApiKey = 'AIzaSyAUjhxMMfOFsi6mmwz2mn0ADjfLKnUY4wk';
+  static const String _defaultApiKey = 'AIzaSyCRV3CEy0trgd_EGdX4L6D1tvhJ_GOKxO0';
   static const String _envApiKey = String.fromEnvironment(
     'GOOGLE_MAPS_API_KEY',
-    defaultValue: String.fromEnvironment('MAPS_API_KEY', defaultValue: 'AIzaSyAUjhxMMfOFsi6mmwz2mn0ADjfLKnUY4wk'),
+    defaultValue: String.fromEnvironment('MAPS_API_KEY', defaultValue: _defaultApiKey),
   );
   String get _googleMapsApiKey => (widget.apiKey?.isNotEmpty == true) ? widget.apiKey! : _envApiKey;
+  bool _isPlaceSelected = false;
+
+  String _cleanFormattedAddress(String rawAddress) {
+    if (rawAddress.trim().isEmpty) return rawAddress;
+    var cleaned = rawAddress.trim();
+
+    // 1. Remove duplicate numeric/plot prefixes like "1-1, 1-1, " or "12, 12, "
+    cleaned = cleaned.replaceAllMapped(
+      RegExp(r'^([\w\/-]+)(,\s*\1)+,\s*'),
+      (m) => '${m[1]}, ',
+    );
+
+    // 2. Remove redundant consecutive duplicate tokens (e.g., "Porur, Porur")
+    final parts = cleaned.split(',').map((s) => s.trim()).toList();
+    final uniqueParts = <String>[];
+    for (final part in parts) {
+      if (part.isNotEmpty && (uniqueParts.isEmpty || uniqueParts.last.toLowerCase() != part.toLowerCase())) {
+        uniqueParts.add(part);
+      }
+    }
+
+    return uniqueParts.join(', ');
+  }
   String _mapType = 'roadmap'; // roadmap, satellite, terrain
   double _zoomLevel = 15.0;
   final List<int> _radiusOptions = [50, 100, 200, 500];
@@ -183,6 +208,7 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
 
   void _onSearchChanged(String query) {
     _debounceTimer?.cancel();
+    _isPlaceSelected = false;
     if (query.trim().isEmpty) {
       setState(() {
         _suggestions = [];
@@ -434,9 +460,10 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
       final double lat = (item['lat'] as num).toDouble();
       final double lng = (item['lng'] as num).toDouble();
       final String name = item['name'].toString();
-      final String address = item['address'].toString();
+      final String address = _cleanFormattedAddress(item['address'].toString());
 
       setState(() {
+        _isPlaceSelected = true;
         _selectedLat = lat;
         _selectedLng = lng;
         _selectedName = name;
@@ -495,13 +522,23 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
             lat = double.tryParse(location?['latitude']?.toString() ?? '');
             lng = double.tryParse(location?['longitude']?.toString() ?? '');
 
-            final formattedAddr = data['formattedAddress']?.toString();
-            if (formattedAddr != null && formattedAddr.isNotEmpty) {
-              address = formattedAddr;
-            }
-            final placeName = data['displayName']?['text']?.toString();
-            if (placeName != null && placeName.isNotEmpty) {
+            final rawFormattedAddr = data['formattedAddress']?.toString();
+            final placeName = data['displayName']?['text']?.toString() ?? item['name']?.toString() ?? '';
+            if (placeName.isNotEmpty) {
               name = placeName;
+            }
+
+            final secondaryText = item['address']?.toString() ?? '';
+            if (rawFormattedAddr != null && rawFormattedAddr.isNotEmpty) {
+              var cleaned = _cleanFormattedAddress(rawFormattedAddr);
+              // If secondaryText has the accurate local neighborhood (e.g. Porur) while the postal boundary says Virugambakkam,
+              // harmonize to display the user-friendly neighborhood name
+              if (secondaryText.toLowerCase().contains('porur') && cleaned.toLowerCase().contains('virugambakkam')) {
+                cleaned = cleaned.replaceAll(RegExp(r'\bVirugambakkam\b', caseSensitive: false), 'Porur');
+              }
+              address = _cleanFormattedAddress(cleaned);
+            } else if (secondaryText.isNotEmpty) {
+              address = _cleanFormattedAddress(secondaryText);
             }
             debugPrint('[Place Details] Successfully resolved: $name ($lat, $lng)');
           } else {
@@ -534,6 +571,7 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
 
         if (lat != null && lng != null && mounted) {
           setState(() {
+            _isPlaceSelected = true;
             _selectedLat = lat;
             _selectedLng = lng;
             _selectedName = name;
@@ -568,6 +606,7 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
   }
 
   Future<void> _fetchCurrentGpsLocation({bool isAuto = false}) async {
+    _isPlaceSelected = false;
     if (mounted) setState(() => _isLocatingUser = true);
     try {
       Position? position;
@@ -695,9 +734,10 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
             final results = data['results'] as List<dynamic>? ?? [];
             if (results.isNotEmpty) {
               final formattedAddr = (results.first['formatted_address'] ?? '').toString();
-              final parts = formattedAddr.split(',');
+              final cleaned = _cleanFormattedAddress(formattedAddr);
+              final parts = cleaned.split(',');
               name = parts.isNotEmpty ? parts.first.trim() : 'Current Location';
-              addr = parts.length > 1 ? parts.sublist(1).join(',').trim() : formattedAddr;
+              addr = parts.length > 1 ? parts.sublist(1).join(',').trim() : cleaned;
             }
           } else {
             debugPrint('[Reverse Geocode] Google Geocoding status: ${data['status']} - ${data['error_message']}');
@@ -868,6 +908,7 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
   }
 
   void _nudgeLocation(double latDelta, double lngDelta) {
+    _isPlaceSelected = false;
     final curLat = _selectedLat ?? 13.0827;
     final curLng = _selectedLng ?? 80.2707;
     final newLat = (curLat + latDelta).clamp(-50.0, 50.0);
@@ -1142,7 +1183,6 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
       child: Container(
         constraints: const BoxConstraints(maxHeight: 280),
         decoration: BoxDecoration(
-          color: Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: const Color(0xFFE2E8F0)),
         ),
@@ -1279,6 +1319,11 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
               mapType: _mapType,
               radius: _selectedRadius,
               primaryColor: widget.primaryColor,
+              onUserInteraction: () {
+                if (_isPlaceSelected) {
+                  setState(() => _isPlaceSelected = false);
+                }
+              },
               onCameraMoved: (newLat, newLng, newZoom) {
                 setState(() {
                   _selectedLat = newLat;
@@ -1288,8 +1333,13 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
               },
               onCameraIdle: () {
                 _debounceTimer?.cancel();
+                if (_isPlaceSelected) {
+                  // Specific place was selected from Google Places search suggestions.
+                  // Preserve Google's clean verified place name & address rather than overwriting with boundary reverse geocoding.
+                  return;
+                }
                 _debounceTimer = Timer(const Duration(milliseconds: 300), () {
-                  if (mounted && _selectedLat != null && _selectedLng != null) {
+                  if (mounted && _selectedLat != null && _selectedLng != null && !_isPlaceSelected) {
                     _applyGpsCoordinates(_selectedLat!, _selectedLng!);
                   }
                 });
@@ -1725,6 +1775,7 @@ class _RealTileMapWidget extends StatefulWidget {
     required this.primaryColor,
     required this.onCameraMoved,
     required this.onCameraIdle,
+    this.onUserInteraction,
   });
 
   final double lat;
@@ -1735,6 +1786,7 @@ class _RealTileMapWidget extends StatefulWidget {
   final Color primaryColor;
   final Function(double newLat, double newLng, double newZoom) onCameraMoved;
   final VoidCallback onCameraIdle;
+  final VoidCallback? onUserInteraction;
 
   @override
   State<_RealTileMapWidget> createState() => _RealTileMapWidgetState();
@@ -1805,11 +1857,13 @@ class _RealTileMapWidgetState extends State<_RealTileMapWidget> {
 
         return GestureDetector(
           onDoubleTap: () {
+            widget.onUserInteraction?.call();
             widget.onCameraMoved(lat, lng, (zoom + 1.0).clamp(3.0, 19.0));
             widget.onCameraIdle();
           },
           onScaleStart: (_) {
             _baseScale = 1.0;
+            widget.onUserInteraction?.call();
           },
           onScaleUpdate: (details) {
             if (details.scale != 1.0) {
@@ -1817,6 +1871,7 @@ class _RealTileMapWidgetState extends State<_RealTileMapWidget> {
               _baseScale = details.scale;
               widget.onCameraMoved(lat, lng, newZoom);
             } else if (details.focalPointDelta != Offset.zero) {
+              widget.onUserInteraction?.call();
               final double metersPerPixel = (156543.03392 * math.cos(lat * math.pi / 180.0)) / math.pow(2, zoom);
               final double latDelta = (details.focalPointDelta.dy * metersPerPixel) / 111320.0;
               final double lngDelta = -(details.focalPointDelta.dx * metersPerPixel) / (111320.0 * math.cos(lat * math.pi / 180.0));
