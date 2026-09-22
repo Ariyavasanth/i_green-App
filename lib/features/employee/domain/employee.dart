@@ -258,6 +258,13 @@ class Employee {
     return type == 'SUPER_ADMIN' || type == 'SUPER ADMIN';
   }
 
+  /// Indicates whether this employee is required to track daily attendance.
+  /// Super Admins manage the system and are not attendance-tracked by default.
+  bool get isAttendanceTracked {
+    if (isSuperAdmin) return false;
+    return true;
+  }
+
   /// Check if the user has access to a specific permission.
   /// Super Admin always returns true.
   /// Other users are checked against their explicit accessPermissions list.
