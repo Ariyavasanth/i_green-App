@@ -230,36 +230,64 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
 
       final encoded = Uri.encodeComponent(query);
 
-      // 2. Query Google Places Autocomplete API with session token, location bias & region preference
+      // 2. Query Google Places Autocomplete API (Places API (New))
       if (_googleMapsApiKey.isNotEmpty) {
         try {
-          String locationBias = '';
+          final uri = Uri.parse('https://places.googleapis.com/v1/places:autocomplete');
+          final Map<String, dynamic> payload = {
+            'input': query,
+            'includedRegionCodes': ['in'],
+            'sessionToken': _sessionToken,
+          };
+
           if (_selectedLat != null && _selectedLng != null) {
-            locationBias = '&location=$_selectedLat,$_selectedLng&radius=50000';
+            payload['locationBias'] = {
+              'circle': {
+                'center': {
+                  'latitude': _selectedLat,
+                  'longitude': _selectedLng,
+                },
+                'radius': 50000.0,
+              }
+            };
+            payload['origin'] = {
+              'latitude': _selectedLat,
+              'longitude': _selectedLng,
+            };
           }
 
-          final autocompleteUrl = Uri.parse(
-            'https://maps.googleapis.com/maps/api/place/autocomplete/json?input=$encoded$locationBias&components=country:in&sessiontoken=$_sessionToken&key=$_googleMapsApiKey',
-          );
+          debugPrint('[Places Search] Querying Places API (New) for "$query"');
+          final autoResp = await http.post(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Goog-Api-Key': _googleMapsApiKey,
+            },
+            body: jsonEncode(payload),
+          ).timeout(const Duration(seconds: 5));
 
-          final autoResp = await http.get(autocompleteUrl).timeout(const Duration(seconds: 4));
+          debugPrint('[Places Search] HTTP status: ${autoResp.statusCode}');
           if (autoResp.statusCode == 200) {
             final Map<String, dynamic> autoData = jsonDecode(autoResp.body);
-            final status = (autoData['status'] ?? '').toString();
+            final suggestions = autoData['suggestions'] as List<dynamic>? ?? [];
+            debugPrint('[Places Search] Found ${suggestions.length} suggestions from Google Places');
 
-            if (status == 'OK') {
-              final predictions = autoData['predictions'] as List<dynamic>? ?? [];
-              for (final pred in predictions) {
-                final description = (pred['description'] ?? '').toString();
-                final placeId = (pred['place_id'] ?? '').toString();
-                final mainText = pred['structured_formatting']?['main_text']?.toString() ?? description.split(',').first.trim();
-                final secondaryText = pred['structured_formatting']?['secondary_text']?.toString() ??
-                    (description.contains(',') ? description.substring(description.indexOf(',') + 1).trim() : description);
+            for (final item in suggestions) {
+              final pred = item['placePrediction'];
+              if (pred != null) {
+                final placeId = (pred['placeId'] ?? '').toString();
+                final fullText = (pred['text']?['text'] ?? '').toString();
+                final mainText = (pred['structuredFormat']?['mainText']?['text'] ??
+                        (fullText.contains(',') ? fullText.split(',').first.trim() : fullText))
+                    .toString();
+                final secondaryText = (pred['structuredFormat']?['secondaryText']?['text'] ??
+                        (fullText.contains(',') ? fullText.substring(fullText.indexOf(',') + 1).trim() : fullText))
+                    .toString();
 
                 if (placeId.isNotEmpty) {
                   results.add({
-                    'name': mainText,
-                    'address': secondaryText,
+                    'name': mainText.isNotEmpty ? mainText : fullText,
+                    'address': secondaryText.isNotEmpty ? secondaryText : fullText,
                     'place_id': placeId,
                     'lat': null,
                     'lng': null,
@@ -267,12 +295,16 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
                 }
               }
             }
+          } else {
+            debugPrint('[Places Search] Google error response: ${autoResp.statusCode} - ${autoResp.body}');
           }
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('[Places Search] Exception during Google Places search: $e');
+        }
       }
 
-      // 3. Fallback Autocomplete (Photon & Nominatim)
-      if (results.length < 5) {
+      // 3. Fallback Autocomplete (Photon & Nominatim only if Google Places returned no results)
+      if (results.isEmpty) {
         try {
           final photonUrl = Uri.parse('https://photon.komoot.io/api/?q=$encoded&limit=8');
           final photonResp = await http.get(photonUrl).timeout(const Duration(seconds: 4));
@@ -441,33 +473,46 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
         String address = item['address'].toString();
 
         if (_googleMapsApiKey.isNotEmpty) {
-          String tokenParam = activeSessionToken != null ? '&sessiontoken=$activeSessionToken' : '';
-          final detailsUrl = Uri.parse(
-            'https://maps.googleapis.com/maps/api/place/details/json?place_id=$placeId&fields=geometry,name,formatted_address$tokenParam&key=$_googleMapsApiKey',
-          );
-          final resp = await http.get(detailsUrl).timeout(const Duration(seconds: 5));
+          final sessionParam = (activeSessionToken != null && activeSessionToken.isNotEmpty)
+              ? '?sessionToken=$activeSessionToken'
+              : '';
+          final detailsUrl = Uri.parse('https://places.googleapis.com/v1/places/$placeId$sessionParam');
+
+          debugPrint('[Place Details] Fetching details for place ID: $placeId');
+          final resp = await http.get(
+            detailsUrl,
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Goog-Api-Key': _googleMapsApiKey,
+              'X-Goog-FieldMask': 'id,displayName,formattedAddress,location',
+            },
+          ).timeout(const Duration(seconds: 5));
+
+          debugPrint('[Place Details] HTTP status: ${resp.statusCode}');
           if (resp.statusCode == 200) {
             final data = jsonDecode(resp.body);
-            if (data['status'] == 'OK') {
-              final result = data['result'];
-              final location = result?['geometry']?['location'];
-              lat = double.tryParse(location?['lat']?.toString() ?? '');
-              lng = double.tryParse(location?['lng']?.toString() ?? '');
-              final formattedAddr = result?['formatted_address']?.toString();
-              if (formattedAddr != null && formattedAddr.isNotEmpty) {
-                address = formattedAddr;
-              }
-              final placeName = result?['name']?.toString();
-              if (placeName != null && placeName.isNotEmpty) {
-                name = placeName;
-              }
+            final location = data['location'];
+            lat = double.tryParse(location?['latitude']?.toString() ?? '');
+            lng = double.tryParse(location?['longitude']?.toString() ?? '');
+
+            final formattedAddr = data['formattedAddress']?.toString();
+            if (formattedAddr != null && formattedAddr.isNotEmpty) {
+              address = formattedAddr;
             }
+            final placeName = data['displayName']?['text']?.toString();
+            if (placeName != null && placeName.isNotEmpty) {
+              name = placeName;
+            }
+            debugPrint('[Place Details] Successfully resolved: $name ($lat, $lng)');
+          } else {
+            debugPrint('[Place Details] Error response: ${resp.statusCode} - ${resp.body}');
           }
         }
 
         // OpenStreetMap Nominatim Geocoding fallback if lat/lng is null
         if ((lat == null || lng == null) && name.isNotEmpty) {
           try {
+            debugPrint('[Place Details] Lat/Lng null, attempting Nominatim fallback');
             final nomUrl = Uri.parse(
               'https://nominatim.openstreetmap.org/search?format=json&q=${Uri.encodeComponent('$name $address')}&limit=1',
             );
@@ -482,7 +527,9 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
                 lng = double.tryParse(nomList.first['lon']?.toString() ?? '');
               }
             }
-          } catch (_) {}
+          } catch (e) {
+            debugPrint('[Place Details] Nominatim fallback error: $e');
+          }
         }
 
         if (lat != null && lng != null && mounted) {
@@ -652,9 +699,15 @@ class _DestinationMapPickerState extends State<DestinationMapPicker> with Single
               name = parts.isNotEmpty ? parts.first.trim() : 'Current Location';
               addr = parts.length > 1 ? parts.sublist(1).join(',').trim() : formattedAddr;
             }
+          } else {
+            debugPrint('[Reverse Geocode] Google Geocoding status: ${data['status']} - ${data['error_message']}');
           }
+        } else {
+          debugPrint('[Reverse Geocode] HTTP status error: ${resp.statusCode}');
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[Reverse Geocode] Exception during reverse geocoding: $e');
+      }
     }
 
     // 2. OpenStreetMap Nominatim Reverse Geocoding Fallback
