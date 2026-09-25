@@ -204,16 +204,20 @@ String _getFirstAllowedPath(Employee emp) {
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
-    initialLocation: '/splash',
+    initialLocation: '/module-dashboard',
     redirect: (context, state) {
       final path = state.uri.path;
-      if (path == '/login' || path == '/splash' || path.startsWith('/employee/register')) {
+      if (path == '/login' || path.startsWith('/employee/register')) {
         return null;
       }
 
       final emailOrId = ref.read(currentUserEmailProvider);
       if (emailOrId == null || emailOrId.trim().isEmpty) {
         return '/login';
+      }
+
+      if (path == '/' || path == '/splash') {
+        return '/module-dashboard';
       }
 
       // Module dashboard and sub-module pages require login but not sidebar-level permissions
@@ -241,7 +245,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
+      GoRoute(path: '/', redirect: (_, _) => '/module-dashboard'),
+      GoRoute(
+        path: '/splash',
+        redirect: (_, _) => '/module-dashboard',
+        builder: (_, _) => const SplashScreen(),
+      ),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       GoRoute(path: '/module-dashboard', builder: (_, _) => const ModuleDashboardScreen()),
       GoRoute(path: '/module/hrms', builder: (_, _) => const HrmsModuleScreen()),
