@@ -14,6 +14,9 @@ class RegistrationLink {
     this.submittedDate = '',
     this.submittedBy = '',
     this.isExperienceMandatory = false,
+    this.referredBy = '',
+    this.referredByMobile = '',
+    this.referredByEmployeeId = '',
   });
 
   final int id;
@@ -30,6 +33,9 @@ class RegistrationLink {
   final String submittedDate;
   final String submittedBy;
   final bool isExperienceMandatory;
+  final String referredBy;
+  final String referredByMobile;
+  final String referredByEmployeeId;
 
   String get fullUrl {
     try {
@@ -69,6 +75,9 @@ class RegistrationLink {
       'submitted_date': submittedDate,
       'submitted_by': submittedBy,
       'is_experience_mandatory': isExperienceMandatory,
+      'referred_by': referredBy,
+      'referred_by_mobile': referredByMobile,
+      'referred_by_employee_id': referredByEmployeeId,
     };
   }
 
@@ -98,6 +107,9 @@ class RegistrationLink {
       submittedBy: map['submitted_by']?.toString() ?? '',
       isExperienceMandatory: map['is_experience_mandatory'] as bool? ??
           (map['isExperienceMandatory'] as bool? ?? false),
+      referredBy: map['referred_by']?.toString() ?? map['referredByName']?.toString() ?? '',
+      referredByMobile: map['referred_by_mobile']?.toString() ?? map['referredByMobile']?.toString() ?? '',
+      referredByEmployeeId: map['referred_by_employee_id']?.toString() ?? map['referredByEmployeeId']?.toString() ?? '',
     );
   }
 
@@ -116,6 +128,9 @@ class RegistrationLink {
     String? submittedDate,
     String? submittedBy,
     bool? isExperienceMandatory,
+    String? referredBy,
+    String? referredByMobile,
+    String? referredByEmployeeId,
   }) {
     return RegistrationLink(
       id: id ?? this.id,
@@ -132,6 +147,9 @@ class RegistrationLink {
       submittedDate: submittedDate ?? this.submittedDate,
       submittedBy: submittedBy ?? this.submittedBy,
       isExperienceMandatory: isExperienceMandatory ?? this.isExperienceMandatory,
+      referredBy: referredBy ?? this.referredBy,
+      referredByMobile: referredByMobile ?? this.referredByMobile,
+      referredByEmployeeId: referredByEmployeeId ?? this.referredByEmployeeId,
     );
   }
 }

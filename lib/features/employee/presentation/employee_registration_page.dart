@@ -105,6 +105,7 @@ class _EmployeeRegistrationPageState
   Uint8List? _profileImageBytes;
   bool _isProfileImageRemoved = false;
   bool _isExperienceMandatory = false;
+  bool _criminalCaseDeclarationChecked = true;
 
   // Tab 2: Address
   final _permAddressController = TextEditingController();
@@ -760,6 +761,9 @@ class _EmployeeRegistrationPageState
     if (_hasCriminalCases &&
         _criminalCaseDetailsController.text.trim().isEmpty) {
       errors.add('Criminal Case Details are required when declaration is Yes');
+    }
+    if (!_criminalCaseDeclarationChecked) {
+      errors.add('Please check the Criminal Background Declaration acknowledgement');
     }
     return errors;
   }
@@ -1902,6 +1906,14 @@ class _EmployeeRegistrationPageState
             if (_designation.isEmpty && link.designation.isNotEmpty) {
               _designation = link.designation;
             }
+            if (_referredByNameController.text.trim().isEmpty && link.referredBy.isNotEmpty) {
+              _referredByNameController.text = link.referredBy;
+              if (link.referredByMobile.isNotEmpty) {
+                final (refCc, refNum) = _parsePhoneAndCountryCode(link.referredByMobile);
+                _referredByMobileCountryCode = refCc;
+                _referredByMobileController.text = refNum;
+              }
+            }
           }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -1927,6 +1939,14 @@ class _EmployeeRegistrationPageState
             }
             if (link.designation.isNotEmpty) {
               _designation = link.designation;
+            }
+            if (_referredByNameController.text.trim().isEmpty && link.referredBy.isNotEmpty) {
+              _referredByNameController.text = link.referredBy;
+              if (link.referredByMobile.isNotEmpty) {
+                final (refCc, refNum) = _parsePhoneAndCountryCode(link.referredByMobile);
+                _referredByMobileCountryCode = refCc;
+                _referredByMobileController.text = refNum;
+              }
             }
             final matchedEmployee = _findMatchingEmployee(link, allEmps);
             if (matchedEmployee != null) {
@@ -2014,6 +2034,14 @@ class _EmployeeRegistrationPageState
             if (_designation.isEmpty && link.designation.isNotEmpty) {
               _designation = link.designation;
             }
+            if (_referredByNameController.text.trim().isEmpty && link.referredBy.isNotEmpty) {
+              _referredByNameController.text = link.referredBy;
+              if (link.referredByMobile.isNotEmpty) {
+                final (refCc, refNum) = _parsePhoneAndCountryCode(link.referredByMobile);
+                _referredByMobileCountryCode = refCc;
+                _referredByMobileController.text = refNum;
+              }
+            }
           }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -2039,6 +2067,14 @@ class _EmployeeRegistrationPageState
             }
             if (link.designation.isNotEmpty) {
               _designation = link.designation;
+            }
+            if (_referredByNameController.text.trim().isEmpty && link.referredBy.isNotEmpty) {
+              _referredByNameController.text = link.referredBy;
+              if (link.referredByMobile.isNotEmpty) {
+                final (refCc, refNum) = _parsePhoneAndCountryCode(link.referredByMobile);
+                _referredByMobileCountryCode = refCc;
+                _referredByMobileController.text = refNum;
+              }
             }
             final matchedEmployee = _findMatchingEmployee(link, allEmps);
             if (matchedEmployee != null) {
@@ -5874,7 +5910,7 @@ class _EmployeeRegistrationPageState
             ],
             const SizedBox(height: 20),
             const Text(
-              'Criminal Background Check :',
+              'Criminal Background Check & Declaration :',
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
@@ -5884,33 +5920,139 @@ class _EmployeeRegistrationPageState
             const SizedBox(height: 8),
             Row(
               children: [
-                Checkbox(
-                  value: _hasCriminalCases,
+                Radio<bool>(
+                  value: false,
+                  groupValue: _hasCriminalCases,
                   activeColor: AppColors.active,
                   onChanged: (val) {
-                    setState(() => _hasCriminalCases = val ?? false);
+                    setState(() {
+                      _hasCriminalCases = false;
+                      _criminalCaseDetailsController.clear();
+                    });
                     _markTabUnsaved('History');
                   },
                 ),
+                const Text(
+                  'No',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(width: 20),
+                Radio<bool>(
+                  value: true,
+                  groupValue: _hasCriminalCases,
+                  activeColor: AppColors.active,
+                  onChanged: (val) {
+                    setState(() => _hasCriminalCases = true);
+                    _markTabUnsaved('History');
+                  },
+                ),
+                const Text(
+                  'Yes',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(width: 12),
                 const Expanded(
                   child: Text(
-                    'Does the employee have any criminal cases or legal charges?',
+                    '(Do you have any criminal cases, FIR, conviction, or pending legal charges?)',
                     style: TextStyle(
                       fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.black87,
+                      color: AppColors.textSecondary,
                     ),
                   ),
                 ),
               ],
             ),
             if (_hasCriminalCases) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               _buildTextField(
                 'Criminal Case Details / Description *',
                 _criminalCaseDetailsController,
-                placeholder: 'Enter details regarding the criminal case(s)...',
+                placeholder:
+                    'Provide complete details regarding the case(s), FIR number, court, and status...',
                 maxLines: 3,
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFFFECACA)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Checkbox(
+                      value: _criminalCaseDeclarationChecked,
+                      activeColor: AppColors.active,
+                      onChanged: (val) {
+                        setState(
+                          () => _criminalCaseDeclarationChecked = val ?? false,
+                        );
+                        _markTabUnsaved('History');
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: Text(
+                          'I hereby declare that the criminal / legal proceeding details provided above are true, accurate, and complete.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF991B1B),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0FDF4),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFFBBF7D0)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Checkbox(
+                      value: _criminalCaseDeclarationChecked,
+                      activeColor: AppColors.active,
+                      onChanged: (val) {
+                        setState(
+                          () => _criminalCaseDeclarationChecked = val ?? false,
+                        );
+                        _markTabUnsaved('History');
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: Text(
+                          'I hereby declare and confirm that I have no criminal record, FIR, conviction, or pending court proceedings against me.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF166534),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
             const SizedBox(height: 24),
@@ -7666,26 +7808,29 @@ class _EmployeeRegistrationPageState
     final name = '${_firstNameController.text} ${_lastNameController.text}'
         .trim();
     final isMobile = MediaQuery.of(context).size.width < 600;
+    bool finalDeclarationAgreed = false;
 
     showDialog(
       context: context,
       barrierDismissible: true,
       builder: (BuildContext context) {
-        return Dialog(
-          insetPadding: isMobile
-              ? const EdgeInsets.symmetric(horizontal: 12, vertical: 20)
-              : const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          child: Container(
-            width: isMobile
-                ? double.infinity
-                : MediaQuery.of(context).size.width * 0.85,
-            constraints: BoxConstraints(
-              maxWidth: 900,
-              maxHeight: MediaQuery.of(context).size.height * 0.88,
-            ),
-            padding: EdgeInsets.all(isMobile ? 14 : 24),
-            child: Column(
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              insetPadding: isMobile
+                  ? const EdgeInsets.symmetric(horizontal: 12, vertical: 20)
+                  : const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              child: Container(
+                width: isMobile
+                    ? double.infinity
+                    : MediaQuery.of(context).size.width * 0.85,
+                constraints: BoxConstraints(
+                  maxWidth: 900,
+                  maxHeight: MediaQuery.of(context).size.height * 0.88,
+                ),
+                padding: EdgeInsets.all(isMobile ? 14 : 24),
+                child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Header
@@ -8337,7 +8482,63 @@ class _EmployeeRegistrationPageState
                     ),
                   ),
                 ),
-                const Divider(height: 20),
+                const Divider(height: 16),
+                // Final Submission Declaration Card
+                Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: finalDeclarationAgreed
+                        ? const Color(0xFFF0FDF4)
+                        : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: finalDeclarationAgreed
+                          ? const Color(0xFF86EFAC)
+                          : const Color(0xFFCBD5E1),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Checkbox(
+                        value: finalDeclarationAgreed,
+                        activeColor: AppColors.active,
+                        onChanged: (val) {
+                          setDialogState(() {
+                            finalDeclarationAgreed = val ?? false;
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: InkWell(
+                            onTap: () {
+                              setDialogState(() {
+                                finalDeclarationAgreed =
+                                    !finalDeclarationAgreed;
+                              });
+                            },
+                            child: const Text(
+                              'I hereby declare that all the information, credentials, and documents submitted in this registration form are true, accurate, and complete to the best of my knowledge.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1E293B),
+                                height: 1.35,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 // Footer Action Buttons
                 if (isMobile)
                   Column(
@@ -8345,17 +8546,31 @@ class _EmployeeRegistrationPageState
                     children: [
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.active,
+                          backgroundColor: finalDeclarationAgreed
+                              ? AppColors.active
+                              : Colors.grey.shade400,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(6),
                           ),
                         ),
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                          _submitForm(link, isSubmit: true);
-                        },
+                        onPressed: !finalDeclarationAgreed
+                            ? () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Please check the declaration box before submitting.',
+                                    ),
+                                    backgroundColor: Colors.orange,
+                                    duration: Duration(seconds: 3),
+                                  ),
+                                );
+                              }
+                            : () {
+                                Navigator.of(context).pop();
+                                _submitForm(link, isSubmit: true);
+                              },
                         icon: const Icon(Icons.check_circle_outline, size: 18),
                         label: Text(
                           _isEditing
@@ -8427,7 +8642,9 @@ class _EmployeeRegistrationPageState
                       const SizedBox(width: 12),
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.active,
+                          backgroundColor: finalDeclarationAgreed
+                              ? AppColors.active
+                              : Colors.grey.shade400,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(
                             horizontal: 20,
@@ -8437,10 +8654,22 @@ class _EmployeeRegistrationPageState
                             borderRadius: BorderRadius.circular(4),
                           ),
                         ),
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                          _submitForm(link, isSubmit: true);
-                        },
+                        onPressed: !finalDeclarationAgreed
+                            ? () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Please check the declaration box before submitting.',
+                                    ),
+                                    backgroundColor: Colors.orange,
+                                    duration: Duration(seconds: 3),
+                                  ),
+                                );
+                              }
+                            : () {
+                                Navigator.of(context).pop();
+                                _submitForm(link, isSubmit: true);
+                              },
                         icon: const Icon(Icons.check_circle_outline, size: 18),
                         label: Text(
                           _isEditing
@@ -8457,6 +8686,8 @@ class _EmployeeRegistrationPageState
               ],
             ),
           ),
+        );
+          },
         );
       },
     );

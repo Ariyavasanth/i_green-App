@@ -26,6 +26,7 @@ class _AddEmployeeLinkDialogState
   String? _selectedOrg;
   String? _selectedDept;
   String? _selectedDesignation;
+  Employee? _selectedReferredEmployee;
   late final TextEditingController _baseUrlController;
 
   RegistrationLink? _generatedLink;
@@ -67,6 +68,9 @@ class _AddEmployeeLinkDialogState
         department: _selectedDept ?? '',
         designation: _selectedDesignation ?? '',
         isExperienceMandatory: _isExperienceMandatory,
+        referredBy: _selectedReferredEmployee?.fullName ?? '',
+        referredByMobile: _selectedReferredEmployee?.phoneNumber ?? '',
+        referredByEmployeeId: _selectedReferredEmployee?.employeeId ?? '',
       );
       ref.invalidate(registrationLinksProvider);
       setState(() {
@@ -287,6 +291,35 @@ class _AddEmployeeLinkDialogState
                         searchHint: 'Search designation...',
                         onChanged: (val) {
                           setState(() => _selectedDesignation = val);
+                        },
+                      );
+                    },
+                  ),
+              const SizedBox(height: 12),
+              ref.watch(allEmployeesProvider).when(
+                    loading: () => const SizedBox(
+                      height: 48,
+                      child: Center(child: LinearProgressIndicator()),
+                    ),
+                    error: (_, __) => const SizedBox.shrink(),
+                    data: (employees) {
+                      final activeEmployees = employees
+                          .where((e) =>
+                              e.status.toUpperCase() != 'INACTIVE' &&
+                              e.status.toUpperCase() != 'SUSPENDED' &&
+                              e.fullName.trim().isNotEmpty)
+                          .toList();
+                      return AppSearchableDropdown<Employee>(
+                        label: 'Referred By (Optional)',
+                        value: _selectedReferredEmployee,
+                        items: activeEmployees,
+                        itemLabel: (emp) => emp.employeeId.isNotEmpty
+                            ? '${emp.fullName} (${emp.employeeId})'
+                            : emp.fullName,
+                        placeholder: 'Select Referring Employee',
+                        searchHint: 'Search employee name or ID...',
+                        onChanged: (emp) {
+                          setState(() => _selectedReferredEmployee = emp);
                         },
                       );
                     },

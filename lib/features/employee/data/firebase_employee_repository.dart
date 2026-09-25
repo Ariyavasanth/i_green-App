@@ -339,6 +339,9 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     String? department,
     String? designation,
     bool isExperienceMandatory = false,
+    String? referredBy,
+    String? referredByMobile,
+    String? referredByEmployeeId,
   }) async {
     final docRef = _registrationLinksRef.doc();
     final linkId = 'lnk_${docRef.id.substring(0, 8)}';
@@ -356,6 +359,9 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       department: department ?? '',
       designation: designation ?? '',
       isExperienceMandatory: isExperienceMandatory,
+      referredBy: referredBy ?? '',
+      referredByMobile: referredByMobile ?? '',
+      referredByEmployeeId: referredByEmployeeId ?? '',
     );
 
     final data = link.toMap();

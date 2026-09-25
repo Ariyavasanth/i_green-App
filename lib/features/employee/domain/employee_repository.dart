@@ -34,6 +34,9 @@ abstract class EmployeeRepository {
     String? department,
     String? designation,
     bool isExperienceMandatory = false,
+    String? referredBy,
+    String? referredByMobile,
+    String? referredByEmployeeId,
   });
   Future<List<RegistrationLink>> getRegistrationLinks();
   Future<RegistrationLink?> getRegistrationLinkById(String linkId);
