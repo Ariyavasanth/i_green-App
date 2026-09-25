@@ -390,35 +390,10 @@ class _AssetSettingsPageState extends ConsumerState<AssetSettingsPage>
     return Scaffold(
       backgroundColor: const Color(0xFFEFF3F6),
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         backgroundColor: Colors.white,
         elevation: 0.5,
-        leading: IconButton(
-          icon: const Icon(Icons.grid_view, color: Color(0xFF1E293B)),
-          onPressed: () {},
-        ),
-        title: const Text(
-          'Asset Settings',
-          style: TextStyle(color: Color(0xFF1E293B), fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        centerTitle: false,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search, color: Color(0xFF414A51)),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.notifications_none, color: Color(0xFF414A51)),
-            onPressed: () {},
-          ),
-          const Padding(
-            padding: EdgeInsets.only(right: 12),
-            child: CircleAvatar(
-              radius: 14,
-              backgroundColor: primaryColor,
-              child: Text('A', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-            ),
-          ),
-        ],
+        toolbarHeight: 0,
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: primaryColor,

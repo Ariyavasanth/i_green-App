@@ -42,10 +42,7 @@ final userDestinationsProvider = Provider<List<SidebarDestination>>((ref) {
   return AppShell.destinations.where((d) => currentEmp.hasPermission(d.label)).toList();
 });
 
-void _toggleSidebarExpanded(WidgetRef ref, bool expanded) {
-  ref.read(sidebarExpandedProvider.notifier).state = expanded;
-  ref.read(sidebarStateStorageProvider).writeExpanded(expanded);
-}
+
 
 
 class AppShell extends ConsumerWidget {
@@ -324,71 +321,30 @@ class AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final expanded = ref.watch(sidebarExpandedProvider);
-    final activeDestinations = ref.watch(userDestinationsProvider);
-    final currentEmp = ref.watch(currentEmployeeProvider);
-
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < AppBreakpoints.laptop;
-        final sidebar = SidebarDrawer(
-          destinations: activeDestinations,
-          currentLocation: currentLocation,
-          expanded: compact || expanded,
-          employee: compact ? currentEmp : null,
-          onSelected: (path) {
-            context.go(path);
-            if (compact) Navigator.of(context).pop();
-          },
-          onLogout: () async {
-            ref.read(currentUserEmailProvider.notifier).state = null;
-            await ref.read(authSessionStorageProvider).writeUserEmail(null);
-            await ref.read(authenticationRepositoryProvider).signOut();
-            ref.invalidate(employeesProvider);
-            ref.invalidate(allEmployeesProvider);
-            ref.invalidate(currentEmployeeProvider);
-            if (context.mounted) context.go('/login');
-          },
-        );
         return Scaffold(
-          drawer: compact ? Drawer(width: 250, child: sidebar) : null,
           body: DecoratedBox(
             decoration: const BoxDecoration(
               color: Color(0xFFF8FAFC),
             ),
-            child: Builder(
-              builder: (scaffoldContext) {
-                return Row(
-                  children: [
-                    if (!compact) sidebar,
-                    Expanded(
-                      child: Column(
-                        children: [
-                          _TopBar(
-                            compact: compact,
-                            expanded: expanded,
-                            currentLocation: currentLocation,
-                            onMenuPressed: compact
-                                ? () =>
-                                      Scaffold.of(scaffoldContext).openDrawer()
-                                : () =>
-                                      _toggleSidebarExpanded(ref, !expanded),
-                          ),
-                          Expanded(
-                            child: SafeArea(
-                              top: false,
-                              bottom: true,
-                              child: (currentLocation == '/home' || currentLocation == '/module-dashboard')
-                                  ? child
-                                  : AppBackgroundWrapper(child: child),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              },
+            child: Column(
+              children: [
+                _TopBar(
+                  compact: compact,
+                  currentLocation: currentLocation,
+                ),
+                Expanded(
+                  child: SafeArea(
+                    top: false,
+                    bottom: true,
+                    child: (currentLocation == '/home' || currentLocation == '/module-dashboard')
+                        ? child
+                        : AppBackgroundWrapper(child: child),
+                  ),
+                ),
+              ],
             ),
           ),
         );
@@ -400,14 +356,10 @@ class AppShell extends ConsumerWidget {
 class _TopBar extends ConsumerWidget {
   const _TopBar({
     required this.compact,
-    required this.expanded,
     required this.currentLocation,
-    required this.onMenuPressed,
   });
   final bool compact;
-  final bool expanded;
   final String currentLocation;
-  final VoidCallback onMenuPressed;
 
   String _getHeading(String location) {
     final cleanLoc = location.split('?').first.trim();
@@ -515,6 +467,9 @@ class _TopBar extends ConsumerWidget {
       '/my-payslips',
       '/permission',
       '/permission-management',
+      '/payroll',
+      '/payroll-history',
+      '/payroll-settings',
     ];
 
     for (final route in hrmsRoutes) {
@@ -550,9 +505,6 @@ class _TopBar extends ConsumerWidget {
       '/expenses',
       '/purchase-orders',
       '/bills',
-      '/payroll',
-      '/payroll-history',
-      '/payroll-settings',
     ];
 
     for (final route in accountsRoutes) {
@@ -606,13 +558,6 @@ class _TopBar extends ConsumerWidget {
     final isLoanDetails = currentLocation.startsWith('/loan/details') || currentLocation.startsWith('/loan-management/details');
     final loanId = isLoanDetails ? int.tryParse(currentLocation.split('?').first.split('/').last) : null;
 
-    final isFormPage = currentLocation.endsWith('/new') ||
-        currentLocation.contains('/edit') ||
-        currentLocation.startsWith('/permission/') ||
-        currentLocation.startsWith('/inventory-adjustments/') ||
-        isLoanDetails ||
-        currentLocation.startsWith('/loan-management/create');
-
     final content = SafeArea(
       bottom: false,
       child: Container(
@@ -620,43 +565,22 @@ class _TopBar extends ConsumerWidget {
         constraints: const BoxConstraints(minHeight: 48),
         child: Row(
           children: [
-            if (compact)
-              IconButton(
-                icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1E293B)),
-                tooltip: 'Back',
-                onPressed: () {
-                  if (context.canPop()) {
-                    context.pop();
-                  } else {
-                    context.go(_getBackRoute(currentLocation));
-                  }
-                },
-              )
-            else if (isFormPage)
-              IconButton(
-                icon: const Icon(Icons.arrow_back, color: Color(0xFF1E293B)),
-                tooltip: 'Back',
-                onPressed: () {
-                  if (context.canPop()) {
-                    context.pop();
-                  } else {
-                    context.go(_getBackRoute(currentLocation));
-                  }
-                },
-              )
-            else
-              _AnimatedMenuButton(
-                tooltip: 'Toggle navigation',
-                onPressed: onMenuPressed,
-              ),
+            IconButton(
+              icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1E293B)),
+              tooltip: 'Back',
+              onPressed: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(_getBackRoute(currentLocation));
+                }
+              },
+            ),
             const SizedBox(width: 8),
             Expanded(
-              child: InkWell(
-                onTap: isFormPage ? null : onMenuPressed,
-                borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
                     children: [
                       Flexible(
                         child: Column(
@@ -757,7 +681,6 @@ class _TopBar extends ConsumerWidget {
                   ),
                 ),
               ),
-            ),
 
             if (currentLocation == '/inventory-adjustments/requests')
               IconButton(
@@ -1051,67 +974,3 @@ class _TopBar extends ConsumerWidget {
   }
 }
 
-class _AnimatedMenuButton extends StatefulWidget {
-  const _AnimatedMenuButton({
-    required this.tooltip,
-    required this.onPressed,
-  });
-
-  final String tooltip;
-  final VoidCallback onPressed;
-
-  @override
-  State<_AnimatedMenuButton> createState() => _AnimatedMenuButtonState();
-}
-
-class _AnimatedMenuButtonState extends State<_AnimatedMenuButton>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 320),
-  );
-  late final Animation<double> _turn = TweenSequence<double>([
-    TweenSequenceItem(tween: Tween(begin: 0, end: 0.125), weight: 50),
-    TweenSequenceItem(tween: Tween(begin: 0.125, end: 0), weight: 50),
-  ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-  late final Animation<double> _scale = TweenSequence<double>([
-    TweenSequenceItem(tween: Tween(begin: 1, end: 0.88), weight: 35),
-    TweenSequenceItem(tween: Tween(begin: 0.88, end: 1), weight: 65),
-  ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _handlePressed() {
-    _controller.forward(from: 0);
-    widget.onPressed();
-  }
-
-  @override
-  Widget build(BuildContext context) => IconButton(
-    tooltip: widget.tooltip,
-    onPressed: _handlePressed,
-    icon: AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) => RotationTransition(
-        turns: _turn,
-        child: ScaleTransition(scale: _scale, child: child),
-      ),
-      child: const _FourTileMenuIcon(),
-    ),
-  );
-}
-
-class _FourTileMenuIcon extends StatelessWidget {
-  const _FourTileMenuIcon();
-
-  @override
-  Widget build(BuildContext context) => const Icon(
-        Icons.menu,
-        size: 24,
-        color: Color(0xFF1E293B),
-      );
-}
