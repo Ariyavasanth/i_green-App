@@ -5318,7 +5318,10 @@ class _EmployeeRegistrationPageState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 4,
               children: [
                 Text(
                   _isExperienceMandatory
@@ -5330,7 +5333,6 @@ class _EmployeeRegistrationPageState
                     color: Colors.black87,
                   ),
                 ),
-                const SizedBox(width: 8),
                 Text(
                   _isExperienceMandatory
                       ? '(Mandatory for this registration)'

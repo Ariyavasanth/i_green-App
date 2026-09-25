@@ -94,7 +94,10 @@ class FirebaseTaskRepository implements TaskRepository {
           return TaskItem.fromMap(doc.data()!);
         }
       }
-      return _fallbackTasks.firstWhere((t) => t.id == id, orElse: () => _fallbackTasks.first);
+      return _fallbackTasks.cast<TaskItem?>().firstWhere(
+        (t) => t?.id == id,
+        orElse: () => null,
+      );
     } catch (_) {
       final index = _fallbackTasks.indexWhere((t) => t.id == id);
       return index >= 0 ? _fallbackTasks[index] : null;

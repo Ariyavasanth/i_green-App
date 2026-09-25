@@ -11,10 +11,14 @@ class TaskFormDialog extends ConsumerStatefulWidget {
   const TaskFormDialog({
     super.key,
     this.existingTask,
+    this.initialAssignedTo,
+    this.isSelfAssign = false,
     this.onTaskSaved,
   });
 
   final TaskItem? existingTask;
+  final String? initialAssignedTo;
+  final bool isSelfAssign;
   final VoidCallback? onTaskSaved;
 
   @override
@@ -27,6 +31,8 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
   late TextEditingController _codeController;
   String? _selectedAssignedTo;
   String _status = 'TODO';
+  String _priority = 'MEDIUM';
+  DateTime _createdAt = DateTime.now();
   DateTime _startTime = DateTime.now();
   DateTime? _endTime;
 
@@ -36,9 +42,11 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
     final task = widget.existingTask;
     _titleController = TextEditingController(text: task?.title ?? '');
     _codeController = TextEditingController(text: task?.projectOrOfficeCode ?? 'PRJ-101');
-    _selectedAssignedTo = task?.assignedTo;
+    _selectedAssignedTo = task?.assignedTo ?? widget.initialAssignedTo;
     _status = task?.status ?? 'TODO';
+    _priority = task?.priority ?? 'MEDIUM';
     if (task != null) {
+      _createdAt = task.createdAt;
       _startTime = task.startTime;
       _endTime = task.endTime;
     }
@@ -51,11 +59,18 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
     super.dispose();
   }
 
+  DateTime _calculateDeadline() {
+    final priorityObj = TaskPriority.fromString(_priority);
+    return _createdAt.add(Duration(hours: priorityObj.slaHours));
+  }
+
   Future<void> _saveTask() async {
     if (!_formKey.currentState!.validate()) return;
 
     final currentEmp = ref.read(currentEmployeeProvider);
-    final empIdStr = _selectedAssignedTo ?? (currentEmp?.employeeId ?? '');
+    final empIdStr = widget.isSelfAssign
+        ? (currentEmp?.employeeId ?? '')
+        : (_selectedAssignedTo ?? widget.initialAssignedTo ?? (currentEmp?.employeeId ?? ''));
     final digits = empIdStr.replaceAll(RegExp(r'[^0-9]'), '');
     final empIdInt = int.tryParse(digits) ?? (currentEmp?.id ?? 0);
 
@@ -186,16 +201,30 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
 
     final repo = ref.read(taskRepositoryProvider);
     final taskId = widget.existingTask?.id ?? DateTime.now().millisecondsSinceEpoch.toString();
+    final priorityObj = TaskPriority.fromString(_priority);
+    final deadline = _calculateDeadline();
+    final currentEmpName = '${currentEmp?.firstName ?? ""} ${currentEmp?.lastName ?? ""}'.trim();
+    final isSelf = widget.isSelfAssign || (empIdStr == currentEmp?.employeeId);
+
+    final assignedBy = widget.existingTask?.assignedBy.isNotEmpty == true
+        ? widget.existingTask!.assignedBy
+        : (isSelf
+            ? (currentEmpName.isNotEmpty ? '$currentEmpName (Self)' : 'Self-Assigned')
+            : (currentEmpName.isNotEmpty ? currentEmpName : 'Admin'));
 
     final task = TaskItem(
       id: taskId,
       title: _titleController.text.trim(),
       projectOrOfficeCode: _codeController.text.trim().toUpperCase(),
-      assignedBy: '${currentEmp?.firstName ?? "Admin"} ${currentEmp?.lastName ?? ""}'.trim(),
-      assignedTo: _selectedAssignedTo ?? (currentEmp?.employeeId ?? ''),
+      assignedBy: assignedBy,
+      assignedTo: empIdStr,
+      createdAt: _createdAt,
       startTime: _startTime,
       endTime: _endTime,
       status: _status,
+      priority: _priority,
+      slaDurationHours: priorityObj.slaHours,
+      deadline: deadline,
     );
 
     if (widget.existingTask == null) {
@@ -215,11 +244,74 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(widget.existingTask == null ? 'Task created successfully' : 'Task updated successfully'),
+          content: Text(
+            widget.existingTask == null
+                ? (isSelf ? 'Task self-assigned successfully' : 'Task created successfully')
+                : 'Task updated successfully',
+          ),
           backgroundColor: const Color(0xFF9CC70A),
         ),
       );
     }
+  }
+
+  Color _getPriorityColor(String priority) {
+    switch (priority) {
+      case 'VERY_HIGH':
+        return Colors.red.shade700;
+      case 'HIGH':
+        return Colors.orange.shade800;
+      case 'MEDIUM':
+        return Colors.blue.shade700;
+      case 'LOW':
+      default:
+        return const Color(0xFF414A51);
+    }
+  }
+
+  Widget _buildAssigneeField({
+    required List<dynamic> employees,
+    required dynamic currentEmp,
+  }) {
+    if (widget.isSelfAssign) {
+      final empName = currentEmp != null
+          ? '${currentEmp.employeeId} - ${currentEmp.fullName} (Self)'
+          : 'Self';
+      return TextFormField(
+        initialValue: empName,
+        readOnly: true,
+        decoration: const InputDecoration(
+          labelText: 'Assign To',
+          border: OutlineInputBorder(),
+          prefixIcon: Icon(Icons.person_outline, size: 20),
+          suffixIcon: Tooltip(
+            message: 'Self-assigned to yourself',
+            child: Icon(Icons.lock_outline, size: 18, color: Color(0xFF64748B)),
+          ),
+          filled: true,
+          fillColor: Color(0xFFF1F5F9),
+        ),
+      );
+    }
+
+    return DropdownButtonFormField<String>(
+      value: _selectedAssignedTo ?? (currentEmp?.employeeId),
+      decoration: const InputDecoration(
+        labelText: 'Assign To',
+        border: OutlineInputBorder(),
+      ),
+      items: employees.map(
+        (emp) {
+          final isSelf = currentEmp != null && emp.id == currentEmp.id;
+          final label = isSelf ? '${emp.employeeId} - ${emp.fullName} (Self)' : '${emp.employeeId} - ${emp.fullName}';
+          return DropdownMenuItem<String>(
+            value: emp.employeeId,
+            child: Text(label),
+          );
+        },
+      ).toList(),
+      onChanged: (val) => setState(() => _selectedAssignedTo = val),
+    );
   }
 
   @override
@@ -231,18 +323,27 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
 
-    final empIdStr = _selectedAssignedTo ?? (currentEmp?.employeeId ?? '');
+    final empIdStr = widget.isSelfAssign
+        ? (currentEmp?.employeeId ?? '')
+        : (_selectedAssignedTo ?? widget.initialAssignedTo ?? (currentEmp?.employeeId ?? ''));
     final digits = empIdStr.replaceAll(RegExp(r'[^0-9]'), '');
     final empIdInt = int.tryParse(digits) ?? (currentEmp?.id ?? 0);
     final activeODAsync = ref.watch(activeOnDutyAssignmentProvider(empIdInt));
     final activeOD = activeODAsync.valueOrNull;
     final isOnDutyRunning = activeOD != null && (activeOD.status == 'IN_PROGRESS' || activeOD.status == 'ACTIVE');
 
+    final deadline = _calculateDeadline();
+    final priorityObj = TaskPriority.fromString(_priority);
+
+    final dialogTitle = widget.isSelfAssign
+        ? 'Self-Assign Task'
+        : (widget.existingTask == null ? 'Create Task Assignment' : 'Edit Task Assignment');
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 540),
+        constraints: const BoxConstraints(maxWidth: 560),
         width: screenWidth * 0.95,
         padding: EdgeInsets.all(isMobile ? 16 : 24),
         child: Form(
@@ -265,12 +366,15 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
                               color: primaryColor.withValues(alpha: 0.15),
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.assignment_turned_in_outlined, color: primaryColor),
+                            child: Icon(
+                              widget.isSelfAssign ? Icons.add_task_rounded : Icons.assignment_turned_in_outlined,
+                              color: primaryColor,
+                            ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              widget.existingTask == null ? 'Create Task Assignment' : 'Edit Task Assignment',
+                              dialogTitle,
                               style: TextStyle(
                                 fontSize: isMobile ? 16 : 18,
                                 fontWeight: FontWeight.bold,
@@ -293,7 +397,7 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
                   controller: _titleController,
                   decoration: const InputDecoration(
                     labelText: 'Task Title *',
-                    hintText: 'e.g. Implement Riverpod state management',
+                    hintText: 'e.g. Implement Login API & Riverpod state',
                     border: OutlineInputBorder(),
                   ),
                   validator: (val) => val == null || val.trim().isEmpty ? 'Required' : null,
@@ -310,23 +414,36 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
                     validator: (val) => val == null || val.trim().isEmpty ? 'Required' : null,
                   ),
                   const SizedBox(height: 16),
+                  _buildAssigneeField(employees: employees, currentEmp: currentEmp),
+                  const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
-                    value: _selectedAssignedTo,
+                    value: _priority,
                     decoration: const InputDecoration(
-                      labelText: 'Assign To',
+                      labelText: 'Priority (SLA)',
                       border: OutlineInputBorder(),
                     ),
-                    items: employees.map(
-                      (emp) {
-                        final isSelf = currentEmp != null && emp.id == currentEmp.id;
-                        final label = isSelf ? '${emp.employeeId} - ${emp.fullName} (Self)' : '${emp.employeeId} - ${emp.fullName}';
-                        return DropdownMenuItem(
-                          value: emp.employeeId,
-                          child: Text(label),
-                        );
-                      },
-                    ).toList(),
-                    onChanged: (val) => setState(() => _selectedAssignedTo = val),
+                    items: TaskPriority.values.map((p) {
+                      return DropdownMenuItem(
+                        value: p.code,
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                color: _getPriorityColor(p.code),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(p.label, style: const TextStyle(fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) setState(() => _priority = val);
+                    },
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
@@ -341,28 +458,6 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
                       DropdownMenuItem(value: 'COMPLETED', child: Text('COMPLETED')),
                     ],
                     onChanged: (val) => setState(() => _status = val ?? 'TODO'),
-                  ),
-                  const SizedBox(height: 16),
-                  InkWell(
-                    onTap: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: _startTime,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime(2030),
-                      );
-                      if (picked != null) {
-                        setState(() => _startTime = picked);
-                      }
-                    },
-                    child: InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Start Date',
-                        border: OutlineInputBorder(),
-                        suffixIcon: Icon(Icons.calendar_today, size: 18),
-                      ),
-                      child: Text(DateFormat('dd MMM yyyy').format(_startTime)),
-                    ),
                   ),
                 ] else ...[
                   Row(
@@ -380,30 +475,45 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: DropdownButtonFormField<String>(
-                          value: _selectedAssignedTo,
-                          decoration: const InputDecoration(
-                            labelText: 'Assign To',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: employees.map(
-                            (emp) {
-                              final isSelf = currentEmp != null && emp.id == currentEmp.id;
-                              final label = isSelf ? '${emp.employeeId} - ${emp.fullName} (Self)' : '${emp.employeeId} - ${emp.fullName}';
-                              return DropdownMenuItem(
-                                value: emp.employeeId,
-                                child: Text(label),
-                              );
-                            },
-                          ).toList(),
-                          onChanged: (val) => setState(() => _selectedAssignedTo = val),
-                        ),
+                        child: _buildAssigneeField(employees: employees, currentEmp: currentEmp),
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
                   Row(
                     children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: _priority,
+                          decoration: const InputDecoration(
+                            labelText: 'Priority (SLA)',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: TaskPriority.values.map((p) {
+                            return DropdownMenuItem(
+                              value: p.code,
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 10,
+                                    height: 10,
+                                    decoration: BoxDecoration(
+                                      color: _getPriorityColor(p.code),
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(p.label, style: const TextStyle(fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) setState(() => _priority = val);
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           value: _status,
@@ -419,55 +529,79 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
                           onChanged: (val) => setState(() => _status = val ?? 'TODO'),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: InkWell(
-                          onTap: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: _startTime,
-                              firstDate: DateTime(2020),
-                              lastDate: DateTime(2030),
-                            );
-                            if (picked != null) {
-                              setState(() => _startTime = picked);
-                            }
-                          },
-                          child: InputDecorator(
-                            decoration: const InputDecoration(
-                              labelText: 'Start Date',
-                              border: OutlineInputBorder(),
-                              suffixIcon: Icon(Icons.calendar_today, size: 18),
-                            ),
-                            child: Text(DateFormat('dd MMM yyyy').format(_startTime)),
-                          ),
-                        ),
-                      ),
                     ],
                   ),
-                  if (isOnDutyRunning) ...[
-                    const SizedBox(height: 14),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEFF6FF),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFF93C5FD)),
-                      ),
-                      child: Row(
+                ],
+                const SizedBox(height: 14),
+                // SLA & Deadline Information Preview Card
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         children: [
-                          const Icon(Icons.info_outline, color: Color(0xFF1D4ED8), size: 20),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'ℹ️ Notice: Selected employee is currently on On-Duty (${activeOD.odType} - ${activeOD.destination}). This task will be added as TODO so they can start it after completing OD.',
-                              style: const TextStyle(fontSize: 12.5, color: Color(0xFF1E40AF), fontWeight: FontWeight.w500),
+                          Icon(Icons.timer_outlined, color: _getPriorityColor(_priority), size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            'SLA & Deadline Rules',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: _getPriorityColor(_priority),
                             ),
                           ),
                         ],
                       ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Allowed Time: ${priorityObj.slaHours >= 24 ? '${priorityObj.slaHours ~/ 24} days' : '${priorityObj.slaHours} hours'}',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+                          ),
+                          Text(
+                            'Assigned: ${DateFormat('dd MMM, h:mm a').format(_createdAt)}',
+                            style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Target Deadline: ${DateFormat('dd MMM yyyy, h:mm a').format(deadline)}',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                      ),
+                    ],
+                  ),
+                ),
+                if (isOnDutyRunning) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF93C5FD)),
                     ),
-                  ],
+                    child: Row(
+                      children: [
+                        const Icon(Icons.info_outline, color: Color(0xFF1D4ED8), size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'ℹ️ Notice: Selected employee is currently on On-Duty (${activeOD.odType} - ${activeOD.destination}). This task will be added as TODO so they can start it after completing OD.',
+                            style: const TextStyle(fontSize: 12.5, color: Color(0xFF1E40AF), fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
                 const SizedBox(height: 24),
                 Wrap(
@@ -514,7 +648,7 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                           ),
                           onPressed: _saveTask,
-                          child: Text(widget.existingTask == null ? 'Create Task' : 'Save Changes'),
+                          child: Text(widget.existingTask == null ? (widget.isSelfAssign ? 'Self-Assign' : 'Create Task') : 'Save Changes'),
                         ),
                       ],
                     ),
