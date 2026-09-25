@@ -150,4 +150,30 @@ class FirebaseTaskRepository implements TaskRepository {
     }
     return result;
   }
+
+  @override
+  Future<String> getNextTaskCode() async {
+    try {
+      final tasks = await getTasks();
+      int maxNum = 100;
+      bool foundAny = false;
+      for (final t in tasks) {
+        final code = t.projectOrOfficeCode.trim().toUpperCase();
+        final match = RegExp(r'PRJ-(\d+)').firstMatch(code);
+        if (match != null) {
+          foundAny = true;
+          final numVal = int.tryParse(match.group(1) ?? '0') ?? 0;
+          if (numVal > maxNum) {
+            maxNum = numVal;
+          }
+        }
+      }
+      if (foundAny || maxNum > 100) {
+        return 'PRJ-${maxNum + 1}';
+      }
+      return 'PRJ-${100 + tasks.length + 1}';
+    } catch (_) {
+      return 'PRJ-${100 + _fallbackTasks.length + 1}';
+    }
+  }
 }

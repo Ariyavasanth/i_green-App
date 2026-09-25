@@ -39,6 +39,7 @@ class ModuleDashboardScreen extends ConsumerWidget {
                   await Future.delayed(const Duration(milliseconds: 500));
                 },
                 child: SingleChildScrollView(
+                  key: const PageStorageKey<String>('module_dashboard_scroll'),
                   physics: const AlwaysScrollableScrollPhysics(),
                   child: Center(
                     child: ConstrainedBox(

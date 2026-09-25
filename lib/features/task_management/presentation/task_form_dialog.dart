@@ -41,7 +41,7 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
     super.initState();
     final task = widget.existingTask;
     _titleController = TextEditingController(text: task?.title ?? '');
-    _codeController = TextEditingController(text: task?.projectOrOfficeCode ?? 'PRJ-101');
+    _codeController = TextEditingController(text: task?.projectOrOfficeCode ?? '');
     _selectedAssignedTo = task?.assignedTo ?? widget.initialAssignedTo;
     _status = task?.status ?? 'TODO';
     _priority = task?.priority ?? 'MEDIUM';
@@ -49,6 +49,17 @@ class _TaskFormDialogState extends ConsumerState<TaskFormDialog> {
       _createdAt = task.createdAt;
       _startTime = task.startTime;
       _endTime = task.endTime;
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        try {
+          final nextCode = await ref.read(taskRepositoryProvider).getNextTaskCode();
+          if (mounted && _codeController.text.isEmpty) {
+            setState(() {
+              _codeController.text = nextCode;
+            });
+          }
+        } catch (_) {}
+      });
     }
   }
 

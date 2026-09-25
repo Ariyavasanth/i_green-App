@@ -36,11 +36,28 @@ class ProjectModuleScreen extends ConsumerStatefulWidget {
 }
 
 class _ProjectModuleScreenState extends ConsumerState<ProjectModuleScreen> {
+  static double _savedScrollOffset = 0.0;
+  late final ScrollController _scrollController;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
   @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController(initialScrollOffset: _savedScrollOffset);
+    _scrollController.addListener(() {
+      if (_scrollController.hasClients) {
+        _savedScrollOffset = _scrollController.offset;
+      }
+    });
+  }
+
+  @override
   void dispose() {
+    if (_scrollController.hasClients) {
+      _savedScrollOffset = _scrollController.offset;
+    }
+    _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -88,6 +105,8 @@ class _ProjectModuleScreenState extends ConsumerState<ProjectModuleScreen> {
                   await Future.delayed(const Duration(milliseconds: 500));
                 },
                 child: ListView(
+                  key: const PageStorageKey<String>('project_module_scroll_list'),
+                  controller: _scrollController,
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.all(20),
                   children: [

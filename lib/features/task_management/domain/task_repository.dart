@@ -16,4 +16,6 @@ abstract class TaskRepository {
   Future<void> deleteTask(String id);
 
   Future<Map<String, double>> getHoursByProject({String? assignedTo});
+
+  Future<String> getNextTaskCode();
 }

@@ -32,3 +32,8 @@ final activeTaskProvider = FutureProvider.family<TaskItem?, String>((ref, employ
   }
   return null;
 });
+
+final nextTaskCodeProvider = FutureProvider.autoDispose<String>((ref) async {
+  final repo = ref.watch(taskRepositoryProvider);
+  return repo.getNextTaskCode();
+});

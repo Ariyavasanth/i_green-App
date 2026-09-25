@@ -90,6 +90,10 @@ void main() {
       expect(fetched, isNotNull);
       expect(fetched!.priority, 'VERY_HIGH');
       expect(fetched.deadline, DateTime(2026, 9, 26, 17, 0));
+
+      // Test Dynamic Sequence Code Auto-generation (e.g. PRJ-105 after PRJ-104)
+      final nextCode = await taskRepo.getNextTaskCode();
+      expect(nextCode, 'PRJ-105');
     });
 
     // =========================================================================
