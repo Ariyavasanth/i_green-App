@@ -7,13 +7,64 @@ import '../../features/employee/providers/employee_providers.dart';
 import '../../widgets/app_background_wrapper.dart';
 import '../../widgets/module_card.dart';
 
-class ProjectModuleScreen extends ConsumerWidget {
+/// Data model for a sub-module item.
+class _SubModule {
+  const _SubModule(this.label, this.icon, this.route, this.color);
+  final String label;
+  final IconData icon;
+  final String route;
+  final Color color;
+}
+
+class ProjectModuleScreen extends ConsumerStatefulWidget {
   const ProjectModuleScreen({super.key});
 
+  static const _sections = <String, List<_SubModule>>{
+    'PROJECT OPERATIONS': [
+      _SubModule(
+        'NEW PROJECT',
+        Icons.add_circle_outline_rounded,
+        '/projects/new',
+        Color(0xFF9C27B0),
+      ),
+    ],
+  };
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProjectModuleScreen> createState() =>
+      _ProjectModuleScreenState();
+}
+
+class _ProjectModuleScreenState extends ConsumerState<ProjectModuleScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final employee = ref.watch(currentEmployeeProvider);
     final employeeName = employee?.firstName ?? '';
+
+    final query = _searchQuery.trim().toLowerCase();
+    final filteredSections = <String, List<_SubModule>>{};
+
+    for (final entry in ProjectModuleScreen._sections.entries) {
+      final matches = entry.value.where((m) {
+        if (query.isEmpty) return true;
+        final cleanLabel = m.label.replaceAll('\n', ' ').toLowerCase();
+        final sectionName = entry.key.toLowerCase();
+        return cleanLabel.contains(query) || sectionName.contains(query);
+      }).toList();
+
+      if (matches.isNotEmpty) {
+        filteredSections[entry.key] = matches;
+      }
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6F3),
@@ -22,7 +73,7 @@ class ProjectModuleScreen extends ConsumerWidget {
           children: [
             ModuleScreenHeader(
               title: 'PROJECT MODULE',
-              icon: Icons.engineering_outlined,
+              icon: Icons.rocket_launch_rounded,
               color: const Color(0xFF9C27B0),
               onBack: () => context.go('/module-dashboard'),
               employeeName: employeeName,
@@ -35,113 +86,177 @@ class ProjectModuleScreen extends ConsumerWidget {
                   ref.invalidate(currentEmployeeProvider);
                   await Future.delayed(const Duration(milliseconds: 500));
                 },
-                child: SingleChildScrollView(
+                child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(40),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 100,
-                            height: 100,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: const Color(0xFF9C27B0).withValues(alpha: 0.1),
-                            ),
-                            child: const Icon(
-                              Icons.engineering_outlined,
-                              size: 48,
-                              color: Color(0xFF9C27B0),
-                            ),
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    // ── Search Bar ──
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: TextField(
+                        controller: _searchController,
+                        onChanged: (val) => setState(() => _searchQuery = val),
+                        decoration: InputDecoration(
+                          hintText: 'Search icons (e.g. New Project...)',
+                          hintStyle: const TextStyle(
+                            fontSize: 13.5,
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w400,
                           ),
-                          const SizedBox(height: 24),
-                          const Text(
-                            'Coming Soon',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.textPrimary,
-                            ),
+                          prefixIcon: const Icon(
+                            Icons.search_rounded,
+                            color: Color(0xFF9C27B0),
+                            size: 20,
                           ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'The Project Module is currently under development.\nStay tuned for exciting project management features!',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: AppColors.textSecondary,
-                              height: 1.5,
-                            ),
+                          suffixIcon: _searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.close_rounded,
+                                      size: 18, color: AppColors.textSecondary),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() => _searchQuery = '');
+                                  },
+                                )
+                              : null,
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(
+                              vertical: 12, horizontal: 16),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: const BorderSide(
+                                color: Color(0xFFE5E8E2), width: 1),
                           ),
-                          const SizedBox(height: 32),
-                          // Preview of planned features
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            alignment: WrapAlignment.center,
-                            children: const [
-                              _PlannedFeatureChip(
-                                label: 'Project Planning',
-                                icon: Icons.calendar_today_outlined,
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: const BorderSide(
+                                color: Color(0xFFE5E8E2), width: 1),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: const BorderSide(
+                                color: Color(0xFF9C27B0), width: 1.5),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    if (filteredSections.isEmpty && _searchQuery.isNotEmpty)
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 40, horizontal: 24),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: const Color(0xFF9C27B0)
+                                      .withValues(alpha: 0.1),
+                                ),
+                                child: const Icon(
+                                  Icons.search_off_rounded,
+                                  size: 40,
+                                  color: Color(0xFF9C27B0),
+                                ),
                               ),
-                              _PlannedFeatureChip(
-                                label: 'Resource Allocation',
-                                icon: Icons.group_outlined,
+                              const SizedBox(height: 16),
+                              Text(
+                                'No icons found for "$_searchQuery"',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF414A51),
+                                ),
                               ),
-                              _PlannedFeatureChip(
-                                label: 'Milestones',
-                                icon: Icons.flag_outlined,
+                              const SizedBox(height: 6),
+                              const Text(
+                                'Try searching with a different keyword like "New Project".',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textSecondary,
+                                ),
                               ),
-                              _PlannedFeatureChip(
-                                label: 'Progress Tracking',
-                                icon: Icons.trending_up_outlined,
+                              const SizedBox(height: 16),
+                              OutlinedButton.icon(
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() => _searchQuery = '');
+                                },
+                                icon: const Icon(Icons.clear, size: 16),
+                                label: const Text('Clear search'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF9C27B0),
+                                  side: const BorderSide(
+                                      color: Color(0xFF9C27B0)),
+                                ),
                               ),
                             ],
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
+
+                    // ── Sub-module Sections ──
+                    ...filteredSections.entries.map((entry) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10, top: 4),
+                            child: Text(
+                              entry.key,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF9C27B0),
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                          ),
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final crossAxisCount = constraints.maxWidth > 800
+                                  ? 6
+                                  : constraints.maxWidth > 500
+                                      ? 4
+                                      : 3;
+                              final childAspectRatio = constraints.maxWidth > 800
+                                  ? 0.95
+                                  : constraints.maxWidth > 500
+                                      ? 0.82
+                                      : 0.72;
+
+                              return GridView.count(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                crossAxisCount: crossAxisCount,
+                                mainAxisSpacing: 12,
+                                crossAxisSpacing: 12,
+                                childAspectRatio: childAspectRatio,
+                                children: entry.value.map((m) {
+                                  return SubModuleCard(
+                                    label: m.label,
+                                    icon: m.icon,
+                                    color: m.color,
+                                    onTap: () => context.go(m.route),
+                                  );
+                                }).toList(),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+                      );
+                    }),
+                  ],
                 ),
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _PlannedFeatureChip extends StatelessWidget {
-  const _PlannedFeatureChip({required this.label, required this.icon});
-  final String label;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: AppColors.textSecondary),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -500,7 +500,7 @@ class _WorkspaceSection extends StatelessWidget {
           icon: Icons.rocket_launch_rounded,
           color: const Color(0xFF9C27B0),
           description: 'Project tracking\n& milestones',
-          comingSoon: true,
+          comingSoon: false,
           onTap: () => context.go('/module/project'),
         ),
       );

@@ -374,7 +374,7 @@ class _DropdownMenuContentState<T> extends State<_DropdownMenuContent<T>> {
                           ),
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? AppColors.primary.withOpacity(0.08)
+                                ? AppColors.primary.withValues(alpha: 0.08)
                                 : Colors.transparent,
                             borderRadius: BorderRadius.circular(5),
                           ),

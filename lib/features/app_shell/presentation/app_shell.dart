@@ -561,6 +561,11 @@ class _TopBar extends ConsumerWidget {
       }
     }
 
+    // Project Sub-modules -> Projects Module Screen
+    if (cleanLoc.startsWith('/projects') || cleanLoc.startsWith('/project')) {
+      return '/module/project';
+    }
+
     // Module screens or profile -> Module Dashboard
     return '/module-dashboard';
   }
