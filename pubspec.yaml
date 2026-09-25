@@ -87,6 +87,8 @@ flutter:
   assets:
     - assets/
     - assets/images/
+    - assets/reference_logo_base.png
+    - assets/inner_wheel_rotating.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

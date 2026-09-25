@@ -207,7 +207,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     initialLocation: '/module-dashboard',
     redirect: (context, state) {
       final path = state.uri.path;
-      if (path == '/login' || path.startsWith('/employee/register')) {
+      if (path == '/splash' || path == '/login' || path.startsWith('/employee/register')) {
         return null;
       }
 
@@ -216,7 +216,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return '/login';
       }
 
-      if (path == '/' || path == '/splash') {
+      if (path == '/') {
         return '/module-dashboard';
       }
 
@@ -248,7 +248,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/', redirect: (_, _) => '/module-dashboard'),
       GoRoute(
         path: '/splash',
-        redirect: (_, _) => '/module-dashboard',
         builder: (_, _) => const SplashScreen(),
       ),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
