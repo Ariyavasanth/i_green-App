@@ -53,9 +53,16 @@ class AttendanceStatusHelper {
       }
     }
 
-    // 1. If an explicit AttendanceRecord exists
-    if (record != null) {
-      final stLower = record.status.trim().toLowerCase();
+    final curEmpCode = employee.employeeId.trim().toUpperCase();
+
+    // 1. If an explicit AttendanceRecord exists (ensure it does not belong to another employee code)
+    final recEmpCode = record?.employeeCode.trim().toUpperCase() ?? '';
+    final effectiveRecord = (record != null && recEmpCode.isNotEmpty && curEmpCode.isNotEmpty && recEmpCode != curEmpCode)
+        ? null
+        : record;
+
+    if (effectiveRecord != null) {
+      final stLower = effectiveRecord.status.trim().toLowerCase();
 
       if (stLower == 'absent') {
         return AttendanceStatusInfo.absent;
@@ -78,8 +85,8 @@ class AttendanceStatusHelper {
 
       // If check-in is present but no check-out on a past day -> Missing Check-Out
       if (targetDate.isBefore(today) &&
-          record.effectiveCheckInTime.isNotEmpty &&
-          record.checkOutTime.isEmpty) {
+          effectiveRecord.effectiveCheckInTime.isNotEmpty &&
+          effectiveRecord.checkOutTime.isEmpty) {
         return AttendanceStatusInfo.missingCheckout;
       }
 
@@ -96,9 +103,13 @@ class AttendanceStatusHelper {
       return AttendanceStatusInfo.present;
     }
 
-    // 2. Check Leave Requests (Only Approved leaves resolve to On Leave)
+    // 2. Check Leave Requests (Only Approved leaves resolve to On Leave, strictly isolated by employeeCode)
     if (leaves != null && leaves.isNotEmpty) {
       for (final leave in leaves) {
+        final leaveCode = leave.employeeCustomId.trim().toUpperCase();
+        if (leaveCode.isNotEmpty && curEmpCode.isNotEmpty && leaveCode != curEmpCode) {
+          continue;
+        }
         if (leave.employeeId == employee.id &&
             leave.status.trim().toLowerCase() == 'approved') {
           final fromDt = _parseDate(leave.fromDate);
@@ -114,7 +125,7 @@ class AttendanceStatusHelper {
       }
     }
 
-    // 3. Check On Duty Assignments
+    // 3. Check On Duty Assignments (Isolated by integer employeeId which is now unique per employee)
     if (onDutyAssignments != null && onDutyAssignments.isNotEmpty) {
       for (final od in onDutyAssignments) {
         if (od.employeeId == employee.id &&

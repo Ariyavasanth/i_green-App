@@ -19,6 +19,25 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
   CollectionReference<Map<String, dynamic>> get _employeesRef =>
       _firestore.collection('employees');
 
+  /// Looks up the employee's string code (e.g. 'EMP-002') from Firestore by integer ID.
+  /// No employee-specific codes or offsets are hardcoded — always reads from the database.
+  Future<String> _resolveEmpCode(int employeeId) async {
+    try {
+      final snap = await _employeesRef.get();
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final dataId = data['id'] is int
+            ? data['id'] as int
+            : (int.tryParse(data['id']?.toString() ?? '') ?? 0);
+        if (dataId == employeeId) {
+          // Prefer the stored employee_id field; fallback to doc ID
+          return (data['employee_id'] ?? doc.id).toString().trim().toUpperCase();
+        }
+      }
+    } catch (_) {}
+    return '';
+  }
+
   String _normalizeDateKey(String dateStr) {
     if (dateStr.trim().isEmpty) return dateStr;
     try {
@@ -62,23 +81,42 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
     String? monthYear,
     String? statusFilter,
   }) async {
+    // Resolve the target employee code so we can strictly isolate records
+    final String targetEmpCode = employeeId != null ? await _resolveEmpCode(employeeId) : '';
+
     List<AttendanceRecord> firestoreRecords = [];
     try {
-      Query<Map<String, dynamic>> query = _recordsRef;
-      if (employeeId != null) {
-        query = query.where('employee_id', isEqualTo: employeeId);
+      final snap = await _recordsRef.get();
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        if (employeeId != null) {
+          final docEmpCode = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
+          final docEmpIdRaw = data['employee_id'];
+          final docEmpIdNum = docEmpIdRaw is int ? docEmpIdRaw : (int.tryParse(docEmpIdRaw?.toString() ?? '') ?? 0);
+
+          // Strict isolation: skip records that explicitly belong to a different employee
+          if (targetEmpCode.isNotEmpty && docEmpCode.isNotEmpty && docEmpCode != targetEmpCode) {
+            continue;
+          }
+
+          final matchesEmp = (targetEmpCode.isNotEmpty && docEmpCode == targetEmpCode) ||
+              (docEmpIdNum == employeeId && (docEmpCode.isEmpty || targetEmpCode.isEmpty || docEmpCode == targetEmpCode));
+          if (!matchesEmp) continue;
+        }
+        firestoreRecords.add(AttendanceRecord.fromMap(data));
       }
-      final snap = await query.get();
-      firestoreRecords = snap.docs.map((d) => AttendanceRecord.fromMap(d.data())).toList();
     } catch (_) {}
 
     final combinedMap = <String, AttendanceRecord>{};
     for (final r in _localMemoryCache.values) {
-      if (employeeId == null || r.employeeId == employeeId) {
-        final norm = _normalizeDateKey(r.date);
-        final key = r.employeeCode.isNotEmpty ? '${r.employeeCode}_$norm' : '${r.employeeId}_$norm';
-        combinedMap[key] = r;
+      if (employeeId != null) {
+        final rCode = r.employeeCode.trim().toUpperCase();
+        if (targetEmpCode.isNotEmpty && rCode.isNotEmpty && rCode != targetEmpCode) continue;
+        if (r.employeeId != employeeId && !(targetEmpCode.isNotEmpty && rCode == targetEmpCode)) continue;
       }
+      final norm = _normalizeDateKey(r.date);
+      final key = r.employeeCode.isNotEmpty ? '${r.employeeCode}_$norm' : '${r.employeeId}_$norm';
+      combinedMap[key] = r;
     }
     for (final r in firestoreRecords) {
       final norm = _normalizeDateKey(r.date);
@@ -105,21 +143,38 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
     int? employeeId,
     String? monthYear,
     String? statusFilter,
-  }) {
-    Query<Map<String, dynamic>> query = _recordsRef;
-    if (employeeId != null) {
-      query = query.where('employee_id', isEqualTo: employeeId);
-    }
-    return query.snapshots().map((snap) {
-      final firestoreRecords = snap.docs.map((d) => AttendanceRecord.fromMap(d.data())).toList();
+  }) async* {
+    // Resolve the employee code once before streaming so we never hardcode IDs
+    final String targetEmpCode = employeeId != null ? await _resolveEmpCode(employeeId) : '';
+
+    yield* _recordsRef.snapshots().map((snap) {
+      final List<AttendanceRecord> firestoreRecords = [];
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        if (employeeId != null) {
+          final docEmpCode = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
+          final docEmpIdRaw = data['employee_id'];
+          final docEmpIdNum = docEmpIdRaw is int ? docEmpIdRaw : (int.tryParse(docEmpIdRaw?.toString() ?? '') ?? 0);
+
+          if (targetEmpCode.isNotEmpty && docEmpCode.isNotEmpty && docEmpCode != targetEmpCode) continue;
+
+          final matchesEmp = (targetEmpCode.isNotEmpty && docEmpCode == targetEmpCode) ||
+              (docEmpIdNum == employeeId && (docEmpCode.isEmpty || targetEmpCode.isEmpty || docEmpCode == targetEmpCode));
+          if (!matchesEmp) continue;
+        }
+        firestoreRecords.add(AttendanceRecord.fromMap(data));
+      }
 
       final combinedMap = <String, AttendanceRecord>{};
       for (final r in _localMemoryCache.values) {
-        if (employeeId == null || r.employeeId == employeeId) {
-          final norm = _normalizeDateKey(r.date);
-          final key = r.employeeCode.isNotEmpty ? '${r.employeeCode}_$norm' : '${r.employeeId}_$norm';
-          combinedMap[key] = r;
+        if (employeeId != null) {
+          final rCode = r.employeeCode.trim().toUpperCase();
+          if (targetEmpCode.isNotEmpty && rCode.isNotEmpty && rCode != targetEmpCode) continue;
+          if (r.employeeId != employeeId && !(targetEmpCode.isNotEmpty && rCode == targetEmpCode)) continue;
         }
+        final norm = _normalizeDateKey(r.date);
+        final key = r.employeeCode.isNotEmpty ? '${r.employeeCode}_$norm' : '${r.employeeId}_$norm';
+        combinedMap[key] = r;
       }
       for (final r in firestoreRecords) {
         final norm = _normalizeDateKey(r.date);
@@ -331,10 +386,35 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
 
   @override
   Future<void> deleteAttendanceRecord(int employeeId, String date) async {
+    final normDate = _normalizeDateKey(date);
+    final empCode = await _resolveEmpCode(employeeId);
+
+    // Clear memory cache for both key forms
     _localMemoryCache.remove('${employeeId}_$date');
+    _localMemoryCache.remove('${employeeId}_$normDate');
+    if (empCode.isNotEmpty) {
+      _localMemoryCache.remove('${empCode}_$date');
+      _localMemoryCache.remove('${empCode}_$normDate');
+    }
+
     try {
-      final docId = '${employeeId}_${date.replaceAll('-', '')}';
-      await _recordsRef.doc(docId).delete();
+      // Delete code-keyed document (e.g. EMPCODE_20260925)
+      if (empCode.isNotEmpty) {
+        await _recordsRef.doc('${empCode}_${normDate.replaceAll('-', '')}').delete();
+        await _recordsRef.doc('${empCode}_${date.replaceAll('-', '')}').delete();
+      }
+
+      // Delete integer-keyed document, but ONLY if it belongs to this employee
+      // (to avoid accidentally deleting a different employee's legacy doc)
+      final intDocId = '${employeeId}_${normDate.replaceAll('-', '')}';
+      final intSnap = await _recordsRef.doc(intDocId).get();
+      if (intSnap.exists) {
+        final docEmpCode = (intSnap.data()?['employee_code'] ?? intSnap.data()?['employee_id'] ?? '').toString().trim().toUpperCase();
+        // Only delete if the document's code matches this employee (or doc has no code)
+        if (docEmpCode.isEmpty || empCode.isEmpty || docEmpCode == empCode) {
+          await _recordsRef.doc(intDocId).delete();
+        }
+      }
     } catch (_) {}
   }
 
@@ -359,10 +439,18 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
     required String status,
     required String checkInTime,
   }) async {
+    // Resolve employee codes first so we use code-keyed Firestore docs
+    final empCodeMap = <int, String>{};
     for (final empId in employeeIds) {
+      empCodeMap[empId] = await _resolveEmpCode(empId);
+    }
+
+    for (final empId in employeeIds) {
+      final empCode = empCodeMap[empId] ?? '';
       final rec = AttendanceRecord(
         id: empId * 10000 + DateTime.now().millisecondsSinceEpoch % 10000,
         employeeId: empId,
+        employeeCode: empCode,
         employeeName: '',
         date: date,
         time: checkInTime,
@@ -373,17 +461,22 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
         similarityScore: 1.0,
         markedAt: DateTime.now().toIso8601String(),
       );
-      _localMemoryCache['${empId}_$date'] = rec;
+      final cacheKey = empCode.isNotEmpty ? '${empCode}_$date' : '${empId}_$date';
+      _localMemoryCache[cacheKey] = rec;
     }
     try {
       final batch = _firestore.batch();
       for (final empId in employeeIds) {
-        final docId = '${empId}_${date.replaceAll('-', '')}';
+        final empCode = empCodeMap[empId] ?? '';
+        // Use employee code as doc key (isolated), falling back to integer only if code unknown
+        final key = empCode.isNotEmpty ? empCode : empId.toString();
+        final docId = '${key}_${date.replaceAll('-', '')}';
         final ref = _recordsRef.doc(docId);
         batch.set(
           ref,
           {
             'employee_id': empId,
+            if (empCode.isNotEmpty) 'employee_code': empCode,
             'date': date,
             'time': checkInTime,
             'check_in_time': checkInTime,

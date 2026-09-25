@@ -185,12 +185,20 @@ class MonthlyAttendanceCalculator {
     final monthYear = '${month.toString().padLeft(2, '0')}-$year';
 
     final recordMap = <String, AttendanceRecord>{};
+    final empCodeUpper = employee.employeeId.trim().toUpperCase();
+
     for (final r in records) {
       final norm = _normalizeDateKey(r.date);
-      if (r.employeeId == employee.id ||
-          (r.employeeCode.isNotEmpty &&
-              employee.employeeId.isNotEmpty &&
-              r.employeeCode.trim().toLowerCase() == employee.employeeId.trim().toLowerCase())) {
+      final rCode = r.employeeCode.trim().toUpperCase();
+
+      // Strict isolation: if record has an employee code that does not match this employee, skip it!
+      if (rCode.isNotEmpty && empCodeUpper.isNotEmpty && rCode != empCodeUpper) {
+        continue;
+      }
+
+      if (rCode.isNotEmpty && empCodeUpper.isNotEmpty && rCode == empCodeUpper) {
+        recordMap[norm] = r;
+      } else if (r.employeeId != 0 && r.employeeId == employee.id && (rCode.isEmpty || rCode == empCodeUpper)) {
         recordMap[norm] = r;
       }
     }

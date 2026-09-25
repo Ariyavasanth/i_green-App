@@ -126,7 +126,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
             id: record?.id ?? 0,
             employeeId: emp.id,
             employeeCode: emp.employeeId,
-            employeeName: emp.name,
+            employeeName: emp.fullName,
             date: dateStr,
             time: correctedCheckIn,
             status: correctedStatus,
@@ -146,6 +146,9 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
 
           try {
             await repo.saveOrOverrideAttendance(updatedRecord);
+            ref.invalidate(attendanceRecordsProvider(emp.id));
+            ref.invalidate(allAttendanceRecordsProvider);
+            ref.invalidate(todayAttendanceRecordProvider(emp.id));
             ref.invalidate(attendanceManagementRecordsProvider);
             ref.invalidate(attendanceManagementStatsProvider);
             if (mounted) {

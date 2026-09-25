@@ -61,19 +61,32 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     return map;
   }
 
+  /// Returns the integer employee ID, always preferring the stored 'id' field from Firestore.
+  /// Falls back to parsing the numeric suffix from the Firestore document key.
+  /// No employee-specific names or codes are hardcoded here.
+  static int resolveEmployeeIntegerId(String docKey, [int? currentId]) {
+    // Always prefer explicitly stored id
+    if (currentId != null && currentId > 0) return currentId;
+    // Derive from the numeric portion of the doc key (e.g. EMP-002 → 2)
+    final digits = docKey.trim().replaceAll(RegExp(r'\D'), '');
+    final num = int.tryParse(digits) ?? 0;
+    if (num > 0) return num;
+    // Final fallback: non-zero hash of the doc key string
+    final hash = docKey.trim().hashCode.abs();
+    return hash > 0 ? hash : 1;
+  }
+
   // Helper: Map Firestore document data to Employee object
   Employee _employeeFromFirestore(Map<String, dynamic> map, String docId) {
     final mutableMap = Map<String, dynamic>.from(map);
 
-    // Ensure unique integer ID per employee document to prevent collisions (e.g. EMP-0001 vs EMP-001)
-    final docKey = docId.isNotEmpty ? docId : (mutableMap['employee_id']?.toString() ?? '');
-    final fallbackId = (docKey.hashCode.abs() & 0x7FFFFFFF);
     final currentId = mutableMap['id'] as int?;
-    if (currentId == null || currentId == 0 || (currentId == 1 && docKey != 'EMP-001')) {
-      final parsed = int.tryParse(docId.replaceAll(RegExp(r'\D'), ''));
-      mutableMap['id'] = (parsed != null && parsed != 0 && (docId == 'EMP-$parsed' || docId == 'EMP-${parsed.toString().padLeft(3, '0')}'))
-          ? parsed
-          : (fallbackId != 0 ? fallbackId : 1);
+    final resolvedId = resolveEmployeeIntegerId(docId, currentId);
+    mutableMap['id'] = resolvedId;
+
+    // Self-healing: persist id back to Firestore if it was missing or zero
+    if (docId.isNotEmpty && (currentId == null || currentId == 0)) {
+      _employeesRef.doc(docId).set({'id': resolvedId}, SetOptions(merge: true)).ignore();
     }
 
     // Convert Firestore native array lists back to JSON strings for domain model compatibility
@@ -179,13 +192,11 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
     await _employeesRef.doc(docId).set(data, SetOptions(merge: true));
 
-    final parsed = int.tryParse(docId.replaceAll(RegExp(r'\D'), ''));
-    final assignedId = (parsed != null && parsed != 0)
-        ? parsed
-        : (docId.hashCode & 0x7FFFFFFF);
+    final assignedId = resolveEmployeeIntegerId(docId, emp.id != 0 ? emp.id : null);
+    await _employeesRef.doc(docId).set({'id': assignedId}, SetOptions(merge: true));
 
     return emp.copyWith(
-      id: emp.id != 0 ? emp.id : assignedId,
+      id: assignedId,
     );
   }
 
@@ -237,12 +248,8 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
     for (final doc in snapshot.docs) {
       final data = doc.data();
-      final docId = doc.id;
-      final parsed = int.tryParse(docId.replaceAll(RegExp(r'\D'), ''));
-      final assignedId = (parsed != null && parsed != 0)
-          ? parsed
-          : (docId.hashCode & 0x7FFFFFFF);
-      final empId = (data['id'] as int?) ?? assignedId;
+      final assignedId = resolveEmployeeIntegerId(doc.id, data['id'] as int?);
+      final empId = assignedId;
 
       if (idSet.contains(empId)) {
         final updateData = <String, dynamic>{
@@ -283,10 +290,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       final data = d.data();
       // Reconstruct the id that _employeeFromFirestore would have assigned
       final docId = d.id;
-      final parsed = int.tryParse(docId.replaceAll(RegExp(r'\D'), ''));
-      final assignedId = (parsed != null && parsed != 0)
-          ? parsed
-          : (docId.hashCode & 0x7FFFFFFF);
+      final assignedId = resolveEmployeeIntegerId(docId, data['id'] as int?);
       if (assignedId == id || data['id'] == id) {
         await _employeesRef.doc(d.id).delete();
         return;

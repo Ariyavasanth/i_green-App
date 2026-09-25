@@ -336,15 +336,24 @@ class AttendanceMatrixView extends StatelessWidget {
     if (empCodeUpper.isNotEmpty) {
       record = recordMap['${empCodeUpper}_$dateStr'];
     }
-    // 2. Secondary match: specific full name
+    // 2. Secondary match: specific full name (isolated from other employee codes)
     if (record == null && empNameLower.isNotEmpty) {
-      record = recordMap['${empNameLower}_$dateStr'];
+      final cand = recordMap['${empNameLower}_$dateStr'];
+      if (cand != null) {
+        final cCode = cand.employeeCode.trim().toUpperCase();
+        if (cCode.isEmpty || cCode == empCodeUpper) {
+          record = cand;
+        }
+      }
     }
-    // 3. Fallback: integer ID
+    // 3. Fallback: integer ID (strictly isolated from other employee codes)
     if (record == null && emp.id != 0) {
-      final duplicateCount = employees.where((e) => e.id == emp.id).length;
-      if (duplicateCount <= 1) {
-        record = recordMap['${emp.id}_$dateStr'];
+      final cand = recordMap['${emp.id}_$dateStr'];
+      if (cand != null) {
+        final cCode = cand.employeeCode.trim().toUpperCase();
+        if (cCode.isEmpty || cCode == empCodeUpper) {
+          record = cand;
+        }
       }
     }
 

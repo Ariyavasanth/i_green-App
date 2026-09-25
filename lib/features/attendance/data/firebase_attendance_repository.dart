@@ -218,6 +218,11 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
                 : (finalHasActive ? syncStatus : (rec.status == 'Late' ? syncStatus : rec.status)),
           );
           await doc.reference.set(updatedRec.toMap(), SetOptions(merge: true));
+          final syncEmpCode = updatedRec.employeeCode.trim().toUpperCase();
+          if (syncEmpCode.isNotEmpty) {
+            _localMemoryCache['${syncEmpCode}_$normDate'] = updatedRec;
+            _localMemoryCache['${syncEmpCode}_${rec.date}'] = updatedRec;
+          }
           _localMemoryCache['${rec.employeeId}_$normDate'] = updatedRec;
           _localMemoryCache['${rec.employeeId}_${rec.date}'] = updatedRec;
         }
@@ -298,6 +303,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
   @override
   Future<List<AttendanceRecord>> getAttendanceRecords(int employeeId) async {
     List<AttendanceRecord> firestoreList = [];
+    final emp = await _getEmployeeById(employeeId);
+    final empCode = emp?.employeeId.trim().toUpperCase() ?? '';
+
     try {
       final snap = await _recordsRef.get();
       for (final doc in snap.docs) {
@@ -308,9 +316,14 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
             : (int.tryParse(docEmpIdRaw?.toString() ?? '') ?? 0);
         final docEmpCode = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
 
-        final matchesEmp = (employeeId != 0 && docEmpIdNum == employeeId) ||
-            (employeeId == 0) ||
-            data['employee_id']?.toString() == employeeId.toString();
+        // Strict isolation: if document has an explicit code that belongs to a different employee, skip it!
+        if (empCode.isNotEmpty && docEmpCode.isNotEmpty && docEmpCode != empCode) {
+          continue;
+        }
+
+        final matchesEmp = (empCode.isNotEmpty && docEmpCode == empCode) ||
+            (employeeId != 0 && docEmpIdNum == employeeId && (docEmpCode.isEmpty || docEmpCode == empCode)) ||
+            (employeeId == 0);
 
         if (matchesEmp) {
           firestoreList.add(AttendanceRecord.fromMap(data));
@@ -320,12 +333,18 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
     final combinedMap = <String, AttendanceRecord>{};
     for (final r in _localMemoryCache.values) {
-      if (r.employeeId == employeeId || employeeId == 0) {
-        combinedMap['${r.employeeId}_${r.date}'] = r;
+      final rCode = r.employeeCode.trim().toUpperCase();
+      if (empCode.isNotEmpty && rCode.isNotEmpty && rCode != empCode) {
+        continue;
+      }
+      if (r.employeeId == employeeId || (empCode.isNotEmpty && rCode == empCode) || employeeId == 0) {
+        final key = r.employeeCode.isNotEmpty ? '${r.employeeCode}_${r.date}' : '${r.employeeId}_${r.date}';
+        combinedMap[key] = r;
       }
     }
     for (final r in firestoreList) {
-      combinedMap['${r.employeeId}_${r.date}'] = r;
+      final key = r.employeeCode.isNotEmpty ? '${r.employeeCode}_${r.date}' : '${r.employeeId}_${r.date}';
+      combinedMap[key] = r;
     }
     return combinedMap.values.toList();
   }
@@ -341,10 +360,12 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
     final combinedMap = <String, AttendanceRecord>{};
     for (final r in _localMemoryCache.values) {
-      combinedMap['${r.employeeId}_${r.date}'] = r;
+      final key = r.employeeCode.isNotEmpty ? '${r.employeeCode}_${r.date}' : '${r.employeeId}_${r.date}';
+      combinedMap[key] = r;
     }
     for (final r in firestoreList) {
-      combinedMap['${r.employeeId}_${r.date}'] = r;
+      final key = r.employeeCode.isNotEmpty ? '${r.employeeCode}_${r.date}' : '${r.employeeId}_${r.date}';
+      combinedMap[key] = r;
     }
     return combinedMap.values.toList();
   }
@@ -352,18 +373,44 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
   @override
   Future<AttendanceRecord?> getAttendanceRecordForDate(int employeeId, String date) async {
     final normDate = _normalizeDateKey(date);
-    final docId = '${employeeId}_${normDate.replaceAll('-', '')}';
+    final emp = await _getEmployeeById(employeeId);
+    final empCode = emp?.employeeId.trim().toUpperCase() ?? '';
+
+    final codeDocId = empCode.isNotEmpty ? '${empCode}_${normDate.replaceAll('-', '')}' : null;
+    final intDocId = '${employeeId}_${normDate.replaceAll('-', '')}';
+
     try {
       await autoResolveMissingCheckOuts(employeeId: employeeId);
       final todayNormDate = _normalizeDateKey('${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}');
-      final recordSnap = await _recordsRef.doc(docId).get();
-      if (recordSnap.exists && recordSnap.data() != null) {
+
+      DocumentSnapshot<Map<String, dynamic>>? recordSnap;
+      if (codeDocId != null) {
+        final snap = await _recordsRef.doc(codeDocId).get();
+        if (snap.exists && snap.data() != null) {
+          recordSnap = snap;
+        }
+      }
+      if (recordSnap == null || !recordSnap.exists) {
+        final snap = await _recordsRef.doc(intDocId).get();
+        if (snap.exists && snap.data() != null) {
+          final docEmpCode = (snap.data()!['employee_code'] ?? '').toString().trim().toUpperCase();
+          if (empCode.isEmpty || docEmpCode.isEmpty || docEmpCode == empCode) {
+            recordSnap = snap;
+          }
+        }
+      }
+
+      if (recordSnap != null && recordSnap.exists && recordSnap.data() != null) {
         final rec = AttendanceRecord.fromMap(recordSnap.data()!);
 
         if (_isOdRecord(rec) && rec.checkOutTime.trim().isEmpty) {
           final updatedRec = rec.copyWith(status: 'Present');
           if (rec.status != 'Present') {
-            await _recordsRef.doc(docId).set({'status': 'Present'}, SetOptions(merge: true));
+            await recordSnap.reference.set({'status': 'Present'}, SetOptions(merge: true));
+          }
+          if (empCode.isNotEmpty) {
+            _localMemoryCache['${empCode}_$normDate'] = updatedRec;
+            _localMemoryCache['${empCode}_${rec.date}'] = updatedRec;
           }
           _localMemoryCache['${rec.employeeId}_$normDate'] = updatedRec;
           _localMemoryCache['${rec.employeeId}_${rec.date}'] = updatedRec;
@@ -372,7 +419,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
         if (rec.status == 'Missing Check-Out' && rec.checkOutTime.trim().isEmpty && _normalizeDateKey(rec.date) == todayNormDate) {
           final settings = await getAttendanceSettings();
-          final empObj = await _getEmployeeById(employeeId);
+          final empObj = emp ?? await _getEmployeeById(employeeId);
           final checkInMins = _parseMinutes(rec.effectiveCheckInTime);
           final schedIn = empObj?.inTime.trim() ?? '';
           final schedInMins = schedIn.isNotEmpty ? _parseMinutes(schedIn) : null;
@@ -382,10 +429,17 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
           }
           return rec.copyWith(status: isLate ? 'Late' : 'Present');
         }
+
+        if (empCode.isNotEmpty) {
+          _localMemoryCache['${empCode}_$normDate'] = rec;
+          _localMemoryCache['${empCode}_${rec.date}'] = rec;
+          _localMemoryCache['${empCode}_$date'] = rec;
+        }
         _localMemoryCache['${rec.employeeId}_$normDate'] = rec;
         _localMemoryCache['${rec.employeeId}_${rec.date}'] = rec;
         _localMemoryCache['${rec.employeeId}_$date'] = rec;
-        _localMemoryCache[docId] = rec;
+        if (codeDocId != null) _localMemoryCache[codeDocId] = rec;
+        _localMemoryCache[intDocId] = rec;
         return rec;
       }
 
@@ -398,9 +452,14 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
             : (int.tryParse(docEmpIdRaw?.toString() ?? '') ?? 0);
         final docEmpCode = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
 
-        final matchesEmp = (employeeId != 0 && docEmpIdNum == employeeId) ||
-            (employeeId == 0) ||
-            data['employee_id']?.toString() == employeeId.toString();
+        // Strict isolation: if document has an explicit code that belongs to a different employee, skip it!
+        if (empCode.isNotEmpty && docEmpCode.isNotEmpty && docEmpCode != empCode) {
+          continue;
+        }
+
+        final matchesEmp = (empCode.isNotEmpty && docEmpCode == empCode) ||
+            (employeeId != 0 && docEmpIdNum == employeeId && (docEmpCode.isEmpty || docEmpCode == empCode)) ||
+            (employeeId == 0);
 
         final docDate = (data['date'] ?? '').toString();
         final normDocDate = _normalizeDateKey(docDate);
@@ -408,6 +467,11 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
         if (matchesEmp && matchesDate) {
           final foundRec = AttendanceRecord.fromMap(data);
+          if (empCode.isNotEmpty) {
+            _localMemoryCache['${empCode}_$normDate'] = foundRec;
+            _localMemoryCache['${empCode}_${foundRec.date}'] = foundRec;
+            _localMemoryCache['${empCode}_$date'] = foundRec;
+          }
           _localMemoryCache['${foundRec.employeeId}_$normDate'] = foundRec;
           _localMemoryCache['${foundRec.employeeId}_${foundRec.date}'] = foundRec;
           _localMemoryCache['${foundRec.employeeId}_$date'] = foundRec;
@@ -415,7 +479,11 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         }
       }
     } catch (_) {}
-    return _localMemoryCache['${employeeId}_$date'] ?? _localMemoryCache['${employeeId}_$normDate'] ?? _localMemoryCache[docId];
+    if (empCode.isNotEmpty) {
+      final cachedByCode = _localMemoryCache['${empCode}_$date'] ?? _localMemoryCache['${empCode}_$normDate'];
+      if (cachedByCode != null) return cachedByCode;
+    }
+    return _localMemoryCache['${employeeId}_$date'] ?? _localMemoryCache['${employeeId}_$normDate'] ?? _localMemoryCache[intDocId];
   }
 
   @override
@@ -705,31 +773,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     );
     await logAttendanceAttempt(employeeId: employeeId, employeeName: employeeName, date: date, time: time, verificationStatus: result.verificationStatus, similarityScore: score, message: result.message);
     if (result.allowed) {
-      Employee? employee;
-      try {
-        final snap = await _firestore.collection('employees').get();
-        for (final doc in snap.docs) {
-          final data = Map<String, dynamic>.from(doc.data());
-          final docId = doc.id;
-          final docIdNum = int.tryParse(docId.replaceAll(RegExp(r'\D'), '')) ?? 0;
-          final idNum = data['id'] is int ? data['id'] : (int.tryParse(data['id']?.toString() ?? '') ?? 0);
-          final codeStr = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
-          final codeNum = int.tryParse(codeStr.replaceAll(RegExp(r'\D'), '')) ?? 0;
-
-          final matches = (employeeId != 0 && (idNum == employeeId || docIdNum == employeeId || codeNum == employeeId)) ||
-              docId == employeeId.toString() ||
-              data['id']?.toString() == employeeId.toString() ||
-              data['employee_id']?.toString() == employeeId.toString();
-
-          if (matches) {
-            if (!data.containsKey('id') || data['id'] == null || data['id'] == 0) {
-              data['id'] = (docIdNum != 0) ? docIdNum : (docId.hashCode & 0x7FFFFFFF);
-            }
-            employee = Employee.fromMap(data);
-            break;
-          }
-        }
-      } catch (_) {}
+      final employee = await _getEmployeeById(employeeId);
 
       String status = 'Present';
       String notes = '';
@@ -1047,31 +1091,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     );
     await logAttendanceAttempt(employeeId: employeeId, employeeName: employeeName, date: date, time: time, verificationStatus: 'CheckOut ${result.verificationStatus}', similarityScore: score, message: result.message);
     if (result.allowed) {
-      Employee? employee;
-      try {
-        final snap = await _firestore.collection('employees').get();
-        for (final doc in snap.docs) {
-          final data = Map<String, dynamic>.from(doc.data());
-          final docId = doc.id;
-          final docIdNum = int.tryParse(docId.replaceAll(RegExp(r'\D'), '')) ?? 0;
-          final idNum = data['id'] is int ? data['id'] : (int.tryParse(data['id']?.toString() ?? '') ?? 0);
-          final codeStr = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
-          final codeNum = int.tryParse(codeStr.replaceAll(RegExp(r'\D'), '')) ?? 0;
-
-          final matches = (employeeId != 0 && (idNum == employeeId || docIdNum == employeeId || codeNum == employeeId)) ||
-              docId == employeeId.toString() ||
-              data['id']?.toString() == employeeId.toString() ||
-              data['employee_id']?.toString() == employeeId.toString();
-
-          if (matches) {
-            if (!data.containsKey('id') || data['id'] == null || data['id'] == 0) {
-              data['id'] = (docIdNum != 0) ? docIdNum : (docId.hashCode & 0x7FFFFFFF);
-            }
-            employee = Employee.fromMap(data);
-            break;
-          }
-        }
-      } catch (_) {}
+      final employee = await _getEmployeeById(employeeId);
 
       final isDynamic = employee?.isDynamicEmployee ?? false;
 
@@ -2125,13 +2145,28 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       markedAt: record.markedAt.isNotEmpty ? record.markedAt : DateTime.now().toIso8601String(),
     );
 
+    final empCode = record.employeeCode.trim().toUpperCase();
+    if (empCode.isNotEmpty) {
+      _localMemoryCache['${empCode}_${record.date}'] = toSave;
+      _localMemoryCache['${empCode}_${_normalizeDateKey(record.date)}'] = toSave;
+    }
     _localMemoryCache['${record.employeeId}_${record.date}'] = toSave;
 
     try {
-      await _recordsRef.doc('${record.employeeId}_${record.date.replaceAll('-', '')}').set(
+      final key = empCode.isNotEmpty ? empCode : record.employeeId.toString();
+      final docId = '${key}_${record.date.replaceAll('-', '')}';
+      await _recordsRef.doc(docId).set(
         toSave.toMap(),
         SetOptions(merge: true),
       );
+      // If code is available, also ensure clean sync to the intDocId ONLY if it belongs to this employee
+      final intDocId = '${record.employeeId}_${record.date.replaceAll('-', '')}';
+      if (empCode.isNotEmpty && docId != intDocId) {
+        final existingIntDoc = await _recordsRef.doc(intDocId).get();
+        if (!existingIntDoc.exists || (existingIntDoc.data()?['employee_code'] ?? '') == empCode) {
+          await _recordsRef.doc(intDocId).set(toSave.toMap(), SetOptions(merge: true));
+        }
+      }
     } catch (_) {}
   }
 
@@ -2141,18 +2176,37 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     required String date,
   }) async {
     final normDate = _normalizeDateKey(date);
+    final emp = await _getEmployeeById(employeeId);
+    final empCode = emp?.employeeId.trim().toUpperCase() ?? '';
+
     _localMemoryCache.remove('${employeeId}_$date');
     _localMemoryCache.remove('${employeeId}_$normDate');
+    if (empCode.isNotEmpty) {
+      _localMemoryCache.remove('${empCode}_$date');
+      _localMemoryCache.remove('${empCode}_$normDate');
+    }
     try {
+      if (empCode.isNotEmpty) {
+        await _recordsRef.doc('${empCode}_${normDate.replaceAll('-', '')}').delete();
+        await _recordsRef.doc('${empCode}_${date.replaceAll('-', '')}').delete();
+      }
       await _recordsRef.doc('${employeeId}_${normDate.replaceAll('-', '')}').delete();
       await _recordsRef.doc('${employeeId}_${date.replaceAll('-', '')}').delete();
+
       final allSnap = await _recordsRef.get();
       for (final doc in allSnap.docs) {
         final data = doc.data();
         final docEmpId = data['employee_id'] is int ? data['employee_id'] : int.tryParse(data['employee_id']?.toString() ?? '');
+        final docEmpCode = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
         final docDate = (data['date'] ?? '').toString();
         final normDocDate = _normalizeDateKey(docDate);
-        if ((docEmpId == employeeId || data['employee_id']?.toString() == employeeId.toString()) &&
+
+        // Strict isolation: never delete another employee's record
+        if (empCode.isNotEmpty && docEmpCode.isNotEmpty && docEmpCode != empCode) {
+          continue;
+        }
+
+        if ((docEmpId == employeeId || (empCode.isNotEmpty && docEmpCode == empCode)) &&
             (docDate == date || docDate == normDate || normDocDate == normDate)) {
           await doc.reference.delete();
         }
@@ -2257,31 +2311,31 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     final idStr = employeeIdentifier.toString().trim();
     if (idStr.isEmpty || idStr == '0') return null;
 
-    final idNum = int.tryParse(idStr.replaceAll(RegExp(r'\D'), '')) ?? 0;
     final idUpper = idStr.toUpperCase();
+    // Treat as explicit string code if it contains a non-digit character
+    final isStringCode = idStr.contains(RegExp(r'[^0-9]'));
+    // Strict integer parse — no digit-stripping to avoid cross-code collisions
+    final idNum = isStringCode ? 0 : (int.tryParse(idStr) ?? 0);
 
     try {
       final snap = await _firestore.collection('employees').get();
       for (final doc in snap.docs) {
         final data = Map<String, dynamic>.from(doc.data());
-        final docId = doc.id;
-        final docIdNum = int.tryParse(docId.replaceAll(RegExp(r'\D'), '')) ?? 0;
-        final dataIdNum = data['id'] is int ? data['id'] : (int.tryParse(data['id']?.toString() ?? '') ?? 0);
+        final docId = doc.id.trim();
+        final docIdUpper = docId.toUpperCase();
         final codeStr = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
-        final codeNum = int.tryParse(codeStr.replaceAll(RegExp(r'\D'), '')) ?? 0;
+        final dataId = data['id'] is int ? data['id'] as int : (int.tryParse(data['id']?.toString() ?? '') ?? 0);
 
-        final matches = (idNum != 0 && (dataIdNum == idNum || docIdNum == idNum || codeNum == idNum)) ||
-            docId.toUpperCase() == idUpper ||
-            data['id']?.toString().toUpperCase() == idUpper ||
-            data['employee_id']?.toString().toUpperCase() == idUpper ||
-            codeStr == idUpper ||
-            (idUpper.startsWith('EMP-') && codeStr == idUpper) ||
-            ('EMP-$idNum' == codeStr && idNum != 0);
+        // 1. String code / doc ID exact match (primary — uniquely identifies an employee)
+        if (docIdUpper == idUpper || codeStr == idUpper) {
+          return Employee.fromMap(data);
+        }
 
-        if (matches) {
-          if (!data.containsKey('id') || data['id'] == null || data['id'] == 0) {
-            data['id'] = (docIdNum != 0) ? docIdNum : (idNum != 0 ? idNum : (docId.hashCode & 0x7FFFFFFF));
-          }
+        // Do not fall back to integer matching when caller used a string code
+        if (isStringCode) continue;
+
+        // 2. Stored integer ID match
+        if (dataId > 0 && dataId == idNum) {
           return Employee.fromMap(data);
         }
       }

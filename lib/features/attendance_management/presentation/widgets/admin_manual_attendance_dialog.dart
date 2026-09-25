@@ -194,7 +194,13 @@ class _AdminManualAttendanceDialogState extends ConsumerState<AdminManualAttenda
               children: [
                 employeesAsync.maybeWhen(
                   data: (employees) {
-                    if (_selectedEmployeeId != null && _selectedEmployeeName.isEmpty) {
+                    if (_selectedEmployeeCode.isNotEmpty) {
+                      final match = employees.where((e) => e.employeeId.trim().toUpperCase() == _selectedEmployeeCode.trim().toUpperCase()).toList();
+                      if (match.isNotEmpty) {
+                        _selectedEmployeeName = match.first.fullName;
+                        _selectedEmployeeId = match.first.id;
+                      }
+                    } else if (_selectedEmployeeId != null && _selectedEmployeeName.isEmpty) {
                       final match = employees.where((e) => e.id == _selectedEmployeeId).toList();
                       if (match.isNotEmpty) {
                         _selectedEmployeeName = match.first.fullName;

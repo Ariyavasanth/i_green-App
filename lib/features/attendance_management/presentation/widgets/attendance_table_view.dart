@@ -37,15 +37,17 @@ class AttendanceTableView extends StatelessWidget {
         if (e.employeeId.trim().toLowerCase() == code) return e;
       }
     }
-    if (record.employeeId != 0) {
-      for (final e in employees) {
-        if (e.id == record.employeeId) return e;
-      }
-    }
     final name = record.employeeName.trim().toLowerCase();
     if (name.isNotEmpty) {
       for (final e in employees) {
         if (e.fullName.trim().toLowerCase() == name) return e;
+      }
+    }
+    if (record.employeeId != 0) {
+      for (final e in employees) {
+        if (e.id == record.employeeId) {
+          if (code.isEmpty || e.employeeId.trim().toLowerCase() == code) return e;
+        }
       }
     }
     return null;
