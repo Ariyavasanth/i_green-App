@@ -75,6 +75,29 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
     return recordStatus.trim().toLowerCase() == statusFilter.trim().toLowerCase();
   }
 
+  static String _extractDocEmpCode(Map<String, dynamic> data) {
+    if (data['employee_code'] != null && data['employee_code'].toString().trim().isNotEmpty) {
+      return data['employee_code'].toString().trim().toUpperCase();
+    }
+    if (data['employee_id'] is String) {
+      final rawId = data['employee_id'].toString().trim();
+      if (rawId.contains(RegExp(r'[^0-9]'))) {
+        return rawId.toUpperCase();
+      }
+    }
+    return '';
+  }
+
+  static int _extractDocEmpId(Map<String, dynamic> data) {
+    final rawId = data['employee_id'];
+    if (rawId is int) return rawId;
+    if (rawId is num) return rawId.toInt();
+    if (rawId is String) {
+      return int.tryParse(rawId) ?? 0;
+    }
+    return 0;
+  }
+
   @override
   Future<List<AttendanceRecord>> getAllAttendanceRecords({
     int? employeeId,
@@ -90,9 +113,8 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
       for (final doc in snap.docs) {
         final data = doc.data();
         if (employeeId != null) {
-          final docEmpCode = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
-          final docEmpIdRaw = data['employee_id'];
-          final docEmpIdNum = docEmpIdRaw is int ? docEmpIdRaw : (int.tryParse(docEmpIdRaw?.toString() ?? '') ?? 0);
+          final docEmpCode = _extractDocEmpCode(data);
+          final docEmpIdNum = _extractDocEmpId(data);
 
           // Strict isolation: skip records that explicitly belong to a different employee
           if (targetEmpCode.isNotEmpty && docEmpCode.isNotEmpty && docEmpCode != targetEmpCode) {

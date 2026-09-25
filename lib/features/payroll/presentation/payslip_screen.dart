@@ -387,7 +387,12 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
               Expanded(child: _buildLabelValue('LATE', '${record.lateDays}')),
               Expanded(child: _buildLabelValue('ABSENT (LOP)', '${record.absentDays}')),
               Expanded(child: _buildLabelValue('LEAVE', '${record.leaveDays}')),
-              Expanded(child: _buildLabelValue('TOTAL DAYS', '${record.presentDays + record.absentDays + record.leaveDays}')),
+              Expanded(
+                child: _buildLabelValue(
+                  'TOTAL DAYS',
+                  '${record.totalWorkingDays > 0 ? record.totalWorkingDays : (record.presentDays + record.lateDays + record.absentDays + record.leaveDays)}',
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -602,10 +607,23 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
   }
 
   Widget _buildStatusPill(PayrollRecord record) {
-    final isPaid = record.status == 'Paid';
-    final color = isPaid ? const Color(0xFF9CC70A) : Colors.amber[800]!;
-    final bgColor = isPaid ? const Color(0xFF9CC70A).withValues(alpha: 0.1) : Colors.amber[50]!;
-    final label = isPaid ? 'Paid' : 'Processing';
+    final status = record.status;
+    final isPaid = status == 'Paid';
+    final isProcessed = status == 'Processed';
+
+    Color color;
+    Color bgColor;
+
+    if (isPaid) {
+      color = const Color(0xFF9CC70A);
+      bgColor = const Color(0xFF9CC70A).withValues(alpha: 0.1);
+    } else if (isProcessed) {
+      color = Colors.blue[700]!;
+      bgColor = Colors.blue[50]!;
+    } else {
+      color = Colors.amber[800]!;
+      bgColor = Colors.amber[50]!;
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -613,18 +631,27 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
         color: bgColor,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Text(
-        label,
-        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isPaid) ...[
+            const Icon(Icons.lock_outlined, size: 11, color: Color(0xFF9CC70A)),
+            const SizedBox(width: 3),
+          ],
+          Text(
+            status,
+            style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildActionRow(BuildContext context, PayrollRecord record, bool isMobile) {
-    final isPaid = record.status == 'Paid';
+    final canDownload = record.status == 'Processed' || record.status == 'Paid';
 
     final downloadBtn = ElevatedButton(
-      onPressed: (!isPaid || _downloading) ? null : () => _startDownloadFlow(context, record),
+      onPressed: (!canDownload || _downloading) ? null : () => _startDownloadFlow(context, record),
       style: ElevatedButton.styleFrom(
         backgroundColor: const Color(0xFF9CC70A),
         foregroundColor: Colors.white,

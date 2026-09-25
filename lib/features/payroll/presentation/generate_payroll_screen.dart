@@ -134,17 +134,17 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     if (_initialized) return;
     _initialized = true;
 
-    // Use employee standard CTC details
-    final basic = employee.salaryBasic > 0 ? employee.salaryBasic : 33500.0;
-    final hra = employee.salaryHra > 0 ? employee.salaryHra : 16750.0;
-    final special = employee.salarySpecialAllowance > 0 ? employee.salarySpecialAllowance : 16750.0;
-    final edu = employee.salaryEducationAllowance > 0 ? employee.salaryEducationAllowance : 3000.0;
-    final travel = employee.salaryTravelAllowance > 0 ? employee.salaryTravelAllowance : 0.0;
-    final otherAllowance = employee.salaryOtherAllowance > 0 ? employee.salaryOtherAllowance : 3000.0;
+    // Use employee standard CTC details directly from employee record
+    final basic = (employee.salaryBasic as num?)?.toDouble() ?? 0.0;
+    final hra = (employee.salaryHra as num?)?.toDouble() ?? 0.0;
+    final special = (employee.salarySpecialAllowance as num?)?.toDouble() ?? 0.0;
+    final edu = (employee.salaryEducationAllowance as num?)?.toDouble() ?? 0.0;
+    final travel = (employee.salaryTravelAllowance as num?)?.toDouble() ?? 0.0;
+    final otherAllowance = (employee.salaryOtherAllowance as num?)?.toDouble() ?? 0.0;
 
-    final pf = employee.salaryPf > 0 ? employee.salaryPf : 1800.0;
-    final tax = employee.salaryTax > 0 ? employee.salaryTax : 0.0;
-    final esi = employee.salaryEsi > 0 ? employee.salaryEsi : 0.0;
+    final pf = (employee.salaryPf as num?)?.toDouble() ?? 0.0;
+    final tax = (employee.salaryTax as num?)?.toDouble() ?? 0.0;
+    final esi = (employee.salaryEsi as num?)?.toDouble() ?? 0.0;
 
     _basicController.text = basic.toStringAsFixed(2);
     _hraController.text = hra.toStringAsFixed(2);
@@ -153,11 +153,11 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     _travelAllowanceController.text = travel.toStringAsFixed(2);
     _otherAllowanceController.text = otherAllowance.toStringAsFixed(2);
 
-    // Initial mock values for monthly inputs matching screenshot
-    _incentiveController.text = '8880.00';
+    // Initial values for dynamic monthly inputs
+    _incentiveController.text = '0.00';
     _carryForwardController.text = '-';
     _othersEarningController.text = '0.00';
-    _cumulativeIncentiveController.text = '31067.00';
+    _cumulativeIncentiveController.text = '0.00';
     _bonusController.text = '0.00';
     _otController.text = '0.00';
 
@@ -168,8 +168,8 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     _lopController.text = '0.00';
     _companyLoanController.text = '0.00';
     _loanDescController.text = '';
-    _salaryAdvanceController.text = '12200.00';
-    _othersDeductionController.text = '3392.00';
+    _salaryAdvanceController.text = '0.00';
+    _othersDeductionController.text = '0.00';
     _staffWelfareController.text = '0.00';
 
     _recalculate();
@@ -471,6 +471,9 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
 
           return settingsAsync.when(
             data: (settings) {
+              if (attendanceAsync.isLoading || leavesAsync.isLoading) {
+                return const Center(child: CircularProgressIndicator());
+              }
               _initializeValues(employee, settings, selectedMonth);
               final records = attendanceAsync.value ?? [];
               final leaves = leavesAsync.value;

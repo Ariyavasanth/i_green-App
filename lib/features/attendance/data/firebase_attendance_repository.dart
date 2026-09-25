@@ -300,6 +300,29 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     } catch (_) {}
   }
 
+  static String _extractDocEmpCode(Map<String, dynamic> data) {
+    if (data['employee_code'] != null && data['employee_code'].toString().trim().isNotEmpty) {
+      return data['employee_code'].toString().trim().toUpperCase();
+    }
+    if (data['employee_id'] is String) {
+      final rawId = data['employee_id'].toString().trim();
+      if (rawId.contains(RegExp(r'[^0-9]'))) {
+        return rawId.toUpperCase();
+      }
+    }
+    return '';
+  }
+
+  static int _extractDocEmpId(Map<String, dynamic> data) {
+    final rawId = data['employee_id'];
+    if (rawId is int) return rawId;
+    if (rawId is num) return rawId.toInt();
+    if (rawId is String) {
+      return int.tryParse(rawId) ?? 0;
+    }
+    return 0;
+  }
+
   @override
   Future<List<AttendanceRecord>> getAttendanceRecords(int employeeId) async {
     List<AttendanceRecord> firestoreList = [];
@@ -310,13 +333,10 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       final snap = await _recordsRef.get();
       for (final doc in snap.docs) {
         final data = doc.data();
-        final docEmpIdRaw = data['employee_id'];
-        final docEmpIdNum = docEmpIdRaw is int
-            ? docEmpIdRaw
-            : (int.tryParse(docEmpIdRaw?.toString() ?? '') ?? 0);
-        final docEmpCode = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
+        final docEmpIdNum = _extractDocEmpId(data);
+        final docEmpCode = _extractDocEmpCode(data);
 
-        // Strict isolation: if document has an explicit code that belongs to a different employee, skip it!
+        // Strict isolation: if document has an explicit string code that belongs to a different employee, skip it!
         if (empCode.isNotEmpty && docEmpCode.isNotEmpty && docEmpCode != empCode) {
           continue;
         }
@@ -446,13 +466,10 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       final snap = await _recordsRef.get();
       for (final doc in snap.docs) {
         final data = doc.data();
-        final docEmpIdRaw = data['employee_id'];
-        final docEmpIdNum = docEmpIdRaw is int
-            ? docEmpIdRaw
-            : (int.tryParse(docEmpIdRaw?.toString() ?? '') ?? 0);
-        final docEmpCode = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
+        final docEmpIdNum = _extractDocEmpId(data);
+        final docEmpCode = _extractDocEmpCode(data);
 
-        // Strict isolation: if document has an explicit code that belongs to a different employee, skip it!
+        // Strict isolation: if document has an explicit string code that belongs to a different employee, skip it!
         if (empCode.isNotEmpty && docEmpCode.isNotEmpty && docEmpCode != empCode) {
           continue;
         }

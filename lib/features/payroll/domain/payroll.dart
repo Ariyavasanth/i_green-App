@@ -493,18 +493,26 @@ class PayrollSettings {
   });
 
   PayrollPeriod getPayrollPeriod(int year, int month) {
-    // 20th of previous month 00:00 through 20th of current month 00:00 exclusive.
-    // Example for September 2026 (year=2026, month=9):
-    //   startDate        = 20 Aug 2026 00:00
-    //   endDateExclusive = 20 Sep 2026 00:00
-    //   processingDate   = 21 Sep 2026
-    //   paymentDate      = 21 Sep 2026
-    final prevMonthDate = DateTime(year, month - 1, 1);
-    final prevYear = prevMonthDate.year;
-    final prevMonth = prevMonthDate.month;
+    // Determine whether this payroll cycle crosses month boundaries
+    final bool isCrossMonth = payrollStartDay > payrollEndDay || (payrollStartDay == payrollEndDay && payrollStartDay > 1);
 
-    final start = DateTime(prevYear, prevMonth, payrollStartDay);
-    final endExclusive = DateTime(year, month, payrollEndDay);
+    final DateTime start;
+    if (isCrossMonth) {
+      final prevMonthDate = DateTime(year, month - 1, 1);
+      start = DateTime(prevMonthDate.year, prevMonthDate.month, payrollStartDay);
+    } else {
+      start = DateTime(year, month, payrollStartDay);
+    }
+
+    // End date is inclusive: endDateExclusive is set to the day following payrollEndDay at 00:00:00
+    // so display subtraction (1 sec) and while (cursor.isBefore(endDateExclusive)) include the entire end day.
+    final DateTime endExclusive;
+    if (payrollStartDay < payrollEndDay) {
+      endExclusive = DateTime(year, month, payrollEndDay).add(const Duration(days: 1));
+    } else {
+      endExclusive = DateTime(year, month, payrollEndDay);
+    }
+
     final processing = DateTime(year, month, processingDay);
     final payment = DateTime(year, month, paymentDay);
 
