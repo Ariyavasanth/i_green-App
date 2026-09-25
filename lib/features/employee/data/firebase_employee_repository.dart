@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:image/image.dart' as img;
 
 import '../../organization/domain/column_preference.dart';
 import '../domain/candidate_response.dart';
@@ -843,12 +844,49 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       }
 
       if (bytes != null && bytes.isNotEmpty) {
+        Uint8List uploadBytes = bytes;
+        // Compress image if larger than 250KB to keep storage lightweight and fast
+        if (uploadBytes.lengthInBytes > 250000) {
+          try {
+            final decoded = img.decodeImage(uploadBytes);
+            if (decoded != null) {
+              final resized = (decoded.width > 720 || decoded.height > 720)
+                  ? img.copyResize(decoded, width: 720, height: 720)
+                  : decoded;
+              uploadBytes = Uint8List.fromList(img.encodeJpg(resized, quality: 85));
+              ext = 'jpg';
+            }
+          } catch (_) {}
+        }
+
         final storagePath = 'Employee Photo/${docId}_${DateTime.now().millisecondsSinceEpoch}.$ext';
         final ref = _storage.ref().child(storagePath);
-        final uploadTask = await ref.putData(bytes, SettableMetadata(contentType: 'image/$ext'));
+        final contentType = ext == 'png' ? 'image/png' : (ext == 'webp' ? 'image/webp' : 'image/jpeg');
+        final uploadTask = await ref.putData(uploadBytes, SettableMetadata(contentType: contentType));
         return await uploadTask.ref.getDownloadURL();
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Firebase Storage upload failed: $e');
+    }
+
+    // Safety fallback: If Firebase Storage failed and image string is too large (> 400KB),
+    // compress it to a light JPEG base64 to ensure it NEVER exceeds Firestore's 1,048,487 byte document limit.
+    if (imagePathOrData.length > 400000) {
+      try {
+        final commaIdx = imagePathOrData.indexOf(',');
+        final rawStr = commaIdx != -1 ? imagePathOrData.substring(commaIdx + 1) : imagePathOrData;
+        final rawBytes = base64Decode(rawStr);
+        final decoded = img.decodeImage(rawBytes);
+        if (decoded != null) {
+          final resized = (decoded.width > 600 || decoded.height > 600)
+              ? img.copyResize(decoded, width: 600, height: 600)
+              : decoded;
+          final compressedJpg = img.encodeJpg(resized, quality: 80);
+          return 'data:image/jpeg;base64,${base64Encode(compressedJpg)}';
+        }
+      } catch (_) {}
+    }
+
     return imagePathOrData;
   }
 }

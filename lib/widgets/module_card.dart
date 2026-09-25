@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
@@ -420,6 +422,7 @@ class ModuleScreenHeader extends StatelessWidget {
     required this.color,
     required this.onBack,
     this.employeeName,
+    this.photoUrl,
     this.onProfile,
     this.actions,
     super.key,
@@ -430,6 +433,7 @@ class ModuleScreenHeader extends StatelessWidget {
   final Color color;
   final VoidCallback onBack;
   final String? employeeName;
+  final String? photoUrl;
   final VoidCallback? onProfile;
   final List<Widget>? actions;
 
@@ -508,36 +512,65 @@ class ModuleScreenHeader extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          colors: [
-                            AppColors.primary,
-                            AppColors.primary.withValues(alpha: 0.7),
-                          ],
-                        ),
-                      ),
-                      child: Center(
-                        child: Text(
-                          employeeName!.isNotEmpty
-                              ? employeeName![0].toUpperCase()
-                              : '?',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15,
-                          ),
-                        ),
-                      ),
-                    ),
+                    _buildAvatar(),
                   ],
                 ),
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAvatar() {
+    final cleanPhoto = photoUrl?.trim() ?? '';
+    final initial = employeeName != null && employeeName!.isNotEmpty
+        ? employeeName![0].toUpperCase()
+        : '?';
+
+    if (cleanPhoto.isNotEmpty) {
+      if (cleanPhoto.startsWith('data:')) {
+        try {
+          final commaIdx = cleanPhoto.indexOf(',');
+          final bytes = base64Decode(
+            commaIdx != -1 ? cleanPhoto.substring(commaIdx + 1) : cleanPhoto,
+          );
+          return CircleAvatar(
+            radius: 17,
+            backgroundColor: AppColors.primary,
+            backgroundImage: MemoryImage(bytes),
+          );
+        } catch (_) {}
+      } else if (cleanPhoto.startsWith('http://') || cleanPhoto.startsWith('https://')) {
+        return CircleAvatar(
+          radius: 17,
+          backgroundColor: AppColors.primary,
+          backgroundImage: NetworkImage(cleanPhoto),
+        );
+      }
+    }
+
+    return Container(
+      width: 34,
+      height: 34,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: [
+            AppColors.primary,
+            AppColors.primary.withValues(alpha: 0.7),
+          ],
+        ),
+      ),
+      child: Center(
+        child: Text(
+          initial,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+            fontSize: 15,
+          ),
         ),
       ),
     );

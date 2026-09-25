@@ -26,6 +26,7 @@ class FactoryModuleScreen extends ConsumerWidget {
               color: const Color(0xFF607D8B),
               onBack: () => context.go('/module-dashboard'),
               employeeName: employeeName,
+              photoUrl: employee?.profileImageUrl,
               onProfile: () => context.go('/my-profile'),
             ),
             Expanded(

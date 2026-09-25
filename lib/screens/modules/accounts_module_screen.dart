@@ -103,6 +103,7 @@ class _AccountsModuleScreenState extends ConsumerState<AccountsModuleScreen> {
             color: const Color(0xFFFF9800),
             onBack: () => context.go('/module-dashboard'),
             employeeName: employeeName,
+            photoUrl: employee?.profileImageUrl,
             onProfile: () => context.go('/my-profile'),
           ),
           Expanded(

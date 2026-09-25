@@ -77,6 +77,7 @@ class _ProjectModuleScreenState extends ConsumerState<ProjectModuleScreen> {
               color: const Color(0xFF9C27B0),
               onBack: () => context.go('/module-dashboard'),
               employeeName: employeeName,
+              photoUrl: employee?.profileImageUrl,
               onProfile: () => context.go('/my-profile'),
             ),
             Expanded(

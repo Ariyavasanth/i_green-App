@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -25,6 +27,7 @@ class ModuleDashboardScreen extends ConsumerWidget {
             _DashboardTopBar(
               employeeName: employeeName,
               designation: designation,
+              photoUrl: employee?.profileImageUrl,
             ),
             // ── Main Content Area ──
             Expanded(
@@ -82,10 +85,12 @@ class _DashboardTopBar extends StatelessWidget {
   const _DashboardTopBar({
     required this.employeeName,
     required this.designation,
+    this.photoUrl,
   });
 
   final String employeeName;
   final String designation;
+  final String? photoUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -154,40 +159,7 @@ class _DashboardTopBar extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              AppColors.primary,
-                              AppColors.primary.withValues(alpha: 0.8),
-                            ],
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.primary.withValues(alpha: 0.25),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Center(
-                          child: Text(
-                            employeeName.isNotEmpty
-                                ? employeeName[0].toUpperCase()
-                                : 'U',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 15,
-                            ),
-                          ),
-                        ),
-                      ),
+                      _buildAvatar(),
                       if (!isNarrow) ...[
                         const SizedBox(width: 10),
                         Column(
@@ -228,6 +200,66 @@ class _DashboardTopBar extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildAvatar() {
+    final cleanUrl = photoUrl?.trim() ?? '';
+    final initial = employeeName.isNotEmpty ? employeeName[0].toUpperCase() : 'U';
+
+    if (cleanUrl.isNotEmpty) {
+      if (cleanUrl.startsWith('data:')) {
+        try {
+          final commaIdx = cleanUrl.indexOf(',');
+          final bytes = base64Decode(
+            commaIdx != -1 ? cleanUrl.substring(commaIdx + 1) : cleanUrl,
+          );
+          return CircleAvatar(
+            radius: 18,
+            backgroundColor: AppColors.primary,
+            backgroundImage: MemoryImage(bytes),
+          );
+        } catch (_) {}
+      } else if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+        return CircleAvatar(
+          radius: 18,
+          backgroundColor: AppColors.primary,
+          backgroundImage: NetworkImage(cleanUrl),
+        );
+      }
+    }
+
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppColors.primary,
+            AppColors.primary.withValues(alpha: 0.8),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.25),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Center(
+        child: Text(
+          initial,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+            fontSize: 15,
+          ),
+        ),
+      ),
     );
   }
 }

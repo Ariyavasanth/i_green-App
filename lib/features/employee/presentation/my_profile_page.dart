@@ -11,6 +11,8 @@ import '../../../widgets/background_picker_modal.dart';
 import '../../authentication/providers/authentication_providers.dart';
 import '../domain/employee.dart';
 import '../providers/employee_providers.dart';
+import 'dialogs/profile_photo_cropper_dialog.dart';
+import 'dialogs/profile_photo_viewer_dialog.dart';
 
 class MyProfilePage extends ConsumerStatefulWidget {
   const MyProfilePage({super.key});
@@ -44,14 +46,37 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
   }
 
   void _syncEmployeeData(Employee emp) {
-    if (_lastEmployee?.id == emp.id && _profileImageUrl.isNotEmpty) return;
-    _lastEmployee = emp;
-    _profileImageUrl = emp.profileImageUrl;
-    _firstNameController.text = emp.firstName;
-    _lastNameController.text = emp.lastName;
-    _phoneController.text = emp.phoneNumber;
-    _personalMobileController.text = emp.personalMobile;
-    _presentAddressController.text = emp.presentAddress;
+    if (_lastEmployee?.id != emp.id) {
+      _lastEmployee = emp;
+      _profileImageUrl = emp.profileImageUrl;
+      _selectedPhotoBytes = null;
+      _isPhotoRemoved = emp.profileImageUrl.trim().isEmpty;
+      _firstNameController.text = emp.firstName;
+      _lastNameController.text = emp.lastName;
+      _phoneController.text = emp.phoneNumber;
+      _personalMobileController.text = emp.personalMobile;
+      _presentAddressController.text = emp.presentAddress;
+    } else if (!_isSaving) {
+      if (_lastEmployee?.profileImageUrl != emp.profileImageUrl) {
+        _lastEmployee = emp;
+        _profileImageUrl = emp.profileImageUrl;
+        _selectedPhotoBytes = null;
+        _isPhotoRemoved = emp.profileImageUrl.trim().isEmpty;
+      }
+    }
+  }
+
+  void _openPhotoViewer(String displayName, String initial) {
+    ProfilePhotoViewerDialog.show(
+      context: context,
+      displayName: displayName,
+      initial: initial,
+      photoBytes: _selectedPhotoBytes,
+      photoUrl: (_profileImageUrl.isNotEmpty && !_isPhotoRemoved)
+          ? _profileImageUrl
+          : null,
+      heroTag: 'profile_photo_hero',
+    );
   }
 
   @override
@@ -74,19 +99,17 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
       final file = result?.files.isNotEmpty == true ? result!.files.first : null;
       if (file == null || file.bytes == null) return;
 
-      final bytes = file.bytes!;
-      final ext = (file.extension ?? 'jpg').toLowerCase();
-      final mimeType = switch (ext) {
-        'png' => 'image/png',
-        'webp' => 'image/webp',
-        'gif' => 'image/gif',
-        'bmp' => 'image/bmp',
-        _ => 'image/jpeg',
-      };
+      if (!mounted) return;
+      final croppedBytes = await ProfilePhotoCropperDialog.show(
+        context: context,
+        rawBytes: file.bytes!,
+      );
+
+      if (croppedBytes == null) return; // User cancelled crop
 
       setState(() {
-        _selectedPhotoBytes = bytes;
-        _profileImageUrl = 'data:$mimeType;base64,${base64Encode(bytes)}';
+        _selectedPhotoBytes = croppedBytes;
+        _profileImageUrl = 'data:image/jpeg;base64,${base64Encode(croppedBytes)}';
         _isPhotoRemoved = false;
       });
 
@@ -94,7 +117,7 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to pick photo: $e')),
+        SnackBar(content: Text('Failed to set photo: $e')),
       );
     }
   }
@@ -263,7 +286,7 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              _buildAvatarWithBadge(initial, radius: 42),
+                              _buildAvatar(displayName, initial, radius: 42),
                               const SizedBox(width: 16),
                               Expanded(
                                 child: Column(
@@ -313,7 +336,7 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              _buildAvatarWithBadge(initial, radius: 46),
+                              _buildAvatar(displayName, initial, radius: 46),
                               const SizedBox(width: 20),
                               Expanded(
                                 child: Column(
@@ -767,12 +790,12 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
     );
   }
 
-  Widget _buildAvatarWithBadge(String initial, {required double radius}) {
+  Widget _buildAvatar(String displayName, String initial, {required double radius}) {
     Widget avatarChild;
     if (_selectedPhotoBytes != null) {
       avatarChild = CircleAvatar(
         radius: radius,
-        backgroundColor: AppColors.primary,
+        backgroundColor: const Color(0xFFF1F5F9),
         backgroundImage: MemoryImage(_selectedPhotoBytes!),
       );
     } else if (_profileImageUrl.isNotEmpty && !_isPhotoRemoved) {
@@ -786,7 +809,7 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
           );
           avatarChild = CircleAvatar(
             radius: radius,
-            backgroundColor: AppColors.primary,
+            backgroundColor: const Color(0xFFF1F5F9),
             backgroundImage: MemoryImage(bytes),
           );
         } catch (_) {
@@ -795,7 +818,7 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
       } else if (_profileImageUrl.startsWith('http')) {
         avatarChild = CircleAvatar(
           radius: radius,
-          backgroundColor: AppColors.primary,
+          backgroundColor: const Color(0xFFF1F5F9),
           backgroundImage: NetworkImage(_profileImageUrl),
         );
       } else {
@@ -805,44 +828,22 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
       avatarChild = _buildDefaultInitialAvatar(initial, radius);
     }
 
-    return Stack(
-      children: [
-        avatarChild,
-        Positioned(
-          right: 0,
-          bottom: 0,
-          child: InkWell(
-            onTap: _pickPhoto,
-            borderRadius: BorderRadius.circular(15),
-            child: Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: const Color(0xFFE5E8E2),
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: const Center(
-                child: Icon(
-                  Icons.camera_alt_rounded,
-                  size: 14,
-                  color: Color(0xFF1E293B),
-                ),
-              ),
-            ),
+    return Hero(
+      tag: 'profile_photo_hero',
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: () => _openPhotoViewer(displayName, initial),
+          mouseCursor: SystemMouseCursors.click,
+          child: Tooltip(
+            message: 'View profile photo',
+            child: avatarChild,
           ),
         ),
-      ],
+      ),
     );
   }
 

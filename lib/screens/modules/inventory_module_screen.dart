@@ -116,6 +116,7 @@ class _InventoryModuleScreenState extends ConsumerState<InventoryModuleScreen> {
             color: const Color(0xFF2196F3),
             onBack: () => context.go('/module-dashboard'),
             employeeName: employeeName,
+            photoUrl: employee?.profileImageUrl,
             onProfile: () => context.go('/my-profile'),
           ),
           Expanded(
