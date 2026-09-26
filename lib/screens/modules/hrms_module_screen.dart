@@ -167,6 +167,22 @@ class HrmsModuleScreen extends ConsumerStatefulWidget {
         containerColor: const Color(0xFFFEE7EB),
       ),
     ],
+    'PERMISSION': [
+      _SubModule(
+        'Permission',
+        Icons.access_time_filled_outlined,
+        '/permission',
+        const Color(0xFF2563EB),
+        containerColor: const Color(0xFFEFF6FF),
+      ),
+      _SubModule(
+        'Permission\nManagement',
+        Icons.more_time_outlined,
+        '/permission-management',
+        const Color(0xFF7C3AED),
+        containerColor: const Color(0xFFF5F3FF),
+      ),
+    ],
     'SALARY & ASSETS': [
       _SubModule(
         'Salary\nSettings',

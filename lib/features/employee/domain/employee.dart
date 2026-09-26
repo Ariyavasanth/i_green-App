@@ -289,6 +289,12 @@ class Employee {
       if ((normClean == 'leave' || normClean == 'leaves' || normClean == 'leavemanagement') &&
           (pClean == 'leave' || pClean == 'leaves' || pClean == 'leavemanagement')) return true;
 
+      // Permission aliases
+      if ((normClean == 'permission' || normClean == 'permissions' || normClean == 'mypermission') &&
+          (pClean == 'permission' || pClean == 'permissions' || pClean == 'mypermission')) return true;
+      if ((normClean == 'permissionmanagement' || normClean == 'permissionmgmt') &&
+          (pClean == 'permissionmanagement' || pClean == 'permissionmgmt')) return true;
+
       // Tasks & Clocking aliases
       if ((normClean.contains('task') && (normClean.contains('clock') || normClean.contains('timesheet'))) &&
           (pClean.contains('task') && (pClean.contains('clock') || pClean.contains('timesheet')))) return true;
