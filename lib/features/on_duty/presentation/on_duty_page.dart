@@ -240,6 +240,7 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
       return GridView.count(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
+        padding: EdgeInsets.zero,
         crossAxisCount: 2,
         mainAxisSpacing: 10,
         crossAxisSpacing: 10,

@@ -9,7 +9,7 @@ class FirebaseAssetAssignmentRepository implements AssetAssignmentRepository {
   final FirebaseFirestore _firestore;
 
   FirebaseAssetAssignmentRepository({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+    : _firestore = firestore ?? FirebaseFirestore.instance;
 
   CollectionReference<Map<String, dynamic>> get _ref =>
       _firestore.collection('asset_assignments');
@@ -25,9 +25,13 @@ class FirebaseAssetAssignmentRepository implements AssetAssignmentRepository {
       final assignments = snapshot.docs
           .map((doc) => AssetAssignment.fromMap(doc.data(), doc.id))
           .toList();
-      assignments.sort((a, b) => b.id.compareTo(a.id));
+      assignments.sort((a, b) {
+        final dateCmp = b.assignedDate.compareTo(a.assignedDate);
+        if (dateCmp != 0) return dateCmp;
+        return b.id.compareTo(a.id);
+      });
       return assignments;
-    } catch (_) {
+    } catch (e) {
       return [];
     }
   }
@@ -37,12 +41,9 @@ class FirebaseAssetAssignmentRepository implements AssetAssignmentRepository {
     try {
       final nowStr = DateTime.now().toIso8601String();
       final docRef = _ref.doc();
-      final parsedId = int.tryParse(docRef.id.replaceAll(RegExp(r'\D'), ''));
       final assignedId = assignment.id != 0
           ? assignment.id
-          : ((parsedId != null && parsedId != 0)
-              ? parsedId
-              : (docRef.id.hashCode & 0x7FFFFFFF));
+          : (DateTime.now().millisecondsSinceEpoch & 0x7FFFFFFF);
 
       final newAssignment = assignment.copyWith(
         id: assignedId,
@@ -66,14 +67,12 @@ class FirebaseAssetAssignmentRepository implements AssetAssignmentRepository {
     try {
       final batch = _firestore.batch();
       final nowStr = DateTime.now().toIso8601String();
-      for (final assignment in assignments) {
+      for (var i = 0; i < assignments.length; i++) {
+        final assignment = assignments[i];
         final docRef = _ref.doc();
-        final parsedId = int.tryParse(docRef.id.replaceAll(RegExp(r'\D'), ''));
         final assignedId = assignment.id != 0
             ? assignment.id
-            : ((parsedId != null && parsedId != 0)
-                ? parsedId
-                : (docRef.id.hashCode & 0x7FFFFFFF));
+            : ((DateTime.now().millisecondsSinceEpoch + i) & 0x7FFFFFFF);
 
         final newAssignment = assignment.copyWith(
           id: assignedId,
@@ -86,15 +85,26 @@ class FirebaseAssetAssignmentRepository implements AssetAssignmentRepository {
         batch.set(docRef, data, SetOptions(merge: true));
       }
       await batch.commit();
-    } catch (_) {}
+    } catch (e) {
+      // Fallback: write individually if batch fails
+      for (var i = 0; i < assignments.length; i++) {
+        try {
+          await addAssignment(assignments[i]);
+        } catch (_) {}
+      }
+    }
   }
 
   @override
   Future<void> updateAssignment(AssetAssignment assignment) async {
     try {
-      final snapshot =
-          await _ref.where('id', isEqualTo: assignment.id).limit(1).get();
-      String docId = snapshot.docs.isNotEmpty ? snapshot.docs.first.id : assignment.id.toString();
+      final snapshot = await _ref
+          .where('id', isEqualTo: assignment.id)
+          .limit(1)
+          .get();
+      String docId = snapshot.docs.isNotEmpty
+          ? snapshot.docs.first.id
+          : assignment.id.toString();
       final data = assignment.toMap();
       data['updated_at'] = FieldValue.serverTimestamp();
       await _ref.doc(docId).set(data, SetOptions(merge: true));
@@ -104,8 +114,7 @@ class FirebaseAssetAssignmentRepository implements AssetAssignmentRepository {
   @override
   Future<void> deleteAssignment(int id) async {
     try {
-      final snapshot =
-          await _ref.where('id', isEqualTo: id).limit(1).get();
+      final snapshot = await _ref.where('id', isEqualTo: id).limit(1).get();
       if (snapshot.docs.isNotEmpty) {
         await _ref.doc(snapshot.docs.first.id).delete();
         return;
@@ -117,13 +126,17 @@ class FirebaseAssetAssignmentRepository implements AssetAssignmentRepository {
   @override
   Future<List<AssetTransferRequest>> getTransferRequests() async {
     final snapshot = await _transferRef.get();
-    final requests = snapshot.docs.map((d) => AssetTransferRequest.fromMap(d.data(), d.id)).toList();
+    final requests = snapshot.docs
+        .map((d) => AssetTransferRequest.fromMap(d.data(), d.id))
+        .toList();
     requests.sort((a, b) => (b.createdAt ?? '').compareTo(a.createdAt ?? ''));
     return requests;
   }
 
   @override
-  Future<AssetTransferRequest> createTransferRequest(AssetTransferRequest request) async {
+  Future<AssetTransferRequest> createTransferRequest(
+    AssetTransferRequest request,
+  ) async {
     final doc = _transferRef.doc();
     final created = request.copyWith(
       id: request.id == 0 ? doc.id.hashCode & 0x7fffffff : request.id,
@@ -134,12 +147,23 @@ class FirebaseAssetAssignmentRepository implements AssetAssignmentRepository {
   }
 
   @override
-  Future<void> respondToTransferRequest(AssetTransferRequest request, {required bool approve}) async {
-    final requestQuery = await _transferRef.where('id', isEqualTo: request.id).limit(1).get();
-    if (requestQuery.docs.isEmpty) throw StateError('Transfer request was not found.');
+  Future<void> respondToTransferRequest(
+    AssetTransferRequest request, {
+    required bool approve,
+  }) async {
+    final requestQuery = await _transferRef
+        .where('id', isEqualTo: request.id)
+        .limit(1)
+        .get();
+    if (requestQuery.docs.isEmpty)
+      throw StateError('Transfer request was not found.');
     final requestDoc = requestQuery.docs.first.reference;
-    final assignmentQuery = await _ref.where('id', isEqualTo: request.assetAssignmentId).limit(1).get();
-    if (approve && assignmentQuery.docs.isEmpty) throw StateError('Asset assignment was not found.');
+    final assignmentQuery = await _ref
+        .where('id', isEqualTo: request.assetAssignmentId)
+        .limit(1)
+        .get();
+    if (approve && assignmentQuery.docs.isEmpty)
+      throw StateError('Asset assignment was not found.');
     await _firestore.runTransaction((transaction) async {
       if (approve) {
         transaction.update(assignmentQuery.docs.first.reference, {
@@ -149,7 +173,8 @@ class FirebaseAssetAssignmentRepository implements AssetAssignmentRepository {
           'assigned_date': request.transferDate,
           'description': request.reason,
           'status': 'Assigned',
-          'transferred_from': '${request.fromEmployeeName}${request.fromEmployeeCode.isEmpty ? '' : ' (${request.fromEmployeeCode})'}',
+          'transferred_from':
+              '${request.fromEmployeeName}${request.fromEmployeeCode.isEmpty ? '' : ' (${request.fromEmployeeCode})'}',
           'transfer_date': request.transferDate,
           'maintenance_address': null,
           'maintenance_contact': null,
@@ -169,7 +194,9 @@ class FirebaseAssetAssignmentRepository implements AssetAssignmentRepository {
   Future<List<AssetReturnRequest>> getReturnRequests() async {
     try {
       final snapshot = await _returnRef.get();
-      final requests = snapshot.docs.map((d) => AssetReturnRequest.fromMap(d.data(), d.id)).toList();
+      final requests = snapshot.docs
+          .map((d) => AssetReturnRequest.fromMap(d.data(), d.id))
+          .toList();
       requests.sort((a, b) => (b.createdAt ?? '').compareTo(a.createdAt ?? ''));
       return requests;
     } catch (_) {
@@ -178,7 +205,9 @@ class FirebaseAssetAssignmentRepository implements AssetAssignmentRepository {
   }
 
   @override
-  Future<AssetReturnRequest> createReturnRequest(AssetReturnRequest request) async {
+  Future<AssetReturnRequest> createReturnRequest(
+    AssetReturnRequest request,
+  ) async {
     final doc = _returnRef.doc();
     final created = request.copyWith(
       id: request.id == 0 ? doc.id.hashCode & 0x7fffffff : request.id,
@@ -189,12 +218,23 @@ class FirebaseAssetAssignmentRepository implements AssetAssignmentRepository {
   }
 
   @override
-  Future<void> respondToReturnRequest(AssetReturnRequest request, {required bool approve}) async {
-    final requestQuery = await _returnRef.where('id', isEqualTo: request.id).limit(1).get();
-    if (requestQuery.docs.isEmpty) throw StateError('Return request was not found.');
+  Future<void> respondToReturnRequest(
+    AssetReturnRequest request, {
+    required bool approve,
+  }) async {
+    final requestQuery = await _returnRef
+        .where('id', isEqualTo: request.id)
+        .limit(1)
+        .get();
+    if (requestQuery.docs.isEmpty)
+      throw StateError('Return request was not found.');
     final requestDoc = requestQuery.docs.first.reference;
-    final assignmentQuery = await _ref.where('id', isEqualTo: request.assetAssignmentId).limit(1).get();
-    if (approve && assignmentQuery.docs.isEmpty) throw StateError('Asset assignment was not found.');
+    final assignmentQuery = await _ref
+        .where('id', isEqualTo: request.assetAssignmentId)
+        .limit(1)
+        .get();
+    if (approve && assignmentQuery.docs.isEmpty)
+      throw StateError('Asset assignment was not found.');
 
     await _firestore.runTransaction((transaction) async {
       if (approve) {
@@ -210,4 +250,3 @@ class FirebaseAssetAssignmentRepository implements AssetAssignmentRepository {
     });
   }
 }
-

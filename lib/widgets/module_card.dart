@@ -263,15 +263,25 @@ class _ModuleCardState extends State<ModuleCard>
 class SubModuleCard extends StatefulWidget {
   const SubModuleCard({
     required this.label,
-    required this.icon,
+    this.icon,
+    this.customIcon,
     required this.color,
+    this.containerColor,
+    this.cardColor,
+    this.containerSize,
+    this.containerBorderRadius,
     required this.onTap,
     super.key,
-  });
+  }) : assert(icon != null || customIcon != null, 'Either icon or customIcon must be provided');
 
   final String label;
-  final IconData icon;
+  final IconData? icon;
+  final Widget? customIcon;
   final Color color;
+  final Color? containerColor;
+  final Color? cardColor;
+  final double? containerSize;
+  final BorderRadius? containerBorderRadius;
   final VoidCallback onTap;
 
   @override
@@ -305,10 +315,9 @@ class _SubModuleCardState extends State<SubModuleCard>
   @override
   Widget build(BuildContext context) {
     final primaryColor = widget.color;
-    final secondaryColor = Color.alphaBlend(
-      Colors.black.withValues(alpha: 0.18),
-      widget.color,
-    );
+    final effectiveCardBg = widget.cardColor ?? widget.containerColor ?? Colors.white;
+    final isCustomBg = effectiveCardBg != Colors.white;
+    final bgCol = isCustomBg ? Colors.transparent : primaryColor.withValues(alpha: 0.14);
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -332,12 +341,12 @@ class _SubModuleCardState extends State<SubModuleCard>
             curve: Curves.easeOutCubic,
             transform: Matrix4.translationValues(0, _isHovered ? -3 : 0, 0),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: effectiveCardBg,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color: _isHovered
                     ? primaryColor.withValues(alpha: 0.5)
-                    : const Color(0xFFE2E8F0),
+                    : (isCustomBg ? primaryColor.withValues(alpha: 0.30) : const Color(0xFFE2E8F0)),
                 width: _isHovered ? 1.5 : 1,
               ),
               boxShadow: [
@@ -349,7 +358,9 @@ class _SubModuleCardState extends State<SubModuleCard>
                   ),
                 ] else ...[
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
+                    color: isCustomBg
+                        ? primaryColor.withValues(alpha: 0.08)
+                        : Colors.black.withValues(alpha: 0.04),
                     blurRadius: 10,
                     offset: const Offset(0, 3),
                   ),
@@ -357,36 +368,43 @@ class _SubModuleCardState extends State<SubModuleCard>
               ],
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
-                    width: 42,
-                    height: 42,
+                    width: widget.containerSize ?? 56,
+                    height: widget.containerSize ?? 56,
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [primaryColor, secondaryColor],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: primaryColor.withValues(alpha: 0.32),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
+                      color: bgCol,
+                      borderRadius: widget.containerBorderRadius ?? BorderRadius.circular(15),
+                      border: bgCol == Colors.transparent
+                          ? null
+                          : Border.all(
+                              color: primaryColor.withValues(alpha: 0.20),
+                              width: 1,
+                            ),
+                      boxShadow: bgCol == Colors.transparent
+                          ? null
+                          : [
+                              BoxShadow(
+                                color: primaryColor.withValues(alpha: 0.12),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
                     ),
                     child: Center(
-                      child: Icon(
-                        widget.icon,
-                        color: Colors.white,
-                        size: 21,
-                      ),
+                      child: widget.customIcon ??
+                          (widget.icon != null
+                              ? Icon(
+                                  widget.icon,
+                                  color: primaryColor,
+                                  size: 40,
+                                )
+                              : const SizedBox.shrink()),
                     ),
                   ),
                   const SizedBox(height: 6),

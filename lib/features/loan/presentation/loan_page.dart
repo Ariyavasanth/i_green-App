@@ -279,6 +279,7 @@ class _LoanPageState extends ConsumerState<LoanPage> {
         childAspectRatio: 1.65,
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
+        padding: EdgeInsets.zero,
         children: [
           _buildLoanSummaryCard(
             title: 'Outstanding',

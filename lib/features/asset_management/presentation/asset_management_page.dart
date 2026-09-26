@@ -681,13 +681,19 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
                   ),
                   onPressed: () async {
                     if (!formKey.currentState!.validate()) return;
-                    Navigator.pop(dialogContext);
+                    if (selectedEmployee == null) return;
 
                     final repo = ref.read(assetAssignmentRepositoryProvider);
-                    if (isEditing) {
+                    final isEdit = isEditing;
+                    final targetEmpName = selectedEmployee!.fullName;
+
+                    List<AssetAssignment> toAdd = [];
+                    AssetAssignment? toUpdate;
+
+                    if (isEdit) {
                       final item = assetItems.first;
                       final isMaint = item.selectedStatus == 'Maintenance';
-                      final updated = assignmentToEdit.copyWith(
+                      toUpdate = assignmentToEdit.copyWith(
                         employeeId: selectedEmployee!.id,
                         employeeName: selectedEmployee!.fullName,
                         employeeCode: selectedEmployee!.employeeId,
@@ -703,10 +709,9 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
                         maintenanceGivenDate: isMaint ? item.maintGivenDateController.text.trim() : null,
                         maintenanceReturnDate: isMaint ? item.maintReturnDateController.text.trim() : null,
                       );
-                      await repo.updateAssignment(updated);
 
                       if (assetItems.length > 1) {
-                        final extraAssignments = assetItems.sublist(1).map((extraItem) {
+                        toAdd = assetItems.sublist(1).map((extraItem) {
                           final extraIsMaint = extraItem.selectedStatus == 'Maintenance';
                           return AssetAssignment(
                             id: 0,
@@ -726,10 +731,9 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
                             maintenanceReturnDate: extraIsMaint ? extraItem.maintReturnDateController.text.trim() : null,
                           );
                         }).toList();
-                        await repo.addAssignments(extraAssignments);
                       }
                     } else {
-                      final newAssignments = assetItems.map((item) {
+                      toAdd = assetItems.map((item) {
                         final isMaint = item.selectedStatus == 'Maintenance';
                         return AssetAssignment(
                           id: 0,
@@ -749,13 +753,57 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
                           maintenanceReturnDate: isMaint ? item.maintReturnDateController.text.trim() : null,
                         );
                       }).toList();
-                      await repo.addAssignments(newAssignments);
                     }
 
-                    for (final item in assetItems) {
-                      item.dispose();
+                    Navigator.pop(dialogContext);
+
+                    try {
+                      if (toUpdate != null) {
+                        await repo.updateAssignment(toUpdate);
+                      }
+                      if (toAdd.isNotEmpty) {
+                        await repo.addAssignments(toAdd);
+                      }
+
+                      ref.invalidate(assetAssignmentsProvider);
+                      ref.invalidate(myAssetAssignmentsProvider);
+
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Row(
+                              children: [
+                                const Icon(Icons.check_circle, color: Colors.white),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    isEdit
+                                        ? 'Asset record updated successfully.'
+                                        : 'Assigned ${toAdd.length} asset(s) to $targetEmpName.',
+                                  ),
+                                ),
+                              ],
+                            ),
+                            backgroundColor: const Color(0xFF9CC70A),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        );
+                      }
+                    } catch (err) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Failed to assign asset: $err'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    } finally {
+                      for (final item in assetItems) {
+                        item.dispose();
+                      }
                     }
-                    ref.invalidate(assetAssignmentsProvider);
                   },
                 ),
               ],

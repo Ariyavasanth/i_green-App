@@ -7,97 +7,284 @@ import '../../core/theme/app_colors.dart';
 import '../../features/employee/providers/employee_providers.dart';
 import '../../widgets/app_background_wrapper.dart';
 import '../../widgets/module_card.dart';
+import '../../widgets/organization_chart_icon.dart';
 
 /// Data model for a sub-module item.
 class _SubModule {
-  const _SubModule(this.label, this.icon, this.route, this.color);
+  const _SubModule(
+    this.label,
+    this.icon,
+    this.route,
+    this.color, {
+    this.customIcon,
+    this.containerColor,
+  });
   final String label;
-  final IconData icon;
+  final IconData? icon;
   final String route;
   final Color color;
+  final Widget? customIcon;
+  final Color? containerColor;
 }
+
+Widget _icon(String fileName, {double size = 52}) => Image.asset(
+  'assets/icones/$fileName',
+  width: size,
+  height: size,
+  fit: BoxFit.contain,
+);
 
 class HrmsModuleScreen extends ConsumerStatefulWidget {
   const HrmsModuleScreen({super.key});
 
-  static const _sections = <String, List<_SubModule>>{
+  static final _sections = <String, List<_SubModule>>{
     'ORGANIZATION': [
-      _SubModule('Organization\nManagement', Icons.corporate_fare_outlined,
-          '/organization-management', Color(0xFF6C5CE7)),
-      _SubModule('Organization\nStructure', Icons.account_tree_outlined,
-          '/organization-structure', Color(0xFF00CEC9)),
+      _SubModule(
+        'Organization\nManagement',
+        null,
+        '/organization-management',
+        const Color(0xFFF59E0B),
+        customIcon: const OrganizationChartIcon(size: 52),
+        containerColor: const Color(0xFFFEF3D6),
+      ),
+      _SubModule(
+        'Organization\nStructure',
+        null,
+        '/organization-structure',
+        const Color(0xFF00CEC9),
+        customIcon: _icon('Organisation_structure.png'),
+        containerColor: const Color(0xFFE0F9F8),
+      ),
     ],
     'EMPLOYEE': [
-      _SubModule('Employee\nManagement', Icons.badge_outlined,
-          '/employee-management', Color(0xFF0984E3)),
       _SubModule(
-          'Responses', Icons.rate_review_outlined, '/responses', Color(0xFFFF7675)),
+        'Employee\nManagement',
+        null,
+        '/employee-management',
+        const Color(0xFF0984E3),
+        customIcon: _icon('employee management.png'),
+        containerColor: const Color(0xFFE1EFFF),
+      ),
+      _SubModule(
+        'Responses',
+        null,
+        '/responses',
+        const Color(0xFFFF7675),
+        customIcon: _icon('Response.png'),
+        containerColor: const Color(0xFFFFECEB),
+      ),
     ],
     'ATTENDANCE': [
       _SubModule(
-          'Attendance', Icons.calendar_month_outlined, '/attendance', Color(0xFF10B981)),
-      _SubModule('Attendance\nManagement', Icons.co_present_outlined,
-          '/attendance-management', Color(0xFF06B6D4)),
-      _SubModule('Attendance\nSettings', Icons.tune_outlined,
-          '/attendance-settings', Color(0xFF8B5CF6)),
+        'Attendance',
+        Icons.calendar_month_outlined,
+        '/attendance',
+        const Color(0xFF10B981),
+        containerColor: const Color(0xFFE1F8ED),
+      ),
       _SubModule(
-          'My On Duty', Icons.business_center_outlined, '/on-duty', Color(0xFFF59E0B)),
-      _SubModule('On Duty\nManagement', Icons.business_center,
-          '/on-duty-management', Color(0xFFEF4444)),
+        'Attendance\nManagement',
+        Icons.co_present_outlined,
+        '/attendance-management',
+        const Color(0xFF06B6D4),
+        containerColor: const Color(0xFFE0F7FA),
+      ),
+      _SubModule(
+        'Attendance\nSettings',
+        null,
+        '/attendance-settings',
+        const Color(0xFF8B5CF6),
+        customIcon: _icon('attendace_settings.png'),
+        containerColor: const Color(0xFFF1EAFF),
+      ),
+      _SubModule(
+        'My On Duty',
+        null,
+        '/on-duty',
+        const Color(0xFFF59E0B),
+        customIcon: _icon('On_duty.png'),
+        containerColor: const Color(0xFFFEF3D6),
+      ),
+      _SubModule(
+        'On Duty\nManagement',
+        null,
+        '/on-duty-management',
+        const Color(0xFFEF4444),
+        customIcon: _icon('Od_management.png'),
+        containerColor: const Color(0xFFFEE8E8),
+      ),
     ],
     'TASKS & CLOCKING': [
       _SubModule(
-          'My Tasks', Icons.task_alt_outlined, '/my-tasks', Color(0xFF3B82F6)),
-      _SubModule('Time\nClocking', Icons.timer_outlined, '/time-clocking',
-          Color(0xFFEC4899)),
-      _SubModule('Tasks & Clocking\nManagement', Icons.assignment_outlined,
-          '/tasks-and-timesheets', Color(0xFF14B8A6)),
+        'My Tasks',
+        null,
+        '/my-tasks',
+        const Color(0xFF3B82F6),
+        customIcon: _icon('My_Task.png'),
+        containerColor: const Color(0xFFE6F0FD),
+      ),
+      _SubModule(
+        'Time\nClocking',
+        null,
+        '/time-clocking',
+        const Color(0xFFEC4899),
+        customIcon: _icon('clockinng.png'),
+        containerColor: const Color(0xFFFDF0F6),
+      ),
+      _SubModule(
+        'Tasks & Clocking\nManagement',
+        null,
+        '/tasks-and-timesheets',
+        const Color(0xFF14B8A6),
+        customIcon: _icon('task_and_clocking management.png'),
+        containerColor: const Color(0xFFE0F7F4),
+      ),
     ],
     'SITE VISIT': [
-      _SubModule('Site Visit\nAttendance', Icons.add_location_alt_outlined,
-          '/site-visit-attendance', Color(0xFFF97316)),
-      _SubModule('Site Visit\nAttendance Mgmt', Icons.pin_drop_outlined,
-          '/site-visit-attendance-management', Color(0xFF6366F1)),
+      _SubModule(
+        'Site Visit\nAttendance',
+        Icons.add_location_alt_outlined,
+        '/site-visit-attendance',
+        const Color(0xFFF97316),
+        containerColor: const Color(0xFFFFEEDB),
+      ),
+      _SubModule(
+        'Site Visit\nAttendance Mgmt',
+        null,
+        '/site-visit-attendance-management',
+        const Color(0xFF6366F1),
+        customIcon: _icon('site_attendace_management.png'),
+        containerColor: const Color(0xFFEEF0FD),
+      ),
     ],
     'LEAVE': [
-      _SubModule('Leave\nManagement', Icons.event_note, '/leave-management',
-          Color(0xFFE11D48)),
+      _SubModule(
+        'Leave\nManagement',
+        null,
+        '/leave-management',
+        const Color(0xFFE11D48),
+        customIcon: _icon('Leave Management.png'),
+        containerColor: const Color(0xFFFEE7EB),
+      ),
     ],
     'SALARY & ASSETS': [
-      _SubModule('Salary\nSettings', Icons.request_quote_outlined,
-          '/salary-settings', Color(0xFF059669)),
-      _SubModule('Asset\nSettings', Icons.settings_suggest_outlined,
-          '/asset-settings', Color(0xFF0284C7)),
-      _SubModule('Asset\nManagement', Icons.devices_other_outlined,
-          '/asset-management', Color(0xFF7C3AED)),
       _SubModule(
-          'My Asset', Icons.devices_outlined, '/my-asset', Color(0xFFEA580C)),
+        'Salary\nSettings',
+        Icons.request_quote_outlined,
+        '/salary-settings',
+        const Color(0xFF059669),
+        containerColor: const Color(0xFFE1F7EF),
+      ),
+      _SubModule(
+        'Asset\nSettings',
+        null,
+        '/asset-settings',
+        const Color(0xFF0284C7),
+        customIcon: _icon('asset_settings.png'),
+        containerColor: const Color(0xFFE0F2FE),
+      ),
+      _SubModule(
+        'Asset\nManagement',
+        null,
+        '/asset-management',
+        const Color(0xFF7C3AED),
+        customIcon: _icon('asset_management.png'),
+        containerColor: const Color(0xFFF2EAFE),
+      ),
+      _SubModule(
+        'My Asset',
+        null,
+        '/my-asset',
+        const Color(0xFFEA580C),
+        customIcon: _icon('My_asset.png'),
+        containerColor: const Color(0xFFFDEDE5),
+      ),
     ],
     'LOAN': [
       _SubModule(
-          'Loan', Icons.account_balance_outlined, '/loan', Color(0xFF10B981)),
-      _SubModule('Loan\nManagement', Icons.account_balance,
-          '/loan-management', Color(0xFFD97706)),
+        'Loan',
+        null,
+        '/loan',
+        const Color(0xFF10B981),
+        customIcon: _icon('loan.png'),
+        containerColor: const Color(0xFFE1F8ED),
+      ),
+      _SubModule(
+        'Loan\nManagement',
+        null,
+        '/loan-management',
+        const Color(0xFFD97706),
+        customIcon: _icon('Loan_management.png'),
+        containerColor: const Color(0xFFFEF3D8),
+      ),
     ],
     'EXIT & INCENTIVE': [
       _SubModule(
-          'My Exit', Icons.exit_to_app_outlined, '/my-exit', Color(0xFFDC2626)),
-      _SubModule('Exit\nManagement', Icons.assignment_return_outlined,
-          '/exit-management', Color(0xFF9333EA)),
-      _SubModule('Incentive\nRequest', Icons.request_quote_outlined,
-          '/incentive', Color(0xFF16A34A)),
-      _SubModule('Incentive\nManagement', Icons.price_check_outlined,
-          '/incentive-management', Color(0xFF0891B2)),
+        'My Exit',
+        null,
+        '/my-exit',
+        const Color(0xFFDC2626),
+        customIcon: _icon('My_exit.png'),
+        containerColor: const Color(0xFFFEE7E7),
+      ),
+      _SubModule(
+        'Exit\nManagement',
+        null,
+        '/exit-management',
+        const Color(0xFF9333EA),
+        customIcon: _icon('Exit_management.png'),
+        containerColor: const Color(0xFFF5E8FD),
+      ),
+      _SubModule(
+        'Incentive\nRequest',
+        null,
+        '/incentive',
+        const Color(0xFF16A34A),
+        customIcon: _icon('incentive_requestion.png'),
+        containerColor: const Color(0xFFE5F8EC),
+      ),
+      _SubModule(
+        'Incentive\nManagement',
+        null,
+        '/incentive-management',
+        const Color(0xFF0891B2),
+        customIcon: _icon('incentive_management.png'),
+        containerColor: const Color(0xFFE1F7FB),
+      ),
     ],
     'PAYROLL': [
       _SubModule(
-          'My Payslips', Icons.receipt_long_outlined, '/my-payslips', Color(0xFF2563EB)),
+        'My Payslips',
+        null,
+        '/my-payslips',
+        const Color(0xFF2563EB),
+        customIcon: _icon('my_payslips.png'),
+        containerColor: const Color(0xFFE6EFFF),
+      ),
       _SubModule(
-          'Payroll', Icons.payments_outlined, '/payroll', Color(0xFF4F46E5)),
-      _SubModule('Payroll\nHistory', Icons.history_outlined, '/payroll-history',
-          Color(0xFFC026D3)),
-      _SubModule('Payroll\nSettings', Icons.settings_outlined,
-          '/payroll-settings', Color(0xFF0D9488)),
+        'Payroll',
+        null,
+        '/payroll',
+        const Color(0xFF4F46E5),
+        customIcon: _icon('payroll.png'),
+        containerColor: const Color(0xFFECEEFE),
+      ),
+      _SubModule(
+        'Payroll\nHistory',
+        null,
+        '/payroll-history',
+        const Color(0xFFC026D3),
+        customIcon: _icon('Payroll_historty.png'),
+        containerColor: const Color(0xFFFCEBFD),
+      ),
+      _SubModule(
+        'Payroll\nSettings',
+        null,
+        '/payroll-settings',
+        const Color(0xFF0D9488),
+        customIcon: _icon('payroll_Settings.png'),
+        containerColor: const Color(0xFFE0F6F4),
+      ),
     ],
   };
 
@@ -191,6 +378,51 @@ class _HrmsModuleScreenState extends ConsumerState<HrmsModuleScreen> {
               photoUrl: employee?.profileImageUrl,
               onProfile: () => context.go('/my-profile'),
             ),
+            // ── Fixed Full-width Search Bar ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (val) => setState(() => _searchQuery = val),
+                decoration: InputDecoration(
+                  hintText: 'Search icons (e.g. Attendance, Leave, Employee...)',
+                  hintStyle: const TextStyle(
+                    fontSize: 13.5,
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w400,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search_rounded,
+                    color: Color(0xFF9CC70A),
+                    size: 20,
+                  ),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.textSecondary),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.95),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFFE5E8E2), width: 1),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFFE5E8E2), width: 1),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFF9CC70A), width: 1.5),
+                  ),
+                ),
+              ),
+            ),
             Expanded(
               child: RefreshIndicator(
                 color: const Color(0xFF9CC70A),
@@ -233,53 +465,8 @@ class _HrmsModuleScreenState extends ConsumerState<HrmsModuleScreen> {
                         key: const PageStorageKey<String>('hrms_module_scroll_list'),
                         controller: _scrollController,
                         physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.all(20),
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
                         children: [
-                          // ── Clean Full-width Search Bar ──
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: TextField(
-                              controller: _searchController,
-                              onChanged: (val) => setState(() => _searchQuery = val),
-                              decoration: InputDecoration(
-                                hintText: 'Search icons (e.g. Attendance, Leave, Employee...)',
-                                hintStyle: const TextStyle(
-                                  fontSize: 13.5,
-                                  color: AppColors.textSecondary,
-                                  fontWeight: FontWeight.w400,
-                                ),
-                                prefixIcon: const Icon(
-                                  Icons.search_rounded,
-                                  color: Color(0xFF9CC70A),
-                                  size: 20,
-                                ),
-                                suffixIcon: _searchQuery.isNotEmpty
-                                    ? IconButton(
-                                        icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.textSecondary),
-                                        onPressed: () {
-                                          _searchController.clear();
-                                          setState(() => _searchQuery = '');
-                                        },
-                                      )
-                                    : null,
-                                filled: true,
-                                fillColor: Colors.white.withValues(alpha: 0.95),
-                                contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: const BorderSide(color: Color(0xFFE5E8E2), width: 1),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: const BorderSide(color: Color(0xFFE5E8E2), width: 1),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: const BorderSide(color: Color(0xFF9CC70A), width: 1.5),
-                                ),
-                              ),
-                            ),
-                          ),
 
                           if (filteredSections.isEmpty && _searchQuery.isNotEmpty)
                             Center(
@@ -359,14 +546,11 @@ class _HrmsModuleScreenState extends ConsumerState<HrmsModuleScreen> {
                                       : constraints.maxWidth > 500
                                           ? 4
                                           : 3;
-                                  final childAspectRatio = constraints.maxWidth > 800
-                                      ? 0.95
-                                      : constraints.maxWidth > 500
-                                          ? 0.82
-                                          : 0.72;
+                                  const childAspectRatio = 0.80;
                                   return GridView.count(
                                     shrinkWrap: true,
                                     physics: const NeverScrollableScrollPhysics(),
+                                    padding: EdgeInsets.zero,
                                     crossAxisCount: crossAxisCount,
                                     mainAxisSpacing: 12,
                                     crossAxisSpacing: 12,
@@ -375,7 +559,9 @@ class _HrmsModuleScreenState extends ConsumerState<HrmsModuleScreen> {
                                         .map((m) => SubModuleCard(
                                               label: m.label,
                                               icon: m.icon,
+                                              customIcon: m.customIcon,
                                               color: m.color,
+                                              containerColor: m.containerColor,
                                               onTap: () => context.go(m.route),
                                             ))
                                         .toList(),

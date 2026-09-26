@@ -193,7 +193,7 @@ class _LoginRightPanel extends StatelessWidget {
                   ),
                   const SizedBox(height: 40),
                   const Text(
-                    'Enterprise Resource\nManagement',
+                    'Enterprise Resource\nPlanning',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 28,

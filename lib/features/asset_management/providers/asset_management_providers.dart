@@ -51,7 +51,7 @@ final myAssetAssignmentsProvider = FutureProvider<List<AssetAssignment>>((ref) a
     return matchesId || matchesCode || matchesName;
   }).toList();
 
-  return filtered.isNotEmpty ? filtered : assignments;
+  return filtered;
 });
 
 final assetTransferRequestsProvider = FutureProvider<List<AssetTransferRequest>>((ref) async {

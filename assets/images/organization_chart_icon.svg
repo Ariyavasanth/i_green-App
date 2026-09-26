@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <!-- Monitor Display Body -->
+  <rect x="20" y="32" width="472" height="340" rx="38" ry="38" fill="#E2EDF6"/>
+
+  <!-- Monitor Bottom Bezel / Chin -->
+  <path d="M 20 324 H 492 V 334 C 492 355 475 372 454 372 H 58 C 37 372 20 355 20 334 Z" fill="#2E4D71"/>
+
+  <!-- Monitor Stand Neck -->
+  <rect x="222" y="372" width="68" height="52" fill="#2E4D71"/>
+
+  <!-- Monitor Stand Base -->
+  <rect x="168" y="416" width="176" height="54" rx="27" ry="27" fill="#2E4D71"/>
+
+  <!-- Top-Right Status Pills -->
+  <!-- Green row -->
+  <rect x="348" y="70" width="32" height="20" rx="10" ry="10" fill="#78D122"/>
+  <rect x="390" y="70" width="62" height="20" rx="10" ry="10" fill="#78D122"/>
+  <!-- Orange row -->
+  <rect x="348" y="108" width="32" height="20" rx="10" ry="10" fill="#E25821"/>
+  <rect x="390" y="108" width="62" height="20" rx="10" ry="10" fill="#E25821"/>
+
+  <!-- Hierarchy Chart Lines -->
+  <!-- Connecting bridge -->
+  <path d="M 146 226 V 186 C 146 172 158 172 172 172 H 340 C 354 172 366 172 366 186 V 226" 
+        fill="none" stroke="#6C9FBF" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Center stem line -->
+  <line x1="256" y1="140" x2="256" y2="226" stroke="#6C9FBF" stroke-width="20" stroke-linecap="round"/>
+
+  <!-- Chart Root Node (Top) -->
+  <rect x="225" y="92" width="62" height="48" rx="3" ry="3" fill="#54C2FA"/>
+
+  <!-- Chart Child Nodes (Bottom Row) -->
+  <!-- Left Node: Lime Green -->
+  <rect x="115" y="226" width="62" height="48" rx="3" ry="3" fill="#78D122"/>
+  <!-- Center Node: Golden Yellow -->
+  <rect x="225" y="226" width="62" height="48" rx="3" ry="3" fill="#F7CE27"/>
+  <!-- Right Node: Deep Orange -->
+  <rect x="335" y="226" width="62" height="48" rx="3" ry="3" fill="#E05C1F"/>
+</svg>

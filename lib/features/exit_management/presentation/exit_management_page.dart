@@ -204,6 +204,7 @@ class _DashboardTab extends StatelessWidget {
                 crossAxisCount: crossCount,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
+                padding: EdgeInsets.zero,
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
                 childAspectRatio: isMobile ? 1.4 : 1.6,

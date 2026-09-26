@@ -386,6 +386,7 @@ class _SummaryCardsGrid extends ConsumerWidget {
           crossAxisCount: crossCount,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
+          padding: EdgeInsets.zero,
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
           childAspectRatio: isDesktop ? 1.8 : 1.5,

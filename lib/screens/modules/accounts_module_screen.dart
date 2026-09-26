@@ -123,6 +123,51 @@ class _AccountsModuleScreenState extends ConsumerState<AccountsModuleScreen> {
             photoUrl: employee?.profileImageUrl,
             onProfile: () => context.go('/my-profile'),
           ),
+          // ── Fixed Search Bar ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (val) => setState(() => _searchQuery = val),
+              decoration: InputDecoration(
+                hintText: 'Search icons (e.g. Invoices, Bills, Expenses...)',
+                hintStyle: const TextStyle(
+                  fontSize: 13.5,
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w400,
+                ),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  color: Color(0xFFFF9800),
+                  size: 20,
+                ),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.textSecondary),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Color(0xFFE5E8E2), width: 1),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Color(0xFFE5E8E2), width: 1),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Color(0xFFFF9800), width: 1.5),
+                ),
+              ),
+            ),
+          ),
           Expanded(
             child: RefreshIndicator(
               color: const Color(0xFFFF9800),
@@ -165,53 +210,8 @@ class _AccountsModuleScreenState extends ConsumerState<AccountsModuleScreen> {
                       key: const PageStorageKey<String>('accounts_module_scroll_list'),
                       controller: _scrollController,
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
                       children: [
-                        // ── Search Bar ──
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: TextField(
-                            controller: _searchController,
-                            onChanged: (val) => setState(() => _searchQuery = val),
-                            decoration: InputDecoration(
-                              hintText: 'Search icons (e.g. Invoices, Bills, Expenses...)',
-                              hintStyle: const TextStyle(
-                                fontSize: 13.5,
-                                color: AppColors.textSecondary,
-                                fontWeight: FontWeight.w400,
-                              ),
-                              prefixIcon: const Icon(
-                                Icons.search_rounded,
-                                color: Color(0xFFFF9800),
-                                size: 20,
-                              ),
-                              suffixIcon: _searchQuery.isNotEmpty
-                                  ? IconButton(
-                                      icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.textSecondary),
-                                      onPressed: () {
-                                        _searchController.clear();
-                                        setState(() => _searchQuery = '');
-                                      },
-                                    )
-                                  : null,
-                              filled: true,
-                              fillColor: Colors.white,
-                              contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                borderSide: const BorderSide(color: Color(0xFFE5E8E2), width: 1),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                borderSide: const BorderSide(color: Color(0xFFE5E8E2), width: 1),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                borderSide: const BorderSide(color: Color(0xFFFF9800), width: 1.5),
-                              ),
-                            ),
-                          ),
-                        ),
 
                         if (filteredSections.isEmpty && _searchQuery.isNotEmpty)
                           Center(
@@ -291,14 +291,11 @@ class _AccountsModuleScreenState extends ConsumerState<AccountsModuleScreen> {
                                     : constraints.maxWidth > 500
                                         ? 4
                                         : 3;
-                                final childAspectRatio = constraints.maxWidth > 800
-                                    ? 0.95
-                                    : constraints.maxWidth > 500
-                                        ? 0.82
-                                        : 0.72;
+                                const childAspectRatio = 0.80;
                                 return GridView.count(
                                   shrinkWrap: true,
                                   physics: const NeverScrollableScrollPhysics(),
+                                  padding: EdgeInsets.zero,
                                   crossAxisCount: crossAxisCount,
                                   mainAxisSpacing: 12,
                                   crossAxisSpacing: 12,

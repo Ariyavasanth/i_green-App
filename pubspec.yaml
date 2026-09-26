@@ -87,6 +87,7 @@ flutter:
   assets:
     - assets/
     - assets/images/
+    - assets/icones/
     - assets/reference_logo_base.png
     - assets/inner_wheel_rotating.png
 

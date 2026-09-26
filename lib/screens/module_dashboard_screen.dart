@@ -660,6 +660,7 @@ class _WorkspaceSection extends StatelessWidget {
               return GridView.count(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
+                padding: EdgeInsets.zero,
                 crossAxisCount: crossAxisCount,
                 mainAxisSpacing: 14,
                 crossAxisSpacing: 14,
@@ -755,7 +756,7 @@ class _BrandFooterCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Enterprise Resource Management • Smart solutions',
+                      'Enterprise Resource Planning • Smart solutions',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(

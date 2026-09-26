@@ -271,26 +271,48 @@ class Employee {
   bool hasPermission(String permission) {
     if (isSuperAdmin) return true;
     final normalized = permission.replaceAll('\n', ' ').trim().toLowerCase();
+    final normClean = normalized.replaceAll(RegExp(r'[\s\-_&]+'), '');
+
     return accessPermissions.any((p) {
       final pLower = p.replaceAll('\n', ' ').trim().toLowerCase();
       if (pLower == normalized) return true;
-      // Semantic and plural/label variations
-      if (normalized == 'leave management' && (pLower == 'leave' || pLower == 'leaves' || pLower == 'leave management')) return true;
-      if (normalized == 'leave' && (pLower == 'leave' || pLower == 'leaves' || pLower == 'leave management')) return true;
-      if ((normalized == 'on-duty' || normalized == 'on duty' || normalized == 'my on-duty') &&
-          (pLower == 'on-duty' || pLower == 'on duty' || pLower == 'my on-duty' || pLower == 'onduty')) return true;
-      if ((normalized == 'on-duty management' || normalized == 'onduty management') &&
-          (pLower == 'on-duty management' || pLower == 'on-duty' || pLower == 'onduty management')) return true;
-      if ((normalized == 'time clocking' || normalized == 'clocking') &&
-          (pLower == 'time clocking' || pLower == 'clocking')) return true;
-      if ((normalized == 'tasks and clocking management' || normalized == 'tasks & clocking management') &&
-          (pLower == 'tasks & timesheets' || pLower == 'tasks and timesheets' || pLower == 'tasks and clocking management' || pLower == 'tasks & clocking management')) return true;
-      if ((normalized == 'site visit attendance mgmt' || normalized == 'site visit attendance management') &&
-          (pLower == 'site visit attendance management' || pLower == 'site visit attendance mgmt')) return true;
-      if (normalized == 'organization structure' && (pLower == 'organization' || pLower == 'organization structure')) return true;
-      if (normalized == 'organization management' && (pLower == 'organization' || pLower == 'organization management')) return true;
-      if ((normalized == 'incentive request' || normalized == 'incentive') && (pLower == 'incentive' || pLower == 'incentive request')) return true;
-      if (normalized == 'payroll' && (pLower == 'payroll' || pLower == 'my payslips' || pLower == 'payroll history' || pLower == 'payroll settings')) return true;
+      final pClean = pLower.replaceAll(RegExp(r'[\s\-_&]+'), '');
+      if (pClean == normClean) return true;
+
+      // On Duty aliases: 'my on duty', 'on-duty', 'on duty', 'onduty'
+      if ((normClean == 'myonduty' || normClean == 'onduty') &&
+          (pClean == 'myonduty' || pClean == 'onduty')) return true;
+      if ((normClean == 'ondutymanagement' || normClean == 'myondutymanagement') &&
+          (pClean == 'ondutymanagement' || pClean == 'myondutymanagement' || pClean == 'onduty')) return true;
+
+      // Leave aliases
+      if ((normClean == 'leave' || normClean == 'leaves' || normClean == 'leavemanagement') &&
+          (pClean == 'leave' || pClean == 'leaves' || pClean == 'leavemanagement')) return true;
+
+      // Tasks & Clocking aliases
+      if ((normClean.contains('task') && (normClean.contains('clock') || normClean.contains('timesheet'))) &&
+          (pClean.contains('task') && (pClean.contains('clock') || pClean.contains('timesheet')))) return true;
+      if ((normClean == 'timeclocking' || normClean == 'clocking') &&
+          (pClean == 'timeclocking' || pClean == 'clocking')) return true;
+
+      // Site visit aliases
+      if ((normClean == 'sitevisitattendancemgmt' || normClean == 'sitevisitattendancemanagement') &&
+          (pClean == 'sitevisitattendancemanagement' || pClean == 'sitevisitattendancemgmt')) return true;
+
+      // Organization aliases
+      if ((normClean == 'organizationstructure' || normClean == 'organization') &&
+          (pClean == 'organization' || pClean == 'organizationstructure')) return true;
+      if ((normClean == 'organizationmanagement' || normClean == 'organization') &&
+          (pClean == 'organization' || pClean == 'organizationmanagement')) return true;
+
+      // Incentive aliases
+      if ((normClean == 'incentiverequest' || normClean == 'incentive') &&
+          (pClean == 'incentive' || pClean == 'incentiverequest')) return true;
+
+      // Payroll aliases
+      if (normClean == 'payroll' &&
+          (pClean == 'payroll' || pClean == 'mypayslips' || pClean == 'payrollhistory' || pClean == 'payrollsettings')) return true;
+
       return false;
     });
   }
@@ -298,45 +320,50 @@ class Employee {
   /// Check if the user has access to the HRMS module (Super Admin or any HRMS permission)
   bool get canAccessHrms {
     if (isSuperAdmin) return true;
+    if (accessPermissions.isEmpty) return false;
     return accessPermissions.any((p) {
       final pLower = p.replaceAll('\n', ' ').trim().toLowerCase();
-      return pLower == 'hrms' ||
-          pLower == 'human resource' ||
-          pLower == 'organization management' ||
-          pLower == 'organization structure' ||
-          pLower == 'employee management' ||
-          pLower == 'responses' ||
-          pLower == 'attendance' ||
-          pLower == 'attendance management' ||
-          pLower == 'attendance settings' ||
-          pLower == 'on-duty' ||
-          pLower == 'on-duty management' ||
-          pLower == 'my tasks' ||
-          pLower == 'time clocking' ||
-          pLower == 'tasks and clocking management' ||
-          pLower == 'tasks & clocking management' ||
-          pLower == 'site visit attendance' ||
-          pLower == 'site visit attendance management' ||
-          pLower == 'leave management' ||
-          pLower == 'leave' ||
-          pLower == 'leaves' ||
-          pLower == 'permission' ||
-          pLower == 'permission management' ||
-          pLower == 'salary settings' ||
-          pLower == 'asset settings' ||
-          pLower == 'asset management' ||
-          pLower == 'my asset' ||
-          pLower == 'loan' ||
-          pLower == 'loan management' ||
-          pLower == 'my exit' ||
-          pLower == 'exit management' ||
-          pLower == 'incentive request' ||
-          pLower == 'incentive management' ||
-          pLower == 'incentive' ||
-          pLower == 'my payslips' ||
-          pLower == 'payroll' ||
-          pLower == 'payroll history' ||
-          pLower == 'payroll settings';
+      final pClean = pLower.replaceAll(RegExp(r'[\s\-_&]+'), '');
+      return pClean == 'hrms' ||
+          pClean == 'humanresource' ||
+          pClean == 'organizationmanagement' ||
+          pClean == 'organizationstructure' ||
+          pClean == 'employeemanagement' ||
+          pClean == 'responses' ||
+          pClean == 'attendance' ||
+          pClean == 'attendancemanagement' ||
+          pClean == 'attendancesettings' ||
+          pClean == 'onduty' ||
+          pClean == 'myonduty' ||
+          pClean == 'ondutymanagement' ||
+          pClean == 'mytasks' ||
+          pClean == 'timeclocking' ||
+          pClean == 'tasksandclockingmanagement' ||
+          pClean == 'tasksclockingmanagement' ||
+          pClean == 'taskstimesheets' ||
+          pClean == 'sitevisitattendance' ||
+          pClean == 'sitevisitattendancemanagement' ||
+          pClean == 'sitevisitattendancemgmt' ||
+          pClean == 'leavemanagement' ||
+          pClean == 'leave' ||
+          pClean == 'leaves' ||
+          pClean == 'permission' ||
+          pClean == 'permissionmanagement' ||
+          pClean == 'salarysettings' ||
+          pClean == 'assetsettings' ||
+          pClean == 'assetmanagement' ||
+          pClean == 'myasset' ||
+          pClean == 'loan' ||
+          pClean == 'loanmanagement' ||
+          pClean == 'myexit' ||
+          pClean == 'exitmanagement' ||
+          pClean == 'incentiverequest' ||
+          pClean == 'incentivemanagement' ||
+          pClean == 'incentive' ||
+          pClean == 'mypayslips' ||
+          pClean == 'payroll' ||
+          pClean == 'payrollhistory' ||
+          pClean == 'payrollsettings';
     });
   }
 
