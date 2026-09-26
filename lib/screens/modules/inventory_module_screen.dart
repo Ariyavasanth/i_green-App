@@ -86,11 +86,23 @@ class _InventoryModuleScreenState extends ConsumerState<InventoryModuleScreen> {
     super.dispose();
   }
 
+  static IconData _getSectionIcon(String sectionName) {
+    switch (sectionName) {
+      case 'STOCK':
+        return Icons.inventory_2_outlined;
+      case 'SALES':
+        return Icons.point_of_sale_outlined;
+      case 'PURCHASE':
+        return Icons.shopping_bag_outlined;
+      default:
+        return Icons.folder_outlined;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final employee = ref.watch(currentEmployeeProvider);
     final employeeName = employee?.firstName ?? '';
-
     final isSuper = employee == null || employee.isSuperAdmin;
     final permittedSections = <String, List<_SubModule>>{};
 
@@ -122,217 +134,460 @@ class _InventoryModuleScreenState extends ConsumerState<InventoryModuleScreen> {
       }
     }
 
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth >= 800;
+
+        if (isDesktop) {
+          return _buildDesktopLayout(
+            context,
+            employee: employee,
+            employeeName: employeeName,
+            isSuper: isSuper,
+            permittedSections: permittedSections,
+            filteredSections: filteredSections,
+            constraints: constraints,
+          );
+        }
+
+        return _buildMobileLayout(
+          context,
+          employee: employee,
+          employeeName: employeeName,
+          permittedSections: permittedSections,
+          filteredSections: filteredSections,
+        );
+      },
+    );
+  }
+
+  Widget _buildDesktopLayout(
+    BuildContext context, {
+    required dynamic employee,
+    required String employeeName,
+    required bool isSuper,
+    required Map<String, List<_SubModule>> permittedSections,
+    required Map<String, List<_SubModule>> filteredSections,
+    required BoxConstraints constraints,
+  }) {
+    final horizontalPadding = constraints.maxWidth > 1200 ? 32.0 : 20.0;
+    final gridColumns = constraints.maxWidth >= 1180
+        ? 4
+        : constraints.maxWidth >= 860
+            ? 3
+            : 2;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6F3),
+      backgroundColor: Colors.transparent,
       body: AppBackgroundWrapper(
         child: Column(
-        children: [
-          ModuleScreenHeader(
-            title: 'INVENTORY',
-            icon: Icons.inventory_2_outlined,
-            color: const Color(0xFF2196F3),
-            onBack: () => context.go('/module-dashboard'),
-            employeeName: employeeName,
-            photoUrl: employee?.profileImageUrl,
-            onProfile: () => context.go('/my-profile'),
-          ),
-          // ── Fixed Search Bar ──
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-            child: TextField(
-              controller: _searchController,
-              onChanged: (val) => setState(() => _searchQuery = val),
-              decoration: InputDecoration(
-                hintText: 'Search icons (e.g. Items, Quotes, Vendors...)',
-                hintStyle: const TextStyle(
-                  fontSize: 13.5,
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w400,
-                ),
-                prefixIcon: const Icon(
-                  Icons.search_rounded,
-                  color: Color(0xFF2196F3),
-                  size: 20,
-                ),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.textSecondary),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _searchQuery = '');
-                        },
-                      )
-                    : null,
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFFE5E8E2), width: 1),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFFE5E8E2), width: 1),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFF2196F3), width: 1.5),
+          children: [
+            DesktopModuleScreenHeader(
+              title: 'INVENTORY',
+              icon: Icons.inventory_2_outlined,
+              color: const Color(0xFF2196F3),
+              onBack: () => context.go('/module-dashboard'),
+              employeeName: employeeName,
+              photoUrl: employee?.profileImageUrl,
+              isSuperAdmin: isSuper,
+              onProfile: () => context.go('/my-profile'),
+            ),
+            Padding(
+              padding: EdgeInsets.fromLTRB(horizontalPadding, 16, horizontalPadding, 8),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (val) => setState(() => _searchQuery = val),
+                decoration: InputDecoration(
+                  hintText: 'Search modules...',
+                  hintStyle: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w400,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search_rounded,
+                    color: Color(0xFF2196F3),
+                    size: 20,
+                  ),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.textSecondary),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.95),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFE5E8E2), width: 1),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFE5E8E2), width: 1),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFF2196F3), width: 1.5),
+                  ),
                 ),
               ),
             ),
-          ),
-          Expanded(
-            child: RefreshIndicator(
-              color: const Color(0xFF2196F3),
-              onRefresh: () async {
-                ref.invalidate(currentEmployeeProvider);
-                ref.invalidate(employeesProvider);
-                await Future.delayed(const Duration(milliseconds: 500));
-              },
-              child: permittedSections.isEmpty
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: const [
-                            Icon(Icons.lock_outline, size: 48, color: Color(0xFF9E9E9E)),
-                            SizedBox(height: 16),
-                            Text(
-                              'No Accessible Inventory Modules',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                            SizedBox(height: 6),
-                            Text(
-                              'You do not have permission to access any sub-modules in Inventory.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  : ListView(
-                      key: const PageStorageKey<String>('inventory_module_scroll_list'),
-                      controller: _scrollController,
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                      children: [
-
-                        if (filteredSections.isEmpty && _searchQuery.isNotEmpty)
-                          Center(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: const Color(0xFF2196F3).withValues(alpha: 0.1),
-                                    ),
-                                    child: const Icon(
-                                      Icons.search_off_rounded,
-                                      size: 40,
-                                      color: Color(0xFF2196F3),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    'No icons found for "$_searchQuery"',
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.textPrimary,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  const Text(
-                                    'Try searching with a different keyword like "Items", "Sales", or "Vendors".',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: AppColors.textSecondary,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  OutlinedButton.icon(
-                                    onPressed: () {
-                                      _searchController.clear();
-                                      setState(() => _searchQuery = '');
-                                    },
-                                    icon: const Icon(Icons.refresh_rounded, size: 16),
-                                    label: const Text('Clear Search'),
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: const Color(0xFF2196F3),
-                                      side: const BorderSide(color: Color(0xFF2196F3)),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          )
-                        else
-                          for (final entry in filteredSections.entries) ...[
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 8, top: 8),
-                              child: Text(
-                                entry.key,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF2196F3),
-                                  letterSpacing: 1.2,
+            Expanded(
+              child: Scrollbar(
+                controller: _scrollController,
+                thumbVisibility: false,
+                child: ListView(
+                  controller: _scrollController,
+                  padding: EdgeInsets.fromLTRB(horizontalPadding, 4, horizontalPadding, 32),
+                  children: [
+                    if (permittedSections.isEmpty)
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(48),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Icon(Icons.lock_outline, size: 48, color: Color(0xFF9E9E9E)),
+                              SizedBox(height: 16),
+                              Text(
+                                'No Accessible Inventory Modules',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
                                 ),
                               ),
-                            ),
-                            LayoutBuilder(
-                              builder: (context, constraints) {
-                                final crossAxisCount = constraints.maxWidth > 800
-                                    ? 6
-                                    : constraints.maxWidth > 500
-                                        ? 4
-                                        : 3;
-                                const childAspectRatio = 0.80;
-                                return GridView.count(
-                                  shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  padding: EdgeInsets.zero,
-                                  crossAxisCount: crossAxisCount,
-                                  mainAxisSpacing: 12,
-                                  crossAxisSpacing: 12,
-                                  childAspectRatio: childAspectRatio,
-                                  children: entry.value
-                                      .map((m) => SubModuleCard(
-                                            label: m.label,
-                                            icon: m.icon,
-                                            color: m.color,
-                                            onTap: () => context.go(m.route),
-                                          ))
-                                      .toList(),
-                                );
-                              },
-                            ),
-                            const SizedBox(height: 8),
-                          ],
+                              SizedBox(height: 6),
+                              Text(
+                                'You do not have permission to access any sub-modules in Inventory.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else if (filteredSections.isEmpty && _searchQuery.isNotEmpty)
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: const Color(0xFF2196F3).withOpacity(0.1),
+                                ),
+                                child: const Icon(
+                                  Icons.search_off_rounded,
+                                  size: 40,
+                                  color: Color(0xFF2196F3),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No modules found for "$_searchQuery"',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              const Text(
+                                'Try searching with a different keyword like "Items", "Quotes", or "Vendors".',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              OutlinedButton.icon(
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() => _searchQuery = '');
+                                },
+                                icon: const Icon(Icons.refresh_rounded, size: 16),
+                                label: const Text('Clear Search'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF2196F3),
+                                  side: const BorderSide(color: Color(0xFF2196F3)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      for (final entry in filteredSections.entries) ...[
+                        DesktopSectionHeader(
+                          title: entry.key,
+                          icon: _getSectionIcon(entry.key),
+                          color: const Color(0xFF2196F3),
+                          count: entry.value.length,
+                        ),
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          padding: EdgeInsets.zero,
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: gridColumns,
+                            mainAxisSpacing: 14,
+                            crossAxisSpacing: 14,
+                            mainAxisExtent: 80,
+                          ),
+                          itemCount: entry.value.length,
+                          itemBuilder: (context, index) {
+                            final m = entry.value[index];
+                            return DesktopSubModuleCard(
+                              label: m.label,
+                              icon: m.icon,
+                              color: m.color,
+                              onTap: () => context.go(m.route),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 16),
                       ],
-                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
+
+  Widget _buildMobileLayout(
+    BuildContext context, {
+    required dynamic employee,
+    required String employeeName,
+    required Map<String, List<_SubModule>> permittedSections,
+    required Map<String, List<_SubModule>> filteredSections,
+  }) {
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: AppBackgroundWrapper(
+        child: Column(
+          children: [
+            ModuleScreenHeader(
+              title: 'INVENTORY',
+              icon: Icons.inventory_2_outlined,
+              color: const Color(0xFF2196F3),
+              onBack: () => context.go('/module-dashboard'),
+              employeeName: employeeName,
+              photoUrl: employee?.profileImageUrl,
+              onProfile: () => context.go('/my-profile'),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (val) => setState(() => _searchQuery = val),
+                decoration: InputDecoration(
+                  hintText: 'Search icons (e.g. Items, Quotes, Vendors...)',
+                  hintStyle: const TextStyle(
+                    fontSize: 13.5,
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w400,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search_rounded,
+                    color: Color(0xFF2196F3),
+                    size: 20,
+                  ),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.textSecondary),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.95),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFFE5E8E2), width: 1),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFFE5E8E2), width: 1),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFF2196F3), width: 1.5),
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                color: const Color(0xFF2196F3),
+                onRefresh: () async {
+                  ref.invalidate(currentEmployeeProvider);
+                  ref.invalidate(employeesProvider);
+                  await Future.delayed(const Duration(milliseconds: 500));
+                },
+                child: permittedSections.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Icon(Icons.lock_outline, size: 48, color: Color(0xFF9E9E9E)),
+                              SizedBox(height: 16),
+                              Text(
+                                'No Accessible Inventory Modules',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              SizedBox(height: 6),
+                              Text(
+                                'You do not have permission to access any sub-modules in Inventory.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : ListView(
+                        key: const PageStorageKey<String>('inventory_module_scroll_list'),
+                        controller: _scrollController,
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                        children: [
+                          if (filteredSections.isEmpty && _searchQuery.isNotEmpty)
+                            Center(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: const Color(0xFF2196F3).withOpacity(0.1),
+                                      ),
+                                      child: const Icon(
+                                        Icons.search_off_rounded,
+                                        size: 40,
+                                        color: Color(0xFF2196F3),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      'No icons found for "$_searchQuery"',
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    const Text(
+                                      'Try searching with a different keyword like "Items", "Sales", or "Vendors".',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    OutlinedButton.icon(
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        setState(() => _searchQuery = '');
+                                      },
+                                      icon: const Icon(Icons.refresh_rounded, size: 16),
+                                      label: const Text('Clear Search'),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: const Color(0xFF2196F3),
+                                        side: const BorderSide(color: Color(0xFF2196F3)),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )
+                          else
+                            for (final entry in filteredSections.entries) ...[
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8, top: 8),
+                                child: Text(
+                                  entry.key,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF2196F3),
+                                    letterSpacing: 1.2,
+                                  ),
+                                ),
+                              ),
+                              LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final crossAxisCount = constraints.maxWidth > 800
+                                      ? 6
+                                      : constraints.maxWidth > 500
+                                          ? 4
+                                          : 3;
+                                  const childAspectRatio = 0.80;
+                                  return GridView.count(
+                                    shrinkWrap: true,
+                                    physics: const NeverScrollableScrollPhysics(),
+                                    padding: EdgeInsets.zero,
+                                    crossAxisCount: crossAxisCount,
+                                    mainAxisSpacing: 12,
+                                    crossAxisSpacing: 12,
+                                    childAspectRatio: childAspectRatio,
+                                    children: entry.value
+                                        .map((m) => SubModuleCard(
+                                              label: m.label,
+                                              icon: m.icon,
+                                              color: m.color,
+                                              onTap: () => context.go(m.route),
+                                            ))
+                                        .toList(),
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 8),
+                            ],
+                        ],
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

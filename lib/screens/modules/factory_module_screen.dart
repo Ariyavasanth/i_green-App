@@ -14,102 +14,121 @@ class FactoryModuleScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final employee = ref.watch(currentEmployeeProvider);
     final employeeName = employee?.firstName ?? '';
+    final isSuper = employee == null || employee.isSuperAdmin;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4F6F3),
-      body: AppBackgroundWrapper(
-        child: Column(
-          children: [
-            ModuleScreenHeader(
-              title: 'FACTORY MODULE',
-              icon: Icons.factory_outlined,
-              color: const Color(0xFF607D8B),
-              onBack: () => context.go('/module-dashboard'),
-              employeeName: employeeName,
-              photoUrl: employee?.profileImageUrl,
-              onProfile: () => context.go('/my-profile'),
-            ),
-            Expanded(
-              child: RefreshIndicator(
-                color: const Color(0xFF607D8B),
-                onRefresh: () async {
-                  ref.invalidate(currentEmployeeProvider);
-                  await Future.delayed(const Duration(milliseconds: 500));
-                },
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(40),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 100,
-                            height: 100,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: const Color(0xFF607D8B).withValues(alpha: 0.1),
-                            ),
-                            child: const Icon(
-                              Icons.factory_outlined,
-                              size: 48,
-                              color: Color(0xFF607D8B),
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          const Text(
-                            'Coming Soon',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'The Factory Module is currently under development.\nManufacturing & production management features are on the way!',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: AppColors.textSecondary,
-                              height: 1.5,
-                            ),
-                          ),
-                          const SizedBox(height: 32),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            alignment: WrapAlignment.center,
-                            children: const [
-                              _PlannedFeatureChip(
-                                label: 'Production Planning',
-                                icon: Icons.precision_manufacturing_outlined,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth >= 800;
+
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          body: AppBackgroundWrapper(
+            child: Column(
+              children: [
+                if (isDesktop)
+                  DesktopModuleScreenHeader(
+                    title: 'FACTORY MODULE',
+                    icon: Icons.factory_outlined,
+                    color: const Color(0xFF607D8B),
+                    onBack: () => context.go('/module-dashboard'),
+                    employeeName: employeeName,
+                    photoUrl: employee?.profileImageUrl,
+                    isSuperAdmin: isSuper,
+                    onProfile: () => context.go('/my-profile'),
+                  )
+                else
+                  ModuleScreenHeader(
+                    title: 'FACTORY MODULE',
+                    icon: Icons.factory_outlined,
+                    color: const Color(0xFF607D8B),
+                    onBack: () => context.go('/module-dashboard'),
+                    employeeName: employeeName,
+                    photoUrl: employee?.profileImageUrl,
+                    onProfile: () => context.go('/my-profile'),
+                  ),
+                Expanded(
+                  child: RefreshIndicator(
+                    color: const Color(0xFF607D8B),
+                    onRefresh: () async {
+                      ref.invalidate(currentEmployeeProvider);
+                      await Future.delayed(const Duration(milliseconds: 500));
+                    },
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(40),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 100,
+                                height: 100,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: const Color(0xFF607D8B).withOpacity(0.1),
+                                ),
+                                child: const Icon(
+                                  Icons.factory_outlined,
+                                  size: 48,
+                                  color: Color(0xFF607D8B),
+                                ),
                               ),
-                              _PlannedFeatureChip(
-                                label: 'Quality Control',
-                                icon: Icons.verified_outlined,
+                              const SizedBox(height: 24),
+                              const Text(
+                                'Coming Soon',
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.textPrimary,
+                                ),
                               ),
-                              _PlannedFeatureChip(
-                                label: 'Work Orders',
-                                icon: Icons.assignment_outlined,
+                              const SizedBox(height: 8),
+                              const Text(
+                                'The Factory Module is currently under development.\nManufacturing & production management features are on the way!',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.textSecondary,
+                                  height: 1.5,
+                                ),
                               ),
-                              _PlannedFeatureChip(
-                                label: 'Machine Management',
-                                icon: Icons.settings_outlined,
+                              const SizedBox(height: 32),
+                              Wrap(
+                                spacing: 12,
+                                runSpacing: 12,
+                                alignment: WrapAlignment.center,
+                                children: const [
+                                  _PlannedFeatureChip(
+                                    label: 'Production Planning',
+                                    icon: Icons.precision_manufacturing_outlined,
+                                  ),
+                                  _PlannedFeatureChip(
+                                    label: 'Quality Control',
+                                    icon: Icons.verified_outlined,
+                                  ),
+                                  _PlannedFeatureChip(
+                                    label: 'Work Orders',
+                                    icon: Icons.assignment_outlined,
+                                  ),
+                                  _PlannedFeatureChip(
+                                    label: 'Machine Management',
+                                    icon: Icons.settings_outlined,
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

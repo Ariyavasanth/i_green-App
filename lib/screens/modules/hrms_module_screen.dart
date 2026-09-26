@@ -319,6 +319,33 @@ class _HrmsModuleScreenState extends ConsumerState<HrmsModuleScreen> {
     super.dispose();
   }
 
+  static IconData _getSectionIcon(String sectionName) {
+    switch (sectionName) {
+      case 'ORGANIZATION':
+        return Icons.business_outlined;
+      case 'EMPLOYEE':
+        return Icons.person_outline_rounded;
+      case 'ATTENDANCE':
+        return Icons.calendar_month_outlined;
+      case 'TASKS & CLOCKING':
+        return Icons.access_time_rounded;
+      case 'SITE VISIT':
+        return Icons.location_on_outlined;
+      case 'LEAVE':
+        return Icons.event_busy_outlined;
+      case 'SALARY & ASSETS':
+        return Icons.account_balance_wallet_outlined;
+      case 'LOAN':
+        return Icons.payments_outlined;
+      case 'EXIT & INCENTIVE':
+        return Icons.card_giftcard_outlined;
+      case 'PAYROLL':
+        return Icons.receipt_long_outlined;
+      default:
+        return Icons.folder_outlined;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final employee = ref.watch(currentEmployeeProvider);
@@ -364,6 +391,267 @@ class _HrmsModuleScreenState extends ConsumerState<HrmsModuleScreen> {
       }
     }
 
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth >= 800;
+
+        if (isDesktop) {
+          return _buildDesktopLayout(
+            context,
+            employee: employee,
+            employeeName: employeeName,
+            isSuper: isSuper,
+            permittedSections: permittedSections,
+            filteredSections: filteredSections,
+            constraints: constraints,
+          );
+        }
+
+        return _buildMobileLayout(
+          context,
+          employee: employee,
+          employeeName: employeeName,
+          permittedSections: permittedSections,
+          filteredSections: filteredSections,
+        );
+      },
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // ── Desktop Layout ──
+  // ══════════════════════════════════════════════════════════════════
+
+  Widget _buildDesktopLayout(
+    BuildContext context, {
+    required dynamic employee,
+    required String employeeName,
+    required bool isSuper,
+    required Map<String, List<_SubModule>> permittedSections,
+    required Map<String, List<_SubModule>> filteredSections,
+    required BoxConstraints constraints,
+  }) {
+    final horizontalPadding = constraints.maxWidth > 1200 ? 32.0 : 20.0;
+    final gridColumns = constraints.maxWidth >= 1180
+        ? 4
+        : constraints.maxWidth >= 860
+            ? 3
+            : 2;
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: AppBackgroundWrapper(
+        child: Column(
+          children: [
+            // ── Top Navigation Bar (Fixed) ──
+            DesktopModuleScreenHeader(
+              title: 'HRMS',
+              icon: Icons.people_alt_rounded,
+              color: const Color(0xFF9CC70A),
+              onBack: () => context.go('/module-dashboard'),
+              employeeName: employeeName,
+              photoUrl: employee?.profileImageUrl,
+              isSuperAdmin: isSuper,
+              onProfile: () => context.go('/my-profile'),
+            ),
+
+            // ── Fixed Search Bar (Fixed at top) ──
+            Padding(
+              padding: EdgeInsets.fromLTRB(horizontalPadding, 16, horizontalPadding, 8),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (val) => setState(() => _searchQuery = val),
+                decoration: InputDecoration(
+                  hintText: 'Search modules...',
+                  hintStyle: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w400,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search_rounded,
+                    color: Color(0xFF9CC70A),
+                    size: 20,
+                  ),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.textSecondary),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.95),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFE5E8E2), width: 1),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFE5E8E2), width: 1),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFF9CC70A), width: 1.5),
+                  ),
+                ),
+              ),
+            ),
+
+            // ── Scrollable Module Grid Content ──
+            Expanded(
+              child: Scrollbar(
+                controller: _scrollController,
+                thumbVisibility: false,
+                child: ListView(
+                  controller: _scrollController,
+                  padding: EdgeInsets.fromLTRB(horizontalPadding, 4, horizontalPadding, 32),
+                  children: [
+                    // ── Content or Empty State ──
+                    if (permittedSections.isEmpty)
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(48),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Icon(Icons.lock_outline, size: 48, color: Color(0xFF9E9E9E)),
+                              SizedBox(height: 16),
+                              Text(
+                                'No Accessible HRMS Modules',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              SizedBox(height: 6),
+                              Text(
+                                'You do not have permission to access any sub-modules in HRMS.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else if (filteredSections.isEmpty && _searchQuery.isNotEmpty)
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: const Color(0xFF9CC70A).withOpacity(0.1),
+                                ),
+                                child: const Icon(
+                                  Icons.search_off_rounded,
+                                  size: 40,
+                                  color: Color(0xFF9CC70A),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No modules found for "$_searchQuery"',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              const Text(
+                                'Try searching with a different keyword like "Attendance", "Employee", or "Leave".',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              OutlinedButton.icon(
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() => _searchQuery = '');
+                                },
+                                icon: const Icon(Icons.refresh_rounded, size: 16),
+                                label: const Text('Clear Search'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF9CC70A),
+                                  side: const BorderSide(color: Color(0xFF9CC70A)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      for (final entry in filteredSections.entries) ...[
+                        DesktopSectionHeader(
+                          title: entry.key,
+                          icon: _getSectionIcon(entry.key),
+                          color: const Color(0xFF9CC70A),
+                          count: entry.value.length,
+                        ),
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          padding: EdgeInsets.zero,
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: gridColumns,
+                            mainAxisSpacing: 14,
+                            crossAxisSpacing: 14,
+                            mainAxisExtent: 80,
+                          ),
+                          itemCount: entry.value.length,
+                          itemBuilder: (context, index) {
+                            final m = entry.value[index];
+                            return DesktopSubModuleCard(
+                              label: m.label,
+                              icon: m.icon,
+                              customIcon: m.customIcon,
+                              color: m.color,
+                              containerColor: m.containerColor,
+                              onTap: () => context.go(m.route),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // ── Mobile Layout (Preserved Exactly As Before) ──
+  // ══════════════════════════════════════════════════════════════════
+
+  Widget _buildMobileLayout(
+    BuildContext context, {
+    required dynamic employee,
+    required String employeeName,
+    required Map<String, List<_SubModule>> permittedSections,
+    required Map<String, List<_SubModule>> filteredSections,
+  }) {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: AppBackgroundWrapper(
@@ -378,7 +666,6 @@ class _HrmsModuleScreenState extends ConsumerState<HrmsModuleScreen> {
               photoUrl: employee?.profileImageUrl,
               onProfile: () => context.go('/my-profile'),
             ),
-            // ── Fixed Full-width Search Bar ──
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
               child: TextField(
@@ -406,7 +693,7 @@ class _HrmsModuleScreenState extends ConsumerState<HrmsModuleScreen> {
                         )
                       : null,
                   filled: true,
-                  fillColor: Colors.white.withValues(alpha: 0.95),
+                  fillColor: Colors.white.withOpacity(0.95),
                   contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
@@ -467,7 +754,6 @@ class _HrmsModuleScreenState extends ConsumerState<HrmsModuleScreen> {
                         physics: const AlwaysScrollableScrollPhysics(),
                         padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
                         children: [
-
                           if (filteredSections.isEmpty && _searchQuery.isNotEmpty)
                             Center(
                               child: Padding(
@@ -479,7 +765,7 @@ class _HrmsModuleScreenState extends ConsumerState<HrmsModuleScreen> {
                                       padding: const EdgeInsets.all(16),
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
-                                        color: const Color(0xFF9CC70A).withValues(alpha: 0.1),
+                                        color: const Color(0xFF9CC70A).withOpacity(0.1),
                                       ),
                                       child: const Icon(
                                         Icons.search_off_rounded,

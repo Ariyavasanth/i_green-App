@@ -66,6 +66,7 @@ class _ProjectModuleScreenState extends ConsumerState<ProjectModuleScreen> {
   Widget build(BuildContext context) {
     final employee = ref.watch(currentEmployeeProvider);
     final employeeName = employee?.firstName ?? '';
+    final isSuper = employee == null || employee.isSuperAdmin;
 
     final query = _searchQuery.trim().toLowerCase();
     final filteredSections = <String, List<_SubModule>>{};
@@ -83,8 +84,219 @@ class _ProjectModuleScreenState extends ConsumerState<ProjectModuleScreen> {
       }
     }
 
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth >= 800;
+
+        if (isDesktop) {
+          return _buildDesktopLayout(
+            context,
+            employee: employee,
+            employeeName: employeeName,
+            isSuper: isSuper,
+            filteredSections: filteredSections,
+            constraints: constraints,
+          );
+        }
+
+        return _buildMobileLayout(
+          context,
+          employee: employee,
+          employeeName: employeeName,
+          filteredSections: filteredSections,
+        );
+      },
+    );
+  }
+
+  Widget _buildDesktopLayout(
+    BuildContext context, {
+    required dynamic employee,
+    required String employeeName,
+    required bool isSuper,
+    required Map<String, List<_SubModule>> filteredSections,
+    required BoxConstraints constraints,
+  }) {
+    final horizontalPadding = constraints.maxWidth > 1200 ? 32.0 : 20.0;
+    final gridColumns = constraints.maxWidth >= 1180
+        ? 4
+        : constraints.maxWidth >= 860
+            ? 3
+            : 2;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6F3),
+      backgroundColor: Colors.transparent,
+      body: AppBackgroundWrapper(
+        child: Column(
+          children: [
+            DesktopModuleScreenHeader(
+              title: 'PROJECT MODULE',
+              icon: Icons.rocket_launch_rounded,
+              color: const Color(0xFF9C27B0),
+              onBack: () => context.go('/module-dashboard'),
+              employeeName: employeeName,
+              photoUrl: employee?.profileImageUrl,
+              isSuperAdmin: isSuper,
+              onProfile: () => context.go('/my-profile'),
+            ),
+            Padding(
+              padding: EdgeInsets.fromLTRB(horizontalPadding, 16, horizontalPadding, 8),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (val) => setState(() => _searchQuery = val),
+                decoration: InputDecoration(
+                  hintText: 'Search modules...',
+                  hintStyle: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w400,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search_rounded,
+                    color: Color(0xFF9C27B0),
+                    size: 20,
+                  ),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.textSecondary),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.95),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFE5E8E2), width: 1),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFE5E8E2), width: 1),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFF9C27B0), width: 1.5),
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: Scrollbar(
+                controller: _scrollController,
+                thumbVisibility: false,
+                child: ListView(
+                  controller: _scrollController,
+                  padding: EdgeInsets.fromLTRB(horizontalPadding, 4, horizontalPadding, 32),
+                  children: [
+                    if (filteredSections.isEmpty && _searchQuery.isNotEmpty)
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: const Color(0xFF9C27B0).withOpacity(0.1),
+                                ),
+                                child: const Icon(
+                                  Icons.search_off_rounded,
+                                  size: 40,
+                                  color: Color(0xFF9C27B0),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No modules found for "$_searchQuery"',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              const Text(
+                                'Try searching with a different keyword like "New Project".',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              OutlinedButton.icon(
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() => _searchQuery = '');
+                                },
+                                icon: const Icon(Icons.refresh_rounded, size: 16),
+                                label: const Text('Clear Search'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF9C27B0),
+                                  side: const BorderSide(color: Color(0xFF9C27B0)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      for (final entry in filteredSections.entries) ...[
+                        DesktopSectionHeader(
+                          title: entry.key,
+                          icon: Icons.rocket_launch_outlined,
+                          color: const Color(0xFF9C27B0),
+                          count: entry.value.length,
+                        ),
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          padding: EdgeInsets.zero,
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: gridColumns,
+                            mainAxisSpacing: 14,
+                            crossAxisSpacing: 14,
+                            mainAxisExtent: 80,
+                          ),
+                          itemCount: entry.value.length,
+                          itemBuilder: (context, index) {
+                            final m = entry.value[index];
+                            return DesktopSubModuleCard(
+                              label: m.label,
+                              icon: m.icon,
+                              color: m.color,
+                              onTap: () => context.go(m.route),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileLayout(
+    BuildContext context, {
+    required dynamic employee,
+    required String employeeName,
+    required Map<String, List<_SubModule>> filteredSections,
+  }) {
+    return Scaffold(
+      backgroundColor: Colors.transparent,
       body: AppBackgroundWrapper(
         child: Column(
           children: [
@@ -97,7 +309,6 @@ class _ProjectModuleScreenState extends ConsumerState<ProjectModuleScreen> {
               photoUrl: employee?.profileImageUrl,
               onProfile: () => context.go('/my-profile'),
             ),
-            // ── Fixed Search Bar ──
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
               child: TextField(
@@ -126,7 +337,7 @@ class _ProjectModuleScreenState extends ConsumerState<ProjectModuleScreen> {
                         )
                       : null,
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: Colors.white.withOpacity(0.95),
                   contentPadding: const EdgeInsets.symmetric(
                       vertical: 12, horizontal: 16),
                   border: OutlineInputBorder(
@@ -160,7 +371,6 @@ class _ProjectModuleScreenState extends ConsumerState<ProjectModuleScreen> {
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
                   children: [
-
                     if (filteredSections.isEmpty && _searchQuery.isNotEmpty)
                       Center(
                         child: Padding(
@@ -174,7 +384,7 @@ class _ProjectModuleScreenState extends ConsumerState<ProjectModuleScreen> {
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   color: const Color(0xFF9C27B0)
-                                      .withValues(alpha: 0.1),
+                                      .withOpacity(0.1),
                                 ),
                                 child: const Icon(
                                   Icons.search_off_rounded,
@@ -218,8 +428,6 @@ class _ProjectModuleScreenState extends ConsumerState<ProjectModuleScreen> {
                           ),
                         ),
                       ),
-
-                    // ── Sub-module Sections ──
                     ...filteredSections.entries.map((entry) {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,

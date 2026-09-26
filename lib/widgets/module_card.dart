@@ -88,30 +88,30 @@ class _ModuleCardState extends State<ModuleCard>
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: _isHovered && !widget.comingSoon
-                    ? widget.color.withValues(alpha: 0.45)
+                    ? widget.color.withOpacity(0.45)
                     : const Color(0xFFE5E8E2),
                 width: _isHovered && !widget.comingSoon ? 1.5 : 1.2,
               ),
               boxShadow: [
                 if (_isHovered && !widget.comingSoon) ...[
                   BoxShadow(
-                    color: widget.color.withValues(alpha: 0.12),
+                    color: widget.color.withOpacity(0.12),
                     blurRadius: 20,
                     offset: const Offset(0, 10),
                   ),
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
+                    color: Colors.black.withOpacity(0.04),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
                 ] else ...[
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
+                    color: Colors.black.withOpacity(0.03),
                     blurRadius: 10,
                     offset: const Offset(0, 2),
                   ),
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.02),
+                    color: Colors.black.withOpacity(0.02),
                     blurRadius: 4,
                     offset: const Offset(0, 1),
                   ),
@@ -133,7 +133,7 @@ class _ModuleCardState extends State<ModuleCard>
                         gradient: LinearGradient(
                           colors: [
                             widget.color,
-                            Color.alphaBlend(Colors.black.withValues(alpha: 0.18), widget.color),
+                            Color.alphaBlend(Colors.black.withOpacity(0.18), widget.color),
                           ],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
@@ -141,7 +141,7 @@ class _ModuleCardState extends State<ModuleCard>
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
                           BoxShadow(
-                            color: widget.color.withValues(alpha: 0.35),
+                            color: widget.color.withOpacity(0.35),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),
@@ -245,7 +245,7 @@ class _ModuleCardState extends State<ModuleCard>
                         style: TextStyle(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w600,
-                          color: widget.color.withValues(alpha: 0.95),
+                          color: widget.color.withOpacity(0.95),
                         ),
                       ),
                     ],
@@ -317,7 +317,7 @@ class _SubModuleCardState extends State<SubModuleCard>
     final primaryColor = widget.color;
     final effectiveCardBg = widget.cardColor ?? widget.containerColor ?? Colors.white;
     final isCustomBg = effectiveCardBg != Colors.white;
-    final bgCol = isCustomBg ? Colors.transparent : primaryColor.withValues(alpha: 0.14);
+    final bgCol = isCustomBg ? Colors.transparent : primaryColor.withOpacity(0.14);
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -345,22 +345,22 @@ class _SubModuleCardState extends State<SubModuleCard>
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color: _isHovered
-                    ? primaryColor.withValues(alpha: 0.5)
-                    : (isCustomBg ? primaryColor.withValues(alpha: 0.30) : const Color(0xFFE2E8F0)),
+                    ? primaryColor.withOpacity(0.5)
+                    : (isCustomBg ? primaryColor.withOpacity(0.30) : const Color(0xFFE2E8F0)),
                 width: _isHovered ? 1.5 : 1,
               ),
               boxShadow: [
                 if (_isHovered) ...[
                   BoxShadow(
-                    color: primaryColor.withValues(alpha: 0.22),
+                    color: primaryColor.withOpacity(0.22),
                     blurRadius: 16,
                     offset: const Offset(0, 6),
                   ),
                 ] else ...[
                   BoxShadow(
                     color: isCustomBg
-                        ? primaryColor.withValues(alpha: 0.08)
-                        : Colors.black.withValues(alpha: 0.04),
+                        ? primaryColor.withOpacity(0.08)
+                        : Colors.black.withOpacity(0.04),
                     blurRadius: 10,
                     offset: const Offset(0, 3),
                   ),
@@ -383,14 +383,14 @@ class _SubModuleCardState extends State<SubModuleCard>
                       border: bgCol == Colors.transparent
                           ? null
                           : Border.all(
-                              color: primaryColor.withValues(alpha: 0.20),
+                              color: primaryColor.withOpacity(0.20),
                               width: 1,
                             ),
                       boxShadow: bgCol == Colors.transparent
                           ? null
                           : [
                               BoxShadow(
-                                color: primaryColor.withValues(alpha: 0.12),
+                                color: primaryColor.withOpacity(0.12),
                                 blurRadius: 8,
                                 offset: const Offset(0, 3),
                               ),
@@ -432,7 +432,7 @@ class _SubModuleCardState extends State<SubModuleCard>
   }
 }
 
-/// Reusable header for sub-module screens with back button and profile.
+/// Reusable header for sub-module screens with back button and profile (Mobile).
 class ModuleScreenHeader extends StatelessWidget {
   const ModuleScreenHeader({
     required this.title,
@@ -463,7 +463,7 @@ class ModuleScreenHeader extends StatelessWidget {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -486,7 +486,7 @@ class ModuleScreenHeader extends StatelessWidget {
                 gradient: LinearGradient(
                   colors: [
                     color,
-                    Color.alphaBlend(Colors.black.withValues(alpha: 0.18), color),
+                    Color.alphaBlend(Colors.black.withOpacity(0.18), color),
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -494,7 +494,7 @@ class ModuleScreenHeader extends StatelessWidget {
                 borderRadius: BorderRadius.circular(11),
                 boxShadow: [
                   BoxShadow(
-                    color: color.withValues(alpha: 0.3),
+                    color: color.withOpacity(0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 3),
                   ),
@@ -577,7 +577,7 @@ class ModuleScreenHeader extends StatelessWidget {
         gradient: LinearGradient(
           colors: [
             AppColors.primary,
-            AppColors.primary.withValues(alpha: 0.7),
+            AppColors.primary.withOpacity(0.7),
           ],
         ),
       ),
@@ -590,6 +590,397 @@ class ModuleScreenHeader extends StatelessWidget {
             fontSize: 15,
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Reusable header for sub-module screens on Desktop.
+class DesktopModuleScreenHeader extends StatelessWidget {
+  const DesktopModuleScreenHeader({
+    required this.title,
+    required this.icon,
+    required this.color,
+    required this.onBack,
+    this.employeeName,
+    this.photoUrl,
+    this.onProfile,
+    this.isSuperAdmin = false,
+    this.actions,
+    super.key,
+  });
+
+  final String title;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onBack;
+  final String? employeeName;
+  final String? photoUrl;
+  final VoidCallback? onProfile;
+  final bool isSuperAdmin;
+  final List<Widget>? actions;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 60,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: const Border(
+          bottom: BorderSide(color: Color(0xFFEDF2F7), width: 1),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            color: const Color(0xFF1E293B),
+            onPressed: onBack,
+            tooltip: 'Back',
+          ),
+          const SizedBox(width: 6),
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(9),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              icon,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1E293B),
+            ),
+          ),
+          const Spacer(),
+          if (actions != null) ...actions!,
+          IconButton(
+            icon: const Icon(Icons.search_rounded, size: 21, color: Color(0xFF64748B)),
+            onPressed: () {},
+            tooltip: 'Search',
+          ),
+          IconButton(
+            icon: const Icon(Icons.calendar_today_outlined, size: 19, color: Color(0xFF64748B)),
+            onPressed: () {},
+            tooltip: 'Calendar',
+          ),
+          IconButton(
+            icon: const Icon(Icons.notifications_none_rounded, size: 21, color: Color(0xFF64748B)),
+            onPressed: () {},
+            tooltip: 'Notifications',
+          ),
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: onProfile,
+            borderRadius: BorderRadius.circular(20),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildAvatar(),
+                  const SizedBox(width: 8),
+                  Text(
+                    (employeeName != null && employeeName!.isNotEmpty)
+                        ? employeeName!
+                        : (isSuperAdmin ? 'Super' : 'User'),
+                    style: const TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 18,
+                    color: Color(0xFF64748B),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAvatar() {
+    final cleanPhoto = photoUrl?.trim() ?? '';
+    final initial = employeeName != null && employeeName!.isNotEmpty
+        ? employeeName![0].toUpperCase()
+        : '?';
+
+    if (cleanPhoto.isNotEmpty) {
+      if (cleanPhoto.startsWith('data:')) {
+        try {
+          final commaIdx = cleanPhoto.indexOf(',');
+          final bytes = base64Decode(
+            commaIdx != -1 ? cleanPhoto.substring(commaIdx + 1) : cleanPhoto,
+          );
+          return CircleAvatar(
+            radius: 16,
+            backgroundColor: color,
+            backgroundImage: MemoryImage(bytes),
+          );
+        } catch (_) {}
+      } else if (cleanPhoto.startsWith('http://') || cleanPhoto.startsWith('https://')) {
+        return CircleAvatar(
+          radius: 16,
+          backgroundColor: color,
+          backgroundImage: NetworkImage(cleanPhoto),
+        );
+      }
+    }
+
+    return CircleAvatar(
+      radius: 16,
+      backgroundColor: color,
+      child: Text(
+        initial,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 13,
+        ),
+      ),
+    );
+  }
+}
+
+/// Desktop module horizontal card with accent left bar and tinted background.
+class DesktopSubModuleCard extends StatefulWidget {
+  const DesktopSubModuleCard({
+    required this.label,
+    this.icon,
+    this.customIcon,
+    required this.color,
+    this.containerColor,
+    required this.onTap,
+    super.key,
+  });
+
+  final String label;
+  final IconData? icon;
+  final Widget? customIcon;
+  final Color color;
+  final Color? containerColor;
+  final VoidCallback onTap;
+
+  @override
+  State<DesktopSubModuleCard> createState() => _DesktopSubModuleCardState();
+}
+
+class _DesktopSubModuleCardState extends State<DesktopSubModuleCard> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final cleanLabel = widget.label.replaceAll('\n', ' ');
+    final primaryColor = widget.color;
+    final cardBgColor = widget.containerColor ?? primaryColor.withOpacity(0.12);
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          transform: Matrix4.translationValues(0, _isHovered ? -2 : 0, 0),
+          decoration: BoxDecoration(
+            color: cardBgColor,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: _isHovered
+                  ? primaryColor.withOpacity(0.6)
+                  : primaryColor.withOpacity(0.25),
+              width: _isHovered ? 1.5 : 1,
+            ),
+            boxShadow: [
+              if (_isHovered)
+                BoxShadow(
+                  color: primaryColor.withOpacity(0.20),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                )
+              else
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Stack(
+              children: [
+                // Left colored accent line
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: 4,
+                  child: Container(color: primaryColor),
+                ),
+                // Card Inner Content
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 14, 12),
+                  child: Row(
+                    children: [
+                      // Icon Container
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.85),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: primaryColor.withOpacity(0.18),
+                            width: 1,
+                          ),
+                        ),
+                        alignment: Alignment.center,
+                        child: widget.customIcon ??
+                            (widget.icon != null
+                                ? Icon(
+                                    widget.icon,
+                                    color: primaryColor,
+                                    size: 26,
+                                  )
+                                : const SizedBox.shrink()),
+                      ),
+                      const SizedBox(width: 14),
+                      // Module Label
+                      Expanded(
+                        child: Text(
+                          cleanLabel,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1E293B),
+                            height: 1.25,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Right forward arrow
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withOpacity(0.9),
+                          border: Border.all(
+                            color: _isHovered ? primaryColor.withOpacity(0.4) : const Color(0xFFE2E8F0),
+                            width: 1,
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.arrow_forward_rounded,
+                          size: 15,
+                          color: _isHovered ? primaryColor : const Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Desktop section header with vertical accent bar, icon, title, and module count badge.
+class DesktopSectionHeader extends StatelessWidget {
+  const DesktopSectionHeader({
+    required this.title,
+    required this.icon,
+    this.color = const Color(0xFF9CC70A),
+    this.count,
+    super.key,
+  });
+
+  final String title;
+  final IconData icon;
+  final Color color;
+  final int? count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 3.5,
+            height: 18,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Icon(
+            icon,
+            size: 18,
+            color: color,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w700,
+              color: color,
+              letterSpacing: 1.1,
+            ),
+          ),
+          const Spacer(),
+          if (count != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Text(
+                '$count ${count == 1 ? 'Module' : 'Modules'}',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
