@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/authentication/providers/authentication_providers.dart';
+import '../features/employee/providers/employee_providers.dart';
 import '../features/organization/providers/organization_providers.dart';
 
 class LoginFormWidget extends ConsumerStatefulWidget {
@@ -56,6 +57,9 @@ class _LoginFormWidgetState extends ConsumerState<LoginFormWidget> {
         await ref.read(authSessionStorageProvider).writeUserEmail(userEmail);
         
         // Invalidate cached state so the newly logged-in user gets fresh data from Firestore
+        ref.invalidate(employeesProvider);
+        ref.invalidate(allEmployeesProvider);
+        ref.invalidate(currentEmployeeProvider);
         ref.invalidate(organizationsProvider);
         ref.invalidate(departmentsProvider);
         ref.invalidate(allDesignationsProvider);

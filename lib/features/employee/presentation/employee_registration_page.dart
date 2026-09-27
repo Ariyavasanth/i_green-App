@@ -1774,9 +1774,7 @@ class _EmployeeRegistrationPageState
         } catch (_) {}
       }
 
-      if (emp.accessPermissions.isNotEmpty) {
-        _selectedPermissions = Set<String>.from(emp.accessPermissions);
-      }
+      _selectedPermissions = Set<String>.from(emp.accessPermissions);
 
       _updateSavedTabsFromData();
     });
@@ -1847,7 +1845,7 @@ class _EmployeeRegistrationPageState
     super.initState();
     _attachControllerListeners();
     _selectedPermissions =
-        widget.employee != null && widget.employee!.accessPermissions.isNotEmpty
+        widget.employee != null
         ? Set<String>.from(widget.employee!.accessPermissions)
         : (!_isManagementAdd
               ? <String>{}

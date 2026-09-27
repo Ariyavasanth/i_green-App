@@ -130,9 +130,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
       _leaveType = (emp.leaveType.isEmpty || emp.leaveType == 'Once a Month')
           ? (emp.leaveType == 'Once a Month' ? 'Manual Allocation' : 'As Needed')
           : emp.leaveType;
-      _selectedPermissions = emp.accessPermissions.isNotEmpty
-          ? Set<String>.from(emp.accessPermissions)
-          : Set<String>.from(Employee.allSidebarPermissions);
+      _selectedPermissions = Set<String>.from(emp.accessPermissions);
     } else {
       _workScheduleType = 'Fixed Schedule';
       _requiredWorkingHoursController = TextEditingController(text: '9 Hours');
@@ -269,9 +267,9 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
         await repo.updateEmployee(updatedEmployee);
       } else {
         await repo.addEmployee(updatedEmployee);
-      }
-
       ref.invalidate(employeesProvider);
+      ref.invalidate(allEmployeesProvider);
+      ref.invalidate(currentEmployeeProvider);
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setState(() => _isSaving = false);

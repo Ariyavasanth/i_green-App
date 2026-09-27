@@ -279,11 +279,13 @@ class Employee {
       final pClean = pLower.replaceAll(RegExp(r'[\s\-_&]+'), '');
       if (pClean == normClean) return true;
 
-      // On Duty aliases: 'my on duty', 'on-duty', 'on duty', 'onduty'
+      // On Duty aliases:
+      // Regular user: 'My On Duty', 'On-Duty', 'On Duty', 'onduty'
       if ((normClean == 'myonduty' || normClean == 'onduty') &&
           (pClean == 'myonduty' || pClean == 'onduty')) return true;
+      // Admin management: 'On-Duty Management', 'On Duty Management'
       if ((normClean == 'ondutymanagement' || normClean == 'myondutymanagement') &&
-          (pClean == 'ondutymanagement' || pClean == 'myondutymanagement' || pClean == 'onduty')) return true;
+          (pClean == 'ondutymanagement' || pClean == 'myondutymanagement')) return true;
 
       // Leave aliases
       if ((normClean == 'leave' || normClean == 'leaves' || normClean == 'leavemanagement') &&
@@ -296,28 +298,32 @@ class Employee {
           (pClean == 'permissionmanagement' || pClean == 'permissionmgmt')) return true;
 
       // Tasks & Clocking aliases
-      if ((normClean.contains('task') && (normClean.contains('clock') || normClean.contains('timesheet'))) &&
-          (pClean.contains('task') && (pClean.contains('clock') || pClean.contains('timesheet')))) return true;
+      if ((normClean == 'tasksandclockingmanagement' || normClean == 'tasksclockingmanagement' || normClean == 'tasksandtimesheets') &&
+          (pClean == 'tasksandclockingmanagement' || pClean == 'tasksclockingmanagement' || pClean == 'tasksandtimesheets')) return true;
+      if ((normClean == 'mytasks' || normClean == 'tasks') &&
+          (pClean == 'mytasks' || pClean == 'tasks')) return true;
       if ((normClean == 'timeclocking' || normClean == 'clocking') &&
           (pClean == 'timeclocking' || pClean == 'clocking')) return true;
 
       // Site visit aliases
       if ((normClean == 'sitevisitattendancemgmt' || normClean == 'sitevisitattendancemanagement') &&
           (pClean == 'sitevisitattendancemanagement' || pClean == 'sitevisitattendancemgmt')) return true;
+      if (normClean == 'sitevisitattendance' && pClean == 'sitevisitattendance') return true;
 
       // Organization aliases
-      if ((normClean == 'organizationstructure' || normClean == 'organization') &&
-          (pClean == 'organization' || pClean == 'organizationstructure')) return true;
-      if ((normClean == 'organizationmanagement' || normClean == 'organization') &&
-          (pClean == 'organization' || pClean == 'organizationmanagement')) return true;
+      if (normClean == 'organizationstructure' && pClean == 'organizationstructure') return true;
+      if (normClean == 'organizationmanagement' && pClean == 'organizationmanagement') return true;
 
       // Incentive aliases
       if ((normClean == 'incentiverequest' || normClean == 'incentive') &&
           (pClean == 'incentive' || pClean == 'incentiverequest')) return true;
+      if (normClean == 'incentivemanagement' && pClean == 'incentivemanagement') return true;
 
       // Payroll aliases
-      if (normClean == 'payroll' &&
-          (pClean == 'payroll' || pClean == 'mypayslips' || pClean == 'payrollhistory' || pClean == 'payrollsettings')) return true;
+      if (normClean == 'mypayslips' && pClean == 'mypayslips') return true;
+      if (normClean == 'payrollhistory' && pClean == 'payrollhistory') return true;
+      if (normClean == 'payrollsettings' && pClean == 'payrollsettings') return true;
+      if (normClean == 'payroll' && pClean == 'payroll') return true;
 
       return false;
     });
