@@ -58,15 +58,34 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
   }
 
   DateTime? _parseCheckInTimeToDateTime(String timeStr) {
-    if (timeStr.isEmpty) return null;
+    final trimmed = timeStr.trim();
+    if (trimmed.isEmpty) return null;
     final now = DateTime.now();
-    final formats = ['HH:mm:ss', 'hh:mm:ss a', 'hh:mm a', 'HH:mm', 'h:mm a', 'h:mm:ss a'];
+
+    if (trimmed.contains('T')) {
+      final dt = DateTime.tryParse(trimmed);
+      if (dt != null) return dt.toLocal();
+    }
+
+    final is12Hour = trimmed.toUpperCase().contains('AM') || trimmed.toUpperCase().contains('PM');
+    final formats = is12Hour
+        ? ['hh:mm:ss a', 'h:mm:ss a', 'hh:mm a', 'h:mm a']
+        : ['HH:mm:ss', 'H:m:s', 'HH:mm', 'H:m'];
+
     for (final fmt in formats) {
       try {
-        final parsed = DateFormat(fmt).parse(timeStr);
+        final parsed = DateFormat(fmt).parseStrict(trimmed);
         return DateTime(now.year, now.month, now.day, parsed.hour, parsed.minute, parsed.second);
       } catch (_) {}
     }
+
+    for (final fmt in formats) {
+      try {
+        final parsed = DateFormat(fmt).parse(trimmed);
+        return DateTime(now.year, now.month, now.day, parsed.hour, parsed.minute, parsed.second);
+      } catch (_) {}
+    }
+
     return null;
   }
 
@@ -3546,12 +3565,16 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                       builder: (context) {
                         final hasActiveSession = todayRecord != null && todayRecord.sessions.any((s) => s.isActive);
                         final showLiveClock = hasCheckedIn && !hasCheckedOut && hasActiveSession;
+                        final activeSession = todayRecord?.sessions.where((s) => s.isActive).firstOrNull;
+                        final clockInTime = (activeSession != null && activeSession.checkInTime.isNotEmpty)
+                            ? activeSession.checkInTime
+                            : (todayRecord?.effectiveCheckInTime ?? '');
                         return _buildCompactStatChip(
                           icon: showLiveClock ? Icons.timer_outlined : Icons.timelapse,
                           iconColor: showLiveClock ? const Color(0xFF9CC70A) : AppColors.active,
                           label: showLiveClock ? 'Live Clock' : 'Work Hrs',
                           value: showLiveClock
-                              ? _getLiveClockDisplay(todayRecord.effectiveCheckInTime)
+                              ? _getLiveClockDisplay(clockInTime)
                               : (todayRecord != null && (todayRecord.totalHours > 0 || todayRecord.sessions.isNotEmpty)
                                   ? todayRecord.formattedTotalHours
                                   : '--'),

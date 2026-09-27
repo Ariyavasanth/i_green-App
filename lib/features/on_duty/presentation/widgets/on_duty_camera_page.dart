@@ -9,7 +9,7 @@ class OnDutyCameraPage extends StatefulWidget {
   const OnDutyCameraPage({
     super.key,
     required this.title,
-    required this.subtitle,
+    this.subtitle = '',
   });
 
   final String title;
@@ -39,7 +39,7 @@ class _OnDutyCameraPageState extends State<OnDutyCameraPage> {
       if (status.isDenied || status.isPermanentlyDenied) {
         if (mounted) {
           setState(() {
-            _errorMessage = 'Camera permission was denied. Please allow camera access in device Settings to capture live arrival proof.';
+            _errorMessage = 'Camera permission was denied. Please allow camera access in device Settings to capture live reached proof.';
             _isInitializing = false;
           });
         }
@@ -221,16 +221,17 @@ class _OnDutyCameraPageState extends State<OnDutyCameraPage> {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          Text(
-                            widget.subtitle,
-                            style: const TextStyle(
-                              color: Color(0xFF9CC70A),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                          if (widget.subtitle.isNotEmpty)
+                            Text(
+                              widget.subtitle,
+                              style: const TextStyle(
+                                color: Color(0xFF9CC70A),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
                         ],
                       ),
                     ),

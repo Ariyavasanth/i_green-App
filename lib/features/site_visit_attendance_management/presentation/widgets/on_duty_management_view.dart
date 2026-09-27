@@ -8,6 +8,7 @@ import '../../../on_duty/domain/on_duty_assignment.dart';
 import '../../../on_duty/domain/on_duty_site.dart';
 import '../../../on_duty/providers/on_duty_providers.dart';
 import '../../../on_duty/presentation/assign_on_duty_dialog.dart';
+import '../../../../core/widgets/reverse_geocoded_location_text.dart';
 
 class OnDutyManagementView extends ConsumerStatefulWidget {
   const OnDutyManagementView({super.key});
@@ -659,6 +660,30 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
     );
   }
 
+  String _formatStatusLabel(String status) {
+    switch (status.toUpperCase()) {
+      case 'TRAVELING_TO_DESTINATION':
+        return 'Traveling';
+      case 'REACHED_DESTINATION':
+        return 'At Site';
+      case 'WORK_COMPLETED':
+        return 'Work Done';
+      case 'RETURNING_TO_OFFICE':
+        return 'Returning';
+      case 'IN_PROGRESS':
+      case 'ACTIVE':
+        return 'Active';
+      case 'ASSIGNED':
+        return 'Assigned';
+      case 'COMPLETED':
+        return 'Completed';
+      case 'CANCELLED':
+        return 'Cancelled';
+      default:
+        return status.replaceAll('_', ' ');
+    }
+  }
+
   Widget _buildStatusBadge(String status) {
     Color bg;
     Color fg;
@@ -756,6 +781,7 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         clipBehavior: Clip.antiAlias,
         child: ConstrainedBox(
@@ -852,10 +878,29 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                                 children: [
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      FittedBox(
-                                        fit: BoxFit.scaleDown,
-                                        child: _buildStatusBadge(assignment.status),
+                                      Icon(
+                                        assignment.isCompleted ? Icons.check_circle : Icons.directions_car_rounded,
+                                        size: 13,
+                                        color: assignment.isCompleted
+                                            ? const Color(0xFF16A34A)
+                                            : const Color(0xFFD97706),
+                                      ),
+                                      const SizedBox(width: 3),
+                                      Flexible(
+                                        child: Text(
+                                          _formatStatusLabel(assignment.status),
+                                          style: TextStyle(
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.bold,
+                                            color: assignment.isCompleted
+                                                ? const Color(0xFF16A34A)
+                                                : const Color(0xFFD97706),
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: 1,
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -982,67 +1027,11 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                         },
                       ),
 
-                      // GPS Locations if captured
-                      if (hasStartGps || hasEndGps) ...[
-                        const SizedBox(height: 10),
-                        const Divider(height: 1),
-                        const SizedBox(height: 14),
-                        const Text(
-                          'GPS TRACKING LOCATIONS',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8, color: Color(0xFF64748B)),
-                        ),
-                        const SizedBox(height: 10),
-                        if (hasStartGps)
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text('Start Location GPS', style: TextStyle(fontSize: 11.5, color: Colors.grey)),
-                                  Text(
-                                    '${assignment.startLatitude!.toStringAsFixed(4)}, ${assignment.startLongitude!.toStringAsFixed(4)}',
-                                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
-                                  ),
-                                ],
-                              ),
-                              TextButton.icon(
-                                onPressed: () => _openMap(assignment.startLatitude!, assignment.startLongitude!, label: 'Start Location'),
-                                icon: const Icon(Icons.map_outlined, size: 16, color: Color(0xFF414A51)),
-                                label: const Text('📍 View Map', style: TextStyle(color: Color(0xFF414A51), fontWeight: FontWeight.bold, fontSize: 12)),
-                              ),
-                            ],
-                          ),
-                        if (hasEndGps) ...[
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text('End Location GPS', style: TextStyle(fontSize: 11.5, color: Colors.grey)),
-                                  Text(
-                                    '${assignment.endLatitude!.toStringAsFixed(4)}, ${assignment.endLongitude!.toStringAsFixed(4)}',
-                                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
-                                  ),
-                                ],
-                              ),
-                              TextButton.icon(
-                                onPressed: () => _openMap(assignment.endLatitude!, assignment.endLongitude!, label: 'End Location'),
-                                icon: const Icon(Icons.map_outlined, size: 16, color: Color(0xFF414A51)),
-                                label: const Text('📍 View Map', style: TextStyle(color: Color(0xFF414A51), fontWeight: FontWeight.bold, fontSize: 12)),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ],
-
                       const SizedBox(height: 10),
                       const Divider(height: 1),
                       const SizedBox(height: 16),
 
-                      // RETURN TO OFFICE Section
+                      // RETURN TO OFFICE / AFTER COMPLETION OPTION
                       _buildMgmtReturnToOfficeSection(assignment),
 
                       const SizedBox(height: 20),
@@ -1242,7 +1231,7 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                         children: [
                           if (site.reachedPhoto != null)
                             Expanded(
-                              child: _buildMgmtPhotoThumbnail(context, 'Arrival Proof', site.reachedPhoto!),
+                              child: _buildMgmtPhotoThumbnail(context, 'Reached Proof', site.reachedPhoto!),
                             ),
                           if (site.reachedPhoto != null && site.workPhoto != null)
                             const SizedBox(width: 10),
@@ -1258,6 +1247,74 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
               ),
             );
           }
+
+  Widget _buildLocationRow({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required Color titleColor,
+    required double lat,
+    required double lng,
+    String? mapLabel,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(icon, size: 15, color: iconColor),
+        ),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: titleColor,
+                ),
+              ),
+              const SizedBox(height: 2),
+              ReverseGeocodedLocationText(
+                latitude: lat,
+                longitude: lng,
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1E293B),
+                  height: 1.25,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        InkWell(
+          onTap: () => _openMap(lat, lng, label: mapLabel ?? ''),
+          borderRadius: BorderRadius.circular(6),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: const Color(0xFFCBD5E1)),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.map_outlined, size: 12, color: Color(0xFF2563EB)),
+                SizedBox(width: 3),
+                Text('Map', style: TextStyle(fontSize: 10.5, color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _buildSiteLocationProofsBox({
     required OnDutySite site,
@@ -1319,217 +1376,62 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
           ),
           if (startLat != null && startLng != null) ...[
             const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.navigation_outlined, size: 14, color: Color(0xFFD97706)),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Started Location${startTimeStr != null && startTimeStr.isNotEmpty ? " ($startTimeStr)" : ""}',
-                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
-                      ),
-                      Text(
-                        '${startLat.toStringAsFixed(5)}, ${startLng.toStringAsFixed(5)}',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-                      ),
-                    ],
-                  ),
-                ),
-                InkWell(
-                  onTap: () => _openMap(startLat, startLng, label: 'Started Location - Site $siteIndex'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFFCBD5E1)),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.map_outlined, size: 12, color: Color(0xFF2563EB)),
-                        SizedBox(width: 3),
-                        Text('Map', style: TextStyle(fontSize: 10.5, color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+            _buildLocationRow(
+              icon: Icons.navigation_outlined,
+              iconColor: const Color(0xFFD97706),
+              title: 'Started Location${startTimeStr != null && startTimeStr.isNotEmpty ? " ($startTimeStr)" : ""}',
+              titleColor: const Color(0xFFB45309),
+              lat: startLat,
+              lng: startLng,
+              mapLabel: 'Started Location - Site $siteIndex',
             ),
           ],
           if (reachedLat != null && reachedLng != null) ...[
             const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.location_on, size: 14, color: Color(0xFF2563EB)),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Reached Location${reachedTimeStr != null && reachedTimeStr.isNotEmpty ? " ($reachedTimeStr)" : ""}',
-                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF1D4ED8)),
-                      ),
-                      Text(
-                        '${reachedLat.toStringAsFixed(5)}, ${reachedLng.toStringAsFixed(5)}',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-                      ),
-                    ],
-                  ),
-                ),
-                InkWell(
-                  onTap: () => _openMap(reachedLat, reachedLng, label: 'Reached Location - Site $siteIndex'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFFCBD5E1)),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.map_outlined, size: 12, color: Color(0xFF2563EB)),
-                        SizedBox(width: 3),
-                        Text('Map', style: TextStyle(fontSize: 10.5, color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+            _buildLocationRow(
+              icon: Icons.location_on,
+              iconColor: const Color(0xFF2563EB),
+              title: 'Reached Location${reachedTimeStr != null && reachedTimeStr.isNotEmpty ? " ($reachedTimeStr)" : ""}',
+              titleColor: const Color(0xFF1D4ED8),
+              lat: reachedLat,
+              lng: reachedLng,
+              mapLabel: 'Reached Location - Site $siteIndex',
             ),
           ],
           if (endLat != null && endLng != null) ...[
             const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.check_circle_outline, size: 14, color: Color(0xFF16A34A)),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Completed Location${completedTimeStr != null && completedTimeStr.isNotEmpty ? " ($completedTimeStr)" : ""}',
-                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF15803D)),
-                      ),
-                      Text(
-                        '${endLat.toStringAsFixed(5)}, ${endLng.toStringAsFixed(5)}',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-                      ),
-                    ],
-                  ),
-                ),
-                InkWell(
-                  onTap: () => _openMap(endLat, endLng, label: 'Completed Location - Site $siteIndex'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFFCBD5E1)),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.map_outlined, size: 12, color: Color(0xFF2563EB)),
-                        SizedBox(width: 3),
-                        Text('Map', style: TextStyle(fontSize: 10.5, color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+            _buildLocationRow(
+              icon: Icons.check_circle_outline,
+              iconColor: const Color(0xFF16A34A),
+              title: 'Completed Location${completedTimeStr != null && completedTimeStr.isNotEmpty ? " ($completedTimeStr)" : ""}',
+              titleColor: const Color(0xFF15803D),
+              lat: endLat,
+              lng: endLng,
+              mapLabel: 'Completed Location - Site $siteIndex',
             ),
           ],
           if (retLat != null && retLng != null) ...[
             const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.directions_car_rounded, size: 14, color: Color(0xFF2563EB)),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Return Started Location${assignment?.returnStartTime != null ? " (${assignment!.returnStartTime})" : ""}',
-                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF1D4ED8)),
-                      ),
-                      Text(
-                        '${retLat.toStringAsFixed(5)}, ${retLng.toStringAsFixed(5)}',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-                      ),
-                    ],
-                  ),
-                ),
-                InkWell(
-                  onTap: () => _openMap(retLat, retLng, label: 'Return Started Location'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFFCBD5E1)),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.map_outlined, size: 12, color: Color(0xFF2563EB)),
-                        SizedBox(width: 3),
-                        Text('Map', style: TextStyle(fontSize: 10.5, color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+            _buildLocationRow(
+              icon: Icons.directions_car_rounded,
+              iconColor: const Color(0xFF2563EB),
+              title: 'Return Started Location${assignment?.returnStartTime != null ? " (${assignment!.returnStartTime})" : ""}',
+              titleColor: const Color(0xFF1D4ED8),
+              lat: retLat,
+              lng: retLng,
+              mapLabel: 'Return Started Location',
             ),
           ],
           if (offLat != null && offLng != null) ...[
             const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.location_city_rounded, size: 14, color: Color(0xFF16A34A)),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Office Reached Location${assignment?.officeReachedTime != null ? " (${assignment!.officeReachedTime})" : ""}',
-                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF15803D)),
-                      ),
-                      Text(
-                        '${offLat.toStringAsFixed(5)}, ${offLng.toStringAsFixed(5)}',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-                      ),
-                    ],
-                  ),
-                ),
-                InkWell(
-                  onTap: () => _openMap(offLat, offLng, label: 'Office Reached Location'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFFCBD5E1)),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.map_outlined, size: 12, color: Color(0xFF2563EB)),
-                        SizedBox(width: 3),
-                        Text('Map', style: TextStyle(fontSize: 10.5, color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+            _buildLocationRow(
+              icon: Icons.location_city_rounded,
+              iconColor: const Color(0xFF16A34A),
+              title: 'Office Reached Location${assignment?.officeReachedTime != null ? " (${assignment!.officeReachedTime})" : ""}',
+              titleColor: const Color(0xFF15803D),
+              lat: offLat,
+              lng: offLng,
+              mapLabel: 'Office Reached Location',
             ),
           ],
         ],
@@ -1593,8 +1495,8 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                     sectionTitle,
                     style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5, color: Color(0xFF64748B)),
                   ),
-                  const SizedBox(height: 4),
                   if (hasReturned) ...[
+                    const SizedBox(height: 4),
                     Row(
                       children: [
                         const Icon(Icons.check_circle, size: 16, color: Color(0xFF16A34A)),
@@ -1607,21 +1509,6 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                                     ? 'Completed & Checked out directly from OD'
                                     : 'Returned to office${assignment.officeReachedTime != null ? " at ${assignment.officeReachedTime}" : (assignment.actualEndTime != null ? " at ${assignment.actualEndTime}" : "")}'),
                             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ] else ...[
-                    Row(
-                      children: [
-                        Icon(Icons.pending_actions, size: 16, color: Colors.amber.shade800),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            isAssignNextOd
-                                ? 'Assign next OD pending after completion'
-                                : (isCheckoutDirect ? 'Check-out pending after completion' : 'Return to office pending'),
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade800),
                           ),
                         ),
                       ],

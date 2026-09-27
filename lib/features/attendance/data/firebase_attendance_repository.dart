@@ -40,34 +40,45 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
   Future<void> autoSyncCompletedOdSessions({int? employeeId}) async {
     try {
       final assignmentsSnap = await _firestore.collection('on_duty_assignments').get();
-      final completedAssignments = <int, Map<String, dynamic>>{};
-      final completedByEmpDate = <String, Map<String, dynamic>>{};
+      final allAssignmentsById = <int, Map<String, dynamic>>{};
+      final assignmentsByEmpDate = <String, List<Map<String, dynamic>>>{};
 
       for (final doc in assignmentsSnap.docs) {
         final data = doc.data();
         final status = (data['status'] ?? '').toString().toUpperCase();
-        if (status == 'COMPLETED') {
-          final idNum = int.tryParse(doc.id) ?? (data['id'] is int ? data['id'] : (int.tryParse(data['id']?.toString() ?? '') ?? 0));
-          if (idNum > 0) {
-            completedAssignments[idNum] = data;
-          }
-          final empId = (data['employee_id'] ?? '').toString();
-          final dateStr = (data['date'] ?? '').toString();
-          if (empId.isNotEmpty && dateStr.isNotEmpty) {
-            completedByEmpDate['${empId}_${_normalizeDateKey(dateStr)}'] = data;
-          }
+        if (status == 'CANCELLED' || status == 'REJECTED') continue;
+
+        final idNum = int.tryParse(doc.id) ?? (data['id'] is int ? data['id'] : (int.tryParse(data['id']?.toString() ?? '') ?? 0));
+        if (idNum > 0) {
+          allAssignmentsById[idNum] = data;
+        }
+
+        final empIdRaw = data['employee_id'];
+        final empIdStr = (empIdRaw ?? '').toString().trim();
+        final empIdNum = empIdRaw is int ? empIdRaw : (int.tryParse(empIdStr) ?? 0);
+        final dateStr = (data['date'] ?? '').toString().trim();
+        if (dateStr.isEmpty) continue;
+        final normDate = _normalizeDateKey(dateStr);
+
+        if (empIdNum > 0) {
+          final key = '${empIdNum}_$normDate';
+          assignmentsByEmpDate.putIfAbsent(key, () => []).add(data);
+        }
+        if (empIdStr.isNotEmpty && empIdStr.contains(RegExp(r'[^0-9]'))) {
+          final key = '${empIdStr.toUpperCase()}_$normDate';
+          assignmentsByEmpDate.putIfAbsent(key, () => []).add(data);
         }
       }
 
-      if (completedAssignments.isEmpty && completedByEmpDate.isEmpty) return;
+      if (allAssignmentsById.isEmpty && assignmentsByEmpDate.isEmpty) return;
 
       final recordsSnap = await _recordsRef.get();
+      final processedRecordKeys = <String>{};
+
       for (final doc in recordsSnap.docs) {
         final data = doc.data();
-        final docEmpIdRaw = data['employee_id'];
-        final docEmpIdNum = docEmpIdRaw is int
-            ? docEmpIdRaw
-            : (int.tryParse(docEmpIdRaw?.toString() ?? '') ?? 0);
+        final docEmpIdNum = _extractDocEmpId(data);
+        final docEmpCode = _extractDocEmpCode(data);
 
         if (employeeId != null && employeeId > 0 && docEmpIdNum != employeeId) continue;
 
@@ -79,48 +90,168 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         bool modified = false;
         final updatedSessions = List<AttendanceSession>.from(rec.sessions);
 
-        for (int i = 0; i < updatedSessions.length; i++) {
-          final s = updatedSessions[i];
-          if (s.isActive && (s.isOd || s.type == 'od')) {
-            Map<String, dynamic>? matchingAssignment;
-            if (s.assignmentId != null && s.assignmentId! > 0) {
-              if (completedAssignments.containsKey(s.assignmentId!)) {
-                matchingAssignment = completedAssignments[s.assignmentId!];
-              }
-            } else {
-              final key = '${rec.employeeId}_$normDate';
-              if (completedByEmpDate.containsKey(key)) {
-                matchingAssignment = completedByEmpDate[key];
+        // Find all OD assignments matching this record
+        final matchingAssignments = <Map<String, dynamic>>[];
+        final numKey = '${rec.employeeId}_$normDate';
+        if (assignmentsByEmpDate.containsKey(numKey)) {
+          matchingAssignments.addAll(assignmentsByEmpDate[numKey]!);
+        }
+        if (rec.employeeCode.isNotEmpty) {
+          final codeKey = '${rec.employeeCode.toUpperCase()}_$normDate';
+          if (assignmentsByEmpDate.containsKey(codeKey)) {
+            for (final a in assignmentsByEmpDate[codeKey]!) {
+              if (!matchingAssignments.contains(a)) {
+                matchingAssignments.add(a);
               }
             }
+          }
+        }
+        if (docEmpCode.isNotEmpty) {
+          final docCodeKey = '${docEmpCode.toUpperCase()}_$normDate';
+          if (assignmentsByEmpDate.containsKey(docCodeKey)) {
+            for (final a in assignmentsByEmpDate[docCodeKey]!) {
+              if (!matchingAssignments.contains(a)) {
+                matchingAssignments.add(a);
+              }
+            }
+          }
+        }
 
-            if (matchingAssignment != null) {
-              final outTime = (matchingAssignment['office_reached_time'] ??
-                      matchingAssignment['actual_end_time'] ??
-                      matchingAssignment['work_completed_time'] ??
-                      s.checkInTime)
-                  .toString();
+        // 1. Sync or update existing OD sessions
+        for (int i = 0; i < updatedSessions.length; i++) {
+          final s = updatedSessions[i];
+          if (s.isOd || s.type.toLowerCase() == 'od') {
+            Map<String, dynamic>? matchingAssign;
+            if (s.assignmentId != null && s.assignmentId! > 0) {
+              matchingAssign = allAssignmentsById[s.assignmentId!];
+            }
+            if (matchingAssign == null && matchingAssignments.isNotEmpty) {
+              matchingAssign = matchingAssignments.firstWhere(
+                (a) => (a['purpose'] ?? '').toString().trim() == (s.purpose ?? '').trim() ||
+                    (a['destination_name'] ?? a['destination'] ?? '').toString().trim() == (s.destination ?? '').trim(),
+                orElse: () => matchingAssignments.first,
+              );
+            }
 
-              int sessionDurationMinutes = 0;
-              double sessionDurationHours = 0.0;
-              final inMin = _parseMinutes(s.checkInTime);
+            if (matchingAssign != null) {
+              final assignStatus = (matchingAssign['status'] ?? '').toString().toUpperCase();
+              final isCompleted = assignStatus == 'COMPLETED' ||
+                  (matchingAssign['office_reached_time'] != null && matchingAssign['office_reached_time'].toString().trim().isNotEmpty);
+
+              if (isCompleted && (s.isActive || s.checkOutTime.trim().isEmpty)) {
+                final outTime = (matchingAssign['office_reached_time'] ??
+                        matchingAssign['actual_end_time'] ??
+                        matchingAssign['work_completed_time'] ??
+                        s.checkInTime)
+                    .toString();
+
+                int sessionDurationMinutes = 0;
+                double sessionDurationHours = 0.0;
+                final inMin = _parseMinutes(s.checkInTime);
+                final outMin = _parseMinutes(outTime);
+                if (inMin != null && outMin != null && outMin >= inMin) {
+                  sessionDurationMinutes = outMin - inMin;
+                  sessionDurationHours = double.parse((sessionDurationMinutes / 60.0).toStringAsFixed(2));
+                }
+
+                final closedSession = s.copyWith(
+                  checkOutTime: outTime.isNotEmpty ? outTime : s.checkInTime,
+                  checkOutVerificationStatus: 'OD Completed',
+                  checkOutSimilarityScore: 1.0,
+                  checkOutMethod: 'OD Auto Sync',
+                  durationHours: sessionDurationHours,
+                  durationMinutes: sessionDurationMinutes,
+                );
+                updatedSessions[i] = closedSession;
+                modified = true;
+              }
+            }
+          }
+        }
+
+        // 2. Insert any OD assignment that is missing from updatedSessions
+        for (final assign in matchingAssignments) {
+          final assignId = int.tryParse(assign['id']?.toString() ?? '') ?? 0;
+          final assignStatus = (assign['status'] ?? '').toString().toUpperCase();
+          if (assignStatus == 'CANCELLED' || assignStatus == 'REJECTED') continue;
+
+          final bool alreadyPresent = updatedSessions.any((s) {
+            if (assignId > 0 && s.assignmentId == assignId) return true;
+            if (s.isOd || s.type.toLowerCase() == 'od') {
+              final sPurpose = (s.purpose ?? '').trim().toLowerCase();
+              final aPurpose = (assign['purpose'] ?? '').toString().trim().toLowerCase();
+              if (sPurpose.isNotEmpty && aPurpose.isNotEmpty && sPurpose == aPurpose) return true;
+            }
+            return false;
+          });
+
+          if (!alreadyPresent) {
+            String startTime = (assign['travel_start_time'] ??
+                    assign['actual_start_time'] ??
+                    assign['planned_start_time'] ??
+                    '')
+                .toString()
+                .trim();
+            if (startTime.isEmpty) {
+              final sites = assign['sites'] as List?;
+              if (sites != null && sites.isNotEmpty) {
+                final firstSite = sites.first as Map?;
+                startTime = (firstSite?['travel_start_time'] ?? firstSite?['reached_time'] ?? '').toString().trim();
+              }
+            }
+            if (startTime.isEmpty) {
+              startTime = rec.checkOutTime.isNotEmpty ? rec.checkOutTime : '08:00 AM';
+            }
+
+            final isCompleted = assignStatus == 'COMPLETED' ||
+                (assign['office_reached_time'] != null && assign['office_reached_time'].toString().trim().isNotEmpty);
+
+            final outTime = isCompleted
+                ? (assign['office_reached_time'] ??
+                        assign['actual_end_time'] ??
+                        assign['work_completed_time'] ??
+                        startTime)
+                    .toString()
+                    .trim()
+                : '';
+
+            int sessionDurationMinutes = 0;
+            double sessionDurationHours = 0.0;
+            if (isCompleted) {
+              final inMin = _parseMinutes(startTime);
               final outMin = _parseMinutes(outTime);
               if (inMin != null && outMin != null && outMin >= inMin) {
                 sessionDurationMinutes = outMin - inMin;
                 sessionDurationHours = double.parse((sessionDurationMinutes / 60.0).toStringAsFixed(2));
               }
-
-              final closedSession = s.copyWith(
-                checkOutTime: outTime.isNotEmpty ? outTime : s.checkInTime,
-                checkOutVerificationStatus: 'OD Completed',
-                checkOutSimilarityScore: 1.0,
-                checkOutMethod: 'OD Auto Sync',
-                durationHours: sessionDurationHours,
-                durationMinutes: sessionDurationMinutes,
-              );
-              updatedSessions[i] = closedSession;
-              modified = true;
             }
+
+            final destName = (assign['destination_name'] ?? assign['destination'] ?? '').toString().trim();
+            final purposeStr = (assign['purpose'] ?? 'On Duty').toString().trim();
+            final destAddr = (assign['destination_address'] ?? '').toString().trim();
+
+            final newOdSession = AttendanceSession(
+              id: 'session_od_${assignId > 0 ? assignId : DateTime.now().millisecondsSinceEpoch}_${updatedSessions.length + 1}',
+              type: 'od',
+              checkInTime: startTime,
+              checkOutTime: outTime,
+              checkInVerificationStatus: isCompleted ? 'OD Completed' : 'OD In Progress',
+              checkOutVerificationStatus: isCompleted ? 'OD Completed' : '',
+              checkInSimilarityScore: 1.0,
+              checkOutSimilarityScore: isCompleted ? 1.0 : 0.0,
+              checkInMethod: 'OD Auto Sync',
+              checkOutMethod: isCompleted ? 'OD Auto Sync' : '',
+              assignmentId: assignId > 0 ? assignId : null,
+              purpose: purposeStr,
+              destination: destName,
+              destinationAddress: destAddr,
+              durationHours: sessionDurationHours,
+              durationMinutes: sessionDurationMinutes,
+              notes: 'On Duty: $purposeStr${destName.isNotEmpty ? " ($destName)" : ""}',
+              createdAt: (assign['created_at'] ?? DateTime.now().toIso8601String()).toString(),
+            );
+            updatedSessions.add(newOdSession);
+            modified = true;
           }
         }
 
@@ -138,93 +269,47 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
           }
         }
 
-        final hasActiveNow = updatedSessions.any((sess) => sess.isActive);
-        final hasOfficeSession = updatedSessions.any((sess) => sess.isOffice);
-        final isRecordCheckedOut = rec.checkOutTime.trim().isNotEmpty;
-
-        if (!hasActiveNow && !hasOfficeSession && !isRecordCheckedOut) {
-          AttendanceSession? lastCompletedOd;
-          for (int i = updatedSessions.length - 1; i >= 0; i--) {
-            final sess = updatedSessions[i];
-            if (sess.isCompleted && (sess.isOd || sess.type == 'od')) {
-              lastCompletedOd = sess;
-              break;
-            }
-          }
-
-          if (lastCompletedOd != null) {
-            Map<String, dynamic>? matchingAssignment;
-            if (lastCompletedOd.assignmentId != null && lastCompletedOd.assignmentId! > 0) {
-              if (completedAssignments.containsKey(lastCompletedOd.assignmentId!)) {
-                matchingAssignment = completedAssignments[lastCompletedOd.assignmentId!];
-              }
-            } else {
-              final key = '${rec.employeeId}_$normDate';
-              if (completedByEmpDate.containsKey(key)) {
-                matchingAssignment = completedByEmpDate[key];
-              }
-            }
-
-            final option = (matchingAssignment?['after_completion_option'] ?? 'RETURN_TO_OFFICE').toString().toUpperCase();
-            final isCheckoutFromOd = option.contains('CHECKOUT');
-            final isAssignNextOd = option.contains('ASSIGN_NEXT');
-            if (!isCheckoutFromOd && !isAssignNextOd) {
-              final officeCheckIn = lastCompletedOd.checkOutTime.isNotEmpty
-                  ? lastCompletedOd.checkOutTime
-                  : lastCompletedOd.checkInTime;
-
-              final officeSessionUuid = 'session_${DateTime.now().millisecondsSinceEpoch}_${updatedSessions.length + 1}';
-              updatedSessions.add(AttendanceSession(
-                id: officeSessionUuid,
-                type: 'office',
-                checkInTime: officeCheckIn,
-                checkOutTime: '',
-                checkInVerificationStatus: 'Returned to Office',
-                checkOutVerificationStatus: '',
-                checkInSimilarityScore: 1.0,
-                checkOutSimilarityScore: 0.0,
-                checkInMethod: 'OD Return to Office',
-                durationHours: 0.0,
-                durationMinutes: 0,
-                notes: 'Resumed office shift after returning from On-Duty',
-                createdAt: DateTime.now().toIso8601String(),
-              ));
-              modified = true;
-            }
-          }
-        }
-
         if (modified) {
-          final settings = await getAttendanceSettings();
-          final isOdSession = _isOdRecord(rec);
-          String syncStatus = 'Present';
-          if (!isOdSession) {
-            final empObj = await _getEmployeeById(rec.employeeId);
-            final checkInMins = _parseMinutes(rec.effectiveCheckInTime);
-            final schedIn = empObj?.inTime.trim() ?? '';
-            final schedInMins = schedIn.isNotEmpty ? _parseMinutes(schedIn) : null;
-            if (checkInMins != null && schedInMins != null) {
-              if (checkInMins > (schedInMins + settings.gracePeriodMinutes)) {
-                syncStatus = 'Late';
-              }
+          // Sort chronologically
+          updatedSessions.sort((a, b) {
+            final aMin = _parseMinutes(a.checkInTime) ?? 0;
+            final bMin = _parseMinutes(b.checkInTime) ?? 0;
+            return aMin.compareTo(bMin);
+          });
+
+          double totalDailyHours = 0.0;
+          for (final session in updatedSessions) {
+            if (session.isCompleted) {
+              totalDailyHours += session.effectiveDurationHours;
             }
           }
-          final finalHasActive = updatedSessions.any((sess) => sess.isActive);
+          totalDailyHours = double.parse(totalDailyHours.toStringAsFixed(2));
+
+          final hasActiveNow = updatedSessions.any((sess) => sess.isActive);
           final updatedRec = rec.copyWith(
             sessions: updatedSessions,
-            checkOutTime: finalHasActive ? '' : rec.checkOutTime,
-            status: (isOdSession && rec.checkOutTime.trim().isEmpty)
-                ? 'Present'
-                : (finalHasActive ? syncStatus : (rec.status == 'Late' ? syncStatus : rec.status)),
+            totalHours: totalDailyHours > 0 ? totalDailyHours : rec.totalHours,
+            checkOutTime: hasActiveNow ? '' : rec.checkOutTime,
+            status: hasActiveNow ? 'Present' : rec.status,
           );
+
           await doc.reference.set(updatedRec.toMap(), SetOptions(merge: true));
           final syncEmpCode = updatedRec.employeeCode.trim().toUpperCase();
           if (syncEmpCode.isNotEmpty) {
+            final codeDoc = _recordsRef.doc('${syncEmpCode}_${normDate.replaceAll('-', '')}');
+            await codeDoc.set(updatedRec.toMap(), SetOptions(merge: true));
             _localMemoryCache['${syncEmpCode}_$normDate'] = updatedRec;
             _localMemoryCache['${syncEmpCode}_${rec.date}'] = updatedRec;
           }
+          final intDoc = _recordsRef.doc('${updatedRec.employeeId}_${normDate.replaceAll('-', '')}');
+          await intDoc.set(updatedRec.toMap(), SetOptions(merge: true));
           _localMemoryCache['${rec.employeeId}_$normDate'] = updatedRec;
           _localMemoryCache['${rec.employeeId}_${rec.date}'] = updatedRec;
+        }
+
+        processedRecordKeys.add('${rec.employeeId}_$normDate');
+        if (rec.employeeCode.isNotEmpty) {
+          processedRecordKeys.add('${rec.employeeCode.toUpperCase()}_$normDate');
         }
       }
     } catch (_) {}
@@ -330,6 +415,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     final empCode = emp?.employeeId.trim().toUpperCase() ?? '';
 
     try {
+      await autoResolveMissingCheckOuts(employeeId: employeeId);
       final snap = await _recordsRef.get();
       for (final doc in snap.docs) {
         final data = doc.data();
@@ -1371,6 +1457,10 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     String notes = '',
   }) async {
     final normDate = _normalizeDateKey(date);
+    if (employeeCode.isEmpty) {
+      final emp = await _getEmployeeById(employeeId);
+      employeeCode = emp?.employeeId.trim().toUpperCase() ?? '';
+    }
     final docId = '${employeeId}_${normDate.replaceAll('-', '')}';
 
     // 1. Validate that the assignment exists and is not cancelled/rejected
@@ -1599,6 +1689,10 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     String afterCompletionOption = 'RETURN_TO_OFFICE',
   }) async {
     final normDate = _normalizeDateKey(date);
+    if (employeeCode.isEmpty) {
+      final emp = await _getEmployeeById(employeeId);
+      employeeCode = emp?.employeeId.trim().toUpperCase() ?? '';
+    }
     final docId = '${employeeId}_${normDate.replaceAll('-', '')}';
 
     AttendanceRecord? existingRecord = await getAttendanceRecordForDate(employeeId, date);
