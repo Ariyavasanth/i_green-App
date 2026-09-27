@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/layout/responsive_layout.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
 import '../../employee/providers/employee_providers.dart';
 import '../../employee/domain/employee.dart';
 import '../../attendance/providers/attendance_providers.dart';
@@ -39,22 +38,7 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => context.pop(),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Run Payroll', style: AppTextStyles.heading),
-            Text(selectedMonth, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.normal)),
-          ],
-        ),
-      ),
+
       body: LayoutBuilder(
         builder: (context, constraints) {
           final isMobile = constraints.maxWidth < AppBreakpoints.tablet;

@@ -118,6 +118,7 @@ class PayslipPdfGenerator {
         record.otherAllowance +
         record.incentive +
         record.othersEarning +
+        record.cumulativeIncentive +
         record.bonus +
         record.ot;
 
@@ -373,7 +374,12 @@ class PayslipPdfGenerator {
                         children: [
                           _pdfSalaryItemCell('-', '-'),
                           _pdfSalaryItemCell('Incentive', _currencyFormat.format(record.incentive)),
-                          _pdfSalaryItemCell('Company Loan', _currencyFormat.format(record.companyLoan)),
+                          _pdfSalaryItemCell(
+                            record.loanDescription.isNotEmpty
+                                ? 'Company Loan (${record.loanDescription})'
+                                : 'Company Loan',
+                            _currencyFormat.format(record.companyLoan),
+                          ),
                         ],
                       ),
                       // Row 6: Carry Forward / Advance
@@ -381,7 +387,12 @@ class PayslipPdfGenerator {
                         children: [
                           _pdfSalaryItemCell('-', '-'),
                           _pdfSalaryItemCell('Carry Forward', record.carryForward.isNotEmpty ? record.carryForward : '-'),
-                          _pdfSalaryItemCell('Salary Advance', _currencyFormat.format(record.salaryAdvance)),
+                          _pdfSalaryItemCell(
+                            record.advanceDescription.isNotEmpty
+                                ? 'Salary Advance (${record.advanceDescription})'
+                                : 'Salary Advance',
+                            _currencyFormat.format(record.salaryAdvance),
+                          ),
                         ],
                       ),
                       // Row 7: Others / Staff Welfare
