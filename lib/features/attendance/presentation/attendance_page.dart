@@ -3972,7 +3972,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
               final record = attendanceMap[key];
               final currentEmp = ref.watch(currentEmployeeProvider);
 
-              final holidays = ref.watch(holidaysProvider).value ?? [];
+              final holidays = ref.watch(holidaysProvider).valueOrNull ?? [];
               final statusInfo = currentEmp != null
                   ? AttendanceStatusHelper.resolveStatus(
                       employee: currentEmp,

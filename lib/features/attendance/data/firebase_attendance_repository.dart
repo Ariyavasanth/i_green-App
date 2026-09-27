@@ -877,6 +877,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     await logAttendanceAttempt(employeeId: employeeId, employeeName: employeeName, date: date, time: time, verificationStatus: result.verificationStatus, similarityScore: score, message: result.message);
     if (result.allowed) {
       final employee = await _getEmployeeById(employeeId);
+      final isWeeklyOff = _isWeeklyOffDay(employee, date, now);
 
       String status = 'Present';
       String notes = '';
@@ -891,9 +892,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
       final scheduledMinutes = _parseMinutes(schedIn);
 
-      if (isDynamic || scheduledMinutes == null) {
+      if (isDynamic || isWeeklyOff || scheduledMinutes == null) {
         status = 'Present';
-        notes = 'Flexible schedule';
+        notes = isWeeklyOff ? 'Weekly off attendance' : 'Flexible schedule';
       } else {
         final actualMinutes = now.hour * 60 + now.minute;
 
@@ -1957,6 +1958,35 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     );
   }
 
+  bool _isWeeklyOffDay(Employee? employee, String dateStr, [DateTime? referenceDate]) {
+    DateTime? dt;
+    final cleaned = dateStr.trim();
+    if (cleaned.isNotEmpty) {
+      try {
+        final iso = DateTime.tryParse(cleaned);
+        if (iso != null) {
+          dt = iso;
+        } else {
+          final parts = cleaned.split(RegExp(r'[-/]'));
+          if (parts.length == 3) {
+            if (parts[0].length == 4) {
+              dt = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+            } else if (parts[2].length == 4) {
+              dt = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+            }
+          }
+        }
+      } catch (_) {}
+    }
+    dt ??= referenceDate ?? DateTime.now();
+
+    final dayName = DateFormat('EEEE').format(dt).toLowerCase();
+    if (employee != null && employee.weeklyOffDay.trim().isNotEmpty) {
+      return employee.weeklyOffDay.trim().toLowerCase() == dayName;
+    }
+    return dt.weekday == DateTime.sunday;
+  }
+
   String _normalizeDateKey(String dateStr) {
     final parts = dateStr.split(RegExp(r'[-/]'));
     if (parts.length == 3) {
@@ -2082,6 +2112,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     }
 
     final employee = await _getEmployeeById(employeeId);
+    final isWeeklyOff = _isWeeklyOffDay(employee, date);
     final isDynamic = employee?.isDynamicEmployee ?? false;
     final requiredHours = (employee?.requiredWorkingHours ?? 0) > 0
         ? employee!.requiredWorkingHours
@@ -2103,6 +2134,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       if (updatedNotes.isEmpty) {
         updatedNotes = 'On Duty Active';
       }
+    } else if (isWeeklyOff) {
+      finalStatus = 'Completed';
+      updatedNotes = 'Worked ${hours.toStringAsFixed(1)} hrs (Weekly off attendance)';
     } else {
       if (shortfallMins == 0) {
         if (isDynamic) {
@@ -2208,6 +2242,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
     if (inTime.isNotEmpty && outTime.isNotEmpty) {
       final employee = await _getEmployeeById(record.employeeId);
+      final isWeeklyOff = _isWeeklyOffDay(employee, record.date);
       final isDynamic = employee?.isDynamicEmployee ?? false;
       final requiredHours = (employee?.requiredWorkingHours ?? 0) > 0
           ? employee!.requiredWorkingHours
@@ -2237,6 +2272,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
       if (isOdRelated && outTime.trim().isEmpty) {
         status = 'Present';
+      } else if (isWeeklyOff) {
+        status = 'Completed';
+        notes = 'Worked ${hours.toStringAsFixed(1)} hrs (Weekly off attendance)${isLateCheckout ? ' | Late Checkout' : ''}';
       } else if (shortfallMins == 0) {
         if (isDynamic) {
           status = 'Completed';
@@ -2519,6 +2557,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       }
 
       final Employee? employee = await _getEmployeeById(employeeId);
+      final isWeeklyOff = _isWeeklyOffDay(employee, date);
       final isDynamic = employee?.isDynamicEmployee ?? false;
       final settings = await getAttendanceSettings();
       final approvedPermissions = await _getApprovedPermissions(
@@ -2527,6 +2566,18 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         employeeCode: employee?.employeeId ?? record.employeeCode,
       );
 
+      int maxApprovedToMinutes = -1;
+      int totalApprovedMins = 0;
+      for (final p in approvedPermissions) {
+        final toStr = (p['to_time'] ?? '').toString();
+        final dur = (p['duration_minutes'] as num?)?.toInt() ?? 0;
+        totalApprovedMins += dur;
+        final toMins = _parseMinutes(toStr);
+        if (toMins != null && toMins > maxApprovedToMinutes) {
+          maxApprovedToMinutes = toMins;
+        }
+      }
+
       final String schedIn = employee?.inTime.trim() ?? '';
       final scheduledMinutes = schedIn.isNotEmpty ? _parseMinutes(schedIn) : null;
       final checkInMinutes = _parseMinutes(inTime);
@@ -2534,24 +2585,67 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       String newStatus = record.status;
       String newNotes = record.notes;
 
-      if (isDynamic || scheduledMinutes == null || checkInMinutes == null) {
+      if (isDynamic || isWeeklyOff || scheduledMinutes == null || checkInMinutes == null) {
         if (record.checkOutTime.trim().isEmpty) {
           newStatus = 'Present';
-          newNotes = 'Flexible schedule';
+          newNotes = isWeeklyOff ? 'Weekly off attendance' : 'Flexible schedule';
+        } else {
+          final checkOutTime = record.checkOutTime.trim();
+          double hours = 0.0;
+          if (record.sessions.isNotEmpty) {
+            for (final s in record.sessions) {
+              if (s.isCompleted) {
+                hours += s.effectiveDurationHours;
+              }
+            }
+            hours = double.parse(hours.toStringAsFixed(2));
+          }
+          if (hours == 0.0 && record.totalHours > 0) {
+            hours = record.totalHours;
+          }
+          if (hours == 0.0) {
+            final outMinutes = _parseMinutes(checkOutTime);
+            if (outMinutes != null && checkInMinutes != null && outMinutes > checkInMinutes) {
+              hours = double.parse(((outMinutes - checkInMinutes) / 60.0).toStringAsFixed(2));
+            }
+          }
+
+          if (isWeeklyOff) {
+            newStatus = 'Completed';
+            newNotes = 'Worked ${hours.toStringAsFixed(1)} hrs (Weekly off attendance)';
+          } else {
+            final requiredHours = (employee?.requiredWorkingHours ?? 0) > 0
+                ? employee!.requiredWorkingHours
+                : 9.0;
+            final shortfallHours = (requiredHours - hours).clamp(0, requiredHours);
+            final shortfallMins = (shortfallHours * 60).ceil();
+
+            if (shortfallMins == 0 || totalApprovedMins >= shortfallMins) {
+              newStatus = 'Completed';
+              newNotes = totalApprovedMins > 0
+                  ? 'Worked ${hours.toStringAsFixed(1)} hrs (Permission Authorized)'
+                  : 'Worked ${hours.toStringAsFixed(1)} hrs (Completed shift)';
+            } else {
+              newStatus = 'Insufficient hours';
+              newNotes = 'Worked ${hours.toStringAsFixed(1)} hrs (Insufficient hours)';
+            }
+          }
+
+          final updatedRec = record.copyWith(
+            status: newStatus,
+            notes: newNotes,
+            totalHours: hours,
+          );
+          _localMemoryCache['${employeeId}_$normDate'] = updatedRec;
+          _localMemoryCache['${employeeId}_$date'] = updatedRec;
+          if (record.employeeCode.isNotEmpty) {
+            _localMemoryCache['${record.employeeCode}_$normDate'] = updatedRec;
+            _localMemoryCache['${record.employeeCode}_$date'] = updatedRec;
+          }
+          await docRef.set(updatedRec.toMap(), SetOptions(merge: true));
+          return;
         }
       } else {
-        int maxApprovedToMinutes = -1;
-        int totalApprovedMins = 0;
-        for (final p in approvedPermissions) {
-          final toStr = (p['to_time'] ?? '').toString();
-          final dur = (p['duration_minutes'] as num?)?.toInt() ?? 0;
-          totalApprovedMins += dur;
-          final toMins = _parseMinutes(toStr);
-          if (toMins != null && toMins > maxApprovedToMinutes) {
-            maxApprovedToMinutes = toMins;
-          }
-        }
-
         int effectiveAllowedMinutes = scheduledMinutes + settings.gracePeriodMinutes;
         if (maxApprovedToMinutes > 0) {
           if (maxApprovedToMinutes + settings.gracePeriodMinutes > effectiveAllowedMinutes) {

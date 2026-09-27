@@ -5,9 +5,15 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/layout/responsive_layout.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
+import '../../employee/services/offer_letter_save_stub.dart'
+    if (dart.library.html) '../../employee/services/offer_letter_save_web.dart'
+    if (dart.library.io) '../../employee/services/offer_letter_save_io.dart';
+import '../../organization/providers/organization_providers.dart';
 import '../domain/payroll.dart';
 import '../providers/payroll_providers.dart';
+import '../services/payslip_pdf_generator.dart';
 
 class EmployeePayslipListScreen extends ConsumerStatefulWidget {
   const EmployeePayslipListScreen({super.key});
@@ -19,6 +25,58 @@ class EmployeePayslipListScreen extends ConsumerStatefulWidget {
 class _EmployeePayslipListScreenState extends ConsumerState<EmployeePayslipListScreen> {
   String? _selectedYear;
   String _selectedStatusFilter = 'All';
+  int? _downloadingPayrollId;
+
+  Future<void> _handleDownloadPdf(PayrollRecord record, Employee employee) async {
+    if (_downloadingPayrollId != null) return;
+    setState(() {
+      _downloadingPayrollId = record.id;
+    });
+
+    try {
+      final organizations = ref.read(organizationsProvider).valueOrNull ?? [];
+      final resolvedOrg = organizations.where((o) =>
+          o.docId == employee.organizationId ||
+          o.canonicalId == employee.organizationId ||
+          o.name.trim().toLowerCase() == employee.organizationName.trim().toLowerCase()).firstOrNull ??
+          (organizations.isNotEmpty ? organizations.first : null);
+
+      final pdfBytes = await PayslipPdfGenerator.generatePayslipPdf(
+        record: record,
+        employee: employee,
+        organization: resolvedOrg,
+      );
+
+      final cleanEmpId = (employee.employeeId.isNotEmpty ? employee.employeeId : 'EMP_${record.employeeId}')
+          .replaceAll(RegExp(r'[^\w\-_]'), '_');
+      final cleanMonth = record.month.replaceAll(RegExp(r'[^\w\-_]'), '_');
+      final fileName = 'Payslip_${cleanEmpId}_$cleanMonth.pdf';
+
+      if (mounted) {
+        await saveAndDownloadOfferLetter(
+          context: context,
+          bytes: pdfBytes,
+          fileName: fileName,
+          docTitle: 'Payslip',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to download payslip: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _downloadingPayrollId = null;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -196,7 +254,7 @@ class _EmployeePayslipListScreenState extends ConsumerState<EmployeePayslipListS
                                     separatorBuilder: (_, _) => const SizedBox(height: 12),
                                     itemBuilder: (context, index) {
                                       final record = filteredRecords[index];
-                                      return _buildPayslipCard(context, record);
+                                      return _buildPayslipCard(context, record, employee);
                                     },
                                   ),
                               ],
@@ -254,7 +312,7 @@ class _EmployeePayslipListScreenState extends ConsumerState<EmployeePayslipListS
     );
   }
 
-  Widget _buildPayslipCard(BuildContext context, PayrollRecord record) {
+  Widget _buildPayslipCard(BuildContext context, PayrollRecord record, Employee employee) {
     final formattedNetSalary = NumberFormat.currency(
       locale: 'en_IN',
       symbol: '₹',
@@ -330,9 +388,17 @@ class _EmployeePayslipListScreenState extends ConsumerState<EmployeePayslipListS
                 ),
               ),
               ElevatedButton.icon(
-                onPressed: () => context.push('/payroll/payslip/${record.id}'),
-                icon: const Icon(Icons.download_outlined, size: 16),
-                label: const Text('Download PDF'),
+                onPressed: _downloadingPayrollId == record.id
+                    ? null
+                    : () => _handleDownloadPdf(record, employee),
+                icon: _downloadingPayrollId == record.id
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.download_outlined, size: 16),
+                label: Text(_downloadingPayrollId == record.id ? 'Downloading...' : 'Download PDF'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,

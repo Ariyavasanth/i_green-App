@@ -138,13 +138,6 @@ class AttendanceStatusHelper {
       }
     }
 
-    // 3.5. Non-Attendance Tracked Employees (e.g. Super Admin):
-    // If no explicit attendance record, leave, or OD exists for this date, do NOT auto-mark Absent ('A') for past dates.
-    // Instead return null, which renders as the neutral '-' status.
-    if (!employee.isAttendanceTracked) {
-      return null;
-    }
-
     // 4. Check Weekly Off
     bool isWeeklyOff = false;
     final dayName = DateFormat('EEEE').format(date).toLowerCase();
@@ -169,6 +162,13 @@ class AttendanceStatusHelper {
           return AttendanceStatusInfo.holiday;
         }
       }
+    }
+
+    // 5.5. Non-Attendance Tracked Employees (e.g. Super Admin):
+    // If no explicit attendance record, leave, or OD exists for this date, do NOT auto-mark Absent ('A') for past dates.
+    // Instead return null, which renders as the neutral '-' status.
+    if (!employee.isAttendanceTracked) {
+      return null;
     }
 
     // 6. Historical Past Working Day Check:

@@ -7,8 +7,15 @@ import '../../../core/layout/responsive_layout.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
+import '../../employee/services/offer_letter_save_stub.dart'
+    if (dart.library.html) '../../employee/services/offer_letter_save_web.dart'
+    if (dart.library.io) '../../employee/services/offer_letter_save_io.dart';
+import '../../organization/domain/organization.dart';
+import '../../organization/providers/organization_providers.dart';
 import '../domain/payroll.dart';
 import '../providers/payroll_providers.dart';
+import '../services/payslip_pdf_generator.dart';
+import '../utils/currency_words_helper.dart';
 
 class PayslipScreen extends ConsumerStatefulWidget {
   const PayslipScreen({required this.payrollId, super.key});
@@ -27,30 +34,70 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
     return '${"*" * (clean.length - 4)}${clean.substring(clean.length - 4)}';
   }
 
-  void _showMockAction(BuildContext context, String message) {
+  void _showFeedback(BuildContext context, String message, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
+        backgroundColor: isError ? Colors.red : const Color(0xFF9CC70A),
         behavior: SnackBarBehavior.floating,
       ),
     );
   }
 
-  void _startDownloadFlow(BuildContext context, PayrollRecord record) async {
+  Future<void> _handleDownloadPdf(
+    BuildContext context,
+    PayrollRecord record,
+    Employee? employee,
+    Organization? organization,
+  ) async {
+    if (_downloading) return;
     setState(() {
       _downloading = true;
     });
-    await Future<void>.delayed(const Duration(milliseconds: 1500));
-    if (!mounted) return;
-    setState(() {
-      _downloading = false;
-    });
-    if (context.mounted) {
-      _showMockAction(context, 'PDF Downloaded successfully!');
+
+    try {
+      final pdfBytes = await PayslipPdfGenerator.generatePayslipPdf(
+        record: record,
+        employee: employee,
+        organization: organization,
+      );
+
+      final cleanEmpId = (employee?.employeeId.isNotEmpty == true
+              ? employee!.employeeId
+              : 'EMP_${record.employeeId}')
+          .replaceAll(RegExp(r'[^\w\-_]'), '_');
+      final cleanMonth = record.month.replaceAll(RegExp(r'[^\w\-_]'), '_');
+      final fileName = 'Payslip_${cleanEmpId}_$cleanMonth.pdf';
+
+      if (context.mounted) {
+        await saveAndDownloadOfferLetter(
+          context: context,
+          bytes: pdfBytes,
+          fileName: fileName,
+          docTitle: 'Payslip',
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        _showFeedback(context, 'Failed to generate PDF: $e', isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _downloading = false;
+        });
+      }
     }
   }
 
-  void _showOverflowMenu(BuildContext context, WidgetRef ref, PayrollRecord record, bool isMobile) {
+  void _showOverflowMenu(
+    BuildContext context,
+    WidgetRef ref,
+    PayrollRecord record,
+    Employee? employee,
+    Organization? organization,
+    bool isMobile,
+  ) {
     if (isMobile) {
       showModalBottomSheet<void>(
         context: context,
@@ -64,11 +111,11 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 ListTile(
-                  leading: const Icon(Icons.print_outlined),
-                  title: const Text('Print'),
+                  leading: const Icon(Icons.print_outlined, color: Color(0xFF414A51)),
+                  title: const Text('Print Payslip'),
                   onTap: () {
                     Navigator.pop(context);
-                    _showMockAction(context, 'Opening print layout...');
+                    _handleDownloadPdf(context, record, employee, organization);
                   },
                 ),
                 const Divider(height: 1),
@@ -91,9 +138,9 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
   @override
   Widget build(BuildContext context) {
     final payrollAsync = ref.watch(payrollRecordByIdProvider(widget.payrollId));
-
     final currentEmp = ref.watch(currentEmployeeProvider);
     final employees = ref.watch(employeesProvider).valueOrNull ?? [];
+    final organizations = ref.watch(organizationsProvider).valueOrNull ?? [];
 
     return payrollAsync.when(
       data: (record) {
@@ -104,13 +151,48 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
               backgroundColor: Colors.transparent,
               elevation: 0,
               leading: IconButton(
-                icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+                icon: const Icon(Icons.arrow_back, color: Color(0xFF414A51)),
                 onPressed: () => context.pop(),
               ),
               title: const Text('Payslip Detail'),
             ),
             body: const Center(child: Text('Payroll record not found.')),
           );
+        }
+
+        // 1. Resolve matching employee
+        Employee? matchingEmp;
+        if (record.employeeId > 0) {
+          matchingEmp = employees.where((e) => e.id == record.employeeId).firstOrNull;
+        }
+        if (matchingEmp == null && currentEmp != null) {
+          if (currentEmp.id == record.employeeId ||
+              (record.employeeName.trim().isNotEmpty &&
+                  record.employeeName.toLowerCase() == currentEmp.fullName.toLowerCase())) {
+            matchingEmp = currentEmp;
+          }
+        }
+
+        // 2. Resolve organization dynamically
+        Organization? resolvedOrg;
+        if (matchingEmp != null) {
+          final empOrgId = matchingEmp.organizationId.trim();
+          final empOrgName = matchingEmp.organizationName.trim();
+
+          if (empOrgId.isNotEmpty) {
+            resolvedOrg = organizations.where((o) =>
+                o.docId == empOrgId ||
+                o.canonicalId == empOrgId ||
+                o.id.toString() == empOrgId ||
+                'org_${o.id}' == empOrgId).firstOrNull;
+          }
+          if (resolvedOrg == null && empOrgName.isNotEmpty) {
+            resolvedOrg = organizations.where((o) =>
+                o.name.trim().toLowerCase() == empOrgName.toLowerCase()).firstOrNull;
+          }
+        }
+        if (resolvedOrg == null && organizations.isNotEmpty) {
+          resolvedOrg = organizations.firstOrNull;
         }
 
         return LayoutBuilder(
@@ -124,25 +206,32 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
                 backgroundColor: Colors.transparent,
                 elevation: 0,
                 leading: IconButton(
-                  icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+                  icon: const Icon(Icons.arrow_back, color: Color(0xFF414A51)),
                   onPressed: () => context.pop(),
                 ),
                 title: const Text(
                   'Payslip Detail',
-                  style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: Color(0xFF414A51), fontWeight: FontWeight.bold),
                 ),
                 actions: [
                   if (isMobile)
                     IconButton(
-                      icon: const Icon(Icons.more_vert, color: AppColors.textPrimary),
-                      onPressed: () => _showOverflowMenu(context, ref, record, true),
+                      icon: const Icon(Icons.more_vert, color: Color(0xFF414A51)),
+                      onPressed: () => _showOverflowMenu(
+                        context,
+                        ref,
+                        record,
+                        matchingEmp,
+                        resolvedOrg,
+                        true,
+                      ),
                     )
                   else
                     PopupMenuButton<String>(
-                      icon: const Icon(Icons.more_vert, color: AppColors.textPrimary),
+                      icon: const Icon(Icons.more_vert, color: Color(0xFF414A51)),
                       onSelected: (val) {
                         if (val == 'print') {
-                          _showMockAction(context, 'Opening print layout...');
+                          _handleDownloadPdf(context, record, matchingEmp, resolvedOrg);
                         } else if (val == 'report') {
                           _showReportIssueDialog(context, ref, record);
                         }
@@ -153,9 +242,9 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
                           value: 'print',
                           child: Row(
                             children: [
-                              Icon(Icons.print_outlined, size: 18),
+                              Icon(Icons.print_outlined, size: 18, color: Color(0xFF414A51)),
                               SizedBox(width: 8),
-                              Text('Print'),
+                              Text('Print / Download PDF'),
                             ],
                           ),
                         ),
@@ -177,7 +266,7 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
                 child: SingleChildScrollView(
                   padding: EdgeInsets.all(gutter),
                   child: ResponsiveContent(
-                    maxWidth: 720,
+                    maxWidth: 820,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -200,7 +289,11 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
                                     children: [
                                       const Text(
                                         'DISPUTE RAISED BY EMPLOYEE',
-                                        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 13),
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.red,
+                                          fontSize: 13,
+                                        ),
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
@@ -213,9 +306,20 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
                               ],
                             ),
                           ),
-                        _buildDetailCard(record, isMobile, currentEmp, employees),
+                        _buildPayslipStructuredCard(
+                          record: record,
+                          employee: matchingEmp,
+                          organization: resolvedOrg,
+                          isMobile: isMobile,
+                        ),
                         const SizedBox(height: 24),
-                        _buildActionRow(context, record, isMobile),
+                        _buildActionRow(
+                          context: context,
+                          record: record,
+                          employee: matchingEmp,
+                          organization: resolvedOrg,
+                          isMobile: isMobile,
+                        ),
                       ],
                     ),
                   ),
@@ -231,7 +335,7 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+            icon: const Icon(Icons.arrow_back, color: Color(0xFF414A51)),
             onPressed: () => context.pop(),
           ),
           title: const Text('Payslip Detail'),
@@ -240,7 +344,7 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: ResponsiveContent(
-              maxWidth: 720,
+              maxWidth: 820,
               child: _buildSkeletonLoader(),
             ),
           ),
@@ -253,9 +357,93 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
     );
   }
 
-  Widget _buildDetailCard(PayrollRecord record, bool isMobile, Employee? currentEmp, List<Employee> employees) {
-    final currencyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+  Widget _buildPayslipStructuredCard({
+    required PayrollRecord record,
+    required Employee? employee,
+    required Organization? organization,
+    required bool isMobile,
+  }) {
+    final currencyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹ ', decimalDigits: 0);
 
+    // Organization details
+    final orgName = organization?.name.isNotEmpty == true
+        ? organization!.name
+        : (employee?.organizationName.isNotEmpty == true
+            ? employee!.organizationName
+            : 'I-GREEN TECHNOLOGIES');
+    final orgEmail = organization?.emailAddress ?? '';
+    final orgTan = organization?.tanNumber ?? '';
+
+    // Employee & Statutory Details (prefer snapshot in PayrollRecord)
+    final displayName = record.employeeName.isNotEmpty
+        ? record.employeeName
+        : (employee?.fullName.isNotEmpty == true ? employee!.fullName : 'Employee');
+
+    final displayEmpId = employee?.employeeId.isNotEmpty == true
+        ? employee!.employeeId
+        : (record.employeeId > 0 ? 'EMP-${record.employeeId.toString().padLeft(4, '0')}' : '-');
+
+    final displayDesignation = record.designation.isNotEmpty
+        ? record.designation
+        : (employee?.designation.isNotEmpty == true ? employee!.designation : '-');
+
+    final displayDepartment = record.department.isNotEmpty
+        ? record.department
+        : (employee?.department.isNotEmpty == true ? employee!.department : '-');
+
+    final displayEmail = record.emailId.isNotEmpty
+        ? record.emailId
+        : (employee?.emailAddress.isNotEmpty == true ? employee!.emailAddress : '-');
+
+    final panNo = record.panNumber.isNotEmpty
+        ? record.panNumber
+        : (employee?.panNumber.isNotEmpty == true ? employee!.panNumber : '-');
+
+    final pfNo = record.pfNumber.isNotEmpty
+        ? record.pfNumber
+        : (employee?.pfUan.isNotEmpty == true
+            ? employee!.pfUan
+            : (employee?.pfNumber.isNotEmpty == true ? employee!.pfNumber : '-'));
+
+    final esiNo = record.esiNumber.isNotEmpty
+        ? record.esiNumber
+        : (employee?.esiNumber.isNotEmpty == true ? employee!.esiNumber : '-');
+
+    final bankName = record.bankName.isNotEmpty
+        ? record.bankName
+        : (employee?.bankName.isNotEmpty == true ? employee!.bankName : '-');
+
+    final bankAcct = record.bankAcctNo.isNotEmpty
+        ? record.bankAcctNo
+        : (employee?.bankAccountNumber.isNotEmpty == true ? employee!.bankAccountNumber : '-');
+
+    final branch = record.branch.isNotEmpty
+        ? record.branch
+        : (employee?.bankBranch.isNotEmpty == true ? employee!.bankBranch : '-');
+
+    final ifsc = record.ifscCode.isNotEmpty
+        ? record.ifscCode
+        : (employee?.bankIfsc.isNotEmpty == true ? employee!.bankIfsc : '-');
+
+    // Attendance
+    final totalDays = record.totalWorkingDays > 0
+        ? record.totalWorkingDays
+        : (record.presentDays + record.lateDays + record.absentDays + record.leaveDays);
+
+    // Standard Master Salaries
+    final standardBasic = employee != null && employee.salaryBasic > 0 ? employee.salaryBasic : record.basicPay;
+    final standardHra = employee != null && employee.salaryHra > 0 ? employee.salaryHra : record.hra;
+    final standardEdu = employee != null && employee.salaryEducationAllowance > 0
+        ? employee.salaryEducationAllowance
+        : record.educationAllowance;
+    final standardSpecial = employee != null && employee.salarySpecialAllowance > 0
+        ? employee.salarySpecialAllowance
+        : record.specialAllowance;
+    final standardSalary = employee != null && employee.salaryTotalCtc > 0
+        ? employee.salaryTotalCtc
+        : (standardBasic + standardHra + standardEdu + standardSpecial);
+
+    // Monthly Processed Earnings
     final grossSalary = record.basicPay +
         record.hra +
         record.educationAllowance +
@@ -267,6 +455,7 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
         record.bonus +
         record.ot;
 
+    // Monthly Processed Deductions
     final deductions = record.pf +
         record.tax +
         record.esi +
@@ -278,281 +467,518 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
         record.greeting;
 
     final netSalary = record.netSalary > 0 ? record.netSalary : (grossSalary - deductions);
-
-    // Resolve employee details
-    Employee? matchingEmp;
-    if (record.employeeId > 0) {
-      matchingEmp = employees.where((e) => e.id == record.employeeId).firstOrNull;
-    }
-    if (matchingEmp == null && currentEmp != null) {
-      if (currentEmp.id == record.employeeId ||
-          (record.employeeName.trim().isNotEmpty && record.employeeName.toLowerCase() == currentEmp.fullName.toLowerCase())) {
-        matchingEmp = currentEmp;
-      }
-    }
-
-    final displayName = matchingEmp != null && matchingEmp.fullName.isNotEmpty
-        ? matchingEmp.fullName
-        : (matchingEmp != null && matchingEmp.firstName.isNotEmpty
-            ? matchingEmp.firstName
-            : (record.employeeName.isNotEmpty
-                ? record.employeeName
-                : (currentEmp?.fullName.isNotEmpty == true
-                    ? currentEmp!.fullName
-                    : (currentEmp?.firstName.isNotEmpty == true ? currentEmp!.firstName : 'Employee'))));
-
-    final displayDesignation = matchingEmp != null && matchingEmp.designation.isNotEmpty
-        ? matchingEmp.designation
-        : (record.designation.isNotEmpty && !record.designation.contains('Director')
-            ? record.designation
-            : (currentEmp?.designation.isNotEmpty == true ? currentEmp!.designation : 'Engineering Manager'));
-
-    final displayDepartment = matchingEmp != null && matchingEmp.department.isNotEmpty
-        ? matchingEmp.department
-        : (record.department.isNotEmpty && !record.department.contains('Management')
-            ? record.department
-            : (currentEmp?.department.isNotEmpty == true ? currentEmp!.department : 'Execution'));
-
-    final displayId = matchingEmp != null && matchingEmp.employeeId.isNotEmpty
-        ? matchingEmp.employeeId
-        : (record.employeeId > 0 ? "EMP-${record.employeeId.toString().padLeft(4, '0')}" : "");
+    final netWords = CurrencyWordsHelper.formatAmountInWords(netSalary);
 
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider, width: 0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF414A51), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      padding: EdgeInsets.all(isMobile ? 16 : 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                record.month,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10.8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // 1. HEADER SECTION (Organization Branding & Header)
+            Container(
+              padding: EdgeInsets.all(isMobile ? 12 : 18),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(bottom: BorderSide(color: Color(0xFF414A51), width: 1)),
               ),
-              _buildStatusPill(record),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: const Color(0xFF9CC70A).withValues(alpha: 0.1),
-                child: const Icon(Icons.person_outline, color: Color(0xFF9CC70A), size: 24),
+              child: isMobile
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            _buildCompanyLogo(),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    orgName.toUpperCase(),
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF414A51),
+                                    ),
+                                  ),
+                                  const Text(
+                                    'PAYSLIP',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF9CC70A),
+                                      letterSpacing: 1.1,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            _buildStatusPill(record),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        const Divider(height: 1, color: AppColors.divider),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Period: ${record.month}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF414A51),
+                              ),
+                            ),
+                            if (orgTan.isNotEmpty)
+                              Text(
+                                'TAN: $orgTan',
+                                style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                              ),
+                          ],
+                        ),
+                        if (orgEmail.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              'Email: $orgEmail',
+                              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                            ),
+                          ),
+                      ],
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Row(
+                          children: [
+                            _buildCompanyLogo(),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  orgName.toUpperCase(),
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF414A51),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                const Text(
+                                  'PAYSLIP',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF9CC70A),
+                                    letterSpacing: 1.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Period: ${record.month}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF414A51),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                _buildStatusPill(record),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            if (orgEmail.isNotEmpty)
+                              Text(
+                                'Email: $orgEmail',
+                                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                              ),
+                            if (orgTan.isNotEmpty)
+                              Text(
+                                'TAN: $orgTan',
+                                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+            ),
+
+            // 2. TWO-COLUMN EMPLOYEE / STATUTORY & BANK DETAILS SECTION
+            Container(
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: Color(0xFF414A51), width: 1)),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      displayName,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
+              child: isMobile
+                  ? Column(
+                      children: [
+                        _buildLeftDetailsBox(
+                          record: record,
+                          employeeId: displayEmpId,
+                          name: displayName,
+                          designation: displayDesignation,
+                          department: displayDepartment,
+                          email: displayEmail,
+                          daysWorked: '${record.presentDays}',
+                          isMobile: true,
+                        ),
+                        const Divider(height: 1, color: Color(0xFF414A51)),
+                        _buildRightDetailsBox(
+                          pan: panNo,
+                          pf: pfNo,
+                          esi: esiNo,
+                          bankName: bankName,
+                          bankAcct: _maskBankAccount(bankAcct),
+                          branch: branch,
+                          ifsc: ifsc,
+                          isMobile: true,
+                        ),
+                      ],
+                    )
+                  : IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            child: _buildLeftDetailsBox(
+                              record: record,
+                              employeeId: displayEmpId,
+                              name: displayName,
+                              designation: displayDesignation,
+                              department: displayDepartment,
+                              email: displayEmail,
+                              daysWorked: '${record.presentDays}',
+                              isMobile: false,
+                            ),
+                          ),
+                          Container(width: 1, color: AppColors.divider),
+                          Expanded(
+                            child: _buildRightDetailsBox(
+                              pan: panNo,
+                              pf: pfNo,
+                              esi: esiNo,
+                              bankName: bankName,
+                              bankAcct: _maskBankAccount(bankAcct),
+                              branch: branch,
+                              ifsc: ifsc,
+                              isMobile: false,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${displayId.isNotEmpty ? "ID: $displayId" : ""}${displayDepartment.isNotEmpty ? " • $displayDepartment" : ""}${displayDesignation.isNotEmpty ? " • $displayDesignation" : ""}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
+            ),
+
+            // 3. ATTENDANCE METRICS ROW
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+              decoration: const BoxDecoration(
+                color: Color(0xFFEEF2F6),
+                border: Border(bottom: BorderSide(color: Color(0xFF414A51), width: 1)),
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(child: _buildLabelValue('PRESENT', '${record.presentDays}')),
-              Expanded(child: _buildLabelValue('LATE', '${record.lateDays}')),
-              Expanded(child: _buildLabelValue('ABSENT (LOP)', '${record.absentDays}')),
-              Expanded(child: _buildLabelValue('LEAVE', '${record.leaveDays}')),
-              Expanded(
-                child: _buildLabelValue(
-                  'TOTAL DAYS',
-                  '${record.totalWorkingDays > 0 ? record.totalWorkingDays : (record.presentDays + record.lateDays + record.absentDays + record.leaveDays)}',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
-          const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'EARNINGS',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textSecondary,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildRowItem('Basic Pay', currencyFormat.format(record.basicPay)),
-                    _buildRowItem('HRA', currencyFormat.format(record.hra)),
-                    if (record.educationAllowance > 0)
-                      _buildRowItem('Education Allowance', currencyFormat.format(record.educationAllowance)),
-                    _buildRowItem('Special Allowance', currencyFormat.format(record.specialAllowance)),
-                    if (record.travelAllowance > 0)
-                      _buildRowItem('Travel Allowance', currencyFormat.format(record.travelAllowance)),
-                    if (record.otherAllowance > 0)
-                      _buildRowItem('Other Allowance', currencyFormat.format(record.otherAllowance)),
-                    if (record.incentive > 0)
-                      _buildRowItem('Incentive', currencyFormat.format(record.incentive)),
-                    if (record.othersEarning > 0)
-                      _buildRowItem('Others', currencyFormat.format(record.othersEarning)),
-                    if (record.cumulativeIncentive > 0)
-                      _buildRowItem('Cumulative Incentive', currencyFormat.format(record.cumulativeIncentive)),
-                    if (record.bonus > 0)
-                      _buildRowItem('Bonus', currencyFormat.format(record.bonus)),
-                    if (record.ot > 0)
-                      _buildRowItem('OT', currencyFormat.format(record.ot)),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 24),
-              Container(
-                height: 140,
-                width: 0.5,
-                color: AppColors.divider,
-              ),
-              const SizedBox(width: 24),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'DEDUCTIONS',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textSecondary,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildRowItem('PF', currencyFormat.format(record.pf)),
-                    _buildRowItem('TDS (Tax)', currencyFormat.format(record.tax)),
-                    if (record.esi > 0)
-                      _buildRowItem('ESI', currencyFormat.format(record.esi)),
-                    if (record.lop > 0)
-                      _buildRowItem('LOP', currencyFormat.format(record.lop)),
-                    if (record.companyLoan > 0)
-                      _buildRowItem(
-                        record.loanDescription.isNotEmpty
-                            ? 'Company Loan Recovery (${record.loanDescription})'
-                            : 'Company Loan Recovery',
-                        currencyFormat.format(record.companyLoan),
-                      ),
-                    if (record.salaryAdvance > 0)
-                      _buildRowItem(
-                        record.advanceDescription.isNotEmpty ? 'Advance (${record.advanceDescription})' : 'Salary Advance',
-                        currencyFormat.format(record.salaryAdvance),
-                      ),
-                    if (record.staffWelfareContribution > 0)
-                      _buildRowItem('Staff Welfare', currencyFormat.format(record.staffWelfareContribution)),
-                    if (record.greeting > 0)
-                      _buildRowItem('Greeting Deduction', currencyFormat.format(record.greeting)),
-                    if (record.othersDeduction > 0)
-                      _buildRowItem('Others', currencyFormat.format(record.othersDeduction)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
-          const SizedBox(height: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildLabelValue('GROSS SALARY', currencyFormat.format(grossSalary)),
-                  _buildLabelValue('TOTAL DEDUCTIONS', currencyFormat.format(deductions)),
-                  _buildLabelValue('NET SALARY', currencyFormat.format(netSalary), highlight: true),
+                  _buildAttendanceMetricCell('PRESENT DAYS', '${record.presentDays}'),
+                  _buildAttendanceMetricCell('LATE DAYS', '${record.lateDays}'),
+                  _buildAttendanceMetricCell('ABSENT (LOP)', '${record.absentDays}'),
+                  _buildAttendanceMetricCell('LEAVE DAYS', '${record.leaveDays}'),
+                  _buildAttendanceMetricCell('TOTAL DAYS', '$totalDays'),
                 ],
               ),
-              const SizedBox(height: 12),
-              Text(
-                'In words: ${numberToWords(netSalary)} Rupees Only',
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontStyle: FontStyle.italic,
-                  color: AppColors.textSecondary,
+            ),
+
+            // 4. THREE-COLUMN SALARY TABLE (Standard CTC | Earnings | Deductions)
+            _buildSalaryTable(
+              currencyFormat: currencyFormat,
+              isMobile: isMobile,
+              standardBasic: standardBasic,
+              standardHra: standardHra,
+              standardEdu: standardEdu,
+              standardSpecial: standardSpecial,
+              standardSalary: standardSalary,
+              record: record,
+              grossSalary: grossSalary,
+              deductions: deductions,
+            ),
+
+            // 5. SUMMARY & NET SALARY ROW
+            Container(
+              padding: EdgeInsets.all(isMobile ? 12 : 16),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(
+                  top: BorderSide(color: Color(0xFF414A51), width: 1),
+                  bottom: BorderSide(color: Color(0xFF414A51), width: 1),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
-          const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildLabelValue('BANK NAME', record.bankName),
-                    const SizedBox(height: 12),
-                    _buildLabelValue('BANK ACCOUNT', _maskBankAccount(record.bankAcctNo)),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildLabelValue('IFSC CODE', record.ifscCode),
-                    const SizedBox(height: 12),
-                    _buildLabelValue(
-                      'CREDIT DATE',
-                      record.paymentDate.isNotEmpty ? record.paymentDate : 'Expected by 5th of next month',
+              child: isMobile
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'NET SALARY',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF414A51),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF9CC70A).withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFF9CC70A)),
+                              ),
+                              child: Text(
+                                currencyFormat.format(netSalary),
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF414A51),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'In words: $netWords Rupees Only',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontStyle: FontStyle.italic,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'NET SALARY',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF414A51),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'In words: $netWords Rupees Only',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontStyle: FontStyle.italic,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF9CC70A).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFF9CC70A)),
+                          ),
+                          child: Text(
+                            currencyFormat.format(netSalary),
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF414A51),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+            ),
+
+            // 6. SYSTEM GENERATED FOOTER
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+              color: const Color(0xFFF8F9FA),
+              child: const Center(
+                child: Text(
+                  'This Is A System Generated Payslip Hence Needs No Signature',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF414A51),
+                  ),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
-          const SizedBox(height: 12),
-          const Center(
-            child: Text(
-              'This is a system generated payslip hence needs no signature.',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompanyLogo() {
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: const Color(0xFF9CC70A).withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      padding: const EdgeInsets.all(4),
+      child: Image.asset(
+        'assets/reference_logo_base.png',
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => const Icon(
+          Icons.apartment_rounded,
+          color: Color(0xFF9CC70A),
+          size: 26,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLeftDetailsBox({
+    required PayrollRecord record,
+    required String employeeId,
+    required String name,
+    required String designation,
+    required String department,
+    required String email,
+    required String daysWorked,
+    required bool isMobile,
+  }) {
+    return Padding(
+      padding: EdgeInsets.all(isMobile ? 12 : 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8F9FA),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: const Text(
+              'EMPLOYEE DETAILS',
               style: TextStyle(
-                fontSize: 10,
-                fontStyle: FontStyle.italic,
-                color: AppColors.textSecondary,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF414A51),
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          _buildDetailRow('Employee No', employeeId),
+          _buildDetailRow('Employee Name', name),
+          _buildDetailRow('Designation', designation),
+          _buildDetailRow('Department', department),
+          _buildDetailRow('Email ID', email),
+          _buildDetailRow('Days Worked in Month', daysWorked),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRightDetailsBox({
+    required String pan,
+    required String pf,
+    required String esi,
+    required String bankName,
+    required String bankAcct,
+    required String branch,
+    required String ifsc,
+    required bool isMobile,
+  }) {
+    return Padding(
+      padding: EdgeInsets.all(isMobile ? 12 : 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8F9FA),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: const Text(
+              'STATUTORY & BANK DETAILS',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF414A51),
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          _buildDetailRow('PAN Number', pan),
+          _buildDetailRow('PF / UAN', pf),
+          _buildDetailRow('ESI Number', esi),
+          _buildDetailRow('Bank Name', bankName),
+          _buildDetailRow('Bank Account No', bankAcct),
+          _buildDetailRow('Branch', branch),
+          _buildDetailRow('IFSC / SWIFT Code', ifsc),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 140,
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+            ),
+          ),
+          const Text(': ', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+          Expanded(
+            child: Text(
+              value.isNotEmpty ? value : '-',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF414A51),
               ),
             ),
           ),
@@ -561,45 +987,231 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
     );
   }
 
-  Widget _buildLabelValue(String label, String value, {bool highlight = false}) {
+  Widget _buildAttendanceMetricCell(String label, String value) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
           style: const TextStyle(
-            fontSize: 10,
+            fontSize: 9,
             fontWeight: FontWeight.bold,
-            color: AppColors.textSecondary,
-            letterSpacing: 0.5,
+            color: Color(0xFF414A51),
+            letterSpacing: 0.4,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 2),
         Text(
           value,
-          style: TextStyle(
-            fontSize: highlight ? 16 : 13,
+          style: const TextStyle(
+            fontSize: 12,
             fontWeight: FontWeight.bold,
-            color: highlight ? const Color(0xFF9CC70A) : AppColors.textPrimary,
+            color: Color(0xFF414A51),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildRowItem(String label, String value) {
+  Widget _buildSalaryTable({
+    required NumberFormat currencyFormat,
+    required bool isMobile,
+    required double standardBasic,
+    required double standardHra,
+    required double standardEdu,
+    required double standardSpecial,
+    required double standardSalary,
+    required PayrollRecord record,
+    required double grossSalary,
+    required double deductions,
+  }) {
+    final rows = [
+      _SalaryTableRow(
+        col1Label: 'Basic Pay',
+        col1Value: currencyFormat.format(standardBasic),
+        col2Label: 'Basic Pay',
+        col2Value: currencyFormat.format(record.basicPay),
+        col3Label: 'PF (Statutory)',
+        col3Value: currencyFormat.format(record.pf),
+      ),
+      _SalaryTableRow(
+        col1Label: 'HRA',
+        col1Value: currencyFormat.format(standardHra),
+        col2Label: 'HRA',
+        col2Value: currencyFormat.format(record.hra),
+        col3Label: 'TDS / Tax',
+        col3Value: currencyFormat.format(record.tax),
+      ),
+      _SalaryTableRow(
+        col1Label: 'Educational Allowance',
+        col1Value: currencyFormat.format(standardEdu),
+        col2Label: 'Educational Allowance',
+        col2Value: currencyFormat.format(record.educationAllowance),
+        col3Label: 'ESI',
+        col3Value: currencyFormat.format(record.esi),
+      ),
+      _SalaryTableRow(
+        col1Label: 'Special Allowance',
+        col1Value: currencyFormat.format(standardSpecial),
+        col2Label: 'Special Allowance',
+        col2Value: currencyFormat.format(record.specialAllowance),
+        col3Label: 'LOP Deduction',
+        col3Value: currencyFormat.format(record.lop),
+      ),
+      _SalaryTableRow(
+        col1Label: '-',
+        col1Value: '-',
+        col2Label: 'Incentive',
+        col2Value: currencyFormat.format(record.incentive),
+        col3Label: record.loanDescription.isNotEmpty
+            ? 'Company Loan (${record.loanDescription})'
+            : 'Company Loan',
+        col3Value: currencyFormat.format(record.companyLoan),
+      ),
+      _SalaryTableRow(
+        col1Label: '-',
+        col1Value: '-',
+        col2Label: 'Carry Forward',
+        col2Value: record.carryForward.isNotEmpty ? record.carryForward : '-',
+        col3Label: record.advanceDescription.isNotEmpty
+            ? 'Salary Advance (${record.advanceDescription})'
+            : 'Salary Advance',
+        col3Value: currencyFormat.format(record.salaryAdvance),
+      ),
+      _SalaryTableRow(
+        col1Label: '-',
+        col1Value: '-',
+        col2Label: 'Others',
+        col2Value: currencyFormat.format(record.othersEarning),
+        col3Label: 'Staff Welfare',
+        col3Value: currencyFormat.format(record.staffWelfareContribution),
+      ),
+      _SalaryTableRow(
+        col1Label: '-',
+        col1Value: '-',
+        col2Label: 'Cumulative Incentive',
+        col2Value: currencyFormat.format(record.cumulativeIncentive),
+        col3Label: 'Other Deductions',
+        col3Value: currencyFormat.format(record.othersDeduction),
+      ),
+    ];
+
+    if (isMobile) {
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SizedBox(
+          width: 700,
+          child: _buildTableInternal(rows, currencyFormat, standardSalary, grossSalary, deductions),
+        ),
+      );
+    }
+
+    return _buildTableInternal(rows, currencyFormat, standardSalary, grossSalary, deductions);
+  }
+
+  Widget _buildTableInternal(
+    List<_SalaryTableRow> rows,
+    NumberFormat currencyFormat,
+    double standardSalary,
+    double grossSalary,
+    double deductions,
+  ) {
+    return Table(
+      border: const TableBorder(
+        verticalInside: BorderSide(color: AppColors.divider, width: 0.8),
+        horizontalInside: BorderSide(color: AppColors.divider, width: 0.5),
+      ),
+      children: [
+        TableRow(
+          decoration: const BoxDecoration(color: Color(0xFFEEF2F6)),
+          children: [
+            _buildTableHeaderCell('MONTHLY SALARY (CTC)'),
+            _buildTableHeaderCell('EARNINGS'),
+            _buildTableHeaderCell('DEDUCTIONS'),
+          ],
+        ),
+        ...rows.map(
+          (row) => TableRow(
+            children: [
+              _buildTableCell(row.col1Label, row.col1Value),
+              _buildTableCell(row.col2Label, row.col2Value),
+              _buildTableCell(row.col3Label, row.col3Value),
+            ],
+          ),
+        ),
+        TableRow(
+          decoration: const BoxDecoration(color: Color(0xFFF8F9FA)),
+          children: [
+            _buildTotalCell('Standard Salary', currencyFormat.format(standardSalary)),
+            _buildTotalCell('Gross Salary', currencyFormat.format(grossSalary)),
+            _buildTotalCell('Total Deductions', currencyFormat.format(deductions)),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTableHeaderCell(String title) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+          color: Color(0xFF414A51),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTableCell(String label, String amount) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 11, color: Color(0xFF414A51)),
+            ),
           ),
           Text(
-            value,
-            style: const TextStyle(fontSize: 12, color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+            amount,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF414A51),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTotalCell(String label, String amount) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF414A51),
+              ),
+            ),
+          ),
+          Text(
+            amount,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF414A51),
+            ),
           ),
         ],
       ),
@@ -616,10 +1228,10 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
 
     if (isPaid) {
       color = const Color(0xFF9CC70A);
-      bgColor = const Color(0xFF9CC70A).withValues(alpha: 0.1);
+      bgColor = const Color(0xFF9CC70A).withValues(alpha: 0.12);
     } else if (isProcessed) {
-      color = Colors.blue[700]!;
-      bgColor = Colors.blue[50]!;
+      color = const Color(0xFF414A51);
+      bgColor = const Color(0xFF414A51).withValues(alpha: 0.1);
     } else {
       color = Colors.amber[800]!;
       bgColor = Colors.amber[50]!;
@@ -647,11 +1259,33 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
     );
   }
 
-  Widget _buildActionRow(BuildContext context, PayrollRecord record, bool isMobile) {
+  Widget _buildActionRow({
+    required BuildContext context,
+    required PayrollRecord record,
+    required Employee? employee,
+    required Organization? organization,
+    required bool isMobile,
+  }) {
     final canDownload = record.status == 'Processed' || record.status == 'Paid';
 
-    final downloadBtn = ElevatedButton(
-      onPressed: (!canDownload || _downloading) ? null : () => _startDownloadFlow(context, record),
+    final downloadBtn = ElevatedButton.icon(
+      onPressed: (!canDownload || _downloading)
+          ? null
+          : () => _handleDownloadPdf(context, record, employee, organization),
+      icon: _downloading
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            )
+          : const Icon(Icons.download_rounded, size: 18),
+      label: Text(
+        _downloading ? 'Preparing PDF…' : 'Download PDF',
+        style: const TextStyle(fontWeight: FontWeight.bold),
+      ),
       style: ElevatedButton.styleFrom(
         backgroundColor: const Color(0xFF9CC70A),
         foregroundColor: Colors.white,
@@ -661,38 +1295,20 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         elevation: 0,
       ),
-      child: Center(
-        child: _downloading
-            ? const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  ),
-                  SizedBox(width: 8),
-                  Text('Preparing PDF…', style: TextStyle(fontWeight: FontWeight.bold)),
-                ],
-              )
-            : const Text('Download PDF', style: TextStyle(fontWeight: FontWeight.bold)),
-      ),
     );
 
-    final emailBtn = OutlinedButton(
-      onPressed: () => _showMockAction(context, 'Sending Email to employee...'),
+    final emailBtn = OutlinedButton.icon(
+      onPressed: () => _showFeedback(context, 'Payslip emailed to employee.'),
+      icon: const Icon(Icons.email_outlined, size: 18, color: Color(0xFF414A51)),
+      label: const Text(
+        'Send Email',
+        style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+      ),
       style: OutlinedButton.styleFrom(
-        foregroundColor: AppColors.textPrimary,
         side: const BorderSide(color: AppColors.divider, width: 1),
         padding: const EdgeInsets.symmetric(vertical: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         backgroundColor: Colors.white,
-      ),
-      child: const Center(
-        child: Text('Send Email', style: TextStyle(fontWeight: FontWeight.bold)),
       ),
     );
 
@@ -701,7 +1317,7 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           downloadBtn,
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           emailBtn,
         ],
       );
@@ -720,7 +1336,7 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.divider, width: 0.5),
       ),
       padding: const EdgeInsets.all(24),
@@ -731,7 +1347,7 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                width: 150,
+                width: 160,
                 height: 24,
                 decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(4)),
               ),
@@ -743,52 +1359,7 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(color: Colors.grey[200], shape: BoxShape.circle),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 180,
-                      height: 16,
-                      decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(4)),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      width: 240,
-                      height: 12,
-                      decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(4)),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: List.generate(
-              5,
-              (index) => Container(
-                width: 50,
-                height: 36,
-                decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(4)),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
+          const Divider(height: 1, color: AppColors.divider),
           const SizedBox(height: 16),
           Row(
             children: [
@@ -799,14 +1370,14 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
                     (index) => Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Container(
-                        height: 12,
+                        height: 14,
                         decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(4)),
                       ),
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 48),
+              const SizedBox(width: 24),
               Expanded(
                 child: Column(
                   children: List.generate(
@@ -814,7 +1385,7 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
                     (index) => Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Container(
-                        height: 12,
+                        height: 14,
                         decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(4)),
                       ),
                     ),
@@ -823,19 +1394,10 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: List.generate(
-              3,
-              (index) => Container(
-                width: 80,
-                height: 36,
-                decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(4)),
-              ),
-            ),
+          const SizedBox(height: 24),
+          Container(
+            height: 160,
+            decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(8)),
           ),
         ],
       ),
@@ -886,7 +1448,7 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
                   return;
                 }
                 Navigator.pop(dialogContext);
-                
+
                 final updated = record.copyWith(
                   isDisputed: true,
                   disputeComment: comment,
@@ -897,12 +1459,12 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
                   ref.invalidate(payrollRecordByIdProvider(record.id));
                   ref.invalidate(payrollRecordsForMonthProvider);
                   ref.invalidate(employeePayrollRecordsProvider(record.employeeId));
-                  
+
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text('Dispute raised successfully. HR has been notified.'),
-                        backgroundColor: Colors.green,
+                        backgroundColor: Color(0xFF9CC70A),
                       ),
                     );
                   }
@@ -928,50 +1490,22 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
       },
     );
   }
+}
 
-  static String numberToWords(double number) {
-    if (number == 0) return 'Zero';
-    final intNumber = number.toInt();
-    
-    final units = [
-      '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
-      'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
-      'Seventeen', 'Eighteen', 'Nineteen'
-    ];
-    
-    final tens = [
-      '', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'
-    ];
+class _SalaryTableRow {
+  final String col1Label;
+  final String col1Value;
+  final String col2Label;
+  final String col2Value;
+  final String col3Label;
+  final String col3Value;
 
-    String convertLessThanOneThousand(int n) {
-      if (n < 20) return units[n];
-      if (n < 100) {
-        return '${tens[n ~/ 10]} ${units[n % 10]}'.trim();
-      }
-      return '${units[n ~/ 100]} Hundred ${convertLessThanOneThousand(n % 100)}'.trim();
-    }
-
-    String result = '';
-    int temp = intNumber;
-
-    if (temp >= 10000000) {
-      result += '${convertLessThanOneThousand(temp ~/ 10000000)} Crore ';
-      temp %= 10000000;
-    }
-    if (temp >= 100000) {
-      result += '${convertLessThanOneThousand(temp ~/ 100000)} Lakh ';
-      temp %= 100000;
-    }
-    if (temp >= 1000) {
-      result += '${convertLessThanOneThousand(temp ~/ 1000)} Thousand ';
-      temp %= 1000;
-    }
-    if (temp > 0) {
-      result += convertLessThanOneThousand(temp);
-    }
-
-    final words = result.trim();
-    if (words.isEmpty) return 'Zero';
-    return words;
-  }
+  const _SalaryTableRow({
+    required this.col1Label,
+    required this.col1Value,
+    required this.col2Label,
+    required this.col2Value,
+    required this.col3Label,
+    required this.col3Value,
+  });
 }
