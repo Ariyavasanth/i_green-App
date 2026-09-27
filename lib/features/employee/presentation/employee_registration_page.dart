@@ -12,6 +12,7 @@ import '../../../../core/utils/location_data.dart';
 import '../domain/employee.dart';
 import '../domain/registration_link.dart';
 import '../domain/candidate_response.dart';
+import '../domain/correction_request.dart';
 import '../providers/employee_providers.dart';
 import '../services/offer_letter_generator.dart';
 import '../services/welcome_letter_generator.dart';
@@ -32,6 +33,7 @@ class EmployeeRegistrationPage extends ConsumerStatefulWidget {
     this.employee,
     this.acceptedEmpId,
     this.acceptedLinkId,
+    this.correctionToken,
     super.key,
   });
 
@@ -39,6 +41,8 @@ class EmployeeRegistrationPage extends ConsumerStatefulWidget {
   final Employee? employee;
   final int? acceptedEmpId;
   final String? acceptedLinkId;
+  final String? correctionToken;
+
 
   static List<Map<String, String>> get allWorldCountryCodes =>
       _EmployeeRegistrationPageState.allWorldCountryCodes;
@@ -468,9 +472,13 @@ class _EmployeeRegistrationPageState
   Employee? _submittedEmployee;
   Employee? _currentEmployee;
   String _registrationMode = 'manual';
+  bool _isCorrectionMode = false;
+  CorrectionRequest? _activeCorrectionRequest;
+  String? _correctionError;
   // ignore: unused_field
   int? _selectedAcceptedEmpId;
   String? _selectedAcceptedLinkId;
+
   bool _draftLoaded = false;
   bool _hasSubmittedAtLeastOnce = false;
   final Set<String> _savedTabs = {};
@@ -1862,10 +1870,45 @@ class _EmployeeRegistrationPageState
         }
       }
     });
-    if (widget.employee != null) {
+    if (widget.correctionToken != null && widget.correctionToken!.isNotEmpty) {
+      _registrationMode = 'candidate_correction';
+      _isCorrectionMode = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final repo = ref.read(employeeRepositoryProvider);
+        final req = await repo.validateCorrectionToken(widget.correctionToken!);
+        if (req == null || !req.isValidActive) {
+          if (mounted) {
+            setState(() {
+              _correctionError = 'This correction link is invalid, expired, or has already been used.';
+            });
+          }
+          return;
+        }
+
+        final candidateResp = await repo.getCandidateResponseForCorrection(widget.correctionToken!);
+        if (candidateResp != null && mounted) {
+          setState(() {
+            _activeCorrectionRequest = req;
+          });
+          _populateFromEmployee(candidateResp.employeeData);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Loaded submitted details for correction. Please update the requested fields and submit.'),
+              behavior: SnackBarBehavior.floating,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        } else if (mounted) {
+          setState(() {
+            _correctionError = 'Candidate details not found for this correction request.';
+          });
+        }
+      });
+    } else if (widget.employee != null) {
       _populateFromEmployee(widget.employee!);
     } else if (widget.acceptedLinkId != null &&
         widget.acceptedLinkId!.isNotEmpty) {
+
       _registrationMode = 'accepted_response';
       _selectedAcceptedLinkId = widget.acceptedLinkId;
       WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -2788,7 +2831,16 @@ class _EmployeeRegistrationPageState
         // FINAL SUBMISSION (Submit Registration)
         // ==========================================
         // ONLY here is the employee document created in /employees
-        if (_registrationMode == 'accepted_response' ||
+        if (_isCorrectionMode && widget.correctionToken != null) {
+          final success = await repo.submitCandidateCorrection(
+            rawToken: widget.correctionToken!,
+            updatedEmployee: employeeData,
+          );
+          if (!success) {
+            throw Exception('Correction link is invalid or already submitted.');
+          }
+          savedEmployee = employeeData;
+        } else if (_registrationMode == 'accepted_response' ||
             widget.acceptedLinkId != null ||
             widget.acceptedEmpId != null) {
           final linkIdToConvert =
@@ -2815,6 +2867,7 @@ class _EmployeeRegistrationPageState
             candidateData: employeeData,
           );
         }
+
       }
 
       _currentEmployee = savedEmployee;
@@ -2897,6 +2950,64 @@ class _EmployeeRegistrationPageState
 
   @override
   Widget build(BuildContext context) {
+    if (_correctionError != null) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFEFF3F6),
+        body: Center(
+          child: Container(
+            width: 460,
+            margin: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.divider),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFFEF2F2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.link_off_rounded, color: Color(0xFFDC2626), size: 36),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Correction Link Expired or Invalid',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  _correctionError!,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     _updateTabControllerIfNeeded();
     final linkAsync = ref.watch(registrationLinkByIdProvider(widget.linkId));
     final screenWidth = MediaQuery.of(context).size.width;
@@ -2912,8 +3023,50 @@ class _EmployeeRegistrationPageState
               data: (link) => _buildTopNavBar(link),
               orElse: () => _buildTopNavBar(null),
             ),
+            if (_activeCorrectionRequest != null)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFBEB),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFFDE68A)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.info_outline, color: Color(0xFFD97706), size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Correction Requested by Admin',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: Color(0xFF92400E),
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            _activeCorrectionRequest!.remarks,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Color(0xFF78350F),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             // Scrollable Tab Bar
             _buildTabBar(),
+
             // Main Content Area
             Expanded(
               child: linkAsync.when(
@@ -2921,7 +3074,23 @@ class _EmployeeRegistrationPageState
                 error: (err, _) =>
                     Center(child: Text('Error loading link: $err')),
                 data: (link) {
-                  if (_isEditing) {
+                  if (_submittedEmployee != null) {
+                    final emp = _submittedEmployee;
+                    return _buildStatusCard(
+                      icon: Icons.check_circle_outline,
+                      color: const Color(0xFF28A745),
+                      title: 'Registration Submitted Successfully!',
+                      message: _isCorrectionMode
+                          ? 'Thank you! Your employee registration corrections have been submitted successfully.'
+                          : 'Thank you! Your employee registration has been submitted successfully.\n\n${emp != null && emp.employeeId.isNotEmpty ? "Candidate ID: ${emp.employeeId}" : "Status: Registration Submitted"}',
+                    );
+                  }
+
+                  if (_isCorrectionMode && _activeCorrectionRequest == null && _correctionError == null) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  if (_isEditing || (_isCorrectionMode && _activeCorrectionRequest != null)) {
                     final editLink =
                         link ??
                         const RegistrationLink(
@@ -2975,18 +3144,13 @@ class _EmployeeRegistrationPageState
                   if (link.linkStatus == 'Submitted' ||
                       link.linkStatus == 'Converted' ||
                       link.linkStatus == 'Completed' ||
-                      link.linkStatus == 'Used' ||
-                      _submittedEmployee != null) {
-                    final emp = _submittedEmployee;
+                      link.linkStatus == 'Used') {
                     return _buildStatusCard(
                       icon: Icons.check_circle_outline,
                       color: const Color(0xFF28A745),
-                      title: _submittedEmployee != null
-                          ? 'Registration Submitted Successfully!'
-                          : 'Registration Link Already Used',
-                      message: _submittedEmployee != null
-                          ? 'Thank you! Your employee registration has been submitted successfully.\n\n${emp != null && emp.employeeId.isNotEmpty ? "Candidate ID: ${emp.employeeId}" : "Status: Registration Submitted"}'
-                          : 'This registration link has already been used and is no longer available.',
+                      title: 'Registration Link Already Used',
+                      message:
+                          'This registration link has already been used and is no longer available.',
                     );
                   }
 
@@ -3090,9 +3254,14 @@ class _EmployeeRegistrationPageState
     final name = '${_firstNameController.text} ${_lastNameController.text}'
         .trim();
     final isEditMode = _isEditing;
+    final isCorrection = _isCorrectionMode;
     final titleText = name.isEmpty
-        ? (isEditMode ? 'Edit Employee Details' : 'Employee Registration')
-        : (isEditMode ? 'Edit: $name' : name);
+        ? (isEditMode
+            ? 'Edit Employee Details'
+            : (isCorrection ? 'Candidate Correction' : 'Employee Registration'))
+        : (isEditMode
+            ? 'Edit: $name'
+            : (isCorrection ? '$name (Correction)' : name));
 
     final submitBtn = ElevatedButton.icon(
       style: ElevatedButton.styleFrom(
@@ -3127,13 +3296,15 @@ class _EmployeeRegistrationPageState
               ),
             )
           : Icon(
-              isEditMode ? Icons.save_outlined : Icons.check_circle_outline,
+              (isEditMode || isCorrection) ? Icons.save_outlined : Icons.check_circle_outline,
               size: 16,
             ),
       label: Text(
         _isSubmitting
             ? 'Saving...'
-            : (isEditMode ? 'Save Changes' : 'Submit Registration'),
+            : (isEditMode
+                ? 'Save Changes'
+                : (isCorrection ? 'Submit Corrections' : 'Submit Registration')),
         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
       ),
     );
@@ -3173,6 +3344,7 @@ class _EmployeeRegistrationPageState
                 ),
                 if (_isManagementAdd ||
                     isEditMode ||
+                    (_isCorrectionMode && _activeCorrectionRequest != null && _submittedEmployee == null) ||
                     (link != null &&
                         link.linkStatus != 'Submitted' &&
                         link.linkStatus != 'Converted' &&
@@ -3256,6 +3428,7 @@ class _EmployeeRegistrationPageState
               const SizedBox(width: 8),
               if (_isManagementAdd ||
                   isEditMode ||
+                  (_isCorrectionMode && _activeCorrectionRequest != null && _submittedEmployee == null) ||
                   (link != null &&
                       link.linkStatus != 'Submitted' &&
                       link.linkStatus != 'Converted' &&
@@ -8564,7 +8737,9 @@ class _EmployeeRegistrationPageState
                         label: Text(
                           _isEditing
                               ? 'Confirm & Save Changes'
-                              : 'Confirm & Submit Registration',
+                              : (_isCorrectionMode
+                                  ? 'Confirm & Submit Corrections'
+                                  : 'Confirm & Submit Registration'),
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
@@ -8663,7 +8838,9 @@ class _EmployeeRegistrationPageState
                         label: Text(
                           _isEditing
                               ? 'Confirm & Save Changes'
-                              : 'Confirm & Submit Registration',
+                              : (_isCorrectionMode
+                                  ? 'Confirm & Submit Corrections'
+                                  : 'Confirm & Submit Registration'),
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
@@ -10609,6 +10786,17 @@ class _EmployeeRegistrationPageState
                         entry.key ==
                         Employee.sidebarPermissionsByCategory.keys.first;
 
+                    final allSelected = categoryPermissions.isNotEmpty &&
+                        categoryPermissions.every(
+                          (p) => _selectedPermissions.contains(p),
+                        );
+                    final someSelected = categoryPermissions.any(
+                      (p) => _selectedPermissions.contains(p),
+                    );
+                    final bool? checkboxValue = allSelected
+                        ? true
+                        : (someSelected ? null : false);
+
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -10617,13 +10805,57 @@ class _EmployeeRegistrationPageState
                             top: isFirst ? 0.0 : 16.0,
                             bottom: 8.0,
                           ),
-                          child: Text(
-                            categoryName,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF667085),
-                              letterSpacing: 0.8,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(4),
+                            onTap: () {
+                              setState(() {
+                                if (allSelected) {
+                                  _selectedPermissions.removeAll(
+                                    categoryPermissions,
+                                  );
+                                } else {
+                                  _selectedPermissions.addAll(
+                                    categoryPermissions,
+                                  );
+                                }
+                              });
+                            },
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: Checkbox(
+                                    tristate: true,
+                                    value: checkboxValue,
+                                    activeColor: AppColors.active,
+                                    onChanged: (val) {
+                                      setState(() {
+                                        if (allSelected) {
+                                          _selectedPermissions.removeAll(
+                                            categoryPermissions,
+                                          );
+                                        } else {
+                                          _selectedPermissions.addAll(
+                                            categoryPermissions,
+                                          );
+                                        }
+                                      });
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  categoryName,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF667085),
+                                    letterSpacing: 0.8,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),

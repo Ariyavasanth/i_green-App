@@ -90,7 +90,7 @@ String? _getRequiredPermissionForPath(String path) {
   if (path == '/organization-management') return 'Organization Management';
   if (path == '/organization-structure') return 'Organization Structure';
   if (path == '/employee' || path == '/employee-management') return 'Employee Management';
-  if (path == '/responses') return 'Responses';
+  if (path == '/responses' || path == '/employee/responses') return 'Responses';
   if (path == '/leave' || path == '/leave-management') return 'Leave Management';
   if (path == '/attendance') return 'Attendance';
   if (path == '/attendance-settings') return 'Attendance Settings';
@@ -265,14 +265,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final rawAcceptedId = state.uri.queryParameters['acceptedId'];
           final acceptedEmpId = rawAcceptedId != null ? int.tryParse(rawAcceptedId) : null;
           final acceptedLinkId = state.uri.queryParameters['acceptedLinkId'];
+          final correctionToken = state.uri.queryParameters['correctionToken'] ??
+              state.uri.queryParameters['token'];
           return EmployeeRegistrationPage(
             linkId: state.pathParameters['linkId'] ?? '',
             employee: state.extra is Employee ? state.extra as Employee : null,
             acceptedEmpId: acceptedEmpId,
             acceptedLinkId: acceptedLinkId,
+            correctionToken: correctionToken,
           );
         },
       ),
+
       ShellRoute(
         builder: (context, state, child) =>
             AppShell(currentLocation: state.uri.path, child: child),
@@ -298,6 +302,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/responses',
+            builder: (_, _) => const ResponsesPage(),
+          ),
+          GoRoute(
+            path: '/employee/responses',
             builder: (_, _) => const ResponsesPage(),
           ),
           GoRoute(

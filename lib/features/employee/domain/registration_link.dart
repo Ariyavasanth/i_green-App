@@ -44,14 +44,14 @@ class RegistrationLink {
       final uri = Uri.base;
       if (uri.scheme == 'http' || uri.scheme == 'https') {
         final origin = uri.origin;
-        if (!origin.contains('localhost') &&
-            !origin.contains('127.0.0.1')) {
+        if (origin.isNotEmpty) {
           return '$origin/#/employee/register/$linkId';
         }
       }
     } catch (_) {}
-    return 'https://app.igreentech.in/#/employee/register/$linkId';
+    return '/#/employee/register/$linkId';
   }
+
 
   String buildFullUrl({String? customBaseUrl}) {
     if (customBaseUrl != null && customBaseUrl.trim().isNotEmpty) {

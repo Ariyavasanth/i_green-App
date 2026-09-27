@@ -16,6 +16,20 @@ class _BooksAppState extends ConsumerState<BooksApp> {
   bool _splashCompleted = false;
 
   @override
+  void initState() {
+    super.initState();
+    // If opening directly via a public registration link, skip the non-router splash screen
+    // so GoRouter directly mounts and preserves the registration form URL.
+    try {
+      final uri = Uri.base;
+      final full = uri.toString();
+      if (full.contains('/employee/register')) {
+        _splashCompleted = true;
+      }
+    } catch (_) {}
+  }
+
+  @override
   Widget build(BuildContext context) {
     if (!_splashCompleted) {
       return MaterialApp(

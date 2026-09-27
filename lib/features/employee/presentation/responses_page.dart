@@ -15,9 +15,10 @@ import '../domain/candidate_response.dart';
 import '../providers/employee_providers.dart';
 import 'dialogs/add_employee_link_dialog.dart';
 import 'dialogs/registration_links_dialog.dart';
+import 'dialogs/request_correction_dialog.dart';
 import 'widgets/admin_list_toolbar.dart';
 
-enum CandidateCardStatus { pending, submitted, accepted, registered, rejected }
+enum CandidateCardStatus { pending, submitted, correctionRequested, resubmitted, accepted, registered, rejected }
 
 class ResponsesPage extends ConsumerStatefulWidget {
   const ResponsesPage({super.key});
@@ -35,6 +36,16 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     'Email',
     'Phone Number',
     'Status',
+  ];
+
+  static const List<String> _statusList = [
+    'All Statuses',
+    'Pending',
+    'Submitted',
+    'Correction Requested',
+    'Resubmitted',
+    'Accepted',
+    'Rejected',
   ];
 
   int _currentPage = 0;
@@ -89,18 +100,12 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                 return s != 'registered' && s != 'converted';
               }).toList();
 
-              final statusList = const [
-                'All Statuses',
-                'Pending',
-                'Submitted',
-                'Accepted',
-                'Rejected',
-              ];
-
               final filtered = activeLinks.where((link) {
                 final q = searchQuery.toLowerCase().trim();
                 final candidateId = _candidateId(link);
                 final employee = _employeeForLink(link, employees, candidateResponses);
+                final resp = _candidateResponseForLink(link, candidateResponses);
+                final effectiveStatus = (resp != null && resp.status.isNotEmpty) ? resp.status : link.linkStatus;
                 final matchesSearch = q.isEmpty ||
                     candidateId.toLowerCase().contains(q) ||
                     link.linkId.toLowerCase().contains(q) ||
@@ -108,9 +113,10 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                     _candidateName(link, employee).toLowerCase().contains(q) ||
                     _emailForLink(link, employee).toLowerCase().contains(q) ||
                     _phoneForLink(link, employee).toLowerCase().contains(q) ||
+                    effectiveStatus.toLowerCase().contains(q) ||
                     link.linkStatus.toLowerCase().contains(q);
 
-                final normStatus = _normalizeStatus(link.linkStatus, link);
+                final normStatus = _normalizeStatus(effectiveStatus, link, resp);
                 final filter = statusFilter.trim().toLowerCase();
 
                 bool matchesStatus = false;
@@ -120,18 +126,24 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                   matchesStatus = normStatus == CandidateCardStatus.pending;
                 } else if (filter == 'submitted') {
                   matchesStatus = normStatus == CandidateCardStatus.submitted;
+                } else if (filter == 'correction requested' || filter == 'correction_requested') {
+                  matchesStatus = normStatus == CandidateCardStatus.correctionRequested;
+                } else if (filter == 'resubmitted') {
+                  matchesStatus = normStatus == CandidateCardStatus.resubmitted;
                 } else if (filter == 'accepted') {
                   matchesStatus = normStatus == CandidateCardStatus.accepted;
                 } else if (filter == 'rejected') {
                   matchesStatus = normStatus == CandidateCardStatus.rejected;
                 } else {
-                  matchesStatus = link.linkStatus.trim().toLowerCase() == filter;
+                  matchesStatus = effectiveStatus.trim().toLowerCase() == filter || link.linkStatus.trim().toLowerCase() == filter;
                 }
 
                 final matchesDate = _matchesDateRange(link, dateRange);
 
                 return matchesSearch && matchesStatus && matchesDate;
               }).toList();
+
+
 
               // Sort by newest/most recent date descending (recent accepted/submitted on top)
               filtered.sort((a, b) {
@@ -158,7 +170,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildMobileSearchAndFilter(context, searchQuery),
-                      _buildStatusSummaryCards(context, links),
+                      _buildStatusSummaryCards(context, links, candidateResponses),
                       const SizedBox(height: 8),
                       Expanded(
                         child: RefreshIndicator(
@@ -213,7 +225,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                   children: [
                     _buildToolbar(context, prefAsync),
                     const Divider(height: 1),
-                    _buildFiltersRow(statusList),
+                    _buildFiltersRow(_statusList),
                     const Expanded(
                       child: Center(
                         child: Padding(
@@ -248,7 +260,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                 children: [
                   _buildToolbar(context, prefAsync),
                   const Divider(height: 1),
-                  _buildFiltersRow(statusList),
+                  _buildFiltersRow(_statusList),
                   const Divider(height: 1),
                   Expanded(
                     child: _buildDesktopTable(pageItems, visibleCols, constraints.maxWidth, employees, candidateResponses),
@@ -409,8 +421,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
           ),
           const SizedBox(width: 8),
           InkWell(
-            onTap: () => _openFilterBottomSheet(context, const ['All Statuses', 'Pending', 'Submitted', 'Accepted', 'Rejected']),
-
+            onTap: () => _openFilterBottomSheet(context, _statusList),
             borderRadius: BorderRadius.circular(16),
             child: Container(
               width: 44,
@@ -439,7 +450,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     );
   }
 
-  Widget _buildStatusSummaryCards(BuildContext context, List<RegistrationLink> allLinks) {
+  Widget _buildStatusSummaryCards(BuildContext context, List<RegistrationLink> allLinks, [List<CandidateResponse>? candidateResponses]) {
     final activeLinks = allLinks.where((l) {
       final s = l.linkStatus.trim().toLowerCase();
       return s != 'registered' && s != 'converted';
@@ -448,10 +459,36 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     final currentFilter = ref.watch(responseStatusFilterProvider);
 
     final allCount = activeLinks.length;
-    final pendingCount = activeLinks.where((l) => _normalizeStatus(l.linkStatus, l) == CandidateCardStatus.pending).length;
-    final submittedCount = activeLinks.where((l) => _normalizeStatus(l.linkStatus, l) == CandidateCardStatus.submitted).length;
-    final acceptedCount = activeLinks.where((l) => _normalizeStatus(l.linkStatus, l) == CandidateCardStatus.accepted).length;
-    final rejectedCount = activeLinks.where((l) => _normalizeStatus(l.linkStatus, l) == CandidateCardStatus.rejected).length;
+    final pendingCount = activeLinks.where((l) {
+      final resp = _candidateResponseForLink(l, candidateResponses);
+      final eff = (resp != null && resp.status.isNotEmpty) ? resp.status : l.linkStatus;
+      return _normalizeStatus(eff, l, resp) == CandidateCardStatus.pending;
+    }).length;
+    final submittedCount = activeLinks.where((l) {
+      final resp = _candidateResponseForLink(l, candidateResponses);
+      final eff = (resp != null && resp.status.isNotEmpty) ? resp.status : l.linkStatus;
+      return _normalizeStatus(eff, l, resp) == CandidateCardStatus.submitted;
+    }).length;
+    final correctionCount = activeLinks.where((l) {
+      final resp = _candidateResponseForLink(l, candidateResponses);
+      final eff = (resp != null && resp.status.isNotEmpty) ? resp.status : l.linkStatus;
+      return _normalizeStatus(eff, l, resp) == CandidateCardStatus.correctionRequested;
+    }).length;
+    final resubmittedCount = activeLinks.where((l) {
+      final resp = _candidateResponseForLink(l, candidateResponses);
+      final eff = (resp != null && resp.status.isNotEmpty) ? resp.status : l.linkStatus;
+      return _normalizeStatus(eff, l, resp) == CandidateCardStatus.resubmitted;
+    }).length;
+    final acceptedCount = activeLinks.where((l) {
+      final resp = _candidateResponseForLink(l, candidateResponses);
+      final eff = (resp != null && resp.status.isNotEmpty) ? resp.status : l.linkStatus;
+      return _normalizeStatus(eff, l, resp) == CandidateCardStatus.accepted;
+    }).length;
+    final rejectedCount = activeLinks.where((l) {
+      final resp = _candidateResponseForLink(l, candidateResponses);
+      final eff = (resp != null && resp.status.isNotEmpty) ? resp.status : l.linkStatus;
+      return _normalizeStatus(eff, l, resp) == CandidateCardStatus.rejected;
+    }).length;
 
     return SizedBox(
       height: 64,
@@ -491,6 +528,30 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             isSelected: currentFilter == 'Submitted',
             onTap: () {
               ref.read(responseStatusFilterProvider.notifier).state = 'Submitted';
+              setState(() => _currentPage = 0);
+            },
+          ),
+          const SizedBox(width: 10),
+          _buildStatusTabCard(
+            title: 'Correction Requested',
+            count: correctionCount,
+            icon: Icons.assignment_return_rounded,
+            iconColor: const Color(0xFFD97706),
+            isSelected: currentFilter == 'Correction Requested',
+            onTap: () {
+              ref.read(responseStatusFilterProvider.notifier).state = 'Correction Requested';
+              setState(() => _currentPage = 0);
+            },
+          ),
+          const SizedBox(width: 10),
+          _buildStatusTabCard(
+            title: 'Resubmitted',
+            count: resubmittedCount,
+            icon: Icons.update_rounded,
+            iconColor: const Color(0xFF0284C7),
+            isSelected: currentFilter == 'Resubmitted',
+            onTap: () {
+              ref.read(responseStatusFilterProvider.notifier).state = 'Resubmitted';
               setState(() => _currentPage = 0);
             },
           ),
@@ -1323,23 +1384,28 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
       ref.invalidate(empColumnPreferenceProvider(_tableId));
     }
   }
-
   Color _getStatusColor(String status) {
     switch (status.trim().toLowerCase()) {
       case 'submitted':
-        return Colors.orange;
+      case 'completed':
+        return const Color(0xFF1976D2);
+      case 'correction_requested':
+      case 'correction requested':
+        return const Color(0xFFD97706);
+      case 'resubmitted':
+        return const Color(0xFF0284C7);
       case 'accepted':
-        return Colors.blue;
+        return const Color(0xFF2E7D32);
       case 'registered':
       case 'converted':
-      case 'completed':
       case 'active':
-        return Colors.green;
+        return const Color(0xFF00695C);
       case 'expired':
       case 'rejected':
-        return Colors.redAccent;
+      case 'cancelled':
+        return const Color(0xFFC62828);
       case 'pending':
-        return Colors.orange;
+        return const Color(0xFFE65100);
       default:
         return Colors.grey;
     }
@@ -1410,8 +1476,8 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                       });
                     },
                     cells: [
-                      for (final colName in visibleColumns) DataCell(_buildCellContent(colName, link, employee)),
-                      DataCell(_buildRowActions(link)),
+                      for (final colName in visibleColumns) DataCell(_buildCellContent(colName, link, employee, candidateResponses)),
+                      DataCell(_buildRowActions(link, candidateResponses: candidateResponses)),
                     ],
                   );
                 }).toList(),
@@ -1423,7 +1489,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     );
   }
 
-  Widget _buildCellContent(String columnName, RegistrationLink link, Employee? employee) {
+  Widget _buildCellContent(String columnName, RegistrationLink link, Employee? employee, [List<CandidateResponse>? candidateResponses]) {
     String value = '';
     Widget? customWidget;
     TextStyle? style;
@@ -1444,10 +1510,19 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
         value = _phoneForLink(link, employee);
         break;
       case 'Status':
-        final rawStatus = link.linkStatus.trim();
-        final displayStatus = (rawStatus.toLowerCase() == 'completed' || rawStatus.toLowerCase() == 'pending')
-            ? 'Submitted'
-            : rawStatus;
+        final resp = _candidateResponseForLink(link, candidateResponses);
+        final rawStatus = (resp != null && resp.status.isNotEmpty) ? resp.status.trim() : link.linkStatus.trim();
+        final displayStatus = switch (rawStatus.toLowerCase()) {
+          'correction_requested' || 'correction requested' => 'Correction Requested',
+          'resubmitted' => 'Resubmitted',
+          'accepted' => 'Accepted',
+          'registered' || 'converted' => 'Registered',
+          'rejected' => 'Rejected',
+          'expired' => 'Expired',
+          'pending' => 'Pending',
+          'submitted' || 'completed' || 'used' => 'Submitted',
+          _ => rawStatus.isNotEmpty ? rawStatus : 'Pending',
+        };
         final statusColor = _getStatusColor(displayStatus);
         customWidget = Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -1491,19 +1566,29 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     );
   }
 
-  CandidateCardStatus _normalizeStatus(String rawStatus, [RegistrationLink? link]) {
-    final s = rawStatus.trim().toLowerCase();
+  CandidateCardStatus _normalizeStatus(String rawStatus, [RegistrationLink? link, CandidateResponse? response]) {
+    final effectiveStatus = (response != null && response.status.isNotEmpty) ? response.status : rawStatus;
+    final s = effectiveStatus.trim().toLowerCase();
     if (s == 'registered' || s == 'converted') {
       return CandidateCardStatus.registered;
     }
     if (s == 'rejected' || s == 'expired' || s == 'cancelled') {
       return CandidateCardStatus.rejected;
     }
-    if (s == 'submitted' || s == 'completed' || s == 'used' || s.contains('submit')) {
+    if (s == 'correction_requested' || s == 'correction requested') {
+      return CandidateCardStatus.correctionRequested;
+    }
+    if (s == 'resubmitted') {
+      return CandidateCardStatus.resubmitted;
+    }
+    if (s == 'submitted' || s == 'completed' || s == 'used') {
       return CandidateCardStatus.submitted;
     }
     if (s == 'accepted') {
       return CandidateCardStatus.accepted;
+    }
+    if (s == 'pending') {
+      return CandidateCardStatus.pending;
     }
     if (link != null) {
       final name = link.employeeName.trim();
@@ -1547,13 +1632,24 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     final hasName = rawName.isNotEmpty && rawName != '-';
     final candidateName = hasName ? rawName : 'Unknown Applicant';
 
-    final normalizedStatus = _normalizeStatus(link.linkStatus, link);
+    final resp = _candidateResponseForLink(link, candidateResponses);
+    final normalizedStatus = _normalizeStatus(link.linkStatus, link, resp);
 
     final ({Color bg, Color color, IconData icon}) statusBadge = switch (normalizedStatus) {
       CandidateCardStatus.submitted => (
           bg: const Color(0xFFE3F2FD),
           color: const Color(0xFF1976D2),
           icon: Icons.assignment_turned_in,
+        ),
+      CandidateCardStatus.correctionRequested => (
+          bg: const Color(0xFFFEF3C7),
+          color: const Color(0xFFD97706),
+          icon: Icons.assignment_return_rounded,
+        ),
+      CandidateCardStatus.resubmitted => (
+          bg: const Color(0xFFE0F2FE),
+          color: const Color(0xFF0284C7),
+          icon: Icons.update_rounded,
         ),
       CandidateCardStatus.accepted => (
           bg: const Color(0xFFE8F5E9),
@@ -1578,6 +1674,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     };
 
     final initials = hasName ? _getInitials(candidateName) : '?';
+
     final email = _emailForLink(link, employee);
     final phone = _phoneForLink(link, employee);
     final appliedDate = _formatAppliedDate(link);
@@ -1693,7 +1790,18 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(),
                             itemBuilder: (context) => [
-                              if (normalizedStatus == CandidateCardStatus.submitted || normalizedStatus == CandidateCardStatus.pending) ...[
+                              if (normalizedStatus == CandidateCardStatus.submitted ||
+                                  normalizedStatus == CandidateCardStatus.resubmitted) ...[
+                                const PopupMenuItem(
+                                  value: 'request_correction',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.assignment_return_outlined, size: 18, color: Color(0xFF414A51)),
+                                      SizedBox(width: 8),
+                                      Text('Request Correction', style: TextStyle(fontSize: 13, color: Color(0xFF414A51), fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                ),
                                 const PopupMenuItem(
                                   value: 'accept',
                                   child: Row(
@@ -1749,7 +1857,24 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                               ),
                             ],
                             onSelected: (value) {
-                              if (value == 'accept') {
+                              if (value == 'request_correction') {
+                                showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => RequestCorrectionDialog(
+                                    link: link,
+                                    employee: employee,
+                                    candidateId: _candidateId(link),
+                                    candidateName: candidateName,
+                                    candidateEmail: email,
+                                  ),
+                                ).then((updated) {
+                                  if (updated == true) {
+                                    ref.invalidate(registrationLinksProvider);
+                                    ref.invalidate(candidateResponsesProvider);
+                                    ref.invalidate(activeResponsesProvider);
+                                  }
+                                });
+                              } else if (value == 'accept') {
                                 _setResponseStatus(link, 'Accepted');
                               } else if (value == 'reject') {
                                 _setResponseStatus(link, 'Rejected');
@@ -1860,10 +1985,12 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     );
   }
 
-  Widget _buildRowActions(RegistrationLink link, {bool isMobile = false}) {
-    final status = link.linkStatus.trim().toLowerCase();
-    final isSubmittedOrPending = status == 'submitted' || status == 'pending' || status == 'completed';
-    final isAccepted = status == 'accepted';
+  Widget _buildRowActions(RegistrationLink link, {bool isMobile = false, List<CandidateResponse>? candidateResponses}) {
+    final resp = _candidateResponseForLink(link, candidateResponses);
+    final normStatus = _normalizeStatus(link.linkStatus, link, resp);
+    final isSubmittedOrResubmitted = normStatus == CandidateCardStatus.submitted ||
+        normStatus == CandidateCardStatus.resubmitted;
+    final isAccepted = normStatus == CandidateCardStatus.accepted;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -1878,7 +2005,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
           icon: Icon(Icons.remove_red_eye_outlined, size: isMobile ? 14 : 16, color: AppColors.textPrimary),
           label: Text('View', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
         ),
-        if (isSubmittedOrPending) ...[
+        if (isSubmittedOrResubmitted) ...[
           const SizedBox(width: 6),
           TextButton.icon(
             style: TextButton.styleFrom(
@@ -2040,6 +2167,8 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
   Color _getStatusBgColor(String status) {
     final s = status.trim().toLowerCase();
     if (s == 'submitted' || s == 'completed') return const Color(0xFFE3F2FD);
+    if (s == 'correction_requested' || s == 'correction requested') return const Color(0xFFFEF3C7);
+    if (s == 'resubmitted') return const Color(0xFFE0F2FE);
     if (s == 'accepted') return const Color(0xFFE8F5E9);
     if (s == 'registered' || s == 'converted') return const Color(0xFFE0F2F1);
     if (s == 'rejected' || s == 'expired' || s == 'cancelled') return const Color(0xFFFFEBEE);
@@ -2049,6 +2178,8 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
   Color _getStatusTextColor(String status) {
     final s = status.trim().toLowerCase();
     if (s == 'submitted' || s == 'completed') return const Color(0xFF1976D2);
+    if (s == 'correction_requested' || s == 'correction requested') return const Color(0xFFD97706);
+    if (s == 'resubmitted') return const Color(0xFF0284C7);
     if (s == 'accepted') return const Color(0xFF2E7D32);
     if (s == 'registered' || s == 'converted') return const Color(0xFF00695C);
     if (s == 'rejected' || s == 'expired' || s == 'cancelled') return const Color(0xFFC62828);
@@ -2072,11 +2203,15 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     final normalized = _normalizeStatus(candidateResp?.status ?? link.linkStatus, link);
     final displayStatus = switch (normalized) {
       CandidateCardStatus.submitted => 'Submitted',
+      CandidateCardStatus.correctionRequested => 'Correction Requested',
+      CandidateCardStatus.resubmitted => 'Resubmitted',
       CandidateCardStatus.accepted => 'Accepted',
       CandidateCardStatus.registered => 'Converted',
       CandidateCardStatus.rejected => 'Rejected',
       CandidateCardStatus.pending => 'Pending',
     };
+
+
 
     showDialog<void>(
       context: context,
@@ -2095,54 +2230,27 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Top Header with Category Subtitle & Close X Button
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Candidate details',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          displayName,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                      ],
+              // Top Close X Button
+              Align(
+                alignment: Alignment.topRight,
+                child: InkWell(
+                  onTap: () => Navigator.of(context).pop(),
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFF0F4F8),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.close,
+                      size: 18,
+                      color: AppColors.textPrimary,
                     ),
                   ),
-                  InkWell(
-                    onTap: () => Navigator.of(context).pop(),
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFF0F4F8),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.close,
-                        size: 18,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
 
               // Profile Summary Header Card
               Container(
@@ -2325,28 +2433,80 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
               ),
               const SizedBox(height: 12),
 
-              // Bottom Close Button (No Accept/Reject buttons)
-              SizedBox(
-                width: double.infinity,
-                height: 42,
-                child: OutlinedButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFFCBD5E1)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+              // Bottom Action Buttons: [ Close ] [ Request Correction ]
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 42,
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFFCBD5E1)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Close',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                  child: const Text(
-                    'Close',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                  if (normalized == CandidateCardStatus.submitted ||
+                      normalized == CandidateCardStatus.resubmitted ||
+                      normalized == CandidateCardStatus.pending) ...[
+                    const SizedBox(width: 12),
+
+                    Expanded(
+                      child: SizedBox(
+                        height: 42,
+                        child: FilledButton.icon(
+                          onPressed: () async {
+                            Navigator.of(context).pop();
+                            final updated = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => RequestCorrectionDialog(
+                                link: link,
+                                employee: employee,
+                                candidateId: candidateId,
+                                candidateName: displayName,
+                                candidateEmail: _emailForLink(link, employee),
+                              ),
+                            );
+                            if (updated == true) {
+                              ref.invalidate(registrationLinksProvider);
+                              ref.invalidate(candidateResponsesProvider);
+                              ref.invalidate(activeResponsesProvider);
+                            }
+                          },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF414A51),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: const Icon(Icons.assignment_return_outlined, size: 16),
+                          label: const Text(
+                            'Request Correction',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
+                  ],
+                ],
               ),
+
             ],
           ),
         ),
@@ -2356,18 +2516,29 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
 
   Future<void> _setResponseStatus(RegistrationLink link, String status) async {
     try {
+      final candResponses = ref.read(candidateResponsesProvider).valueOrNull;
+      final resp = _candidateResponseForLink(link, candResponses);
+      final effectiveLinkId = (resp != null && resp.linkId.isNotEmpty) ? resp.linkId : link.linkId;
+      final effectiveCandId = (resp != null && resp.candidateId.isNotEmpty)
+          ? resp.candidateId
+          : (link.employeeId.isNotEmpty ? link.employeeId : null);
+
       await ref.read(employeeRepositoryProvider).updateRegistrationLinkStatus(
-            linkId: link.linkId,
+            linkId: effectiveLinkId,
             linkStatus: status,
+            candidateId: effectiveCandId,
           );
       ref.invalidate(registrationLinksProvider);
+      ref.invalidate(candidateResponsesProvider);
       ref.invalidate(employeesProvider);
       ref.invalidate(allEmployeesProvider);
+      ref.invalidate(activeResponsesProvider);
       await ref.read(registrationLinksProvider.future);
+      await ref.read(candidateResponsesProvider.future);
       await ref.read(allEmployeesProvider.future);
       
       // Auto-switch to the target status filter tab so the user sees the updated item immediately
-      if (status == 'Accepted' || status == 'Rejected' || status == 'Submitted' || status == 'Pending') {
+      if (status == 'Accepted' || status == 'Rejected' || status == 'Submitted' || status == 'Pending' || status == 'Correction Requested' || status == 'Resubmitted') {
         ref.read(responseStatusFilterProvider.notifier).state = status;
       }
       
@@ -2427,6 +2598,18 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
           (link.linkId.isNotEmpty && employee.employeeId == link.linkId) ||
           (link.employeeName.isNotEmpty && employee.fullName.trim().toLowerCase() == link.employeeName.trim().toLowerCase())) {
         return employee;
+      }
+    }
+    return null;
+  }
+
+  CandidateResponse? _candidateResponseForLink(RegistrationLink link, [List<CandidateResponse>? candidateResponses]) {
+    if (candidateResponses == null) return null;
+    for (final resp in candidateResponses) {
+      if ((link.linkId.isNotEmpty && (resp.linkId == link.linkId || resp.candidateId == link.linkId)) ||
+          (link.employeeId.isNotEmpty && (resp.candidateId == link.employeeId || resp.linkId == link.employeeId)) ||
+          (link.employeeName.isNotEmpty && resp.employeeData.fullName.trim().toLowerCase() == link.employeeName.trim().toLowerCase())) {
+        return resp;
       }
     }
     return null;

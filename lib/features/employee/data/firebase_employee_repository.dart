@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -10,6 +11,7 @@ import 'package:image/image.dart' as img;
 
 import '../../organization/domain/column_preference.dart';
 import '../domain/candidate_response.dart';
+import '../domain/correction_request.dart';
 import '../domain/employee.dart';
 import '../domain/employee_repository.dart';
 import '../domain/registration_link.dart';
@@ -36,8 +38,12 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   CollectionReference<Map<String, dynamic>> get _candidateResponsesRef =>
       _firestore.collection('candidate_responses');
 
+  CollectionReference<Map<String, dynamic>> get _correctionRequestsRef =>
+      _firestore.collection('correction_requests');
+
   CollectionReference<Map<String, dynamic>> get _columnPreferencesRef =>
       _firestore.collection('column_preferences');
+
 
   String _folderForEmployee(String employeeId, String role) {
     final normalizedRole = role.trim().isEmpty ? 'employees' : role.trim().toLowerCase();
@@ -104,6 +110,32 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     }
 
     return Employee.fromMap(mutableMap);
+  }
+
+  @override
+  Stream<Employee?> watchEmployee(String emailOrId) {
+    final target = emailOrId.trim();
+    if (target.isEmpty) return Stream.value(null);
+
+    if (target.contains('@')) {
+      return _employeesRef
+          .where('email_address', isEqualTo: target)
+          .snapshots()
+          .map((snapshot) {
+        if (snapshot.docs.isNotEmpty) {
+          final doc = snapshot.docs.first;
+          return _employeeFromFirestore(doc.data(), doc.id);
+        }
+        return null;
+      });
+    }
+
+    return _employeesRef.doc(target).snapshots().map((doc) {
+      if (doc.exists && doc.data() != null) {
+        return _employeeFromFirestore(doc.data()!, doc.id);
+      }
+      return null;
+    });
   }
 
   @override
@@ -436,8 +468,12 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       final candMap = <String, CandidateResponse>{};
       for (final doc in candSnapshot.docs) {
         final resp = CandidateResponse.fromMap(doc.data());
-        candMap[resp.linkId] = resp;
-        candMap[resp.candidateId] = resp;
+        if (resp.linkId.isNotEmpty) candMap[resp.linkId] = resp;
+        if (resp.candidateId.isNotEmpty) candMap[resp.candidateId] = resp;
+        candMap[doc.id] = resp;
+        if (resp.employeeData.fullName.isNotEmpty) {
+          candMap[resp.employeeData.fullName.trim().toLowerCase()] = resp;
+        }
       }
 
       final now = DateTime.now();
@@ -446,14 +482,30 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         final data = Map<String, dynamic>.from(doc.data());
         final linkId = (data['link_id']?.toString() ?? doc.id).trim();
         data['link_id'] = linkId.isNotEmpty ? linkId : doc.id;
+        final empId = (data['employee_id']?.toString() ?? '').trim();
+        final empName = (data['employee_name']?.toString() ?? '').trim().toLowerCase();
 
-        final cand = candMap[linkId] ?? candMap[data['employee_id']?.toString() ?? ''];
+        final cand = candMap[linkId] ??
+            candMap[doc.id] ??
+            (empId.isNotEmpty ? candMap[empId] : null) ??
+            (empName.isNotEmpty && empName != '-' ? candMap[empName] : null);
+
         if (cand != null) {
-          if ((data['employee_name']?.toString() ?? '').isEmpty) {
+          if ((data['employee_name']?.toString() ?? '').isEmpty || data['employee_name'] == '-') {
             data['employee_name'] = cand.employeeData.fullName;
           }
-          if ((data['employee_id']?.toString() ?? '').isEmpty) {
+          if ((data['employee_id']?.toString() ?? '').isEmpty || data['employee_id'] == '-') {
             data['employee_id'] = cand.candidateId;
+          }
+          if (cand.status.isNotEmpty && cand.status.toLowerCase() != 'pending') {
+            data['link_status'] = cand.status;
+            data['status'] = cand.status;
+          }
+          if ((data['submitted_date']?.toString() ?? '').isEmpty) {
+            data['submitted_date'] = cand.submittedDate;
+          }
+          if ((data['submitted_by']?.toString() ?? '').isEmpty) {
+            data['submitted_by'] = cand.employeeData.fullName;
           }
         }
 
@@ -472,12 +524,14 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         links.add(link);
       }
 
-
       for (final doc in candSnapshot.docs) {
         final cand = CandidateResponse.fromMap(doc.data());
         final s = cand.status.toLowerCase();
         if (s != 'converted' && s != 'registered') {
-          final exists = links.any((l) => l.linkId == cand.linkId || l.employeeId == cand.candidateId);
+          final exists = links.any((l) =>
+              (cand.linkId.isNotEmpty && l.linkId == cand.linkId) ||
+              (cand.candidateId.isNotEmpty && (l.employeeId == cand.candidateId || l.linkId == cand.candidateId)) ||
+              (cand.employeeData.fullName.isNotEmpty && l.employeeName.trim().toLowerCase() == cand.employeeData.fullName.trim().toLowerCase()));
           if (!exists) {
             links.add(RegistrationLink(
               id: cand.id,
@@ -559,15 +613,77 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   Future<void> updateRegistrationLinkStatus({
     required String linkId,
     required String linkStatus,
+    String? candidateId,
   }) async {
     try {
-      await _registrationLinksRef.doc(linkId).set(
-        {
-          'link_status': linkStatus,
-          'updated_at': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      final batch = _firestore.batch();
+      if (linkId.isNotEmpty) {
+        batch.set(
+          _registrationLinksRef.doc(linkId),
+          {
+            'link_status': linkStatus,
+            'status': linkStatus,
+            'updated_at': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      }
+      if (candidateId != null && candidateId.isNotEmpty) {
+        batch.set(
+          _candidateResponsesRef.doc(candidateId),
+          {
+            'status': linkStatus,
+            'updated_at': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      }
+
+      // Also batch update any candidate_responses matching linkId
+      if (linkId.isNotEmpty) {
+        final candByLink = await _candidateResponsesRef.where('link_id', isEqualTo: linkId).get();
+        for (final doc in candByLink.docs) {
+          batch.set(
+            doc.reference,
+            {
+              'status': linkStatus,
+              'updated_at': FieldValue.serverTimestamp(),
+            },
+            SetOptions(merge: true),
+          );
+        }
+      }
+
+      // Also batch update any candidate_responses or registration_links matching candidateId
+      if (candidateId != null && candidateId.isNotEmpty) {
+        final candById = await _candidateResponsesRef.where('candidate_id', isEqualTo: candidateId).get();
+        for (final doc in candById.docs) {
+          batch.set(
+            doc.reference,
+            {
+              'status': linkStatus,
+              'updated_at': FieldValue.serverTimestamp(),
+            },
+            SetOptions(merge: true),
+          );
+        }
+
+        final linksByCand = await _registrationLinksRef.where('employee_id', isEqualTo: candidateId).get();
+        for (final doc in linksByCand.docs) {
+          batch.set(
+            doc.reference,
+            {
+              'link_status': linkStatus,
+              'status': linkStatus,
+              'updated_at': FieldValue.serverTimestamp(),
+            },
+            SetOptions(merge: true),
+          );
+        }
+      }
+
+      await batch.commit();
+
       final query = await _registrationLinksRef
           .where('link_id', isEqualTo: linkId)
           .get();
@@ -575,12 +691,15 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         await doc.reference.set(
           {
             'link_status': linkStatus,
+            'status': linkStatus,
             'updated_at': FieldValue.serverTimestamp(),
           },
           SetOptions(merge: true),
         );
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('updateRegistrationLinkStatus error: $e');
+    }
   }
 
   @override
@@ -695,6 +814,264 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     } catch (_) {
       return [];
     }
+  }
+
+  @override
+  Future<String> createCorrectionRequest({
+    required String candidateId,
+    required String linkId,
+    required String candidateResponseId,
+    required String remarks,
+    required String requestedBy,
+    bool allowEditing = true,
+    Duration validity = const Duration(days: 7),
+  }) async {
+    final batch = _firestore.batch();
+
+    // Invalidate / expire any existing active correction requests for this candidate/link
+    try {
+      final existingActive = await _correctionRequestsRef
+          .where('candidate_id', isEqualTo: candidateId)
+          .where('status', isEqualTo: 'active')
+          .get();
+      for (final doc in existingActive.docs) {
+        batch.update(doc.reference, {
+          'status': 'expired',
+          'updated_at': FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (_) {}
+
+    // Generate a cryptographically secure 32-byte token
+    final random = Random.secure();
+    final values = List<int>.generate(32, (i) => random.nextInt(256));
+    final rawToken = values.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    final tokenHash = CorrectionRequest.hashToken(rawToken);
+
+    final now = DateTime.now();
+    final expiresAt = now.add(validity).toIso8601String();
+    final reqDocRef = _correctionRequestsRef.doc();
+
+    final request = CorrectionRequest(
+      id: reqDocRef.id,
+      candidateResponseId: candidateResponseId.isNotEmpty ? candidateResponseId : candidateId,
+      candidateId: candidateId,
+      linkId: linkId,
+      remarks: remarks.trim(),
+      status: 'active',
+      allowEditing: allowEditing,
+      tokenHash: tokenHash,
+      createdAt: now.toIso8601String(),
+      expiresAt: expiresAt,
+      requestedBy: requestedBy,
+    );
+
+    batch.set(reqDocRef, request.toMap());
+
+    // Update candidate response and registration link status to 'Correction Requested'
+    if (candidateId.isNotEmpty) {
+      batch.set(
+        _candidateResponsesRef.doc(candidateId),
+        {
+          'status': 'Correction Requested',
+          'has_correction_request': true,
+          'updated_at': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    }
+
+    if (linkId.isNotEmpty) {
+      final linkQuery = await _registrationLinksRef
+          .where('link_id', isEqualTo: linkId)
+          .limit(1)
+          .get();
+      if (linkQuery.docs.isNotEmpty) {
+        batch.set(
+          linkQuery.docs.first.reference,
+          {
+            'link_status': 'Correction Requested',
+            'status': 'Correction Requested',
+            'updated_at': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      }
+    }
+
+    await batch.commit();
+    return rawToken;
+  }
+
+  @override
+  Future<CorrectionRequest?> validateCorrectionToken(String rawToken) async {
+    if (rawToken.trim().isEmpty) return null;
+    final tokenHash = CorrectionRequest.hashToken(rawToken);
+
+    try {
+      final query = await _correctionRequestsRef
+          .where('token_hash', isEqualTo: tokenHash)
+          .limit(1)
+          .get();
+
+      if (query.docs.isEmpty) return null;
+
+      final doc = query.docs.first;
+      final request = CorrectionRequest.fromMap(doc.data(), doc.id);
+
+      if (request.status != 'active' || request.usedAt != null) {
+        return null;
+      }
+
+      if (request.isExpired) {
+        await doc.reference.update({
+          'status': 'expired',
+          'updated_at': FieldValue.serverTimestamp(),
+        });
+        return null;
+      }
+
+      return request;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<CandidateResponse?> getCandidateResponseForCorrection(String rawToken) async {
+    final req = await validateCorrectionToken(rawToken);
+    if (req == null) return null;
+
+    if (req.candidateId.isNotEmpty) {
+      final byCandId = await getCandidateResponseByCandidateId(req.candidateId);
+      if (byCandId != null) return byCandId;
+    }
+
+    if (req.linkId.isNotEmpty) {
+      final byLinkId = await getCandidateResponseByLinkId(req.linkId);
+      if (byLinkId != null) return byLinkId;
+    }
+
+    return null;
+  }
+
+  @override
+  Future<List<CorrectionRequest>> getCorrectionRequestsForCandidate(String candidateId) async {
+    try {
+      final query = await _correctionRequestsRef
+          .where('candidate_id', isEqualTo: candidateId)
+          .get();
+      final list = query.docs
+          .map((d) => CorrectionRequest.fromMap(d.data(), d.id))
+          .toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  @override
+  Future<bool> submitCandidateCorrection({
+    required String rawToken,
+    required Employee updatedEmployee,
+  }) async {
+    final req = await validateCorrectionToken(rawToken);
+    if (req == null || !req.isValidActive) return false;
+
+    final batch = _firestore.batch();
+    final nowIso = DateTime.now().toIso8601String();
+
+    Employee finalEmp = updatedEmployee;
+    if (finalEmp.profileImageUrl.isNotEmpty &&
+        (finalEmp.profileImageUrl.startsWith('data:') || finalEmp.profileImageUrl.startsWith('blob:'))) {
+      final storageUrl = await _uploadEmployeePhotoToStorage(req.candidateId, finalEmp.profileImageUrl);
+      finalEmp = finalEmp.copyWith(profileImageUrl: storageUrl);
+    }
+
+    final candidateResp = CandidateResponse(
+      candidateId: req.candidateId,
+      linkId: req.linkId,
+      organizationId: finalEmp.organizationId,
+      employeeData: finalEmp,
+      submittedDate: nowIso,
+      status: 'Resubmitted',
+    );
+
+    if (req.candidateId.isNotEmpty) {
+      batch.set(
+        _candidateResponsesRef.doc(req.candidateId),
+        candidateResp.toMap(),
+        SetOptions(merge: true),
+      );
+    }
+    if (req.candidateResponseId.isNotEmpty && req.candidateResponseId != req.candidateId) {
+      batch.set(
+        _candidateResponsesRef.doc(req.candidateResponseId),
+        candidateResp.toMap(),
+        SetOptions(merge: true),
+      );
+    }
+
+    if (req.linkId.isNotEmpty) {
+      batch.set(
+        _registrationLinksRef.doc(req.linkId),
+        {
+          'link_status': 'Resubmitted',
+          'status': 'Resubmitted',
+          'submitted_date': nowIso,
+          'submitted_by': finalEmp.fullName,
+          'employee_name': finalEmp.fullName,
+          'employee_id': req.candidateId,
+          'updated_at': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    }
+
+    batch.update(_correctionRequestsRef.doc(req.id), {
+      'status': 'completed',
+      'used_at': nowIso,
+      'updated_at': FieldValue.serverTimestamp(),
+    });
+
+    await batch.commit();
+
+    // Also update any queried docs
+    if (req.linkId.isNotEmpty) {
+      final linkQuery = await _registrationLinksRef.where('link_id', isEqualTo: req.linkId).get();
+      for (final doc in linkQuery.docs) {
+        await doc.reference.set(
+          {
+            'link_status': 'Resubmitted',
+            'status': 'Resubmitted',
+            'submitted_date': nowIso,
+            'submitted_by': finalEmp.fullName,
+            'employee_name': finalEmp.fullName,
+            'updated_at': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      }
+    }
+    if (req.candidateId.isNotEmpty) {
+      final candLinkQuery = await _registrationLinksRef.where('employee_id', isEqualTo: req.candidateId).get();
+      for (final doc in candLinkQuery.docs) {
+        await doc.reference.set(
+          {
+            'link_status': 'Resubmitted',
+            'status': 'Resubmitted',
+            'submitted_date': nowIso,
+            'submitted_by': finalEmp.fullName,
+            'employee_name': finalEmp.fullName,
+            'updated_at': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      }
+    }
+
+    return true;
   }
 
   @override

@@ -267,6 +267,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
         await repo.updateEmployee(updatedEmployee);
       } else {
         await repo.addEmployee(updatedEmployee);
+      }
       ref.invalidate(employeesProvider);
       ref.invalidate(allEmployeesProvider);
       ref.invalidate(currentEmployeeProvider);
@@ -913,6 +914,17 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                       final categoryPermissions = entry.value;
                       final isFirst = entry.key == Employee.sidebarPermissionsByCategory.keys.first;
 
+                      final allSelected = categoryPermissions.isNotEmpty &&
+                          categoryPermissions.every(
+                            (p) => _selectedPermissions.contains(p),
+                          );
+                      final someSelected = categoryPermissions.any(
+                        (p) => _selectedPermissions.contains(p),
+                      );
+                      final bool? checkboxValue = allSelected
+                          ? true
+                          : (someSelected ? null : false);
+
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -921,13 +933,57 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                               top: isFirst ? 0.0 : 12.0,
                               bottom: 6.0,
                             ),
-                            child: Text(
-                              categoryName,
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF667085),
-                                letterSpacing: 0.8,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(4),
+                              onTap: () {
+                                setState(() {
+                                  if (allSelected) {
+                                    _selectedPermissions.removeAll(
+                                      categoryPermissions,
+                                    );
+                                  } else {
+                                    _selectedPermissions.addAll(
+                                      categoryPermissions,
+                                    );
+                                  }
+                                });
+                              },
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: Checkbox(
+                                      tristate: true,
+                                      value: checkboxValue,
+                                      activeColor: AppColors.active,
+                                      onChanged: (val) {
+                                        setState(() {
+                                          if (allSelected) {
+                                            _selectedPermissions.removeAll(
+                                              categoryPermissions,
+                                            );
+                                          } else {
+                                            _selectedPermissions.addAll(
+                                              categoryPermissions,
+                                            );
+                                          }
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    categoryName,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF667085),
+                                      letterSpacing: 0.8,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),

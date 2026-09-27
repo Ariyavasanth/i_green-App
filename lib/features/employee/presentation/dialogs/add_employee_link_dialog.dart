@@ -43,13 +43,10 @@ class _AddEmployeeLinkDialogState
         origin = uri.origin;
       }
     } catch (_) {}
-    final initialUrl = (origin.startsWith('http') &&
-            !origin.contains('localhost') &&
-            !origin.contains('127.0.0.1'))
-        ? origin
-        : 'https://i-green-tech.web.app';
+    final initialUrl = origin.isNotEmpty ? origin : '';
     _baseUrlController = TextEditingController(text: initialUrl);
   }
+
 
   @override
   void dispose() {

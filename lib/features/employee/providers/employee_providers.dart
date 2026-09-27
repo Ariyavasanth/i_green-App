@@ -5,11 +5,26 @@ import '../../authentication/providers/authentication_providers.dart';
 import '../../organization/domain/column_preference.dart';
 import '../data/firebase_employee_repository.dart';
 import '../domain/candidate_response.dart';
+import '../domain/correction_request.dart';
 import '../domain/employee.dart';
 import '../domain/employee_repository.dart';
 import '../domain/registration_link.dart';
 
+
+final currentEmployeeStreamProvider = StreamProvider<Employee?>((ref) {
+  final emailOrId = ref.watch(currentUserEmailProvider);
+  if (emailOrId == null || emailOrId.trim().isEmpty) {
+    return Stream.value(null);
+  }
+  return ref.watch(employeeRepositoryProvider).watchEmployee(emailOrId.trim());
+});
+
 final currentEmployeeProvider = Provider<Employee?>((ref) {
+  final streamedAsync = ref.watch(currentEmployeeStreamProvider);
+  final streamedEmployee = streamedAsync.asData?.value;
+  if (streamedEmployee != null) {
+    return streamedEmployee;
+  }
   final emailOrId = ref.watch(currentUserEmailProvider);
   if (emailOrId == null || emailOrId.trim().isEmpty) {
     return null;
@@ -52,7 +67,14 @@ final candidateResponseByCandidateIdProvider =
   (ref, candidateId) => ref.watch(employeeRepositoryProvider).getCandidateResponseByCandidateId(candidateId),
 );
 
+final correctionRequestsForCandidateProvider =
+    FutureProvider.family<List<CorrectionRequest>, String>(
+  (ref, candidateId) =>
+      ref.watch(employeeRepositoryProvider).getCorrectionRequestsForCandidate(candidateId),
+);
+
 final employeeRepositoryProvider = Provider<EmployeeRepository>(
+
   (ref) => FirebaseEmployeeRepository(),
 );
 

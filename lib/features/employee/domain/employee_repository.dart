@@ -1,11 +1,13 @@
 import 'dart:typed_data';
 
 import 'candidate_response.dart';
+import 'correction_request.dart';
 import 'employee.dart';
 import 'registration_link.dart';
 import '../../organization/domain/column_preference.dart';
 
 abstract class EmployeeRepository {
+  Stream<Employee?> watchEmployee(String emailOrId);
   Future<List<Employee>> getEmployees();
   Future<List<Employee>> getAllEmployees();
   Future<Employee?> getEmployeeById(int id);
@@ -43,6 +45,7 @@ abstract class EmployeeRepository {
   Future<void> updateRegistrationLinkStatus({
     required String linkId,
     required String linkStatus,
+    String? candidateId,
   });
   Future<Employee> submitEmployeeRegistration({
     required String linkId,
@@ -61,6 +64,25 @@ abstract class EmployeeRepository {
   Future<CandidateResponse?> getCandidateResponseByLinkId(String linkId);
   Future<CandidateResponse?> getCandidateResponseByCandidateId(String candidateId);
   Future<List<CandidateResponse>> getCandidateResponses();
+
+  // Candidate Correction Requests
+  Future<String> createCorrectionRequest({
+    required String candidateId,
+    required String linkId,
+    required String candidateResponseId,
+    required String remarks,
+    required String requestedBy,
+    bool allowEditing = true,
+    Duration validity = const Duration(days: 7),
+  });
+  Future<CorrectionRequest?> validateCorrectionToken(String rawToken);
+  Future<CandidateResponse?> getCandidateResponseForCorrection(String rawToken);
+  Future<List<CorrectionRequest>> getCorrectionRequestsForCandidate(String candidateId);
+  Future<bool> submitCandidateCorrection({
+    required String rawToken,
+    required Employee updatedEmployee,
+  });
+
   Future<void> clearAllData();
 
   Future<ColumnPreference?> getColumnPreference(String tableId);
@@ -68,3 +90,4 @@ abstract class EmployeeRepository {
 
   Future<String> getNextEmployeeId();
 }
+
