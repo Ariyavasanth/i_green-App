@@ -1,4 +1,7 @@
+import 'dart:io' as io;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 
 import '../domain/business_unit.dart';
@@ -9,11 +12,9 @@ import '../domain/location.dart';
 import '../domain/organization.dart';
 import '../domain/organization_repository.dart';
 
-/// Robust Firestore implementation of OrganizationRepository with auto-seeding
-/// and safe fallback for offline / uninitialized environments.
+/// Robust Firestore implementation of OrganizationRepository.
 class FirebaseOrganizationRepository implements OrganizationRepository {
   final FirebaseFirestore? _customFirestore;
-  bool _seeded = false;
 
   FirebaseOrganizationRepository({FirebaseFirestore? firestore})
       : _customFirestore = firestore;
@@ -33,216 +34,31 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
   CollectionReference<Map<String, dynamic>>? get _designationsRef => _firestore?.collection('designations');
   CollectionReference<Map<String, dynamic>>? get _colPrefRef => _firestore?.collection('column_preferences');
 
-  static const String _orgName = 'IGreentec Engg. India Pvt. Ltd.';
-
-  static final Organization _initialSeedOrg = const Organization(
-    id: 1,
-    name: _orgName,
-    businessType: 'Private Limited Company',
-    industryType: 'Engineering & Manufacturing',
-    businessUnits: 'Engineering & Manufacturing, Projects & Services, Corporate Operations',
-    locations: 'Chennai Head Office, Chennai Manufacturing Plant',
-    address: 'No. 25, Industrial Estate, Ambattur, Chennai, Tamil Nadu - 600058',
-    phoneNumber: '+91 44 4567 8900',
-    emailAddress: 'info@igreentec.example',
-    website: 'www.igreentec.example',
-    taxId: '33ABCDE1234F1Z5',
-  );
-
-  static final List<BusinessUnit> _initialSeedBUs = [
-    const BusinessUnit(id: 1, organizationName: _orgName, unitName: 'Engineering & Manufacturing', description: 'Core engineering, design, and plant manufacturing operations.'),
-    const BusinessUnit(id: 2, organizationName: _orgName, unitName: 'Projects & Services', description: 'On-site execution, HDD, trenchless, and utility infrastructure services.'),
-    const BusinessUnit(id: 3, organizationName: _orgName, unitName: 'Corporate Operations', description: 'HR, Finance, IT, Administration, Sales and corporate functions.'),
-  ];
-
-  static final List<Location> _initialSeedLocations = [
-    const Location(id: 1, organizationName: _orgName, businessUnitName: 'Engineering & Manufacturing', locationName: 'Chennai Manufacturing Plant', address: 'Plot No. 45, Ambattur Industrial Estate, Chennai - 600058'),
-    const Location(id: 2, organizationName: _orgName, businessUnitName: 'Corporate Operations', locationName: 'Chennai Head Office', address: 'No. 25, Greams Road, Thousand Lights, Chennai - 600006'),
-    const Location(id: 3, organizationName: _orgName, businessUnitName: 'Projects & Services', locationName: 'Chennai Manufacturing Plant', address: 'Plot No. 45, Ambattur Industrial Estate, Chennai - 600058'),
-  ];
-
-  static final List<Department> _initialSeedDepts = [
-    const Department(id: 1, organizationName: _orgName, businessUnitName: 'Engineering & Manufacturing', departmentName: 'Engineering', departmentHead: 'Arun Kumar', reportingHierarchy: 'Manager', workLocation: 'Chennai Manufacturing Plant'),
-    const Department(id: 2, organizationName: _orgName, businessUnitName: 'Engineering & Manufacturing', departmentName: 'Production', departmentHead: 'Suresh Kumar', reportingHierarchy: 'Manager', workLocation: 'Chennai Manufacturing Plant'),
-    const Department(id: 3, organizationName: _orgName, businessUnitName: 'Engineering & Manufacturing', departmentName: 'Quality Assurance', departmentHead: 'Priya Raj', reportingHierarchy: 'Manager', workLocation: 'Chennai Manufacturing Plant'),
-    const Department(id: 4, organizationName: _orgName, businessUnitName: 'Projects & Services', departmentName: 'Projects', departmentHead: 'Karthik M', reportingHierarchy: 'Manager', workLocation: 'Chennai Manufacturing Plant'),
-    const Department(id: 5, organizationName: _orgName, businessUnitName: 'Engineering & Manufacturing', departmentName: 'Purchase & Procurement', departmentHead: 'Divya S', reportingHierarchy: 'Manager', workLocation: 'Chennai Manufacturing Plant'),
-    const Department(id: 6, organizationName: _orgName, businessUnitName: 'Corporate Operations', departmentName: 'Sales & Marketing', departmentHead: 'Naveen Kumar', reportingHierarchy: 'Manager', workLocation: 'Chennai Head Office'),
-    const Department(id: 7, organizationName: _orgName, businessUnitName: 'Corporate Operations', departmentName: 'Human Resources', departmentHead: 'Meena R', reportingHierarchy: 'Manager', workLocation: 'Chennai Head Office'),
-    const Department(id: 8, organizationName: _orgName, businessUnitName: 'Corporate Operations', departmentName: 'Finance & Accounts', departmentHead: 'Ravi Shankar', reportingHierarchy: 'Head', workLocation: 'Chennai Head Office'),
-    const Department(id: 9, organizationName: _orgName, businessUnitName: 'Corporate Operations', departmentName: 'Administration', departmentHead: 'Anitha P', reportingHierarchy: 'Manager', workLocation: 'Chennai Head Office'),
-    const Department(id: 10, organizationName: _orgName, businessUnitName: 'Corporate Operations', departmentName: 'Information Technology', departmentHead: 'Vijay Kumar', reportingHierarchy: 'Manager', workLocation: 'Chennai Head Office'),
-  ];
-
-  static final List<Designation> _initialSeedDesignations = [
-    // Engineering
-    const Designation(id: 1, organizationName: _orgName, departmentName: 'Engineering', designationName: 'Technical Head', hierarchyLevel: HierarchyLevel.head),
-    const Designation(id: 2, organizationName: _orgName, departmentName: 'Engineering', designationName: 'Engineering Manager', hierarchyLevel: HierarchyLevel.manager),
-    const Designation(id: 3, organizationName: _orgName, departmentName: 'Engineering', designationName: 'Senior Design Engineer', hierarchyLevel: HierarchyLevel.senior),
-    const Designation(id: 4, organizationName: _orgName, departmentName: 'Engineering', designationName: 'Design Engineer', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 5, organizationName: _orgName, departmentName: 'Engineering', designationName: 'Mechanical Engineer', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 6, organizationName: _orgName, departmentName: 'Engineering', designationName: 'Electrical Engineer', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 7, organizationName: _orgName, departmentName: 'Engineering', designationName: 'Junior Engineer', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 8, organizationName: _orgName, departmentName: 'Engineering', designationName: 'CAD Engineer', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 9, organizationName: _orgName, departmentName: 'Engineering', designationName: 'CAD Designer', hierarchyLevel: HierarchyLevel.employee),
-
-    // Production
-    const Designation(id: 10, organizationName: _orgName, departmentName: 'Production', designationName: 'Factory Manager', hierarchyLevel: HierarchyLevel.manager),
-    const Designation(id: 11, organizationName: _orgName, departmentName: 'Production', designationName: 'Production Manager', hierarchyLevel: HierarchyLevel.manager),
-    const Designation(id: 12, organizationName: _orgName, departmentName: 'Production', designationName: 'Production Engineer', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 13, organizationName: _orgName, departmentName: 'Production', designationName: 'Production Supervisor', hierarchyLevel: HierarchyLevel.supervisor),
-    const Designation(id: 14, organizationName: _orgName, departmentName: 'Production', designationName: 'Factory Coordinator', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 15, organizationName: _orgName, departmentName: 'Production', designationName: 'Machine Operator', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 16, organizationName: _orgName, departmentName: 'Production', designationName: 'Operator', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 17, organizationName: _orgName, departmentName: 'Production', designationName: 'Production Trainee', hierarchyLevel: HierarchyLevel.trainee),
-
-    // Quality Assurance
-    const Designation(id: 18, organizationName: _orgName, departmentName: 'Quality Assurance', designationName: 'Quality Manager', hierarchyLevel: HierarchyLevel.manager),
-    const Designation(id: 19, organizationName: _orgName, departmentName: 'Quality Assurance', designationName: 'Quality Engineer', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 20, organizationName: _orgName, departmentName: 'Quality Assurance', designationName: 'Quality Inspector', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 21, organizationName: _orgName, departmentName: 'Quality Assurance', designationName: 'QA Executive', hierarchyLevel: HierarchyLevel.employee),
-
-    // Projects
-    const Designation(id: 22, organizationName: _orgName, departmentName: 'Projects', designationName: 'Technical Head', hierarchyLevel: HierarchyLevel.head),
-    const Designation(id: 23, organizationName: _orgName, departmentName: 'Projects', designationName: 'Project Manager', hierarchyLevel: HierarchyLevel.manager),
-    const Designation(id: 24, organizationName: _orgName, departmentName: 'Projects', designationName: 'Project Lead', hierarchyLevel: HierarchyLevel.lead),
-    const Designation(id: 25, organizationName: _orgName, departmentName: 'Projects', designationName: 'Project Engineer', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 26, organizationName: _orgName, departmentName: 'Projects', designationName: 'Sr. Project Coordinator', hierarchyLevel: HierarchyLevel.senior),
-    const Designation(id: 27, organizationName: _orgName, departmentName: 'Projects', designationName: 'Project Coordinator', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 28, organizationName: _orgName, departmentName: 'Projects', designationName: 'Project Assistant', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 29, organizationName: _orgName, departmentName: 'Projects', designationName: 'Site Engineer', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 30, organizationName: _orgName, departmentName: 'Projects', designationName: 'Site Coordinator', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 31, organizationName: _orgName, departmentName: 'Projects', designationName: 'Sr. Site Coordinator', hierarchyLevel: HierarchyLevel.senior),
-    const Designation(id: 32, organizationName: _orgName, departmentName: 'Projects', designationName: 'Site Coordinator - Trainee', hierarchyLevel: HierarchyLevel.trainee),
-    const Designation(id: 33, organizationName: _orgName, departmentName: 'Projects', designationName: 'Rig Operator', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 34, organizationName: _orgName, departmentName: 'Projects', designationName: 'Bore Path Specialist', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 35, organizationName: _orgName, departmentName: 'Projects', designationName: 'Tracker', hierarchyLevel: HierarchyLevel.employee),
-
-    // Human Resources
-    const Designation(id: 36, organizationName: _orgName, departmentName: 'Human Resources', designationName: 'HR Manager', hierarchyLevel: HierarchyLevel.manager),
-    const Designation(id: 37, organizationName: _orgName, departmentName: 'Human Resources', designationName: 'HR Executive', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 38, organizationName: _orgName, departmentName: 'Human Resources', designationName: 'HR Coordinator', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 39, organizationName: _orgName, departmentName: 'Human Resources', designationName: 'HR Trainee', hierarchyLevel: HierarchyLevel.trainee),
-
-    // Finance & Accounts
-    const Designation(id: 40, organizationName: _orgName, departmentName: 'Finance & Accounts', designationName: 'Finance Head', hierarchyLevel: HierarchyLevel.head),
-    const Designation(id: 41, organizationName: _orgName, departmentName: 'Finance & Accounts', designationName: 'Finance Manager', hierarchyLevel: HierarchyLevel.manager),
-    const Designation(id: 42, organizationName: _orgName, departmentName: 'Finance & Accounts', designationName: 'Senior Accountant', hierarchyLevel: HierarchyLevel.senior),
-    const Designation(id: 43, organizationName: _orgName, departmentName: 'Finance & Accounts', designationName: 'Accountant', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 44, organizationName: _orgName, departmentName: 'Finance & Accounts', designationName: 'Junior Accountant', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 45, organizationName: _orgName, departmentName: 'Finance & Accounts', designationName: 'Accounts Executive', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 46, organizationName: _orgName, departmentName: 'Finance & Accounts', designationName: 'Accounts Assistant', hierarchyLevel: HierarchyLevel.employee),
-
-    // Information Technology
-    const Designation(id: 47, organizationName: _orgName, departmentName: 'Information Technology', designationName: 'IT Manager', hierarchyLevel: HierarchyLevel.manager),
-    const Designation(id: 48, organizationName: _orgName, departmentName: 'Information Technology', designationName: 'Software Developer', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 49, organizationName: _orgName, departmentName: 'Information Technology', designationName: 'System Administrator', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 50, organizationName: _orgName, departmentName: 'Information Technology', designationName: 'IT Support Executive', hierarchyLevel: HierarchyLevel.employee),
-
-    // Purchase & Procurement
-    const Designation(id: 51, organizationName: _orgName, departmentName: 'Purchase & Procurement', designationName: 'Purchase Manager', hierarchyLevel: HierarchyLevel.manager),
-    const Designation(id: 52, organizationName: _orgName, departmentName: 'Purchase & Procurement', designationName: 'Purchase Executive', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 53, organizationName: _orgName, departmentName: 'Purchase & Procurement', designationName: 'Procurement Specialist', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 54, organizationName: _orgName, departmentName: 'Purchase & Procurement', designationName: 'Purchase Assistant', hierarchyLevel: HierarchyLevel.employee),
-
-    // Sales & Marketing
-    const Designation(id: 55, organizationName: _orgName, departmentName: 'Sales & Marketing', designationName: 'Sales Manager', hierarchyLevel: HierarchyLevel.manager),
-    const Designation(id: 56, organizationName: _orgName, departmentName: 'Sales & Marketing', designationName: 'Sales Executive', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 57, organizationName: _orgName, departmentName: 'Sales & Marketing', designationName: 'Marketing Executive', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 58, organizationName: _orgName, departmentName: 'Sales & Marketing', designationName: 'Business Development Executive', hierarchyLevel: HierarchyLevel.employee),
-
-    // Administration
-    const Designation(id: 59, organizationName: _orgName, departmentName: 'Administration', designationName: 'Admin Manager', hierarchyLevel: HierarchyLevel.manager),
-    const Designation(id: 60, organizationName: _orgName, departmentName: 'Administration', designationName: 'Admin Executive', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 61, organizationName: _orgName, departmentName: 'Administration', designationName: 'Office Assistant', hierarchyLevel: HierarchyLevel.employee),
-    const Designation(id: 62, organizationName: _orgName, departmentName: 'Administration', designationName: 'Receptionist', hierarchyLevel: HierarchyLevel.employee),
-  ];
-
-  final List<Organization> _memoryOrgs = [_initialSeedOrg];
-  final List<BusinessUnit> _memoryBUs = List.from(_initialSeedBUs);
-  final List<Location> _memoryLocations = List.from(_initialSeedLocations);
-  final List<Department> _memoryDepts = List.from(_initialSeedDepts);
-  final List<Designation> _memoryDesignations = List.from(_initialSeedDesignations);
-
-  Future<void> _ensureSeeded() async {
-    if (_seeded) return;
-    _seeded = true;
-
-    try {
-      final orgRef = _orgsRef;
-      if (orgRef != null) {
-        final snap = await orgRef.limit(1).get();
-        if (snap.docs.isEmpty) {
-          await orgRef.doc('org_1').set(_initialSeedOrg.toMap());
-        }
-      }
-
-      final buRef = _buRef;
-      if (buRef != null) {
-        final snap = await buRef.limit(1).get();
-        if (snap.docs.isEmpty) {
-          for (final item in _initialSeedBUs) {
-            await buRef.doc('bu_${item.id}').set(item.toMap());
-          }
-        }
-      }
-
-      final locRef = _locationsRef;
-      if (locRef != null) {
-        final snap = await locRef.limit(1).get();
-        if (snap.docs.isEmpty) {
-          for (final item in _initialSeedLocations) {
-            await locRef.doc('loc_${item.id}').set(item.toMap());
-          }
-        }
-      }
-
-      final dRef = _deptsRef;
-      if (dRef != null) {
-        final snap = await dRef.limit(1).get();
-        if (snap.docs.isEmpty) {
-          for (final dept in _initialSeedDepts) {
-            await dRef.doc('dept_${dept.id}').set(dept.toMap());
-          }
-        }
-      }
-
-      final desigRef = _designationsRef;
-      if (desigRef != null) {
-        final snap = await desigRef.limit(1).get();
-        if (snap.docs.isEmpty) {
-          for (final desig in _initialSeedDesignations) {
-            await desigRef.doc('desig_${desig.id}').set(desig.toMap());
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Firestore Organization seeding check warning: $e');
-    }
-  }
+  final List<Organization> _memoryOrgs = [];
+  final List<BusinessUnit> _memoryBUs = [];
+  final List<Location> _memoryLocations = [];
+  final List<Department> _memoryDepts = [];
+  final List<Designation> _memoryDesignations = [];
 
   // --- Organization ---
   @override
   Future<List<Organization>> getOrganizations() async {
-    await _ensureSeeded();
     try {
       final ref = _orgsRef;
       if (ref != null) {
         final snapshot = await ref.get();
-        if (snapshot.docs.isNotEmpty) {
-          final orgs = <Organization>[];
-          for (final doc in snapshot.docs) {
-            final o = Organization.fromMap(doc.data());
-            if (o.name.trim().toLowerCase() == 'igreen tech') {
-              doc.reference.delete().ignore();
-            } else {
-              orgs.add(o);
-            }
+        final orgs = <Organization>[];
+        for (final doc in snapshot.docs) {
+          final o = Organization.fromMap(doc.data());
+          if (o.name.trim().toLowerCase() == 'igreen tech') {
+            doc.reference.delete().ignore();
+          } else {
+            orgs.add(o);
           }
-          _memoryOrgs.clear();
-          _memoryOrgs.addAll(orgs);
-          return orgs;
         }
+        _memoryOrgs.clear();
+        _memoryOrgs.addAll(orgs);
+        return orgs;
       }
     } catch (e) {
       debugPrint('Error getting organizations from Firestore: $e');
@@ -295,16 +111,13 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
   // --- Business Units ---
   @override
   Future<List<BusinessUnit>> getBusinessUnits({String? organizationName}) async {
-    await _ensureSeeded();
     try {
       final ref = _buRef;
       if (ref != null) {
         final snapshot = await ref.get();
-        if (snapshot.docs.isNotEmpty) {
-          final list = snapshot.docs.map((doc) => BusinessUnit.fromMap(doc.data())).toList();
-          _memoryBUs.clear();
-          _memoryBUs.addAll(list);
-        }
+        final list = snapshot.docs.map((doc) => BusinessUnit.fromMap(doc.data())).toList();
+        _memoryBUs.clear();
+        _memoryBUs.addAll(list);
       }
     } catch (e) {
       debugPrint('Error getting business units: $e');
@@ -375,16 +188,13 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
   // --- Locations ---
   @override
   Future<List<Location>> getLocations({String? organizationName, String? businessUnitName}) async {
-    await _ensureSeeded();
     try {
       final ref = _locationsRef;
       if (ref != null) {
         final snapshot = await ref.get();
-        if (snapshot.docs.isNotEmpty) {
-          final list = snapshot.docs.map((doc) => Location.fromMap(doc.data())).toList();
-          _memoryLocations.clear();
-          _memoryLocations.addAll(list);
-        }
+        final list = snapshot.docs.map((doc) => Location.fromMap(doc.data())).toList();
+        _memoryLocations.clear();
+        _memoryLocations.addAll(list);
       }
     } catch (e) {
       debugPrint('Error getting locations: $e');
@@ -460,17 +270,14 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
   // --- Departments ---
   @override
   Future<List<Department>> getDepartments({String? organizationName, String? businessUnitName, String? workLocation}) async {
-    await _ensureSeeded();
     try {
       final ref = _deptsRef;
       if (ref != null) {
         final snapshot = await ref.get();
-        if (snapshot.docs.isNotEmpty) {
-          final list = snapshot.docs.map((doc) => Department.fromMap(doc.data())).toList();
-          list.sort((a, b) => a.id.compareTo(b.id));
-          _memoryDepts.clear();
-          _memoryDepts.addAll(list);
-        }
+        final list = snapshot.docs.map((doc) => Department.fromMap(doc.data())).toList();
+        list.sort((a, b) => a.id.compareTo(b.id));
+        _memoryDepts.clear();
+        _memoryDepts.addAll(list);
       }
     } catch (e) {
       debugPrint('Error getting departments: $e');
@@ -527,25 +334,22 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
   // --- Designations ---
   @override
   Future<List<Designation>> getDesignations({String? organizationName, String? departmentName}) async {
-    await _ensureSeeded();
     try {
       final ref = _designationsRef;
       if (ref != null) {
         final snapshot = await ref.get();
-        if (snapshot.docs.isNotEmpty) {
-          final list = snapshot.docs.map((doc) {
-            final desig = Designation.fromMap(doc.data());
-            if (desig.organizationName.isEmpty) {
-              final dept = _memoryDepts.where((dept) => dept.departmentName == desig.departmentName).firstOrNull;
-              final org = (dept != null && dept.organizationName.isNotEmpty) ? dept.organizationName : _orgName;
-              return desig.copyWith(organizationName: org);
-            }
-            return desig;
-          }).toList();
-          list.sort((a, b) => a.id.compareTo(b.id));
-          _memoryDesignations.clear();
-          _memoryDesignations.addAll(list);
-        }
+        final list = snapshot.docs.map((doc) {
+          final desig = Designation.fromMap(doc.data());
+          if (desig.organizationName.isEmpty) {
+            final dept = _memoryDepts.where((dept) => dept.departmentName == desig.departmentName).firstOrNull;
+            final org = (dept != null && dept.organizationName.isNotEmpty) ? dept.organizationName : '';
+            return desig.copyWith(organizationName: org);
+          }
+          return desig;
+        }).toList();
+        list.sort((a, b) => a.id.compareTo(b.id));
+        _memoryDesignations.clear();
+        _memoryDesignations.addAll(list);
       }
     } catch (e) {
       debugPrint('Error getting designations: $e');
@@ -553,7 +357,7 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
     return _memoryDesignations.map((d) {
       if (d.organizationName.isEmpty) {
         final dept = _memoryDepts.where((dept) => dept.departmentName == d.departmentName).firstOrNull;
-        final org = (dept != null && dept.organizationName.isNotEmpty) ? dept.organizationName : _orgName;
+        final org = (dept != null && dept.organizationName.isNotEmpty) ? dept.organizationName : '';
         return d.copyWith(organizationName: org);
       }
       return d;
@@ -637,6 +441,72 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
       }
     } catch (e) {
       debugPrint('Error saving column preference: $e');
+    }
+  }
+
+  // --- Document Upload ---
+  @override
+  Future<OrgDocument> uploadDocument({
+    required int orgId,
+    required String docTitle,
+    required dynamic file,
+  }) async {
+    String downloadUrl = '';
+    String fileName = 'document';
+
+    try {
+      final platformFile = file is PlatformFile ? file : null;
+      fileName = platformFile?.name ?? 'document';
+
+      Uint8List? bytes = platformFile?.bytes;
+      if (bytes == null && platformFile?.path != null && platformFile!.path!.isNotEmpty) {
+        if (!kIsWeb) {
+          final f = io.File(platformFile.path!);
+          if (await f.exists()) {
+            bytes = await f.readAsBytes();
+          }
+        }
+      }
+
+      if (bytes != null) {
+        final storage = FirebaseStorage.instance;
+        final cleanFileName = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+        final cleanDocTitle = docTitle.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+        final storageRef = storage.ref().child('organizations/$orgId/$cleanDocTitle/${DateTime.now().millisecondsSinceEpoch}_$cleanFileName');
+        
+        final uploadTask = await storageRef.putData(
+          bytes,
+          SettableMetadata(contentType: _getContentType(platformFile?.extension)),
+        );
+        downloadUrl = await uploadTask.ref.getDownloadURL();
+      }
+    } catch (e) {
+      debugPrint('Error uploading organization document to Firebase Storage: $e');
+    }
+
+    return OrgDocument(
+      title: docTitle,
+      fileName: fileName,
+      fileUrl: downloadUrl,
+      uploadedAt: DateTime.now().toIso8601String(),
+    );
+  }
+
+  String _getContentType(String? extension) {
+    switch (extension?.toLowerCase()) {
+      case 'pdf':
+        return 'application/pdf';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'doc':
+        return 'application/msword';
+      case 'docx':
+        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      default:
+        return 'application/octet-stream';
     }
   }
 }

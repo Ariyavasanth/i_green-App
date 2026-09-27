@@ -32,7 +32,12 @@ class _OrganizationManagementPageState
     'Phone Number',
     'Email Address',
     'Website',
-    'Tax Identification Number (GST/VAT/TIN)',
+    'GST / VAT Number',
+    'CIN Number',
+    'PAN Number',
+    'TAN Number',
+    'Directors / DIN',
+    'Documents',
   ];
 
   int _currentPage = 0;
@@ -88,28 +93,74 @@ class _OrganizationManagementPageState
                     return org.name.toLowerCase().contains(q) ||
                         org.businessType.toLowerCase().contains(q) ||
                         org.industryType.toLowerCase().contains(q) ||
+                        org.address.toLowerCase().contains(q) ||
+                        org.pincode.toLowerCase().contains(q) ||
                         org.emailAddress.toLowerCase().contains(q) ||
                         org.phoneNumber.toLowerCase().contains(q) ||
-                        org.taxId.toLowerCase().contains(q);
+                        org.taxId.toLowerCase().contains(q) ||
+                        org.gstNumber.toLowerCase().contains(q) ||
+                        org.cinNumber.toLowerCase().contains(q) ||
+                        org.panNumber.toLowerCase().contains(q) ||
+                        org.tanNumber.toLowerCase().contains(q) ||
+                        org.contactNumbers.any((c) => c.number.toLowerCase().contains(q) || c.label.toLowerCase().contains(q)) ||
+                        org.directors.any((d) => d.name.toLowerCase().contains(q) || d.din.toLowerCase().contains(q));
                   }).toList();
 
                   if (filtered.isEmpty) {
-                    return ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      children: const [
-                        Padding(
-                          padding: EdgeInsets.all(48),
-                          child: Center(
-                            child: Text(
-                              'No organizations found.',
-                              style: TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 14,
+                    final bool isFirstTimeSetup = orgs.isEmpty;
+                    return Center(
+                      child: SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.all(48),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              isFirstTimeSetup ? Icons.business_outlined : Icons.search_off_rounded,
+                              size: 48,
+                              color: AppColors.textSecondary.withValues(alpha: 0.5),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              isFirstTimeSetup
+                                  ? 'No Organizations Configured'
+                                  : 'No organizations found matching your criteria.',
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                          ),
+                            const SizedBox(height: 8),
+                            Text(
+                              isFirstTimeSetup
+                                  ? 'Get started by creating your company profile and business details.'
+                                  : 'Try adjusting your search query or filters.',
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 13,
+                              ),
+                            ),
+                            if (isFirstTimeSetup) ...[
+                              const SizedBox(height: 20),
+                              ElevatedButton.icon(
+                                onPressed: () => OrganizationFormDialog.show(context),
+                                icon: const Icon(Icons.add, size: 18),
+                                label: const Text('Add Organization'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF9CC70A),
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
-                      ],
+                      ),
                     );
                   }
 
@@ -649,7 +700,9 @@ class _OrganizationManagementPageState
         value = org.address;
         break;
       case 'Phone Number':
-        value = org.phoneNumber;
+        value = org.contactNumbers.isNotEmpty
+            ? org.contactNumbers.map((c) => '${c.label}: ${c.number}').join(', ')
+            : org.phoneNumber;
         break;
       case 'Email Address':
         value = org.emailAddress;
@@ -658,8 +711,26 @@ class _OrganizationManagementPageState
         value = org.website;
         style = const TextStyle(color: AppColors.primary);
         break;
+      case 'GST / VAT Number':
       case 'Tax Identification Number (GST/VAT/TIN)':
-        value = org.taxId;
+        value = org.gstNumber.isNotEmpty ? org.gstNumber : org.taxId;
+        break;
+      case 'CIN Number':
+        value = org.cinNumber;
+        break;
+      case 'PAN Number':
+        value = org.panNumber;
+        break;
+      case 'TAN Number':
+        value = org.tanNumber;
+        break;
+      case 'Directors / DIN':
+        value = org.directors.isNotEmpty
+            ? org.directors.map((d) => d.din.isNotEmpty ? '${d.name} (${d.din})' : d.name).join(', ')
+            : '';
+        break;
+      case 'Documents':
+        value = org.documents.isNotEmpty ? '${org.documents.length} document(s)' : '';
         break;
       default:
         value = '';

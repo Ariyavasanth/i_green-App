@@ -39,4 +39,11 @@ abstract interface class OrganizationRepository {
   // Column Preference methods
   Future<ColumnPreference?> getColumnPreference(String tableId);
   Future<void> saveColumnPreference(ColumnPreference preference);
+
+  // Document Upload
+  Future<OrgDocument> uploadDocument({
+    required int orgId,
+    required String docTitle,
+    required dynamic file, // PlatformFile
+  });
 }
