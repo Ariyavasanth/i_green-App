@@ -5,10 +5,15 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../organization/domain/department.dart';
+import '../../organization/domain/organization.dart';
 import '../../organization/presentation/widgets/column_selection_dialog.dart';
 import '../../organization/providers/organization_providers.dart';
 import '../domain/employee.dart';
 import '../providers/employee_providers.dart';
+import '../services/offer_letter_save_stub.dart'
+    if (dart.library.html) '../services/offer_letter_save_web.dart'
+    if (dart.library.io) '../services/offer_letter_save_io.dart';
 import 'dialogs/employee_details_dialog.dart';
 import 'dialogs/registration_links_dialog.dart';
 import 'widgets/admin_list_toolbar.dart';
@@ -28,11 +33,11 @@ class _EmployeeManagementPageState
   static const List<String> _defaultAllColumns = [
     'Employee ID',
     'Employee Name',
-    'Department',
-    'Designation',
+    'Organization Name',
     'Email Address',
     'Phone Number',
-    'Employment Type',
+    'Department',
+    'Designation',
     'Joining Date',
     'Status',
   ];
@@ -229,7 +234,17 @@ class _EmployeeManagementPageState
               final pref = prefAsync.valueOrNull;
               List<String> visibleCols;
               if (pref != null && pref.visibleColumns.isNotEmpty) {
-                visibleCols = pref.visibleColumns;
+                visibleCols = pref.visibleColumns
+                    .where((c) => c != 'Employment Type')
+                    .toList();
+                if (!visibleCols.contains('Organization Name')) {
+                  final insertIdx = visibleCols.indexOf('Employee Name');
+                  if (insertIdx != -1) {
+                    visibleCols.insert(insertIdx + 1, 'Organization Name');
+                  } else {
+                    visibleCols.add('Organization Name');
+                  }
+                }
               } else {
                 visibleCols = List.from(_defaultAllColumns);
               }
@@ -541,29 +556,54 @@ class _EmployeeManagementPageState
       return;
     }
 
+    final orgs = ref.read(organizationsProvider).valueOrNull ?? [];
+    final depts = ref.read(departmentsProvider).valueOrNull ?? [];
+
     final buffer = StringBuffer();
-    buffer.writeln('Employee ID,Employee Name,Department,Designation,Email Address,Phone Number,Employment Type,Status');
+    buffer.writeln('Employee ID,Employee Name,Organization Name,Email Address,Phone Number,Department,Designation,Joining Date,Status');
     for (final emp in employees) {
+      String orgName = emp.organizationName.trim();
+      if (orgName.isEmpty && emp.organizationId.isNotEmpty) {
+        final matched = orgs
+            .where((o) =>
+                o.id.toString() == emp.organizationId ||
+                o.docId == emp.organizationId)
+            .firstOrNull;
+        if (matched != null && matched.name.isNotEmpty) {
+          orgName = matched.name;
+        }
+      }
+      if (orgName.isEmpty && emp.department.isNotEmpty) {
+        final matchedDept = depts
+            .where((d) =>
+                d.departmentName.trim().toLowerCase() ==
+                    emp.department.trim().toLowerCase() &&
+                d.organizationName.trim().isNotEmpty)
+            .firstOrNull;
+        if (matchedDept != null && matchedDept.organizationName.isNotEmpty) {
+          orgName = matchedDept.organizationName;
+        }
+      }
+      if (orgName.isEmpty && orgs.isNotEmpty) {
+        orgName = orgs.first.name;
+      }
+
       buffer.writeln(
-        '"${emp.employeeId}","${emp.fullName.replaceAll('"', '""')}","${emp.department.replaceAll('"', '""')}","${emp.designation.replaceAll('"', '""')}","${emp.emailAddress}","${emp.phoneNumber}","${emp.employmentType}","${emp.status}"',
+        '"${emp.employeeId}","${emp.fullName.replaceAll('"', '""')}","${orgName.replaceAll('"', '""')}","${emp.emailAddress}","${emp.phoneNumber}","${emp.department.replaceAll('"', '""')}","${emp.designation.replaceAll('"', '""')}","${emp.joiningDate}","${emp.status}"',
       );
     }
 
     final String csvContent = buffer.toString();
-    final Uri url = Uri.parse('data:text/csv;charset=utf-8,${Uri.encodeComponent(csvContent)}');
+    final bytes = utf8.encode(csvContent);
+    final fileName = 'employee_records_${DateTime.now().millisecondsSinceEpoch}.csv';
+
     try {
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Successfully exported ${employees.length} employee records!'),
-              backgroundColor: AppColors.active,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      }
+      await saveAndDownloadOfferLetter(
+        context: context,
+        bytes: bytes,
+        fileName: fileName,
+        docTitle: 'Employee Records',
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -592,9 +632,12 @@ class _EmployeeManagementPageState
       builder: (context) => ColumnSelectionDialog(
         tableId: _tableId,
         allColumns: _defaultAllColumns,
-        currentVisibleColumns:
-            pref?.visibleColumns ?? List.from(_defaultAllColumns),
-        currentColumnOrder: pref?.columnOrder ?? List.from(_defaultAllColumns),
+        currentVisibleColumns: pref != null && pref.visibleColumns.isNotEmpty
+            ? pref.visibleColumns.where((c) => c != 'Employment Type').toList()
+            : List.from(_defaultAllColumns),
+        currentColumnOrder: pref != null && pref.columnOrder.isNotEmpty
+            ? pref.columnOrder.where((c) => c != 'Employment Type').toList()
+            : List.from(_defaultAllColumns),
       ),
     );
 
@@ -743,36 +786,52 @@ class _EmployeeManagementPageState
                       for (final colName in visibleColumns)
                         DataCell(_buildCellContent(colName, emp)),
                       DataCell(
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.visibility_outlined, size: 18),
-                              color: AppColors.textPrimary,
-                              tooltip: 'View Details',
-                              visualDensity: VisualDensity.compact,
-                              splashRadius: 18,
-                              onPressed: () => _openViewDialog(context, emp),
+                        PopupMenuButton<String>(
+                          icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                          padding: EdgeInsets.zero,
+                          tooltip: 'Actions',
+                          constraints: const BoxConstraints(),
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'view',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.visibility_outlined, size: 18, color: AppColors.textPrimary),
+                                  SizedBox(width: 8),
+                                  Text('View Details', style: TextStyle(fontSize: 13)),
+                                ],
+                              ),
                             ),
-                            const SizedBox(width: 2),
-                            IconButton(
-                              icon: const Icon(Icons.edit_outlined, size: 18),
-                              color: AppColors.textPrimary,
-                              tooltip: 'Edit Employee',
-                              visualDensity: VisualDensity.compact,
-                              splashRadius: 18,
-                              onPressed: () => _openEditDialog(context, emp),
+                            const PopupMenuItem(
+                              value: 'edit',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.edit_outlined, size: 18, color: AppColors.textPrimary),
+                                  SizedBox(width: 8),
+                                  Text('Edit Employee', style: TextStyle(fontSize: 13)),
+                                ],
+                              ),
                             ),
-                            const SizedBox(width: 2),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline, size: 18),
-                              color: Colors.redAccent,
-                              tooltip: 'Delete Employee',
-                              visualDensity: VisualDensity.compact,
-                              splashRadius: 18,
-                              onPressed: () => _confirmDelete(context, emp),
+                            const PopupMenuItem(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                                  SizedBox(width: 8),
+                                  Text('Delete Employee', style: TextStyle(fontSize: 13, color: Colors.redAccent)),
+                                ],
+                              ),
                             ),
                           ],
+                          onSelected: (value) {
+                            if (value == 'view') {
+                              _openViewDialog(context, emp);
+                            } else if (value == 'edit') {
+                              _openEditDialog(context, emp);
+                            } else if (value == 'delete') {
+                              _confirmDelete(context, emp);
+                            }
+                          },
                         ),
                       ),
                     ],
@@ -806,6 +865,47 @@ class _EmployeeManagementPageState
         value = emp.fullName;
         style = const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary);
         break;
+      case 'Organization':
+      case 'Organization Name':
+        value = emp.organizationName.trim();
+        if (value.isEmpty && emp.organizationId.isNotEmpty) {
+          final orgs = ref.watch(organizationsProvider).valueOrNull ?? [];
+          final matched = orgs
+              .where((o) =>
+                  o.id.toString() == emp.organizationId ||
+                  o.docId == emp.organizationId)
+              .firstOrNull;
+          if (matched != null && matched.name.isNotEmpty) {
+            value = matched.name;
+          }
+        }
+        if (value.isEmpty && emp.department.isNotEmpty) {
+          final depts = ref.watch(departmentsProvider).valueOrNull ?? [];
+          final matchedDept = depts
+              .where((d) =>
+                  d.departmentName.trim().toLowerCase() ==
+                      emp.department.trim().toLowerCase() &&
+                  d.organizationName.trim().isNotEmpty)
+              .firstOrNull;
+          if (matchedDept != null && matchedDept.organizationName.isNotEmpty) {
+            value = matchedDept.organizationName;
+          }
+        }
+        if (value.isEmpty) {
+          final orgs = ref.watch(organizationsProvider).valueOrNull ?? [];
+          if (orgs.isNotEmpty) {
+            value = orgs.first.name;
+          }
+        }
+        return SizedBox(
+          width: 160,
+          child: Text(
+            value.isEmpty ? '-' : value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 13),
+          ),
+        );
       case 'Department':
         value = emp.department;
         break;
@@ -825,9 +925,6 @@ class _EmployeeManagementPageState
         );
       case 'Phone Number':
         value = emp.phoneNumber;
-        break;
-      case 'Employment Type':
-        value = emp.employmentType;
         break;
       case 'Joining Date':
         value = emp.joiningDate;
