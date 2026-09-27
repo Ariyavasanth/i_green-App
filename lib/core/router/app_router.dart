@@ -9,6 +9,7 @@ import '../../screens/modules/inventory_module_screen.dart';
 import '../../screens/modules/accounts_module_screen.dart';
 import '../../screens/modules/project_module_screen.dart';
 import '../../screens/modules/factory_module_screen.dart';
+import '../../features/projects/presentation/screens/project_dashboard_screen.dart';
 import '../../features/projects/presentation/screens/new_project_form_screen.dart';
 
 import '../../features/app_shell/presentation/app_shell.dart';
@@ -256,6 +257,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/module/inventory', builder: (_, _) => const InventoryModuleScreen()),
       GoRoute(path: '/module/accounts', builder: (_, _) => const AccountsModuleScreen()),
       GoRoute(path: '/module/project', builder: (_, _) => const ProjectModuleScreen()),
+      GoRoute(path: '/projects/dashboard', builder: (_, _) => const ProjectDashboardScreen()),
+      GoRoute(path: '/project/dashboard', builder: (_, _) => const ProjectDashboardScreen()),
       GoRoute(path: '/projects/new', builder: (_, _) => const NewProjectFormScreen()),
       GoRoute(path: '/project/new', builder: (_, _) => const NewProjectFormScreen()),
       GoRoute(path: '/module/factory', builder: (_, _) => const FactoryModuleScreen()),

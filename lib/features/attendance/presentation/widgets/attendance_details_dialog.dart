@@ -480,6 +480,22 @@ class AttendanceDetailsDialog extends StatelessWidget {
                         ],
                       ),
 
+                      if (record != null &&
+                          record!.sessions.any((s) => s.projectCode != null && s.projectCode!.isNotEmpty)) ...[
+                        const SizedBox(height: 8),
+                        _buildDetailMetric(
+                          label: 'Assigned Project',
+                          value: record!.sessions
+                              .map((s) => s.projectCode)
+                              .where((c) => c != null && c.isNotEmpty)
+                              .cast<String>()
+                              .toSet()
+                              .join(', '),
+                          icon: Icons.folder_outlined,
+                          iconColor: const Color(0xFF414A51),
+                        ),
+                      ],
+
                       if (record?.notes.isNotEmpty == true) ...[
                         const SizedBox(height: 10),
                         Container(

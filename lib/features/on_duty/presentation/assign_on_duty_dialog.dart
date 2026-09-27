@@ -7,6 +7,8 @@ import '../../attendance/providers/attendance_providers.dart';
 import '../../attendance_settings/providers/attendance_settings_providers.dart';
 import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
+import '../../projects/presentation/dialogs/project_picker_dialog.dart';
+import '../../projects/providers/project_providers.dart';
 import '../../task_management/providers/task_providers.dart';
 import '../../time_clocking/providers/clocking_providers.dart';
 import '../domain/on_duty_assignment.dart';
@@ -34,6 +36,8 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
   final _formKey = GlobalKey<FormState>();
 
   Employee? _selectedEmployee;
+  String? _selectedProjectId;
+  String? _selectedProjectCode;
   String _selectedOdType = 'Customer Visit';
   final _purposeController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
@@ -60,6 +64,8 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
 
     final existing = widget.existingAssignment;
     if (existing != null) {
+      _selectedProjectId = existing.projectId;
+      _selectedProjectCode = existing.projectCode;
       _selectedOdType = _odTypes.contains(existing.odType) ? existing.odType : 'Customer Visit';
       _purposeController.text = existing.purpose;
       _notesController.text = existing.notes;
@@ -166,6 +172,9 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
 
     final employeesAsync = ref.watch(allEmployeesProvider);
     final employees = employeesAsync.valueOrNull ?? employeesAsync.asData?.value ?? [];
+
+    final projectsAsync = ref.watch(projectsStreamProvider);
+    final projects = projectsAsync.valueOrNull ?? [];
 
     final confirmedEmployees = employees.where((emp) => !_isCandidate(emp)).toList();
 
@@ -413,6 +422,76 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
                     }
                     return null;
                   },
+                ),
+                const SizedBox(height: 16),
+
+                // 4. Project Code Dropdown
+                const Text(
+                  'Project Code *',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: darkTextColor),
+                ),
+                const SizedBox(height: 6),
+                InkWell(
+                  onTap: () async {
+                    final picked = await ProjectPickerDialog.show(
+                      context,
+                      projects: projects,
+                      selectedProjectCode: _selectedProjectCode,
+                    );
+                    if (picked != null) {
+                      setState(() {
+                        _selectedProjectCode = picked.projectCode;
+                        _selectedProjectId = picked.id;
+                      });
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: _selectedProjectCode != null ? const Color(0xFFCBD5E1) : const Color(0xFFCBD5E1),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.folder_outlined,
+                                size: 18,
+                                color: _selectedProjectCode != null ? primaryColor : const Color(0xFF94A3B8),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _selectedProjectCode != null
+                                      ? () {
+                                          final p = projects.where((proj) => proj.projectCode == _selectedProjectCode).firstOrNull;
+                                          return p != null && p.clientName.isNotEmpty
+                                              ? '${p.projectCode} (${p.clientName})'
+                                              : _selectedProjectCode!;
+                                        }()
+                                      : 'Search & Select Project Code...',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: _selectedProjectCode != null ? FontWeight.bold : FontWeight.normal,
+                                    color: _selectedProjectCode != null ? darkTextColor : const Color(0xFF94A3B8),
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.arrow_drop_down, color: Color(0xFF64748B)),
+                      ],
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 16),
 
@@ -1200,6 +1279,8 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
         notes: _notesController.text.trim(),
         afterCompletionOption: _afterCompletionOption,
         startOdFromHome: _startOdFromHome,
+        projectCode: _selectedProjectCode,
+        projectId: _selectedProjectId,
         assignedBy: 'Self (Employee Request)',
         createdAt: DateTime.now().toIso8601String(),
       );
@@ -1224,6 +1305,8 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
           destinationLongitude: primarySite.longitude,
           destinationRadius: primarySite.radius,
           startOdFromHome: false,
+          projectCode: _selectedProjectCode,
+          projectId: _selectedProjectId,
           notes: 'On Duty: $_selectedOdType (${primarySite.effectiveName})',
         );
 
@@ -1309,6 +1392,8 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
           notes: _notesController.text.trim(),
           afterCompletionOption: _afterCompletionOption,
           startOdFromHome: _startOdFromHome,
+          projectCode: _selectedProjectCode,
+          projectId: _selectedProjectId,
         );
         await repo.updateAssignment(updated);
       } else {
@@ -1336,6 +1421,8 @@ class _AssignOnDutyDialogState extends ConsumerState<AssignOnDutyDialog> {
           notes: _notesController.text.trim(),
           afterCompletionOption: _afterCompletionOption,
           startOdFromHome: _startOdFromHome,
+          projectCode: _selectedProjectCode,
+          projectId: _selectedProjectId,
           assignedBy: assignedByVal,
           createdAt: DateTime.now().toIso8601String(),
         );

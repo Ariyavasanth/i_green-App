@@ -23,6 +23,8 @@ class AttendanceSession {
     this.destinationLatitude,
     this.destinationLongitude,
     this.destinationRadius = 100,
+    this.projectCode,
+    this.projectId,
     this.durationHours = 0.0,
     this.durationMinutes = 0,
     this.notes = '',
@@ -77,6 +79,10 @@ class AttendanceSession {
   final double? destinationLatitude;
   final double? destinationLongitude;
   final int destinationRadius;
+
+  /// Optional project code & ID associated with this session (Site Visit / On-Duty)
+  final String? projectCode;
+  final String? projectId;
 
   final double durationHours;
   final int durationMinutes;
@@ -202,6 +208,8 @@ class AttendanceSession {
     double? destinationLatitude,
     double? destinationLongitude,
     int? destinationRadius,
+    String? projectCode,
+    String? projectId,
     double? durationHours,
     int? durationMinutes,
     String? notes,
@@ -233,6 +241,8 @@ class AttendanceSession {
       destinationLatitude: destinationLatitude ?? this.destinationLatitude,
       destinationLongitude: destinationLongitude ?? this.destinationLongitude,
       destinationRadius: destinationRadius ?? this.destinationRadius,
+      projectCode: projectCode ?? this.projectCode,
+      projectId: projectId ?? this.projectId,
       durationHours: durationHours ?? this.durationHours,
       durationMinutes: durationMinutes ?? this.durationMinutes,
       notes: notes ?? this.notes,
@@ -263,6 +273,8 @@ class AttendanceSession {
         if (destinationLatitude != null) 'destination_latitude': destinationLatitude,
         if (destinationLongitude != null) 'destination_longitude': destinationLongitude,
         'destination_radius': destinationRadius,
+        if (projectCode != null && projectCode!.isNotEmpty) 'project_code': projectCode,
+        if (projectId != null && projectId!.isNotEmpty) 'project_id': projectId,
         'duration_hours': durationHours > 0 ? durationHours : effectiveDurationHours,
         'duration_minutes': durationMinutes > 0 ? durationMinutes : effectiveDurationMinutes,
         'notes': notes,
@@ -303,6 +315,8 @@ class AttendanceSession {
       destinationLatitude: (map['destination_latitude'] as num?)?.toDouble(),
       destinationLongitude: (map['destination_longitude'] as num?)?.toDouble(),
       destinationRadius: (map['destination_radius'] as num?)?.toInt() ?? 100,
+      projectCode: (map['project_code'] ?? map['projectCode'])?.toString(),
+      projectId: (map['project_id'] ?? map['projectId'])?.toString(),
       durationHours: (map['duration_hours'] ?? map['durationHours'] as num?)?.toDouble() ?? 0.0,
       durationMinutes: (map['duration_minutes'] ?? map['durationMinutes'] as num?)?.toInt() ?? 0,
       notes: (map['notes'] ?? '').toString(),
@@ -364,6 +378,8 @@ class AttendanceSession {
         destinationLatitude,
         destinationLongitude,
         destinationRadius,
+        projectCode,
+        projectId,
         durationHours,
         durationMinutes,
         notes,

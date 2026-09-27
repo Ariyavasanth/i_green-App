@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/layout/responsive_layout.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../projects/presentation/widgets/site_projects_dashboard_card.dart';
 import '../domain/books_repository.dart';
 import 'books_pages.dart' show money;
 
@@ -26,9 +27,9 @@ class DashboardSections extends StatelessWidget {
               (3, _CashFlowCard(metrics: metrics)),
               (2, _IncomeExpenseCard(metrics: metrics)),
             ]),
-            const SizedBox(height: 12),
-            const _ProjectsCard(),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
+            const SiteProjectsDashboardCard(showTitleHeader: true),
+            const SizedBox(height: 16),
             const _BankAndCreditCardsCard(),
           ],
         );
@@ -254,71 +255,6 @@ class _IncomeExpenseCard extends StatelessWidget {
       Text(money.format(value), style: const TextStyle(fontWeight: FontWeight.w600)),
     ],
   );
-}
-
-class _ProjectsCard extends StatelessWidget {
-  const _ProjectsCard();
-
-  static const _projects = [
-    ('Website Redesign', 'In Progress', .65),
-    ('Warehouse Automation', 'On Track', .4),
-    ('Client Portal Rollout', 'At Risk', .2),
-  ];
-
-  @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _cardTitle('Projects', 'Active projects'),
-          const SizedBox(height: 12),
-          for (final (name, status, progress) in _projects) ...[
-            _projectRow(name, status, progress),
-            const SizedBox(height: 14),
-          ],
-        ],
-      ),
-    ),
-  );
-
-  static Widget _projectRow(String name, String status, double progress) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Row(
-        children: [
-          Expanded(
-            child: Text(name, style: const TextStyle(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: _statusColor(status).withValues(alpha: .12),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(status, style: TextStyle(fontSize: 10, color: _statusColor(status), fontWeight: FontWeight.w600)),
-          ),
-        ],
-      ),
-      const SizedBox(height: 6),
-      ClipRRect(
-        borderRadius: BorderRadius.circular(4),
-        child: LinearProgressIndicator(
-          value: progress,
-          minHeight: 6,
-          backgroundColor: AppColors.canvas,
-          color: _statusColor(status),
-        ),
-      ),
-    ],
-  );
-
-  static Color _statusColor(String status) => switch (status) {
-    'At Risk' => const Color(0xFFDB4437),
-    'On Track' => AppColors.primary,
-    _ => AppColors.active,
-  };
 }
 
 class _BankAndCreditCardsCard extends StatelessWidget {

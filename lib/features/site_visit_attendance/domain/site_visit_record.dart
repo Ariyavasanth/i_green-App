@@ -4,6 +4,8 @@ class SiteVisitRecord {
     required this.employeeId,
     required this.employeeName,
     required this.siteName,
+    this.projectCode,
+    this.projectId,
     required this.visitDate,
     required this.visitTime,
     required this.photoUrl,
@@ -19,6 +21,8 @@ class SiteVisitRecord {
   final int employeeId;
   final String employeeName;
   final String siteName;
+  final String? projectCode;
+  final String? projectId;
   final String visitDate;
   final String visitTime;
   final String photoUrl;
@@ -34,6 +38,8 @@ class SiteVisitRecord {
         'employee_id': employeeId,
         'employee_name': employeeName,
         'site_name': siteName,
+        if (projectCode != null && projectCode!.isNotEmpty) 'project_code': projectCode,
+        if (projectId != null && projectId!.isNotEmpty) 'project_id': projectId,
         'visit_date': visitDate,
         'visit_time': visitTime,
         'photo_url': photoUrl,
@@ -50,6 +56,8 @@ class SiteVisitRecord {
         employeeId: map['employee_id'] as int? ?? 0,
         employeeName: map['employee_name'] as String? ?? '',
         siteName: map['site_name'] as String? ?? '',
+        projectCode: map['project_code'] as String?,
+        projectId: map['project_id'] as String?,
         visitDate: map['visit_date'] as String? ?? '',
         visitTime: map['visit_time'] as String? ?? '',
         photoUrl: map['photo_url'] as String? ?? '',
@@ -66,6 +74,8 @@ class SiteVisitRecord {
     int? employeeId,
     String? employeeName,
     String? siteName,
+    String? projectCode,
+    String? projectId,
     String? visitDate,
     String? visitTime,
     String? photoUrl,
@@ -81,6 +91,8 @@ class SiteVisitRecord {
       employeeId: employeeId ?? this.employeeId,
       employeeName: employeeName ?? this.employeeName,
       siteName: siteName ?? this.siteName,
+      projectCode: projectCode ?? this.projectCode,
+      projectId: projectId ?? this.projectId,
       visitDate: visitDate ?? this.visitDate,
       visitTime: visitTime ?? this.visitTime,
       photoUrl: photoUrl ?? this.photoUrl,

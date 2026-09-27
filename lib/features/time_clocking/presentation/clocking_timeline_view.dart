@@ -914,6 +914,32 @@ class _ClockingTimelineViewState extends ConsumerState<ClockingTimelineView> {
                     ),
                   ],
                 ),
+                if (entry.projectCode != null && entry.projectCode!.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.4)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.folder_outlined, size: 11, color: Color(0xFF414A51)),
+                        const SizedBox(width: 4),
+                        Text(
+                          entry.projectCode!,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF414A51),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 if (entry.notes != null && entry.notes!.isNotEmpty) ...[
                   const SizedBox(height: 6),
                   Text(
@@ -1085,11 +1111,43 @@ class _ClockingTimelineViewState extends ConsumerState<ClockingTimelineView> {
                 DataCell(
                   SizedBox(
                     width: 180,
-                    child: Text(
-                      entry.notes ?? '-',
-                      style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (entry.projectCode != null && entry.projectCode!.isNotEmpty) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.4)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.folder_outlined, size: 11, color: Color(0xFF414A51)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  entry.projectCode!,
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF414A51),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                        ],
+                        Text(
+                          entry.notes ?? '-',
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
                   ),
                 ),

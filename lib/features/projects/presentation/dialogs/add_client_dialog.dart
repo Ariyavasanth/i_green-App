@@ -51,13 +51,14 @@ class _AddClientDialogState extends ConsumerState<AddClientDialog> {
         ),
       );
 
-      final newCustomer = await ref
+      final newCustomerId = await ref
           .read(customerRepositoryProvider)
           .createCustomer(customer);
+      final createdCustomer = customer.copyWith(id: newCustomerId);
       ref.invalidate(activeCustomersProvider);
 
       if (mounted) {
-        Navigator.of(context).pop(newCustomer);
+        Navigator.of(context).pop(createdCustomer);
       }
     } catch (e) {
       if (mounted) {

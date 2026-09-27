@@ -1454,6 +1454,8 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     double? destinationLongitude,
     int destinationRadius = 100,
     bool startOdFromHome = false,
+    String? projectCode,
+    String? projectId,
     String notes = '',
   }) async {
     final normDate = _normalizeDateKey(date);
@@ -1462,6 +1464,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       employeeCode = emp?.employeeId.trim().toUpperCase() ?? '';
     }
     final docId = '${employeeId}_${normDate.replaceAll('-', '')}';
+
+    String? effectiveProjectCode = projectCode;
+    String? effectiveProjectId = projectId;
 
     // 1. Validate that the assignment exists and is not cancelled/rejected
     if (assignmentId > 0) {
@@ -1478,6 +1483,12 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
               message: 'This On-Duty assignment has been cancelled or rejected.',
               capturedImagePath: '',
             );
+          }
+          if (effectiveProjectCode == null || effectiveProjectCode.isEmpty) {
+            effectiveProjectCode = assignData['project_code'] as String?;
+          }
+          if (effectiveProjectId == null || effectiveProjectId.isEmpty) {
+            effectiveProjectId = assignData['project_id'] as String?;
           }
         }
       } catch (_) {}
@@ -1563,6 +1574,8 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       purpose: purpose,
       destination: destination,
       destinationAddress: destinationAddress,
+      projectCode: effectiveProjectCode,
+      projectId: effectiveProjectId,
       durationHours: 0.0,
       durationMinutes: 0,
       notes: initialNotes,

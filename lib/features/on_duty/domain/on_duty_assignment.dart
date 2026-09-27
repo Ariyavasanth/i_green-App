@@ -52,12 +52,16 @@ class OnDutyAssignment {
     this.durationMinutes = 0,
     this.afterCompletionOption = 'RETURN_TO_OFFICE',
     this.startOdFromHome = false,
+    this.projectCode,
+    this.projectId,
     required this.createdAt,
   }) : _workPhoto = workPhoto;
 
   final int id;
   final int employeeId;
   final String employeeName;
+  final String? projectCode;
+  final String? projectId;
   final String odType; // 'Customer Visit', 'Branch Visit', 'External Meeting', 'Govt Office', 'Field Work', 'Other'
   final String purpose;
   final String destination;
@@ -326,6 +330,8 @@ class OnDutyAssignment {
         'duration_minutes': durationMinutes,
         'after_completion_option': afterCompletionOption,
         'start_od_from_home': startOdFromHome,
+        if (projectCode != null && projectCode!.isNotEmpty) 'project_code': projectCode,
+        if (projectId != null && projectId!.isNotEmpty) 'project_id': projectId,
         'created_at': createdAt,
       };
 
@@ -492,6 +498,8 @@ class OnDutyAssignment {
       durationMinutes: parseId(map['duration_minutes']),
       afterCompletionOption: opt,
       startOdFromHome: map['start_od_from_home'] == true || map['start_from_home'] == true,
+      projectCode: (map['project_code'] ?? map['projectCode'])?.toString(),
+      projectId: (map['project_id'] ?? map['projectId'])?.toString(),
       createdAt: map['created_at']?.toString() ?? map['createdAt']?.toString() ?? '',
     );
   }
@@ -547,12 +555,16 @@ class OnDutyAssignment {
     int? durationMinutes,
     String? afterCompletionOption,
     bool? startOdFromHome,
+    String? projectCode,
+    String? projectId,
     String? createdAt,
   }) {
     return OnDutyAssignment(
       id: id ?? this.id,
       employeeId: employeeId ?? this.employeeId,
       employeeName: employeeName ?? this.employeeName,
+      projectCode: projectCode ?? this.projectCode,
+      projectId: projectId ?? this.projectId,
       odType: odType ?? this.odType,
       purpose: purpose ?? this.purpose,
       destination: destination ?? this.destination,

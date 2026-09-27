@@ -93,6 +93,8 @@ abstract class AttendanceRepository {
     double? destinationLongitude,
     int destinationRadius = 100,
     bool startOdFromHome = false,
+    String? projectCode,
+    String? projectId,
     String notes = '',
   });
   Future<AttendanceVerificationResult> completeOdAttendanceSession({

@@ -1,10 +1,12 @@
 class ClockEntry {
   final String id;
   final String employeeId;
-  final String entryType; // 'WORK', 'LUNCH_BREAK', 'TEA_BREAK', 'MEETING', 'IDLE'
+  final String entryType; // 'WORK', 'LUNCH_BREAK', 'TEA_BREAK', 'MEETING', 'IDLE', 'SITE_VISIT', 'ON_DUTY'
   final DateTime startTime;
   final DateTime? endTime;
   final String? notes;
+  final String? projectCode;
+  final String? projectId;
 
   const ClockEntry({
     required this.id,
@@ -13,6 +15,8 @@ class ClockEntry {
     required this.startTime,
     this.endTime,
     this.notes,
+    this.projectCode,
+    this.projectId,
   });
 
   bool get isActive => endTime == null;
@@ -50,6 +54,8 @@ class ClockEntry {
       'start_time': startTime.toIso8601String(),
       'end_time': endTime?.toIso8601String(),
       'notes': notes,
+      if (projectCode != null && projectCode!.isNotEmpty) 'project_code': projectCode,
+      if (projectId != null && projectId!.isNotEmpty) 'project_id': projectId,
     };
   }
 
@@ -61,6 +67,8 @@ class ClockEntry {
       startTime: _parseDateTime(map['start_time']),
       endTime: map['end_time'] != null ? _parseDateTime(map['end_time']) : null,
       notes: map['notes']?.toString(),
+      projectCode: (map['project_code'] ?? map['projectCode'])?.toString(),
+      projectId: (map['project_id'] ?? map['projectId'])?.toString(),
     );
   }
 
@@ -79,6 +87,8 @@ class ClockEntry {
     DateTime? startTime,
     DateTime? endTime,
     String? notes,
+    String? projectCode,
+    String? projectId,
   }) {
     return ClockEntry(
       id: id ?? this.id,
@@ -87,6 +97,8 @@ class ClockEntry {
       startTime: startTime ?? this.startTime,
       endTime: endTime ?? this.endTime,
       notes: notes ?? this.notes,
+      projectCode: projectCode ?? this.projectCode,
+      projectId: projectId ?? this.projectId,
     );
   }
 }

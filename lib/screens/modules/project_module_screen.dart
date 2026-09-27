@@ -22,6 +22,12 @@ class ProjectModuleScreen extends ConsumerStatefulWidget {
   static const _sections = <String, List<_SubModule>>{
     'PROJECT OPERATIONS': [
       _SubModule(
+        'DASHBOARD',
+        Icons.dashboard_rounded,
+        '/projects/dashboard',
+        Color(0xFF9CC70A),
+      ),
+      _SubModule(
         'NEW PROJECT',
         Icons.add_circle_outline_rounded,
         '/projects/new',
@@ -166,7 +172,7 @@ class _ProjectModuleScreenState extends ConsumerState<ProjectModuleScreen> {
                         )
                       : null,
                   filled: true,
-                  fillColor: Colors.white.withOpacity(0.95),
+                  fillColor: Colors.white.withValues(alpha: 0.95),
                   contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -202,7 +208,7 @@ class _ProjectModuleScreenState extends ConsumerState<ProjectModuleScreen> {
                                 padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: const Color(0xFF9C27B0).withOpacity(0.1),
+                                  color: const Color(0xFF9C27B0).withValues(alpha: 0.1),
                                 ),
                                 child: const Icon(
                                   Icons.search_off_rounded,
@@ -337,7 +343,7 @@ class _ProjectModuleScreenState extends ConsumerState<ProjectModuleScreen> {
                         )
                       : null,
                   filled: true,
-                  fillColor: Colors.white.withOpacity(0.95),
+                  fillColor: Colors.white.withValues(alpha: 0.95),
                   contentPadding: const EdgeInsets.symmetric(
                       vertical: 12, horizontal: 16),
                   border: OutlineInputBorder(
@@ -384,7 +390,7 @@ class _ProjectModuleScreenState extends ConsumerState<ProjectModuleScreen> {
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   color: const Color(0xFF9C27B0)
-                                      .withOpacity(0.1),
+                                      .withValues(alpha: 0.1),
                                 ),
                                 child: const Icon(
                                   Icons.search_off_rounded,

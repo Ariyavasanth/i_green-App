@@ -1,7 +1,4 @@
-import 'dart:io';
-
 import 'package:camera/camera.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
@@ -16,11 +13,11 @@ import '../../leave/domain/leave_request.dart';
 import '../../leave/domain/leave_type.dart';
 import '../../leave/providers/leave_providers.dart';
 import '../../leave/presentation/my_leave_requests_page.dart';
-import '../../employee/providers/employee_providers.dart';
+import '../../projects/presentation/dialogs/project_picker_dialog.dart';
+import '../../projects/providers/project_providers.dart';
 import '../domain/site_visit_record.dart';
 import '../providers/site_visit_attendance_providers.dart';
 import 'site_visit_camera_page.dart';
-import '../../on_duty/on_duty.dart';
 
 class SiteVisitAttendancePage extends ConsumerStatefulWidget {
   const SiteVisitAttendancePage({super.key});
@@ -38,6 +35,8 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
   final _scrollController = ScrollController();
   final _captureCardKey = GlobalKey();
 
+  String? _selectedProjectId;
+  String? _selectedProjectCode;
   final _siteController = TextEditingController();
   final _notesController = TextEditingController();
 
@@ -273,6 +272,12 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
 
   Future<void> _openCameraAndSave(Employee employee) async {
     final siteName = _siteController.text.trim();
+    if (_selectedProjectCode == null || _selectedProjectCode!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a Project Code before taking attendance.')),
+      );
+      return;
+    }
     if (siteName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a site name before opening the camera.')),
@@ -320,6 +325,8 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
           employeeId: employee.id,
           employeeName: employee.fullName,
           siteName: siteName,
+          projectCode: _selectedProjectCode,
+          projectId: _selectedProjectId,
           visitDate: visitDate,
           visitTime: visitTime,
           photoUrl: stampedAsset.url,
@@ -922,10 +929,82 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
             ],
           ),
           const SizedBox(height: 12),
+          // Searchable Project Code Selector
+          Consumer(
+            builder: (context, ref, _) {
+              final projectsAsync = ref.watch(projectsStreamProvider);
+              final projects = projectsAsync.valueOrNull ?? [];
+              final selectedP = _selectedProjectCode != null
+                  ? projects.where((p) => p.projectCode == _selectedProjectCode).firstOrNull
+                  : null;
+
+              return InkWell(
+                onTap: () async {
+                  final picked = await ProjectPickerDialog.show(
+                    context,
+                    projects: projects,
+                    selectedProjectCode: _selectedProjectCode,
+                  );
+                  if (picked != null) {
+                    setState(() {
+                      _selectedProjectCode = picked.projectCode;
+                      _selectedProjectId = picked.id;
+                      if (_siteController.text.trim().isEmpty && picked.place.isNotEmpty) {
+                        _siteController.text = picked.place;
+                      }
+                    });
+                  }
+                },
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: _selectedProjectCode != null ? const Color(0xFF9CC70A) : const Color(0xFFCBD5E1),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.folder_outlined,
+                              size: 18,
+                              color: _selectedProjectCode != null ? const Color(0xFF9CC70A) : const Color(0xFF94A3B8),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                selectedP != null
+                                    ? '${selectedP.projectCode}${selectedP.clientName.isNotEmpty ? ' (${selectedP.clientName})' : ''}'
+                                    : (_selectedProjectCode ?? 'Search & Select Project Code *'),
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: _selectedProjectCode != null ? FontWeight.bold : FontWeight.normal,
+                                  color: _selectedProjectCode != null ? const Color(0xFF414A51) : const Color(0xFF94A3B8),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.arrow_drop_down, color: Color(0xFF64748B)),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 10),
           TextField(
             controller: _siteController,
             decoration: const InputDecoration(
-              labelText: 'Site name',
+              labelText: 'Site name *',
               prefixIcon: Icon(Icons.location_on_outlined),
             ),
           ),
@@ -1242,6 +1321,28 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
                   visit.siteName,
                   style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                 ),
+                if (visit.projectCode != null && visit.projectCode!.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.4)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.folder_outlined, size: 11, color: Color(0xFF414A51)),
+                        const SizedBox(width: 4),
+                        Text(
+                          visit.projectCode!,
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 4),
                 Text(
                   visit.notes.isEmpty ? 'No notes added' : visit.notes,
