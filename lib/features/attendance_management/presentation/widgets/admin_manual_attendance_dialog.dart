@@ -192,8 +192,14 @@ class _AdminManualAttendanceDialogState extends ConsumerState<AdminManualAttenda
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                employeesAsync.maybeWhen(
-                  data: (employees) {
+                 employeesAsync.maybeWhen(
+                  data: (allEmployees) {
+                    final employees = allEmployees.where((e) {
+                      final isFixed = e.isStaticEmployee || e.workScheduleType.trim().toLowerCase() == 'fixed schedule';
+                      final isFlexible = e.isDynamicEmployee || e.workScheduleType.trim().toLowerCase() == 'flexible schedule';
+                      return isFixed && !isFlexible;
+                    }).toList();
+
                     if (_selectedEmployeeCode.isNotEmpty) {
                       final match = employees.where((e) => e.employeeId.trim().toUpperCase() == _selectedEmployeeCode.trim().toUpperCase()).toList();
                       if (match.isNotEmpty) {

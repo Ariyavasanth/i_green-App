@@ -206,7 +206,7 @@ class _EmployeeManagementPageState
                   children: [
                     _buildToolbar(context, prefAsync),
                     const Divider(height: 1),
-                    _buildFiltersRow(deptList, desigList, statusList),
+                    _buildFiltersRow(employees, deptList, desigList),
                     const Expanded(
                       child: Center(
                         child: Padding(
@@ -246,7 +246,7 @@ class _EmployeeManagementPageState
                 children: [
                   _buildToolbar(context, prefAsync),
                   const Divider(height: 1),
-                  _buildFiltersRow(deptList, desigList, statusList),
+                  _buildFiltersRow(employees, deptList, desigList),
                   const Divider(height: 1),
                   Expanded(
                     child: _buildDesktopTable(
@@ -278,8 +278,7 @@ class _EmployeeManagementPageState
     final searchQuery = ref.watch(empSearchQueryProvider);
 
     return AdminListToolbar(
-      title: 'Employee Management',
-      searchHint: 'Search employees...',
+      searchHint: 'Search by name, ID, or email...',
       searchQuery: searchQuery,
       onSearchChanged: (val) {
         ref.read(empSearchQueryProvider.notifier).state = val;
@@ -295,16 +294,9 @@ class _EmployeeManagementPageState
       secondaryActions: [
         AdminToolbarAction(
           label: 'Export',
-
           icon: Icons.file_download_outlined,
           tooltip: 'Export (CSV/PDF)',
           onPressed: _exportData,
-        ),
-        AdminToolbarAction(
-          label: 'Response',
-          icon: Icons.rate_review_outlined,
-          tooltip: 'Response',
-          onPressed: () => _openRegistrationLinksDialog(context),
         ),
         AdminToolbarAction(
           label: 'Columns',
@@ -312,61 +304,38 @@ class _EmployeeManagementPageState
           tooltip: 'Columns',
           onPressed: () => _openColumnSelectionDialog(context),
         ),
-        AdminToolbarAction(
-          label: 'Clear All',
-          icon: Icons.delete_sweep_outlined,
-          tooltip: 'Clear All Data',
-          onPressed: () async {
-            final confirm = await showDialog<bool>(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                title: const Text('Clear All Data?'),
-                content: const Text('This will delete all employee records, candidate responses, and registration links.'),
-                actions: [
-                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                  TextButton(
-                    style: TextButton.styleFrom(foregroundColor: Colors.red),
-                    onPressed: () => Navigator.pop(ctx, true),
-                    child: const Text('Clear All'),
-                  ),
-                ],
-              ),
-            );
-            if (confirm == true) {
-              await ref.read(employeeRepositoryProvider).clearAllData();
-              ref.invalidate(registrationLinksProvider);
-              ref.invalidate(allEmployeesProvider);
-              ref.invalidate(employeesProvider);
-              ref.invalidate(candidateResponsesProvider);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('All candidate responses and employee data cleared.'),
-                    backgroundColor: Colors.redAccent,
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              }
-            }
-          },
-        ),
       ],
     );
   }
 
   Widget _buildFiltersRow(
+    List<Employee> allEmployees,
     List<String> depts,
     List<String> desigs,
-    List<String> statuses,
   ) {
     final currentOrg = ref.watch(empOrgFilterProvider);
     final currentDept = ref.watch(empDeptFilterProvider);
     final currentDesig = ref.watch(empDesigFilterProvider);
     final currentStatus = ref.watch(empStatusFilterProvider);
+    final searchQuery = ref.watch(empSearchQueryProvider);
+
+    final allCount = allEmployees.length;
+    final activeCount = allEmployees.where((e) {
+      final s = e.status.trim().toLowerCase();
+      return s == 'active' || s == 'converted';
+    }).length;
+    final inactiveCount = allEmployees.where((e) => e.status.trim().toLowerCase() == 'inactive').length;
+
+    final isStatusFiltered = currentStatus != 'All Statuses' && currentStatus != 'All';
+    final isDeptFiltered = currentDept != 'All Departments';
+    final isDesigFiltered = currentDesig != 'All Designations';
+    final isOrgFiltered = currentOrg != 'All Organizations';
+    final isSearchFiltered = searchQuery.trim().isNotEmpty;
+    final hasActiveFilters = isStatusFiltered || isDeptFiltered || isDesigFiltered || isOrgFiltered || isSearchFiltered;
 
     return Container(
       width: double.infinity,
-      color: Colors.grey.withValues(alpha: 0.05),
+      color: Colors.grey.withValues(alpha: 0.04),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Wrap(
         spacing: 12,
@@ -374,26 +343,57 @@ class _EmployeeManagementPageState
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           const Text(
-            'Filters:',
+            'Status:',
             style: TextStyle(
               fontSize: 12,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w700,
               color: AppColors.textSecondary,
             ),
           ),
+          _buildStatusPill(
+            label: 'All',
+            count: allCount,
+            targetValue: 'All Statuses',
+            isSelected: currentStatus == 'All Statuses' || currentStatus == 'All',
+          ),
+          _buildStatusPill(
+            label: 'Active',
+            count: activeCount,
+            targetValue: 'Active',
+            isSelected: currentStatus == 'Active',
+          ),
+          _buildStatusPill(
+            label: 'Inactive',
+            count: inactiveCount,
+            targetValue: 'Inactive',
+            isSelected: currentStatus == 'Inactive',
+          ),
           Container(
-            height: 36,
+            height: 20,
+            width: 1,
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            color: AppColors.divider,
+          ),
+          Container(
+            height: 34,
             padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: AppColors.divider),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: currentDept != 'All Departments' ? AppColors.active : AppColors.divider,
+              ),
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
                 value: depts.contains(currentDept) ? currentDept : depts.first,
                 isDense: true,
-                style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
+                icon: const Icon(Icons.keyboard_arrow_down, size: 18),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: currentDept != 'All Departments' ? FontWeight.w600 : FontWeight.normal,
+                  color: currentDept != 'All Departments' ? AppColors.active : AppColors.textPrimary,
+                ),
                 items: depts.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
                 onChanged: (val) {
                   if (val != null) {
@@ -405,18 +405,25 @@ class _EmployeeManagementPageState
             ),
           ),
           Container(
-            height: 36,
+            height: 34,
             padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: AppColors.divider),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: currentDesig != 'All Designations' ? AppColors.active : AppColors.divider,
+              ),
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
                 value: desigs.contains(currentDesig) ? currentDesig : desigs.first,
                 isDense: true,
-                style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
+                icon: const Icon(Icons.keyboard_arrow_down, size: 18),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: currentDesig != 'All Designations' ? FontWeight.w600 : FontWeight.normal,
+                  color: currentDesig != 'All Designations' ? AppColors.active : AppColors.textPrimary,
+                ),
                 items: desigs.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
                 onChanged: (val) {
                   if (val != null) {
@@ -427,44 +434,95 @@ class _EmployeeManagementPageState
               ),
             ),
           ),
-          Container(
-            height: 36,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: AppColors.divider),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: statuses.contains(currentStatus) ? currentStatus : statuses.first,
-                isDense: true,
-                style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
-                items: statuses.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-                onChanged: (val) {
-                  if (val != null) {
-                    ref.read(empStatusFilterProvider.notifier).state = val;
-                    setState(() => _currentPage = 0);
-                  }
-                },
-              ),
-            ),
-          ),
-          if (currentOrg != 'All Organizations' ||
-              currentDept != 'All Departments' ||
-              currentDesig != 'All Designations' ||
-              currentStatus != 'All Statuses')
-            TextButton(
-              onPressed: () {
+          if (hasActiveFilters)
+            InkWell(
+              onTap: () {
+                ref.read(empSearchQueryProvider.notifier).state = '';
                 ref.read(empOrgFilterProvider.notifier).state = 'All Organizations';
                 ref.read(empDeptFilterProvider.notifier).state = 'All Departments';
                 ref.read(empDesigFilterProvider.notifier).state = 'All Designations';
                 ref.read(empStatusFilterProvider.notifier).state = 'All Statuses';
                 setState(() => _currentPage = 0);
               },
-              child: const Text('Reset Filters', style: TextStyle(fontSize: 12, color: AppColors.active)),
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.refresh_rounded, size: 16, color: AppColors.active),
+                    SizedBox(width: 4),
+                    Text(
+                      'Reset Filters',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.active,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildStatusPill({
+    required String label,
+    required int count,
+    required String targetValue,
+    required bool isSelected,
+  }) {
+    return InkWell(
+      onTap: () {
+        ref.read(empStatusFilterProvider.notifier).state = targetValue;
+        setState(() => _currentPage = 0);
+      },
+      borderRadius: BorderRadius.circular(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.active.withValues(alpha: 0.12) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? AppColors.active : AppColors.divider,
+            width: isSelected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? AppColors.active : AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? AppColors.active.withValues(alpha: 0.2)
+                    : Colors.grey.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected ? AppColors.active : AppColors.textSecondary,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -688,64 +746,31 @@ class _EmployeeManagementPageState
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            TextButton.icon(
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 4),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
+                            IconButton(
+                              icon: const Icon(Icons.visibility_outlined, size: 18),
+                              color: AppColors.textPrimary,
+                              tooltip: 'View Details',
+                              visualDensity: VisualDensity.compact,
+                              splashRadius: 18,
                               onPressed: () => _openViewDialog(context, emp),
-                              icon: const Icon(Icons.remove_red_eye_outlined,
-                                  size: 16, color: AppColors.textPrimary),
-                              label: const Text(
-                                'View',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
                             ),
-                            const SizedBox(width: 8),
-                            TextButton.icon(
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 4),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
+                            const SizedBox(width: 2),
+                            IconButton(
+                              icon: const Icon(Icons.edit_outlined, size: 18),
+                              color: AppColors.textPrimary,
+                              tooltip: 'Edit Employee',
+                              visualDensity: VisualDensity.compact,
+                              splashRadius: 18,
                               onPressed: () => _openEditDialog(context, emp),
-                              icon: const Icon(Icons.edit_outlined,
-                                  size: 16, color: AppColors.textPrimary),
-                              label: const Text(
-                                'Edit',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
                             ),
-                            const SizedBox(width: 8),
-                            TextButton.icon(
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 4),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
+                            const SizedBox(width: 2),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, size: 18),
+                              color: Colors.redAccent,
+                              tooltip: 'Delete Employee',
+                              visualDensity: VisualDensity.compact,
+                              splashRadius: 18,
                               onPressed: () => _confirmDelete(context, emp),
-                              icon: const Icon(Icons.delete_outline,
-                                  size: 16, color: Colors.redAccent),
-                              label: const Text(
-                                'Delete',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.redAccent,
-                                ),
-                              ),
                             ),
                           ],
                         ),
@@ -759,6 +784,12 @@ class _EmployeeManagementPageState
         ),
       ),
     );
+  }
+
+  String _formatStatus(String status) {
+    final trimmed = status.trim();
+    if (trimmed.isEmpty) return 'Active';
+    return trimmed[0].toUpperCase() + trimmed.substring(1).toLowerCase();
   }
 
   Widget _buildCellContent(String columnName, Employee emp) {
@@ -783,7 +814,15 @@ class _EmployeeManagementPageState
         break;
       case 'Email Address':
         value = emp.emailAddress;
-        break;
+        return SizedBox(
+          width: 180,
+          child: Text(
+            value.isEmpty ? '-' : value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 13),
+          ),
+        );
       case 'Phone Number':
         value = emp.phoneNumber;
         break;
@@ -794,16 +833,17 @@ class _EmployeeManagementPageState
         value = emp.joiningDate;
         break;
       case 'Status':
+        final formattedStatus = _formatStatus(emp.status);
         final statusColor = _getStatusColor(emp.status);
         customWidget = Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
             color: statusColor.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: statusColor, width: 0.8),
           ),
           child: Text(
-            emp.status,
+            formattedStatus,
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.bold,
@@ -1382,7 +1422,7 @@ class _EmployeeManagementPageState
                     border: Border.all(color: statusColor, width: 0.8),
                   ),
                   child: Text(
-                    emp.status.isEmpty ? 'Active' : emp.status,
+                    _formatStatus(emp.status),
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,

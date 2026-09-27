@@ -804,6 +804,12 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     List<Employee> allEmployees,
     AsyncValue<List<AttendanceRecord>> recordsAsync,
   ) {
+    final fixedEmployees = allEmployees.where((e) {
+      final isFixed = e.isStaticEmployee || e.workScheduleType.trim().toLowerCase() == 'fixed schedule';
+      final isFlexible = e.isDynamicEmployee || e.workScheduleType.trim().toLowerCase() == 'flexible schedule';
+      return isFixed && !isFlexible;
+    }).toList();
+
     final allLeaves = ref.watch(allLeaveRequestsProvider).valueOrNull;
     final allOnDuty = ref.watch(allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: null))).valueOrNull;
 
@@ -828,7 +834,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
               _focusedMonth = newMonth;
             });
           },
-          employees: allEmployees,
+          employees: fixedEmployees,
           selectedEmployeeId: _selectedEmployeeId,
           onEmployeeChanged: (empId) {
             setState(() {
@@ -898,12 +904,18 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => Text('Error loading employees: $e'),
           data: (employees) {
+            final fixedEmployees = employees.where((e) {
+              final isFixed = e.isStaticEmployee || e.workScheduleType.trim().toLowerCase() == 'fixed schedule';
+              final isFlexible = e.isDynamicEmployee || e.workScheduleType.trim().toLowerCase() == 'flexible schedule';
+              return isFixed && !isFlexible;
+            }).toList();
+
             return recordsAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Text('Error loading attendance records: $e'),
               data: (records) {
-                final filteredRecords = _filterStaticRecords(records, employees);
-                final filteredEmp = _filterEmployees(employees);
+                final filteredRecords = _filterStaticRecords(records, fixedEmployees);
+                final filteredEmp = _filterEmployees(fixedEmployees);
                 final paginatedEmp = _getPaginatedEmployees(filteredEmp);
 
                 final allLeaves = ref.watch(allLeaveRequestsProvider).valueOrNull;
@@ -943,7 +955,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                       AttendanceTableView(
                         isMobile: isMobile,
                         records: filteredRecords,
-                        employees: employees,
+                        employees: fixedEmployees,
                         leaves: allLeaves,
                         onDutyAssignments: allOnDuty,
                         onEdit: (record) => _openAdminStaticEntryDialog(record, record.employeeId, record.date),
@@ -2326,6 +2338,11 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
 
   List<Employee> _filterEmployees(List<Employee> employees) {
     return employees.where((e) {
+      // Fixed Schedule employees ONLY for Office Attendance
+      final isFixed = e.isStaticEmployee || e.workScheduleType.trim().toLowerCase() == 'fixed schedule';
+      final isFlexible = e.isDynamicEmployee || e.workScheduleType.trim().toLowerCase() == 'flexible schedule';
+      if (!isFixed || (isFlexible && !e.isStaticEmployee)) return false;
+
       if (_selectedEmployeeId != null && e.id != _selectedEmployeeId) return false;
       if (_selectedDepartment != 'All Departments' && e.department != _selectedDepartment) return false;
       if (_selectedDesignation != 'All Designations' && e.designation != _selectedDesignation) return false;
@@ -2338,13 +2355,23 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
   }
 
   List<SiteVisitRecord> _filterSiteVisits(List<SiteVisitRecord> visits, List<Employee> employees) {
-    final empMap = {for (final e in employees) e.id: e};
+    final flexibleEmployees = employees.where((e) {
+      final isFlexible = e.isDynamicEmployee || e.workScheduleType.trim().toLowerCase() == 'flexible schedule';
+      final isFixed = e.isStaticEmployee || e.workScheduleType.trim().toLowerCase() == 'fixed schedule';
+      return isFlexible && !isFixed;
+    }).toList();
+
+    final flexibleEmpMap = {for (final e in flexibleEmployees) e.id: e};
+    final flexibleNames = {for (final e in flexibleEmployees) e.fullName.trim().toLowerCase(): e};
 
     return visits.where((v) {
-      final emp = empMap[v.employeeId];
+      // Strictly only Flexible Schedule employees belong in Site Visit Attendance
+      final emp = flexibleEmpMap[v.employeeId] ?? flexibleNames[v.employeeName.trim().toLowerCase()];
+      if (emp == null) return false;
+
       if (_selectedEmployeeId != null && v.employeeId != _selectedEmployeeId) return false;
-      if (_selectedDepartment != 'All Departments' && emp?.department != _selectedDepartment) return false;
-      if (_selectedDesignation != 'All Designations' && emp?.designation != _selectedDesignation) return false;
+      if (_selectedDepartment != 'All Departments' && emp.department != _selectedDepartment) return false;
+      if (_selectedDesignation != 'All Designations' && emp.designation != _selectedDesignation) return false;
       if (_selectedSite != 'All' && v.siteName.toLowerCase().trim() != _selectedSite.toLowerCase().trim()) return false;
       
       // Month & Year Filter
