@@ -87,7 +87,7 @@ class OfferLetterGenerator {
         : 'Designation';
     final orgName = employee.organizationName.trim().isNotEmpty
         ? employee.organizationName.trim()
-        : 'IGreentec Engg. India Pvt. Ltd.';
+        : 'Organization';
     final workLocation = employee.workLocation.trim().isNotEmpty
         ? employee.workLocation.trim()
         : 'Chennai Office';

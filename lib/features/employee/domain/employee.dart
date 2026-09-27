@@ -122,6 +122,7 @@ class Employee {
     required this.phoneNumber,
     required this.gender,
     required this.dob,
+    this.organizationId = '',
     required this.organizationName,
     required this.department,
     required this.designation,
@@ -674,6 +675,7 @@ class Employee {
   final String phoneNumber;
   final String gender;
   final String dob;
+  final String organizationId;
   final String organizationName;
   final String department;
   final String designation;
@@ -865,6 +867,7 @@ class Employee {
       'phone_number': phoneNumber,
       'gender': gender,
       'dob': dob,
+      if (organizationId.isNotEmpty) 'organization_id': organizationId,
       'organization_name': organizationName,
       'department': department,
       'designation': designation,
@@ -1010,6 +1013,7 @@ class Employee {
       phoneNumber: map['phone_number'] as String? ?? '',
       gender: map['gender'] as String? ?? '',
       dob: map['dob'] as String? ?? '',
+      organizationId: (map['organization_id'] ?? map['organizationId'] ?? map['org_id']) as String? ?? '',
       organizationName: map['organization_name'] as String? ?? '',
       department: map['department'] as String? ?? '',
       designation: map['designation'] as String? ?? '',
@@ -1244,6 +1248,7 @@ class Employee {
     String? phoneNumber,
     String? gender,
     String? dob,
+    String? organizationId,
     String? organizationName,
     String? department,
     String? designation,
@@ -1377,6 +1382,7 @@ class Employee {
       phoneNumber: phoneNumber ?? this.phoneNumber,
       gender: gender ?? this.gender,
       dob: dob ?? this.dob,
+      organizationId: organizationId ?? this.organizationId,
       organizationName: organizationName ?? this.organizationName,
       department: department ?? this.department,
       designation: designation ?? this.designation,

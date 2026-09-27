@@ -24,8 +24,9 @@ final businessUnitsProvider = FutureProvider.family<List<BusinessUnit>, String?>
 
 class LocationFilter {
   final String? organizationName;
+  final String? organizationId;
   final String? businessUnitName;
-  const LocationFilter({this.organizationName, this.businessUnitName});
+  const LocationFilter({this.organizationName, this.organizationId, this.businessUnitName});
 
   @override
   bool operator ==(Object other) =>
@@ -33,24 +34,27 @@ class LocationFilter {
       other is LocationFilter &&
           runtimeType == other.runtimeType &&
           organizationName == other.organizationName &&
+          organizationId == other.organizationId &&
           businessUnitName == other.businessUnitName;
 
   @override
-  int get hashCode => organizationName.hashCode ^ businessUnitName.hashCode;
+  int get hashCode => Object.hash(organizationName, organizationId, businessUnitName);
 }
 
 final locationsProvider = FutureProvider.family<List<Location>, LocationFilter>(
   (ref, filter) => ref.watch(organizationRepositoryProvider).getLocations(
         organizationName: filter.organizationName,
+        organizationId: filter.organizationId,
         businessUnitName: filter.businessUnitName,
       ),
 );
 
 class DepartmentFilter {
   final String? organizationName;
+  final String? organizationId;
   final String? businessUnitName;
   final String? workLocation;
-  const DepartmentFilter({this.organizationName, this.businessUnitName, this.workLocation});
+  const DepartmentFilter({this.organizationName, this.organizationId, this.businessUnitName, this.workLocation});
 
   @override
   bool operator ==(Object other) =>
@@ -58,11 +62,12 @@ class DepartmentFilter {
       other is DepartmentFilter &&
           runtimeType == other.runtimeType &&
           organizationName == other.organizationName &&
+          organizationId == other.organizationId &&
           businessUnitName == other.businessUnitName &&
           workLocation == other.workLocation;
 
   @override
-  int get hashCode => organizationName.hashCode ^ businessUnitName.hashCode ^ workLocation.hashCode;
+  int get hashCode => Object.hash(organizationName, organizationId, businessUnitName, workLocation);
 }
 
 final departmentsProvider = FutureProvider<List<Department>>(
@@ -72,6 +77,7 @@ final departmentsProvider = FutureProvider<List<Department>>(
 final filteredDepartmentsProvider = FutureProvider.family<List<Department>, DepartmentFilter>(
   (ref, filter) => ref.watch(organizationRepositoryProvider).getDepartments(
         organizationName: filter.organizationName,
+        organizationId: filter.organizationId,
         businessUnitName: filter.businessUnitName,
         workLocation: filter.workLocation,
       ),
@@ -87,8 +93,9 @@ final allDesignationsProvider = FutureProvider<List<Designation>>(
 
 class DesignationFilter {
   final String? organizationName;
+  final String? organizationId;
   final String? departmentName;
-  const DesignationFilter({this.organizationName, this.departmentName});
+  const DesignationFilter({this.organizationName, this.organizationId, this.departmentName});
 
   @override
   bool operator ==(Object other) =>
@@ -96,15 +103,17 @@ class DesignationFilter {
       other is DesignationFilter &&
           runtimeType == other.runtimeType &&
           organizationName == other.organizationName &&
+          organizationId == other.organizationId &&
           departmentName == other.departmentName;
 
   @override
-  int get hashCode => organizationName.hashCode ^ departmentName.hashCode;
+  int get hashCode => Object.hash(organizationName, organizationId, departmentName);
 }
 
 final filteredDesignationsProvider = FutureProvider.family<List<Designation>, DesignationFilter>(
   (ref, filter) => ref.watch(organizationRepositoryProvider).getDesignations(
         organizationName: filter.organizationName,
+        organizationId: filter.organizationId,
         departmentName: filter.departmentName,
       ),
 );

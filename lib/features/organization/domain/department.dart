@@ -1,6 +1,7 @@
 class Department {
   const Department({
     required this.id,
+    this.organizationId = '',
     this.organizationName = '',
     this.businessUnitName = '',
     required this.departmentName,
@@ -10,6 +11,7 @@ class Department {
   });
 
   final int id;
+  final String organizationId;
   final String organizationName;
   final String businessUnitName;
   final String departmentName;
@@ -19,6 +21,7 @@ class Department {
 
   Department copyWith({
     int? id,
+    String? organizationId,
     String? organizationName,
     String? businessUnitName,
     String? departmentName,
@@ -28,6 +31,7 @@ class Department {
   }) {
     return Department(
       id: id ?? this.id,
+      organizationId: organizationId ?? this.organizationId,
       organizationName: organizationName ?? this.organizationName,
       businessUnitName: businessUnitName ?? this.businessUnitName,
       departmentName: departmentName ?? this.departmentName,
@@ -40,6 +44,7 @@ class Department {
   Map<String, dynamic> toMap() {
     return {
       if (id != 0) 'id': id,
+      if (organizationId.isNotEmpty) 'organization_id': organizationId,
       'organization_name': organizationName,
       'business_unit_name': businessUnitName,
       'department_name': departmentName,
@@ -52,6 +57,7 @@ class Department {
   factory Department.fromMap(Map<String, dynamic> map) {
     return Department(
       id: (map['id'] as num?)?.toInt() ?? 0,
+      organizationId: map['organization_id']?.toString() ?? map['organizationId']?.toString() ?? map['org_id']?.toString() ?? '',
       organizationName: map['organization_name']?.toString() ?? '',
       businessUnitName: map['business_unit_name']?.toString() ?? '',
       departmentName: map['department_name']?.toString() ?? '',

@@ -4248,22 +4248,13 @@ class _EmployeeRegistrationPageState
             ),
             const SizedBox(height: 16),
             () {
-              if (_organizationName.trim().toLowerCase() == 'igreen tech') {
-                _organizationName = '';
-              }
-
               final orgsAsync = ref.watch(organizationsProvider);
               final orgList = orgsAsync.valueOrNull ?? [];
               final orgNames = orgList
                   .map((e) => e.name)
-                  .where(
-                    (name) =>
-                        name.trim().isNotEmpty &&
-                        name.trim().toLowerCase() != 'igreen tech',
-                  )
+                  .where((name) => name.trim().isNotEmpty)
                   .toList();
               if (_organizationName.isNotEmpty &&
-                  _organizationName.trim().toLowerCase() != 'igreen tech' &&
                   !orgNames.contains(_organizationName)) {
                 orgNames.insert(0, _organizationName);
               }
@@ -9598,7 +9589,7 @@ class _EmployeeRegistrationPageState
         ? _organizationName.trim()
         : (link.organizationName.isNotEmpty
               ? link.organizationName
-              : 'IGreen Technologies');
+              : 'Organization');
 
     final data = WelcomeLetterData(
       organizationName: selectedOrg,
@@ -10095,7 +10086,7 @@ class _EmployeeRegistrationPageState
           ? _organizationName.trim()
           : (link.organizationName.isNotEmpty
                 ? link.organizationName
-                : 'IGreentec Engg. India Pvt. Ltd.'),
+                : 'Organization'),
       workLocation: _workLocation.trim().isNotEmpty
           ? _workLocation.trim()
           : 'Chennai Office',

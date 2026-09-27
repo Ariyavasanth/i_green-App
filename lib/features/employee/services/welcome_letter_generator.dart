@@ -21,7 +21,7 @@ class WelcomeLetterData {
   final String weeklyOffDay;
 
   const WelcomeLetterData({
-    this.organizationName = 'IGreen Technologies',
+    this.organizationName = 'Organization',
     required this.employeeName,
     required this.reportingManagerName,
     required this.reportingManagerTitle,
@@ -37,7 +37,7 @@ class WelcomeLetterData {
     return WelcomeLetterData(
       organizationName: emp.organizationName.trim().isNotEmpty
           ? emp.organizationName.trim()
-          : 'IGreen Technologies',
+          : 'Organization',
       employeeName: emp.fullName.trim().isNotEmpty
           ? emp.fullName.trim()
           : 'Employee',

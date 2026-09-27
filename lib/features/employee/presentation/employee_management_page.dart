@@ -114,7 +114,9 @@ class _EmployeeManagementPageState
                     emp.emailAddress.toLowerCase().contains(q) ||
                     emp.phoneNumber.toLowerCase().contains(q);
 
-                final matchesOrg = orgFilter == 'All Organizations' || emp.organizationName == orgFilter;
+                final matchesOrg = orgFilter == 'All Organizations' ||
+                    emp.organizationName == orgFilter ||
+                    (emp.organizationId.isNotEmpty && emp.organizationId == orgFilter);
                 final matchesDept = deptFilter == 'All Departments' || emp.department == deptFilter;
                 final matchesDesig = desigFilter == 'All Designations' || emp.designation == desigFilter;
 

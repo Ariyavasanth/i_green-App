@@ -274,9 +274,6 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
                       error: (err, _) => const SizedBox.shrink(),
                       data: (orgs) {
                         final orgNames = orgs.map((o) => o.name).where((s) => s.isNotEmpty).toSet().toList();
-                        if (orgNames.isEmpty) {
-                          orgNames.add('IGreentec Engg. India Pvt. Ltd.');
-                        }
                         if (_selectedOrganization != null && !orgNames.contains(_selectedOrganization)) {
                           orgNames.insert(0, _selectedOrganization!);
                         }

@@ -5,6 +5,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../domain/organization.dart';
 import '../domain/column_preference.dart';
 import '../providers/organization_providers.dart';
+import '../services/organization_migration_service.dart';
 import 'widgets/column_selection_dialog.dart';
 import 'widgets/organization_details_dialog.dart';
 import 'widgets/organization_form_dialog.dart';
@@ -25,6 +26,7 @@ class _OrganizationManagementPageState
 
   static const List<String> _defaultAllColumns = [
     'Organization Name',
+    'Status',
     'Business Type',
     'Industry Type',
     'Business Unit(s)',
@@ -330,6 +332,21 @@ class _OrganizationManagementPageState
             ),
           ),
           if (!isMobile) ...[
+            const SizedBox(width: 8),
+            IconButton(
+              style: IconButton.styleFrom(
+                backgroundColor: const Color(0xFFF3F4F6),
+                foregroundColor: const Color(0xFF344054),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: const BorderSide(color: Color(0xFFD0D5DD)),
+                ),
+                minimumSize: const Size(42, 42),
+              ),
+              tooltip: 'Data Migration & ID Audit',
+              onPressed: () => _openMigrationDialog(context),
+              icon: const Icon(Icons.published_with_changes_rounded, size: 20, color: AppColors.primary),
+            ),
             const SizedBox(width: 8),
             _buildColumnsDropdownButton(context, visibleCols, pref),
           ],
@@ -878,7 +895,114 @@ class _OrganizationManagementPageState
     OrganizationShareDialog.show(context, org);
   }
 
+  Future<void> _toggleStatus(BuildContext context, Organization org) async {
+    final newStatus = org.isActive ? 'inactive' : 'active';
+    final actionName = org.isActive ? 'Deactivate' : 'Reactivate';
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('$actionName "${org.name}"?'),
+        content: Text(
+          org.isActive
+              ? 'Deactivating will hide this organization from normal selection while preserving all historical employee, department, attendance, and payroll records intact.'
+              : 'Reactivating will restore this organization to active selection and operational modules.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: org.isActive ? const Color(0xFFD97706) : AppColors.primary,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(actionName),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      if (org.isActive) {
+        await ref.read(organizationRepositoryProvider).deactivateOrganization(org.id, org.docId);
+      } else {
+        await ref.read(organizationRepositoryProvider).reactivateOrganization(org.id, org.docId);
+      }
+      ref.invalidate(organizationsProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(this.context).showSnackBar(
+        SnackBar(content: Text('Organization is now $newStatus.')),
+      );
+    }
+  }
+
   Future<void> _confirmDelete(BuildContext context, Organization org) async {
+    // Audit dependencies first
+    final deps = await ref.read(organizationRepositoryProvider).checkOrganizationDependencies(org.canonicalId, org.name);
+    final totalDeps = deps.values.fold<int>(0, (sum, val) => sum + val);
+
+    if (totalDeps > 0) {
+      if (!mounted) return;
+      final shouldDeactivate = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: const [
+              Icon(Icons.shield_outlined, color: Colors.orange),
+              SizedBox(width: 8),
+              Text('Deletion Blocked'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Cannot permanently delete "${org.name}" because it has $totalDeps associated records:',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 12),
+              ...deps.entries.where((e) => e.value > 0).map(
+                (e) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text('• ${e.value} ${e.key.replaceAll('_', ' ')}'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'To protect employee attendance, leave, and payroll history, please deactivate this organization instead.',
+                style: TextStyle(fontSize: 13, color: Colors.black87),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFFD97706)),
+              onPressed: () => Navigator.of(context).pop(true),
+              icon: const Icon(Icons.pause_circle_outline, size: 18),
+              label: const Text('Deactivate Organization'),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldDeactivate == true) {
+        await ref.read(organizationRepositoryProvider).deactivateOrganization(org.id, org.docId);
+        ref.invalidate(organizationsProvider);
+        if (!mounted) return;
+        ScaffoldMessenger.of(this.context).showSnackBar(
+          SnackBar(content: Text('Deactivated "${org.name}"')),
+        );
+      }
+      return;
+    }
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -890,7 +1014,7 @@ class _OrganizationManagementPageState
           ],
         ),
         content: Text(
-          'Are you sure you want to delete "${org.name}"?\nThis action cannot be undone.',
+          'Are you sure you want to permanently delete "${org.name}"?\nThis action cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -900,20 +1024,27 @@ class _OrganizationManagementPageState
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete'),
+            child: const Text('Delete Permanently'),
           ),
         ],
       ),
     );
 
     if (confirm == true) {
-      await ref.read(organizationRepositoryProvider).deleteOrganization(org.id);
+      await ref.read(organizationRepositoryProvider).deleteOrganization(org.id, org.docId);
       ref.invalidate(organizationsProvider);
       if (!mounted) return;
       ScaffoldMessenger.of(this.context).showSnackBar(
         SnackBar(content: Text('Deleted "${org.name}"')),
       );
     }
+  }
+
+  void _openMigrationDialog(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => const _MigrationManagementDialog(),
+    );
   }
 
   Widget _buildDesktopTable(
@@ -1195,6 +1326,29 @@ class _OrganizationManagementPageState
             ),
           ),
           PopupMenuItem<String>(
+            value: 'status_toggle',
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Icon(
+                  org.isActive ? Icons.pause_circle_outline : Icons.play_circle_outline,
+                  size: 20,
+                  color: org.isActive ? const Color(0xFFD97706) : const Color(0xFF16A34A),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  org.isActive ? 'Deactivate' : 'Reactivate',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: org.isActive ? const Color(0xFFD97706) : const Color(0xFF16A34A),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          PopupMenuItem<String>(
             value: 'delete',
             height: 40,
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1225,6 +1379,8 @@ class _OrganizationManagementPageState
             _openEditDialog(context, org);
           } else if (val == 'share') {
             _openShareDialog(context, org);
+          } else if (val == 'status_toggle') {
+            _toggleStatus(context, org);
           } else if (val == 'delete') {
             _confirmDelete(context, org);
           }
@@ -1238,6 +1394,39 @@ class _OrganizationManagementPageState
     TextStyle? style;
 
     switch (columnName) {
+      case 'Status':
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: org.isActive ? const Color(0xFFDCFCE7) : const Color(0xFFF3F4F6),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: org.isActive ? const Color(0xFF86EFAC) : const Color(0xFFE5E7EB),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: org.isActive ? const Color(0xFF16A34A) : const Color(0xFF6B7280),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                org.isActive ? 'Active' : 'Inactive',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: org.isActive ? const Color(0xFF166534) : const Color(0xFF4B5563),
+                ),
+              ),
+            ],
+          ),
+        );
       case 'Organization Name':
         value = org.name.toUpperCase();
         style = const TextStyle(
@@ -1471,6 +1660,26 @@ class _OrganizationManagementPageState
                               ],
                             ),
                           ),
+                          PopupMenuItem(
+                            value: 'status_toggle',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  org.isActive ? Icons.pause_circle_outline : Icons.play_circle_outline,
+                                  size: 18,
+                                  color: org.isActive ? const Color(0xFFD97706) : const Color(0xFF16A34A),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  org.isActive ? 'Deactivate' : 'Reactivate',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: org.isActive ? const Color(0xFFD97706) : const Color(0xFF16A34A),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                           const PopupMenuItem(
                             value: 'delete',
                             child: Row(
@@ -1486,6 +1695,7 @@ class _OrganizationManagementPageState
                           if (val == 'view') _openViewDialog(context, org);
                           if (val == 'edit') _openEditDialog(context, org);
                           if (val == 'share') _openShareDialog(context, org);
+                          if (val == 'status_toggle') _toggleStatus(context, org);
                           if (val == 'delete') _confirmDelete(context, org);
                         },
                       ),
@@ -1648,6 +1858,248 @@ class _OrganizationManagementPageState
               ],
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _MigrationManagementDialog extends StatefulWidget {
+  const _MigrationManagementDialog();
+
+  @override
+  State<_MigrationManagementDialog> createState() => _MigrationManagementDialogState();
+}
+
+class _MigrationManagementDialogState extends State<_MigrationManagementDialog> {
+  bool _isLoading = false;
+  MigrationReport? _report;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _runMigration(dryRun: true);
+  }
+
+  Future<void> _runMigration({required bool dryRun}) async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final service = OrganizationMigrationService();
+      final res = await service.runMigration(dryRun: dryRun);
+      setState(() {
+        _report = res;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: 750,
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.published_with_changes_rounded, color: AppColors.primary, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text(
+                        'Organization ID Migration & Health Audit',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF101828)),
+                      ),
+                      Text(
+                        'Audit records across Firestore collections and securely link them to canonical organization IDs.',
+                        style: TextStyle(fontSize: 12.5, color: Color(0xFF667085)),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close, color: Color(0xFF667085)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            const Divider(height: 1, color: Color(0xFFEAECF0)),
+            const SizedBox(height: 16),
+            if (_isLoading)
+              const Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text('Analyzing Firestore collections...'),
+                    ],
+                  ),
+                ),
+              )
+            else if (_errorMessage != null)
+              Expanded(
+                child: Center(
+                  child: Text('Error: $_errorMessage', style: const TextStyle(color: Colors.red)),
+                ),
+              )
+            else if (_report != null)
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Status Badge Banner
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: _report!.isDryRun ? const Color(0xFFEFF6FF) : const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: _report!.isDryRun ? const Color(0xFFBFDBFE) : const Color(0xFFA7F3D0),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _report!.isDryRun ? Icons.info_outline : Icons.check_circle_outline,
+                            color: _report!.isDryRun ? const Color(0xFF2563EB) : const Color(0xFF059669),
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              _report!.isDryRun
+                                  ? 'DRY-RUN ANALYSIS COMPLETED: No data has been modified. Review the summary below before applying.'
+                                  : 'MIGRATION APPLIED SUCCESSFULLY: Matched records have been updated with canonical organization IDs.',
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: _report!.isDryRun ? const Color(0xFF1E40AF) : const Color(0xFF065F46),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    // Summary Cards Row
+                    Row(
+                      children: [
+                        _buildStatBox('Organizations', '${_report!.totalOrganizationsFound}', Colors.blueGrey),
+                        const SizedBox(width: 8),
+                        _buildStatBox('Already Linked', '${_report!.totalAlreadyMigrated}', const Color(0xFF059669)),
+                        const SizedBox(width: 8),
+                        _buildStatBox('Ready to Link', '${_report!.totalMatched}', const Color(0xFF2563EB)),
+                        const SizedBox(width: 8),
+                        _buildStatBox('Unmatched', '${_report!.totalUnmatched}', const Color(0xFFD97706)),
+                        const SizedBox(width: 8),
+                        _buildStatBox('Ambiguous', '${_report!.totalAmbiguous}', Colors.red),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    const Text('Detailed Log:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E293B),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: SingleChildScrollView(
+                          child: SelectableText(
+                            _report!.toFormattedString(),
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 11.5,
+                              color: Color(0xFFF8FAFC),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Close'),
+                ),
+                const SizedBox(width: 10),
+                OutlinedButton.icon(
+                  onPressed: _isLoading ? null : () => _runMigration(dryRun: true),
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Re-run Dry-Run'),
+                ),
+                if (_report != null && _report!.isDryRun && _report!.totalMatched > 0) ...[
+                  const SizedBox(width: 10),
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                    onPressed: _isLoading ? null : () => _runMigration(dryRun: false),
+                    icon: const Icon(Icons.bolt, size: 18),
+                    label: Text('Apply Migration (${_report!.totalMatched} records)'),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatBox(String label, String value, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+        ),
+        child: Column(
+          children: [
+            Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: color.withValues(alpha: 0.85)),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
       ),
     );
   }

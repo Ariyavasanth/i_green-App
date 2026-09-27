@@ -42,17 +42,15 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
 
   // --- Organization ---
   @override
-  Future<List<Organization>> getOrganizations() async {
+  Future<List<Organization>> getOrganizations({bool includeInactive = true}) async {
     try {
       final ref = _orgsRef;
       if (ref != null) {
         final snapshot = await ref.get();
         final orgs = <Organization>[];
         for (final doc in snapshot.docs) {
-          final o = Organization.fromMap(doc.data());
-          if (o.name.trim().toLowerCase() == 'igreen tech') {
-            doc.reference.delete().ignore();
-          } else {
+          final o = Organization.fromMap(doc.data(), doc.id);
+          if (includeInactive || o.isActive) {
             orgs.add(o);
           }
         }
@@ -63,20 +61,22 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
     } catch (e) {
       debugPrint('Error getting organizations from Firestore: $e');
     }
-    _memoryOrgs.removeWhere((o) => o.name.trim().toLowerCase() == 'igreen tech');
-    return List.from(_memoryOrgs);
+    return includeInactive
+        ? List.from(_memoryOrgs)
+        : _memoryOrgs.where((o) => o.isActive).toList();
   }
 
   @override
   Future<void> addOrganization(Organization organization) async {
     final nextId = organization.id != 0 ? organization.id : DateTime.now().millisecondsSinceEpoch;
-    final orgWithId = organization.copyWith(id: nextId);
+    final docKey = organization.docId.isNotEmpty ? organization.docId : 'org_$nextId';
+    final orgWithId = organization.copyWith(id: nextId, docId: docKey);
 
     _memoryOrgs.add(orgWithId);
     try {
       final ref = _orgsRef;
       if (ref != null) {
-        await ref.doc('org_$nextId').set(orgWithId.toMap());
+        await ref.doc(docKey).set(orgWithId.toMap());
       }
     } catch (e) {
       debugPrint('Error adding organization: $e');
@@ -85,12 +85,13 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
 
   @override
   Future<void> updateOrganization(Organization organization) async {
-    final idx = _memoryOrgs.indexWhere((o) => o.id == organization.id);
+    final idx = _memoryOrgs.indexWhere((o) => (o.docId.isNotEmpty && o.docId == organization.docId) || o.id == organization.id);
     if (idx != -1) _memoryOrgs[idx] = organization; else _memoryOrgs.add(organization);
     try {
       final ref = _orgsRef;
       if (ref != null) {
-        await ref.doc('org_${organization.id}').set(organization.toMap(), SetOptions(merge: true));
+        final docKey = organization.docId.isNotEmpty ? organization.docId : 'org_${organization.id}';
+        await ref.doc(docKey).set(organization.toMap(), SetOptions(merge: true));
       }
     } catch (e) {
       debugPrint('Error updating organization: $e');
@@ -98,11 +99,107 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
   }
 
   @override
-  Future<void> deleteOrganization(int id) async {
-    _memoryOrgs.removeWhere((o) => o.id == id);
+  Future<void> deactivateOrganization(int id, [String? docId]) async {
+    final docKey = docId ?? (id != 0 ? 'org_$id' : '');
+    final idx = _memoryOrgs.indexWhere((o) => (docKey.isNotEmpty && o.docId == docKey) || o.id == id);
+    if (idx != -1) {
+      _memoryOrgs[idx] = _memoryOrgs[idx].copyWith(status: 'inactive');
+    }
     try {
       final ref = _orgsRef;
-      if (ref != null) await ref.doc('org_$id').delete();
+      if (ref != null && docKey.isNotEmpty) {
+        await ref.doc(docKey).set({'status': 'inactive'}, SetOptions(merge: true));
+      }
+    } catch (e) {
+      debugPrint('Error deactivating organization: $e');
+    }
+  }
+
+  @override
+  Future<void> reactivateOrganization(int id, [String? docId]) async {
+    final docKey = docId ?? (id != 0 ? 'org_$id' : '');
+    final idx = _memoryOrgs.indexWhere((o) => (docKey.isNotEmpty && o.docId == docKey) || o.id == id);
+    if (idx != -1) {
+      _memoryOrgs[idx] = _memoryOrgs[idx].copyWith(status: 'active');
+    }
+    try {
+      final ref = _orgsRef;
+      if (ref != null && docKey.isNotEmpty) {
+        await ref.doc(docKey).set({'status': 'active'}, SetOptions(merge: true));
+      }
+    } catch (e) {
+      debugPrint('Error reactivating organization: $e');
+    }
+  }
+
+  @override
+  Future<Map<String, int>> checkOrganizationDependencies(String orgCanonicalId, [String? orgName]) async {
+    final counts = <String, int>{
+      'employees': 0,
+      'departments': 0,
+      'designations': 0,
+      'business_units': 0,
+      'locations': 0,
+      'registration_links': 0,
+    };
+    final fs = _firestore;
+    if (fs == null) return counts;
+
+    final trimmedId = orgCanonicalId.trim();
+    final trimmedName = (orgName ?? '').trim().toLowerCase();
+
+    Future<int> countMatching(String collectionName) async {
+      try {
+        final snap = await fs.collection(collectionName).get();
+        int c = 0;
+        for (final d in snap.docs) {
+          final data = d.data();
+          final storedId = (data['organization_id'] ?? data['organizationId'] ?? data['org_id'])?.toString().trim();
+          final storedName = (data['organization_name'] ?? data['organizationName'])?.toString().trim().toLowerCase();
+          final bool matchId = trimmedId.isNotEmpty && storedId != null && storedId == trimmedId;
+          final bool matchName = trimmedName.isNotEmpty && storedName != null && storedName == trimmedName;
+          if (matchId || matchName) {
+            c++;
+          }
+        }
+        return c;
+      } catch (_) {
+        return 0;
+      }
+    }
+
+    counts['employees'] = await countMatching('employees');
+    counts['departments'] = await countMatching('departments');
+    counts['designations'] = await countMatching('designations');
+    counts['business_units'] = await countMatching('business_units');
+    counts['locations'] = await countMatching('locations');
+    counts['registration_links'] = await countMatching('registration_links');
+
+    return counts;
+  }
+
+  @override
+  Future<void> deleteOrganization(int id, [String? docId]) async {
+    final docKey = docId ?? (id != 0 ? 'org_$id' : '');
+    
+    // Safety audit
+    final org = _memoryOrgs.where((o) => (docKey.isNotEmpty && o.docId == docKey) || o.id == id).firstOrNull;
+    final deps = await checkOrganizationDependencies(docKey, org?.name);
+    final totalDeps = deps.values.fold<int>(0, (sum, val) => sum + val);
+    if (totalDeps > 0) {
+      throw Exception(
+        'Cannot permanently delete this organization because it has $totalDeps associated records '
+        '(${deps.entries.where((e) => e.value > 0).map((e) => '${e.value} ${e.key}').join(', ')}). '
+        'Please deactivate the organization instead.',
+      );
+    }
+
+    _memoryOrgs.removeWhere((o) => (docKey.isNotEmpty && o.docId == docKey) || o.id == id);
+    try {
+      final ref = _orgsRef;
+      if (ref != null && docKey.isNotEmpty) {
+        await ref.doc(docKey).delete();
+      }
     } catch (e) {
       debugPrint('Error deleting organization: $e');
     }
@@ -110,7 +207,7 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
 
   // --- Business Units ---
   @override
-  Future<List<BusinessUnit>> getBusinessUnits({String? organizationName}) async {
+  Future<List<BusinessUnit>> getBusinessUnits({String? organizationName, String? organizationId}) async {
     try {
       final ref = _buRef;
       if (ref != null) {
@@ -134,6 +231,7 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
           if (!combinedBUs.any((b) => b.organizationName.trim().toLowerCase() == org.name.trim().toLowerCase() && b.unitName.trim().toLowerCase() == buName.toLowerCase())) {
             combinedBUs.add(BusinessUnit(
               id: extraId++,
+              organizationId: org.canonicalId,
               organizationName: org.name,
               unitName: buName,
               description: 'Business unit under ${org.name}',
@@ -143,10 +241,13 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
       }
     }
 
-    if (organizationName != null && organizationName.isNotEmpty) {
-      return combinedBUs.where((bu) => bu.organizationName.isEmpty || bu.organizationName.trim().toLowerCase() == organizationName.trim().toLowerCase()).toList();
+    var res = combinedBUs;
+    if (organizationId != null && organizationId.isNotEmpty && organizationId != 'All') {
+      res = res.where((bu) => bu.organizationId.isEmpty || bu.organizationId == organizationId).toList();
+    } else if (organizationName != null && organizationName.isNotEmpty && organizationName != 'All') {
+      res = res.where((bu) => bu.organizationName.isEmpty || bu.organizationName.trim().toLowerCase() == organizationName.trim().toLowerCase()).toList();
     }
-    return combinedBUs;
+    return res;
   }
 
   @override
@@ -187,7 +288,7 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
 
   // --- Locations ---
   @override
-  Future<List<Location>> getLocations({String? organizationName, String? businessUnitName}) async {
+  Future<List<Location>> getLocations({String? organizationName, String? organizationId, String? businessUnitName}) async {
     try {
       final ref = _locationsRef;
       if (ref != null) {
@@ -211,6 +312,7 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
           if (!combinedLocations.any((l) => l.organizationName.trim().toLowerCase() == org.name.trim().toLowerCase() && l.locationName.trim().toLowerCase() == locName.toLowerCase())) {
             combinedLocations.add(Location(
               id: extraId++,
+              organizationId: org.canonicalId,
               organizationName: org.name,
               businessUnitName: '',
               locationName: locName,
@@ -222,10 +324,12 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
     }
 
     var res = combinedLocations;
-    if (organizationName != null && organizationName.isNotEmpty) {
+    if (organizationId != null && organizationId.isNotEmpty && organizationId != 'All') {
+      res = res.where((l) => l.organizationId.isEmpty || l.organizationId == organizationId).toList();
+    } else if (organizationName != null && organizationName.isNotEmpty && organizationName != 'All') {
       res = res.where((l) => l.organizationName.isEmpty || l.organizationName.trim().toLowerCase() == organizationName.trim().toLowerCase()).toList();
     }
-    if (businessUnitName != null && businessUnitName.isNotEmpty) {
+    if (businessUnitName != null && businessUnitName.isNotEmpty && businessUnitName != 'All') {
       res = res.where((l) => l.businessUnitName.isEmpty || l.businessUnitName.trim().toLowerCase() == businessUnitName.trim().toLowerCase()).toList();
     }
     return List.from(res);
@@ -269,7 +373,7 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
 
   // --- Departments ---
   @override
-  Future<List<Department>> getDepartments({String? organizationName, String? businessUnitName, String? workLocation}) async {
+  Future<List<Department>> getDepartments({String? organizationName, String? organizationId, String? businessUnitName, String? workLocation}) async {
     try {
       final ref = _deptsRef;
       if (ref != null) {
@@ -283,13 +387,15 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
       debugPrint('Error getting departments: $e');
     }
     var res = _memoryDepts;
-    if (organizationName != null && organizationName.isNotEmpty) {
+    if (organizationId != null && organizationId.isNotEmpty && organizationId != 'All') {
+      res = res.where((d) => d.organizationId.isEmpty || d.organizationId == organizationId).toList();
+    } else if (organizationName != null && organizationName.isNotEmpty && organizationName != 'All') {
       res = res.where((d) => d.organizationName.isEmpty || d.organizationName == organizationName).toList();
     }
-    if (businessUnitName != null && businessUnitName.isNotEmpty) {
+    if (businessUnitName != null && businessUnitName.isNotEmpty && businessUnitName != 'All') {
       res = res.where((d) => d.businessUnitName.isEmpty || d.businessUnitName == businessUnitName).toList();
     }
-    if (workLocation != null && workLocation.isNotEmpty) {
+    if (workLocation != null && workLocation.isNotEmpty && workLocation != 'All') {
       res = res.where((d) => d.workLocation.isEmpty || d.workLocation == workLocation).toList();
     }
     return List.from(res);
@@ -333,7 +439,7 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
 
   // --- Designations ---
   @override
-  Future<List<Designation>> getDesignations({String? organizationName, String? departmentName}) async {
+  Future<List<Designation>> getDesignations({String? organizationName, String? organizationId, String? departmentName}) async {
     try {
       final ref = _designationsRef;
       if (ref != null) {
@@ -343,7 +449,8 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
           if (desig.organizationName.isEmpty) {
             final dept = _memoryDepts.where((dept) => dept.departmentName == desig.departmentName).firstOrNull;
             final org = (dept != null && dept.organizationName.isNotEmpty) ? dept.organizationName : '';
-            return desig.copyWith(organizationName: org);
+            final oId = (dept != null && dept.organizationId.isNotEmpty) ? dept.organizationId : '';
+            return desig.copyWith(organizationName: org, organizationId: oId);
           }
           return desig;
         }).toList();
@@ -358,10 +465,18 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
       if (d.organizationName.isEmpty) {
         final dept = _memoryDepts.where((dept) => dept.departmentName == d.departmentName).firstOrNull;
         final org = (dept != null && dept.organizationName.isNotEmpty) ? dept.organizationName : '';
-        return d.copyWith(organizationName: org);
+        final oId = (dept != null && dept.organizationId.isNotEmpty) ? dept.organizationId : '';
+        return d.copyWith(organizationName: org, organizationId: oId);
       }
       return d;
     }).where((d) {
+      if (organizationId != null &&
+          organizationId.isNotEmpty &&
+          organizationId != 'All' &&
+          d.organizationId.isNotEmpty &&
+          d.organizationId != organizationId) {
+        return false;
+      }
       if (organizationName != null &&
           organizationName.isNotEmpty &&
           organizationName != 'All' &&

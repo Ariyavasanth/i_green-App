@@ -8,6 +8,7 @@ class RegistrationLink {
     required this.linkStatus, // 'Pending', 'Completed', 'Expired'
     this.employeeName = '',
     this.employeeId = '',
+    this.organizationId = '',
     this.organizationName = '',
     this.department = '',
     this.designation = '',
@@ -27,6 +28,7 @@ class RegistrationLink {
   final String linkStatus;
   final String employeeName;
   final String employeeId;
+  final String organizationId;
   final String organizationName;
   final String department;
   final String designation;
@@ -69,6 +71,7 @@ class RegistrationLink {
       'link_status': linkStatus,
       'employee_name': employeeName,
       'employee_id': employeeId,
+      if (organizationId.isNotEmpty) 'organization_id': organizationId,
       'organization_name': organizationName,
       'department': department,
       'designation': designation,
@@ -100,7 +103,8 @@ class RegistrationLink {
       linkStatus: map['link_status']?.toString() ?? 'Pending',
       employeeName: map['employee_name']?.toString() ?? '',
       employeeId: map['employee_id']?.toString() ?? '',
-      organizationName: map['organization_name']?.toString() ?? '',
+      organizationId: map['organization_id']?.toString() ?? map['organizationId']?.toString() ?? map['org_id']?.toString() ?? '',
+      organizationName: map['organization_name']?.toString() ?? map['organizationName']?.toString() ?? '',
       department: map['department']?.toString() ?? '',
       designation: map['designation']?.toString() ?? map['designation_name']?.toString() ?? '',
       submittedDate: map['submitted_date']?.toString() ?? '',
@@ -122,6 +126,7 @@ class RegistrationLink {
     String? linkStatus,
     String? employeeName,
     String? employeeId,
+    String? organizationId,
     String? organizationName,
     String? department,
     String? designation,
@@ -141,6 +146,7 @@ class RegistrationLink {
       linkStatus: linkStatus ?? this.linkStatus,
       employeeName: employeeName ?? this.employeeName,
       employeeId: employeeId ?? this.employeeId,
+      organizationId: organizationId ?? this.organizationId,
       organizationName: organizationName ?? this.organizationName,
       department: department ?? this.department,
       designation: designation ?? this.designation,

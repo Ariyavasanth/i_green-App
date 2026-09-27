@@ -121,7 +121,7 @@ final registrationLinkByIdProvider =
         generatedDate: '',
         expiryDate: '',
         linkStatus: 'Pending',
-        organizationName: 'iGreen Tech',
+        organizationName: '',
         department: 'Management',
       );
     }
@@ -136,7 +136,7 @@ final registrationLinkByIdProvider =
       generatedDate: '',
       expiryDate: '',
       linkStatus: 'Pending',
-      organizationName: 'iGreen Tech',
+      organizationName: '',
       department: 'Management',
     );
   },

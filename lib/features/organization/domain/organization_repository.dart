@@ -7,31 +7,34 @@ import 'organization.dart';
 
 abstract interface class OrganizationRepository {
   // Organization methods
-  Future<List<Organization>> getOrganizations();
+  Future<List<Organization>> getOrganizations({bool includeInactive = true});
   Future<void> addOrganization(Organization organization);
   Future<void> updateOrganization(Organization organization);
-  Future<void> deleteOrganization(int id);
+  Future<void> deleteOrganization(int id, [String? docId]);
+  Future<void> deactivateOrganization(int id, [String? docId]);
+  Future<void> reactivateOrganization(int id, [String? docId]);
+  Future<Map<String, int>> checkOrganizationDependencies(String orgCanonicalId, [String? orgName]);
 
   // Business Unit methods
-  Future<List<BusinessUnit>> getBusinessUnits({String? organizationName});
+  Future<List<BusinessUnit>> getBusinessUnits({String? organizationName, String? organizationId});
   Future<void> addBusinessUnit(BusinessUnit businessUnit);
   Future<void> updateBusinessUnit(BusinessUnit businessUnit);
   Future<void> deleteBusinessUnit(int id);
 
   // Location methods
-  Future<List<Location>> getLocations({String? organizationName, String? businessUnitName});
+  Future<List<Location>> getLocations({String? organizationName, String? organizationId, String? businessUnitName});
   Future<void> addLocation(Location location);
   Future<void> updateLocation(Location location);
   Future<void> deleteLocation(int id);
 
   // Department methods
-  Future<List<Department>> getDepartments({String? organizationName, String? businessUnitName, String? workLocation});
+  Future<List<Department>> getDepartments({String? organizationName, String? organizationId, String? businessUnitName, String? workLocation});
   Future<void> addDepartment(Department department);
   Future<void> updateDepartment(Department department);
   Future<void> deleteDepartment(int id);
 
   // Designation methods
-  Future<List<Designation>> getDesignations({String? organizationName, String? departmentName});
+  Future<List<Designation>> getDesignations({String? organizationName, String? organizationId, String? departmentName});
   Future<void> addDesignation(Designation designation);
   Future<void> updateDesignation(Designation designation);
   Future<void> deleteDesignation(int id);

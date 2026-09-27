@@ -1,6 +1,7 @@
 class Location {
   const Location({
     required this.id,
+    this.organizationId = '',
     required this.organizationName,
     required this.businessUnitName,
     required this.locationName,
@@ -8,6 +9,7 @@ class Location {
   });
 
   final int id;
+  final String organizationId;
   final String organizationName;
   final String businessUnitName;
   final String locationName;
@@ -15,6 +17,7 @@ class Location {
 
   Location copyWith({
     int? id,
+    String? organizationId,
     String? organizationName,
     String? businessUnitName,
     String? locationName,
@@ -22,6 +25,7 @@ class Location {
   }) {
     return Location(
       id: id ?? this.id,
+      organizationId: organizationId ?? this.organizationId,
       organizationName: organizationName ?? this.organizationName,
       businessUnitName: businessUnitName ?? this.businessUnitName,
       locationName: locationName ?? this.locationName,
@@ -32,6 +36,7 @@ class Location {
   Map<String, dynamic> toMap() {
     return {
       if (id != 0) 'id': id,
+      if (organizationId.isNotEmpty) 'organization_id': organizationId,
       'organization_name': organizationName,
       'business_unit_name': businessUnitName,
       'location_name': locationName,
@@ -42,9 +47,10 @@ class Location {
   factory Location.fromMap(Map<String, dynamic> map) {
     return Location(
       id: (map['id'] as num?)?.toInt() ?? 0,
-      organizationName: map['organization_name']?.toString() ?? '',
-      businessUnitName: map['business_unit_name']?.toString() ?? '',
-      locationName: map['location_name']?.toString() ?? '',
+      organizationId: map['organization_id']?.toString() ?? map['organizationId']?.toString() ?? map['org_id']?.toString() ?? '',
+      organizationName: map['organization_name']?.toString() ?? map['organizationName']?.toString() ?? '',
+      businessUnitName: map['business_unit_name']?.toString() ?? map['businessUnitName']?.toString() ?? '',
+      locationName: map['location_name']?.toString() ?? map['locationName']?.toString() ?? '',
       address: map['address']?.toString() ?? '',
     );
   }

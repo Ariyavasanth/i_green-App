@@ -115,7 +115,9 @@ class OrgDocument {
 class Organization {
   const Organization({
     required this.id,
+    this.docId = '',
     required this.name,
+    this.status = 'active',
     required this.businessType,
     required this.industryType,
     required this.businessUnits,
@@ -136,7 +138,9 @@ class Organization {
   });
 
   final int id;
+  final String docId;
   final String name;
+  final String status; // 'active', 'inactive'
   final String businessType;
   final String industryType;
   final String businessUnits;
@@ -155,9 +159,15 @@ class Organization {
   final List<DirectorDetail> directors;
   final List<OrgDocument> documents;
 
+  bool get isActive => status.toLowerCase() != 'inactive';
+
+  String get canonicalId => docId.isNotEmpty ? docId : (id != 0 ? 'org_$id' : '');
+
   Organization copyWith({
     int? id,
+    String? docId,
     String? name,
+    String? status,
     String? businessType,
     String? industryType,
     String? businessUnits,
@@ -178,7 +188,9 @@ class Organization {
   }) {
     return Organization(
       id: id ?? this.id,
+      docId: docId ?? this.docId,
       name: name ?? this.name,
+      status: status ?? this.status,
       businessType: businessType ?? this.businessType,
       industryType: industryType ?? this.industryType,
       businessUnits: businessUnits ?? this.businessUnits,
@@ -207,7 +219,9 @@ class Organization {
 
     return {
       if (id != 0) 'id': id,
+      if (canonicalId.isNotEmpty) 'doc_id': canonicalId,
       'name': name,
+      'status': status.isNotEmpty ? status : 'active',
       'business_type': businessType,
       'industry_type': industryType,
       'business_units': businessUnits,
@@ -228,7 +242,7 @@ class Organization {
     };
   }
 
-  factory Organization.fromMap(Map<String, dynamic> map) {
+  factory Organization.fromMap(Map<String, dynamic> map, [String? documentId]) {
     // Parse contact numbers
     List<ContactNumber> contacts = [];
     if (map['contact_numbers'] is List) {
@@ -260,10 +274,14 @@ class Organization {
     }
 
     final gst = map['gst_number']?.toString() ?? map['tax_id']?.toString() ?? '';
+    final parsedId = (map['id'] as num?)?.toInt() ?? 0;
+    final resolvedDocId = documentId ?? map['doc_id']?.toString() ?? (parsedId != 0 ? 'org_$parsedId' : '');
 
     return Organization(
-      id: (map['id'] as num?)?.toInt() ?? 0,
+      id: parsedId,
+      docId: resolvedDocId,
       name: map['name']?.toString() ?? '',
+      status: map['status']?.toString() ?? 'active',
       businessType: map['business_type']?.toString() ?? '',
       industryType: map['industry_type']?.toString() ?? '',
       businessUnits: map['business_units']?.toString() ?? '',

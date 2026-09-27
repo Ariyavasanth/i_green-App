@@ -182,7 +182,9 @@ class _OrganizationStructurePageState
             ),
             data: (depts) {
               final filtered = depts.where((dept) {
-                if (_selectedOrgFilter != 'All' && dept.organizationName != _selectedOrgFilter) {
+                if (_selectedOrgFilter != 'All' &&
+                    dept.organizationName != _selectedOrgFilter &&
+                    dept.organizationId != _selectedOrgFilter) {
                   return false;
                 }
                 if (_selectedDeptFilter != 'All' && dept.departmentName != _selectedDeptFilter) {
@@ -1138,8 +1140,9 @@ class _OrganizationStructurePageState
             data: (desigs) {
               final filtered = desigs.where((d) {
                 if (_selectedDesigOrg != 'All' &&
-                    d.organizationName.isNotEmpty &&
-                    d.organizationName != _selectedDesigOrg) {
+                    (d.organizationName.isNotEmpty || d.organizationId.isNotEmpty) &&
+                    d.organizationName != _selectedDesigOrg &&
+                    d.organizationId != _selectedDesigOrg) {
                   return false;
                 }
                 if (_selectedDesigDept != 'All' &&
