@@ -70,19 +70,18 @@ class _AssetManagementPageState extends ConsumerState<AssetManagementPage> {
 
   String _getResolvedEmployeeName(AssetAssignment record, List<Employee> employees) {
     if (employees.isNotEmpty) {
-      final match = employees.where((e) => e.id == record.employeeId || (e.employeeId.isNotEmpty && e.employeeId == record.employeeCode)).firstOrNull;
+      final match = employees.where((e) =>
+          (record.employeeId > 0 && e.id == record.employeeId) ||
+          (record.employeeCode.isNotEmpty && e.employeeId == record.employeeCode)).firstOrNull;
       if (match != null && match.fullName.trim().isNotEmpty) {
         return match.fullName.trim();
       }
     }
     final name = record.employeeName.trim();
-    if (name.isEmpty || name.toLowerCase().contains('developer') || name.toLowerCase().contains('employee')) {
-      if (employees.isNotEmpty && employees.first.fullName.trim().isNotEmpty) {
-        return employees.first.fullName.trim();
-      }
-      return 'Alex Morgan';
+    if (name.isNotEmpty) {
+      return name;
     }
-    return name;
+    return 'Unassigned';
   }
 
   @override

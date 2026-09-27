@@ -37,7 +37,7 @@ final myAssetAssignmentsProvider = FutureProvider<List<AssetAssignment>>((ref) a
   final currentEmp = overrideEmp ?? ref.watch(currentEmployeeProvider);
 
   if (currentEmp == null) {
-    return assignments;
+    return const [];
   }
 
   final empId = currentEmp.id;
