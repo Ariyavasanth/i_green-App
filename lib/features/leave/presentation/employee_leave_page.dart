@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../employee/domain/employee.dart';
 import '../domain/leave_balance.dart';
 import '../domain/leave_request.dart';
+import '../domain/holiday.dart';
 import '../domain/leave_overlap_validator.dart';
 import '../providers/leave_providers.dart';
 import '../../employee/providers/employee_providers.dart';
@@ -1446,6 +1447,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
   Widget _buildCalendarSection(List<LeaveRequest> requests, bool isMobile) {
     final firstDayOfMonth = DateTime(_focusedMonth.year, _focusedMonth.month, 1);
     final daysInMonth = DateUtils.getDaysInMonth(_focusedMonth.year, _focusedMonth.month);
+    final holidays = ref.watch(holidayListProvider).value ?? [];
 
     return SingleChildScrollView(
       padding: EdgeInsets.all(isMobile ? 16 : 24),
@@ -1484,13 +1486,14 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
           const SizedBox(height: 12),
 
           // Legend
-          Row(
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
             children: [
               _buildLegendDot('Approved', const Color(0xFF2E7D32)),
-              const SizedBox(width: 12),
               _buildLegendDot('Pending', const Color(0xFFE65100)),
-              const SizedBox(width: 12),
               _buildLegendDot('Rejected', const Color(0xFFC62828)),
+              _buildLegendDot('Holiday', const Color(0xFF7C3AED)),
             ],
           ),
           const SizedBox(height: 16),
@@ -1549,17 +1552,37 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                       }
                     }
 
+                    Holiday? matchingHoliday;
+                    for (final h in holidays) {
+                      if (!h.isActive) continue;
+                      final hDate = _parseDateStr(h.date);
+                      if (hDate != null &&
+                          hDate.year == cellDate.year &&
+                          hDate.month == cellDate.month &&
+                          hDate.day == cellDate.day) {
+                        matchingHoliday = h;
+                        break;
+                      }
+                    }
+
                     Color? indicatorColor;
                     bool isPermission = false;
+                    bool isHoliday = false;
+
                     if (matchingReq != null) {
                       indicatorColor = _getStatusColor(matchingReq.status);
                       isPermission = matchingReq.leaveType.toLowerCase().startsWith('permission');
+                    } else if (matchingHoliday != null) {
+                      indicatorColor = const Color(0xFF7C3AED);
+                      isHoliday = true;
                     }
 
                     return InkWell(
                       onTap: () {
                         if (matchingReq != null) {
-                          _showCalendarDateDetailsSheet(cellDate, matchingReq);
+                          _showCalendarDateDetailsSheet(cellDate, matchingReq, null);
+                        } else if (matchingHoliday != null) {
+                          _showCalendarDateDetailsSheet(cellDate, null, matchingHoliday);
                         }
                       },
                       child: Container(
@@ -1595,6 +1618,10 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
                                   if (isPermission) ...[
                                     const SizedBox(width: 2),
                                     Icon(Icons.access_time, size: 9, color: indicatorColor),
+                                  ],
+                                  if (isHoliday) ...[
+                                    const SizedBox(width: 2),
+                                    const Icon(Icons.celebration, size: 9, color: Color(0xFF7C3AED)),
                                   ],
                                 ],
                               ),
@@ -1895,7 +1922,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
     );
   }
 
-  void _showCalendarDateDetailsSheet(DateTime date, LeaveRequest req) {
+  void _showCalendarDateDetailsSheet(DateTime date, LeaveRequest? req, Holiday? holiday) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
@@ -1905,15 +1932,71 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Leave Info: ${DateFormat('dd MMM yyyy').format(date)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const Divider(height: 20),
-            Text('Type: ${req.leaveType}'),
-            const SizedBox(height: 6),
-            Text('Status: ${req.status}'),
-            const SizedBox(height: 6),
-            Text('Duration: ${_formatDurationDisplay(req)}'),
-            const SizedBox(height: 6),
-            Text('Reason: ${req.reason}'),
+            if (holiday != null) ...[
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.celebration_outlined, color: Color(0xFF7C3AED), size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(holiday.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                        Text(DateFormat('dd MMMM yyyy (EEEE)').format(date), style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(height: 20),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  holiday.type,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF7C3AED)),
+                ),
+              ),
+              if (holiday.description != null && holiday.description!.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(holiday.description!, style: const TextStyle(fontSize: 13, color: Color(0xFF475569))),
+              ],
+              const SizedBox(height: 12),
+              const Text(
+                '• This is an official paid holiday. You do not need to apply for leave.',
+                style: TextStyle(fontSize: 12, color: Color(0xFF16A34A), fontWeight: FontWeight.w500),
+              ),
+            ] else if (req != null) ...[
+              Text('Leave Info: ${DateFormat('dd MMM yyyy').format(date)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Divider(height: 20),
+              Text('Type: ${req.leaveType}'),
+              const SizedBox(height: 6),
+              Text('Status: ${req.status}'),
+              const SizedBox(height: 6),
+              Text('Duration: ${_formatDurationDisplay(req)}'),
+              const SizedBox(height: 6),
+              Text('Reason: ${req.reason}'),
+            ],
+            const SizedBox(height: 16),
+            Center(
+              child: SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Close'),
+                ),
+              ),
+            ),
           ],
         ),
       ),

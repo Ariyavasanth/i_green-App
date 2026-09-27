@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../domain/holiday.dart';
 import '../domain/leave_request.dart';
 import '../domain/leave_repository.dart';
 import '../domain/leave_balance.dart';
@@ -938,12 +939,60 @@ class FirebaseLeaveRepository implements LeaveRepository {
       final hSnap = await _firestore.collection('holidays').get();
       final List<String> list = [];
       for (final doc in hSnap.docs) {
-        final d = doc.data()['date']?.toString();
+        final data = doc.data();
+        final isActive = data['is_active'] as bool? ?? true;
+        if (!isActive) continue;
+        final d = data['date']?.toString();
         if (d != null && d.isNotEmpty) list.add(d);
       }
       return list;
     } catch (_) {
       return [];
     }
+  }
+
+  @override
+  Future<List<Holiday>> getHolidayList() async {
+    try {
+      final snap = await _firestore.collection('holidays').get();
+      final list = snap.docs.map((d) => Holiday.fromMap(d.data(), d.id)).toList();
+      list.sort((a, b) {
+        return a.date.compareTo(b.date);
+      });
+      return list;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  @override
+  Future<void> addHoliday(Holiday holiday) async {
+    final docRef = _firestore.collection('holidays').doc();
+    final newHoliday = holiday.copyWith(id: docRef.id);
+    await docRef.set(newHoliday.toMap());
+  }
+
+  @override
+  Future<void> addHolidays(List<Holiday> holidays) async {
+    if (holidays.isEmpty) return;
+    final batch = _firestore.batch();
+    for (final holiday in holidays) {
+      final docRef = _firestore.collection('holidays').doc();
+      final newHoliday = holiday.copyWith(id: docRef.id);
+      batch.set(docRef, newHoliday.toMap());
+    }
+    await batch.commit();
+  }
+
+  @override
+  Future<void> updateHoliday(Holiday holiday) async {
+    if (holiday.id.isEmpty) return;
+    await _firestore.collection('holidays').doc(holiday.id).set(holiday.toMap(), SetOptions(merge: true));
+  }
+
+  @override
+  Future<void> deleteHoliday(String id) async {
+    if (id.isEmpty) return;
+    await _firestore.collection('holidays').doc(id).delete();
   }
 }

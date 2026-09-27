@@ -812,6 +812,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
 
     final allLeaves = ref.watch(allLeaveRequestsProvider).valueOrNull;
     final allOnDuty = ref.watch(allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: null))).valueOrNull;
+    final allHolidays = ref.watch(holidaysProvider).valueOrNull;
 
     return recordsAsync.when(
       loading: () => const Center(
@@ -844,6 +845,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
           records: records,
           leaves: allLeaves,
           onDutyAssignments: allOnDuty,
+          holidays: allHolidays,
           isMobile: isMobile,
           onRowTap: (dailyResult, emp) {
             showDialog(
@@ -920,6 +922,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
 
                 final allLeaves = ref.watch(allLeaveRequestsProvider).valueOrNull;
                 final allOnDuty = ref.watch(allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: null))).valueOrNull;
+                final allHolidays = ref.watch(holidaysProvider).valueOrNull;
 
                 if (_viewMode == AttendanceViewMode.matrix) {
                   return Column(
@@ -930,6 +933,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                         records: filteredRecords,
                         leaves: allLeaves,
                         onDutyAssignments: allOnDuty,
+                        holidays: allHolidays,
                         onCellTap: (emp, date, record, statusInfo) {
                           showDialog(
                             context: context,

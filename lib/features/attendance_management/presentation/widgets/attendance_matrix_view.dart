@@ -16,6 +16,7 @@ class AttendanceMatrixView extends StatelessWidget {
     required this.records,
     this.leaves,
     this.onDutyAssignments,
+    this.holidays,
     required this.onCellTap,
   });
 
@@ -24,6 +25,7 @@ class AttendanceMatrixView extends StatelessWidget {
   final List<AttendanceRecord> records;
   final List<LeaveRequest>? leaves;
   final List<OnDutyAssignment>? onDutyAssignments;
+  final List<String>? holidays;
   final void Function(
     Employee employee,
     DateTime date,
@@ -363,6 +365,7 @@ class AttendanceMatrixView extends StatelessWidget {
       record: record,
       leaves: leaves,
       onDutyAssignments: onDutyAssignments,
+      holidays: holidays,
     );
 
     Color bgColor = statusInfo?.bgColor ?? const Color(0xFFF8FAFC);

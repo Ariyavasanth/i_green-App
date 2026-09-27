@@ -311,6 +311,7 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                             fontSize: 13,
                           ),
                           dataRowMinHeight: 52,
+                          dataRowMaxHeight: 56,
                           columns: const [
                             DataColumn(label: Text('Employee')),
                             DataColumn(label: Text('OD Type')),

@@ -1,3 +1,4 @@
+import 'holiday.dart';
 import 'leave_request.dart';
 import 'leave_balance.dart';
 import 'leave_type.dart';
@@ -50,5 +51,10 @@ abstract class LeaveRepository {
   Future<List<Map<String, dynamic>>> getAuditLogs(int leaveRequestId);
   Future<PermissionAllowance> getPermissionAllowance(int employeeId, DateTime month);
   Future<List<String>> getHolidays();
+  Future<List<Holiday>> getHolidayList();
+  Future<void> addHoliday(Holiday holiday);
+  Future<void> addHolidays(List<Holiday> holidays);
+  Future<void> updateHoliday(Holiday holiday);
+  Future<void> deleteHoliday(String id);
 }
 

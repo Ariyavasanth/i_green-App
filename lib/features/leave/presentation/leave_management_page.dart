@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -7,10 +8,13 @@ import '../../employee/providers/employee_providers.dart';
 import '../domain/leave_request.dart';
 import '../domain/leave_type.dart';
 import '../domain/leave_overlap_validator.dart';
+import '../domain/holiday.dart';
 import '../providers/leave_providers.dart';
 import 'dialogs/admin_leave_review_dialog.dart';
 
-enum LeaveTab { dashboard, requests, calendar, permissions }
+enum LeaveTab { dashboard, requests, calendar, settings }
+
+enum SettingsSubTab { leaveTypes, holidays }
 
 class LeaveManagementPage extends ConsumerStatefulWidget {
   const LeaveManagementPage({super.key});
@@ -21,6 +25,7 @@ class LeaveManagementPage extends ConsumerStatefulWidget {
 
 class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
   LeaveTab _activeTab = LeaveTab.dashboard;
+  SettingsSubTab _activeSettingsSubTab = SettingsSubTab.leaveTypes;
   DateTime _focusedMonth = DateTime.now();
   DateTime _selectedCalendarDate = DateTime.now();
 
@@ -182,7 +187,7 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
                                     LeaveTab.dashboard => _buildDashboardTab(allRequests, employees, leaveTypes, isMobile),
                                     LeaveTab.requests => _buildRequestsTab(allRequests, employees, leaveTypes, isMobile),
                                     LeaveTab.calendar => _buildCalendarTab(allRequests, employees, leaveTypes, isMobile),
-                                    LeaveTab.permissions => _buildPermissionsTab(employees, leaveTypes, isMobile),
+                                    LeaveTab.settings => _buildSettingsTab(employees, leaveTypes, isMobile),
                                   },
                                 ),
                               ),
@@ -204,13 +209,20 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
                         elevation: 4,
                         backgroundColor: const Color(0xFF9CC70A),
                         onPressed: () {
-                          if (_activeTab == LeaveTab.permissions) {
-                            _showAddLeaveTypeDialog(context);
+                          if (_activeTab == LeaveTab.settings) {
+                            switch (_activeSettingsSubTab) {
+                              case SettingsSubTab.leaveTypes:
+                                _showAddLeaveTypeDialog(context);
+                                break;
+                              case SettingsSubTab.holidays:
+                                _showAddHolidayDialog(context);
+                                break;
+                            }
                           } else {
                             _showApplyLeaveDialog(context, employees, leaveTypes, currentEmp);
                           }
                         },
-                        child: const Icon(Icons.add, color: Colors.white, size: 28),
+                        child: const Icon(Icons.add, color: Color(0xFF414A51), size: 28),
                       ),
                     ),
                 ],
@@ -232,15 +244,25 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
     Employee? currentEmp,
     bool isMobile,
   ) {
+    if (_activeTab == LeaveTab.settings) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          _buildSettingsSubTabSelector(isMobile: false),
+          _buildSettingsActionButton(context, employees, leaveTypes),
+        ],
+      );
+    }
+
     return Row(
       children: [
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: const Color(0xFF0D8A4E).withValues(alpha: 0.1),
+            color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: const Icon(Icons.calendar_month_rounded, size: 22, color: Color(0xFF0D8A4E)),
+          child: const Icon(Icons.calendar_month_rounded, size: 22, color: Color(0xFF414A51)),
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -268,8 +290,8 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
         const SizedBox(width: 8),
         ElevatedButton.icon(
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF0D8A4E),
-            foregroundColor: Colors.white,
+            backgroundColor: const Color(0xFF9CC70A),
+            foregroundColor: const Color(0xFF414A51),
             padding: EdgeInsets.symmetric(
               horizontal: isMobile ? 10 : 16,
               vertical: isMobile ? 10 : 12,
@@ -890,9 +912,9 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
             label: 'Calendar',
           ),
           const BottomNavigationBarItem(
-            icon: Icon(Icons.tune_outlined, size: 22),
-            activeIcon: Icon(Icons.tune, size: 22),
-            label: 'Permission',
+            icon: Icon(Icons.settings_outlined, size: 22),
+            activeIcon: Icon(Icons.settings, size: 22),
+            label: 'Settings',
           ),
         ],
       ),
@@ -2034,13 +2056,18 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
     List<LeaveType> leaveTypes,
     bool isMobile,
   ) {
+    final holidaysAsync = ref.watch(holidaysProvider);
+    final holidayListAsync = ref.watch(holidayListProvider);
+    final holidays = holidaysAsync.value ?? [];
+    final holidayModels = holidayListAsync.value ?? [];
+
     final filteredRequests = allRequests.where((req) {
       if (_filterEmployeeId != null && req.employeeId != _filterEmployeeId) return false;
       return true;
     }).toList();
 
-    final calendarView = _buildCalendarGrid(filteredRequests, employees, leaveTypes, isMobile);
-    final sidePanel = _buildCalendarDayDetailPanel(filteredRequests, employees, leaveTypes);
+    final calendarView = _buildCalendarGrid(filteredRequests, employees, leaveTypes, holidays, holidayModels, isMobile);
+    final sidePanel = _buildCalendarDayDetailPanel(filteredRequests, employees, leaveTypes, holidayModels);
 
     if (isMobile) {
       return Column(
@@ -2066,6 +2093,8 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
     List<LeaveRequest> requests,
     List<Employee> employees,
     List<LeaveType> leaveTypes,
+    List<String> holidays,
+    List<Holiday> holidayModels,
     bool isMobile,
   ) {
     final monthStr = DateFormat('MMMM yyyy').format(_focusedMonth);
@@ -2180,6 +2209,19 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
               final isToday = cellDate.year == now.year && cellDate.month == now.month && cellDate.day == now.day;
 
               final cellDateStr = '${cellDate.day.toString().padLeft(2, '0')}-${cellDate.month.toString().padLeft(2, '0')}-${cellDate.year}';
+              
+              // Holiday check
+              bool isHoliday = false;
+              Holiday? holidayMatch;
+              for (final h in holidayModels) {
+                final parsed = _parseDate(h.date);
+                if (h.date.trim() == cellDateStr || (parsed != null && parsed.year == cellDate.year && parsed.month == cellDate.month && parsed.day == cellDate.day)) {
+                  isHoliday = true;
+                  holidayMatch = h;
+                  break;
+                }
+              }
+
               final matching = requests.where((r) {
                 if (r.status == 'Approved' && r.approvedDates.contains(cellDateStr)) return true;
                 if (r.status == 'Pending') {
@@ -2196,30 +2238,51 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
                 return false;
               }).toList();
 
+              final Color cellBg;
+              final Color borderColor;
+              if (isSelected) {
+                cellBg = const Color(0xFFF0FDF4);
+                borderColor = const Color(0xFF9CC70A);
+              } else if (isToday) {
+                cellBg = const Color(0xFFF8FAFC);
+                borderColor = const Color(0xFF9CC70A);
+              } else if (isHoliday) {
+                cellBg = const Color(0xFFFAF5FF);
+                borderColor = const Color(0xFFE9D5FF);
+              } else {
+                cellBg = Colors.white;
+                borderColor = const Color(0xFFE2E8F0);
+              }
+
               return InkWell(
                 onTap: () => setState(() => _selectedCalendarDate = cellDate),
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
                   padding: const EdgeInsets.all(2),
                   decoration: BoxDecoration(
-                    color: isSelected ? const Color(0xFFECFDF5) : (isToday ? const Color(0xFFF0FDF4) : Colors.white),
+                    color: cellBg,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: isSelected
-                          ? const Color(0xFF0D8A4E)
-                          : (isToday ? const Color(0xFF86EFAC) : const Color(0xFFE2E8F0)),
+                      color: borderColor,
                       width: isSelected || isToday ? 2 : 1,
                     ),
                   ),
                   child: Column(
                     children: [
-                      Text(
-                        '$dayNum',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: isSelected || isToday ? FontWeight.bold : FontWeight.w500,
-                          color: isSelected ? const Color(0xFF0D8A4E) : const Color(0xFF334155),
-                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '$dayNum',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: isSelected || isToday ? FontWeight.bold : FontWeight.w500,
+                              color: isSelected ? const Color(0xFF9CC70A) : (isHoliday ? const Color(0xFF7C3AED) : const Color(0xFF334155)),
+                            ),
+                          ),
+                          if (isHoliday)
+                            const Icon(Icons.celebration, size: 10, color: Color(0xFF7C3AED)),
+                        ],
                       ),
                       if (matching.isNotEmpty)
                         Expanded(
@@ -2233,7 +2296,7 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
                                   height: 5,
                                   margin: const EdgeInsets.symmetric(horizontal: 1),
                                   decoration: BoxDecoration(
-                                    color: isPend ? const Color(0xFFF59E0B) : const Color(0xFF0D8A4E),
+                                    color: isPend ? const Color(0xFFF59E0B) : const Color(0xFF9CC70A),
                                     shape: BoxShape.circle,
                                   ),
                                 );
@@ -2258,7 +2321,7 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF0D8A4E), shape: BoxShape.circle)),
+                  Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF9CC70A), shape: BoxShape.circle)),
                   const SizedBox(width: 4),
                   const Text('Approved', style: TextStyle(fontSize: 11, color: Color(0xFF475569))),
                 ],
@@ -2269,6 +2332,14 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
                   Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFFF59E0B), shape: BoxShape.circle)),
                   const SizedBox(width: 4),
                   const Text('Pending', style: TextStyle(fontSize: 11, color: Color(0xFF475569))),
+                ],
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF7C3AED), shape: BoxShape.circle)),
+                  const SizedBox(width: 4),
+                  const Text('Holiday (Paid Day)', style: TextStyle(fontSize: 11, color: Color(0xFF7C3AED), fontWeight: FontWeight.bold)),
                 ],
               ),
               const Text(
@@ -2286,9 +2357,20 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
     List<LeaveRequest> requests,
     List<Employee> employees,
     List<LeaveType> leaveTypes,
+    List<Holiday> holidayModels,
   ) {
     final cellDateStr = '${_selectedCalendarDate.day.toString().padLeft(2, '0')}-${_selectedCalendarDate.month.toString().padLeft(2, '0')}-${_selectedCalendarDate.year}';
     final formattedDateTitle = DateFormat('MMM d, yyyy').format(_selectedCalendarDate);
+
+    // Check if selected date is a holiday
+    Holiday? holidayMatch;
+    for (final h in holidayModels) {
+      final parsed = _parseDate(h.date);
+      if (h.date.trim() == cellDateStr || (parsed != null && parsed.year == _selectedCalendarDate.year && parsed.month == _selectedCalendarDate.month && parsed.day == _selectedCalendarDate.day)) {
+        holidayMatch = h;
+        break;
+      }
+    }
 
     final dayRequests = requests.where((r) {
       if (r.status == 'Approved' && r.approvedDates.contains(cellDateStr)) return true;
@@ -2327,16 +2409,85 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
             formattedDateTitle,
             style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
           ),
+          const SizedBox(height: 6),
+
+          // Holiday Banner if date is a holiday
+          if (holidayMatch != null) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFAF5FF),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE9D5FF)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3E8FF),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.celebration, size: 18, color: Color(0xFF7C3AED)),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              holidayMatch.title,
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF581C87)),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF7C3AED),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text('Paid Day', style: TextStyle(fontSize: 9.5, color: Colors.white, fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          holidayMatch.type,
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF7C3AED)),
+                        ),
+                        if (holidayMatch.description.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            holidayMatch.description,
+                            style: const TextStyle(fontSize: 10.5, color: Color(0xFF6B21A8)),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
           Text(
             '${dayRequests.length} employee${dayRequests.length == 1 ? '' : 's'} on leave',
             style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
           ),
           const SizedBox(height: 12),
           if (dayRequests.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
               child: Center(
-                child: Text('No employees on leave for this date.', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                child: Text(
+                  holidayMatch != null ? 'All employees are on paid holiday.' : 'No employees on leave for this date.',
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                ),
               ),
             )
           else
@@ -2400,25 +2551,542 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
   }
 
   // ---------------------------------------------------------------------------
-  // 6. PERMISSIONS & LEAVE TYPES TAB (MOBILE-FIRST CARDS)
+  // 6. SETTINGS & HOLIDAYS TAB (OPTION B SUB-TABS)
   // ---------------------------------------------------------------------------
-  Widget _buildPermissionsTab(List<Employee> employees, List<LeaveType> leaveTypes, bool isMobile) {
-    final overridesAsync = ref.watch(employeeOverridesProvider);
-
+  Widget _buildSettingsTab(List<Employee> employees, List<LeaveType> leaveTypes, bool isMobile) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Section 1: Leave Types Cards List (No overflow DataTables)
-        _buildLeaveTypesSection(leaveTypes, isMobile),
-        const SizedBox(height: 20),
-
-        // Section 2: Employee Overrides
-        overridesAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF0D8A4E))),
-          error: (e, _) => Text('Error loading overrides: $e'),
-          data: (overrides) => _buildEmployeeOverridesSection(overrides, employees, leaveTypes, isMobile),
-        ),
+        if (isMobile) ...[
+          _buildSettingsSubTabSelector(isMobile: true),
+          const SizedBox(height: 16),
+        ],
+        switch (_activeSettingsSubTab) {
+          SettingsSubTab.leaveTypes => _buildLeaveTypesSection(leaveTypes, isMobile),
+          SettingsSubTab.holidays => _buildHolidaysSection(isMobile),
+        },
       ],
+    );
+  }
+
+  Widget _buildSettingsSubTabSelector({required bool isMobile}) {
+    final tabs = [
+      (SettingsSubTab.leaveTypes, 'Leave Types', Icons.category_outlined),
+      (SettingsSubTab.holidays, 'Holidays', Icons.celebration_outlined),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        mainAxisSize: isMobile ? MainAxisSize.max : MainAxisSize.min,
+        children: tabs.map((t) {
+          final isSelected = _activeSettingsSubTab == t.$1;
+          final item = InkWell(
+            onTap: () => setState(() => _activeSettingsSubTab = t.$1),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: isMobile ? 12 : 16,
+                vertical: 8,
+              ),
+              decoration: BoxDecoration(
+                color: isSelected ? Colors.white : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: isSelected
+                    ? [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    t.$3,
+                    size: 16,
+                    color: isSelected ? const Color(0xFF9CC70A) : const Color(0xFF64748B),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    t.$2,
+                    style: TextStyle(
+                      fontSize: isMobile ? 12 : 13,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      color: isSelected ? const Color(0xFF414A51) : const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+
+          return isMobile ? Expanded(child: item) : item;
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildSettingsActionButton(
+    BuildContext context,
+    List<Employee> employees,
+    List<LeaveType> leaveTypes,
+  ) {
+    if (_activeSettingsSubTab == SettingsSubTab.holidays) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF414A51),
+              side: const BorderSide(color: Color(0xFFCBD5E1)),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => _showBulkAddHolidaysDialog(context),
+            icon: const Icon(Icons.playlist_add, size: 18, color: Color(0xFF7C3AED)),
+            label: const Text('Bulk Add Holidays', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF9CC70A),
+              foregroundColor: const Color(0xFF414A51),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              elevation: 0,
+            ),
+            onPressed: () => _showAddHolidayDialog(context),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('+ Add Holiday', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      );
+    }
+
+    return ElevatedButton.icon(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF9CC70A),
+        foregroundColor: const Color(0xFF414A51),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        elevation: 0,
+      ),
+      onPressed: () => _showAddLeaveTypeDialog(context),
+      icon: const Icon(Icons.add, size: 18),
+      label: const Text('+ Add Leave Type', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  // --- Holidays Section ---
+  Widget _buildHolidaysSection(bool isMobile) {
+    final holidayListAsync = ref.watch(holidayListProvider);
+
+    return holidayListAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF9CC70A))),
+      error: (e, _) => Center(child: Text('Error loading holidays: $e')),
+      data: (holidays) {
+        if (holidays.isEmpty) {
+          return Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.celebration_outlined,
+                    size: 36,
+                    color: Color(0xFF7C3AED),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'No Holidays Added',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Add company and national holidays. Holidays are treated as paid days and reflected across all calendars.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF9CC70A),
+                        foregroundColor: const Color(0xFF414A51),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        elevation: 0,
+                      ),
+                      onPressed: () => _showAddHolidayDialog(context),
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Add Holiday', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    ),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF7C3AED),
+                        side: const BorderSide(color: Color(0xFF7C3AED)),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () => _showBulkAddHolidaysDialog(context),
+                      icon: const Icon(Icons.playlist_add, size: 16),
+                      label: const Text('Bulk Add Preset Holidays', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 2, bottom: 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Company Holidays (${holidays.length})',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => _showBulkAddHolidaysDialog(context),
+                    icon: const Icon(Icons.playlist_add, size: 16, color: Color(0xFF7C3AED)),
+                    label: const Text('Bulk Add', style: TextStyle(color: Color(0xFF7C3AED), fontSize: 12, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: holidays.length,
+              itemBuilder: (context, index) {
+                final h = holidays[index];
+                return _buildHolidayCard(h);
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildHolidayCard(Holiday h) {
+    final parsedDate = _parseDate(h.date);
+    final dateDisplay = parsedDate != null ? DateFormat('dd MMM yyyy (EEEE)').format(parsedDate) : h.date;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3E8FF),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.celebration, size: 16, color: Color(0xFF7C3AED)),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      h.title,
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                    ),
+                    Text(
+                      dateDisplay,
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3E8FF),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  h.type,
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF7C3AED)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Transform.scale(
+                scale: 0.8,
+                child: Switch(
+                  value: h.isActive,
+                  activeTrackColor: const Color(0xFF9CC70A),
+                  onChanged: (val) async {
+                    final updated = h.copyWith(isActive: val);
+                    await ref.read(leaveRepositoryProvider).updateHoliday(updated);
+                    ref.invalidate(holidayListProvider);
+                    ref.invalidate(holidaysProvider);
+                  },
+                ),
+              ),
+            ],
+          ),
+          if (h.description.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              h.description,
+              style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+            ),
+          ],
+          const Divider(height: 14, color: Color(0xFFF1F5F9)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              InkWell(
+                onTap: () => _showAddHolidayDialog(context, h),
+                borderRadius: BorderRadius.circular(4),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit_outlined, size: 15, color: Color(0xFF64748B)),
+                      SizedBox(width: 4),
+                      Text('Edit', style: TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              InkWell(
+                onTap: () async {
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      title: const Text('Delete Holiday'),
+                      content: Text('Are you sure you want to delete "${h.title}"?'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Delete', style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (confirm == true) {
+                    await ref.read(leaveRepositoryProvider).deleteHoliday(h.id);
+                    ref.invalidate(holidayListProvider);
+                    ref.invalidate(holidaysProvider);
+                  }
+                },
+                borderRadius: BorderRadius.circular(4),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete_outline, size: 15, color: Color(0xFFDC2626)),
+                      SizedBox(width: 4),
+                      Text('Delete', style: TextStyle(fontSize: 11, color: Color(0xFFDC2626), fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddHolidayDialog(BuildContext context, [Holiday? existing]) {
+    final titleCtrl = TextEditingController(text: existing?.title ?? '');
+    final descCtrl = TextEditingController(text: existing?.description ?? '');
+    DateTime selectedDate = existing != null ? (_parseDate(existing.date) ?? DateTime.now()) : DateTime.now();
+    String selectedType = existing?.type ?? 'National Holiday';
+    bool isActive = existing?.isActive ?? true;
+
+    final holidayTypes = [
+      'National Holiday',
+      'Festival',
+      'Company Holiday',
+      'Optional Holiday',
+    ];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text(
+              existing != null ? 'Edit Holiday' : 'Add Holiday',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            content: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 450),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Holiday Name / Title', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: titleCtrl,
+                      decoration: InputDecoration(
+                        hintText: 'e.g. Diwali, Gandhi Jayanti',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text('Holiday Date', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 6),
+                    InkWell(
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: ctx,
+                          initialDate: selectedDate,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2030),
+                        );
+                        if (picked != null) {
+                          setDialogState(() => selectedDate = picked);
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: const Color(0xFFCBD5E1)),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              DateFormat('dd-MM-yyyy (EEEE)').format(selectedDate),
+                              style: const TextStyle(fontSize: 13, color: Color(0xFF0F172A), fontWeight: FontWeight.w500),
+                            ),
+                            const Icon(Icons.calendar_today, size: 16, color: Color(0xFF64748B)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text('Holiday Type', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedType,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      ),
+                      items: holidayTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                      onChanged: (v) => setDialogState(() => selectedType = v ?? selectedType),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text('Description (Optional)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: descCtrl,
+                      maxLines: 2,
+                      decoration: InputDecoration(
+                        hintText: 'Brief note or description',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Active Holiday', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      value: isActive,
+                      activeTrackColor: const Color(0xFF9CC70A),
+                      onChanged: (v) => setDialogState(() => isActive = v),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF9CC70A), foregroundColor: const Color(0xFF414A51)),
+                onPressed: () async {
+                  if (titleCtrl.text.trim().isEmpty) return;
+                  final dateStr = DateFormat('dd-MM-yyyy').format(selectedDate);
+                  final holiday = Holiday(
+                    id: existing?.id ?? '',
+                    title: titleCtrl.text.trim(),
+                    date: dateStr,
+                    type: selectedType,
+                    description: descCtrl.text.trim(),
+                    year: selectedDate.year,
+                    isActive: isActive,
+                  );
+
+                  if (existing != null) {
+                    await ref.read(leaveRepositoryProvider).updateHoliday(holiday);
+                  } else {
+                    await ref.read(leaveRepositoryProvider).addHoliday(holiday);
+                  }
+                  ref.invalidate(holidayListProvider);
+                  ref.invalidate(holidaysProvider);
+                  if (ctx.mounted) Navigator.pop(ctx);
+                },
+                child: Text(existing != null ? 'Update Holiday' : 'Save Holiday', style: const TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -2426,11 +3094,22 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.only(left: 2, bottom: 8),
-          child: Text(
-            'Leave Types',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+        Padding(
+          padding: const EdgeInsets.only(left: 2, bottom: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Leave Types',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+              ),
+              if (isMobile)
+                TextButton.icon(
+                  onPressed: () => _showAddLeaveTypeDialog(context),
+                  icon: const Icon(Icons.add, size: 16, color: Color(0xFF414A51)),
+                  label: const Text('Add Leave Type', style: TextStyle(color: Color(0xFF414A51), fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
+            ],
           ),
         ),
         ListView.builder(
@@ -2750,263 +3429,473 @@ class _LeaveManagementPageState extends ConsumerState<LeaveManagementPage> {
     );
   }
 
-  Widget _buildEmployeeOverridesSection(
-    List<Map<String, dynamic>> overrides,
-    List<Employee> employees,
-    List<LeaveType> leaveTypes,
-    bool isMobile,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Employee Overrides',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Per-employee exceptions to standard defaults.',
-                      style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                    ),
-                  ],
-                ),
-              ),
-              if (overrides.isNotEmpty)
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0D8A4E),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    elevation: 0,
-                  ),
-                  onPressed: () => _showAddOverrideDialog(context, employees, leaveTypes),
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('Add Override', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                ),
-            ],
-          ),
-          const SizedBox(height: 14),
+  void _showBulkAddHolidaysDialog(BuildContext context) {
+    int selectedYear = DateTime.now().year;
+    int tabIndex = 0; // 0: Preset Holidays, 1: Custom Multi-Row
 
-          // Rich Empty State for Overrides
-          if (overrides.isEmpty)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0D8A4E).withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.admin_panel_settings_outlined,
-                      size: 32,
-                      color: Color(0xFF0D8A4E),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'No Employee Overrides Defined',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Add per-employee exceptions to standard leave allocations (e.g. extra sick days).',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                  ),
-                  const SizedBox(height: 14),
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0D8A4E),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      elevation: 0,
-                    ),
-                    onPressed: () => _showAddOverrideDialog(context, employees, leaveTypes),
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('Add Employee Override', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                  ),
-                ],
-              ),
-            )
-          else
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: overrides.length,
-              separatorBuilder: (ctx, index) => const SizedBox(height: 8),
-              itemBuilder: (context, index) {
-                final ov = overrides[index];
-                return Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 16,
-                        backgroundColor: const Color(0xFFE2E8F0),
-                        child: Text(
-                          _getInitials(ov['employee_name'] as String? ?? 'EM'),
-                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${ov['employee_name']} (${ov['employee_custom_id']})',
-                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                            ),
-                            Text(
-                              '${ov['leave_type']}: ${ov['override_days']} days allowed',
-                              style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFDC2626)),
-                        onPressed: () async {
-                          final id = ov['id'];
-                          if (id is int) {
-                            await ref.read(leaveRepositoryProvider).deleteEmployeeOverride(id);
-                            ref.invalidate(employeeOverridesProvider);
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-        ],
-      ),
-    );
-  }
+    List<Map<String, dynamic>> generatePresetList(int yr) {
+      return [
+        {'title': "New Year's Day", 'date': '01-01-$yr', 'type': 'National Holiday', 'selected': true},
+        {'title': 'Pongal / Makar Sankranti', 'date': '14-01-$yr', 'type': 'Festival', 'selected': true},
+        {'title': 'Thiruvalluvar Day / Mattu Pongal', 'date': '15-01-$yr', 'type': 'Festival', 'selected': true},
+        {'title': 'Republic Day', 'date': '26-01-$yr', 'type': 'National Holiday', 'selected': true},
+        {'title': 'Maha Shivaratri', 'date': '15-02-$yr', 'type': 'Festival', 'selected': false},
+        {'title': 'Holi', 'date': '04-03-$yr', 'type': 'Festival', 'selected': false},
+        {'title': 'Good Friday', 'date': '03-04-$yr', 'type': 'National Holiday', 'selected': true},
+        {'title': 'Tamil New Year / Ambedkar Jayanti', 'date': '14-04-$yr', 'type': 'National Holiday', 'selected': true},
+        {'title': 'May Day (Labour Day)', 'date': '01-05-$yr', 'type': 'National Holiday', 'selected': true},
+        {'title': 'Bakrid / Eid al-Adha', 'date': '27-05-$yr', 'type': 'Festival', 'selected': true},
+        {'title': 'Muharram', 'date': '26-06-$yr', 'type': 'Festival', 'selected': false},
+        {'title': 'Independence Day', 'date': '15-08-$yr', 'type': 'National Holiday', 'selected': true},
+        {'title': 'Krishna Jayanti / Janmashtami', 'date': '04-09-$yr', 'type': 'Festival', 'selected': false},
+        {'title': 'Milad-un-Nabi', 'date': '25-09-$yr', 'type': 'Festival', 'selected': false},
+        {'title': 'Gandhi Jayanti', 'date': '02-10-$yr', 'type': 'National Holiday', 'selected': true},
+        {'title': 'Ayudha Puja / Vijayadashami', 'date': '20-10-$yr', 'type': 'Festival', 'selected': true},
+        {'title': 'Deepavali (Diwali)', 'date': '08-11-$yr', 'type': 'Festival', 'selected': true},
+        {'title': 'Christmas', 'date': '25-12-$yr', 'type': 'National Holiday', 'selected': true},
+      ];
+    }
 
-  void _showAddOverrideDialog(
-    BuildContext context,
-    List<Employee> employees,
-    List<LeaveType> leaveTypes,
-  ) {
-    Employee? selectedEmp = employees.isNotEmpty ? employees.first : null;
-    LeaveType? selectedType = leaveTypes.isNotEmpty ? leaveTypes.first : null;
-    final daysCtrl = TextEditingController(text: '12');
-    final reasonCtrl = TextEditingController(text: 'Contract terms');
+    var presetHolidays = generatePresetList(selectedYear);
+
+    final List<Map<String, dynamic>> customRows = [
+      {'ctrl': TextEditingController(text: 'Company Annual Day'), 'date': DateTime(selectedYear, 1, 15), 'type': 'Company Holiday'},
+      {'ctrl': TextEditingController(text: 'Founder\'s Day'), 'date': DateTime(selectedYear, 5, 20), 'type': 'Company Holiday'},
+    ];
+
+    const holidayTypes = [
+      'National Holiday',
+      'Festival',
+      'Company Holiday',
+      'Optional Holiday',
+      'Restricted Holiday',
+    ];
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
+          final selectedPresetCount = presetHolidays.where((h) => h['selected'] == true).length;
+          final allSelected = selectedPresetCount == presetHolidays.length;
+
+          final screenSize = MediaQuery.sizeOf(ctx);
+          final dialogWidth = math.min(screenSize.width - 24, 520.0);
+          final dialogHeight = math.min(screenSize.height * 0.72, 480.0);
+
           return AlertDialog(
+            insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            titlePadding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            contentPadding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+            actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Text('Add Employee Override', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            content: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 450),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Employee', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                    const SizedBox(height: 6),
-                    DropdownButtonFormField<Employee>(
-                      initialValue: selectedEmp,
-                      isExpanded: true,
-                      decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)), contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
-                      items: employees
-                          .map((e) => DropdownMenuItem(value: e, child: Text('${e.fullName} (${e.employeeId})', overflow: TextOverflow.ellipsis)))
-                          .toList(),
-                      onChanged: (v) => setDialogState(() => selectedEmp = v),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.playlist_add, color: Color(0xFF7C3AED), size: 18),
+                ),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Bulk Add Holidays',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<int>(
+                      value: selectedYear,
+                      isDense: true,
+                      items: [2024, 2025, 2026, 2027, 2028, 2029, 2030].map((y) {
+                        return DropdownMenuItem(
+                          value: y,
+                          child: Text('$y', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        );
+                      }).toList(),
+                      onChanged: (yr) {
+                        if (yr != null) {
+                          setDialogState(() {
+                            selectedYear = yr;
+                            presetHolidays = generatePresetList(yr);
+                          });
+                        }
+                      },
                     ),
-                    const SizedBox(height: 12),
-                    const Text('Leave Type', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                    const SizedBox(height: 6),
-                    DropdownButtonFormField<LeaveType>(
-                      initialValue: selectedType,
-                      isExpanded: true,
-                      decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)), contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
-                      items: leaveTypes
-                          .map((t) => DropdownMenuItem(value: t, child: Text(t.name, overflow: TextOverflow.ellipsis)))
-                          .toList(),
-                      onChanged: (v) => setDialogState(() => selectedType = v),
+                  ),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: dialogWidth,
+              height: dialogHeight,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Tab Switcher
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    const SizedBox(height: 12),
-                    const Text('Override Days Allowed', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: daysCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => setDialogState(() => tabIndex = 0),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                              decoration: BoxDecoration(
+                                color: tabIndex == 0 ? Colors.white : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: tabIndex == 0
+                                    ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)]
+                                    : null,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  'Presets ($selectedPresetCount)',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: tabIndex == 0 ? FontWeight.bold : FontWeight.w500,
+                                    color: tabIndex == 0 ? const Color(0xFF414A51) : const Color(0xFF64748B),
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => setDialogState(() => tabIndex = 1),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                              decoration: BoxDecoration(
+                                color: tabIndex == 1 ? Colors.white : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: tabIndex == 1
+                                    ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)]
+                                    : null,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  'Custom (${customRows.length})',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: tabIndex == 1 ? FontWeight.bold : FontWeight.w500,
+                                    color: tabIndex == 1 ? const Color(0xFF414A51) : const Color(0xFF64748B),
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 12),
-                    const Text('Reason', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: reasonCtrl,
-                      decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))),
+                  ),
+
+                  // Tab 0: Preset List
+                  if (tabIndex == 0) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Select holidays to add:',
+                          style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                        ),
+                        TextButton(
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          onPressed: () {
+                            setDialogState(() {
+                              final newVal = !allSelected;
+                              for (var h in presetHolidays) {
+                                h['selected'] = newVal;
+                              }
+                            });
+                          },
+                          child: Text(
+                            allSelected ? 'Deselect All' : 'Select All',
+                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Expanded(
+                      child: ListView.separated(
+                        itemCount: presetHolidays.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                        itemBuilder: (ctx, i) {
+                          final h = presetHolidays[i];
+                          final isSelected = h['selected'] == true;
+                          return CheckboxListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            activeColor: const Color(0xFF9CC70A),
+                            checkColor: const Color(0xFF414A51),
+                            value: isSelected,
+                            onChanged: (v) => setDialogState(() => h['selected'] = v ?? false),
+                            title: Text(h['title'] as String, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+                            subtitle: Text('Date: ${h['date']} • ${h['type']}', style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+                          );
+                        },
+                      ),
+                    ),
+                  ] else ...[
+                    // Tab 1: Custom Multi-Row Entry
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Enter holiday details:',
+                          style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                        ),
+                        TextButton.icon(
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          onPressed: () {
+                            setDialogState(() {
+                              customRows.add({
+                                'ctrl': TextEditingController(),
+                                'date': DateTime(selectedYear, 1, 1),
+                                'type': 'Company Holiday',
+                              });
+                            });
+                          },
+                          icon: const Icon(Icons.add, size: 14, color: Color(0xFF414A51)),
+                          label: const Text('Add Row', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Expanded(
+                      child: ListView.separated(
+                        itemCount: customRows.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (ctx, i) {
+                          final row = customRows[i];
+                          final ctrl = row['ctrl'] as TextEditingController;
+                          final date = row['date'] as DateTime;
+                          final type = row['type'] as String;
+
+                          return Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    // Date Picker
+                                    InkWell(
+                                      onTap: () async {
+                                        final picked = await showDatePicker(
+                                          context: ctx,
+                                          initialDate: date,
+                                          firstDate: DateTime(2020),
+                                          lastDate: DateTime(2030),
+                                        );
+                                        if (picked != null) {
+                                          setDialogState(() => row['date'] = picked);
+                                        }
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: const Color(0xFFCBD5E1)),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.calendar_today, size: 12, color: Color(0xFF64748B)),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              DateFormat('dd-MM-yyyy').format(date),
+                                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    // Type Dropdown
+                                    Expanded(
+                                      child: Container(
+                                        height: 32,
+                                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: const Color(0xFFCBD5E1)),
+                                        ),
+                                        child: DropdownButtonHideUnderline(
+                                          child: DropdownButton<String>(
+                                            value: type,
+                                            isDense: true,
+                                            isExpanded: true,
+                                            items: holidayTypes.map((t) => DropdownMenuItem(
+                                              value: t,
+                                              child: Text(t, style: const TextStyle(fontSize: 11), overflow: TextOverflow.ellipsis),
+                                            )).toList(),
+                                            onChanged: (v) => setDialogState(() => row['type'] = v ?? type),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    if (customRows.length > 1) ...[
+                                      const SizedBox(width: 4),
+                                      IconButton(
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                        icon: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFDC2626)),
+                                        onPressed: () => setDialogState(() => customRows.removeAt(i)),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                // Title Field
+                                SizedBox(
+                                  height: 34,
+                                  child: TextField(
+                                    controller: ctrl,
+                                    style: const TextStyle(fontSize: 12),
+                                    decoration: InputDecoration(
+                                      isDense: true,
+                                      hintText: 'Holiday Name / Title',
+                                      hintStyle: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                                      ),
+                                      fillColor: Colors.white,
+                                      filled: true,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ],
-                ),
+                ],
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w600)),
+              ),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0D8A4E)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF9CC70A),
+                  foregroundColor: const Color(0xFF414A51),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  elevation: 0,
+                ),
                 onPressed: () async {
-                  if (selectedEmp == null || selectedType == null) return;
-                  final days = double.tryParse(daysCtrl.text.trim()) ?? 12.0;
+                  final List<Holiday> holidaysToAdd = [];
 
-                  await ref.read(leaveRepositoryProvider).addEmployeeOverride({
-                    'employee_id': selectedEmp!.id,
-                    'employee_name': selectedEmp!.fullName,
-                    'employee_custom_id': selectedEmp!.employeeId,
-                    'leave_type': selectedType!.name,
-                    'override_days': days,
-                    'reason': reasonCtrl.text.trim(),
-                  });
-                  ref.invalidate(employeeOverridesProvider);
+                  if (tabIndex == 0) {
+                    for (final item in presetHolidays) {
+                      if (item['selected'] == true) {
+                        holidaysToAdd.add(
+                          Holiday(
+                            id: '',
+                            title: item['title'] as String,
+                            date: item['date'] as String,
+                            type: item['type'] as String,
+                            description: '${item['title']} - Public Holiday $selectedYear',
+                            year: selectedYear,
+                            isActive: true,
+                          ),
+                        );
+                      }
+                    }
+                  } else {
+                    for (final row in customRows) {
+                      final ctrl = row['ctrl'] as TextEditingController;
+                      final t = ctrl.text.trim();
+                      if (t.isNotEmpty) {
+                        final dt = row['date'] as DateTime;
+                        final dateStr = DateFormat('dd-MM-yyyy').format(dt);
+                        holidaysToAdd.add(
+                          Holiday(
+                            id: '',
+                            title: t,
+                            date: dateStr,
+                            type: row['type'] as String,
+                            description: '',
+                            year: dt.year,
+                            isActive: true,
+                          ),
+                        );
+                      }
+                    }
+                  }
+
+                  if (holidaysToAdd.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('No holidays selected or filled to add.')),
+                    );
+                    return;
+                  }
+
+                  await ref.read(leaveRepositoryProvider).addHolidays(holidaysToAdd);
+                  ref.invalidate(holidayListProvider);
+                  ref.invalidate(holidaysProvider);
+
                   if (ctx.mounted) Navigator.pop(ctx);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Successfully added ${holidaysToAdd.length} holidays for $selectedYear!'),
+                        backgroundColor: const Color(0xFF059669),
+                      ),
+                    );
+                  }
                 },
-                child: const Text('Save Override', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                child: Text(
+                  tabIndex == 0
+                      ? 'Add $selectedPresetCount Holidays'
+                      : 'Save All Rows',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
               ),
             ],
           );
