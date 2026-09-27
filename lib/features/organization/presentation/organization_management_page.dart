@@ -8,6 +8,7 @@ import '../providers/organization_providers.dart';
 import 'widgets/column_selection_dialog.dart';
 import 'widgets/organization_details_dialog.dart';
 import 'widgets/organization_form_dialog.dart';
+import 'widgets/organization_share_dialog.dart';
 import '../../../../core/widgets/app_searchable_dropdown.dart';
 
 class OrganizationManagementPage extends ConsumerStatefulWidget {
@@ -43,8 +44,19 @@ class _OrganizationManagementPageState
   int _currentPage = 0;
   int _rowsPerPage = 10;
   final Set<int> _selectedIds = {};
+  Set<String>? _activeVisibleColumns;
   String _selectedBusinessTypeFilter = 'All';
   String _selectedIndustryTypeFilter = 'All';
+
+  Set<String> _getEffectiveVisibleColumns(ColumnPreference? pref) {
+    if (_activeVisibleColumns != null) {
+      return _activeVisibleColumns!;
+    }
+    if (pref != null && pref.visibleColumns.isNotEmpty) {
+      return pref.visibleColumns.toSet();
+    }
+    return _defaultAllColumns.toSet();
+  }
 
   int get _activeFiltersCount {
     int count = 0;
@@ -165,12 +177,8 @@ class _OrganizationManagementPageState
                   }
 
                   final pref = prefAsync.valueOrNull;
-                  List<String> visibleCols;
-                  if (pref != null && pref.visibleColumns.isNotEmpty) {
-                    visibleCols = pref.visibleColumns;
-                  } else {
-                    visibleCols = List.from(_defaultAllColumns);
-                  }
+                  final effectiveSet = _getEffectiveVisibleColumns(pref);
+                  final visibleCols = _defaultAllColumns.where((c) => effectiveSet.contains(c)).toList();
 
                   final totalItems = filtered.length;
                   final totalPages = (totalItems / _rowsPerPage).ceil();
@@ -222,6 +230,11 @@ class _OrganizationManagementPageState
     searchController.selection = TextSelection.fromPosition(
       TextPosition(offset: searchController.text.length),
     );
+
+    final pref = prefAsync.valueOrNull;
+    final visibleCols = (pref != null && pref.visibleColumns.isNotEmpty)
+        ? List<String>.from(pref.visibleColumns)
+        : List<String>.from(_defaultAllColumns);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
@@ -316,6 +329,10 @@ class _OrganizationManagementPageState
               ),
             ),
           ),
+          if (!isMobile) ...[
+            const SizedBox(width: 8),
+            _buildColumnsDropdownButton(context, visibleCols, pref),
+          ],
           const SizedBox(width: 8),
           if (isMobile)
             IconButton(
@@ -349,6 +366,323 @@ class _OrganizationManagementPageState
         ],
       ),
     );
+  }
+
+  final ScrollController _horizontalScrollController = ScrollController();
+  final LayerLink _columnsLayerLink = LayerLink();
+  final GlobalKey _columnsButtonKey = GlobalKey();
+  OverlayEntry? _columnsOverlayEntry;
+  bool _isColumnsDropdownOpen = false;
+
+  @override
+  void dispose() {
+    _horizontalScrollController.dispose();
+    _closeColumnsDropdown();
+    super.dispose();
+  }
+
+  void _closeColumnsDropdown() {
+    if (_columnsOverlayEntry != null) {
+      _columnsOverlayEntry!.remove();
+      _columnsOverlayEntry = null;
+    }
+    if (_isColumnsDropdownOpen && mounted) {
+      setState(() => _isColumnsDropdownOpen = false);
+    }
+  }
+
+  void _toggleColumnsDropdown() {
+    if (_isColumnsDropdownOpen) {
+      _closeColumnsDropdown();
+    } else {
+      _showColumnsDropdown();
+    }
+  }
+
+  void _showColumnsDropdown() {
+    final renderBox = _columnsButtonKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+
+    final size = renderBox.size;
+
+    _columnsOverlayEntry = OverlayEntry(
+      builder: (ctx) {
+        final pref = ref.watch(columnPreferenceProvider(_tableId)).valueOrNull;
+        final currentVisibleSet = _getEffectiveVisibleColumns(pref);
+
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: _closeColumnsDropdown,
+                child: const SizedBox.expand(),
+              ),
+            ),
+            Positioned(
+              width: 250,
+              child: CompositedTransformFollower(
+                link: _columnsLayerLink,
+                showWhenUnlinked: false,
+                offset: Offset(size.width - 250, size.height + 6),
+                child: Material(
+                  elevation: 8,
+                  shadowColor: Colors.black.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(10),
+                  color: Colors.white,
+                  child: Container(
+                    constraints: const BoxConstraints(maxHeight: 460),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFEAECF0), width: 1),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Toggle Columns',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF101828),
+                                ),
+                              ),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  InkWell(
+                                    onTap: () => _toggleAllColumns(true),
+                                    child: const Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                                      child: Text(
+                                        'All',
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  InkWell(
+                                    onTap: _resetColumnsToDefault,
+                                    child: const Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                                      child: Text(
+                                        'Reset',
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF667085),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Divider(height: 1, color: Color(0xFFEAECF0)),
+                        Flexible(
+                          child: ListView.builder(
+                            shrinkWrap: true,
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            itemCount: _defaultAllColumns.length,
+                            itemBuilder: (context, index) {
+                              final col = _defaultAllColumns[index];
+                              final isChecked = currentVisibleSet.contains(col);
+                              return InkWell(
+                                onTap: () => _toggleColumn(col, !isChecked),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  child: Row(
+                                    children: [
+                                      IgnorePointer(
+                                        child: SizedBox(
+                                          width: 22,
+                                          height: 22,
+                                          child: Checkbox(
+                                            value: isChecked,
+                                            activeColor: AppColors.primary,
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                                            onChanged: (_) {},
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          col,
+                                          style: TextStyle(
+                                            fontSize: 12.5,
+                                            fontWeight: isChecked ? FontWeight.w600 : FontWeight.normal,
+                                            color: isChecked ? const Color(0xFF101828) : const Color(0xFF667085),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        const Divider(height: 1, color: Color(0xFFEAECF0)),
+                        InkWell(
+                          onTap: () {
+                            _closeColumnsDropdown();
+                            _openColumnSelection(context, pref);
+                          },
+                          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(10)),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            child: Row(
+                              children: const [
+                                Icon(Icons.tune, size: 16, color: AppColors.primary),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Reorder & Settings...',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    Overlay.of(context, rootOverlay: true).insert(_columnsOverlayEntry!);
+    setState(() => _isColumnsDropdownOpen = true);
+  }
+
+  Widget _buildColumnsDropdownButton(
+    BuildContext context,
+    List<String> visibleCols,
+    dynamic pref,
+  ) {
+    return CompositedTransformTarget(
+      link: _columnsLayerLink,
+      child: InkWell(
+        key: _columnsButtonKey,
+        onTap: _toggleColumnsDropdown,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          height: 42,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: _isColumnsDropdownOpen ? const Color(0xFFF9FAFB) : Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: _isColumnsDropdownOpen ? AppColors.primary : const Color(0xFFD0D5DD),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.view_column_outlined, size: 18, color: Color(0xFF344054)),
+              SizedBox(width: 6),
+              Text(
+                'Columns',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF344054),
+                ),
+              ),
+              SizedBox(width: 4),
+              Icon(Icons.keyboard_arrow_down, size: 16, color: Color(0xFF667085)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _toggleColumn(String col, bool enable) {
+    final current = Set<String>.from(
+      _getEffectiveVisibleColumns(ref.read(columnPreferenceProvider(_tableId)).valueOrNull),
+    );
+
+    if (enable) {
+      current.add(col);
+    } else {
+      if (current.length <= 1) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('At least one column must remain visible.')),
+        );
+        return;
+      }
+      current.remove(col);
+    }
+
+    setState(() {
+      _activeVisibleColumns = current;
+    });
+
+    _columnsOverlayEntry?.markNeedsBuild();
+
+    final ordered = _defaultAllColumns.where((c) => current.contains(c)).toList();
+    final pref = ColumnPreference(
+      tableId: _tableId,
+      visibleColumns: ordered,
+      columnOrder: _defaultAllColumns,
+    );
+
+    ref.read(organizationRepositoryProvider).saveColumnPreference(pref);
+  }
+
+  void _toggleAllColumns(bool selectAll) {
+    final updated = selectAll ? _defaultAllColumns.toSet() : {_defaultAllColumns.first};
+    setState(() {
+      _activeVisibleColumns = updated;
+    });
+
+    _columnsOverlayEntry?.markNeedsBuild();
+
+    final ordered = _defaultAllColumns.where((c) => updated.contains(c)).toList();
+    final pref = ColumnPreference(
+      tableId: _tableId,
+      visibleColumns: ordered,
+      columnOrder: _defaultAllColumns,
+    );
+
+    ref.read(organizationRepositoryProvider).saveColumnPreference(pref);
+  }
+
+  void _resetColumnsToDefault() {
+    setState(() {
+      _activeVisibleColumns = _defaultAllColumns.toSet();
+    });
+
+    _columnsOverlayEntry?.markNeedsBuild();
+
+    final pref = ColumnPreference(
+      tableId: _tableId,
+      visibleColumns: List<String>.from(_defaultAllColumns),
+      columnOrder: _defaultAllColumns,
+    );
+
+    ref.read(organizationRepositoryProvider).saveColumnPreference(pref);
   }
 
   Widget _buildActiveFilterChips() {
@@ -399,9 +733,9 @@ class _OrganizationManagementPageState
     return Container(
       padding: const EdgeInsets.only(left: 8, right: 4, top: 3, bottom: 3),
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.12),
+        color: AppColors.primary.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.primary.withOpacity(0.4)),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -486,46 +820,26 @@ class _OrganizationManagementPageState
                     },
                   ),
                   const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () {
-                            Navigator.pop(ctx);
-                            _openColumnSelection(context, ref.read(columnPreferenceProvider(_tableId)).valueOrNull);
-                          },
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            side: const BorderSide(color: Color(0xFFD0D5DD)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          icon: const Icon(Icons.view_column_outlined, size: 16, color: Color(0xFF344054)),
-                          label: const Text('Columns', style: TextStyle(color: Color(0xFF344054), fontSize: 12.5)),
-                        ),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          _selectedBusinessTypeFilter = tempBusiness;
+                          _selectedIndustryTypeFilter = tempIndustry;
+                          _currentPage = 0;
+                        });
+                        Navigator.pop(ctx);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        flex: 2,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            setState(() {
-                              _selectedBusinessTypeFilter = tempBusiness;
-                              _selectedIndustryTypeFilter = tempIndustry;
-                              _currentPage = 0;
-                            });
-                            Navigator.pop(ctx);
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          child: const Text('Apply Filters', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                        ),
-                      ),
-                    ],
+                      child: const Text('Apply Filters', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    ),
                   ),
                 ],
               ),
@@ -560,6 +874,10 @@ class _OrganizationManagementPageState
     );
   }
 
+  void _openShareDialog(BuildContext context, Organization org) {
+    OrganizationShareDialog.show(context, org);
+  }
+
   Future<void> _confirmDelete(BuildContext context, Organization org) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -592,7 +910,7 @@ class _OrganizationManagementPageState
       await ref.read(organizationRepositoryProvider).deleteOrganization(org.id);
       ref.invalidate(organizationsProvider);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(this.context).showSnackBar(
         SnackBar(content: Text('Deleted "${org.name}"')),
       );
     }
@@ -603,74 +921,314 @@ class _OrganizationManagementPageState
     List<String> visibleColumns,
     double screenWidth,
   ) {
-    final minTableWidth = (visibleColumns.length * 150.0 + 120.0).clamp(800.0, 2400.0);
+    // Dynamic width calculation based on visible columns
+    double totalColWidth = 60.0; // checkbox column
+    for (final col in visibleColumns) {
+      totalColWidth += _getColumnWidth(col) + 24.0;
+    }
+    totalColWidth += 90.0; // Actions column
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: SizedBox(
-        width: screenWidth < minTableWidth ? minTableWidth : screenWidth,
+    final minTableWidth = totalColWidth.clamp(900.0, 3200.0);
+
+    return Theme(
+      data: Theme.of(context).copyWith(
+        checkboxTheme: CheckboxThemeData(
+          fillColor: WidgetStateProperty.resolveWith<Color>((states) {
+            if (states.contains(WidgetState.selected)) {
+              return AppColors.primary;
+            }
+            return Colors.transparent;
+          }),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(4),
+          ),
+          side: const BorderSide(color: Color(0xFFD0D5DD), width: 1.5),
+        ),
+      ),
+      child: Scrollbar(
+        controller: _horizontalScrollController,
+        thumbVisibility: true,
+        trackVisibility: true,
+        thickness: 8.0,
+        radius: const Radius.circular(4),
         child: SingleChildScrollView(
-          child: DataTable(
-            headingRowHeight: 44,
-            dataRowMinHeight: 52,
-            dataRowMaxHeight: 64,
-            horizontalMargin: 16,
-            columnSpacing: 20,
-            showCheckboxColumn: true,
-            headingTextStyle: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
-            ),
-            columns: [
-              for (final colName in visibleColumns)
-                DataColumn(label: Text(colName.toUpperCase())),
-              const DataColumn(label: Text('ACTIONS')),
-            ],
-            rows: orgs.map((org) {
-              final isSelected = _selectedIds.contains(org.id);
-              return DataRow(
-                selected: isSelected,
-                onSelectChanged: (selected) {
+          controller: _horizontalScrollController,
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            width: screenWidth < minTableWidth ? minTableWidth : screenWidth,
+            child: SingleChildScrollView(
+              child: DataTable(
+                headingRowHeight: 46,
+                dataRowMinHeight: 56,
+                dataRowMaxHeight: 70,
+                horizontalMargin: 16,
+                columnSpacing: 20,
+                showCheckboxColumn: true,
+                headingRowColor: WidgetStateProperty.all(const Color(0xFFF9FAFB)),
+                dataRowColor: WidgetStateProperty.resolveWith<Color?>((states) {
+                  if (states.contains(WidgetState.selected)) {
+                    return const Color(0xFF9CC70A).withValues(alpha: 0.08);
+                  }
+                  return Colors.white;
+                }),
+                headingTextStyle: const TextStyle(
+                  color: Color(0xFF475467),
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                ),
+                onSelectAll: (selected) {
                   setState(() {
                     if (selected == true) {
-                      _selectedIds.add(org.id);
+                      for (final org in orgs) {
+                        _selectedIds.add(org.id);
+                      }
                     } else {
-                      _selectedIds.remove(org.id);
+                      for (final org in orgs) {
+                        _selectedIds.remove(org.id);
+                      }
                     }
                   });
                 },
-                cells: [
+                columns: [
                   for (final colName in visibleColumns)
-                    DataCell(_buildCellContent(colName, org)),
-                  DataCell(
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.remove_red_eye_outlined, size: 18, color: AppColors.primary),
-                          tooltip: 'View Details',
-                          onPressed: () => _openViewDialog(context, org),
+                    DataColumn(
+                      label: SizedBox(
+                        width: _getColumnWidth(colName),
+                        child: Text(
+                          colName.toUpperCase(),
+                          style: const TextStyle(
+                            color: Color(0xFF475467),
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                          ),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
-                          tooltip: 'Edit Organization',
-                          onPressed: () => _openEditDialog(context, org),
+                      ),
+                    ),
+                  const DataColumn(
+                    label: SizedBox(
+                      width: 70,
+                      child: Text(
+                        'ACTIONS',
+                        style: TextStyle(
+                          color: Color(0xFF475467),
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
-                          tooltip: 'Delete Organization',
-                          onPressed: () => _confirmDelete(context, org),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ],
-              );
-            }).toList(),
+                rows: orgs.map((org) {
+                  final isSelected = _selectedIds.contains(org.id);
+                  return DataRow(
+                    selected: isSelected,
+                    onSelectChanged: (selected) {
+                      setState(() {
+                        if (selected == true) {
+                          _selectedIds.add(org.id);
+                        } else {
+                          _selectedIds.remove(org.id);
+                        }
+                      });
+                    },
+                    cells: [
+                      for (final colName in visibleColumns)
+                        DataCell(
+                          SizedBox(
+                            width: _getColumnWidth(colName),
+                            child: _buildCellContent(colName, org),
+                          ),
+                        ),
+                      DataCell(
+                        SizedBox(
+                          width: 70,
+                          child: _buildRowActionsMenu(context, org),
+                        ),
+                      ),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
           ),
         ),
+      ),
+    );
+  }
+
+  double _getColumnWidth(String columnName) {
+    switch (columnName) {
+      case 'Organization Name':
+        return 180;
+      case 'Business Type':
+        return 150;
+      case 'Industry Type':
+        return 130;
+      case 'Business Unit(s)':
+        return 140;
+      case 'Location(s)':
+        return 130;
+      case 'Address':
+        return 200;
+      case 'Phone Number':
+        return 150;
+      case 'Email Address':
+        return 180;
+      case 'Website':
+        return 180;
+      case 'GST / VAT Number':
+      case 'Tax Identification Number (GST/VAT/TIN)':
+        return 150;
+      case 'CIN Number':
+        return 130;
+      case 'PAN Number':
+        return 130;
+      case 'TAN Number':
+        return 130;
+      case 'Directors / DIN':
+        return 150;
+      case 'Documents':
+        return 120;
+      default:
+        return 140;
+    }
+  }
+
+  Widget _buildRowActionsMenu(BuildContext context, Organization org) {
+    return Theme(
+      data: Theme.of(context).copyWith(
+        popupMenuTheme: PopupMenuThemeData(
+          color: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: const BorderSide(color: Color(0xFFF2F4F7)),
+          ),
+          elevation: 6,
+          shadowColor: Colors.black.withValues(alpha: 0.12),
+        ),
+      ),
+      child: PopupMenuButton<String>(
+        icon: const Icon(
+          Icons.more_vert,
+          size: 20,
+          color: Color(0xFF98A2B3),
+        ),
+        tooltip: 'Row Actions',
+        offset: const Offset(0, 36),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: Color(0xFFF2F4F7)),
+        ),
+        elevation: 6,
+        color: Colors.white,
+        itemBuilder: (ctx) => [
+          PopupMenuItem<String>(
+            value: 'view',
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: const [
+                Icon(
+                  Icons.remove_red_eye_outlined,
+                  size: 20,
+                  color: AppColors.primary,
+                ),
+                SizedBox(width: 12),
+                Text(
+                  'View Details',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1D2939),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          PopupMenuItem<String>(
+            value: 'edit',
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: const [
+                Icon(
+                  Icons.edit_outlined,
+                  size: 20,
+                  color: AppColors.primary,
+                ),
+                SizedBox(width: 12),
+                Text(
+                  'Edit Organization',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1D2939),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          PopupMenuItem<String>(
+            value: 'share',
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: const [
+                Icon(
+                  Icons.share_outlined,
+                  size: 20,
+                  color: AppColors.primary,
+                ),
+                SizedBox(width: 12),
+                Text(
+                  'Share Organization',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1D2939),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          PopupMenuItem<String>(
+            value: 'delete',
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: const [
+                Icon(
+                  Icons.delete_outline,
+                  size: 20,
+                  color: Color(0xFFFF4D4F),
+                ),
+                SizedBox(width: 12),
+                Text(
+                  'Delete Organization',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFFF4D4F),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        onSelected: (val) {
+          if (val == 'view') {
+            _openViewDialog(context, org);
+          } else if (val == 'edit') {
+            _openEditDialog(context, org);
+          } else if (val == 'share') {
+            _openShareDialog(context, org);
+          } else if (val == 'delete') {
+            _confirmDelete(context, org);
+          }
+        },
       ),
     );
   }
@@ -681,68 +1239,95 @@ class _OrganizationManagementPageState
 
     switch (columnName) {
       case 'Organization Name':
-        value = org.name;
-        style = const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF101828), fontSize: 14);
+        value = org.name.toUpperCase();
+        style = const TextStyle(
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF101828),
+          fontSize: 13,
+          letterSpacing: 0.2,
+        );
         break;
       case 'Business Type':
         value = org.businessType;
+        style = const TextStyle(fontSize: 12.5, color: Color(0xFF344054));
         break;
       case 'Industry Type':
         value = org.industryType;
+        style = const TextStyle(fontSize: 12.5, color: Color(0xFF344054));
         break;
       case 'Business Unit(s)':
         value = org.businessUnits;
+        style = const TextStyle(fontSize: 12.5, color: Color(0xFF344054));
         break;
       case 'Location(s)':
         value = org.locations;
+        style = const TextStyle(fontSize: 12.5, color: Color(0xFF344054));
         break;
       case 'Address':
         value = org.address;
+        style = const TextStyle(fontSize: 12.5, color: Color(0xFF344054));
         break;
       case 'Phone Number':
-        value = org.contactNumbers.isNotEmpty
-            ? org.contactNumbers.map((c) => '${c.label}: ${c.number}').join(', ')
-            : org.phoneNumber;
+        if (org.contactNumbers.isNotEmpty) {
+          value = org.contactNumbers.map((c) => '${c.label}:\n${c.number}').join('\n');
+        } else {
+          value = org.phoneNumber;
+        }
+        style = const TextStyle(fontSize: 12, color: Color(0xFF344054));
         break;
       case 'Email Address':
         value = org.emailAddress;
+        style = const TextStyle(fontSize: 12.5, color: Color(0xFF344054));
         break;
       case 'Website':
         value = org.website;
-        style = const TextStyle(color: AppColors.primary);
+        style = const TextStyle(
+          fontSize: 12.5,
+          color: AppColors.primary,
+          fontWeight: FontWeight.w600,
+        );
         break;
       case 'GST / VAT Number':
       case 'Tax Identification Number (GST/VAT/TIN)':
         value = org.gstNumber.isNotEmpty ? org.gstNumber : org.taxId;
+        style = const TextStyle(fontSize: 12.5, color: Color(0xFF344054));
         break;
       case 'CIN Number':
         value = org.cinNumber;
+        style = const TextStyle(fontSize: 12.5, color: Color(0xFF344054));
         break;
       case 'PAN Number':
         value = org.panNumber;
+        style = const TextStyle(fontSize: 12.5, color: Color(0xFF344054));
         break;
       case 'TAN Number':
         value = org.tanNumber;
+        style = const TextStyle(fontSize: 12.5, color: Color(0xFF344054));
         break;
       case 'Directors / DIN':
         value = org.directors.isNotEmpty
             ? org.directors.map((d) => d.din.isNotEmpty ? '${d.name} (${d.din})' : d.name).join(', ')
             : '';
+        style = const TextStyle(fontSize: 12.5, color: Color(0xFF344054));
         break;
       case 'Documents':
         value = org.documents.isNotEmpty ? '${org.documents.length} document(s)' : '';
+        style = const TextStyle(fontSize: 12.5, color: Color(0xFF344054));
         break;
       default:
         value = '';
     }
 
-    return SizedBox(
-      width: 140,
+    final displayText = value.trim().isEmpty ? '-' : value;
+
+    return Tooltip(
+      message: displayText,
+      waitDuration: const Duration(milliseconds: 600),
       child: Text(
-        value.isEmpty ? '-' : value,
+        displayText,
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
-        style: style ?? const TextStyle(fontSize: 13),
+        style: style ?? const TextStyle(fontSize: 12.5, color: Color(0xFF344054)),
       ),
     );
   }
@@ -877,6 +1462,16 @@ class _OrganizationManagementPageState
                             ),
                           ),
                           const PopupMenuItem(
+                            value: 'share',
+                            child: Row(
+                              children: [
+                                Icon(Icons.share_outlined, size: 18, color: AppColors.primary),
+                                SizedBox(width: 8),
+                                Text('Share Organization', style: TextStyle(fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
                             value: 'delete',
                             child: Row(
                               children: [
@@ -890,6 +1485,7 @@ class _OrganizationManagementPageState
                         onSelected: (val) {
                           if (val == 'view') _openViewDialog(context, org);
                           if (val == 'edit') _openEditDialog(context, org);
+                          if (val == 'share') _openShareDialog(context, org);
                           if (val == 'delete') _confirmDelete(context, org);
                         },
                       ),

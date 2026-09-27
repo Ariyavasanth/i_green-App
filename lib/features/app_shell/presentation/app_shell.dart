@@ -760,42 +760,6 @@ class _TopBar extends ConsumerWidget {
                 ),
                 const SizedBox(width: 4),
               ],
-              IconButton(
-                tooltip: 'Search current section',
-                onPressed: () => showDialog<void>(
-                  context: context,
-                  builder: (dialogContext) => AlertDialog(
-                    title: const Text('Search'),
-                    content: TextField(
-                      autofocus: true,
-                      decoration: const InputDecoration(
-                        hintText: 'Search records',
-                        prefixIcon: Icon(Icons.search),
-                      ),
-                      onChanged: (value) => ProviderScope.containerOf(
-                        context,
-                      ).read(booksSearchQueryProvider.notifier).state = value,
-                      onSubmitted: (_) => Navigator.pop(dialogContext),
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () {
-                          ProviderScope.containerOf(
-                            context,
-                          ).read(booksSearchQueryProvider.notifier).state = '';
-                          Navigator.pop(dialogContext);
-                        },
-                        child: const Text('Clear'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(dialogContext),
-                        child: const Text('Done'),
-                      ),
-                    ],
-                  ),
-                ),
-                icon: const Icon(Icons.search),
-              ),
               PopupMenuButton<String>(
                 tooltip: 'Quick create',
                 icon: const Icon(
