@@ -133,6 +133,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
   void _initializeValues(dynamic employee, PayrollSettings settings, String selectedMonth) {
     if (_initialized) return;
     _initialized = true;
+    _totalDays = settings.workingDaysInMonth.toInt();
 
     // Use employee standard CTC details directly from employee record
     final basic = (employee.salaryBasic as num?)?.toDouble() ?? 0.0;
@@ -203,7 +204,8 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
         employeeId,
         year,
         monthNum,
-        workingDays: 30,
+        workingDays: settings.workingDaysInMonth.toInt(),
+        settings: settings,
         startDate: period.startDate,
         endDateExclusive: period.endDateExclusive,
       );

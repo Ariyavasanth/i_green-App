@@ -506,12 +506,7 @@ class PayrollSettings {
 
     // End date is inclusive: endDateExclusive is set to the day following payrollEndDay at 00:00:00
     // so display subtraction (1 sec) and while (cursor.isBefore(endDateExclusive)) include the entire end day.
-    final DateTime endExclusive;
-    if (payrollStartDay < payrollEndDay) {
-      endExclusive = DateTime(year, month, payrollEndDay).add(const Duration(days: 1));
-    } else {
-      endExclusive = DateTime(year, month, payrollEndDay);
-    }
+    final DateTime endExclusive = DateTime(year, month, payrollEndDay).add(const Duration(days: 1));
 
     final processing = DateTime(year, month, processingDay);
     final payment = DateTime(year, month, paymentDay);
