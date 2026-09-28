@@ -269,7 +269,9 @@ class FirebasePayrollRepository implements PayrollRepository {
           final loanRepo = _loanRepository ?? FirebaseLoanRepository(firestore: _firestore);
           EmployeeLoan? targetLoan;
           if (record.loanDescription.isNotEmpty) {
-            targetLoan = await loanRepo.getLoanByLoanId(record.loanDescription.trim());
+            final match = RegExp(r'LN\d+').firstMatch(record.loanDescription);
+            final loanIdToFind = match != null ? match.group(0)! : record.loanDescription.trim();
+            targetLoan = await loanRepo.getLoanByLoanId(loanIdToFind);
           }
           targetLoan ??= await loanRepo.getActiveLoanForEmployee(record.employeeId, record.month);
 

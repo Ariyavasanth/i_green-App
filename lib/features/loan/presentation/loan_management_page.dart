@@ -5,8 +5,14 @@ import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../employee/providers/employee_providers.dart';
+import '../../employee/services/offer_letter_save_stub.dart'
+    if (dart.library.html) '../../employee/services/offer_letter_save_web.dart'
+    if (dart.library.io) '../../employee/services/offer_letter_save_io.dart';
+import '../../organization/providers/organization_providers.dart';
+import '../../payroll/providers/payroll_providers.dart';
 import '../domain/employee_loan.dart';
 import '../providers/loan_providers.dart';
+import '../services/loan_statement_pdf_generator.dart';
 import 'widgets/approve_loan_dialog.dart';
 
 class LoanManagementPage extends ConsumerStatefulWidget {
@@ -51,11 +57,9 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
 
   final List<String> _statuses = [
     'All',
-    'Active',
-    'Pending Supervisor',
-    'Pending HR',
-    'Pending MD',
+    'Pending',
     'Approved',
+    'Active',
     'Rejected',
     'Closed'
   ];
@@ -145,7 +149,11 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
                         }
                         // Status filter
                         if (_selectedStatusFilter != 'All') {
-                          if (_selectedStatusFilter == 'Active' && loan.status.toLowerCase() != 'active') {
+                          if (_selectedStatusFilter == 'Pending') {
+                            if (!loan.status.toLowerCase().startsWith('pending')) {
+                              return false;
+                            }
+                          } else if (_selectedStatusFilter == 'Active' && loan.status.toLowerCase() != 'active') {
                             return false;
                           } else if (_selectedStatusFilter == 'Closed' && loan.status.toLowerCase() != 'closed') {
                             return false;
@@ -571,7 +579,7 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
           onView: () => context.push('/loan-management/details/${loan.id}'),
           onHistory: () => _showEmployeeLoanHistory(loan),
           onEdit: () => context.push('/loan-management/create', extra: loan),
-          onDownload: () => _showSnackBar('Statement downloaded for loan ${loan.loanId}.'),
+          onDownload: () => _downloadStatement(loan),
           onApprove: (loan.status == 'Pending' || loan.status.startsWith('Pending '))
               ? () => _handleAction('approve', loan)
               : null,
@@ -773,11 +781,49 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
           _showSnackBar('Loan ${loan.loanId} marked as Closed.');
           break;
         case 'download':
-          _showSnackBar('Statement downloaded for loan ${loan.loanId}.');
+          await _downloadStatement(loan);
           break;
       }
     } catch (e) {
       _showSnackBar('Failed to perform action: $e', isError: true);
+    }
+  }
+
+  Future<void> _downloadStatement(EmployeeLoan loan) async {
+    try {
+      final employeesList = ref.read(employeesProvider).asData?.value ?? [];
+      final employee = employeesList.where((e) =>
+          e.id == loan.employeeId ||
+          e.employeeId.trim().toUpperCase() == loan.employeeCustomId.trim().toUpperCase()
+      ).firstOrNull;
+
+      final payrolls = ref.read(allPayrollRecordsProvider).asData?.value ?? [];
+      final orgList = ref.read(organizationsProvider).asData?.value ?? [];
+      final org = orgList.firstOrNull;
+
+      final pdfBytes = await LoanStatementPdfGenerator.generateStatementPdf(
+        loan: loan,
+        employee: employee,
+        organization: org,
+        payrolls: payrolls,
+      );
+
+      final cleanLoanId = loan.loanId.replaceAll(RegExp(r'[^\w\-_]'), '_');
+      final cleanName = loan.employeeName.replaceAll(RegExp(r'[^\w\-_]'), '_');
+      final fileName = 'Loan_Statement_${cleanLoanId}_$cleanName.pdf';
+
+      if (mounted) {
+        await saveAndDownloadOfferLetter(
+          context: context,
+          bytes: pdfBytes,
+          fileName: fileName,
+          docTitle: 'Loan Statement',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar('Failed to download loan statement: $e', isError: true);
+      }
     }
   }
 

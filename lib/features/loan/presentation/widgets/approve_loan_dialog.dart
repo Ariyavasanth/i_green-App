@@ -110,11 +110,14 @@ class _ApproveLoanDialogState extends ConsumerState<ApproveLoanDialog> {
     final rate = widget.loan.interestRate;
     final principal = widget.loan.loanAmount;
 
-    // Simple Interest Calculation
-    final timeInYears = installments > 0 ? installments / 12.0 : 1.0;
-    final interest = principal * (rate / 100.0) * timeInYears;
-    final totalRepayable = principal + interest;
-    final monthlyEmi = installments > 0 ? totalRepayable / installments : 0.0;
+    // Reducing Balance Interest Calculation
+    final totalInterest = (installments > 0 && rate > 0)
+        ? principal * (rate / 100.0) * ((installments + 1) / 2.0)
+        : 0.0;
+    final totalRepayable = principal + totalInterest;
+    final monthlyPrincipal = installments > 0 ? principal / installments : 0.0;
+    final firstMonthInterest = principal * (rate / 100.0);
+    final monthlyEmi = monthlyPrincipal + firstMonthInterest;
 
     final emiPercent = monthlySalary > 0 ? (monthlyEmi / monthlySalary) * 100 : 0.0;
     final lastDeductionMonth = _calculateLastDeductionMonth(_firstDeductionMonth, installments);
@@ -373,17 +376,17 @@ class _ApproveLoanDialogState extends ConsumerState<ApproveLoanDialog> {
                             ),
                           ],
                         ),
-                        if (rate > 0 || interest > 0) ...[
+                        if (rate > 0 || totalInterest > 0) ...[
                           const SizedBox(height: 6),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                'Principal: ${currencyFormat.format(installments > 0 ? principal / installments : 0.0)} + Interest: ${currencyFormat.format(installments > 0 ? interest / installments : 0.0)}',
+                                'Principal: ${currencyFormat.format(monthlyPrincipal)} + 1st Month Int: ${currencyFormat.format(firstMonthInterest)}',
                                 style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF166534)),
                               ),
                               Text(
-                                'Total Interest: ${currencyFormat.format(interest)}',
+                                'Total Interest: ${currencyFormat.format(totalInterest)}',
                                 style: const TextStyle(fontSize: 11, color: Color(0xFF166534)),
                               ),
                             ],
@@ -397,15 +400,6 @@ class _ApproveLoanDialogState extends ConsumerState<ApproveLoanDialog> {
                               'Schedule: $_firstDeductionMonth to $lastDeductionMonth',
                               style: const TextStyle(fontSize: 11, color: Color(0xFF166534)),
                             ),
-                            if (monthlySalary > 0)
-                              Text(
-                                '${emiPercent.toStringAsFixed(1)}% of Salary',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: emiPercent > 50 ? Colors.red.shade800 : const Color(0xFF166534),
-                                ),
-                              ),
                           ],
                         ),
                       ],
@@ -503,10 +497,13 @@ class _ApproveLoanDialogState extends ConsumerState<ApproveLoanDialog> {
       final rate = widget.loan.interestRate;
       final principal = widget.loan.loanAmount;
 
-      final timeInYears = installments > 0 ? installments / 12.0 : 1.0;
-      final interest = principal * (rate / 100.0) * timeInYears;
-      final totalRepayable = principal + interest;
-      final emiAmount = installments > 0 ? totalRepayable / installments : 0.0;
+      final totalInterest = (installments > 0 && rate > 0)
+          ? principal * (rate / 100.0) * ((installments + 1) / 2.0)
+          : 0.0;
+      final totalRepayable = principal + totalInterest;
+      final monthlyPrincipal = installments > 0 ? principal / installments : 0.0;
+      final firstMonthInterest = principal * (rate / 100.0);
+      final emiAmount = monthlyPrincipal + firstMonthInterest;
       final lastDeductionMonth = _calculateLastDeductionMonth(_firstDeductionMonth, installments);
 
       final nextStatus = await ref.read(loanRepositoryProvider).approveLoan(

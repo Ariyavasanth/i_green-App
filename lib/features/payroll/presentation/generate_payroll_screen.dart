@@ -224,9 +224,18 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     try {
       final loan = await ref.read(loanRepositoryProvider).getActiveLoanForEmployee(employeeId, month);
       if (loan != null && mounted) {
+        final monthIdx = loan.scheduleMonths.indexWhere((m) => m.trim().toLowerCase() == month.trim().toLowerCase());
+        final currentMonthEmi = monthIdx != -1
+            ? loan.emiForInstallment(monthIdx)
+            : (loan.interestRate > 0 ? loan.emiForInstallment(loan.paidInstallments) : loan.emiAmount);
+
+        final installmentNote = monthIdx != -1
+            ? 'Installment ${monthIdx + 1} of ${loan.installments} (${loan.loanId})'
+            : (loan.loanId.isNotEmpty ? 'Loan EMI (${loan.loanId})' : 'Loan EMI');
+
         setState(() {
-          _companyLoanController.text = loan.emiAmount.toStringAsFixed(2);
-          _loanDescController.text = loan.loanId;
+          _companyLoanController.text = currentMonthEmi.toStringAsFixed(2);
+          _loanDescController.text = installmentNote;
           _recalculate();
         });
       }

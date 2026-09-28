@@ -65,7 +65,7 @@ class EmployeeLoan {
   final String approvedBy;
   final String approvalDate;
   final String remarks;
-  final String status; // Pending, Pending Supervisor, Pending HR, Pending MD, Approved, Rejected, Active, Closed
+  final String status; // Pending, Approved, Rejected, Active, Closed
   final double remainingBalance;
   final List<LoanRepayment> repayments;
 
@@ -97,6 +97,53 @@ class EmployeeLoan {
     this.repayments = const [],
   });
 
+  /// Monthly Principal (Principal / installments)
+  double get monthlyPrincipal => installments > 0 ? loanAmount / installments : 0.0;
+
+  /// Total interest calculated using reducing balance formula:
+  /// Sum for i=0 to n-1 of (loanAmount - i*(loanAmount/n)) * (interestRate/100)
+  /// = loanAmount * (interestRate / 100) * ((installments + 1) / 2)
+  double get calculatedTotalInterest {
+    if (installments <= 0 || interestRate <= 0) return 0.0;
+    return loanAmount * (interestRate / 100.0) * ((installments + 1) / 2.0);
+  }
+
+  /// Total repayable amount (Principal + Total Reducing Interest)
+  double get calculatedTotalRepayable {
+    if (interestRate > 0) {
+      return loanAmount + calculatedTotalInterest;
+    }
+    return totalRepayableAmount > 0 ? totalRepayableAmount : loanAmount;
+  }
+
+  /// Principal balance at start of given installment (0-indexed)
+  double startPrincipalForInstallment(int index) {
+    if (installments <= 0) return 0.0;
+    final start = loanAmount - (index * monthlyPrincipal);
+    return start < 0.01 ? 0.0 : start;
+  }
+
+  /// Principal balance at end of given installment (0-indexed)
+  double endPrincipalForInstallment(int index) {
+    if (installments <= 0) return 0.0;
+    final end = loanAmount - ((index + 1) * monthlyPrincipal);
+    return end < 0.01 ? 0.0 : end;
+  }
+
+  /// Interest amount for a specific installment month (0-indexed)
+  /// based on remaining principal balance at the start of that month.
+  double interestForInstallment(int index) {
+    if (interestRate <= 0) return 0.0;
+    final start = startPrincipalForInstallment(index);
+    return start * (interestRate / 100.0);
+  }
+
+  /// Total EMI for a specific installment month (0-indexed)
+  /// = Monthly Principal + Reducing Interest for that month
+  double emiForInstallment(int index) {
+    return monthlyPrincipal + interestForInstallment(index);
+  }
+
   /// Total amount repaid from the repayment ledger, fallback to balance difference.
   double get totalPaid {
     if (repayments.isNotEmpty) {
@@ -117,6 +164,9 @@ class EmployeeLoan {
 
   /// Paid installments count
   int get paidInstallments {
+    if (repayments.isNotEmpty) {
+      return repayments.length > installments ? installments : repayments.length;
+    }
     if (emiAmount <= 0) return 0;
     final count = (totalPaid / emiAmount).round();
     return count > installments ? installments : count;

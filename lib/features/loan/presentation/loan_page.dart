@@ -6,8 +6,14 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
+import '../../employee/services/offer_letter_save_stub.dart'
+    if (dart.library.html) '../../employee/services/offer_letter_save_web.dart'
+    if (dart.library.io) '../../employee/services/offer_letter_save_io.dart';
+import '../../organization/providers/organization_providers.dart';
+import '../../payroll/providers/payroll_providers.dart';
 import '../domain/employee_loan.dart';
 import '../providers/loan_providers.dart';
+import '../services/loan_statement_pdf_generator.dart';
 
 class LoanPage extends ConsumerStatefulWidget {
   const LoanPage({super.key});
@@ -436,16 +442,54 @@ class _LoanPageState extends ConsumerState<LoanPage> {
           balance: currencyFormat.format(loan.remainingBalance),
           status: loan.status,
           onView: () => context.push('/loan/details/${loan.id}'),
-          onDownload: () => ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Statement downloaded for loan ${loan.loanId}.'),
-              backgroundColor: AppColors.primary,
-              behavior: SnackBarBehavior.floating,
-            ),
-          ),
+          onDownload: () => _downloadStatement(loan),
         );
       },
     );
+  }
+
+  Future<void> _downloadStatement(EmployeeLoan loan) async {
+    try {
+      final employeesList = ref.read(employeesProvider).asData?.value ?? [];
+      final employee = employeesList.where((e) =>
+          e.id == loan.employeeId ||
+          e.employeeId.trim().toUpperCase() == loan.employeeCustomId.trim().toUpperCase()
+      ).firstOrNull;
+
+      final payrolls = ref.read(allPayrollRecordsProvider).asData?.value ?? [];
+      final orgList = ref.read(organizationsProvider).asData?.value ?? [];
+      final org = orgList.firstOrNull;
+
+      final pdfBytes = await LoanStatementPdfGenerator.generateStatementPdf(
+        loan: loan,
+        employee: employee,
+        organization: org,
+        payrolls: payrolls,
+      );
+
+      final cleanLoanId = loan.loanId.replaceAll(RegExp(r'[^\w\-_]'), '_');
+      final cleanName = loan.employeeName.replaceAll(RegExp(r'[^\w\-_]'), '_');
+      final fileName = 'Loan_Statement_${cleanLoanId}_$cleanName.pdf';
+
+      if (mounted) {
+        await saveAndDownloadOfferLetter(
+          context: context,
+          bytes: pdfBytes,
+          fileName: fileName,
+          docTitle: 'Loan Statement',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to download loan statement: $e'),
+            backgroundColor: Colors.red[800],
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildLoansTable(List<EmployeeLoan> loans, double screenWidth) {
@@ -498,10 +542,20 @@ class _LoanPageState extends ConsumerState<LoanPage> {
                     DataCell(Text(loan.firstDeductionMonth)),
                     DataCell(_buildStatusBadge(loan.status)),
                     DataCell(
-                      IconButton(
-                        icon: const Icon(Icons.visibility_outlined, size: 20),
-                        onPressed: () => context.push('/loan/details/${loan.id}'),
-                        tooltip: 'View Details',
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.visibility_outlined, size: 20),
+                            onPressed: () => context.push('/loan/details/${loan.id}'),
+                            tooltip: 'View Details',
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.download_outlined, size: 20, color: AppColors.primary),
+                            onPressed: () => _downloadStatement(loan),
+                            tooltip: 'Download Statement',
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -928,7 +982,7 @@ class _RequestLoanDialogState extends ConsumerState<_RequestLoanDialog> {
       approvedBy: '',
       approvalDate: '',
       remarks: '',
-      status: 'Pending Supervisor',
+      status: 'Pending',
       remainingBalance: amount,
     );
 

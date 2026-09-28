@@ -5,10 +5,15 @@ import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../employee/providers/employee_providers.dart';
+import '../../employee/services/offer_letter_save_stub.dart'
+    if (dart.library.html) '../../employee/services/offer_letter_save_web.dart'
+    if (dart.library.io) '../../employee/services/offer_letter_save_io.dart';
+import '../../organization/providers/organization_providers.dart';
 import '../../payroll/domain/payroll.dart';
 import '../../payroll/providers/payroll_providers.dart';
 import '../domain/employee_loan.dart';
 import '../providers/loan_providers.dart';
+import '../services/loan_statement_pdf_generator.dart';
 import 'widgets/approve_loan_dialog.dart';
 
 class LoanDetailsPage extends ConsumerWidget {
@@ -70,7 +75,7 @@ class LoanDetailsPage extends ConsumerWidget {
                     const SizedBox(height: 20),
                     _buildLoanSummaryCard(context, ref, loan),
                     const SizedBox(height: 20),
-                    _buildRepaymentScheduleCard(loan, payrolls),
+                    _buildRepaymentScheduleCard(context, ref, loan, payrolls),
                     if (isAdminManagementView) ...[
                       const SizedBox(height: 20),
                       _buildActionFooter(context, ref, loan),
@@ -202,16 +207,8 @@ class LoanDetailsPage extends ConsumerWidget {
     final status = loan.status.trim().toLowerCase();
 
     final isSubmitted = true;
-    final isSupervisorApproved = status == 'pending hr' ||
-        status == 'pending md' ||
-        status == 'approved' ||
-        status == 'active' ||
-        status == 'closed';
-    final isHrApproved = status == 'pending md' ||
-        status == 'approved' ||
-        status == 'active' ||
-        status == 'closed';
-    final isMdApproved = status == 'approved' || status == 'active' || status == 'closed';
+    final isApproved = status == 'approved' || status == 'active' || status == 'closed';
+    final isPending = status.startsWith('pending');
 
     final steps = [
       (
@@ -221,28 +218,12 @@ class LoanDetailsPage extends ConsumerWidget {
         true,
       ),
       (
-        'Supervisor Review',
-        isSupervisorApproved
+        'Management Approval',
+        isApproved
             ? 'Approved'
-            : (status == 'pending supervisor' || status == 'pending' ? 'Pending Action' : 'Pending'),
-        isSupervisorApproved,
-        status == 'pending supervisor' || status == 'pending',
-      ),
-      (
-        'HR Review',
-        isHrApproved
-            ? 'Approved'
-            : (status == 'pending hr' ? 'Pending Action' : 'Upcoming'),
-        isHrApproved,
-        status == 'pending hr',
-      ),
-      (
-        'MD Final Approval',
-        isMdApproved
-            ? 'Approved'
-            : (status == 'pending md' ? 'Pending Action' : 'Upcoming'),
-        isMdApproved,
-        status == 'pending md',
+            : (isPending ? 'Pending Review & Approval' : 'Pending'),
+        isApproved,
+        isPending,
       ),
     ];
 
@@ -385,9 +366,15 @@ class LoanDetailsPage extends ConsumerWidget {
 
   Widget _buildLoanSummaryCard(BuildContext context, WidgetRef ref, EmployeeLoan loan) {
     final formatCurrency = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
-    final totalInterest = (loan.totalRepayableAmount - loan.loanAmount).clamp(0.0, double.infinity);
-    final monthlyPrincipal = loan.installments > 0 ? loan.loanAmount / loan.installments : 0.0;
-    final monthlyInterest = loan.installments > 0 ? totalInterest / loan.installments : 0.0;
+    final totalInterest = loan.interestRate > 0
+        ? loan.calculatedTotalInterest
+        : (loan.totalRepayableAmount - loan.loanAmount).clamp(0.0, double.infinity);
+    final totalRepayable = loan.interestRate > 0
+        ? loan.calculatedTotalRepayable
+        : (loan.totalRepayableAmount > 0 ? loan.totalRepayableAmount : loan.loanAmount);
+    final monthlyPrincipal = loan.monthlyPrincipal;
+    final firstMonthEmi = loan.emiForInstallment(0);
+    final lastMonthEmi = loan.emiForInstallment(loan.installments > 0 ? loan.installments - 1 : 0);
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -415,14 +402,16 @@ class LoanDetailsPage extends ConsumerWidget {
           _buildRowDetail('Loan ID', loan.loanId),
           _buildRowDetail('Loan Type', loan.loanType),
           _buildRowDetail('Principal Amount', formatCurrency.format(loan.loanAmount)),
-          _buildRowDetail('Interest Rate', '${loan.interestRate}%'),
+          _buildRowDetail('Interest Rate', '${loan.interestRate}% (Reducing Balance)'),
           if (loan.interestRate > 0 || totalInterest > 0) ...[
             _buildRowDetail('Total Interest Amount', formatCurrency.format(totalInterest)),
-            _buildRowDetail('Monthly Interest (per EMI)', formatCurrency.format(monthlyInterest)),
-            _buildRowDetail('Monthly Principal (per EMI)', formatCurrency.format(monthlyPrincipal)),
+            _buildRowDetail('Monthly Principal', formatCurrency.format(monthlyPrincipal)),
+            _buildRowDetail('1st Month Interest', formatCurrency.format(loan.interestForInstallment(0))),
+            _buildRowDetail('1st Month EMI', formatCurrency.format(firstMonthEmi)),
+            if (loan.installments > 1)
+              _buildRowDetail('Last Month EMI', formatCurrency.format(lastMonthEmi)),
           ],
-          _buildRowDetail('Total Repayable', formatCurrency.format(loan.totalRepayableAmount)),
-          _buildRowDetail('Monthly EMI', formatCurrency.format(loan.emiAmount)),
+          _buildRowDetail('Total Repayable', formatCurrency.format(totalRepayable)),
           _buildRowDetail('Total Paid', formatCurrency.format(loan.totalPaid)),
           _buildRowDetail('Remaining Balance', formatCurrency.format(loan.actualRemainingBalance)),
           _buildRowDetail('Paid Installments', '${loan.paidInstallments} of ${loan.installments}'),
@@ -440,13 +429,15 @@ class LoanDetailsPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildRepaymentScheduleCard(EmployeeLoan loan, List<PayrollRecord> payrolls) {
+  Widget _buildRepaymentScheduleCard(
+    BuildContext context,
+    WidgetRef ref,
+    EmployeeLoan loan,
+    List<PayrollRecord> payrolls,
+  ) {
     final formatCurrency = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
     final scheduleMonths = loan.scheduleMonths;
-
-    final totalInterest = (loan.totalRepayableAmount - loan.loanAmount).clamp(0.0, double.infinity);
-    final monthlyPrincipal = loan.installments > 0 ? loan.loanAmount / loan.installments : 0.0;
-    final monthlyInterest = loan.installments > 0 ? totalInterest / loan.installments : 0.0;
+    final monthlyPrincipal = loan.monthlyPrincipal;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -471,9 +462,26 @@ class LoanDetailsPage extends ConsumerWidget {
                   ),
                 ],
               ),
-              Text(
-                '${loan.paidInstallments} / ${loan.installments} Paid',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primary),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    icon: const Icon(Icons.download_outlined, size: 16),
+                    label: const Text('Download Statement', style: TextStyle(fontSize: 12)),
+                    onPressed: () => _downloadStatement(context, ref, loan, payrolls),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    '${loan.paidInstallments} / ${loan.installments} Paid',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                  ),
+                ],
               ),
             ],
           ),
@@ -503,6 +511,9 @@ class LoanDetailsPage extends ConsumerWidget {
                 ],
                 rows: List<DataRow>.generate(scheduleMonths.length, (index) {
                   final month = scheduleMonths[index];
+                  final monthInterest = loan.interestForInstallment(index);
+                  final monthEmi = loan.emiForInstallment(index);
+                  final endingPrincipal = loan.endPrincipalForInstallment(index);
 
                   // Check if repayment ledger has an entry for this month
                   final ledgerRepayment = loan.repayments.where((r) => r.month.trim().toLowerCase() == month.trim().toLowerCase()).firstOrNull;
@@ -515,13 +526,7 @@ class LoanDetailsPage extends ConsumerWidget {
                       p.companyLoan > 0).firstOrNull;
 
                   final isPaid = ledgerRepayment != null || matchingPayroll != null || index < loan.paidInstallments;
-                  final paidAmount = isPaid ? (ledgerRepayment?.amount ?? loan.emiAmount) : 0.0;
-
-                  // Calculate remaining balance at this step in the timeline
-                  final runningPaid = (index + 1) * loan.emiAmount;
-                  final expectedRemaining = isPaid
-                      ? ((loan.totalRepayableAmount - runningPaid).clamp(0.0, loan.totalRepayableAmount))
-                      : ((loan.totalRepayableAmount - (index * loan.emiAmount)).clamp(0.0, loan.totalRepayableAmount));
+                  final paidAmount = isPaid ? (ledgerRepayment?.amount ?? monthEmi) : 0.0;
 
                   final payrollRef = ledgerRepayment?.payrollId.isNotEmpty == true
                       ? ledgerRepayment!.payrollId
@@ -532,18 +537,18 @@ class LoanDetailsPage extends ConsumerWidget {
                       DataCell(Text(month, style: const TextStyle(fontWeight: FontWeight.w500))),
                       DataCell(Text(formatCurrency.format(monthlyPrincipal))),
                       DataCell(Text(
-                        formatCurrency.format(monthlyInterest),
+                        formatCurrency.format(monthInterest),
                         style: TextStyle(
-                          color: monthlyInterest > 0 ? Colors.orange.shade800 : AppColors.textSecondary,
-                          fontWeight: monthlyInterest > 0 ? FontWeight.w600 : FontWeight.normal,
+                          color: monthInterest > 0 ? Colors.orange.shade800 : AppColors.textSecondary,
+                          fontWeight: monthInterest > 0 ? FontWeight.w600 : FontWeight.normal,
                         ),
                       )),
                       DataCell(Text(
-                        formatCurrency.format(loan.emiAmount),
+                        formatCurrency.format(monthEmi),
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       )),
                       DataCell(Text(formatCurrency.format(paidAmount))),
-                      DataCell(Text(formatCurrency.format(expectedRemaining))),
+                      DataCell(Text(formatCurrency.format(endingPrincipal))),
                       DataCell(
                         Row(
                           mainAxisSize: MainAxisSize.min,
@@ -613,7 +618,7 @@ class LoanDetailsPage extends ConsumerWidget {
                 foregroundColor: Colors.white,
               ),
               icon: const Icon(Icons.check_circle_outline, size: 16),
-              label: Text('Approve (${loan.status})'),
+              label: const Text('Approve Loan'),
               onPressed: () => _approveLoan(context, ref, loan),
             ),
           ],
@@ -643,6 +648,53 @@ class LoanDetailsPage extends ConsumerWidget {
 
   Future<void> _approveLoan(BuildContext context, WidgetRef ref, EmployeeLoan loan) async {
     await ApproveLoanDialog.show(context, loan);
+  }
+
+  Future<void> _downloadStatement(
+    BuildContext context,
+    WidgetRef ref,
+    EmployeeLoan loan,
+    List<PayrollRecord> payrolls,
+  ) async {
+    try {
+      final employeesList = ref.read(employeesProvider).asData?.value ?? [];
+      final employee = employeesList.where((e) =>
+          e.id == loan.employeeId ||
+          e.employeeId.trim().toUpperCase() == loan.employeeCustomId.trim().toUpperCase()
+      ).firstOrNull;
+
+      final orgList = ref.read(organizationsProvider).asData?.value ?? [];
+      final org = orgList.firstOrNull;
+
+      final pdfBytes = await LoanStatementPdfGenerator.generateStatementPdf(
+        loan: loan,
+        employee: employee,
+        organization: org,
+        payrolls: payrolls,
+      );
+
+      final cleanLoanId = loan.loanId.replaceAll(RegExp(r'[^\w\-_]'), '_');
+      final cleanName = loan.employeeName.replaceAll(RegExp(r'[^\w\-_]'), '_');
+      final fileName = 'Loan_Statement_${cleanLoanId}_$cleanName.pdf';
+
+      if (context.mounted) {
+        await saveAndDownloadOfferLetter(
+          context: context,
+          bytes: pdfBytes,
+          fileName: fileName,
+          docTitle: 'Loan Statement',
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to download loan statement: $e'),
+            backgroundColor: Colors.red[800],
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _disburseLoan(BuildContext context, WidgetRef ref, EmployeeLoan loan) async {

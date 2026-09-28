@@ -80,26 +80,32 @@ class FirebaseLoanRepository implements LoanRepository {
     try {
       final snap = await _loansRef
           .where('employee_id', isEqualTo: employeeId)
-          .where('status', isEqualTo: 'Active')
+          .where('status', whereIn: ['Active', 'Approved'])
           .get();
 
-      if (snap.docs.isEmpty) return null;
-
-      final activeLoans = snap.docs
+      List<EmployeeLoan> activeLoans = snap.docs
           .map((d) => _loanFromFirestore(d.data(), d.id))
           .where((loan) => loan.actualRemainingBalance > 0)
           .toList();
 
+      if (activeLoans.isEmpty) {
+        // Fallback: search all loans for this employee
+        final allEmployeeLoans = await getLoansForEmployee(employeeId);
+        activeLoans = allEmployeeLoans
+            .where((l) => (l.status == 'Active' || l.status == 'Approved') && l.actualRemainingBalance > 0)
+            .toList();
+      }
+
       if (activeLoans.isEmpty) return null;
 
-      // Check if there is an active loan matching this deduction month
+      // Check if there is an active/approved loan matching this deduction month
       for (final loan in activeLoans) {
-        if (loan.scheduleMonths.contains(month)) {
+        if (loan.scheduleMonths.any((m) => m.trim().toLowerCase() == month.trim().toLowerCase())) {
           return loan;
         }
       }
 
-      // Default to the first active loan with remaining balance
+      // Default to the first active/approved loan with remaining balance
       return activeLoans.first;
     } catch (_) {
       return null;
@@ -220,26 +226,7 @@ class FirebaseLoanRepository implements LoanRepository {
       final loan = await getLoanById(id);
       if (loan == null) return '';
 
-      String nextStatus = 'Approved';
-      final roleLower = approverRole.toLowerCase();
-
-      if (loan.status == 'Pending' || loan.status == 'Pending Supervisor') {
-        if (roleLower.contains('supervisor')) {
-          nextStatus = 'Pending HR';
-        } else if (roleLower.contains('hr')) {
-          nextStatus = 'Pending MD';
-        } else {
-          nextStatus = 'Approved';
-        }
-      } else if (loan.status == 'Pending HR') {
-        if (roleLower.contains('hr')) {
-          nextStatus = 'Pending MD';
-        } else {
-          nextStatus = 'Approved';
-        }
-      } else if (loan.status == 'Pending MD') {
-        nextStatus = 'Approved';
-      }
+      const nextStatus = 'Approved';
 
       final docId = loan.loanId.isNotEmpty ? loan.loanId : 'loan_${loan.id}';
       final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());

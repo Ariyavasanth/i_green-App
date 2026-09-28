@@ -48,7 +48,7 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
   final _approvedByController = TextEditingController();
   DateTime? _approvalDate;
   final _remarksController = TextEditingController();
-  String _status = 'Pending Supervisor';
+  String _status = 'Pending';
 
   final List<String> _loanTypes = [
     'Personal Loan',
@@ -59,7 +59,7 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
     'Other'
   ];
 
-  final List<String> _statuses = ['Pending Supervisor', 'Pending HR', 'Pending MD', 'Approved', 'Rejected', 'Active', 'Closed'];
+  final List<String> _statuses = ['Pending', 'Approved', 'Rejected', 'Active', 'Closed'];
   final List<String> _monthsList = [];
 
   @override
@@ -165,6 +165,11 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
     }
     _remarksController.text = loan.remarks;
     _status = loan.status;
+    if (_status.toLowerCase().startsWith('pending')) {
+      _status = 'Pending';
+    } else if (!_statuses.contains(_status)) {
+      _status = 'Pending';
+    }
   }
 
   void _calculateRepayment() {
@@ -172,16 +177,21 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
     final installments = int.tryParse(_installmentsController.text) ?? 0;
     final rate = double.tryParse(_interestRateController.text) ?? 0.0;
 
-    // Simple Interest: Principal + (Principal * Rate / 100 * Time in years)
-    final timeInYears = installments / 12.0;
-    final interest = amount * (rate / 100.0) * timeInYears;
-    final total = amount + interest;
+    // Reducing Balance Interest:
+    // Total interest = amount * (rate / 100) * ((installments + 1) / 2)
+    final totalInterest = (installments > 0 && rate > 0)
+        ? amount * (rate / 100.0) * ((installments + 1) / 2.0)
+        : 0.0;
+    final total = amount + totalInterest;
 
-    final emi = installments > 0 ? total / installments : 0.0;
+    // Month 1 EMI = Monthly Principal + First Month Interest
+    final monthlyPrincipal = installments > 0 ? amount / installments : 0.0;
+    final firstMonthInterest = amount * (rate / 100.0);
+    final firstMonthEmi = monthlyPrincipal + firstMonthInterest;
 
     setState(() {
       _totalRepayableController.text = total.toStringAsFixed(2);
-      _emiController.text = emi.toStringAsFixed(2);
+      _emiController.text = firstMonthEmi.toStringAsFixed(2);
       _lastDeductionMonth = _calculateLastDeductionMonth(_firstDeductionMonth, installments);
       _lastDeductionController.text = _lastDeductionMonth;
     });
@@ -567,47 +577,6 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
                       ),
                     ],
                   ),
-                  if (empSalary > 0 && (double.tryParse(_emiController.text) ?? 0) > 0) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: ((double.tryParse(_emiController.text) ?? 0) / empSalary) > 0.5
-                            ? Colors.orange.shade50
-                            : const Color(0xFFF0FDF4),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: ((double.tryParse(_emiController.text) ?? 0) / empSalary) > 0.5
-                              ? Colors.orange.shade200
-                              : const Color(0xFFBBF7D0),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.info_outline,
-                            size: 18,
-                            color: ((double.tryParse(_emiController.text) ?? 0) / empSalary) > 0.5
-                                ? Colors.orange.shade800
-                                : const Color(0xFF16A34A),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Monthly EMI is ${(((double.tryParse(_emiController.text) ?? 0) / empSalary) * 100).toStringAsFixed(1)}% of monthly salary (${salaryCurrency.format(empSalary)}).',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: ((double.tryParse(_emiController.text) ?? 0) / empSalary) > 0.5
-                                    ? Colors.orange.shade900
-                                    : const Color(0xFF15803D),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
                   const SizedBox(height: 16),
                   Row(
                     children: [
@@ -731,7 +700,7 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
                     child: const Text('Cancel'),
                   ),
                   ElevatedButton(
-                    onPressed: () => _saveLoan(widget.loan?.status ?? 'Pending Supervisor'),
+                    onPressed: () => _saveLoan(widget.loan?.status ?? 'Pending'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blueGrey,
                       foregroundColor: Colors.white,
