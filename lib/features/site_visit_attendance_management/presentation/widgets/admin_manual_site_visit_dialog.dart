@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../employee/domain/employee.dart';
 import '../../../employee/providers/employee_providers.dart';
 import '../../../site_visit_attendance/domain/site_visit_record.dart';
 import '../../../site_visit_attendance/providers/site_visit_attendance_providers.dart';
@@ -172,11 +173,7 @@ class _AdminManualSiteVisitDialogState extends ConsumerState<AdminManualSiteVisi
                   loading: () => const LinearProgressIndicator(color: Color(0xFF9CC70A)),
                   error: (e, _) => Text('Error loading employees: $e'),
                   data: (allEmployees) {
-                    final employees = allEmployees.where((e) {
-                      final isFlexible = e.isDynamicEmployee || e.workScheduleType.trim().toLowerCase() == 'flexible schedule';
-                      final isFixed = e.isStaticEmployee || e.workScheduleType.trim().toLowerCase() == 'fixed schedule';
-                      return isFlexible && !isFixed;
-                    }).toList();
+                    final employees = allEmployees.isNotEmpty ? allEmployees : <Employee>[];
 
                     if (_selectedEmployeeId != null && _selectedEmployeeName.isEmpty) {
                       final match = employees.where((e) => e.id == _selectedEmployeeId).firstOrNull;

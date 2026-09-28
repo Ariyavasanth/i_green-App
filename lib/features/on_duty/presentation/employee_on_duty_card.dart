@@ -1430,6 +1430,10 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
                 _buildMetaRow(Icons.person_outline, 'Employee', assignment.employeeName, isBold: true),
                 const SizedBox(height: 6),
                 _buildMetaRow(Icons.lightbulb_outline, 'OD Purpose', _sanitizePurposeText(assignment.purpose), isBold: true),
+                if (assignment.projectCode != null && assignment.projectCode!.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  _buildMetaRow(Icons.folder_outlined, 'Project', assignment.projectCode!, isBold: true),
+                ],
                 if (assignment.startOdFromHome) ...[
                   const SizedBox(height: 6),
                   _buildMetaRow(Icons.home_outlined, 'Start Mode', 'OD Starts from Home (Auto Check-In)', isBold: true),
@@ -1909,6 +1913,28 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
               widget.assignment.effectiveDestinationTitle,
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
             ),
+            if (widget.assignment.projectCode != null && widget.assignment.projectCode!.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.4)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.folder_outlined, size: 12, color: Color(0xFF414A51)),
+                    const SizedBox(width: 4),
+                    Text(
+                      widget.assignment.projectCode!,
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(12),
@@ -2014,6 +2040,28 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
               assignment.effectiveDestinationTitle,
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
             ),
+            if (assignment.projectCode != null && assignment.projectCode!.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.4)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.folder_outlined, size: 12, color: Color(0xFF414A51)),
+                    const SizedBox(width: 4),
+                    Text(
+                      assignment.projectCode!,
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             if (assignment.notCompletedReason != null && assignment.notCompletedReason!.isNotEmpty) ...[
               const SizedBox(height: 8),
               Container(

@@ -50,6 +50,17 @@ class FirebaseIncentiveRepository implements IncentiveRepository {
   }
 
   @override
+  Stream<List<IncentiveRequest>> watchAllRequests() {
+    return _requests.snapshots().map((snapshot) {
+      final result = snapshot.docs
+          .map((document) => _request(document.data(), document.id))
+          .toList();
+      result.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return result;
+    });
+  }
+
+  @override
   Future<List<IncentiveRequest>> getRequestsByEmployeeName(String employeeName) async {
     final snapshot = await _requests
         .where('employee_name', isEqualTo: employeeName)

@@ -251,7 +251,9 @@ class EmployeeDetailsDialog extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: [
         _buildSectionHeader('Education Qualifications'),
-        if (eduList.isNotEmpty)
+        if (employee.educationType == 'Labour')
+          const Text('Category: Labour (Education details not required)', style: TextStyle(fontSize: 13, color: AppColors.textSecondary))
+        else if (eduList.isNotEmpty)
           Table(
             border: TableBorder.all(color: Colors.grey.shade300),
             columnWidths: const {

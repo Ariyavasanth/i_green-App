@@ -9,8 +9,8 @@ final incentiveRepositoryProvider = Provider<IncentiveRepository>(
   (ref) => FirebaseIncentiveRepository(),
 );
 
-final allIncentiveRequestsProvider = FutureProvider<List<IncentiveRequest>>((ref) {
-  return ref.watch(incentiveRepositoryProvider).getAllRequests();
+final allIncentiveRequestsProvider = StreamProvider<List<IncentiveRequest>>((ref) {
+  return ref.watch(incentiveRepositoryProvider).watchAllRequests();
 });
 
 final employeeIncentiveRequestsProvider = FutureProvider.family<List<IncentiveRequest>, String>((ref, employeeName) {

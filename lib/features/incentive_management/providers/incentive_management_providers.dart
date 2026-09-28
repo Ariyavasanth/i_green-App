@@ -3,13 +3,15 @@ import '../../incentive/domain/incentive_request.dart';
 import '../data/firebase_incentive_management_repository.dart';
 import '../domain/incentive_management_repository.dart';
 
+import '../../incentive/providers/incentive_providers.dart';
+
 // Firestore implementation active. Both sides use incentive_requests.
 final incentiveManagementRepositoryProvider = Provider<IncentiveManagementRepository>(
   (ref) => FirebaseIncentiveManagementRepository(),
 );
 
-final allManagementRequestsProvider = FutureProvider<List<IncentiveRequest>>((ref) {
-  return ref.watch(incentiveManagementRepositoryProvider).getAllRequests();
+final allManagementRequestsProvider = StreamProvider<List<IncentiveRequest>>((ref) {
+  return ref.watch(incentiveRepositoryProvider).watchAllRequests();
 });
 
 final incentiveManagementTabProvider = StateProvider<String>((ref) => 'Pending');

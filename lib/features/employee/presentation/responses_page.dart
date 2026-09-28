@@ -2359,9 +2359,16 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                         icon: Icons.school_outlined,
                         items: [
                           _buildModernViewItem(
-                            'Education History',
-                            _joinItems(employee?.educationItems.map((e) => '${e.degreeName} | ${e.instituteName} | ${e.result} | ${e.passingYear}') ?? const []),
+                            'Category',
+                            employee?.educationType.isNotEmpty == true
+                                ? employee!.educationType
+                                : 'Employee',
                           ),
+                          if (employee?.educationType != 'Labour')
+                            _buildModernViewItem(
+                              'Education History',
+                              _joinItems(employee?.educationItems.map((e) => '${e.degreeName} | ${e.instituteName} | ${e.result} | ${e.passingYear}') ?? const []),
+                            ),
                         ],
                       ),
                       _buildModernViewSection(

@@ -131,6 +131,7 @@ class _EmployeeRegistrationPageState
   String? _presPincodeError;
 
   // Tab 3: Education
+  String _educationType = 'Employee';
   final _eduDegreeController = TextEditingController();
   final _eduInstController = TextEditingController();
   final _eduResultController = TextEditingController();
@@ -249,6 +250,9 @@ class _EmployeeRegistrationPageState
         0.0;
     if (totalSalary <= 0) return;
 
+    final isYearly = _salaryType.toLowerCase() == 'yearly';
+    final basis = isYearly ? totalSalary / 12.0 : totalSalary;
+
     if ((double.tryParse(_basicPercentController.text.trim()) ?? 0.0) == 0.0) {
       _basicPercentController.text = '50.0';
     }
@@ -271,7 +275,7 @@ class _EmployeeRegistrationPageState
     if ((double.tryParse(_pfPercentController.text.trim()) ?? 0.0) == 0.0) {
       _pfPercentController.text = '12.0';
     }
-    if (totalSalary <= 21000 &&
+    if (basis <= 21000 &&
         (double.tryParse(_esiPercentController.text.trim()) ?? 0.0) == 0.0) {
       _esiPercentController.text = '0.75';
     }
@@ -279,47 +283,47 @@ class _EmployeeRegistrationPageState
     void calcAmount(
       TextEditingController percentCtrl,
       TextEditingController amountCtrl,
-      double basis,
+      double amountBasis,
     ) {
       final pct = double.tryParse(percentCtrl.text.trim()) ?? 0.0;
-      final amount = (pct / 100) * basis;
+      final amount = (pct / 100) * amountBasis;
       amountCtrl.text = amount == 0 ? '' : amount.toStringAsFixed(2);
     }
 
-    calcAmount(_basicPercentController, _basicPayController, totalSalary);
+    calcAmount(_basicPercentController, _basicPayController, basis);
     final basic =
         double.tryParse(_basicPayController.text.replaceAll(',', '').trim()) ??
         0.0;
 
-    calcAmount(_hraPercentController, _hraController, totalSalary);
+    calcAmount(_hraPercentController, _hraController, basis);
     calcAmount(
       _specialAllowancePercentController,
       _specialAllowanceController,
-      totalSalary,
+      basis,
     );
     calcAmount(
       _eduAllowancePercentController,
       _eduAllowanceController,
-      totalSalary,
+      basis,
     );
     calcAmount(
       _travelAllowancePercentController,
       _travelAllowanceController,
-      totalSalary,
+      basis,
     );
     calcAmount(
       _otherAllowancePercentController,
       _otherAllowanceController,
-      totalSalary,
+      basis,
     );
     calcAmount(_pfPercentController, _pfController, basic);
 
-    if (totalSalary <= 21000 && totalSalary > 0) {
+    if (basis <= 21000 && basis > 0) {
       calcAmount(_esiPercentController, _esiController, basic);
       calcAmount(
         _esiEmployerPercentController,
         _esiEmployerController,
-        totalSalary,
+        basis,
       );
     } else {
       _esiController.text = '';
@@ -329,9 +333,9 @@ class _EmployeeRegistrationPageState
     calcAmount(
       _professionalTaxPercentController,
       _professionalTaxController,
-      totalSalary,
+      basis,
     );
-    calcAmount(_tdsPercentController, _tdsController, totalSalary);
+    calcAmount(_tdsPercentController, _tdsController, basis);
   }
 
   void _onTotalSalaryChanged(String val) {
@@ -619,6 +623,9 @@ class _EmployeeRegistrationPageState
   }
 
   List<String> _validateEducationTab() {
+    if (_educationType == 'Labour') {
+      return [];
+    }
     final errors = <String>[];
     bool hasEduInList = _educationList.any(
       (e) =>
@@ -876,11 +883,14 @@ class _EmployeeRegistrationPageState
           ) ??
           0.0;
       if (total > 0) {
+        final isYearly = _salaryType.toLowerCase() == 'yearly';
+        final basisTotal = isYearly ? total / 12.0 : total;
         final additionsTotal = _getAdditionsTotal();
-        final excess = additionsTotal - total;
+        final excess = additionsTotal - basisTotal;
         if (excess > 0.01) {
+          final label = isYearly ? 'Monthly Gross CTC' : 'Total Salary CTC';
           errors.add(
-            'Total additions (\u20B9${additionsTotal.toStringAsFixed(2)}) exceed Total Salary CTC (\u20B9${total.toStringAsFixed(2)})',
+            'Total additions (\u20B9${additionsTotal.toStringAsFixed(2)}) exceed $label (\u20B9${basisTotal.toStringAsFixed(2)})',
           );
         }
       }
@@ -1258,20 +1268,22 @@ class _EmployeeRegistrationPageState
   void _recalculateSpecialAllowance() {
     if (_isPopulating) return;
     final total = double.tryParse(_totalSalaryController.text.replaceAll(',', '').trim()) ?? 0.0;
+    final isYearly = _salaryType.toLowerCase() == 'yearly';
+    final basisTotal = isYearly ? total / 12.0 : total;
     final basic = double.tryParse(_basicPayController.text.replaceAll(',', '').trim()) ?? 0.0;
     final hra = double.tryParse(_hraController.text.replaceAll(',', '').trim()) ?? 0.0;
     final edu = double.tryParse(_eduAllowanceController.text.replaceAll(',', '').trim()) ?? 0.0;
     final travel = double.tryParse(_travelAllowanceController.text.replaceAll(',', '').trim()) ?? 0.0;
     final other = double.tryParse(_otherAllowanceController.text.replaceAll(',', '').trim()) ?? 0.0;
 
-    if (total > 0) {
-      double special = total - basic - hra - edu - travel - other;
+    if (basisTotal > 0) {
+      double special = basisTotal - basic - hra - edu - travel - other;
       if (special < 0) special = 0.0;
       final newSpecialText = special.toStringAsFixed(2);
       if (_specialAllowanceController.text != newSpecialText) {
         _specialAllowanceController.text = newSpecialText;
       }
-      final newPercentText = ((special / total) * 100).toStringAsFixed(1);
+      final newPercentText = ((special / basisTotal) * 100).toStringAsFixed(1);
       if (_specialAllowancePercentController.text != newPercentText) {
         _specialAllowancePercentController.text = newPercentText;
       }
@@ -1746,6 +1758,8 @@ class _EmployeeRegistrationPageState
       if (emp.temporaryPassword.isNotEmpty)
         _passwordController.text = emp.temporaryPassword;
 
+      if (emp.educationType.isNotEmpty) _educationType = emp.educationType;
+
       if (emp.educationListJson.isNotEmpty) {
         try {
           final List parsed = jsonDecode(emp.educationListJson);
@@ -1799,7 +1813,7 @@ class _EmployeeRegistrationPageState
         _presAddressController.text.isNotEmpty ||
         _permCityController.text.isNotEmpty)
       _savedTabs.add('Address');
-    if (_educationList.isNotEmpty || _eduDegreeController.text.isNotEmpty)
+    if (_educationType == 'Labour' || _educationList.isNotEmpty || _eduDegreeController.text.isNotEmpty)
       _savedTabs.add('Education');
     if (_experienceList.isNotEmpty || _expCompanyController.text.isNotEmpty)
       _savedTabs.add('Experience');
@@ -2611,6 +2625,7 @@ class _EmployeeRegistrationPageState
         educationListJson: jsonEncode(
           _educationList.map((e) => e.toMap()).toList(),
         ),
+        educationType: _educationType,
         experienceListJson: jsonEncode(
           _experienceList.map((e) => e.toMap()).toList(),
         ),
@@ -3449,7 +3464,8 @@ class _EmployeeRegistrationPageState
       case 'Address':
         return _permAddressController.text.trim().isNotEmpty;
       case 'Education':
-        return _educationList.isNotEmpty ||
+        return _educationType == 'Labour' ||
+            _educationList.isNotEmpty ||
             _eduDegreeController.text.trim().isNotEmpty;
       case 'Experience':
         return _experienceList.isNotEmpty ||
@@ -5149,335 +5165,458 @@ class _EmployeeRegistrationPageState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Export buttons & Search bar - responsive wrap to prevent overflow
-            Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                Wrap(
-                  spacing: 4,
-                  runSpacing: 4,
-                  children: ['Copy', 'CSV', 'Excel', 'PDF', 'Print'].map((
-                    label,
-                  ) {
-                    return ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.active,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                      onPressed: () {},
-                      child: Text(label, style: const TextStyle(fontSize: 11)),
-                    );
-                  }).toList(),
-                ),
-                SizedBox(
-                  width: isMobile ? 140 : 180,
-                  child: TextField(
-                    controller: _eduSearchController,
-                    style: const TextStyle(fontSize: 12),
-                    decoration: const InputDecoration(
-                      hintText: 'Search...',
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 6,
-                      ),
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            // Education Table
+            // Category Selection (Employee / Labour)
             Container(
-              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              margin: const EdgeInsets.only(bottom: 20),
               decoration: BoxDecoration(
+                color: const Color(0xFFF8F9FA),
+                borderRadius: BorderRadius.circular(6),
                 border: Border.all(color: const Color(0xFFE4E7EC)),
-                borderRadius: BorderRadius.circular(2),
               ),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minWidth: constraints.maxWidth,
-                      ),
-                      child: DataTable(
-                        columnSpacing: 28,
-                        headingRowHeight: 38,
-                        dataRowMinHeight: 36,
-                        dataRowMaxHeight: 48,
-                        columns: const [
-                          DataColumn(
-                            label: Text(
-                              'ID ↕',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          DataColumn(
-                            label: Text(
-                              'Certificate name ↕',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          DataColumn(
-                            label: Text(
-                              'Institute ↕',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          DataColumn(
-                            label: Text(
-                              'Result ↕',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          DataColumn(
-                            label: Text(
-                              'year ↕',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          DataColumn(
-                            label: Text(
-                              'Action ↕',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                        rows: _educationList.isEmpty
-                            ? [
-                                const DataRow(
-                                  cells: [
-                                    DataCell(
-                                      Text(
-                                        'No data available in table',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.black54,
-                                        ),
-                                      ),
-                                    ),
-                                    DataCell(Text('')),
-                                    DataCell(Text('')),
-                                    DataCell(Text('')),
-                                    DataCell(Text('')),
-                                    DataCell(Text('')),
-                                  ],
-                                ),
-                              ]
-                            : _educationList.map((item) {
-                                return DataRow(
-                                  cells: [
-                                    DataCell(
-                                      Text(
-                                        item.id,
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                    ),
-                                    DataCell(
-                                      Text(
-                                        item.degreeName,
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                    ),
-                                    DataCell(
-                                      Text(
-                                        item.instituteName,
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                    ),
-                                    DataCell(
-                                      Text(
-                                        item.result,
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                    ),
-                                    DataCell(
-                                      Text(
-                                        item.passingYear,
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                    ),
-                                    DataCell(
-                                      IconButton(
-                                        icon: const Icon(
-                                          Icons.delete,
-                                          size: 16,
-                                          color: Colors.red,
-                                        ),
-                                        onPressed: () {
-                                          setState(
-                                            () => _educationList.removeWhere(
-                                              (e) => e.id == item.id,
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              }).toList(),
-                      ),
+              child: Row(
+                children: [
+                  const Text(
+                    'Category:',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
                     ),
-                  );
-                },
+                  ),
+                  const SizedBox(width: 16),
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        _educationType = 'Employee';
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Radio<String>(
+                          value: 'Employee',
+                          groupValue: _educationType,
+                          activeColor: AppColors.primary,
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() {
+                                _educationType = val;
+                              });
+                            }
+                          },
+                        ),
+                        const Text(
+                          'Employee',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        _educationType = 'Labour';
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Radio<String>(
+                          value: 'Labour',
+                          groupValue: _educationType,
+                          activeColor: AppColors.primary,
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() {
+                                _educationType = val;
+                              });
+                            }
+                          },
+                        ),
+                        const Text(
+                          'Labour',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 8),
-            Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                Text(
-                  'Showing ${_educationList.isEmpty ? 0 : 1} to ${_educationList.length} of ${_educationList.length} entries',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.textSecondary,
-                  ),
+            if (_educationType == 'Labour') ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9FAFB),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: const Color(0xFFE5E7EB)),
                 ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
+                child: const Row(
                   children: [
-                    _buildPaginationBtn('Previous', null),
-                    const SizedBox(width: 6),
-                    _buildPaginationBtn('Next', null),
+                    Icon(
+                      Icons.info_outline,
+                      size: 20,
+                      color: AppColors.textSecondary,
+                    ),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Education details and certificates are not required for Labour category.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            // Education Entry Form
-            _buildRow2or3(
-              isMobile: isMobile,
-              children: [
-                _buildTextField(
-                  'Highest Degree / Course Name *',
-                  _eduDegreeController,
-                  placeholder: 'Degree Name',
-                ),
-                _buildTextField(
-                  'Institute / University Name *',
-                  _eduInstController,
-                  placeholder: 'Institute name',
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _buildRow2or3(
-              isMobile: isMobile,
-              children: [
-                _buildTextField(
-                  'Percentage / CGPA *',
-                  _eduResultController,
-                  placeholder: 'Result (e.g. 85% / Pass)',
-                ),
-                _buildTextField(
-                  'Passing Year *',
-                  _eduYearController,
-                  placeholder: 'Year (e.g. 2024)',
-                  isNumber: true,
-                  maxLength: 4,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.active,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 8,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-                onPressed: () {
-                  if (_eduDegreeController.text.isNotEmpty ||
-                      _eduInstController.text.isNotEmpty) {
-                    setState(() {
-                      _educationList.add(
-                        EducationItem(
-                          id: (_educationList.length + 1).toString(),
-                          degreeName: _eduDegreeController.text,
-                          instituteName: _eduInstController.text,
-                          result: _eduResultController.text,
-                          passingYear: _eduYearController.text,
+              ),
+              const SizedBox(height: 20),
+            ] else ...[
+              // Export buttons & Search bar - responsive wrap to prevent overflow
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  Wrap(
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: ['Copy', 'CSV', 'Excel', 'PDF', 'Print'].map((
+                      label,
+                    ) {
+                      return ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.active,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(2),
+                          ),
                         ),
+                        onPressed: () {},
+                        child: Text(label, style: const TextStyle(fontSize: 11)),
                       );
-                      _eduDegreeController.clear();
-                      _eduInstController.clear();
-                      _eduResultController.clear();
-                      _eduYearController.clear();
-                    });
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Education entry added to list.'),
-                        duration: Duration(seconds: 1),
-                      ),
-                    );
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Please fill degree name or institute first.',
+                    }).toList(),
+                  ),
+                  SizedBox(
+                    width: isMobile ? 140 : 180,
+                    child: TextField(
+                      controller: _eduSearchController,
+                      style: const TextStyle(fontSize: 12),
+                      decoration: const InputDecoration(
+                        hintText: 'Search...',
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 6,
                         ),
-                        backgroundColor: Colors.orange,
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // Education Table
+              Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  border: Border.all(color: const Color(0xFFE4E7EC)),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minWidth: constraints.maxWidth,
+                        ),
+                        child: DataTable(
+                          columnSpacing: 28,
+                          headingRowHeight: 38,
+                          dataRowMinHeight: 36,
+                          dataRowMaxHeight: 48,
+                          columns: const [
+                            DataColumn(
+                              label: Text(
+                                'ID ↕',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            DataColumn(
+                              label: Text(
+                                'Certificate name ↕',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            DataColumn(
+                              label: Text(
+                                'Institute ↕',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            DataColumn(
+                              label: Text(
+                                'Result ↕',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            DataColumn(
+                              label: Text(
+                                'year ↕',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            DataColumn(
+                              label: Text(
+                                'Action ↕',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                          rows: _educationList.isEmpty
+                              ? [
+                                  const DataRow(
+                                    cells: [
+                                      DataCell(
+                                        Text(
+                                          'No data available in table',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.black54,
+                                          ),
+                                        ),
+                                      ),
+                                      DataCell(Text('')),
+                                      DataCell(Text('')),
+                                      DataCell(Text('')),
+                                      DataCell(Text('')),
+                                      DataCell(Text('')),
+                                    ],
+                                  ),
+                                ]
+                              : _educationList.map((item) {
+                                  return DataRow(
+                                    cells: [
+                                      DataCell(
+                                        Text(
+                                          item.id,
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          item.degreeName,
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          item.instituteName,
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          item.result,
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          item.passingYear,
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.delete,
+                                            size: 16,
+                                            color: Colors.red,
+                                          ),
+                                          onPressed: () {
+                                            setState(
+                                              () => _educationList.removeWhere(
+                                                (e) => e.id == item.id,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }).toList(),
+                        ),
                       ),
                     );
-                  }
-                },
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text(
-                  'Add Education',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  },
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
+              const SizedBox(height: 8),
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  Text(
+                    'Showing ${_educationList.isEmpty ? 0 : 1} to ${_educationList.length} of ${_educationList.length} entries',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildPaginationBtn('Previous', null),
+                      const SizedBox(width: 6),
+                      _buildPaginationBtn('Next', null),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              // Education Entry Form
+              _buildRow2or3(
+                isMobile: isMobile,
+                children: [
+                  _buildTextField(
+                    'Highest Degree / Course Name *',
+                    _eduDegreeController,
+                    placeholder: 'Degree Name',
+                  ),
+                  _buildTextField(
+                    'Institute / University Name *',
+                    _eduInstController,
+                    placeholder: 'Institute name',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _buildRow2or3(
+                isMobile: isMobile,
+                children: [
+                  _buildTextField(
+                    'Percentage / CGPA *',
+                    _eduResultController,
+                    placeholder: 'Result (e.g. 85% / Pass)',
+                  ),
+                  _buildTextField(
+                    'Passing Year *',
+                    _eduYearController,
+                    placeholder: 'Year (e.g. 2024)',
+                    isNumber: true,
+                    maxLength: 4,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.active,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  onPressed: () {
+                    if (_eduDegreeController.text.isNotEmpty ||
+                        _eduInstController.text.isNotEmpty) {
+                      setState(() {
+                        _educationList.add(
+                          EducationItem(
+                            id: (_educationList.length + 1).toString(),
+                            degreeName: _eduDegreeController.text,
+                            instituteName: _eduInstController.text,
+                            result: _eduResultController.text,
+                            passingYear: _eduYearController.text,
+                          ),
+                        );
+                        _eduDegreeController.clear();
+                        _eduInstController.clear();
+                        _eduResultController.clear();
+                        _eduYearController.clear();
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Education entry added to list.'),
+                          duration: Duration(seconds: 1),
+                        ),
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Please fill degree name or institute first.',
+                          ),
+                          backgroundColor: Colors.orange,
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text(
+                    'Add Education',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
             _buildSaveButtonsRow(
               link,
               'Education',
               onCustomSave: () {
-                if (_eduDegreeController.text.isNotEmpty ||
-                    _eduInstController.text.isNotEmpty) {
+                if (_educationType == 'Employee' &&
+                    (_eduDegreeController.text.isNotEmpty ||
+                        _eduInstController.text.isNotEmpty)) {
                   setState(() {
                     _educationList.add(
                       EducationItem(
@@ -8222,7 +8361,19 @@ class _EmployeeRegistrationPageState
                           'Education Details',
                           Icons.school_outlined,
                         ),
-                        if (_educationList.isEmpty)
+                        if (_educationType == 'Labour')
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 4),
+                            child: Text(
+                              'Category: Labour (Education details not required)',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.black54,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          )
+                        else if (_educationList.isEmpty)
                           const Padding(
                             padding: EdgeInsets.symmetric(vertical: 4),
                             child: Text(
@@ -9324,9 +9475,11 @@ class _EmployeeRegistrationPageState
           _totalSalaryController.text.replaceAll(',', '').trim(),
         ) ??
         0.0;
+    final isYearly = _salaryType.toLowerCase() == 'yearly';
+    final monthlyBasis = isYearly ? totalSalary / 12.0 : totalSalary;
     final basicPay =
         double.tryParse(_basicPayController.text.replaceAll(',', '').trim()) ??
-        (totalSalary * 0.50);
+        (monthlyBasis * 0.50);
 
     return SingleChildScrollView(
       padding: EdgeInsets.all(isMobile ? 12 : 16),
@@ -9357,12 +9510,17 @@ class _EmployeeRegistrationPageState
                   'Salary Type',
                   _salaryType,
                   ['Monthly', 'Yearly'],
-                  (val) => setState(() => _salaryType = val ?? 'Monthly'),
+                  (val) {
+                    setState(() {
+                      _salaryType = val ?? 'Monthly';
+                      _recalculateSalaryAmountsFromPercentages();
+                    });
+                  },
                 ),
                 _buildTextField(
                   'Total Salary',
                   _totalSalaryController,
-                  placeholder: '85000',
+                  placeholder: isYearly ? '500000' : '85000',
                   isNumber: true,
                   onChanged: _onTotalSalaryChanged,
                 ),
@@ -9389,7 +9547,7 @@ class _EmployeeRegistrationPageState
                   amountController: _basicPayController,
                   percentController: _basicPercentController,
                   placeholder: '42500.00',
-                  basisValue: totalSalary,
+                  basisValue: monthlyBasis,
                   isMobile: isMobile,
                 ),
                 _buildSalaryComponentRow(
@@ -9398,7 +9556,7 @@ class _EmployeeRegistrationPageState
                   amountController: _hraController,
                   percentController: _hraPercentController,
                   placeholder: '21250.00',
-                  basisValue: totalSalary,
+                  basisValue: monthlyBasis,
                   isMobile: isMobile,
                 ),
               ],
@@ -9413,7 +9571,7 @@ class _EmployeeRegistrationPageState
                   amountController: _specialAllowanceController,
                   percentController: _specialAllowancePercentController,
                   placeholder: '6250.00',
-                  basisValue: totalSalary,
+                  basisValue: monthlyBasis,
                   isMobile: isMobile,
                   showPercentageField: false,
                 ),
@@ -9423,7 +9581,7 @@ class _EmployeeRegistrationPageState
                   amountController: _eduAllowanceController,
                   percentController: _eduAllowancePercentController,
                   placeholder: '0.00',
-                  basisValue: totalSalary,
+                  basisValue: monthlyBasis,
                   isMobile: isMobile,
                   showPercentageField: false,
                 ),
@@ -9433,7 +9591,7 @@ class _EmployeeRegistrationPageState
                   amountController: _travelAllowanceController,
                   percentController: _travelAllowancePercentController,
                   placeholder: '0.00',
-                  basisValue: totalSalary,
+                  basisValue: monthlyBasis,
                   isMobile: isMobile,
                   showPercentageField: false,
                 ),
@@ -9443,7 +9601,7 @@ class _EmployeeRegistrationPageState
                   amountController: _otherAllowanceController,
                   percentController: _otherAllowancePercentController,
                   placeholder: '0.00',
-                  basisValue: totalSalary,
+                  basisValue: monthlyBasis,
                   isMobile: isMobile,
                   showPercentageField: false,
                 ),
@@ -9459,9 +9617,11 @@ class _EmployeeRegistrationPageState
                     ) ??
                     0.0;
                 if (total <= 0) return const SizedBox(height: 12);
+                final basisLimit = isYearly ? total / 12.0 : total;
                 final additionsTotal = _getAdditionsTotal();
-                final excess = additionsTotal - total;
+                final excess = additionsTotal - basisLimit;
                 if (excess > 0.01) {
+                  final label = isYearly ? 'Monthly Gross CTC' : 'Total Salary';
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Container(
@@ -9484,7 +9644,7 @@ class _EmployeeRegistrationPageState
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              'Total additions (\u20B9${additionsTotal.toStringAsFixed(2)}) exceed Total Salary (\u20B9${total.toStringAsFixed(2)}) by \u20B9${excess.toStringAsFixed(2)}. Please adjust the values.',
+                              'Total additions (\u20B9${additionsTotal.toStringAsFixed(2)}) exceed $label (\u20B9${basisLimit.toStringAsFixed(2)}) by \u20B9${excess.toStringAsFixed(2)}. Please adjust the values.',
                               style: const TextStyle(
                                 fontSize: 12,
                                 color: Color(0xFFD92D20),
@@ -9497,7 +9657,7 @@ class _EmployeeRegistrationPageState
                     ),
                   );
                 }
-                if ((additionsTotal - total).abs() < 0.01 &&
+                if ((additionsTotal - basisLimit).abs() < 0.01 &&
                     additionsTotal > 0) {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
@@ -9521,7 +9681,7 @@ class _EmployeeRegistrationPageState
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              'Salary breakup is balanced. Total additions = \u20B9${additionsTotal.toStringAsFixed(2)}',
+                              'Salary breakup is balanced. Total monthly additions = \u20B9${additionsTotal.toStringAsFixed(2)}',
                               style: const TextStyle(
                                 fontSize: 12,
                                 color: Color(0xFF039855),
@@ -9562,7 +9722,7 @@ class _EmployeeRegistrationPageState
                   isMobile: isMobile,
                   showPercentageField: false,
                 ),
-                if (totalSalary > 0 && totalSalary <= 21000) ...[
+                if (monthlyBasis > 0 && monthlyBasis <= 21000) ...[
                   _buildSalaryComponentRow(
                     label: 'Employee State Insurance (ESI)',
                     basis: '% of Basic',
@@ -9578,7 +9738,7 @@ class _EmployeeRegistrationPageState
                     amountController: _esiEmployerController,
                     percentController: _esiEmployerPercentController,
                     placeholder: '0.00',
-                    basisValue: totalSalary,
+                    basisValue: monthlyBasis,
                     isMobile: isMobile,
                   ),
                 ],
@@ -9588,7 +9748,7 @@ class _EmployeeRegistrationPageState
                   amountController: _professionalTaxController,
                   percentController: _professionalTaxPercentController,
                   placeholder: '200.00',
-                  basisValue: totalSalary,
+                  basisValue: monthlyBasis,
                   isMobile: isMobile,
                 ),
                 _buildSalaryComponentRow(
@@ -9597,7 +9757,7 @@ class _EmployeeRegistrationPageState
                   amountController: _tdsController,
                   percentController: _tdsPercentController,
                   placeholder: '0.00',
-                  basisValue: totalSalary,
+                  basisValue: monthlyBasis,
                   isMobile: isMobile,
                   showPercentageField: false,
                 ),
@@ -10301,6 +10461,7 @@ class _EmployeeRegistrationPageState
       educationListJson: jsonEncode(
         _educationList.map((e) => e.toMap()).toList(),
       ),
+      educationType: _educationType,
       experienceListJson: jsonEncode(
         _experienceList.map((e) => e.toMap()).toList(),
       ),

@@ -3,6 +3,7 @@ import 'incentive_settings.dart';
 
 abstract class IncentiveRepository {
   Future<List<IncentiveRequest>> getAllRequests();
+  Stream<List<IncentiveRequest>> watchAllRequests();
   Future<List<IncentiveRequest>> getRequestsByEmployeeName(String employeeName);
   Future<IncentiveRequest?> getRequestById(int id);
   Future<void> createRequest(IncentiveRequest request);

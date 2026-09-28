@@ -158,6 +158,7 @@ class Employee {
     this.educationYear = '',
     this.educationGrade = '',
     this.educationListJson = '',
+    this.educationType = 'Employee',
     this.experienceCompany = '',
     this.experienceRole = '',
     this.experienceYears = '',
@@ -715,6 +716,7 @@ class Employee {
   final String educationYear;
   final String educationGrade;
   final String educationListJson;
+  final String educationType;
 
   final String experienceCompany;
   final String experienceRole;
@@ -903,6 +905,7 @@ class Employee {
       'education_year': educationYear,
       'education_grade': educationGrade,
       'education_list_json': educationListJson,
+      'education_type': educationType,
       'experience_company': experienceCompany,
       'experience_role': experienceRole,
       'experience_years': experienceYears,
@@ -1049,6 +1052,7 @@ class Employee {
       educationYear: map['education_year'] as String? ?? '',
       educationGrade: map['education_grade'] as String? ?? '',
       educationListJson: map['education_list_json'] as String? ?? '',
+      educationType: (map['education_type'] ?? map['educationType']) as String? ?? 'Employee',
       experienceCompany: map['experience_company'] as String? ?? '',
       experienceRole: map['experience_role'] as String? ?? '',
       experienceYears: map['experience_years'] as String? ?? '',
@@ -1284,6 +1288,7 @@ class Employee {
     String? educationYear,
     String? educationGrade,
     String? educationListJson,
+    String? educationType,
     String? experienceCompany,
     String? experienceRole,
     String? experienceYears,
@@ -1418,6 +1423,7 @@ class Employee {
       educationYear: educationYear ?? this.educationYear,
       educationGrade: educationGrade ?? this.educationGrade,
       educationListJson: educationListJson ?? this.educationListJson,
+      educationType: educationType ?? this.educationType,
       experienceCompany: experienceCompany ?? this.experienceCompany,
       experienceRole: experienceRole ?? this.experienceRole,
       experienceYears: experienceYears ?? this.experienceYears,

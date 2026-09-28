@@ -496,6 +496,26 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                             style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
                           ),
                         ),
+                        if (item.projectCode != null && item.projectCode!.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.4)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.folder_outlined, size: 12, color: Color(0xFF414A51)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  item.projectCode!,
+                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                                ),
+                              ],
+                            ),
+                          ),
                       ],
                     ),
                     Container(
@@ -872,6 +892,29 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                         ),
                       ],
 
+                      if (item.projectCode != null && item.projectCode!.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            const Icon(Icons.folder_outlined, size: 14, color: Color(0xFF414A51)),
+                            const SizedBox(width: 4),
+                            Text('Project Code: ', style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600)),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.4)),
+                              ),
+                              child: Text(
+                                item.projectCode!,
+                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+
                       if (item.notes.isNotEmpty) ...[
                         const SizedBox(height: 10),
                         Text('Instructions / Notes', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
@@ -1043,6 +1086,29 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                     if (site.purpose.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Text(site.purpose, style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700, fontWeight: FontWeight.w500)),
+                    ],
+
+                    if (assignment?.projectCode != null && assignment!.projectCode!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.4)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.folder_outlined, size: 11, color: Color(0xFF414A51)),
+                            const SizedBox(width: 4),
+                            Text(
+                              assignment.projectCode!,
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
 
                     if (site.destinationAddress.isNotEmpty || site.destination.isNotEmpty) ...[

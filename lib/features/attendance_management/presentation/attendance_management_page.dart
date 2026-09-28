@@ -14,6 +14,7 @@ import '../../leave/providers/leave_providers.dart';
 import '../../attendance_settings/presentation/widgets/attendance_settings_embedded_view.dart';
 import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
+import '../../on_duty/domain/on_duty_assignment.dart';
 import '../../on_duty/presentation/assign_on_duty_dialog.dart';
 import '../../on_duty/presentation/employee_on_duty_card.dart';
 import '../../on_duty/providers/on_duty_providers.dart';
@@ -635,7 +636,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
           _buildCategoryTabItem(
             tab: AttendanceCategoryTab.staticAttendance,
             icon: Icons.storefront_outlined,
-            label: 'Office / Site',
+            label: 'Office',
           ),
           _buildCategoryTabItem(
             tab: AttendanceCategoryTab.monthlyResult,
@@ -645,7 +646,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
           _buildCategoryTabItem(
             tab: AttendanceCategoryTab.siteVisitAttendance,
             icon: Icons.location_on_outlined,
-            label: 'Site Visits',
+            label: 'Site',
           ),
         ],
       ),
@@ -1153,6 +1154,8 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     List<Employee> allEmployees,
     AsyncValue<List<SiteVisitRecord>> visitsAsync,
   ) {
+    final allOnDuty = ref.watch(allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: null))).valueOrNull ?? [];
+
     return visitsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Text('Error loading site visits: $e'),
@@ -1167,7 +1170,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
             _buildSiteVisitSectionHeader(),
             const SizedBox(height: 12),
             if (_viewMode == AttendanceViewMode.matrix)
-              _buildSiteVisitMatrixView(filteredVisits)
+              _buildSiteVisitMatrixView(filteredVisits, allEmployees, allOnDuty)
             else
               _buildSiteVisitTable(filteredVisits),
           ],
@@ -1250,10 +1253,17 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
   }
 
   Widget _buildSiteVisitKpiBanner(List<SiteVisitRecord> visits, bool isMobile) {
+    final today = DateTime.now();
     final totalVisits = visits.length;
     final uniqueEmployees = visits.map((v) => v.employeeId).toSet().length;
-    final uniqueSites = visits.map((v) => v.siteName.toLowerCase().trim()).toSet().length;
-    final checkedInToday = visits.where((v) => v.visitDate == DateFormat('dd-MM-yyyy').format(DateTime.now())).length;
+    final uniqueSites = visits.map((v) => v.siteName.toLowerCase().trim()).where((s) => s.isNotEmpty).toSet().length;
+    final checkedInToday = visits.where((v) {
+      final dt = _parseDateStr(v.visitDate);
+      if (dt != null) {
+        return dt.year == today.year && dt.month == today.month && dt.day == today.day;
+      }
+      return v.visitDate == DateFormat('dd-MM-yyyy').format(today) || v.visitDate == DateFormat('yyyy-MM-dd').format(today);
+    }).length;
 
     return Container(
       width: double.infinity,
@@ -1317,8 +1327,14 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
   }
 
   Widget _buildSiteVisitBottomSummaryBar(List<SiteVisitRecord> allVisits) {
-    final todayStr = DateFormat('dd-MM-yyyy').format(DateTime.now());
-    final todayVisits = allVisits.where((v) => v.visitDate == todayStr).toList();
+    final today = DateTime.now();
+    final todayVisits = allVisits.where((v) {
+      final dt = _parseDateStr(v.visitDate);
+      if (dt != null) {
+        return dt.year == today.year && dt.month == today.month && dt.day == today.day;
+      }
+      return v.visitDate == DateFormat('dd-MM-yyyy').format(today) || v.visitDate == DateFormat('yyyy-MM-dd').format(today);
+    }).toList();
 
     final totalVisitsToday = todayVisits.length;
     final activeStaffToday = todayVisits.map((v) => v.employeeId).toSet().length;
@@ -2358,37 +2374,68 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     }).toList();
   }
 
-  List<SiteVisitRecord> _filterSiteVisits(List<SiteVisitRecord> visits, List<Employee> employees) {
-    final flexibleEmployees = employees.where((e) {
-      final isFlexible = e.isDynamicEmployee || e.workScheduleType.trim().toLowerCase() == 'flexible schedule';
-      final isFixed = e.isStaticEmployee || e.workScheduleType.trim().toLowerCase() == 'fixed schedule';
-      return isFlexible && !isFixed;
-    }).toList();
+  DateTime? _parseDateStr(String dateStr) {
+    if (dateStr.isEmpty) return null;
+    final dt = DateTime.tryParse(dateStr);
+    if (dt != null) return dt;
+    final parts = dateStr.replaceAll('/', '-').split('-');
+    if (parts.length == 3) {
+      if (parts[0].length == 4) {
+        // yyyy-MM-dd
+        final y = int.tryParse(parts[0]);
+        final m = int.tryParse(parts[1]);
+        final d = int.tryParse(parts[2]);
+        if (y != null && m != null && d != null) return DateTime(y, m, d);
+      } else if (parts[2].length == 4) {
+        // dd-MM-yyyy
+        final d = int.tryParse(parts[0]);
+        final m = int.tryParse(parts[1]);
+        final y = int.tryParse(parts[2]);
+        if (y != null && m != null && d != null) return DateTime(y, m, d);
+      }
+    }
+    return null;
+  }
 
-    final flexibleEmpMap = {for (final e in flexibleEmployees) e.id: e};
-    final flexibleNames = {for (final e in flexibleEmployees) e.fullName.trim().toLowerCase(): e};
+  String _normalizeDateStr(String dateStr) {
+    final dt = _parseDateStr(dateStr);
+    if (dt != null) {
+      return DateFormat('dd-MM-yyyy').format(dt);
+    }
+    return dateStr.trim();
+  }
+
+  List<SiteVisitRecord> _filterSiteVisits(List<SiteVisitRecord> visits, List<Employee> employees) {
+    final empMapById = {for (final e in employees) e.id: e};
+    final empMapByName = {
+      for (final e in employees) ...{
+        if (e.fullName.trim().isNotEmpty) e.fullName.trim().toLowerCase(): e,
+        if (e.name.trim().isNotEmpty) e.name.trim().toLowerCase(): e,
+        if (e.firstName.trim().isNotEmpty) '${e.firstName} ${e.lastName}'.trim().toLowerCase(): e,
+      }
+    };
 
     return visits.where((v) {
-      // Strictly only Flexible Schedule employees belong in Site Visit Attendance
-      final emp = flexibleEmpMap[v.employeeId] ?? flexibleNames[v.employeeName.trim().toLowerCase()];
-      if (emp == null) return false;
+      final emp = empMapById[v.employeeId] ?? empMapByName[v.employeeName.trim().toLowerCase()];
 
-      if (_selectedEmployeeId != null && v.employeeId != _selectedEmployeeId) return false;
-      if (_selectedDepartment != 'All Departments' && emp.department != _selectedDepartment) return false;
-      if (_selectedDesignation != 'All Designations' && emp.designation != _selectedDesignation) return false;
-      if (_selectedSite != 'All' && v.siteName.toLowerCase().trim() != _selectedSite.toLowerCase().trim()) return false;
-      
+      if (_selectedEmployeeId != null && v.employeeId != _selectedEmployeeId && (emp == null || emp.id != _selectedEmployeeId)) {
+        return false;
+      }
+      if (_selectedDepartment != 'All Departments' && emp != null && emp.department != _selectedDepartment) {
+        return false;
+      }
+      if (_selectedDesignation != 'All Designations' && emp != null && emp.designation != _selectedDesignation) {
+        return false;
+      }
+      if (_selectedSite != 'All' && v.siteName.toLowerCase().trim() != _selectedSite.toLowerCase().trim()) {
+        return false;
+      }
+
       // Month & Year Filter
-      try {
-        final parts = v.visitDate.split('-');
-        if (parts.length == 3) {
-          final month = int.tryParse(parts[1]);
-          final year = int.tryParse(parts[2]);
-          if (month != null && year != null) {
-            if (month != _focusedMonth.month || year != _focusedMonth.year) return false;
-          }
-        }
-      } catch (_) {}
+      final dt = _parseDateStr(v.visitDate);
+      if (dt != null) {
+        if (dt.month != _focusedMonth.month || dt.year != _focusedMonth.year) return false;
+      }
 
       if (_searchQuery.isNotEmpty) {
         final name = v.employeeName.toLowerCase();
@@ -2506,7 +2553,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                 ],
                 _buildDetailRowItem(Icons.person_outline, 'Employee', v.employeeName),
                 _buildDetailRowItem(Icons.business_outlined, 'Site Name', v.siteName),
-                _buildDetailRowItem(Icons.calendar_today_outlined, 'Date & Time', '${v.visitDate}  ${v.visitTime}'),
+                _buildDetailRowItem(Icons.calendar_today_outlined, 'Date & Time', '${_normalizeDateStr(v.visitDate)}  ${v.visitTime}'),
                 _buildDetailRowItem(Icons.map_outlined, 'Location / Address', v.address.isNotEmpty ? v.address : 'N/A'),
                 _buildDetailRowItem(
                   Icons.my_location,
@@ -2568,14 +2615,69 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
 
   // --- Site Visit Specific Sub-Views ---
 
-  Widget _buildSiteVisitMatrixView(List<SiteVisitRecord> visits) {
+  Widget _buildSiteVisitMatrixView(
+    List<SiteVisitRecord> visits,
+    List<Employee> allEmployees, [
+    List<OnDutyAssignment> odAssignments = const [],
+  ]) {
+    if (visits.isEmpty && odAssignments.isEmpty) {
+      return Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+        child: const Padding(
+          padding: EdgeInsets.all(36),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.location_off_outlined, size: 48, color: Color(0xFF94A3B8)),
+                SizedBox(height: 12),
+                Text(
+                  'No site visit logs found.',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Try selecting a different month or clearing search filters.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final empMapById = {for (final e in allEmployees) e.id: e};
+    final empMapByName = {
+      for (final e in allEmployees) ...{
+        if (e.fullName.trim().isNotEmpty) e.fullName.trim().toLowerCase(): e,
+        if (e.name.trim().isNotEmpty) e.name.trim().toLowerCase(): e,
+        if (e.firstName.trim().isNotEmpty) '${e.firstName} ${e.lastName}'.trim().toLowerCase(): e,
+      }
+    };
+
     final daysInMonth = DateUtils.getDaysInMonth(_focusedMonth.year, _focusedMonth.month);
     final grouped = <String, Map<String, List<SiteVisitRecord>>>{};
 
     for (final v in visits) {
-      grouped.putIfAbsent(v.employeeName, () => {});
-      grouped[v.employeeName]!.putIfAbsent(v.visitDate, () => []);
-      grouped[v.employeeName]![v.visitDate]!.add(v);
+      final normalizedDate = _normalizeDateStr(v.visitDate);
+      final displayName = v.employeeName.trim().isNotEmpty ? v.employeeName.trim() : 'Employee #${v.employeeId}';
+      grouped.putIfAbsent(displayName, () => {});
+      grouped[displayName]!.putIfAbsent(normalizedDate, () => []);
+      grouped[displayName]![normalizedDate]!.add(v);
+    }
+
+    // Also include any employee who has OD assignments this month if not already in grouped
+    for (final od in odAssignments) {
+      final dt = _parseDateStr(od.date);
+      if (dt != null && dt.month == _focusedMonth.month && dt.year == _focusedMonth.year) {
+        final displayName = od.employeeName.trim().isNotEmpty ? od.employeeName.trim() : 'Employee #${od.employeeId}';
+        grouped.putIfAbsent(displayName, () => {});
+      }
     }
 
     return Card(
@@ -2590,7 +2692,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
             columns: [
               const DataColumn(
                 label: SizedBox(
-                  width: 140,
+                  width: 170,
                   child: Text('Employee Name', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
@@ -2611,15 +2713,63 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
               final empName = entry.key;
               final dateMap = entry.value;
 
+              final allEmpVisits = dateMap.values.expand((list) => list).toList();
+              final firstVisit = allEmpVisits.isNotEmpty ? allEmpVisits.first : null;
+              final emp = firstVisit != null
+                  ? (empMapById[firstVisit.employeeId] ?? empMapByName[empName.trim().toLowerCase()])
+                  : empMapByName[empName.trim().toLowerCase()];
+              final visitWithPhoto = allEmpVisits.where((v) => v.photoUrl.isNotEmpty).firstOrNull;
+              final empPhotoUrl = visitWithPhoto?.photoUrl ?? '';
+
               return DataRow(
                 cells: [
                   DataCell(
                     SizedBox(
-                      width: 140,
-                      child: Text(
-                        empName,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                        overflow: TextOverflow.ellipsis,
+                      width: 170,
+                      child: Row(
+                        children: [
+                          if (empPhotoUrl.isNotEmpty)
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(14),
+                              child: SizedBox(
+                                width: 28,
+                                height: 28,
+                                child: SmartNetworkImage(
+                                  url: empPhotoUrl,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_) => CircleAvatar(
+                                    radius: 14,
+                                    backgroundColor: const Color(0xFF9CC70A).withValues(alpha: 0.2),
+                                    child: Text(
+                                      empName.trim().isNotEmpty
+                                          ? empName.trim().split(' ').map((e) => e.isNotEmpty ? e[0] : '').take(2).join('').toUpperCase()
+                                          : 'E',
+                                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            )
+                          else
+                            CircleAvatar(
+                              radius: 14,
+                              backgroundColor: const Color(0xFF9CC70A).withValues(alpha: 0.2),
+                              child: Text(
+                                empName.trim().isNotEmpty
+                                    ? empName.trim().split(' ').map((e) => e.isNotEmpty ? e[0] : '').take(2).join('').toUpperCase()
+                                    : 'E',
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                              ),
+                            ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              empName,
+                              style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -2629,7 +2779,14 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                       final dateStr = DateFormat('dd-MM-yyyy').format(dayDate);
                       final dayVisits = dateMap[dateStr] ?? [];
 
-                      if (dayVisits.isEmpty) {
+                      final dayOD = odAssignments.where((od) {
+                        final empMatch = (emp != null && od.employeeId == emp.id) ||
+                            od.employeeName.trim().toLowerCase() == empName.trim().toLowerCase();
+                        final dateMatch = _normalizeDateStr(od.date) == dateStr;
+                        return empMatch && dateMatch;
+                      }).toList();
+
+                      if (dayVisits.isEmpty && dayOD.isEmpty) {
                         return const DataCell(
                           SizedBox(
                             width: 68,
@@ -2638,26 +2795,81 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                         );
                       }
 
+                      if (dayVisits.isEmpty && dayOD.isNotEmpty) {
+                        return DataCell(
+                          SizedBox(
+                            width: 68,
+                            child: Center(
+                              child: InkWell(
+                                onTap: () => _openDaySiteTimelineDialog(empName, dateStr, dayVisits, dayOD),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE0F2FE),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: const Color(0xFF0369A1).withValues(alpha: 0.5)),
+                                  ),
+                                  child: const Text(
+                                    'OD',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF0369A1),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      final hasPhoto = dayVisits.any((v) => v.photoUrl.isNotEmpty);
+                      final firstPhoto = dayVisits.firstWhere((v) => v.photoUrl.isNotEmpty, orElse: () => dayVisits.first).photoUrl;
+
                       return DataCell(
                         SizedBox(
                           width: 68,
                           child: Center(
                             child: InkWell(
-                              onTap: () => _openDaySiteTimelineDialog(empName, dateStr, dayVisits),
+                              onTap: () => _openDaySiteTimelineDialog(empName, dateStr, dayVisits, dayOD),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(6),
                                   border: Border.all(color: const Color(0xFF9CC70A)),
                                 ),
-                                child: Text(
-                                  '${dayVisits.length} site(s)',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF414A51),
-                                  ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (dayOD.isNotEmpty) ...[
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF0369A1),
+                                          borderRadius: BorderRadius.circular(3),
+                                        ),
+                                        child: const Text('OD', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+                                      ),
+                                      const SizedBox(width: 3),
+                                    ],
+                                    if (hasPhoto) ...[
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(3),
+                                        child: _buildSiteVisitImageWidget(firstPhoto, width: 15, height: 15),
+                                      ),
+                                      const SizedBox(width: 3),
+                                    ],
+                                    Text(
+                                      '${dayVisits.length} site(s)',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF414A51),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -2936,7 +3148,12 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     );
   }
 
-  void _openDaySiteTimelineDialog(String employeeName, String dateStr, List<SiteVisitRecord> dayVisits) {
+  void _openDaySiteTimelineDialog(
+    String employeeName,
+    String dateStr,
+    List<SiteVisitRecord> dayVisits, [
+    List<OnDutyAssignment> dayOD = const [],
+  ]) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -2958,89 +3175,256 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              children: dayVisits.whereType<SiteVisitRecord>().map((v) {
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Photo Image Thumbnail with Tap to View Full Screen
-                      GestureDetector(
-                        onTap: () {
-                          if (v.photoUrl.isNotEmpty) {
-                            _openFullImagePreview(v.photoUrl, v.siteName);
-                          }
-                        },
-                        child: Stack(
-                          children: [
-                            _buildSiteVisitImageWidget(v.photoUrl, width: 56, height: 56),
-                            if (v.photoUrl.isNotEmpty)
-                              Positioned(
-                                right: 2,
-                                bottom: 2,
-                                child: Container(
-                                  padding: const EdgeInsets.all(2),
-                                  decoration: const BoxDecoration(
-                                    color: Colors.black54,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(Icons.zoom_in, color: Colors.white, size: 12),
-                                ),
-                              ),
-                          ],
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (dayOD.isNotEmpty) ...[
+                  ...dayOD.map((od) => Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE0F2FE).withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF0369A1).withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0369A1).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.badge_outlined, color: Color(0xFF0369A1), size: 20),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    v.siteName,
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                    overflow: TextOverflow.ellipsis,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      'On-Duty: ${od.destination.isNotEmpty ? od.destination : od.destinationName}',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0369A1)),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF0369A1),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      od.status.replaceAll('_', ' '),
+                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (od.purpose.isNotEmpty) ...[
+                                const SizedBox(height: 3),
+                                Text(
+                                  'Purpose: ${od.purpose}',
+                                  style: const TextStyle(fontSize: 11, color: Color(0xFF334155)),
                                 ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF7FEE7),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.3)),
-                                  ),
-                                  child: Text(
-                                    v.visitTime,
-                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF9CC70A)),
+                              ],
+                              if (od.destinationLatitude != null && od.destinationLongitude != null) ...[
+                                const SizedBox(height: 4),
+                                InkWell(
+                                  onTap: () async {
+                                    final mapsUrl = Uri.parse(
+                                        'https://www.google.com/maps/search/?api=1&query=${od.destinationLatitude},${od.destinationLongitude}');
+                                    if (await canLaunchUrl(mapsUrl)) {
+                                      await launchUrl(mapsUrl, mode: LaunchMode.externalApplication);
+                                    }
+                                  },
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.pin_drop_rounded, size: 14, color: Color(0xFF2563EB)),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        od.destinationAddress.isNotEmpty ? od.destinationAddress : 'View Destination on Google Maps',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: Color(0xFF2563EB),
+                                          fontWeight: FontWeight.w600,
+                                          decoration: TextDecoration.underline,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 3),
+                                      const Icon(Icons.open_in_new, size: 11, color: Color(0xFF2563EB)),
+                                    ],
                                   ),
                                 ),
                               ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Location: ${v.address.isNotEmpty ? v.address : '${v.latitude}, ${v.longitude}'}',
-                              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                            ),
-                            if (v.notes.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text('Notes: ${v.notes}', style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Color(0xFF475569))),
                             ],
-                          ],
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
+                      ],
+                    ),
+                  )),
+                ],
+                ...dayVisits.whereType<SiteVisitRecord>().map((v) {
+                  final isOdVisit = dayOD.isNotEmpty ||
+                      v.notes.toLowerCase().contains('od') ||
+                      v.notes.toLowerCase().contains('on duty') ||
+                      v.siteName.toLowerCase().contains('on duty');
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Photo Image Thumbnail with Tap to View Full Screen
+                        GestureDetector(
+                          onTap: () {
+                            if (v.photoUrl.isNotEmpty) {
+                              _openFullImagePreview(v.photoUrl, v.siteName);
+                            }
+                          },
+                          child: Stack(
+                            children: [
+                              _buildSiteVisitImageWidget(v.photoUrl, width: 56, height: 56),
+                              if (v.photoUrl.isNotEmpty)
+                                Positioned(
+                                  right: 2,
+                                  bottom: 2,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(2),
+                                    decoration: const BoxDecoration(
+                                      color: Colors.black54,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.zoom_in, color: Colors.white, size: 12),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Row(
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            v.siteName,
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        if (isOdVisit) ...[
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFE0F2FE),
+                                              borderRadius: BorderRadius.circular(4),
+                                              border: Border.all(color: const Color(0xFF0369A1).withValues(alpha: 0.4)),
+                                            ),
+                                            child: const Text(
+                                              'On-Duty',
+                                              style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF0369A1)),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF7FEE7),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.3)),
+                                    ),
+                                    child: Text(
+                                      v.visitTime,
+                                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF9CC70A)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              // Location with Google Maps link
+                              if (v.latitude != 0 || v.longitude != 0)
+                                InkWell(
+                                  onTap: () async {
+                                    final mapsUrl = Uri.parse(
+                                        'https://www.google.com/maps/search/?api=1&query=${v.latitude},${v.longitude}');
+                                    if (await canLaunchUrl(mapsUrl)) {
+                                      await launchUrl(mapsUrl, mode: LaunchMode.externalApplication);
+                                    }
+                                  },
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 2),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.pin_drop_rounded, size: 14, color: Color(0xFF2563EB)),
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Text(
+                                            v.address.isNotEmpty ? v.address : 'View location on Google Maps (${v.latitude.toStringAsFixed(4)}, ${v.longitude.toStringAsFixed(4)})',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              color: Color(0xFF2563EB),
+                                              fontWeight: FontWeight.w600,
+                                              decoration: TextDecoration.underline,
+                                            ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        const Icon(Icons.open_in_new, size: 12, color: Color(0xFF2563EB)),
+                                      ],
+                                    ),
+                                  ),
+                                )
+                              else if (v.address.isNotEmpty)
+                                Row(
+                                  children: [
+                                    const Icon(Icons.location_on_outlined, size: 14, color: Color(0xFF64748B)),
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                      child: Text(
+                                        v.address,
+                                        style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              if (v.notes.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text('Notes: ${v.notes}', style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Color(0xFF475569))),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ],
             ),
           ),
         ),

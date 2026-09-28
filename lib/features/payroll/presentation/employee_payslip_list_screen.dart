@@ -23,9 +23,15 @@ class EmployeePayslipListScreen extends ConsumerStatefulWidget {
 }
 
 class _EmployeePayslipListScreenState extends ConsumerState<EmployeePayslipListScreen> {
-  String? _selectedYear;
-  String _selectedStatusFilter = 'All';
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
   int? _downloadingPayrollId;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   Future<void> _handleDownloadPdf(PayrollRecord record, Employee employee) async {
     if (_downloadingPayrollId != null) return;
@@ -116,134 +122,26 @@ class _EmployeePayslipListScreenState extends ConsumerState<EmployeePayslipListS
                       children: [
                         recordsAsync.when(
                           data: (records) {
-                            // Extract unique years from month strings (e.g. "June 2026" -> "2026")
-                            final years = records
-                                .map((r) => r.month.trim().split(' ').last)
-                                .where((y) => y.length == 4 && int.tryParse(y) != null)
-                                .toSet()
-                                .toList();
-                            years.sort((a, b) => b.compareTo(a)); // Descending order
-
-                            // Default selected year if not set or no longer valid
-                            if (_selectedYear == null || !years.contains(_selectedYear)) {
-                              if (years.isNotEmpty) {
-                                _selectedYear = years.first;
-                              } else {
-                                _selectedYear = DateTime.now().year.toString();
-                              }
-                            }
-
-                            // Filter records by selected year and status
-                            var filteredRecords = records
-                                .where((r) => r.month.trim().endsWith(_selectedYear!))
+                            // Only PAID payslips should appear in My Payslips
+                            final paidRecords = records
+                                .where((r) => r.status.trim().toLowerCase() == 'paid')
                                 .toList();
 
-                            if (_selectedStatusFilter != 'All') {
-                              filteredRecords = filteredRecords
-                                  .where((r) => r.status.toLowerCase() == _selectedStatusFilter.toLowerCase())
-                                  .toList();
-                            }
+                            // Filter records by search query (matching month name, e.g. "September 2026", "2026", "Sep")
+                            final query = _searchQuery.trim().toLowerCase();
+                            final filteredRecords = paidRecords.where((r) {
+                              if (query.isEmpty) return true;
+                              return r.month.toLowerCase().contains(query);
+                            }).toList();
 
-                            // Sort newest month first
+                            // Sort newest month/id first
                             filteredRecords.sort((a, b) => b.id.compareTo(a.id));
 
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                // Top Header Row
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: const [
-                                          Text(
-                                            'My Payslips',
-                                            style: TextStyle(
-                                              fontSize: 24,
-                                              fontWeight: FontWeight.w700,
-                                              color: AppColors.textPrimary,
-                                            ),
-                                          ),
-                                          SizedBox(height: 4),
-                                          Text(
-                                            'Your monthly salary statements',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              color: AppColors.textSecondary,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    if (years.isNotEmpty)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          borderRadius: BorderRadius.circular(10),
-                                          border: Border.all(color: AppColors.divider, width: 1),
-                                        ),
-                                        child: DropdownButtonHideUnderline(
-                                          child: DropdownButton<String>(
-                                            value: _selectedYear,
-                                            icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textSecondary, size: 20),
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w700,
-                                              color: AppColors.textPrimary,
-                                            ),
-                                            dropdownColor: Colors.white,
-                                            items: years.map((y) => DropdownMenuItem(value: y, child: Text(y))).toList(),
-                                            onChanged: (val) {
-                                              if (val != null) {
-                                                setState(() {
-                                                  _selectedYear = val;
-                                                });
-                                              }
-                                            },
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                                const SizedBox(height: 20),
-
-                                // Status Filter Chips: [ All ] [ Paid ] [ Processed ]
-                                Wrap(
-                                  spacing: 8,
-                                  children: ['All', 'Paid', 'Processed'].map((status) {
-                                    final isSelected = _selectedStatusFilter == status;
-                                    return ChoiceChip(
-                                      label: Text(status),
-                                      selected: isSelected,
-                                      onSelected: (selected) {
-                                        if (selected) {
-                                          setState(() {
-                                            _selectedStatusFilter = status;
-                                          });
-                                        }
-                                      },
-                                      selectedColor: AppColors.primary,
-                                      labelStyle: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 13,
-                                        color: isSelected ? Colors.white : AppColors.textPrimary,
-                                      ),
-                                      backgroundColor: Colors.white,
-                                      side: BorderSide(
-                                        color: isSelected ? AppColors.primary : AppColors.divider,
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                    );
-                                  }).toList(),
-                                ),
-                                const SizedBox(height: 20),
-
+                                _buildSearchBar(),
+                                const SizedBox(height: 16),
                                 if (filteredRecords.isEmpty)
                                   _buildEmptyState()
                                 else
@@ -263,20 +161,8 @@ class _EmployeePayslipListScreenState extends ConsumerState<EmployeePayslipListS
                           loading: () => Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              const Text(
-                                'My Payslips',
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              const Text(
-                                'Your monthly salary statements',
-                                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
-                              ),
-                              const SizedBox(height: 24),
+                              _buildSearchBar(),
+                              const SizedBox(height: 16),
                               _buildSkeletonLoader(),
                             ],
                           ),
@@ -307,6 +193,49 @@ class _EmployeePayslipListScreenState extends ConsumerState<EmployeePayslipListS
         error: (err, _) => Scaffold(
           backgroundColor: AppColors.canvas,
           body: Center(child: Text('Error loading account: $err')),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.divider),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: _searchController,
+        onChanged: (val) {
+          setState(() {
+            _searchQuery = val;
+          });
+        },
+        decoration: InputDecoration(
+          hintText: 'Search payslip by month or year...',
+          hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+          prefixIcon: const Icon(Icons.search, color: Color(0xFF414A51), size: 20),
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.close, size: 18, color: AppColors.textSecondary),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() {
+                      _searchQuery = '';
+                    });
+                  },
+                )
+              : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         ),
       ),
     );
@@ -458,21 +387,23 @@ class _EmployeePayslipListScreenState extends ConsumerState<EmployeePayslipListS
   }
 
   Widget _buildEmptyState() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 60, horizontal: 16),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 16),
       child: Center(
         child: Column(
           children: [
-            Icon(Icons.description_outlined, size: 48, color: AppColors.textSecondary),
-            SizedBox(height: 12),
+            const Icon(Icons.description_outlined, size: 48, color: AppColors.textSecondary),
+            const SizedBox(height: 12),
             Text(
-              'No payslips found for the selected filter.',
-              style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w600),
+              _searchQuery.isNotEmpty ? 'No matching payslips found.' : 'No payslips found.',
+              style: const TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w600),
             ),
-            SizedBox(height: 4),
+            const SizedBox(height: 4),
             Text(
-              'Your monthly payslips will appear here once payroll is processed by HR.',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              _searchQuery.isNotEmpty
+                  ? 'Try searching with a different month or year.'
+                  : 'Your monthly payslips will appear here once marked as paid by HR.',
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
               textAlign: TextAlign.center,
             ),
           ],

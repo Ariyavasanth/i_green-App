@@ -20,13 +20,97 @@ class OnDutyManagementView extends ConsumerStatefulWidget {
 class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
   String _searchQuery = '';
   String _selectedStatus = 'All';
-  DateTime _selectedDate = DateTime.now();
+  DateTimeRange _selectedDateRange = DateTimeRange(
+    start: DateTime.now(),
+    end: DateTime.now(),
+  );
   final _searchController = TextEditingController();
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  DateTime? _parseOdDate(String dateStr) {
+    final trimmed = dateStr.trim();
+    if (trimmed.isEmpty) return null;
+    try {
+      if (trimmed.contains('-')) {
+        final parts = trimmed.split('-');
+        if (parts.length == 3) {
+          if (parts[0].length == 4) {
+            // yyyy-MM-dd
+            return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+          } else {
+            // dd-MM-yyyy
+            return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+          }
+        }
+      } else if (trimmed.contains('/')) {
+        final parts = trimmed.split('/');
+        if (parts.length == 3) {
+          if (parts[0].length == 4) {
+            // yyyy/MM/dd
+            return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+          } else {
+            // dd/MM/yyyy
+            return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+          }
+        }
+      }
+      return DateTime.tryParse(trimmed);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _pickDateRange() async {
+    final picked = await showDateRangePicker(
+      context: context,
+      initialDateRange: _selectedDateRange,
+      firstDate: DateTime(2023),
+      lastDate: DateTime(2030),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF9CC70A),
+              onPrimary: Colors.white,
+              onSurface: Color(0xFF414A51),
+              surface: Colors.white,
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(foregroundColor: const Color(0xFF414A51)),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() => _selectedDateRange = picked);
+    }
+  }
+
+  String _getDateRangeDisplayLabel({bool isMobile = false}) {
+    final start = _selectedDateRange.start;
+    final end = _selectedDateRange.end;
+    final isSingleDay = start.year == end.year && start.month == end.month && start.day == end.day;
+    final now = DateTime.now();
+    final isToday = isSingleDay && start.year == now.year && start.month == now.month && start.day == now.day;
+
+    if (isToday) {
+      return 'Today (${DateFormat('dd-MM-yyyy').format(start)})';
+    } else if (isSingleDay) {
+      return DateFormat('dd-MM-yyyy').format(start);
+    } else {
+      if (isMobile) {
+        return '${DateFormat('dd/MM/yy').format(start)} - ${DateFormat('dd/MM/yy').format(end)}';
+      }
+      return '${DateFormat('dd-MM-yyyy').format(start)}  ➔  ${DateFormat('dd-MM-yyyy').format(end)}';
+    }
   }
 
   Future<void> _openMap(double latitude, double longitude, {String label = ''}) async {
@@ -50,7 +134,21 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
 
   @override
   Widget build(BuildContext context) {
-    final dateStr = DateFormat('dd-MM-yyyy').format(_selectedDate);
+    final now = DateTime.now();
+    final isSingleDay = _selectedDateRange.start.year == _selectedDateRange.end.year &&
+        _selectedDateRange.start.month == _selectedDateRange.end.month &&
+        _selectedDateRange.start.day == _selectedDateRange.end.day;
+    final isToday = isSingleDay &&
+        _selectedDateRange.start.year == now.year &&
+        _selectedDateRange.start.month == now.month &&
+        _selectedDateRange.start.day == now.day;
+
+    final dateRangeLabel = isSingleDay
+        ? (isToday
+            ? 'Today (${DateFormat('dd-MM-yyyy').format(_selectedDateRange.start)})'
+            : DateFormat('dd-MM-yyyy').format(_selectedDateRange.start))
+        : '${DateFormat('dd-MM-yyyy').format(_selectedDateRange.start)} to ${DateFormat('dd-MM-yyyy').format(_selectedDateRange.end)}';
+
     final assignmentsAsync = ref.watch(
       allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: null)),
     );
@@ -141,71 +239,121 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                 ),
                 const SizedBox(height: 10),
 
-                // Status & Date Selectors Side-by-Side
-                Row(
-                  children: [
-                    // Status Dropdown
-                    Expanded(
-                      child: Container(
-                        height: 44,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.grey.shade300),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: _selectedStatus,
-                            isExpanded: true,
-                            style: const TextStyle(fontSize: 13, color: Color(0xFF414A51), fontWeight: FontWeight.w500),
-                            items: const [
-                              DropdownMenuItem(value: 'All', child: Text('Status: All')),
-                              DropdownMenuItem(value: 'ACTIVE', child: Text('🟡 Active')),
-                              DropdownMenuItem(value: 'IN_PROGRESS', child: Text('🔵 In Progress')),
-                              DropdownMenuItem(value: 'COMPLETED', child: Text('🟢 Completed')),
-                              DropdownMenuItem(value: 'NOT_COMPLETED', child: Text('🔴 Not Completed')),
-                            ],
-                            onChanged: (val) {
-                              if (val != null) setState(() => _selectedStatus = val);
-                            },
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
+                // Responsive Status & Date Range Selectors
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isMobile = constraints.maxWidth < 600;
 
-                    // Date Selector Button
-                    Expanded(
-                      child: SizedBox(
-                        height: 44,
-                        child: OutlinedButton.icon(
-                          onPressed: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: _selectedDate,
-                              firstDate: DateTime(2025),
-                              lastDate: DateTime(2030),
-                            );
-                            if (picked != null) {
-                              setState(() => _selectedDate = picked);
-                            }
+                    final statusDropdown = Container(
+                      height: 44,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedStatus,
+                          isExpanded: true,
+                          style: const TextStyle(fontSize: 13, color: Color(0xFF414A51), fontWeight: FontWeight.w500),
+                          items: const [
+                            DropdownMenuItem(value: 'All', child: Text('Status: All')),
+                            DropdownMenuItem(value: 'ACTIVE', child: Text('🟡 Active')),
+                            DropdownMenuItem(value: 'IN_PROGRESS', child: Text('🔵 In Progress')),
+                            DropdownMenuItem(value: 'COMPLETED', child: Text('🟢 Completed')),
+                            DropdownMenuItem(value: 'NOT_COMPLETED', child: Text('🔴 Not Completed')),
+                          ],
+                          onChanged: (val) {
+                            if (val != null) setState(() => _selectedStatus = val);
                           },
-                          icon: const Icon(Icons.calendar_today, size: 16, color: Color(0xFF414A51)),
-                          label: Text(
-                            dateStr,
-                            style: const TextStyle(color: Color(0xFF414A51), fontSize: 13, fontWeight: FontWeight.w500),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            side: BorderSide(color: Colors.grey.shade300),
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    );
+
+                    final dateRangeButton = SizedBox(
+                      height: 44,
+                      child: OutlinedButton(
+                        onPressed: _pickDateRange,
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          side: BorderSide(
+                            color: !isToday ? const Color(0xFF9CC70A) : Colors.grey.shade300,
+                            width: !isToday ? 1.5 : 1.0,
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.date_range_outlined,
+                                    size: 16,
+                                    color: !isToday ? const Color(0xFF9CC70A) : const Color(0xFF414A51),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Flexible(
+                                    child: Text(
+                                      _getDateRangeDisplayLabel(isMobile: isMobile),
+                                      style: TextStyle(
+                                        color: const Color(0xFF414A51),
+                                        fontSize: isMobile ? 12.5 : 13,
+                                        fontWeight: !isToday ? FontWeight.w600 : FontWeight.w500,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (!isToday) ...[
+                              InkWell(
+                                onTap: () {
+                                  setState(() {
+                                    _selectedDateRange = DateTimeRange(
+                                      start: DateTime.now(),
+                                      end: DateTime.now(),
+                                    );
+                                  });
+                                },
+                                borderRadius: BorderRadius.circular(12),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(2.0),
+                                  child: Icon(Icons.close, size: 16, color: Colors.grey.shade500),
+                                ),
+                              ),
+                            ] else ...[
+                              Icon(Icons.arrow_drop_down, size: 20, color: Colors.grey.shade600),
+                            ],
+                          ],
+                        ),
+                      ),
+                    );
+
+                    if (isMobile) {
+                      return Column(
+                        children: [
+                          statusDropdown,
+                          const SizedBox(height: 10),
+                          dateRangeButton,
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      children: [
+                        Expanded(child: statusDropdown),
+                        const SizedBox(width: 10),
+                        Expanded(child: dateRangeButton),
+                      ],
+                    );
+                  },
                 ),
               ],
             ),
@@ -221,8 +369,31 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
               ),
               error: (e, _) => Center(child: Text('Error loading On-Duty assignments: $e')),
               data: (allAssignments) {
+                final startDay = DateTime(
+                  _selectedDateRange.start.year,
+                  _selectedDateRange.start.month,
+                  _selectedDateRange.start.day,
+                );
+                final endDay = DateTime(
+                  _selectedDateRange.end.year,
+                  _selectedDateRange.end.month,
+                  _selectedDateRange.end.day,
+                  23,
+                  59,
+                  59,
+                  999,
+                );
+
                 final filtered = allAssignments.where((item) {
-                  final matchesDate = item.date == dateStr;
+                  final itemDt = _parseOdDate(item.date);
+                  bool matchesDate = false;
+                  if (itemDt != null) {
+                    matchesDate = !itemDt.isBefore(startDay) && !itemDt.isAfter(endDay);
+                  } else {
+                    final startStr = DateFormat('dd-MM-yyyy').format(_selectedDateRange.start);
+                    matchesDate = item.date == startStr;
+                  }
+
                   final matchSearch = _searchQuery.isEmpty ||
                       item.employeeName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
                       item.purpose.toLowerCase().contains(_searchQuery.toLowerCase()) ||
@@ -273,7 +444,7 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'No on-duty records found for this date',
+                            'No on-duty records found for $dateRangeLabel',
                             textAlign: TextAlign.center,
                             style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                           ),
@@ -313,23 +484,29 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                           dataRowMinHeight: 52,
                           dataRowMaxHeight: 56,
                           columns: const [
+                            DataColumn(label: Text('Employee ID')),
                             DataColumn(label: Text('Employee')),
                             DataColumn(label: Text('OD Type')),
+                            DataColumn(label: Text('Project Code')),
                             DataColumn(label: Text('Destination')),
-                            DataColumn(label: Text('Planned Time')),
                             DataColumn(label: Text('Actual Start')),
                             DataColumn(label: Text('Actual End')),
-                            DataColumn(label: Text('Duration')),
                             DataColumn(label: Text('Status')),
                             DataColumn(label: Text('Actions')),
                           ],
                           rows: filtered.map((item) {
-                            final durationStr = item.durationMinutes > 0
-                                ? '${item.durationMinutes ~/ 60}h ${item.durationMinutes % 60}m'
-                                : (item.status == 'IN_PROGRESS' || item.status == 'ACTIVE' ? 'Running' : '--');
+                            final empIdStr = item.employeeId > 0
+                                ? 'EMP-${item.employeeId.toString().padLeft(3, '0')}'
+                                : '--';
 
                             return DataRow(
                               cells: [
+                                DataCell(
+                                  Text(
+                                    empIdStr,
+                                    style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF414A51)),
+                                  ),
+                                ),
                                 DataCell(
                                   Text(
                                     item.employeeName,
@@ -350,6 +527,29 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                                   ),
                                 ),
                                 DataCell(
+                                  (item.projectCode != null && item.projectCode!.isNotEmpty)
+                                      ? Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(5),
+                                            border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.4)),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(Icons.folder_outlined, size: 12, color: Color(0xFF414A51)),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                item.projectCode!,
+                                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                                              ),
+                                            ],
+                                          ),
+                                        )
+                                      : Text('--', style: TextStyle(color: Colors.grey.shade400)),
+                                ),
+                                DataCell(
                                   Text(
                                     item.sites.isNotEmpty
                                         ? '📍 Sites (${item.sites.length}): ${item.sites.map((s) => s.effectiveName).join(" → ")}'
@@ -357,36 +557,44 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                                     style: const TextStyle(fontWeight: FontWeight.w600),
                                   ),
                                 ),
-                                DataCell(
-                                  Text('${item.plannedStartTime}${item.plannedEndTime != null ? " → ${item.plannedEndTime}" : ""}'),
-                                ),
                                 DataCell(Text(item.actualStartTime ?? '--')),
                                 DataCell(Text(item.actualEndTime ?? '--')),
-                                DataCell(
-                                  Text(
-                                    durationStr,
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
-                                  ),
-                                ),
                                 DataCell(_buildStatusBadge(item.status)),
                                 DataCell(
-                                  Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.edit_outlined, color: Color(0xFF414A51), size: 18),
-                                        tooltip: 'Edit OD',
-                                        onPressed: () {
-                                          showDialog(
-                                            context: context,
-                                            builder: (ctx) => AssignOnDutyDialog(existingAssignment: item),
-                                          );
-                                        },
+                                  PopupMenuButton<String>(
+                                    tooltip: 'Actions',
+                                    padding: EdgeInsets.zero,
+                                    icon: const Icon(Icons.more_vert, color: Color(0xFF414A51), size: 20),
+                                    onSelected: (val) {
+                                      if (val == 'view') {
+                                        _showDetailsDialog(context, item);
+                                      } else if (val == 'edit') {
+                                        showDialog(
+                                          context: context,
+                                          builder: (ctx) => AssignOnDutyDialog(existingAssignment: item),
+                                        );
+                                      }
+                                    },
+                                    itemBuilder: (ctx) => [
+                                      const PopupMenuItem(
+                                        value: 'view',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.visibility_outlined, size: 16, color: Color(0xFF414A51)),
+                                            SizedBox(width: 8),
+                                            Text('View Details', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                                          ],
+                                        ),
                                       ),
-                                      IconButton(
-                                        icon: const Icon(Icons.info_outline, color: Color(0xFF414A51), size: 18),
-                                        tooltip: 'View OD Details',
-                                        onPressed: () => _showDetailsDialog(context, item),
+                                      const PopupMenuItem(
+                                        value: 'edit',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.edit_outlined, size: 16, color: Color(0xFF414A51)),
+                                            SizedBox(width: 8),
+                                            Text('Edit OD', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                                          ],
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -529,6 +737,26 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                       style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue.shade800),
                     ),
                   ),
+                  if (item.projectCode != null && item.projectCode!.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.4)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.folder_outlined, size: 11, color: Color(0xFF414A51)),
+                          const SizedBox(width: 3),
+                          Text(
+                            item.projectCode!,
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                          ),
+                        ],
+                      ),
+                    ),
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -954,6 +1182,29 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                         ),
                       ],
 
+                      if (assignment.projectCode != null && assignment.projectCode!.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            const Icon(Icons.folder_outlined, size: 14, color: Color(0xFF414A51)),
+                            const SizedBox(width: 4),
+                            Text('Project Code: ', style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600)),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.4)),
+                              ),
+                              child: Text(
+                                assignment.projectCode!,
+                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+
                       if (assignment.notes.isNotEmpty) ...[
                         const SizedBox(height: 10),
                         Text('Notes / Instructions', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
@@ -1142,6 +1393,29 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                     if (site.purpose.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Text(site.purpose, style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700, fontWeight: FontWeight.w500)),
+                    ],
+
+                    if (assignment?.projectCode != null && assignment!.projectCode!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.4)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.folder_outlined, size: 11, color: Color(0xFF414A51)),
+                            const SizedBox(width: 4),
+                            Text(
+                              assignment.projectCode!,
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
 
                     if (site.destinationAddress.isNotEmpty || site.destination.isNotEmpty) ...[
@@ -1667,45 +1941,83 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
       return s == 'IN_PROGRESS' || s == 'TRAVELING_TO_DESTINATION' || s == 'REACHED_DESTINATION' || s == 'WORK_COMPLETED' || s == 'RETURNING_TO_OFFICE';
     }).length;
 
-    return Column(
-      children: [
-        // Row 1: Total OD & Completed
-        Row(
-          children: [
-            Expanded(
-              child: _buildKpiCard('Total OD', '$totalCount', Icons.business_center_outlined, const Color(0xFF414A51), const Color(0xFFF1F5F9)),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _buildKpiCard('Completed', '$completedCount', Icons.check_circle_outline, const Color(0xFF16A34A), const Color(0xFFDCFCE7)),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
+    final cardTotal = _buildKpiCard('Total OD', '$totalCount', Icons.business_center_outlined, const Color(0xFF414A51), const Color(0xFFF1F5F9));
+    final cardCompleted = _buildKpiCard('Completed', '$completedCount', Icons.check_circle_outline, const Color(0xFF16A34A), const Color(0xFFDCFCE7));
+    final cardNotCompleted = _buildKpiCard('Not Completed', '$notCompletedCount', Icons.cancel_outlined, const Color(0xFFDC2626), const Color(0xFFFEE2E2));
+    final cardActive = _buildKpiCard('Active', '$activeCount', Icons.bolt_outlined, const Color(0xFFD97706), const Color(0xFFFEF3C7));
+    final cardInProgress = _buildKpiCard('In Progress', '$inProgressCount', Icons.directions_run_outlined, const Color(0xFF2563EB), const Color(0xFFDBEAFE));
 
-        // Row 2: Not Completed & Active
-        Row(
-          children: [
-            Expanded(
-              child: _buildKpiCard('Not Completed', '$notCompletedCount', Icons.cancel_outlined, const Color(0xFFDC2626), const Color(0xFFFEE2E2)),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _buildKpiCard('Active', '$activeCount', Icons.bolt_outlined, const Color(0xFFD97706), const Color(0xFFFEF3C7)),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-
-        // Row 3: In Progress (100% Expandable Full Width)
-        Row(
-          children: [
-            Expanded(
-              child: _buildKpiCard('In Progress', '$inProgressCount', Icons.directions_run_outlined, const Color(0xFF2563EB), const Color(0xFFDBEAFE), isFullWidth: true),
-            ),
-          ],
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= 850) {
+          // Desktop: 5 balanced cards in a single row
+          return Row(
+            children: [
+              Expanded(child: cardTotal),
+              const SizedBox(width: 10),
+              Expanded(child: cardCompleted),
+              const SizedBox(width: 10),
+              Expanded(child: cardNotCompleted),
+              const SizedBox(width: 10),
+              Expanded(child: cardActive),
+              const SizedBox(width: 10),
+              Expanded(child: cardInProgress),
+            ],
+          );
+        } else if (constraints.maxWidth >= 550) {
+          // Tablet: 3 on top, 2 on bottom
+          return Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(child: cardTotal),
+                  const SizedBox(width: 10),
+                  Expanded(child: cardCompleted),
+                  const SizedBox(width: 10),
+                  Expanded(child: cardNotCompleted),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(child: cardActive),
+                  const SizedBox(width: 10),
+                  Expanded(child: cardInProgress),
+                ],
+              ),
+            ],
+          );
+        } else {
+          // Mobile: 2 on top, 2 in middle, 1 full-width on bottom
+          return Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(child: cardTotal),
+                  const SizedBox(width: 10),
+                  Expanded(child: cardCompleted),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(child: cardNotCompleted),
+                  const SizedBox(width: 10),
+                  Expanded(child: cardActive),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildKpiCard('In Progress', '$inProgressCount', Icons.directions_run_outlined, const Color(0xFF2563EB), const Color(0xFFDBEAFE), isFullWidth: true),
+                  ),
+                ],
+              ),
+            ],
+          );
+        }
+      },
     );
   }
 

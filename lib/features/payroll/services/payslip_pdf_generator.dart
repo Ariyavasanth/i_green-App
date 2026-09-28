@@ -107,7 +107,9 @@ class PayslipPdfGenerator {
         ? employee.salarySpecialAllowance
         : record.specialAllowance;
     final standardSalary = employee != null && employee.salaryTotalCtc > 0
-        ? employee.salaryTotalCtc
+        ? (employee.salaryType.toLowerCase() == 'yearly'
+            ? employee.salaryTotalCtc / 12.0
+            : employee.salaryTotalCtc)
         : (standardBasic + standardHra + standardEdu + standardSpecial);
 
     final grossSalary = record.basicPay +
