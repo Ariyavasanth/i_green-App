@@ -331,6 +331,24 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
   @override
   Widget build(BuildContext context) {
     final employeesAsync = ref.watch(employeesProvider);
+    final employeesList = employeesAsync.asData?.value ?? [];
+
+    Employee? currentEmpObj = _selectedEmployee;
+    if (currentEmpObj == null && widget.loan != null) {
+      currentEmpObj = employeesList.where((e) =>
+          e.id == widget.loan!.employeeId ||
+          e.employeeId.trim().toUpperCase() == widget.loan!.employeeCustomId.trim().toUpperCase() ||
+          e.fullName.trim().toLowerCase() == widget.loan!.employeeName.trim().toLowerCase()
+      ).firstOrNull;
+    }
+
+    final double empSalary = currentEmpObj != null
+        ? (currentEmpObj.salaryTotalCtc > 0
+            ? currentEmpObj.salaryTotalCtc
+            : (currentEmpObj.salaryBasic + currentEmpObj.salaryHra + currentEmpObj.salaryAllowances))
+        : 0.0;
+    final salaryCurrency = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+    final salaryDisplay = empSalary > 0 ? '${salaryCurrency.format(empSalary)} / mo' : 'Not set';
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
@@ -397,7 +415,13 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  _buildDisabledField('Designation', _designation),
+                  Row(
+                    children: [
+                      Expanded(child: _buildDisabledField('Designation', _designation)),
+                      const SizedBox(width: 16),
+                      Expanded(child: _buildDisabledField('Monthly Salary', salaryDisplay)),
+                    ],
+                  ),
                 ],
               ),
               const SizedBox(height: 20),
@@ -504,7 +528,7 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
                       Expanded(
                         child: TextFormField(
                           controller: _installmentsController,
-                          decoration: _inputDecoration('Installments (Months)'),
+                          decoration: _inputDecoration('Number of EMIs / Installments (Months)'),
                           keyboardType: TextInputType.number,
                           validator: (val) {
                             if (val == null || val.isEmpty) return 'Required';
@@ -543,6 +567,47 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
                       ),
                     ],
                   ),
+                  if (empSalary > 0 && (double.tryParse(_emiController.text) ?? 0) > 0) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: ((double.tryParse(_emiController.text) ?? 0) / empSalary) > 0.5
+                            ? Colors.orange.shade50
+                            : const Color(0xFFF0FDF4),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: ((double.tryParse(_emiController.text) ?? 0) / empSalary) > 0.5
+                              ? Colors.orange.shade200
+                              : const Color(0xFFBBF7D0),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            size: 18,
+                            color: ((double.tryParse(_emiController.text) ?? 0) / empSalary) > 0.5
+                                ? Colors.orange.shade800
+                                : const Color(0xFF16A34A),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Monthly EMI is ${(((double.tryParse(_emiController.text) ?? 0) / empSalary) * 100).toStringAsFixed(1)}% of monthly salary (${salaryCurrency.format(empSalary)}).',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: ((double.tryParse(_emiController.text) ?? 0) / empSalary) > 0.5
+                                    ? Colors.orange.shade900
+                                    : const Color(0xFF15803D),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   Row(
                     children: [
@@ -676,9 +741,13 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
                     child: const Text('Save Draft'),
                   ),
                   ElevatedButton(
-                    onPressed: null,
+                    onPressed: (widget.loan == null ||
+                            widget.loan!.status.toLowerCase().startsWith('pending') ||
+                            widget.loan!.status == 'Pending')
+                        ? () => _saveLoan('Approved')
+                        : null,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.active,
+                      backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

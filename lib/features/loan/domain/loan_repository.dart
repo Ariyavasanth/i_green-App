@@ -22,6 +22,11 @@ abstract class LoanRepository {
     required int id,
     required String approverName,
     required String approverRole,
+    int? installments,
+    double? emiAmount,
+    double? totalRepayableAmount,
+    String? firstDeductionMonth,
+    String? lastDeductionMonth,
   });
   Future<void> disburseLoan(int id, String disbursementDate);
   Future<void> rejectLoan(int id, String reason);

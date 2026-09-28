@@ -555,7 +555,7 @@ class _TopBar extends ConsumerWidget {
       headingText = _getHeading(currentLocation);
     }
 
-    final isLoanDetails = currentLocation.startsWith('/loan/details') || currentLocation.startsWith('/loan-management/details');
+    final isLoanDetails = currentLocation.startsWith('/loan-management/details');
     final loanId = isLoanDetails ? int.tryParse(currentLocation.split('?').first.split('/').last) : null;
 
     final content = SafeArea(
@@ -693,6 +693,10 @@ class _TopBar extends ConsumerWidget {
               if (isLoanDetails && loanId != null) ...[
                 Consumer(
                   builder: (context, ref, _) {
+                    final emp = ref.watch(currentEmployeeProvider);
+                    final isAdmin = emp != null && (emp.isSuperAdmin || emp.hasPermission('Loan Management'));
+                    if (!isAdmin) return const SizedBox.shrink();
+
                     final loanAsync = ref.watch(loanByIdProvider(loanId));
                     return loanAsync.maybeWhen(
                       data: (loan) {
@@ -744,6 +748,10 @@ class _TopBar extends ConsumerWidget {
               if (isLoanDetails && loanId != null) ...[
                 Consumer(
                   builder: (context, ref, _) {
+                    final emp = ref.watch(currentEmployeeProvider);
+                    final isAdmin = emp != null && (emp.isSuperAdmin || emp.hasPermission('Loan Management'));
+                    if (!isAdmin) return const SizedBox.shrink();
+
                     final loanAsync = ref.watch(loanByIdProvider(loanId));
                     return loanAsync.maybeWhen(
                       data: (loan) {

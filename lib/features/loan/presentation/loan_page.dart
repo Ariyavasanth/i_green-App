@@ -18,7 +18,6 @@ class LoanPage extends ConsumerStatefulWidget {
 
 class _LoanPageState extends ConsumerState<LoanPage> {
   String _searchQuery = '';
-  String _selectedStatusFilter = 'All';
   String _selectedTypeFilter = 'All';
 
   final List<String> _loanTypes = [
@@ -29,17 +28,6 @@ class _LoanPageState extends ConsumerState<LoanPage> {
     'Education Loan',
     'Medical Loan',
     'Other'
-  ];
-
-  final List<String> _statuses = [
-    'All',
-    'Active',
-    'Pending Supervisor',
-    'Pending HR',
-    'Pending MD',
-    'Approved',
-    'Rejected',
-    'Closed'
   ];
 
   @override
@@ -59,6 +47,16 @@ class _LoanPageState extends ConsumerState<LoanPage> {
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showRequestLoanDialog(context, currentEmp),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add_rounded),
+        label: const Text(
+          'Request Loan',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+      ),
       body: LayoutBuilder(
         builder: (context, constraints) {
           final isMobile = constraints.maxWidth < 700;
@@ -73,10 +71,6 @@ class _LoanPageState extends ConsumerState<LoanPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Header
-                  _buildHeader(context, currentEmp, isMobile),
-                  const SizedBox(height: 20),
-
                   // Metrics Cards
                   loansAsync.when(
                     loading: () => const Center(
@@ -124,15 +118,6 @@ class _LoanPageState extends ConsumerState<LoanPage> {
                           final matchType = loan.loanType.toLowerCase().contains(q);
                           if (!matchId && !matchType) return false;
                         }
-                        if (_selectedStatusFilter != 'All') {
-                          if (_selectedStatusFilter == 'Active' && loan.status.toLowerCase() != 'active') {
-                            return false;
-                          } else if (_selectedStatusFilter == 'Closed' && loan.status.toLowerCase() != 'closed') {
-                            return false;
-                          } else if (loan.status != _selectedStatusFilter) {
-                            return false;
-                          }
-                        }
                         if (_selectedTypeFilter != 'All' && loan.loanType != _selectedTypeFilter) {
                           return false;
                         }
@@ -176,7 +161,7 @@ class _LoanPageState extends ConsumerState<LoanPage> {
                                   ),
                                   SizedBox(height: 8),
                                   Text(
-                                    'If you need financial assistance, click "Request Loan" above to apply.',
+                                    'If you need financial assistance, click "Request Loan" below to apply.',
                                     textAlign: TextAlign.center,
                                     style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                                   ),
@@ -197,66 +182,6 @@ class _LoanPageState extends ConsumerState<LoanPage> {
           );
         },
       ),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context, Employee currentEmp, bool isMobile) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.account_balance_outlined, size: 24, color: AppColors.active),
-                  SizedBox(width: 8),
-                  Text(
-                    'My Loans',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'View and manage your loans, EMIs, and repayments',
-                style: TextStyle(
-                  fontSize: isMobile ? 12 : 13,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 12),
-        ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            padding: EdgeInsets.symmetric(
-              horizontal: isMobile ? 14 : 18,
-              vertical: isMobile ? 10 : 12,
-            ),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-          icon: const Icon(Icons.add, size: 18),
-          label: Text(
-            'Request Loan',
-            style: TextStyle(
-              fontSize: isMobile ? 13 : 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          onPressed: () => _showRequestLoanDialog(context, currentEmp),
-        ),
-      ],
     );
   }
 
@@ -433,19 +358,6 @@ class _LoanPageState extends ConsumerState<LoanPage> {
       ),
     );
 
-    final statusDropdown = DropdownButtonFormField<String>(
-      initialValue: _selectedStatusFilter,
-      decoration: _filterDropdownDecoration('Status'),
-      isDense: true,
-      items: _statuses.map((item) {
-        return DropdownMenuItem(
-          value: item,
-          child: Text(item, style: const TextStyle(fontSize: 13)),
-        );
-      }).toList(),
-      onChanged: (val) => setState(() => _selectedStatusFilter = val ?? 'All'),
-    );
-
     final typeDropdown = DropdownButtonFormField<String>(
       initialValue: _selectedTypeFilter,
       decoration: _filterDropdownDecoration('Loan Type'),
@@ -465,13 +377,7 @@ class _LoanPageState extends ConsumerState<LoanPage> {
         children: [
           searchField,
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: statusDropdown),
-              const SizedBox(width: 10),
-              Expanded(child: typeDropdown),
-            ],
-          ),
+          typeDropdown,
         ],
       );
     }
@@ -481,11 +387,6 @@ class _LoanPageState extends ConsumerState<LoanPage> {
         Expanded(
           flex: 4,
           child: searchField,
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          flex: 2,
-          child: statusDropdown,
         ),
         const SizedBox(width: 12),
         Expanded(

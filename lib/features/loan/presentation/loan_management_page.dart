@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../employee/providers/employee_providers.dart';
 import '../domain/employee_loan.dart';
 import '../providers/loan_providers.dart';
+import 'widgets/approve_loan_dialog.dart';
 
 class LoanManagementPage extends ConsumerStatefulWidget {
   const LoanManagementPage({super.key});
@@ -754,17 +755,7 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
           context.push('/loan-management/create', extra: loan);
           break;
         case 'approve':
-          final currentEmployee = ref.read(currentEmployeeProvider);
-          if (currentEmployee == null) throw StateError('Current employee not found.');
-          final nextStatus = await repository.approveLoan(
-            id: loan.id,
-            approverName: currentEmployee.fullName,
-            approverRole: currentEmployee.userType,
-          );
-          ref.invalidate(allLoansProvider);
-          _showSnackBar(nextStatus == 'Approved'
-              ? 'Loan ${loan.loanId} approved.'
-              : 'Loan ${loan.loanId} sent to ${nextStatus.replaceFirst('Pending ', '')}.');
+          await ApproveLoanDialog.show(context, loan);
           break;
         case 'reject':
           await repository.changeLoanStatus(loan.id, 'Rejected');

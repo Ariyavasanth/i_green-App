@@ -210,6 +210,11 @@ class FirebaseLoanRepository implements LoanRepository {
     required int id,
     required String approverName,
     required String approverRole,
+    int? installments,
+    double? emiAmount,
+    double? totalRepayableAmount,
+    String? firstDeductionMonth,
+    String? lastDeductionMonth,
   }) async {
     try {
       final loan = await getLoanById(id);
@@ -238,12 +243,31 @@ class FirebaseLoanRepository implements LoanRepository {
 
       final docId = loan.loanId.isNotEmpty ? loan.loanId : 'loan_${loan.id}';
       final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
-      await _loansRef.doc(docId).update({
+      final updateData = <String, dynamic>{
         'status': nextStatus,
         'approved_by': approverName,
         'approval_date': todayStr,
         'updated_at': FieldValue.serverTimestamp(),
-      });
+      };
+
+      if (installments != null && installments > 0) {
+        updateData['installments'] = installments;
+        if (emiAmount != null && emiAmount > 0) {
+          updateData['emi_amount'] = emiAmount;
+        }
+        if (totalRepayableAmount != null && totalRepayableAmount > 0) {
+          updateData['total_repayable_amount'] = totalRepayableAmount;
+          updateData['remaining_balance'] = totalRepayableAmount;
+        }
+        if (firstDeductionMonth != null && firstDeductionMonth.isNotEmpty) {
+          updateData['first_deduction_month'] = firstDeductionMonth;
+        }
+        if (lastDeductionMonth != null && lastDeductionMonth.isNotEmpty) {
+          updateData['last_deduction_month'] = lastDeductionMonth;
+        }
+      }
+
+      await _loansRef.doc(docId).update(updateData);
 
       return nextStatus;
     } catch (_) {
