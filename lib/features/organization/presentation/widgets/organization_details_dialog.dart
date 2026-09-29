@@ -1,9 +1,13 @@
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../domain/organization.dart';
+import '../../../employee/services/offer_letter_save_stub.dart'
+    if (dart.library.html) '../../../employee/services/offer_letter_save_web.dart'
+    if (dart.library.io) '../../../employee/services/offer_letter_save_io.dart';
 
 class OrganizationDetailsDialog extends StatelessWidget {
   const OrganizationDetailsDialog({
@@ -16,6 +20,84 @@ class OrganizationDetailsDialog extends StatelessWidget {
   final Organization organization;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
+
+  Future<String> _resolveFileUrl(OrgDocument doc) async {
+    String url = doc.fileUrl.trim();
+    if (url.isNotEmpty) return url;
+
+    try {
+      final storage = FirebaseStorage.instance;
+      final orgId = organization.canonicalId.isNotEmpty
+          ? organization.canonicalId
+          : (organization.id != 0 ? '${organization.id}' : '1');
+
+      final cleanFileName = doc.fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+      final cleanTitle = doc.title.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+
+      final candidates = [
+        'organizations/$orgId/documents/$cleanTitle/${doc.fileName}',
+        'organizations/$orgId/images/$cleanTitle/${doc.fileName}',
+        'organizations/$orgId/documents/$cleanTitle/$cleanFileName',
+        'organizations/$orgId/images/$cleanTitle/$cleanFileName',
+        'organizations/$orgId/$cleanTitle/${doc.fileName}',
+        'organizations/$orgId/$cleanTitle/$cleanFileName',
+        'organizations/$orgId/${doc.fileName}',
+        'organizations/$orgId/$cleanFileName',
+      ];
+
+      for (final path in candidates) {
+        try {
+          final resolved = await storage.ref().child(path).getDownloadURL();
+          if (resolved.isNotEmpty) return resolved;
+        } catch (_) {}
+      }
+    } catch (_) {}
+
+    return '';
+  }
+
+  Future<void> _handleDownload(BuildContext context, OrgDocument doc) async {
+    final url = await _resolveFileUrl(doc);
+    if (url.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Document link not available for ${doc.title} (${doc.fileName})'),
+            backgroundColor: const Color(0xFFDC2626),
+          ),
+        );
+      }
+      return;
+    }
+
+    if (context.mounted) {
+      await downloadFileFromUrl(
+        context: context,
+        url: url,
+        fileName: doc.fileName.isNotEmpty ? doc.fileName : '${doc.title}.pdf',
+        docTitle: doc.title,
+      );
+    }
+  }
+
+  Future<void> _handleView(BuildContext context, OrgDocument doc) async {
+    final url = await _resolveFileUrl(doc);
+    if (url.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Document link not available for ${doc.title} (${doc.fileName})'),
+            backgroundColor: const Color(0xFFDC2626),
+          ),
+        );
+      }
+      return;
+    }
+
+    if (context.mounted) {
+      await _openDocUrl(context, url);
+    }
+  }
 
   Future<void> _openDocUrl(BuildContext context, String url) async {
     if (url.isEmpty) return;
@@ -415,57 +497,75 @@ class OrganizationDetailsDialog extends StatelessWidget {
                         else
                           Column(
                             children: organization.documents.map((doc) {
-                              return Container(
-                                margin: const EdgeInsets.only(bottom: 8),
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF8FAFC),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFDCFCE7),
-                                        borderRadius: BorderRadius.circular(6),
+                              return InkWell(
+                                onTap: () => _handleDownload(context, doc),
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF8FAFC),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFDCFCE7),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: const Icon(Icons.description_rounded, size: 18, color: Color(0xFF15803D)),
                                       ),
-                                      child: const Icon(Icons.description_rounded, size: 18, color: Color(0xFF15803D)),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            doc.title,
-                                            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-                                          ),
-                                          if (doc.fileName.isNotEmpty)
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
                                             Text(
-                                              doc.fileName,
-                                              style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
+                                              doc.title,
+                                              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
                                             ),
-                                        ],
+                                            if (doc.fileName.isNotEmpty)
+                                              Text(
+                                                doc.fileName,
+                                                style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                    if (doc.fileUrl.isNotEmpty)
+                                      const SizedBox(width: 6),
+                                      OutlinedButton.icon(
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: const Color(0xFF414A51),
+                                          side: const BorderSide(color: Color(0xFFD0D5DD)),
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                          minimumSize: const Size(60, 30),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                        ),
+                                        onPressed: () => _handleView(context, doc),
+                                        icon: const Icon(Icons.open_in_new_rounded, size: 12),
+                                        label: const Text('View', style: TextStyle(fontSize: 11)),
+                                      ),
+                                      const SizedBox(width: 6),
                                       ElevatedButton.icon(
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: AppColors.primary,
                                           foregroundColor: Colors.white,
                                           elevation: 0,
                                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                          minimumSize: const Size(80, 30),
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                                         ),
-                                        onPressed: () => _openDocUrl(context, doc.fileUrl),
-                                        icon: const Icon(Icons.open_in_new_rounded, size: 13),
-                                        label: const Text('View', style: TextStyle(fontSize: 11.5)),
+                                        onPressed: () => _handleDownload(context, doc),
+                                        icon: const Icon(Icons.file_download_outlined, size: 14),
+                                        label: const Text('Download', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
                                       ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               );
                             }).toList(),

@@ -15,9 +15,13 @@ import '../domain/organization_repository.dart';
 /// Robust Firestore implementation of OrganizationRepository.
 class FirebaseOrganizationRepository implements OrganizationRepository {
   final FirebaseFirestore? _customFirestore;
+  final FirebaseStorage? _customStorage;
 
-  FirebaseOrganizationRepository({FirebaseFirestore? firestore})
-      : _customFirestore = firestore;
+  FirebaseOrganizationRepository({
+    FirebaseFirestore? firestore,
+    FirebaseStorage? storage,
+  })  : _customFirestore = firestore,
+        _customStorage = storage;
 
   FirebaseFirestore? get _firestore {
     try {
@@ -26,6 +30,8 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
       return null;
     }
   }
+
+  FirebaseStorage get _storage => _customStorage ?? FirebaseStorage.instance;
 
   CollectionReference<Map<String, dynamic>>? get _orgsRef => _firestore?.collection('organizations');
   CollectionReference<Map<String, dynamic>>? get _buRef => _firestore?.collection('business_units');
@@ -559,7 +565,7 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
     }
   }
 
-  // --- Document Upload ---
+  // --- Document & Image Upload ---
   @override
   Future<OrgDocument> uploadDocument({
     required int orgId,
@@ -584,19 +590,24 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
       }
 
       if (bytes != null) {
-        final storage = FirebaseStorage.instance;
+        final ext = platformFile?.extension?.toLowerCase();
+        final isImage = _isImageExtension(ext);
+        final folderCategory = isImage ? 'images' : 'documents';
+
         final cleanFileName = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
         final cleanDocTitle = docTitle.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-        final storageRef = storage.ref().child('organizations/$orgId/$cleanDocTitle/${DateTime.now().millisecondsSinceEpoch}_$cleanFileName');
+        
+        final storagePath = 'organizations/$orgId/$folderCategory/$cleanDocTitle/${DateTime.now().millisecondsSinceEpoch}_$cleanFileName';
+        final storageRef = _storage.ref().child(storagePath);
         
         final uploadTask = await storageRef.putData(
           bytes,
-          SettableMetadata(contentType: _getContentType(platformFile?.extension)),
+          SettableMetadata(contentType: _getContentType(ext)),
         );
         downloadUrl = await uploadTask.ref.getDownloadURL();
       }
     } catch (e) {
-      debugPrint('Error uploading organization document to Firebase Storage: $e');
+      debugPrint('Error uploading organization document/image to Firebase Storage: $e');
     }
 
     return OrgDocument(
@@ -605,6 +616,18 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
       fileUrl: downloadUrl,
       uploadedAt: DateTime.now().toIso8601String(),
     );
+  }
+
+  bool _isImageExtension(String? extension) {
+    if (extension == null) return false;
+    final ext = extension.toLowerCase();
+    return ext == 'jpg' ||
+        ext == 'jpeg' ||
+        ext == 'png' ||
+        ext == 'webp' ||
+        ext == 'gif' ||
+        ext == 'svg' ||
+        ext == 'bmp';
   }
 
   String _getContentType(String? extension) {
@@ -616,10 +639,24 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
         return 'image/jpeg';
       case 'png':
         return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      case 'gif':
+        return 'image/gif';
+      case 'svg':
+        return 'image/svg+xml';
       case 'doc':
         return 'application/msword';
       case 'docx':
         return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'xls':
+        return 'application/vnd.ms-excel';
+      case 'xlsx':
+        return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      case 'txt':
+        return 'text/plain';
+      case 'csv':
+        return 'text/csv';
       default:
         return 'application/octet-stream';
     }

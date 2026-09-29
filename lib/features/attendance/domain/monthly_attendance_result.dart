@@ -60,6 +60,7 @@ class MonthlyAttendanceResult {
     required this.holidayCount,
     required this.missingCheckoutCount,
     required this.insufficientHoursCount,
+    this.beforeJoiningCount = 0,
     required this.totalWorkingDays,
     required this.totalRequiredHours,
     required this.totalWorkingHours,
@@ -85,6 +86,7 @@ class MonthlyAttendanceResult {
   final int holidayCount;
   final int missingCheckoutCount;
   final int insufficientHoursCount;
+  final int beforeJoiningCount;
 
   // Hours
   final int totalWorkingDays;
@@ -116,6 +118,7 @@ class MonthlyAttendanceResult {
         'holiday_count': holidayCount,
         'missing_checkout_count': missingCheckoutCount,
         'insufficient_hours_count': insufficientHoursCount,
+        'before_joining_count': beforeJoiningCount,
         'total_working_days': totalWorkingDays,
         'total_required_hours': totalRequiredHours,
         'total_working_hours': totalWorkingHours,
@@ -148,6 +151,7 @@ class MonthlyAttendanceResult {
       holidayCount: 0,
       missingCheckoutCount: 0,
       insufficientHoursCount: 0,
+      beforeJoiningCount: 0,
       totalWorkingDays: 0,
       totalRequiredHours: 0.0,
       totalWorkingHours: 0.0,
@@ -212,6 +216,7 @@ class MonthlyAttendanceCalculator {
     int holidayCount = 0;
     int missingCheckoutCount = 0;
     int insufficientHoursCount = 0;
+    int beforeJoiningCount = 0;
 
     double totalWorkingHours = 0.0;
     int totalWorkingDays = 0;
@@ -282,6 +287,8 @@ class MonthlyAttendanceCalculator {
           insufficientHoursCount++;
           break;
         case AttendanceStatusInfo.beforeJoining:
+          beforeJoiningCount++;
+          break;
         case null:
           break;
       }
@@ -330,6 +337,7 @@ class MonthlyAttendanceCalculator {
       holidayCount: holidayCount,
       missingCheckoutCount: missingCheckoutCount,
       insufficientHoursCount: insufficientHoursCount,
+      beforeJoiningCount: beforeJoiningCount,
       totalWorkingDays: totalWorkingDays,
       totalRequiredHours: totalRequiredHours,
       totalWorkingHours: totalWorkingHours,

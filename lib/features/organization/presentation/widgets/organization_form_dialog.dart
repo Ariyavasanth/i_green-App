@@ -5,6 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../domain/organization.dart';
 import '../../providers/organization_providers.dart';
+import '../../../employee/services/offer_letter_save_stub.dart'
+    if (dart.library.html) '../../../employee/services/offer_letter_save_web.dart'
+    if (dart.library.io) '../../../employee/services/offer_letter_save_io.dart';
 
 class OrganizationFormDialog extends ConsumerStatefulWidget {
   const OrganizationFormDialog({this.organization, super.key});
@@ -983,6 +986,17 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
           ),
           const SizedBox(width: 10),
           if (hasPicked || hasExisting) ...[
+            if (hasExisting)
+              IconButton(
+                icon: const Icon(Icons.file_download_outlined, size: 18, color: AppColors.primary),
+                tooltip: 'Download Document',
+                onPressed: () => downloadFileFromUrl(
+                  context: context,
+                  url: item.existingDoc!.fileUrl,
+                  fileName: item.existingDoc!.fileName.isNotEmpty ? item.existingDoc!.fileName : '${item.title}.pdf',
+                  docTitle: item.title,
+                ),
+              ),
             TextButton.icon(
               onPressed: () => _pickFileForDoc(item),
               icon: const Icon(Icons.sync_rounded, size: 14, color: AppColors.primary),

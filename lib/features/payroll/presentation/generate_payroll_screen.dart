@@ -62,6 +62,8 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
 
   double _netSalary = 0.0;
   bool _initialized = false;
+  bool _isSavingDraft = false;
+  bool _isSavingProcessed = false;
 
   // Attendance
   int _presentDays = 27;
@@ -297,6 +299,53 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     if (_attendanceResult != result) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
+          final beforeJoiningDays = result.beforeJoiningCount;
+          final totalDaysInCycle = result.totalDaysInMonth;
+          final eligibleDays = (totalDaysInCycle - beforeJoiningDays).clamp(0, totalDaysInCycle);
+
+          final absenceLopDays = result.absentCount.toDouble();
+          final allowedLate = settings.allowedLateDays;
+          final penaltyPerLate = settings.penaltyPerLateDay;
+          final penalizedLateCount = (result.lateCount - allowedLate).clamp(0, 9999);
+          final lateLopDays = penalizedLateCount * penaltyPerLate;
+          final totalLopDays = absenceLopDays + lateLopDays;
+
+          final basic = (employee.salaryBasic as num?)?.toDouble() ?? 0.0;
+          final hra = (employee.salaryHra as num?)?.toDouble() ?? 0.0;
+          final edu = (employee.salaryEducationAllowance as num?)?.toDouble() ?? 0.0;
+          final special = (employee.salarySpecialAllowance as num?)?.toDouble() ?? 0.0;
+          final travel = (employee.salaryTravelAllowance as num?)?.toDouble() ?? 0.0;
+          final otherAllow = (employee.salaryOtherAllowance as num?)?.toDouble() ?? 0.0;
+          final standardGross = employee.salaryTotalCtc > 0
+              ? employee.salaryTotalCtc
+              : (basic + hra + edu + special + travel + otherAllow);
+
+          final workingDays = settings.workingDaysInMonth > 0 ? settings.workingDaysInMonth : 30.0;
+          final perDaySalary = workingDays > 0 ? (standardGross / workingDays) : 0.0;
+
+          // Pro-rata base gross for eligible days post-DOJ
+          final baseEligibleGross = beforeJoiningDays > 0
+              ? (perDaySalary * eligibleDays).clamp(0.0, standardGross)
+              : standardGross;
+
+          final calculatedLopAmount = perDaySalary * totalLopDays;
+          final earnedGross = (baseEligibleGross - calculatedLopAmount).clamp(0.0, standardGross);
+
+          // If employee joined mid-month or has 0 earned days, pro-rate standard earnings and PF
+          final earningRatio = (beforeJoiningDays > 0 && standardGross > 0)
+              ? (earnedGross / standardGross)
+              : 1.0;
+
+          final proRatedBasic = basic * earningRatio;
+          final proRatedHra = hra * earningRatio;
+          final proRatedEdu = edu * earningRatio;
+          final proRatedSpecial = special * earningRatio;
+          final proRatedTravel = travel * earningRatio;
+          final proRatedOther = otherAllow * earningRatio;
+
+          final standardPf = (employee.salaryPf as num?)?.toDouble() ?? 0.0;
+          final proRatedPf = earnedGross > 0 ? (standardPf * earningRatio) : 0.0;
+
           setState(() {
             _attendanceResult = result;
             _presentDays = result.presentCount;
@@ -304,6 +353,21 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
             _absentDays = result.absentCount;
             _leaveDays = result.onLeaveCount;
             _totalDays = result.totalWorkingDays;
+
+            if (beforeJoiningDays > 0) {
+              _basicController.text = proRatedBasic.toStringAsFixed(2);
+              _hraController.text = proRatedHra.toStringAsFixed(2);
+              _educationController.text = proRatedEdu.toStringAsFixed(2);
+              _specialController.text = proRatedSpecial.toStringAsFixed(2);
+              _travelAllowanceController.text = proRatedTravel.toStringAsFixed(2);
+              _otherAllowanceController.text = proRatedOther.toStringAsFixed(2);
+              _pfController.text = proRatedPf.toStringAsFixed(2);
+              _lopController.text = calculatedLopAmount.toStringAsFixed(2);
+            } else {
+              _lopController.text = calculatedLopAmount.toStringAsFixed(2);
+            }
+
+            _recalculate();
           });
         }
       });
@@ -343,6 +407,16 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
   }
 
   Future<void> _savePayroll(dynamic employee, String month, PayrollSettings settings, {String saveStatus = 'Processed'}) async {
+    if (_isSavingDraft || _isSavingProcessed) return;
+
+    setState(() {
+      if (saveStatus == 'Draft') {
+        _isSavingDraft = true;
+      } else {
+        _isSavingProcessed = true;
+      }
+    });
+
     final now = DateTime.now();
     int year = now.year;
     int monthNum = now.month;
@@ -447,6 +521,13 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
             duration: const Duration(seconds: 4),
           ),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSavingDraft = false;
+          _isSavingProcessed = false;
+        });
       }
     }
   }
@@ -963,25 +1044,47 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
             ),
             const Spacer(),
             OutlinedButton(
-              onPressed: () => _savePayroll(employee, selectedMonth, settings, saveStatus: 'Draft'),
+              onPressed: (_isSavingDraft || _isSavingProcessed)
+                  ? null
+                  : () => _savePayroll(employee, selectedMonth, settings, saveStatus: 'Draft'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.active,
                 side: const BorderSide(color: AppColors.divider),
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-              child: const Text('Save as Draft', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: _isSavingDraft
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.active,
+                      ),
+                    )
+                  : const Text('Save as Draft', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
             const SizedBox(width: 12),
             ElevatedButton(
-              onPressed: () => _savePayroll(employee, selectedMonth, settings, saveStatus: 'Processed'),
+              onPressed: (_isSavingDraft || _isSavingProcessed)
+                  ? null
+                  : () => _savePayroll(employee, selectedMonth, settings, saveStatus: 'Processed'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-              child: const Text('Save & Process Payroll', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: _isSavingProcessed
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Save & Process Payroll', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -1016,11 +1119,13 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
             const Spacer(),
             if (_currentStep > 0) ...[
               OutlinedButton(
-                onPressed: () {
-                  setState(() {
-                    _currentStep--;
-                  });
-                },
+                onPressed: (_isSavingDraft || _isSavingProcessed)
+                    ? null
+                    : () {
+                        setState(() {
+                          _currentStep--;
+                        });
+                      },
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.active,
                   side: const BorderSide(color: AppColors.divider),
@@ -1031,19 +1136,27 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
               const SizedBox(width: 8),
             ],
             ElevatedButton(
-              onPressed: isLastStep
-                  ? () => _savePayroll(employee, selectedMonth, settings)
-                  : () {
-                      setState(() {
-                        _currentStep++;
-                      });
-                    },
+              onPressed: (_isSavingDraft || _isSavingProcessed)
+                  ? null
+                  : (isLastStep
+                      ? () => _savePayroll(employee, selectedMonth, settings)
+                      : () {
+                          setState(() {
+                            _currentStep++;
+                          });
+                        }),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
               ),
-              child: Text(isLastStep ? 'Process' : 'Next'),
+              child: (_isSavingDraft || _isSavingProcessed)
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : Text(isLastStep ? 'Process' : 'Next'),
             ),
           ],
         ),

@@ -98,6 +98,8 @@ class OrgDocument {
       'title': title,
       'file_name': fileName,
       'file_url': fileUrl,
+      'fileName': fileName,
+      'fileUrl': fileUrl,
       if (uploadedAt != null) 'uploaded_at': uploadedAt,
     };
   }
@@ -105,9 +107,17 @@ class OrgDocument {
   factory OrgDocument.fromMap(Map<String, dynamic> map) {
     return OrgDocument(
       title: map['title']?.toString() ?? '',
-      fileName: map['file_name']?.toString() ?? '',
-      fileUrl: map['file_url']?.toString() ?? '',
-      uploadedAt: map['uploaded_at']?.toString(),
+      fileName: map['file_name']?.toString() ??
+          map['fileName']?.toString() ??
+          map['name']?.toString() ??
+          '',
+      fileUrl: map['file_url']?.toString() ??
+          map['fileUrl']?.toString() ??
+          map['url']?.toString() ??
+          map['download_url']?.toString() ??
+          map['downloadUrl']?.toString() ??
+          '',
+      uploadedAt: map['uploaded_at']?.toString() ?? map['uploadedAt']?.toString(),
     );
   }
 }

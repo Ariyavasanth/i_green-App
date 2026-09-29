@@ -856,7 +856,15 @@ class FirebaseLeaveRepository implements LeaveRepository {
       );
     }
 
-    // 5. Evaluate LOP Breakdown
+    // 5. Evaluate DOJ Pro-Rata & LOP Breakdown
+    final int beforeJoiningDays = attendanceResult?.beforeJoiningCount ?? 0;
+    final int totalDaysInCycle = attendanceResult?.totalDaysInMonth ?? 30;
+    final int eligibleDays = (totalDaysInCycle - beforeJoiningDays).clamp(0, totalDaysInCycle);
+
+    final double baseEligibleGross = beforeJoiningDays > 0
+        ? (workingDays > 0 ? (perDaySalary * eligibleDays).clamp(0.0, grossSalary) : grossSalary)
+        : grossSalary;
+
     final double absenceLopDays = attendanceResult?.absentCount.toDouble() ?? 0.0;
     final double approvedDaysCount = attendanceResult?.onLeaveCount.toDouble() ?? 0.0;
 
@@ -903,7 +911,7 @@ class FirebaseLeaveRepository implements LeaveRepository {
 
     final double totalLopDays = absenceLopDays + lateLopDays + manualLopDays + permissionLopDays;
     final double lopDeduction = perDaySalary * totalLopDays;
-    final double payableSalary = grossSalary - lopDeduction;
+    final double payableSalary = (baseEligibleGross - lopDeduction).clamp(0.0, grossSalary);
 
     return SalaryCalculation(
       grossMonthlySalary: grossSalary,
