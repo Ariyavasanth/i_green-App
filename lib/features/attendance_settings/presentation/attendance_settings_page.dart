@@ -17,7 +17,6 @@ class AttendanceSettingsPage extends ConsumerStatefulWidget {
 class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _graceController;
-  late final TextEditingController _lateController;
   late final TextEditingController _latitudeController;
   late final TextEditingController _longitudeController;
   late final TextEditingController _radiusController;
@@ -30,7 +29,6 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
     super.initState();
     final settings = AttendanceSettings.defaults();
     _graceController = TextEditingController(text: settings.gracePeriodMinutes.toString());
-    _lateController = TextEditingController(text: settings.lateLimitMinutes.toString());
     _latitudeController = TextEditingController(text: settings.officeLatitude.toStringAsFixed(6));
     _longitudeController = TextEditingController(text: settings.officeLongitude.toStringAsFixed(6));
     _radiusController = TextEditingController(text: settings.allowedAttendanceRadiusMeters.toString());
@@ -40,7 +38,6 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
   @override
   void dispose() {
     _graceController.dispose();
-    _lateController.dispose();
     _latitudeController.dispose();
     _longitudeController.dispose();
     _radiusController.dispose();
@@ -64,7 +61,6 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
 
     final settings = AttendanceSettings(
       gracePeriodMinutes: int.parse(_graceController.text.trim()),
-      lateLimitMinutes: int.parse(_lateController.text.trim()),
       officeLatitude: latitude,
       officeLongitude: longitude,
       allowedAttendanceRadiusMeters: int.parse(_radiusController.text.trim()),
@@ -95,7 +91,6 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
     if (_lastAppliedSettings == settings) return;
     _lastAppliedSettings = settings;
     _graceController.text = settings.gracePeriodMinutes.toString();
-    _lateController.text = settings.lateLimitMinutes.toString();
     _latitudeController.text = settings.officeLatitude.toStringAsFixed(6);
     _longitudeController.text = settings.officeLongitude.toStringAsFixed(6);
     _radiusController.text = settings.allowedAttendanceRadiusMeters.toString();
@@ -197,16 +192,6 @@ class _AttendanceSettingsPageState extends ConsumerState<AttendanceSettingsPage>
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(
                           labelText: 'Grace Period (minutes)',
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: _validator,
-                      ),
-                      const SizedBox(height: 14),
-                      TextFormField(
-                        controller: _lateController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Late Limit (maximum minutes after grace period)',
                           border: OutlineInputBorder(),
                         ),
                         validator: _validator,

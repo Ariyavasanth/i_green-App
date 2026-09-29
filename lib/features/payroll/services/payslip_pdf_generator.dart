@@ -368,7 +368,7 @@ class PayslipPdfGenerator {
                         children: [
                           _pdfSalaryItemCell('Special Allowance', _currencyFormat.format(standardSpecial)),
                           _pdfSalaryItemCell('Special Allowance', _currencyFormat.format(record.specialAllowance)),
-                          _pdfSalaryItemCell('LOP Deduction', _currencyFormat.format(record.lop)),
+                          _pdfSalaryItemCell('Hourly LOP', _currencyFormat.format(record.lop)),
                         ],
                       ),
                       // Row 5: Additional earnings & Other Deductions

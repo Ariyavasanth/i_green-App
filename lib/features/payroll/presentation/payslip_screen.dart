@@ -1056,7 +1056,7 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
         col1Value: currencyFormat.format(standardSpecial),
         col2Label: 'Special Allowance',
         col2Value: currencyFormat.format(record.specialAllowance),
-        col3Label: 'LOP Deduction',
+        col3Label: 'Hourly LOP',
         col3Value: currencyFormat.format(record.lop),
       ),
       _SalaryTableRow(

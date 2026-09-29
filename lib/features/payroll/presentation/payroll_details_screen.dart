@@ -419,7 +419,7 @@ class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
       ('PF Contribution', record.pf),
       ('Income Tax (TDS)', record.tax),
       ('ESI Contribution', record.esi),
-      ('Leave Days Deduction (LOP)', record.lop),
+      ('Hourly Loss of Pay (LOP)', record.lop),
       ('Company Loan', record.companyLoan),
       ('Salary Advance', record.salaryAdvance),
       ('Others Deduction', record.othersDeduction),

@@ -16,7 +16,6 @@ class AttendanceSettingsDialog extends ConsumerStatefulWidget {
 class _AttendanceSettingsDialogState extends ConsumerState<AttendanceSettingsDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _graceController;
-  late final TextEditingController _lateController;
   late final TextEditingController _latitudeController;
   late final TextEditingController _longitudeController;
   late final TextEditingController _radiusController;
@@ -28,7 +27,6 @@ class _AttendanceSettingsDialogState extends ConsumerState<AttendanceSettingsDia
     super.initState();
     final settings = ref.read(attendanceSettingsProvider).valueOrNull ?? AttendanceSettings.defaults();
     _graceController = TextEditingController(text: settings.gracePeriodMinutes.toString());
-    _lateController = TextEditingController(text: settings.lateLimitMinutes.toString());
     _latitudeController = TextEditingController(text: settings.officeLatitude.toStringAsFixed(6));
     _longitudeController = TextEditingController(text: settings.officeLongitude.toStringAsFixed(6));
     _radiusController = TextEditingController(text: settings.allowedAttendanceRadiusMeters.toString());
@@ -38,7 +36,6 @@ class _AttendanceSettingsDialogState extends ConsumerState<AttendanceSettingsDia
   @override
   void dispose() {
     _graceController.dispose();
-    _lateController.dispose();
     _latitudeController.dispose();
     _longitudeController.dispose();
     _radiusController.dispose();
@@ -50,7 +47,6 @@ class _AttendanceSettingsDialogState extends ConsumerState<AttendanceSettingsDia
     setState(() => _saving = true);
     final settings = AttendanceSettings(
       gracePeriodMinutes: int.parse(_graceController.text.trim()),
-      lateLimitMinutes: int.parse(_lateController.text.trim()),
       officeLatitude: double.parse(_latitudeController.text.trim()),
       officeLongitude: double.parse(_longitudeController.text.trim()),
       allowedAttendanceRadiusMeters: int.parse(_radiusController.text.trim()),
@@ -74,7 +70,6 @@ class _AttendanceSettingsDialogState extends ConsumerState<AttendanceSettingsDia
             mainAxisSize: MainAxisSize.min,
             children: [
               TextFormField(controller: _graceController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Grace Period (minutes)'), validator: _validator),
-              TextFormField(controller: _lateController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Late Limit (minutes)'), validator: _validator),
               AttendanceLocationFields(
                 latitudeController: _latitudeController,
                 longitudeController: _longitudeController,

@@ -922,53 +922,25 @@ class FirebaseLeaveRepository implements LeaveRepository {
         ? (workingDays > 0 ? (perDaySalary * eligibleDays).clamp(0.0, grossSalary) : grossSalary)
         : grossSalary;
 
-    final double absenceLopDays = attendanceResult?.absentCount.toDouble() ?? 0.0;
     final double approvedDaysCount = attendanceResult?.onLeaveCount.toDouble() ?? 0.0;
+    final double scheduledWorkingDays = pSettings.workingDaysInMonth > 0
+        ? pSettings.workingDaysInMonth
+        : (attendanceResult?.totalWorkingDays != null && attendanceResult!.totalWorkingDays > 0
+            ? attendanceResult.totalWorkingDays.toDouble()
+            : workingDays.toDouble());
+    final double dailyRequiredHours = pSettings.standardDailyWorkingHours > 0
+        ? pSettings.standardDailyWorkingHours
+        : (employee != null && employee.requiredWorkingHours > 0 ? employee.requiredWorkingHours : 9.0);
 
-    // Configured Late Penalty: allowedLateDays grace days, then penaltyPerLateDay per excess late mark
-    final int lateCount = attendanceResult?.lateCount ?? 0;
-    final int allowedLate = pSettings.allowedLateDays;
-    final double penaltyPerLate = pSettings.penaltyPerLateDay;
-    final int penalizedLateCount = (lateCount - allowedLate).clamp(0, 9999);
-    final double lateLopDays = penalizedLateCount * penaltyPerLate;
+    final double totalScheduledHours = scheduledWorkingDays * dailyRequiredHours;
+    final double hourlyRate = totalScheduledHours > 0 ? (grossSalary / totalScheduledHours) : 0.0;
 
-    // (a) Manual Loss of Pay records
-    double manualLopDays = 0.0;
-    try {
-      final lopSnap = await _lopRef
-          .where('employee_id', isEqualTo: employeeId)
-          .get();
-
-      for (final doc in lopSnap.docs) {
-        final date = doc.data()['date'] as String? ?? '';
-        if (isDateInPeriod(date)) {
-          manualLopDays += 1.0;
-        }
-      }
-    } catch (_) {}
-
-    // (b) Emergency Exception Permission Requests with LOP payroll treatment
-    double permissionLopDays = 0.0;
-    try {
-      final permSnap = await _firestore
-          .collection('permission_requests')
-          .where('payroll_treatment', isEqualTo: 'lop')
-          .get();
-      for (final doc in permSnap.docs) {
-        final data = doc.data();
-        final empIdRaw = data['employee_id'];
-        final empIdNum = empIdRaw is int ? empIdRaw : (int.tryParse(empIdRaw?.toString() ?? '') ?? 0);
-        final d = data['date']?.toString() ?? '';
-        if ((empIdNum == employeeId || empIdRaw?.toString() == employeeId.toString()) &&
-            isDateInPeriod(d)) {
-          permissionLopDays += 1.0;
-        }
-      }
-    } catch (_) {}
-
-    final double totalLopDays = absenceLopDays + lateLopDays + manualLopDays + permissionLopDays;
-    final double lopDeduction = perDaySalary * totalLopDays;
+    final double rawShortfall = attendanceResult?.totalShortfallHours ?? 0.0;
+    final double paidLeaveHours = approvedDaysCount * dailyRequiredHours;
+    final double lopHours = (rawShortfall - paidLeaveHours).clamp(0.0, 9999.0);
+    final double lopDeduction = double.parse((lopHours * hourlyRate).toStringAsFixed(2));
     final double payableSalary = (baseEligibleGross - lopDeduction).clamp(0.0, grossSalary);
+    final double totalLopDays = lopHours / (dailyRequiredHours > 0 ? dailyRequiredHours : 9.0);
 
     return SalaryCalculation(
       grossMonthlySalary: grossSalary,

@@ -72,6 +72,9 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
   int _leaveDays = 3;
   int _weeklyOffDays = 0;
   int _totalDays = 30;
+  double _lopHours = 0.0;
+  double _hourlyRate = 0.0;
+  double _scheduledHours = 0.0;
   MonthlyAttendanceResult? _attendanceResult;
 
   @override
@@ -314,13 +317,6 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
           final totalDaysInCycle = result.totalDaysInMonth;
           final eligibleDays = (totalDaysInCycle - beforeJoiningDays).clamp(0, totalDaysInCycle);
 
-          final absenceLopDays = result.absentCount.toDouble();
-          final allowedLate = settings.allowedLateDays;
-          final penaltyPerLate = settings.penaltyPerLateDay;
-          final penalizedLateCount = (result.lateCount - allowedLate).clamp(0, 9999);
-          final lateLopDays = penalizedLateCount * penaltyPerLate;
-          final totalLopDays = absenceLopDays + lateLopDays;
-
           final basic = (employee.salaryBasic as num?)?.toDouble() ?? 0.0;
           final hra = (employee.salaryHra as num?)?.toDouble() ?? 0.0;
           final edu = (employee.salaryEducationAllowance as num?)?.toDouble() ?? 0.0;
@@ -331,15 +327,26 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
               ? employee.salaryTotalCtc
               : (basic + hra + edu + special + travel + otherAllow);
 
-          final workingDays = settings.workingDaysInMonth > 0 ? settings.workingDaysInMonth : 30.0;
-          final perDaySalary = workingDays > 0 ? (standardGross / workingDays) : 0.0;
+          final scheduledWorkingDays = settings.workingDaysInMonth > 0
+              ? settings.workingDaysInMonth
+              : (result.totalWorkingDays > 0 ? result.totalWorkingDays.toDouble() : 26.0);
+          final dailyRequiredHours = settings.standardDailyWorkingHours > 0
+              ? settings.standardDailyWorkingHours
+              : (employee.requiredWorkingHours > 0 ? employee.requiredWorkingHours : 9.0);
+
+          final scheduledHours = scheduledWorkingDays * dailyRequiredHours;
+          final hourlyRate = scheduledHours > 0 ? (standardGross / scheduledHours) : 0.0;
 
           // Pro-rata base gross for eligible days post-DOJ
+          final perDaySalary = scheduledWorkingDays > 0 ? (standardGross / scheduledWorkingDays) : 0.0;
           final baseEligibleGross = beforeJoiningDays > 0
               ? (perDaySalary * eligibleDays).clamp(0.0, standardGross)
               : standardGross;
 
-          final calculatedLopAmount = perDaySalary * totalLopDays;
+          final rawShortfall = result.totalShortfallHours;
+          final paidLeaveHours = result.onLeaveCount * dailyRequiredHours;
+          final lopHours = (rawShortfall - paidLeaveHours).clamp(0.0, 9999.0);
+          final calculatedLopAmount = double.parse((lopHours * hourlyRate).toStringAsFixed(2));
           final earnedGross = (baseEligibleGross - calculatedLopAmount).clamp(0.0, standardGross);
 
           // If employee joined mid-month or has 0 earned days, pro-rate standard earnings and PF
@@ -365,6 +372,9 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
             _leaveDays = result.onLeaveCount;
             _weeklyOffDays = result.weeklyOffCount;
             _totalDays = result.totalWorkingDays;
+            _lopHours = lopHours;
+            _hourlyRate = hourlyRate;
+            _scheduledHours = scheduledHours;
 
             if (beforeJoiningDays > 0) {
               _basicController.text = proRatedBasic.toStringAsFixed(2);
@@ -727,7 +737,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
             _buildSummaryRow('PF Contribution', _pfController.text, isDeduction: true),
             _buildSummaryRow('Income Tax (TDS)', _taxController.text, isDeduction: true),
             _buildSummaryRow('ESI Contribution', _esiController.text, isDeduction: true),
-            _buildSummaryRow('Leave Days Deduction (LOP)', _lopController.text, isDeduction: true),
+            _buildSummaryRow('Hourly Loss of Pay (LOP)', _lopController.text, isDeduction: true),
             _buildSummaryRow('Company Loan', _companyLoanController.text, isDeduction: true),
             _buildSummaryRow('Salary Advance', _salaryAdvanceController.text, isDeduction: true),
             _buildSummaryRow('Others Deduction', _othersDeductionController.text, isDeduction: true),
@@ -845,9 +855,16 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
 
     final period = settings.getPayrollPeriod(year, monthNum);
 
+    final lopHoursStr = _lopHours > 0
+        ? '${_lopHours.toStringAsFixed(1)} Hrs'
+        : (_attendanceResult != null && _attendanceResult!.totalShortfallHours > 0
+            ? '${_attendanceResult!.totalShortfallHours.toStringAsFixed(1)} Hrs'
+            : '0.0 Hrs');
+
     final summaries = [
       ('Present Days', '$_presentDays Days', Icons.check_circle_outline, Colors.green),
       ('Late Days', '$_lateDays Days', Icons.watch_later_outlined, Colors.amber),
+      ('LOP Hours', lopHoursStr, Icons.timer_outlined, Colors.deepOrange),
       ('Leave Days', '$_leaveDays Days', Icons.event_note_outlined, Colors.blue),
       ('Absent Days', '$_absentDays Days', Icons.cancel_outlined, Colors.red),
       ('Weekly Off', '$_weeklyOffDays Days', Icons.weekend_outlined, const Color(0xFF64748B)),
@@ -967,6 +984,10 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
   }
 
   Widget _buildDeductionsCard() {
+    final lopHelper = _lopHours > 0
+        ? '${_lopHours.toStringAsFixed(1)} Hours × ₹${_hourlyRate.toStringAsFixed(2)}/hr'
+        : '0.0 Hours LOP (₹${_hourlyRate.toStringAsFixed(2)}/hr)';
+
     return Card(
       elevation: 0,
       color: Colors.white,
@@ -989,7 +1010,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
             const Divider(height: 24),
             const Text('Deductions - Other', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
             const SizedBox(height: 12),
-            _buildInputField('Leave Days Deduction (LOP)', _lopController),
+            _buildInputField('Hourly Loss of Pay (LOP)', _lopController, helperText: lopHelper),
             const SizedBox(height: 12),
             _buildInputField('Company Loan Recovery', _companyLoanController),
             const SizedBox(height: 8),
@@ -1008,7 +1029,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     );
   }
 
-  Widget _buildInputField(String label, TextEditingController controller, {bool isText = false}) {
+  Widget _buildInputField(String label, TextEditingController controller, {bool isText = false, String? helperText}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1022,6 +1043,8 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
           decoration: InputDecoration(
             prefixText: isText ? null : '₹ ',
             prefixStyle: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+            helperText: helperText,
+            helperStyle: TextStyle(color: Colors.grey[600], fontSize: 11, fontWeight: FontWeight.w500),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.divider)),
             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.divider)),

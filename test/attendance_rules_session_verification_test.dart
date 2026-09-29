@@ -66,16 +66,11 @@ void main() {
             ? 'Present (Authorized Permission)'
             : 'On time';
         return (status: 'Present', notes: notes);
-      } else if (netUnauthorizedDelay <= settings.lateLimitMinutes) {
+      } else {
         final notes = (totalApprovedMins > 0 || maxApprovedToMinutes > 0)
             ? 'Late = $netUnauthorizedDelay mins unauthorized after permission'
             : 'Late = $netUnauthorizedDelay minutes';
         return (status: 'Late', notes: notes);
-      } else {
-        final notes = (totalApprovedMins > 0 || maxApprovedToMinutes > 0)
-            ? 'Absent (Exceeds late limit cutoff after permission)'
-            : 'Absent (Exceeds late limit cutoff of ${settings.lateLimitMinutes} mins)';
-        return (status: 'Absent', notes: notes);
       }
     }
 
@@ -219,7 +214,6 @@ void main() {
       allowedAttendanceRadiusMeters: 200,
       requireGpsVerification: true,
       gracePeriodMinutes: 10,
-      lateLimitMinutes: 30,
     );
 
     test('1. Grace Period: 09:00 expected, 10 min grace, 09:08 check-in -> Present, active session starts at 09:08', () {
@@ -275,26 +269,26 @@ void main() {
       expect(record.sessions[0].isActive, isTrue);
     });
 
-    test('3. Absent: 09:00 expected, 10 min grace, 30 min cutoff -> 09:45 check-in -> Absent, active session starts at 09:45', () {
+    test('3. Late Arrival: 09:00 expected, 10 min grace -> 09:45 check-in -> Late (35 mins), active session starts at 09:45', () {
       final evaluation = evaluateAttendanceStatus(
         scheduledCheckInTime: '09:00',
         actualCheckInTime: '09:45',
         settings: defaultSettings,
       );
 
-      expect(evaluation.status, 'Absent');
-      expect(evaluation.notes, contains('Absent (Exceeds late limit cutoff of 30 mins)'));
+      expect(evaluation.status, 'Late');
+      expect(evaluation.notes, 'Late = 35 minutes');
 
       final record = processOfficeCheckIn(
         employeeId: 3,
-        employeeName: 'Absent Employee',
+        employeeName: 'Late Employee 2',
         date: '2026-09-06',
         checkInTime: '09:45',
         status: evaluation.status,
         notes: evaluation.notes,
       );
 
-      expect(record.status, 'Absent');
+      expect(record.status, 'Late');
       expect(record.sessions.length, 1);
       expect(record.sessions[0].checkInTime, '09:45');
       expect(record.sessions[0].isActive, isTrue);

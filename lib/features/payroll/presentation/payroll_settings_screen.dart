@@ -15,9 +15,10 @@ class PayrollSettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _PayrollSettingsScreenState extends ConsumerState<PayrollSettingsScreen> {
-  final _allowedLateController = TextEditingController();
-  final _penaltyController = TextEditingController();
+  final _workingHoursController = TextEditingController();
   final _workingDaysController = TextEditingController();
+  final _lateGraceController = TextEditingController();
+  final _allowedLateController = TextEditingController();
 
   final _startDayController = TextEditingController();
   final _endDayController = TextEditingController();
@@ -28,9 +29,10 @@ class _PayrollSettingsScreenState extends ConsumerState<PayrollSettingsScreen> {
 
   @override
   void dispose() {
-    _allowedLateController.dispose();
-    _penaltyController.dispose();
+    _workingHoursController.dispose();
     _workingDaysController.dispose();
+    _lateGraceController.dispose();
+    _allowedLateController.dispose();
     _startDayController.dispose();
     _endDayController.dispose();
     _processingDayController.dispose();
@@ -42,9 +44,10 @@ class _PayrollSettingsScreenState extends ConsumerState<PayrollSettingsScreen> {
     if (_initialized) return;
     _initialized = true;
 
-    _allowedLateController.text = settings.allowedLateDays.toString();
-    _penaltyController.text = settings.penaltyPerLateDay.toStringAsFixed(1);
+    _workingHoursController.text = settings.standardDailyWorkingHours.toStringAsFixed(1);
     _workingDaysController.text = settings.workingDaysInMonth.toStringAsFixed(1);
+    _lateGraceController.text = settings.lateGraceMinutes.toString();
+    _allowedLateController.text = settings.allowedLateOccurrences.toString();
 
     _startDayController.text = settings.payrollStartDay.toString();
     _endDayController.text = settings.payrollEndDay.toString();
@@ -55,9 +58,11 @@ class _PayrollSettingsScreenState extends ConsumerState<PayrollSettingsScreen> {
   Future<void> _saveSettings() async {
     final settings = PayrollSettings(
       id: 1,
+      standardDailyWorkingHours: double.tryParse(_workingHoursController.text) ?? 9.0,
+      workingDaysInMonth: double.tryParse(_workingDaysController.text) ?? 26.0,
+      lateGraceMinutes: int.tryParse(_lateGraceController.text) ?? 10,
+      allowedLateOccurrences: int.tryParse(_allowedLateController.text) ?? 3,
       allowedLateDays: int.tryParse(_allowedLateController.text) ?? 3,
-      penaltyPerLateDay: double.tryParse(_penaltyController.text) ?? 0.5,
-      workingDaysInMonth: double.tryParse(_workingDaysController.text) ?? 30.0,
       payrollStartDay: int.tryParse(_startDayController.text) ?? 20,
       payrollEndDay: int.tryParse(_endDayController.text) ?? 20,
       processingDay: int.tryParse(_processingDayController.text) ?? 21,
@@ -305,29 +310,36 @@ class _PayrollSettingsScreenState extends ConsumerState<PayrollSettingsScreen> {
                 Icon(Icons.calendar_month_outlined, color: AppColors.primary, size: 20),
                 SizedBox(width: 8),
                 Text(
-                  'Attendance Rules',
+                  'Attendance & LOP Rules',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                 ),
               ],
             ),
             const Divider(height: 24),
             _buildInputField(
-              'Allowed Late Days (Grace Period)',
+              'Standard Daily Working Hours',
+              _workingHoursController,
+              helperText: 'Default required working hours per day (e.g. 9.0 hrs/day).',
+            ),
+            const SizedBox(height: 16),
+            _buildInputField(
+              'Working Days in Payroll Cycle',
+              _workingDaysController,
+              helperText: 'Standard scheduled working days per cycle for scheduled hours calculation.',
+            ),
+            const SizedBox(height: 16),
+            _buildInputField(
+              'Late Grace Period',
+              _lateGraceController,
+              isInt: true,
+              helperText: 'Permitted late check-in grace minutes per day (e.g. 10 minutes).',
+            ),
+            const SizedBox(height: 16),
+            _buildInputField(
+              'Allowed Late Occurrences',
               _allowedLateController,
               isInt: true,
-              helperText: 'Maximum permitted late check-ins per month.',
-            ),
-            const SizedBox(height: 16),
-            _buildInputField(
-              'Penalty per Late Day',
-              _penaltyController,
-              helperText: 'Salary days deducted per excess late day.',
-            ),
-            const SizedBox(height: 16),
-            _buildInputField(
-              'Working Days in Month',
-              _workingDaysController,
-              helperText: 'Standard billable working days per month.',
+              helperText: 'Maximum permitted late check-ins per cycle without penalty.',
             ),
           ],
         ),

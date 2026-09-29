@@ -469,11 +469,12 @@ class PayrollPeriod {
 
 class PayrollSettings {
   final int id;
-  // Attendance Rules
   final double penaltyPerLateDay;
   final int allowedLateDays;
   final double workingDaysInMonth;
-  // Payment dates
+  final double standardDailyWorkingHours;
+  final int lateGraceMinutes;
+  final int allowedLateOccurrences;
   final int payrollStartDay;
   final int payrollEndDay;
   final int processingDay;
@@ -483,9 +484,12 @@ class PayrollSettings {
 
   const PayrollSettings({
     this.id = 1,
-    this.penaltyPerLateDay = 0.5,
+    this.penaltyPerLateDay = 0.0,
     this.allowedLateDays = 3,
-    this.workingDaysInMonth = 30.0,
+    this.workingDaysInMonth = 26.0,
+    this.standardDailyWorkingHours = 9.0,
+    this.lateGraceMinutes = 10,
+    this.allowedLateOccurrences = 3,
     this.payrollStartDay = 20,
     this.payrollEndDay = 20,
     this.processingDay = 21,
@@ -504,9 +508,7 @@ class PayrollSettings {
       start = DateTime(year, month, payrollStartDay);
     }
 
-    // End date is inclusive: endDateExclusive is set to the day following payrollEndDay at 00:00:00
-    // so display subtraction (1 sec) and while (cursor.isBefore(endDateExclusive)) include the entire end day.
-    final DateTime endExclusive = DateTime(year, month, payrollEndDay).add(const Duration(days: 1));
+    final DateTime endExclusive = DateTime(year, month, payrollEndDay);
 
     final processing = DateTime(year, month, processingDay);
     final payment = DateTime(year, month, paymentDay);
@@ -525,6 +527,9 @@ class PayrollSettings {
       'penalty_per_late_day': penaltyPerLateDay,
       'allowed_late_days': allowedLateDays,
       'working_days_in_month': workingDaysInMonth,
+      'standard_daily_working_hours': standardDailyWorkingHours,
+      'late_grace_minutes': lateGraceMinutes,
+      'allowed_late_occurrences': allowedLateOccurrences,
       'payroll_start_day': payrollStartDay,
       'payroll_end_day': payrollEndDay,
       'processing_day': processingDay,
@@ -535,11 +540,15 @@ class PayrollSettings {
 
   factory PayrollSettings.fromMap(Map<String, dynamic> map) {
     final startDay = map['payroll_start_day'] as int? ?? map['payroll_cutoff_day'] as int? ?? 20;
+    final occurrences = map['allowed_late_occurrences'] as int? ?? map['allowed_late_days'] as int? ?? 3;
     return PayrollSettings(
       id: map['id'] as int? ?? 1,
-      penaltyPerLateDay: (map['penalty_per_late_day'] as num?)?.toDouble() ?? 0.5,
-      allowedLateDays: map['allowed_late_days'] as int? ?? 3,
-      workingDaysInMonth: (map['working_days_in_month'] as num?)?.toDouble() ?? 30.0,
+      penaltyPerLateDay: (map['penalty_per_late_day'] as num?)?.toDouble() ?? 0.0,
+      allowedLateDays: occurrences,
+      workingDaysInMonth: (map['working_days_in_month'] as num?)?.toDouble() ?? 26.0,
+      standardDailyWorkingHours: (map['standard_daily_working_hours'] as num?)?.toDouble() ?? 9.0,
+      lateGraceMinutes: map['late_grace_minutes'] as int? ?? 10,
+      allowedLateOccurrences: occurrences,
       payrollStartDay: startDay,
       payrollEndDay: map['payroll_end_day'] as int? ?? 20,
       processingDay: map['processing_day'] as int? ?? 21,
@@ -552,6 +561,9 @@ class PayrollSettings {
     double? penaltyPerLateDay,
     int? allowedLateDays,
     double? workingDaysInMonth,
+    double? standardDailyWorkingHours,
+    int? lateGraceMinutes,
+    int? allowedLateOccurrences,
     int? payrollStartDay,
     int? payrollEndDay,
     int? processingDay,
@@ -562,6 +574,9 @@ class PayrollSettings {
       penaltyPerLateDay: penaltyPerLateDay ?? this.penaltyPerLateDay,
       allowedLateDays: allowedLateDays ?? this.allowedLateDays,
       workingDaysInMonth: workingDaysInMonth ?? this.workingDaysInMonth,
+      standardDailyWorkingHours: standardDailyWorkingHours ?? this.standardDailyWorkingHours,
+      lateGraceMinutes: lateGraceMinutes ?? this.lateGraceMinutes,
+      allowedLateOccurrences: allowedLateOccurrences ?? this.allowedLateOccurrences,
       payrollStartDay: payrollStartDay ?? this.payrollStartDay,
       payrollEndDay: payrollEndDay ?? this.payrollEndDay,
       processingDay: processingDay ?? this.processingDay,
