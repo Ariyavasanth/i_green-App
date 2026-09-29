@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
 import 'tools/seed_demo_ravi_kumar.dart';
 import 'tools/seed_demo_kiruthika.dart';
+import 'tools/seed_all_employees_attendance.dart';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
@@ -21,10 +22,25 @@ Future<void> main() async {
       persistenceEnabled: true,
       cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
     );
-    await seedDemoRaviKumar();
-    await seedDemoKiruthika();
   } catch (e) {
     debugPrint('Firebase initializeApp notice: $e');
   }
+
+  // Render the Flutter UI immediately so there is zero freeze or delay
   runApp(const ProviderScope(child: BooksApp()));
+
+  // Run database sync asynchronously in the background
+  _runBackgroundDataSync();
+}
+
+void _runBackgroundDataSync() {
+  Future.microtask(() async {
+    try {
+      await seedDemoRaviKumar();
+      await seedDemoKiruthika();
+      await syncEmployeeJoiningAndAttendance();
+    } catch (e) {
+      debugPrint('Background sync notice: $e');
+    }
+  });
 }
