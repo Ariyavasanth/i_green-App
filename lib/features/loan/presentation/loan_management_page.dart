@@ -578,7 +578,9 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
           status: loan.status,
           onView: () => context.push('/loan-management/details/${loan.id}'),
           onHistory: () => _showEmployeeLoanHistory(loan),
-          onEdit: () => context.push('/loan-management/create', extra: loan),
+          onEdit: (loan.status == 'Pending' || loan.status.startsWith('Pending '))
+              ? () => context.push('/loan-management/create', extra: loan)
+              : null,
           onDownload: () => _downloadStatement(loan),
           onApprove: (loan.status == 'Pending' || loan.status.startsWith('Pending '))
               ? () => _handleAction('approve', loan)
@@ -716,10 +718,11 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
           value: 'history',
           child: Row(children: [Icon(Icons.history_outlined, size: 16), SizedBox(width: 8), Text('Loan history')]),
         ),
-        const PopupMenuItem(
-          value: 'edit',
-          child: Row(children: [Icon(Icons.edit_outlined, size: 16), SizedBox(width: 8), Text('Edit loan')]),
-        ),
+        if (loan.status == 'Pending' || loan.status.startsWith('Pending '))
+          const PopupMenuItem(
+            value: 'edit',
+            child: Row(children: [Icon(Icons.edit_outlined, size: 16), SizedBox(width: 8), Text('Edit loan')]),
+          ),
         if (loan.status == 'Pending' || loan.status.startsWith('Pending ')) ...[
           const PopupMenuItem(
             value: 'approve',
@@ -957,7 +960,7 @@ class MobileLoanCard extends StatelessWidget {
   final String status;
   final VoidCallback onView;
   final VoidCallback onHistory;
-  final VoidCallback onEdit;
+  final VoidCallback? onEdit;
   final VoidCallback onDownload;
   final VoidCallback? onApprove;
   final VoidCallback? onReject;
@@ -975,7 +978,7 @@ class MobileLoanCard extends StatelessWidget {
     required this.status,
     required this.onView,
     required this.onHistory,
-    required this.onEdit,
+    this.onEdit,
     required this.onDownload,
     this.onApprove,
     this.onReject,
@@ -1005,6 +1008,8 @@ class MobileLoanCard extends StatelessWidget {
       statusColor = Colors.grey.shade600;
       statusBgColor = Colors.grey.shade100;
     }
+
+    final isApprovedOrActive = norm == 'approved' || norm == 'active' || norm == 'closed';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -1059,7 +1064,7 @@ class MobileLoanCard extends StatelessWidget {
                       onHistory();
                       break;
                     case 'edit':
-                      onEdit();
+                      onEdit?.call();
                       break;
                     case 'download':
                       onDownload();
@@ -1097,15 +1102,16 @@ class MobileLoanCard extends StatelessWidget {
                       title: Text('Loan history'),
                     ),
                   ),
-                  const PopupMenuItem(
-                    value: 'edit',
-                    child: ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.edit_outlined, size: 20),
-                      title: Text('Edit loan'),
+                  if (onEdit != null)
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.edit_outlined, size: 20),
+                        title: Text('Edit loan'),
+                      ),
                     ),
-                  ),
                   if (onApprove != null)
                     const PopupMenuItem(
                       value: 'approve',
@@ -1182,27 +1188,29 @@ class MobileLoanCard extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(height: 14),
-          const Divider(height: 1, color: Color(0xFFE5E7EB)),
-          const SizedBox(height: 14),
+          if (isApprovedOrActive) ...[
+            const SizedBox(height: 14),
+            const Divider(height: 1, color: Color(0xFFE5E7EB)),
+            const SizedBox(height: 14),
 
-          // EMI / Balance
-          Row(
-            children: [
-              Expanded(
-                child: _LoanInfo(
-                  label: 'EMI',
-                  value: emi,
+            // EMI / Balance
+            Row(
+              children: [
+                Expanded(
+                  child: _LoanInfo(
+                    label: 'EMI',
+                    value: emi,
+                  ),
                 ),
-              ),
-              Expanded(
-                child: _LoanInfo(
-                  label: 'Balance',
-                  value: balance,
+                Expanded(
+                  child: _LoanInfo(
+                    label: 'Balance',
+                    value: balance,
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
 
           const SizedBox(height: 14),
 

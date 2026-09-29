@@ -175,9 +175,9 @@ class _LoanPageState extends ConsumerState<LoanPage> {
                               ),
                             )
                           else if (isMobile)
-                            _buildLoansListMobile(filtered)
+                            _buildLoansListMobile(filtered, currentEmp)
                           else
-                            _buildLoansTable(filtered, constraints.maxWidth),
+                            _buildLoansTable(filtered, constraints.maxWidth, currentEmp),
                         ],
                       );
                     },
@@ -425,7 +425,7 @@ class _LoanPageState extends ConsumerState<LoanPage> {
     );
   }
 
-  Widget _buildLoansListMobile(List<EmployeeLoan> loans) {
+  Widget _buildLoansListMobile(List<EmployeeLoan> loans, Employee employee) {
     final currencyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
     return ListView.builder(
@@ -434,6 +434,7 @@ class _LoanPageState extends ConsumerState<LoanPage> {
       itemCount: loans.length,
       itemBuilder: (context, index) {
         final loan = loans[index];
+        final isPending = loan.status.trim().toLowerCase().startsWith('pending');
         return _EmployeeMobileLoanCard(
           loanId: loan.loanId,
           loanType: loan.loanType,
@@ -442,6 +443,7 @@ class _LoanPageState extends ConsumerState<LoanPage> {
           balance: currencyFormat.format(loan.remainingBalance),
           status: loan.status,
           onView: () => context.push('/loan/details/${loan.id}'),
+          onEdit: isPending ? () => _showRequestLoanDialog(context, employee, loanToEdit: loan) : null,
           onDownload: () => _downloadStatement(loan),
         );
       },
@@ -492,7 +494,7 @@ class _LoanPageState extends ConsumerState<LoanPage> {
     }
   }
 
-  Widget _buildLoansTable(List<EmployeeLoan> loans, double screenWidth) {
+  Widget _buildLoansTable(List<EmployeeLoan> loans, double screenWidth, Employee employee) {
     final currencyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
     const minTableWidth = 900.0;
 
@@ -532,19 +534,26 @@ class _LoanPageState extends ConsumerState<LoanPage> {
                 DataColumn(label: Text('ACTIONS')),
               ],
               rows: loans.map((loan) {
+                final isPending = loan.status.trim().toLowerCase().startsWith('pending');
                 return DataRow(
                   cells: [
                     DataCell(Text(loan.loanId, style: const TextStyle(fontWeight: FontWeight.bold))),
                     DataCell(Text(loan.loanType)),
                     DataCell(Text(currencyFormat.format(loan.loanAmount), style: const TextStyle(fontWeight: FontWeight.w600))),
-                    DataCell(Text(currencyFormat.format(loan.emiAmount))),
-                    DataCell(Text(currencyFormat.format(loan.remainingBalance), style: const TextStyle(fontWeight: FontWeight.w600))),
-                    DataCell(Text(loan.firstDeductionMonth)),
+                    DataCell(Text(isPending ? '-' : currencyFormat.format(loan.emiAmount))),
+                    DataCell(Text(isPending ? '-' : currencyFormat.format(loan.remainingBalance), style: const TextStyle(fontWeight: FontWeight.w600))),
+                    DataCell(Text(isPending ? '-' : loan.firstDeductionMonth)),
                     DataCell(_buildStatusBadge(loan.status)),
                     DataCell(
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          if (isPending)
+                            IconButton(
+                              icon: const Icon(Icons.edit_outlined, size: 20, color: AppColors.active),
+                              onPressed: () => _showRequestLoanDialog(context, employee, loanToEdit: loan),
+                              tooltip: 'Edit Request',
+                            ),
                           IconButton(
                             icon: const Icon(Icons.visibility_outlined, size: 20),
                             onPressed: () => context.push('/loan/details/${loan.id}'),
@@ -603,15 +612,22 @@ class _LoanPageState extends ConsumerState<LoanPage> {
     );
   }
 
-  void _showRequestLoanDialog(BuildContext context, Employee employee) {
+  void _showRequestLoanDialog(BuildContext context, Employee employee, {EmployeeLoan? loanToEdit}) {
     showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {
-        return _RequestLoanDialog(employee: employee);
+        return _RequestLoanDialog(
+          employee: employee,
+          loanToEdit: loanToEdit,
+        );
       },
     ).then((_) {
       ref.invalidate(employeeLoansProvider(employee.id));
+      ref.invalidate(allLoansProvider);
+      if (loanToEdit != null) {
+        ref.invalidate(loanByIdProvider(loanToEdit.id));
+      }
     });
   }
 }
@@ -624,6 +640,7 @@ class _EmployeeMobileLoanCard extends StatelessWidget {
   final String balance;
   final String status;
   final VoidCallback onView;
+  final VoidCallback? onEdit;
   final VoidCallback onDownload;
 
   const _EmployeeMobileLoanCard({
@@ -634,6 +651,7 @@ class _EmployeeMobileLoanCard extends StatelessWidget {
     required this.balance,
     required this.status,
     required this.onView,
+    this.onEdit,
     required this.onDownload,
   });
 
@@ -659,6 +677,9 @@ class _EmployeeMobileLoanCard extends StatelessWidget {
       statusColor = Colors.grey.shade600;
       statusBgColor = Colors.grey.shade100;
     }
+
+    final isPending = norm.startsWith('pending');
+    final isApprovedOrActive = norm == 'approved' || norm == 'active' || norm == 'closed';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -705,6 +726,9 @@ class _EmployeeMobileLoanCard extends StatelessWidget {
                 elevation: 3,
                 onSelected: (value) {
                   switch (value) {
+                    case 'edit':
+                      onEdit?.call();
+                      break;
                     case 'view':
                       onView();
                       break;
@@ -713,8 +737,18 @@ class _EmployeeMobileLoanCard extends StatelessWidget {
                       break;
                   }
                 },
-                itemBuilder: (context) => const [
-                  PopupMenuItem(
+                itemBuilder: (context) => [
+                  if (isPending && onEdit != null)
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.edit_outlined, size: 20),
+                        title: Text('Edit loan'),
+                      ),
+                    ),
+                  const PopupMenuItem(
                     value: 'view',
                     child: ListTile(
                       dense: true,
@@ -723,7 +757,7 @@ class _EmployeeMobileLoanCard extends StatelessWidget {
                       title: Text('View loan'),
                     ),
                   ),
-                  PopupMenuItem(
+                  const PopupMenuItem(
                     value: 'download',
                     child: ListTile(
                       dense: true,
@@ -748,60 +782,62 @@ class _EmployeeMobileLoanCard extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(height: 14),
-          const Divider(height: 1, color: Color(0xFFE5E7EB)),
-          const SizedBox(height: 14),
+          if (isApprovedOrActive) ...[
+            const SizedBox(height: 14),
+            const Divider(height: 1, color: Color(0xFFE5E7EB)),
+            const SizedBox(height: 14),
 
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'EMI',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'EMI',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      emi,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                      const SizedBox(height: 4),
+                      Text(
+                        emi,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Balance',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Balance',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      balance,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                      const SizedBox(height: 4),
+                      Text(
+                        balance,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
 
           const SizedBox(height: 14),
 
@@ -854,8 +890,12 @@ class _EmployeeMobileLoanCard extends StatelessWidget {
 }
 
 class _RequestLoanDialog extends ConsumerStatefulWidget {
-  const _RequestLoanDialog({required this.employee});
+  const _RequestLoanDialog({
+    required this.employee,
+    this.loanToEdit,
+  });
   final Employee employee;
+  final EmployeeLoan? loanToEdit;
 
   @override
   ConsumerState<_RequestLoanDialog> createState() => _RequestLoanDialogState();
@@ -863,11 +903,12 @@ class _RequestLoanDialog extends ConsumerStatefulWidget {
 
 class _RequestLoanDialogState extends ConsumerState<_RequestLoanDialog> {
   final _formKey = GlobalKey<FormState>();
-  final _amountController = TextEditingController();
-  final _installmentsController = TextEditingController(text: '12');
-  final _emiController = TextEditingController();
-  final _purposeController = TextEditingController();
-  String _selectedLoanType = 'Personal Loan';
+  late final TextEditingController _amountController;
+  late final TextEditingController _installmentsController;
+  late final TextEditingController _emiController;
+  late final TextEditingController _purposeController;
+  late final TextEditingController _descriptionController;
+  late String _selectedLoanType;
 
   final List<String> _loanTypes = [
     'Personal Loan',
@@ -881,6 +922,31 @@ class _RequestLoanDialogState extends ConsumerState<_RequestLoanDialog> {
   @override
   void initState() {
     super.initState();
+    final loan = widget.loanToEdit;
+    _selectedLoanType = loan?.loanType ?? 'Personal Loan';
+    if (!_loanTypes.contains(_selectedLoanType) && _selectedLoanType.isNotEmpty) {
+      _loanTypes.add(_selectedLoanType);
+    }
+    _amountController = TextEditingController(
+      text: loan != null
+          ? (loan.loanAmount == loan.loanAmount.roundToDouble()
+              ? loan.loanAmount.toInt().toString()
+              : loan.loanAmount.toString())
+          : '',
+    );
+    _installmentsController = TextEditingController(
+      text: loan != null ? loan.installments.toString() : '12',
+    );
+    _emiController = TextEditingController(
+      text: loan != null ? loan.emiAmount.toStringAsFixed(2) : '',
+    );
+    _purposeController = TextEditingController(
+      text: loan?.purpose ?? '',
+    );
+    _descriptionController = TextEditingController(
+      text: loan?.remarks ?? '',
+    );
+
     _amountController.addListener(_calculateEmi);
     _installmentsController.addListener(_calculateEmi);
   }
@@ -891,6 +957,7 @@ class _RequestLoanDialogState extends ConsumerState<_RequestLoanDialog> {
     _installmentsController.dispose();
     _emiController.dispose();
     _purposeController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
 
@@ -951,77 +1018,147 @@ class _RequestLoanDialogState extends ConsumerState<_RequestLoanDialog> {
     final amount = double.tryParse(_amountController.text) ?? 0.0;
     final installments = int.tryParse(_installmentsController.text) ?? 12;
     final emi = double.tryParse(_emiController.text) ?? (amount / installments);
-
+    final isEdit = widget.loanToEdit != null;
     final now = DateTime.now();
-    final nextMonthDate = DateTime(now.year, now.month + 1);
-    final firstDeductionMonth = DateFormat('MMMM yyyy').format(nextMonthDate);
-    final lastDeductionMonth = _calculateLastDeductionMonth(firstDeductionMonth, installments);
 
-    final generatedId = await _generateNewLoanId();
+    if (isEdit) {
+      final existingLoan = widget.loanToEdit!;
+      final firstDeductionMonth = existingLoan.firstDeductionMonth.isNotEmpty
+          ? existingLoan.firstDeductionMonth
+          : DateFormat('MMMM yyyy').format(DateTime(now.year, now.month + 1));
+      final lastDeductionMonth = _calculateLastDeductionMonth(firstDeductionMonth, installments);
 
-    final loanRequest = EmployeeLoan(
-      id: 0,
-      loanId: generatedId,
-      employeeId: widget.employee.id,
-      employeeName: widget.employee.fullName,
-      employeeCustomId: widget.employee.employeeId,
-      department: widget.employee.department,
-      designation: widget.employee.designation,
-      loanType: _selectedLoanType,
-      loanAmount: amount,
-      loanDate: DateFormat('yyyy-MM-dd').format(now),
-      disbursementDate: DateFormat('yyyy-MM-dd').format(now),
-      purpose: _purposeController.text,
-      installments: installments,
-      emiAmount: emi,
-      firstDeductionMonth: firstDeductionMonth,
-      lastDeductionMonth: lastDeductionMonth,
-      interestRate: 0.0,
-      totalRepayableAmount: amount,
-      requestedBy: widget.employee.fullName,
-      approvedBy: '',
-      approvalDate: '',
-      remarks: '',
-      status: 'Pending',
-      remainingBalance: amount,
-    );
+      final updatedLoan = EmployeeLoan(
+        id: existingLoan.id,
+        loanId: existingLoan.loanId,
+        employeeId: widget.employee.id,
+        employeeName: widget.employee.fullName,
+        employeeCustomId: widget.employee.employeeId,
+        department: widget.employee.department,
+        designation: widget.employee.designation,
+        loanType: _selectedLoanType,
+        loanAmount: amount,
+        loanDate: existingLoan.loanDate.isNotEmpty ? existingLoan.loanDate : DateFormat('yyyy-MM-dd').format(now),
+        disbursementDate: existingLoan.disbursementDate.isNotEmpty ? existingLoan.disbursementDate : DateFormat('yyyy-MM-dd').format(now),
+        purpose: _purposeController.text.trim(),
+        installments: installments,
+        emiAmount: emi,
+        firstDeductionMonth: firstDeductionMonth,
+        lastDeductionMonth: lastDeductionMonth,
+        interestRate: existingLoan.interestRate,
+        totalRepayableAmount: amount,
+        requestedBy: existingLoan.requestedBy.isNotEmpty ? existingLoan.requestedBy : widget.employee.fullName,
+        approvedBy: existingLoan.approvedBy,
+        approvalDate: existingLoan.approvalDate,
+        remarks: _descriptionController.text.trim(),
+        status: existingLoan.status,
+        remainingBalance: amount,
+        repayments: existingLoan.repayments,
+      );
 
-    try {
-      await ref.read(loanRepositoryProvider).saveLoan(loanRequest);
-      ref.invalidate(allLoansProvider);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Loan request submitted successfully.'),
-            backgroundColor: AppColors.primary,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        Navigator.of(context).pop();
+      try {
+        await ref.read(loanRepositoryProvider).saveLoan(updatedLoan);
+        ref.invalidate(allLoansProvider);
+        ref.invalidate(employeeLoansProvider(widget.employee.id));
+        ref.invalidate(loanByIdProvider(existingLoan.id));
+        ref.invalidate(loanByIdProvider(updatedLoan.id));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Loan request updated successfully.'),
+              backgroundColor: AppColors.primary,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          Navigator.of(context).pop();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to update loan request: $e'),
+              backgroundColor: Colors.red[800],
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to submit loan request: $e'),
-            backgroundColor: Colors.red[800],
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+    } else {
+      final nextMonthDate = DateTime(now.year, now.month + 1);
+      final firstDeductionMonth = DateFormat('MMMM yyyy').format(nextMonthDate);
+      final lastDeductionMonth = _calculateLastDeductionMonth(firstDeductionMonth, installments);
+
+      final generatedId = await _generateNewLoanId();
+
+      final loanRequest = EmployeeLoan(
+        id: 0,
+        loanId: generatedId,
+        employeeId: widget.employee.id,
+        employeeName: widget.employee.fullName,
+        employeeCustomId: widget.employee.employeeId,
+        department: widget.employee.department,
+        designation: widget.employee.designation,
+        loanType: _selectedLoanType,
+        loanAmount: amount,
+        loanDate: DateFormat('yyyy-MM-dd').format(now),
+        disbursementDate: DateFormat('yyyy-MM-dd').format(now),
+        purpose: _purposeController.text.trim(),
+        installments: installments,
+        emiAmount: emi,
+        firstDeductionMonth: firstDeductionMonth,
+        lastDeductionMonth: lastDeductionMonth,
+        interestRate: 0.0,
+        totalRepayableAmount: amount,
+        requestedBy: widget.employee.fullName,
+        approvedBy: '',
+        approvalDate: '',
+        remarks: _descriptionController.text.trim(),
+        status: 'Pending',
+        remainingBalance: amount,
+      );
+
+      try {
+        await ref.read(loanRepositoryProvider).saveLoan(loanRequest);
+        ref.invalidate(allLoansProvider);
+        ref.invalidate(employeeLoansProvider(widget.employee.id));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Loan request submitted successfully.'),
+              backgroundColor: AppColors.primary,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          Navigator.of(context).pop();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to submit loan request: $e'),
+              backgroundColor: Colors.red[800],
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final isEdit = widget.loanToEdit != null;
     return AlertDialog(
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      title: const Row(
+      title: Row(
         children: [
-          Icon(Icons.rate_review_outlined, color: AppColors.active),
-          SizedBox(width: 10),
-          Text('Request New Loan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const Icon(Icons.rate_review_outlined, color: AppColors.active),
+          const SizedBox(width: 10),
+          Text(
+            isEdit ? 'Edit Loan Request' : 'Request New Loan',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
         ],
       ),
       content: SingleChildScrollView(
@@ -1061,11 +1198,17 @@ class _RequestLoanDialogState extends ConsumerState<_RequestLoanDialog> {
               TextFormField(
                 controller: _purposeController,
                 decoration: _inputDecoration('Purpose of Loan'),
-                maxLines: 3,
+                maxLines: 2,
                 validator: (val) {
                   if (val == null || val.isEmpty) return 'Purpose is required';
                   return null;
                 },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _descriptionController,
+                decoration: _inputDecoration('Description'),
+                maxLines: 3,
               ),
             ],
           ),
@@ -1083,7 +1226,7 @@ class _RequestLoanDialogState extends ConsumerState<_RequestLoanDialog> {
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
-          child: const Text('Submit Request'),
+          child: Text(isEdit ? 'Save Changes' : 'Submit Request'),
         ),
       ],
     );

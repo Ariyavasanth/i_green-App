@@ -51,7 +51,8 @@ class FirebaseLoanRepository implements LoanRepository {
       if (snap.docs.isNotEmpty) {
         return _loanFromFirestore(snap.docs.first.data(), snap.docs.first.id);
       }
-      return null;
+      final all = await getAllLoans();
+      return all.where((l) => l.id == id).firstOrNull;
     } catch (_) {
       return null;
     }
@@ -119,6 +120,7 @@ class FirebaseLoanRepository implements LoanRepository {
       final numericId = loan.id != 0 ? loan.id : (docId.hashCode & 0x7FFFFFFF);
       final updatedLoan = loan.copyWith(id: numericId);
       final map = updatedLoan.toMap();
+      map['id'] = numericId;
       map['updated_at'] = FieldValue.serverTimestamp();
       await _loansRef.doc(docId).set(map, SetOptions(merge: true));
     } catch (_) {}

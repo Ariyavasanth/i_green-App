@@ -32,8 +32,28 @@ class LoanDetailsPage extends ConsumerWidget {
         currentEmp != null &&
         (currentEmp.isSuperAdmin || currentEmp.hasPermission('Loan Management'));
 
+    final isMobile = MediaQuery.of(context).size.width < 700;
+
     return Scaffold(
       backgroundColor: AppColors.canvas,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          onPressed: () => context.pop(),
+        ),
+        title: const Text(
+          'Loan Details',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        centerTitle: false,
+      ),
       body: loanAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => Center(child: Text('Error loading loan: $err')),
@@ -48,15 +68,21 @@ class LoanDetailsPage extends ConsumerWidget {
           // In employee route (/loan/details/...) or for regular employees,
           // pending and rejected loans only show application & approval tracking status.
           if ((isEmployeeRoute || !isAdminManagementView) && isPendingOrRejected) {
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildEmployeeCard(loan),
-                  const SizedBox(height: 20),
-                  _buildEmployeeApplicationStatusCard(loan),
-                ],
+            return RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(loanByIdProvider(loanId));
+              },
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.all(isMobile ? 16 : 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildEmployeeCard(loan),
+                    const SizedBox(height: 16),
+                    _buildEmployeeApplicationStatusCard(loan),
+                  ],
+                ),
               ),
             );
           }
@@ -66,21 +92,28 @@ class LoanDetailsPage extends ConsumerWidget {
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (err, _) => Center(child: Text('Error loading payroll: $err')),
             data: (payrolls) {
-              return SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildEmployeeCard(loan),
-                    const SizedBox(height: 20),
-                    _buildLoanSummaryCard(context, ref, loan),
-                    const SizedBox(height: 20),
-                    _buildRepaymentScheduleCard(context, ref, loan, payrolls),
-                    if (isAdminManagementView) ...[
-                      const SizedBox(height: 20),
-                      _buildActionFooter(context, ref, loan),
+              return RefreshIndicator(
+                onRefresh: () async {
+                  ref.invalidate(loanByIdProvider(loanId));
+                  ref.invalidate(allPayrollRecordsProvider);
+                },
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.all(isMobile ? 16 : 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildEmployeeCard(loan),
+                      const SizedBox(height: 16),
+                      _buildLoanSummaryCard(context, ref, loan),
+                      const SizedBox(height: 16),
+                      _buildRepaymentScheduleCard(context, ref, loan, payrolls),
+                      if (isAdminManagementView) ...[
+                        const SizedBox(height: 16),
+                        _buildActionFooter(context, ref, loan),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               );
             },
@@ -95,11 +128,11 @@ class LoanDetailsPage extends ConsumerWidget {
     final isRejected = loan.status.trim().toLowerCase() == 'rejected';
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider, width: 0.5),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -120,20 +153,22 @@ class LoanDetailsPage extends ConsumerWidget {
               _buildStatusPill(loan.status),
             ],
           ),
-          const SizedBox(height: 16),
-          const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
+          const Divider(height: 1, color: Color(0xFFE5E7EB)),
+          const SizedBox(height: 14),
 
           _buildRowDetail('Loan ID', loan.loanId),
           _buildRowDetail('Loan Type', loan.loanType),
           _buildRowDetail('Requested Amount', formatCurrency.format(loan.loanAmount)),
           _buildRowDetail('Application Date', loan.loanDate.isNotEmpty ? loan.loanDate : '-'),
           _buildRowDetail('Purpose', loan.purpose.isNotEmpty ? loan.purpose : '-'),
+          if (loan.remarks.isNotEmpty)
+            _buildRowDetail('Description', loan.remarks),
           _buildRowDetail('Requested By', loan.requestedBy),
 
-          const SizedBox(height: 20),
-          const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
+          const Divider(height: 1, color: Color(0xFFE5E7EB)),
+          const SizedBox(height: 16),
 
           const Text(
             'Approval Workflow Status',
@@ -142,13 +177,13 @@ class LoanDetailsPage extends ConsumerWidget {
           const SizedBox(height: 16),
           _buildApprovalStepper(loan),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           if (isRejected)
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: Colors.red.shade50,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: Colors.red.shade200),
               ),
               child: Row(
@@ -182,7 +217,7 @@ class LoanDetailsPage extends ConsumerWidget {
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
               child: const Row(
@@ -333,11 +368,11 @@ class LoanDetailsPage extends ConsumerWidget {
 
   Widget _buildEmployeeCard(EmployeeLoan loan) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider, width: 0.5),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -352,9 +387,9 @@ class LoanDetailsPage extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
+          const Divider(height: 1, color: Color(0xFFE5E7EB)),
+          const SizedBox(height: 14),
           _buildRowDetail('Employee Name', loan.employeeName),
           _buildRowDetail('Employee ID', loan.employeeCustomId),
           _buildRowDetail('Department', loan.department),
@@ -377,11 +412,11 @@ class LoanDetailsPage extends ConsumerWidget {
     final lastMonthEmi = loan.emiForInstallment(loan.installments > 0 ? loan.installments - 1 : 0);
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider, width: 0.5),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -396,9 +431,9 @@ class LoanDetailsPage extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
+          const Divider(height: 1, color: Color(0xFFE5E7EB)),
+          const SizedBox(height: 14),
           _buildRowDetail('Loan ID', loan.loanId),
           _buildRowDetail('Loan Type', loan.loanType),
           _buildRowDetail('Principal Amount', formatCurrency.format(loan.loanAmount)),
@@ -421,6 +456,8 @@ class LoanDetailsPage extends ConsumerWidget {
           _buildRowDetail('Next EMI Month', loan.nextEmiMonth),
           _buildRowDetail('Disbursement Date', loan.disbursementDate.isNotEmpty ? loan.disbursementDate : '-'),
           _buildRowDetail('Purpose', loan.purpose.isNotEmpty ? loan.purpose : '-'),
+          if (loan.remarks.isNotEmpty)
+            _buildRowDetail('Description', loan.remarks),
           _buildRowDetail('Requested By', loan.requestedBy),
           _buildRowDetail('Approved By', loan.approvedBy.isNotEmpty ? loan.approvedBy : '-'),
           _buildRowDetail('Status', loan.status, isStatus: true),
@@ -440,19 +477,23 @@ class LoanDetailsPage extends ConsumerWidget {
     final monthlyPrincipal = loan.monthlyPrincipal;
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider, width: 0.5),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
             children: [
               const Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(Icons.calendar_month_outlined, color: AppColors.active, size: 20),
                   SizedBox(width: 8),
@@ -469,14 +510,14 @@ class LoanDetailsPage extends ConsumerWidget {
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.primary,
                       side: const BorderSide(color: AppColors.primary),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       visualDensity: VisualDensity.compact,
                     ),
                     icon: const Icon(Icons.download_outlined, size: 16),
                     label: const Text('Download Statement', style: TextStyle(fontSize: 12)),
                     onPressed: () => _downloadStatement(context, ref, loan, payrolls),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 8),
                   Text(
                     '${loan.paidInstallments} / ${loan.installments} Paid',
                     style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
@@ -485,8 +526,8 @@ class LoanDetailsPage extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          const Divider(height: 1, color: AppColors.divider, thickness: 0.5),
+          const SizedBox(height: 14),
+          const Divider(height: 1, color: Color(0xFFE5E7EB)),
           const SizedBox(height: 12),
           if (scheduleMonths.isEmpty)
             const Padding(
@@ -594,8 +635,8 @@ class LoanDetailsPage extends ConsumerWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider, width: 0.5),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Wrap(
         alignment: WrapAlignment.end,
@@ -817,17 +858,28 @@ class LoanDetailsPage extends ConsumerWidget {
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: statusColor,
+          SizedBox(
+            width: 130,
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: statusColor,
+              ),
             ),
           ),
         ],
