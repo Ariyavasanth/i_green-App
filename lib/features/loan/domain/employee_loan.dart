@@ -97,23 +97,79 @@ class EmployeeLoan {
     this.repayments = const [],
   });
 
+  /// Parse "Month Year" (e.g. "September 2026") into (year, monthNumber)
+  static (int, int) parseMonthYear(String monthStr) {
+    final now = DateTime.now();
+    final parts = monthStr.trim().split(' ');
+    if (parts.length < 2) return (now.year, now.month);
+    final monthName = parts[0].toLowerCase();
+    final year = int.tryParse(parts[1]) ?? now.year;
+    const months = [
+      'january', 'february', 'march', 'april', 'may', 'june',
+      'july', 'august', 'september', 'october', 'november', 'december'
+    ];
+    final idx = months.indexOf(monthName);
+    return (year, idx != -1 ? idx + 1 : now.month);
+  }
+
   /// Monthly Principal (Principal / installments)
   double get monthlyPrincipal => installments > 0 ? loanAmount / installments : 0.0;
 
-  /// Total interest calculated using reducing balance formula:
-  /// Sum for i=0 to n-1 of (loanAmount - i*(loanAmount/n)) * (interestRate/100)
-  /// = loanAmount * (interestRate / 100) * ((installments + 1) / 2)
-  double get calculatedTotalInterest {
-    if (installments <= 0 || interestRate <= 0) return 0.0;
-    return loanAmount * (interestRate / 100.0) * ((installments + 1) / 2.0);
+  /// Number of active interest days for installment (0-indexed)
+  /// In 1st installment, calculates exact days from disbursementDate to the payroll cutoff date.
+  int activeDaysForInstallment(int index, {int payrollStartDay = 20, int payrollEndDay = 20}) {
+    if (installments <= 0 || scheduleMonths.isEmpty || index >= scheduleMonths.length) return 30;
+    final (year, monthNum) = parseMonthYear(scheduleMonths[index]);
+    
+    // Determine cross month cycle
+    final bool isCrossMonth = payrollStartDay > payrollEndDay || (payrollStartDay == payrollEndDay && payrollStartDay > 1);
+    final DateTime cycleStart;
+    if (isCrossMonth) {
+      final prevMonthDate = DateTime(year, monthNum - 1, 1);
+      cycleStart = DateTime(prevMonthDate.year, prevMonthDate.month, payrollStartDay);
+    } else {
+      cycleStart = DateTime(year, monthNum, payrollStartDay);
+    }
+    final endExclusive = DateTime(year, monthNum, payrollEndDay).add(const Duration(days: 1));
+    final totalCycleDays = endExclusive.difference(cycleStart).inDays;
+
+    if (index == 0 && disbursementDate.isNotEmpty) {
+      final parsedDisb = DateTime.tryParse(disbursementDate);
+      if (parsedDisb != null) {
+        final disbDateOnly = DateTime(parsedDisb.year, parsedDisb.month, parsedDisb.day);
+        if (disbDateOnly.isAfter(endExclusive)) {
+          return 0;
+        }
+        final effectiveStart = disbDateOnly.isAfter(cycleStart) ? disbDateOnly : cycleStart;
+        final diff = endExclusive.difference(effectiveStart).inDays;
+        return diff.clamp(0, totalCycleDays);
+      }
+    }
+    return totalCycleDays;
   }
 
-  /// Total repayable amount (Principal + Total Reducing Interest)
-  double get calculatedTotalRepayable {
-    if (interestRate > 0) {
-      return loanAmount + calculatedTotalInterest;
+  /// Total days in the payroll cycle for installment
+  int cycleDaysForInstallment(int index, {int payrollStartDay = 20, int payrollEndDay = 20}) {
+    if (installments <= 0 || scheduleMonths.isEmpty || index >= scheduleMonths.length) return 30;
+    final (year, monthNum) = parseMonthYear(scheduleMonths[index]);
+    
+    final bool isCrossMonth = payrollStartDay > payrollEndDay || (payrollStartDay == payrollEndDay && payrollStartDay > 1);
+    final DateTime cycleStart;
+    if (isCrossMonth) {
+      final prevMonthDate = DateTime(year, monthNum - 1, 1);
+      cycleStart = DateTime(prevMonthDate.year, prevMonthDate.month, payrollStartDay);
+    } else {
+      cycleStart = DateTime(year, monthNum, payrollStartDay);
     }
-    return totalRepayableAmount > 0 ? totalRepayableAmount : loanAmount;
+    final endExclusive = DateTime(year, monthNum, payrollEndDay).add(const Duration(days: 1));
+    return endExclusive.difference(cycleStart).inDays;
+  }
+
+  /// Calendar days in month for installment
+  int daysInMonthForInstallment(int index) {
+    if (installments <= 0 || scheduleMonths.isEmpty || index >= scheduleMonths.length) return 30;
+    final (year, monthNum) = parseMonthYear(scheduleMonths[index]);
+    return DateTime(year, monthNum + 1, 0).day;
   }
 
   /// Principal balance at start of given installment (0-indexed)
@@ -131,18 +187,81 @@ class EmployeeLoan {
   }
 
   /// Interest amount for a specific installment month (0-indexed)
-  /// based on remaining principal balance at the start of that month.
-  double interestForInstallment(int index) {
-    if (interestRate <= 0) return 0.0;
+  /// calculated on daily pro-rata basis: Starting Principal * (Rate / 100) * (Active Days / Cycle Days)
+  double interestForInstallment(
+    int index, {
+    int payrollStartDay = 20,
+    int payrollEndDay = 20,
+  }) {
+    if (interestRate <= 0 || installments <= 0) return 0.0;
     final start = startPrincipalForInstallment(index);
-    return start * (interestRate / 100.0);
+    if (start <= 0) return 0.0;
+
+    final activeDays = activeDaysForInstallment(
+      index,
+      payrollStartDay: payrollStartDay,
+      payrollEndDay: payrollEndDay,
+    );
+    final cycleDays = cycleDaysForInstallment(
+      index,
+      payrollStartDay: payrollStartDay,
+      payrollEndDay: payrollEndDay,
+    );
+    final proRataFactor = cycleDays > 0 ? (activeDays / cycleDays) : 1.0;
+
+    return start * (interestRate / 100.0) * proRataFactor;
   }
 
   /// Total EMI for a specific installment month (0-indexed)
-  /// = Monthly Principal + Reducing Interest for that month
-  double emiForInstallment(int index) {
-    return monthlyPrincipal + interestForInstallment(index);
+  /// = Monthly Principal + Pro-rata Interest for that month
+  double emiForInstallment(
+    int index, {
+    int payrollStartDay = 20,
+    int payrollEndDay = 20,
+  }) {
+    return monthlyPrincipal + interestForInstallment(
+      index,
+      payrollStartDay: payrollStartDay,
+      payrollEndDay: payrollEndDay,
+    );
   }
+
+  /// Total interest calculated across all installments considering daily pro-rata basis
+  double calculatedTotalInterestWithDays({
+    int payrollStartDay = 20,
+    int payrollEndDay = 20,
+  }) {
+    if (installments <= 0 || interestRate <= 0) return 0.0;
+    double total = 0.0;
+    for (int i = 0; i < installments; i++) {
+      total += interestForInstallment(
+        i,
+        payrollStartDay: payrollStartDay,
+        payrollEndDay: payrollEndDay,
+      );
+    }
+    return total;
+  }
+
+  /// Total interest calculated using pro-rata daily formula
+  double get calculatedTotalInterest => calculatedTotalInterestWithDays();
+
+  /// Total repayable amount (Principal + Total Pro-rata Interest)
+  double calculatedTotalRepayableWithDays({
+    int payrollStartDay = 20,
+    int payrollEndDay = 20,
+  }) {
+    if (interestRate > 0) {
+      return loanAmount + calculatedTotalInterestWithDays(
+        payrollStartDay: payrollStartDay,
+        payrollEndDay: payrollEndDay,
+      );
+    }
+    return totalRepayableAmount > 0 ? totalRepayableAmount : loanAmount;
+  }
+
+  /// Total repayable amount getter
+  double get calculatedTotalRepayable => calculatedTotalRepayableWithDays();
 
   /// Total amount repaid from the repayment ledger, fallback to balance difference.
   double get totalPaid {

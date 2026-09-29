@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../employee/domain/employee.dart';
 import '../../../employee/providers/employee_providers.dart';
+import '../../../payroll/providers/payroll_providers.dart';
 import '../../domain/employee_loan.dart';
 import '../../providers/loan_providers.dart';
 
@@ -91,6 +92,11 @@ class _ApproveLoanDialogState extends ConsumerState<ApproveLoanDialog> {
   @override
   Widget build(BuildContext context) {
     final employeesAsync = ref.watch(employeesProvider);
+    final settingsAsync = ref.watch(payrollSettingsProvider);
+    final settings = settingsAsync.asData?.value;
+    final pStart = settings?.payrollStartDay ?? 20;
+    final pEnd = settings?.payrollEndDay ?? 20;
+
     final currencyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
     final employeesList = employeesAsync.asData?.value ?? [];
@@ -107,20 +113,22 @@ class _ApproveLoanDialogState extends ConsumerState<ApproveLoanDialog> {
         : 0.0;
 
     final installments = int.tryParse(_installmentsController.text) ?? widget.loan.installments;
-    final rate = widget.loan.interestRate;
-    final principal = widget.loan.loanAmount;
-
-    // Reducing Balance Interest Calculation
-    final totalInterest = (installments > 0 && rate > 0)
-        ? principal * (rate / 100.0) * ((installments + 1) / 2.0)
-        : 0.0;
-    final totalRepayable = principal + totalInterest;
-    final monthlyPrincipal = installments > 0 ? principal / installments : 0.0;
-    final firstMonthInterest = principal * (rate / 100.0);
-    final monthlyEmi = monthlyPrincipal + firstMonthInterest;
-
-    final emiPercent = monthlySalary > 0 ? (monthlyEmi / monthlySalary) * 100 : 0.0;
     final lastDeductionMonth = _calculateLastDeductionMonth(_firstDeductionMonth, installments);
+
+    final previewLoan = widget.loan.copyWith(
+      installments: installments,
+      firstDeductionMonth: _firstDeductionMonth,
+      lastDeductionMonth: lastDeductionMonth,
+    );
+
+    final rate = previewLoan.interestRate;
+    final totalInterest = previewLoan.calculatedTotalInterestWithDays(payrollStartDay: pStart, payrollEndDay: pEnd);
+    final monthlyPrincipal = previewLoan.monthlyPrincipal;
+    final firstMonthInterest = previewLoan.interestForInstallment(0, payrollStartDay: pStart, payrollEndDay: pEnd);
+    final monthlyEmi = previewLoan.emiForInstallment(0, payrollStartDay: pStart, payrollEndDay: pEnd);
+    final activeDays = previewLoan.activeDaysForInstallment(0, payrollStartDay: pStart, payrollEndDay: pEnd);
+    final cycleDays = previewLoan.cycleDaysForInstallment(0, payrollStartDay: pStart, payrollEndDay: pEnd);
+    final emiPercent = monthlySalary > 0 ? (monthlyEmi / monthlySalary) * 100 : 0.0;
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -382,7 +390,9 @@ class _ApproveLoanDialogState extends ConsumerState<ApproveLoanDialog> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                'Principal: ${currencyFormat.format(monthlyPrincipal)} + 1st Month Int: ${currencyFormat.format(firstMonthInterest)}',
+                                activeDays < cycleDays
+                                    ? 'Principal: ${currencyFormat.format(monthlyPrincipal)} + 1st Month Int: ${currencyFormat.format(firstMonthInterest)} ($activeDays/$cycleDays days)'
+                                    : 'Principal: ${currencyFormat.format(monthlyPrincipal)} + 1st Month Int: ${currencyFormat.format(firstMonthInterest)}',
                                 style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF166534)),
                               ),
                               Text(
@@ -493,18 +503,21 @@ class _ApproveLoanDialogState extends ConsumerState<ApproveLoanDialog> {
       final approverName = currentEmp?.fullName ?? 'Admin';
       final approverRole = currentEmp?.userType ?? 'Admin';
 
-      final installments = int.tryParse(_installmentsController.text.trim()) ?? widget.loan.installments;
-      final rate = widget.loan.interestRate;
-      final principal = widget.loan.loanAmount;
+      final settings = ref.read(payrollSettingsProvider).asData?.value;
+      final pStart = settings?.payrollStartDay ?? 20;
+      final pEnd = settings?.payrollEndDay ?? 20;
 
-      final totalInterest = (installments > 0 && rate > 0)
-          ? principal * (rate / 100.0) * ((installments + 1) / 2.0)
-          : 0.0;
-      final totalRepayable = principal + totalInterest;
-      final monthlyPrincipal = installments > 0 ? principal / installments : 0.0;
-      final firstMonthInterest = principal * (rate / 100.0);
-      final emiAmount = monthlyPrincipal + firstMonthInterest;
+      final installments = int.tryParse(_installmentsController.text.trim()) ?? widget.loan.installments;
       final lastDeductionMonth = _calculateLastDeductionMonth(_firstDeductionMonth, installments);
+
+      final previewLoan = widget.loan.copyWith(
+        installments: installments,
+        firstDeductionMonth: _firstDeductionMonth,
+        lastDeductionMonth: lastDeductionMonth,
+      );
+
+      final totalRepayable = previewLoan.calculatedTotalRepayableWithDays(payrollStartDay: pStart, payrollEndDay: pEnd);
+      final emiAmount = previewLoan.emiForInstallment(0, payrollStartDay: pStart, payrollEndDay: pEnd);
 
       final nextStatus = await ref.read(loanRepositoryProvider).approveLoan(
         id: widget.loan.id,

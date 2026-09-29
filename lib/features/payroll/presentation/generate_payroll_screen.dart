@@ -177,7 +177,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     _staffWelfareController.text = '0.00';
 
     _recalculate();
-    _loadActiveLoan(employee.id, selectedMonth);
+    _loadActiveLoan(employee.id, selectedMonth, settings);
     _loadLopDetails(employee.id, selectedMonth, settings);
   }
 
@@ -225,18 +225,28 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     } catch (_) {}
   }
 
-  Future<void> _loadActiveLoan(int employeeId, String month) async {
+  Future<void> _loadActiveLoan(int employeeId, String month, PayrollSettings settings) async {
     try {
       final loan = await ref.read(loanRepositoryProvider).getActiveLoanForEmployee(employeeId, month);
       if (loan != null && mounted) {
+        final pStart = settings.payrollStartDay;
+        final pEnd = settings.payrollEndDay;
+
         final monthIdx = loan.scheduleMonths.indexWhere((m) => m.trim().toLowerCase() == month.trim().toLowerCase());
         final currentMonthEmi = monthIdx != -1
-            ? loan.emiForInstallment(monthIdx)
-            : (loan.interestRate > 0 ? loan.emiForInstallment(loan.paidInstallments) : loan.emiAmount);
+            ? loan.emiForInstallment(monthIdx, payrollStartDay: pStart, payrollEndDay: pEnd)
+            : (loan.interestRate > 0 ? loan.emiForInstallment(loan.paidInstallments, payrollStartDay: pStart, payrollEndDay: pEnd) : loan.emiAmount);
 
-        final installmentNote = monthIdx != -1
+        final activeDays = monthIdx != -1 ? loan.activeDaysForInstallment(monthIdx, payrollStartDay: pStart, payrollEndDay: pEnd) : 30;
+        final cycleDays = monthIdx != -1 ? loan.cycleDaysForInstallment(monthIdx, payrollStartDay: pStart, payrollEndDay: pEnd) : 30;
+
+        String installmentNote = monthIdx != -1
             ? 'Installment ${monthIdx + 1} of ${loan.installments} (${loan.loanId})'
             : (loan.loanId.isNotEmpty ? 'Loan EMI (${loan.loanId})' : 'Loan EMI');
+
+        if (monthIdx == 0 && activeDays < cycleDays && loan.interestRate > 0) {
+          installmentNote += ' • Pro-rata $activeDays/$cycleDays days';
+        }
 
         setState(() {
           _companyLoanController.text = currentMonthEmi.toStringAsFixed(2);

@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
+import '../../payroll/providers/payroll_providers.dart';
 import '../domain/employee_loan.dart';
 import '../providers/loan_providers.dart';
 
@@ -187,22 +188,49 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
     final amount = double.tryParse(_amountController.text) ?? 0.0;
     final installments = int.tryParse(_installmentsController.text) ?? 0;
     final rate = double.tryParse(_interestRateController.text) ?? 0.0;
+    final disbDateStr = DateFormat('yyyy-MM-dd').format(_disbursementDate);
+
+    final settings = ref.read(payrollSettingsProvider).asData?.value;
+    final pStart = settings?.payrollStartDay ?? 20;
+    final pEnd = settings?.payrollEndDay ?? 20;
 
     if (installments > 0 && amount > 0) {
-      final totalInterest = (rate > 0)
-          ? amount * (rate / 100.0) * ((installments + 1) / 2.0)
-          : 0.0;
-      final total = amount + totalInterest;
+      final lastMonth = _firstDeductionMonth.isNotEmpty
+          ? _calculateLastDeductionMonth(_firstDeductionMonth, installments)
+          : '';
 
-      final monthlyPrincipal = amount / installments;
-      final firstMonthInterest = amount * (rate / 100.0);
-      final firstMonthEmi = monthlyPrincipal + firstMonthInterest;
+      final dummyLoan = EmployeeLoan(
+        id: 0,
+        loanId: '',
+        employeeId: 0,
+        employeeName: '',
+        employeeCustomId: '',
+        department: '',
+        designation: '',
+        loanType: _selectedLoanType,
+        loanAmount: amount,
+        loanDate: DateFormat('yyyy-MM-dd').format(_loanDate),
+        disbursementDate: disbDateStr,
+        purpose: '',
+        installments: installments,
+        emiAmount: 0.0,
+        firstDeductionMonth: _firstDeductionMonth,
+        lastDeductionMonth: lastMonth,
+        interestRate: rate,
+        totalRepayableAmount: 0.0,
+        requestedBy: '',
+        status: 'Pending',
+        remainingBalance: 0.0,
+      );
+
+      final total = dummyLoan.calculatedTotalRepayableWithDays(payrollStartDay: pStart, payrollEndDay: pEnd);
+      final firstMonthEmi = dummyLoan.emiForInstallment(0, payrollStartDay: pStart, payrollEndDay: pEnd);
 
       setState(() {
         _totalRepayableController.text = total.toStringAsFixed(2);
         _emiController.text = firstMonthEmi.toStringAsFixed(2);
         if (_firstDeductionMonth.isNotEmpty) {
-          _lastDeductionMonth = _calculateLastDeductionMonth(_firstDeductionMonth, installments);
+          _lastDeductionMonth = lastMonth;
           _lastDeductionController.text = _lastDeductionMonth;
         } else {
           _lastDeductionMonth = '';
@@ -268,6 +296,7 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
           _disbursementDate = picked;
         }
       });
+      _calculateRepayment();
     }
   }
 

@@ -441,15 +441,22 @@ class LoanDetailsPage extends ConsumerWidget {
       );
     }
 
+    final settingsAsync = ref.watch(payrollSettingsProvider);
+    final settings = settingsAsync.asData?.value;
+    final pStart = settings?.payrollStartDay ?? 20;
+    final pEnd = settings?.payrollEndDay ?? 20;
+
     final totalInterest = loan.interestRate > 0
-        ? loan.calculatedTotalInterest
+        ? loan.calculatedTotalInterestWithDays(payrollStartDay: pStart, payrollEndDay: pEnd)
         : (loan.totalRepayableAmount - loan.loanAmount).clamp(0.0, double.infinity);
     final totalRepayable = loan.interestRate > 0
-        ? loan.calculatedTotalRepayable
+        ? loan.calculatedTotalRepayableWithDays(payrollStartDay: pStart, payrollEndDay: pEnd)
         : (loan.totalRepayableAmount > 0 ? loan.totalRepayableAmount : loan.loanAmount);
     final monthlyPrincipal = loan.monthlyPrincipal;
-    final firstMonthEmi = loan.emiForInstallment(0);
-    final lastMonthEmi = loan.emiForInstallment(loan.installments > 0 ? loan.installments - 1 : 0);
+    final firstMonthEmi = loan.emiForInstallment(0, payrollStartDay: pStart, payrollEndDay: pEnd);
+    final lastMonthEmi = loan.emiForInstallment(loan.installments > 0 ? loan.installments - 1 : 0, payrollStartDay: pStart, payrollEndDay: pEnd);
+    final activeDays = loan.activeDaysForInstallment(0, payrollStartDay: pStart, payrollEndDay: pEnd);
+    final daysInMonth = loan.daysInMonthForInstallment(0);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -566,6 +573,11 @@ class LoanDetailsPage extends ConsumerWidget {
       );
     }
 
+    final settingsAsync = ref.watch(payrollSettingsProvider);
+    final settings = settingsAsync.asData?.value;
+    final pStart = settings?.payrollStartDay ?? 20;
+    final pEnd = settings?.payrollEndDay ?? 20;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -636,9 +648,11 @@ class LoanDetailsPage extends ConsumerWidget {
               ],
               rows: List<DataRow>.generate(scheduleMonths.length, (index) {
                 final month = scheduleMonths[index];
-                final monthInterest = loan.interestForInstallment(index);
-                final monthEmi = loan.emiForInstallment(index);
+                final monthInterest = loan.interestForInstallment(index, payrollStartDay: pStart, payrollEndDay: pEnd);
+                final monthEmi = loan.emiForInstallment(index, payrollStartDay: pStart, payrollEndDay: pEnd);
                 final endingPrincipal = loan.endPrincipalForInstallment(index);
+                final activeDays = loan.activeDaysForInstallment(index, payrollStartDay: pStart, payrollEndDay: pEnd);
+                final cycleDays = loan.cycleDaysForInstallment(index, payrollStartDay: pStart, payrollEndDay: pEnd);
 
                 // Check if repayment ledger has an entry for this month
                 final ledgerRepayment = loan.repayments.where((r) => r.month.trim().toLowerCase() == month.trim().toLowerCase()).firstOrNull;
@@ -661,12 +675,23 @@ class LoanDetailsPage extends ConsumerWidget {
                   cells: [
                     DataCell(Text(month, style: const TextStyle(fontWeight: FontWeight.w500))),
                     DataCell(Text(formatCurrency.format(monthlyPrincipal))),
-                    DataCell(Text(
-                      formatCurrency.format(monthInterest),
-                      style: TextStyle(
-                        color: monthInterest > 0 ? Colors.orange.shade800 : AppColors.textSecondary,
-                        fontWeight: monthInterest > 0 ? FontWeight.w600 : FontWeight.normal,
-                      ),
+                    DataCell(Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          formatCurrency.format(monthInterest),
+                          style: TextStyle(
+                            color: monthInterest > 0 ? Colors.orange.shade800 : AppColors.textSecondary,
+                            fontWeight: monthInterest > 0 ? FontWeight.w600 : FontWeight.normal,
+                          ),
+                        ),
+                        if (monthInterest > 0 && activeDays < cycleDays)
+                          Text(
+                            '$activeDays/$cycleDays days',
+                            style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+                          ),
+                      ],
                     )),
                     DataCell(Text(
                       formatCurrency.format(monthEmi),
@@ -791,11 +816,13 @@ class LoanDetailsPage extends ConsumerWidget {
       final orgList = ref.read(organizationsProvider).asData?.value ?? [];
       final org = orgList.firstOrNull;
 
+      final settings = ref.read(payrollSettingsProvider).asData?.value;
       final pdfBytes = await LoanStatementPdfGenerator.generateStatementPdf(
         loan: loan,
         employee: employee,
         organization: org,
         payrolls: payrolls,
+        settings: settings,
       );
 
       final cleanLoanId = loan.loanId.replaceAll(RegExp(r'[^\w\-_]'), '_');

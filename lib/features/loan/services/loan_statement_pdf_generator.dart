@@ -22,11 +22,15 @@ class LoanStatementPdfGenerator {
     Employee? employee,
     Organization? organization,
     List<PayrollRecord> payrolls = const [],
+    PayrollSettings? settings,
   }) async {
     final pdf = pw.Document(
       title: 'Loan_Statement_${loan.loanId}_${loan.employeeName}',
       author: 'IGreen Technologies',
     );
+
+    final pStart = settings?.payrollStartDay ?? 20;
+    final pEnd = settings?.payrollEndDay ?? 20;
 
     // Load default asset logo if available
     pw.MemoryImage? logoImage;
@@ -60,11 +64,11 @@ class LoanStatementPdfGenerator {
         : (employee?.designation.isNotEmpty == true ? employee!.designation : '-');
 
     final totalInterest = loan.interestRate > 0
-        ? loan.calculatedTotalInterest
+        ? loan.calculatedTotalInterestWithDays(payrollStartDay: pStart, payrollEndDay: pEnd)
         : (loan.totalRepayableAmount - loan.loanAmount).clamp(0.0, double.infinity);
 
     final totalRepayable = loan.interestRate > 0
-        ? loan.calculatedTotalRepayable
+        ? loan.calculatedTotalRepayableWithDays(payrollStartDay: pStart, payrollEndDay: pEnd)
         : (loan.totalRepayableAmount > 0 ? loan.totalRepayableAmount : loan.loanAmount);
 
     final scheduleMonths = loan.scheduleMonths;
@@ -284,8 +288,8 @@ class LoanStatementPdfGenerator {
                   ...List<pw.TableRow>.generate(scheduleMonths.length, (index) {
                     final month = scheduleMonths[index];
                     final monthlyPrincipal = loan.monthlyPrincipal;
-                    final monthInterest = loan.interestForInstallment(index);
-                    final monthEmi = loan.emiForInstallment(index);
+                    final monthInterest = loan.interestForInstallment(index, payrollStartDay: pStart, payrollEndDay: pEnd);
+                    final monthEmi = loan.emiForInstallment(index, payrollStartDay: pStart, payrollEndDay: pEnd);
                     final endingPrincipal = loan.endPrincipalForInstallment(index);
 
                     // Check if ledger repayment or payroll paid record matches
