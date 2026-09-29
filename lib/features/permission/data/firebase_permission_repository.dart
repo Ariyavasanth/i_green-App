@@ -43,8 +43,11 @@ class FirebasePermissionRepository implements PermissionRepository {
     final targetMonthYear = '${date.year}-${date.month.toString().padLeft(2, '0')}';
     final targetDateStr = date.toIso8601String().split('T').first;
 
-    int todayUsed = 0;
-    int monthUsed = 0;
+    final dailyLimitMins = (policy.dailyLimitHours * 60).round();
+    final monthlyLimitMins = (policy.monthlyLimitHours * 60).round();
+
+    final activeDaysInMonth = <String>{};
+    bool hasActiveRequestToday = false;
 
     for (final req in all) {
       if (req.status == PermissionStatus.rejected || req.status == PermissionStatus.cancelled) {
@@ -54,15 +57,16 @@ class FirebasePermissionRepository implements PermissionRepository {
       final reqMonthYear = '${req.date.year}-${req.date.month.toString().padLeft(2, '0')}';
 
       if (reqMonthYear == targetMonthYear) {
-        monthUsed += req.durationMinutes;
+        activeDaysInMonth.add(reqDateStr);
       }
       if (reqDateStr == targetDateStr) {
-        todayUsed += req.durationMinutes;
+        hasActiveRequestToday = true;
       }
     }
 
-    final dailyLimitMins = (policy.dailyLimitHours * 60).round();
-    final monthlyLimitMins = (policy.monthlyLimitHours * 60).round();
+    // Applying on any given day automatically exhausts the full daily quota (2 hours / 120 mins)
+    final monthUsed = activeDaysInMonth.length * dailyLimitMins;
+    final todayUsed = hasActiveRequestToday ? dailyLimitMins : 0;
 
     return PermissionBalance(
       employeeId: employeeId,
@@ -124,11 +128,27 @@ class FirebasePermissionRepository implements PermissionRepository {
 
   @override
   Future<void> submitRequest(PermissionRequest request) async {
+    // Check consecutive day restriction
+    final reqDateOnly = DateTime(request.date.year, request.date.month, request.date.day);
+    final all = await getEmployeeRequests(request.employeeId);
+    for (final existing in all) {
+      if (existing.id == request.id) continue;
+      if (existing.status == PermissionStatus.rejected || existing.status == PermissionStatus.cancelled) continue;
+      final exDateOnly = DateTime(existing.date.year, existing.date.month, existing.date.day);
+      final diff = reqDateOnly.difference(exDateOnly).inDays.abs();
+      if (diff == 1) {
+        final dateFormatted = '${existing.date.day.toString().padLeft(2, '0')}-${existing.date.month.toString().padLeft(2, '0')}-${existing.date.year}';
+        throw Exception('Permissions are not permitted on consecutive days. You already have a permission on $dateFormatted.');
+      }
+    }
+
     final newId = request.id ?? DateTime.now().millisecondsSinceEpoch;
     final reqWithId = request.copyWith(id: newId);
     try {
       await _requestsRef.doc(newId.toString()).set(reqWithId.toMap(), SetOptions(merge: true));
-    } catch (_) {}
+    } catch (e) {
+      if (e is Exception && e.toString().contains('consecutive')) rethrow;
+    }
   }
 
   @override
@@ -308,26 +328,26 @@ class FirebasePermissionRepository implements PermissionRepository {
     final targetMonthYear = '${month.year}-${month.month.toString().padLeft(2, '0')}';
     final policy = await getPermissionPolicy();
 
-    final empUsedMap = <int, int>{};
+    final empActiveDaysMap = <int, Set<String>>{};
     for (final req in allRequests) {
       if (req.status == PermissionStatus.rejected || req.status == PermissionStatus.cancelled) {
         continue;
       }
       final reqMonthYear = '${req.date.year}-${req.date.month.toString().padLeft(2, '0')}';
       if (reqMonthYear == targetMonthYear) {
-        empUsedMap[req.employeeId] = (empUsedMap[req.employeeId] ?? 0) + req.durationMinutes;
+        empActiveDaysMap.putIfAbsent(req.employeeId, () => <String>{}).add(req.date.toIso8601String().split('T').first);
       }
     }
 
     final dailyLimitMins = (policy.dailyLimitHours * 60).round();
     final monthlyLimitMins = (policy.monthlyLimitHours * 60).round();
 
-    return empUsedMap.entries.map((e) {
+    return empActiveDaysMap.entries.map((e) {
       return PermissionBalance(
         employeeId: e.key,
         month: month,
         monthlyLimitMinutes: monthlyLimitMins,
-        monthlyUsedMinutes: e.value,
+        monthlyUsedMinutes: e.value.length * dailyLimitMins,
         todayLimitMinutes: dailyLimitMins,
         todayUsedMinutes: 0,
       );

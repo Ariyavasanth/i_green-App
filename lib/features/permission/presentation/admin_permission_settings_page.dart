@@ -47,8 +47,8 @@ class _AdminPermissionSettingsPageState extends ConsumerState<AdminPermissionSet
   }
 
   Future<void> _saveSettings() async {
-    final daily = double.tryParse(_dailyLimitController.text) ?? 1.0;
-    final monthly = double.tryParse(_monthlyLimitController.text) ?? 3.0;
+    final daily = double.tryParse(_dailyLimitController.text) ?? 2.0;
+    final monthly = double.tryParse(_monthlyLimitController.text) ?? 6.0;
 
     setState(() => _isSaving = true);
     try {

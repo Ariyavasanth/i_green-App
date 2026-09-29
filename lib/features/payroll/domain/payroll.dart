@@ -508,7 +508,7 @@ class PayrollSettings {
       start = DateTime(year, month, payrollStartDay);
     }
 
-    final DateTime endExclusive = DateTime(year, month, payrollEndDay);
+    final DateTime endExclusive = DateTime(year, month, payrollEndDay).add(const Duration(days: 1));
 
     final processing = DateTime(year, month, processingDay);
     final payment = DateTime(year, month, paymentDay);

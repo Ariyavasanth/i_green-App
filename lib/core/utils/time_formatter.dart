@@ -39,9 +39,7 @@ class TimeFormatter {
       for (final fmt in formats) {
         try {
           final parsed = DateFormat(fmt).parseStrict(trimmed);
-          final hasSecondsInInput = trimmed.split(':').length >= 3 && !trimmed.contains(' ');
-          final useSeconds = forceSeconds || hasSecondsInInput;
-          final outFmt = useSeconds ? 'hh:mm:ss a' : 'hh:mm a';
+          final outFmt = forceSeconds ? 'hh:mm:ss a' : 'hh:mm a';
           return DateFormat(outFmt).format(parsed);
         } catch (_) {}
       }
@@ -49,9 +47,7 @@ class TimeFormatter {
       for (final fmt in formats) {
         try {
           final parsed = DateFormat(fmt).parse(trimmed);
-          final hasSecondsInInput = trimmed.split(':').length >= 3 && !trimmed.contains(' ');
-          final useSeconds = forceSeconds || hasSecondsInInput;
-          final outFmt = useSeconds ? 'hh:mm:ss a' : 'hh:mm a';
+          final outFmt = forceSeconds ? 'hh:mm:ss a' : 'hh:mm a';
           return DateFormat(outFmt).format(parsed);
         } catch (_) {}
       }

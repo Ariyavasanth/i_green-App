@@ -31,15 +31,15 @@ void main() {
   const settings = PayrollSettings();
 
   group('Payroll Integration Step 5 — Generate Payroll & Phase 2C Attendance Tests', () {
-    test('A. September 2026 Payroll Period bounds (20 Aug 2026 -> 20 Sep 2026 exclusive)', () {
+    test('A. September 2026 Payroll Period bounds (20 Aug 2026 -> 20 Sep 2026 inclusive)', () {
       final period = settings.getPayrollPeriod(2026, 9);
       expect(period.startDate, DateTime(2026, 8, 20));
-      expect(period.endDateExclusive, DateTime(2026, 9, 20));
+      expect(period.endDateExclusive, DateTime(2026, 9, 21));
       expect(period.processingDate, DateTime(2026, 9, 21));
       expect(period.paymentDate, DateTime(2026, 9, 21));
     });
 
-    test('B. Boundary attendance: 19 Aug & 20 Sep excluded, 20 Aug & 19 Sep included', () {
+    test('B. Boundary attendance: 19 Aug & 21 Sep excluded, 20 Aug & 20 Sep included', () {
       final period = settings.getPayrollPeriod(2026, 9);
 
       final records = [
@@ -73,7 +73,7 @@ void main() {
           similarityScore: 1.0,
           totalHours: 9.0,
         ),
-        // End boundary inside (19 Sep) - Present
+        // Inside (19 Sep) - Present
         const AttendanceRecord(
           id: 3,
           employeeId: 101,
@@ -88,13 +88,28 @@ void main() {
           similarityScore: 1.0,
           totalHours: 9.0,
         ),
-        // Exclusive end boundary (20 Sep) - Present (must be excluded from Sep payroll)
+        // End boundary inside (20 Sep) - Present
         const AttendanceRecord(
           id: 4,
           employeeId: 101,
           employeeCode: 'EMP101',
           employeeName: 'Ariya Vasanth',
           date: '20-09-2026',
+          time: '09:00 AM',
+          checkInTime: '09:00 AM',
+          checkOutTime: '06:00 PM',
+          status: 'Present',
+          verificationStatus: 'Verified',
+          similarityScore: 1.0,
+          totalHours: 9.0,
+        ),
+        // After boundary (21 Sep) - Present (must be excluded from Sep payroll)
+        const AttendanceRecord(
+          id: 5,
+          employeeId: 101,
+          employeeCode: 'EMP101',
+          employeeName: 'Ariya Vasanth',
+          date: '21-09-2026',
           time: '09:00 AM',
           checkInTime: '09:00 AM',
           checkOutTime: '06:00 PM',
@@ -115,18 +130,19 @@ void main() {
         referenceDate: period.endDateExclusive,
       );
 
-      // Verify total days in 20 Aug -> 20 Sep range = 31 days
-      expect(result.totalDaysInMonth, 31);
+      // Verify total days in 20 Aug -> 20 Sep range = 32 days
+      expect(result.totalDaysInMonth, 32);
 
-      // Verify dailyResults contains dates from 20-08-2026 to 19-09-2026
+      // Verify dailyResults contains dates from 20-08-2026 to 20-09-2026
       final dates = result.dailyResults.map((d) => d.dateStr).toList();
       expect(dates.contains('19-08-2026'), isFalse, reason: '19 Aug must be excluded');
       expect(dates.contains('20-08-2026'), isTrue, reason: '20 Aug must be included');
       expect(dates.contains('19-09-2026'), isTrue, reason: '19 Sep must be included');
-      expect(dates.contains('20-09-2026'), isFalse, reason: '20 Sep must be excluded');
+      expect(dates.contains('20-09-2026'), isTrue, reason: '20 Sep must be included');
+      expect(dates.contains('21-09-2026'), isFalse, reason: '21 Sep must be excluded');
 
-      // Check Present count inside the boundary = 2 (20 Aug and 19 Sep)
-      expect(result.presentCount, 2);
+      // Check Present count inside the boundary = 3 (20 Aug, 19 Sep, 20 Sep)
+      expect(result.presentCount, 3);
     });
 
     test('C & D. PayrollRecord receives all Phase 2C metrics from MonthlyAttendanceCalculator', () {

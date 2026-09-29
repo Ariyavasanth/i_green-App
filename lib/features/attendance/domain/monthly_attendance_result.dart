@@ -225,6 +225,8 @@ class MonthlyAttendanceCalculator {
     final dailyRequiredHours =
         employee.requiredWorkingHours > 0 ? employee.requiredWorkingHours : 9.0;
 
+    bool previousWorkingDayWasLate = false;
+
     DateTime cursor = start;
     while (cursor.isBefore(endExclusive)) {
       final date = cursor;
@@ -234,7 +236,7 @@ class MonthlyAttendanceCalculator {
       final record = recordMap[dateStr];
 
       // 1. Resolve daily status using authoritative AttendanceStatusHelper
-      final statusInfo = AttendanceStatusHelper.resolveStatus(
+      final rawStatusInfo = AttendanceStatusHelper.resolveStatus(
         employee: employee,
         date: date,
         record: record,
@@ -244,13 +246,34 @@ class MonthlyAttendanceCalculator {
         referenceDate: effectiveRefDate,
       );
 
-      final isWeeklyOff = statusInfo == AttendanceStatusInfo.weeklyOff;
-      final isHoliday = statusInfo == AttendanceStatusInfo.holiday;
-      final isBeforeJoining = statusInfo == AttendanceStatusInfo.beforeJoining;
+      final isWeeklyOff = rawStatusInfo == AttendanceStatusInfo.weeklyOff;
+      final isHoliday = rawStatusInfo == AttendanceStatusInfo.holiday;
+      final isBeforeJoining = rawStatusInfo == AttendanceStatusInfo.beforeJoining;
       final isWorkingDay = !isWeeklyOff && !isHoliday && !isBeforeJoining;
 
       if (isWorkingDay) {
         totalWorkingDays++;
+      }
+
+      // 1.5 Consecutive Late Rule:
+      // If employee takes consecutive late (late on consecutive working days), the next day results in Loss of Pay (LOP).
+      AttendanceStatusInfo? statusInfo = rawStatusInfo;
+      String? customStatusLabel;
+
+      if (isWorkingDay) {
+        if (rawStatusInfo == AttendanceStatusInfo.late) {
+          if (previousWorkingDayWasLate) {
+            statusInfo = AttendanceStatusInfo.lop;
+            customStatusLabel = 'Loss of Pay (Consecutive Late)';
+          } else {
+            previousWorkingDayWasLate = true;
+          }
+        } else if (rawStatusInfo == AttendanceStatusInfo.present ||
+            rawStatusInfo == AttendanceStatusInfo.onDuty ||
+            rawStatusInfo == AttendanceStatusInfo.onLeave ||
+            rawStatusInfo == AttendanceStatusInfo.insufficientHours) {
+          previousWorkingDayWasLate = false;
+        }
       }
 
       // Working hours from dynamic sessions / record
@@ -305,7 +328,7 @@ class MonthlyAttendanceCalculator {
         dateStr: dateStr,
         statusInfo: statusInfo,
         statusCode: statusInfo?.code ?? '-',
-        statusLabel: statusInfo?.label ?? (record != null ? record.status : 'Pending'),
+        statusLabel: customStatusLabel ?? statusInfo?.label ?? (record != null ? record.status : 'Pending'),
         record: record,
         isWorkingDay: isWorkingDay,
         requiredHours: reqHoursForDay,

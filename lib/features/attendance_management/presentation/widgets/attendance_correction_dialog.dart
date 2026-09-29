@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../core/utils/time_formatter.dart';
 import '../../../attendance/domain/attendance_record.dart';
 import '../../../attendance/domain/attendance_status_helper.dart';
 import '../../../employee/domain/employee.dart';
@@ -46,12 +47,29 @@ class _AttendanceCorrectionDialogState extends State<AttendanceCorrectionDialog>
   void initState() {
     super.initState();
     final rec = widget.record;
-    final initialIn = rec?.effectiveCheckInTime.isNotEmpty == true
-        ? rec!.effectiveCheckInTime
-        : (widget.employee.inTime.trim().isNotEmpty ? widget.employee.inTime.trim() : '');
-    final initialOut = rec?.checkOutTime.isNotEmpty == true
-        ? rec!.checkOutTime
-        : (widget.employee.outTime.trim().isNotEmpty ? widget.employee.outTime.trim() : '');
+    final shiftIn = widget.employee.inTime.trim().isNotEmpty
+        ? TimeFormatter.formatToLocal12HourTime(widget.employee.inTime.trim())
+        : '';
+    final shiftOut = widget.employee.outTime.trim().isNotEmpty
+        ? TimeFormatter.formatToLocal12HourTime(widget.employee.outTime.trim())
+        : '';
+
+    String initialIn = rec?.effectiveCheckInTime.isNotEmpty == true
+        ? TimeFormatter.formatToLocal12HourTime(rec!.effectiveCheckInTime)
+        : shiftIn;
+    // Prevent defaulting to erroneous 12:00 AM midnight when employee has a valid daytime shift
+    if ((initialIn == '12:00 AM' || initialIn == '12:00:00 AM' || initialIn.isEmpty) &&
+        shiftIn.isNotEmpty &&
+        shiftIn != '12:00 AM') {
+      initialIn = shiftIn;
+    }
+
+    String initialOut = rec?.checkOutTime.isNotEmpty == true
+        ? TimeFormatter.formatToLocal12HourTime(rec!.checkOutTime)
+        : shiftOut;
+    if (initialOut.isEmpty && shiftOut.isNotEmpty) {
+      initialOut = shiftOut;
+    }
 
     _checkInController = TextEditingController(text: initialIn);
     _checkOutController = TextEditingController(text: initialOut);
@@ -134,15 +152,23 @@ class _AttendanceCorrectionDialogState extends State<AttendanceCorrectionDialog>
         ? widget.employee.employeeId
         : 'EMP${widget.employee.id.toString().padLeft(3, '0')}';
 
-    final expectedCheckIn = widget.employee.inTime.trim().isNotEmpty ? widget.employee.inTime.trim() : '--:--';
-    final expectedCheckOut = widget.employee.outTime.trim().isNotEmpty ? widget.employee.outTime.trim() : '--:--';
+    final expectedCheckIn = widget.employee.inTime.trim().isNotEmpty
+        ? TimeFormatter.formatToLocal12HourTime(widget.employee.inTime.trim())
+        : '--:--';
+    final expectedCheckOut = widget.employee.outTime.trim().isNotEmpty
+        ? TimeFormatter.formatToLocal12HourTime(widget.employee.outTime.trim())
+        : '--:--';
     final scheduleType = widget.employee.workScheduleType.isNotEmpty
         ? widget.employee.workScheduleType
         : (widget.employee.isDynamicEmployee ? 'Flexible' : 'Fixed Schedule');
 
     final rec = widget.record;
-    final origCheckIn = rec?.effectiveCheckInTime.isNotEmpty == true ? rec!.effectiveCheckInTime : '--:--';
-    final origCheckOut = rec?.checkOutTime.isNotEmpty == true ? rec!.checkOutTime : '--:--';
+    final origCheckIn = rec?.effectiveCheckInTime.isNotEmpty == true
+        ? TimeFormatter.formatToLocal12HourTime(rec!.effectiveCheckInTime)
+        : '--:--';
+    final origCheckOut = rec?.checkOutTime.isNotEmpty == true
+        ? TimeFormatter.formatToLocal12HourTime(rec!.checkOutTime)
+        : '--:--';
     final origStatusLabel = widget.statusInfo != null
         ? '${widget.statusInfo!.code} - ${widget.statusInfo!.label}'
         : (rec?.status.isNotEmpty == true ? rec!.status : 'Not Marked');
@@ -317,6 +343,27 @@ class _AttendanceCorrectionDialogState extends State<AttendanceCorrectionDialog>
                                     child: Text(
                                       scheduleType,
                                       style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  InkWell(
+                                    onTap: () {
+                                      setState(() {
+                                        if (expectedCheckIn != '--:--') _checkInController.text = expectedCheckIn;
+                                        if (expectedCheckOut != '--:--') _checkOutController.text = expectedCheckOut;
+                                      });
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF9CC70A).withValues(alpha: 0.2),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: const Color(0xFF9CC70A)),
+                                      ),
+                                      child: const Text(
+                                        'Use Shift Times',
+                                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                                      ),
                                     ),
                                   ),
                                 ],

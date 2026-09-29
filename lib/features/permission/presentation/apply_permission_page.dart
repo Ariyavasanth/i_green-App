@@ -137,10 +137,22 @@ class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
   }
 
   Future<void> _pickToTime() async {
-    final picked = await showTimePicker(context: context, initialTime: _toTime);
+    final fromMins = _fromTime.hour * 60 + _fromTime.minute;
+    TimeOfDay initial = _toTime;
+    final toMins = _toTime.hour * 60 + _toTime.minute;
+    if (toMins <= fromMins) {
+      initial = _addMinutes(_fromTime, 30);
+    }
+
+    final picked = await showTimePicker(context: context, initialTime: initial);
     if (picked != null) {
+      TimeOfDay adjusted = picked;
+      // If user selected 12:00 AM after a morning fromTime (e.g. 10:00 AM), they meant 12:00 PM (Noon)
+      if (picked.hour == 0 && _fromTime.hour >= 6 && _fromTime.hour <= 12) {
+        adjusted = TimeOfDay(hour: 12, minute: picked.minute);
+      }
       setState(() {
-        _toTime = picked;
+        _toTime = adjusted;
       });
     }
   }
@@ -161,6 +173,25 @@ class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
     final emp = ref.read(currentEmployeeProvider);
     final employeeId = emp?.id ?? 1;
     final repo = ref.read(permissionRepositoryProvider);
+
+    // Consecutive Days Validation Check
+    final allRequests = await repo.getEmployeeRequests(employeeId);
+    final selDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    for (final ex in allRequests) {
+      if (ex.status == PermissionStatus.rejected || ex.status == PermissionStatus.cancelled) continue;
+      final exDay = DateTime(ex.date.year, ex.date.month, ex.date.day);
+      if (selDay.difference(exDay).inDays.abs() == 1) {
+        final dateStr = DateFormat('dd MMM yyyy').format(ex.date);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Permissions cannot be taken on consecutive days. You already have a permission on $dateStr.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+    }
 
     final balance = await repo.getPermissionBalance(employeeId, _selectedDate);
 
@@ -242,11 +273,12 @@ class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _ruleItem('1. Daily Allowance', 'Maximum 1.0 Hour (60 minutes) per day.'),
-              _ruleItem('2. Monthly Allowance', 'Maximum 3.0 Hours (180 minutes) per month.'),
-              _ruleItem('3. Approval Required', 'All normal permissions require Manager / Admin approval.'),
-              _ruleItem('4. Emergency Exception', 'Requests exceeding standard allowances can be submitted as Emergency Requests for Admin review.'),
-              _ruleItem('5. Payroll Treatment', 'Management reviews emergency requests to decide Paid vs Loss of Pay (LOP) treatment.'),
+              _ruleItem('1. Daily Allowance', 'Maximum 2.0 Hours (120 minutes) per day. Applying on any day automatically exhausts the full 2-hour daily quota.'),
+              _ruleItem('2. Monthly Allowance', 'Maximum 6.0 Hours (360 minutes) per month (up to 3 permissions per month).'),
+              _ruleItem('3. No Consecutive Days', 'Employees are not permitted to take permissions on consecutive days (e.g., permission on Sep 1st means eligible again on Sep 3rd).'),
+              _ruleItem('4. Consecutive Late Policy', 'Arriving late on consecutive days automatically results in Loss of Pay (LOP) for the next day.'),
+              _ruleItem('5. Approval Required', 'All normal permissions require Manager / Admin approval.'),
+              _ruleItem('6. Emergency Exception', 'Requests exceeding standard allowances can be submitted as Emergency Requests for Admin review.'),
             ],
           ),
         ),
@@ -667,33 +699,48 @@ class _ApplyPermissionPageState extends ConsumerState<ApplyPermissionPage> {
               const SizedBox(height: 12),
 
               // Duration Badge Display
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: ApplyPermissionPage.primaryGreen.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.timer_outlined,
-                      color: ApplyPermissionPage.darkNeutral,
-                      size: 18,
+              Builder(
+                builder: (context) {
+                  final startMins = _fromTime.hour * 60 + _fromTime.minute;
+                  final endMins = _toTime.hour * 60 + _toTime.minute;
+                  final isInvalidOrder = endMins <= startMins;
+
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Requested Duration: $_durationMinutes minutes',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: ApplyPermissionPage.darkNeutral,
-                      ),
+                    decoration: BoxDecoration(
+                      color: isInvalidOrder
+                          ? Colors.orange.shade50
+                          : ApplyPermissionPage.primaryGreen.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(8),
+                      border: isInvalidOrder ? Border.all(color: Colors.orange.shade300) : null,
                     ),
-                  ],
-                ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          isInvalidOrder ? Icons.warning_amber_rounded : Icons.timer_outlined,
+                          color: isInvalidOrder ? Colors.orange.shade900 : ApplyPermissionPage.darkNeutral,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            isInvalidOrder
+                                ? 'Requested Duration: 0 mins (Tip: 12:00 PM is Noon, 12:00 AM is Midnight)'
+                                : 'Requested Duration: $_durationMinutes minutes',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: isInvalidOrder ? Colors.orange.shade900 : ApplyPermissionPage.darkNeutral,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 20),
 

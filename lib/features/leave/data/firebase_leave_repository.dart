@@ -280,22 +280,36 @@ class FirebaseLeaveRepository implements LeaveRepository {
 
   Future<void> _validatePermissionRequest(LeaveRequest request) async {
     final requestedHours = request.numDays * 8;
-    if (requestedHours <= 0 || requestedHours > 1.0001) {
-      throw Exception('Only up to 1 hour of permission can be taken per day.');
+    if (requestedHours <= 0 || requestedHours > 2.0001) {
+      throw Exception('Only up to 2 hours of permission can be taken per day.');
     }
     final requestDate = _parsePermissionDate(request.fromDate);
     final requests = await getLeaveRequests(request.employeeId);
     final active = requests.where((item) =>
         item.leaveType.toLowerCase().startsWith('permission') &&
         (item.status == 'Pending' || item.status == 'Approved'));
+
+    // Check consecutive day restriction
+    final reqDay = DateTime(requestDate.year, requestDate.month, requestDate.day);
+    for (final item in active) {
+      if (item.id == request.id) continue;
+      final itemDate = _parsePermissionDate(item.fromDate);
+      final activeDay = DateTime(itemDate.year, itemDate.month, itemDate.day);
+      final diff = reqDay.difference(activeDay).inDays.abs();
+      if (diff == 1) {
+        throw Exception('Permissions cannot be applied on consecutive days. You already have a permission on ${item.fromDate}.');
+      }
+    }
+
     final usedToday = active
-        .where((item) => item.fromDate == request.fromDate)
-        .fold<double>(0, (acc, item) => acc + item.numDays * 8);
+        .where((item) => item.fromDate == request.fromDate && item.id != request.id)
+        .fold<double>(0, (acc, item) => acc + 2.0);
     final allowance = await getPermissionAllowance(request.employeeId, requestDate);
-    if (usedToday + requestedHours > allowance.dailyLimitHours + 0.0001) {
+    if (usedToday >= allowance.dailyLimitHours || requestedHours > allowance.dailyLimitHours + 0.0001) {
       throw Exception('The ${allowance.dailyLimitHours.toStringAsFixed(0)}-hour permission limit for this day has already been used.');
     }
-    if (allowance.usedHours + requestedHours > allowance.monthlyLimitHours + 0.0001) {
+    // Each permission request consumes the full 2-hour daily allowance automatically
+    if (allowance.usedHours + 2.0 > allowance.monthlyLimitHours + 0.0001) {
       throw Exception('Only ${allowance.monthlyLimitHours.toStringAsFixed(0)} hours of permission are available per month.');
     }
   }
@@ -310,26 +324,32 @@ class FirebaseLeaveRepository implements LeaveRepository {
 
   @override
   Future<PermissionAllowance> getPermissionAllowance(int employeeId, DateTime month) async {
-    double monthlyLimit = 3.0;
-    double dailyLimit = 1.0;
+    double monthlyLimit = 6.0;
+    double dailyLimit = 2.0;
     try {
       final snap = await _employeesRef.where('id', isEqualTo: employeeId).limit(1).get();
       if (snap.docs.isNotEmpty) {
         final empData = snap.docs.first.data();
-        monthlyLimit = (empData['monthly_permission_limit_hours'] as num?)?.toDouble() ?? 3.0;
-        dailyLimit = (empData['daily_permission_limit_hours'] as num?)?.toDouble() ?? 1.0;
+        monthlyLimit = (empData['monthly_permission_limit_hours'] as num?)?.toDouble() ?? 6.0;
+        dailyLimit = (empData['daily_permission_limit_hours'] as num?)?.toDouble() ?? 2.0;
       }
     } catch (_) {}
 
     final requests = await getLeaveRequests(employeeId);
-    final used = requests.where((item) {
+    final activePermissionDays = <String>{};
+    for (final item in requests) {
       if (!item.leaveType.toLowerCase().startsWith('permission') ||
           (item.status != 'Pending' && item.status != 'Approved')) {
-        return false;
+        continue;
       }
       final date = _parsePermissionDate(item.fromDate);
-      return date.year == month.year && date.month == month.month;
-    }).fold<double>(0, (acc, item) => acc + item.numDays * 8);
+      if (date.year == month.year && date.month == month.month) {
+        activePermissionDays.add(item.fromDate);
+      }
+    }
+
+    // Each permission applied exhausts the full 2-hour daily quota
+    final double used = activePermissionDays.length * 2.0;
     return PermissionAllowance(
       monthlyLimitHours: monthlyLimit,
       dailyLimitHours: dailyLimit,

@@ -8,8 +8,8 @@ class PermissionPolicy {
   final bool allowPostDateEmergency;
 
   const PermissionPolicy({
-    this.dailyLimitHours = 1.0,
-    this.monthlyLimitHours = 3.0,
+    this.dailyLimitHours = 2.0,
+    this.monthlyLimitHours = 6.0,
     this.requireApproval = true,
     this.allowEmergency = true,
     this.emergencyRequiresApproval = true,
@@ -31,8 +31,8 @@ class PermissionPolicy {
 
   factory PermissionPolicy.fromMap(Map<String, dynamic> map) {
     return PermissionPolicy(
-      dailyLimitHours: (map['daily_limit_hours'] as num?)?.toDouble() ?? 1.0,
-      monthlyLimitHours: (map['monthly_limit_hours'] as num?)?.toDouble() ?? 3.0,
+      dailyLimitHours: (map['daily_limit_hours'] as num?)?.toDouble() ?? 2.0,
+      monthlyLimitHours: (map['monthly_limit_hours'] as num?)?.toDouble() ?? 6.0,
       requireApproval: (map['require_approval'] ?? 1) == 1,
       allowEmergency: (map['allow_emergency'] ?? 1) == 1,
       emergencyRequiresApproval: (map['emergency_requires_approval'] ?? 1) == 1,
