@@ -358,6 +358,7 @@ class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
       ('Late Days', '${record.lateDays} Days', Colors.amber),
       ('Leave Days', '${record.leaveDays} Days', Colors.blue),
       ('Absent Days', '${record.absentDays} Days', Colors.red),
+      ('Weekly Off', '${record.weeklyOffCount} Days', const Color(0xFF64748B)),
     ];
 
     return Card(

@@ -70,6 +70,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
   int _lateDays = 0;
   int _absentDays = 0;
   int _leaveDays = 3;
+  int _weeklyOffDays = 0;
   int _totalDays = 30;
   MonthlyAttendanceResult? _attendanceResult;
 
@@ -352,6 +353,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
             _lateDays = result.lateCount;
             _absentDays = result.absentCount;
             _leaveDays = result.onLeaveCount;
+            _weeklyOffDays = result.weeklyOffCount;
             _totalDays = result.totalWorkingDays;
 
             if (beforeJoiningDays > 0) {
@@ -446,6 +448,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
       lateDays: _lateDays,
       absentDays: _absentDays,
       leaveDays: _leaveDays,
+      weeklyOffCount: _weeklyOffDays,
       
       designation: employee.designation,
       department: employee.department,
@@ -837,6 +840,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
       ('Late Days', '$_lateDays Days', Icons.watch_later_outlined, Colors.amber),
       ('Leave Days', '$_leaveDays Days', Icons.event_note_outlined, Colors.blue),
       ('Absent Days', '$_absentDays Days', Icons.cancel_outlined, Colors.red),
+      ('Weekly Off', '$_weeklyOffDays Days', Icons.weekend_outlined, const Color(0xFF64748B)),
       ('Working Days', '$_totalDays Days', Icons.calendar_month_outlined, AppColors.active),
     ];
 
