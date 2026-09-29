@@ -2706,12 +2706,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
               newStatus = 'Insufficient hours';
               newNotes = 'Worked ${hours.toStringAsFixed(1)} hrs (Insufficient hours)';
             }
-          } else if (netUnauthorizedDelay <= settings.lateLimitMinutes) {
+          } else {
             newStatus = 'Late';
             newNotes = 'Worked ${hours.toStringAsFixed(1)} hrs (Late: $netUnauthorizedDelay mins)';
-          } else {
-            newStatus = 'Absent';
-            newNotes = 'Worked ${hours.toStringAsFixed(1)} hrs (Exceeded late limit)';
           }
 
           final updatedRec = record.copyWith(
