@@ -35,9 +35,9 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
   DateTime _disbursementDate = DateTime.now();
 
   // Repayment Details
-  final _installmentsController = TextEditingController(text: '12');
+  final _installmentsController = TextEditingController();
   final _emiController = TextEditingController();
-  final _interestRateController = TextEditingController(text: '0');
+  final _interestRateController = TextEditingController();
   final _totalRepayableController = TextEditingController();
   final _lastDeductionController = TextEditingController();
   String _firstDeductionMonth = '';
@@ -76,8 +76,7 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
       _loadExistingLoan(widget.loan!);
     } else {
       _loanIdController.text = 'Generating...';
-      _firstDeductionMonth = _monthsList.first;
-      _calculateRepayment();
+      _firstDeductionMonth = '';
       _requestedByController.text = 'Admin';
       _generateNewLoanId();
     }
@@ -86,7 +85,7 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
   void _generateMonthsList() {
     final now = DateTime.now();
     final formatter = DateFormat('MMMM yyyy');
-    for (int i = -3; i < 24; i++) {
+    for (int i = 0; i < 36; i++) {
       _monthsList.add(formatter.format(DateTime(now.year, now.month + i)));
     }
   }
@@ -139,29 +138,41 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
     _department = loan.department;
     _designation = loan.designation;
     _selectedLoanType = loan.loanType;
-    _amountController.text = loan.loanAmount.toString();
+    _amountController.text = loan.loanAmount == loan.loanAmount.roundToDouble()
+        ? loan.loanAmount.toInt().toString()
+        : loan.loanAmount.toString();
     _purposeController.text = loan.purpose;
-    _loanDate = DateFormat('yyyy-MM-dd').parse(loan.loanDate);
-    _disbursementDate = DateFormat('yyyy-MM-dd').parse(loan.disbursementDate);
+    _loanDate = loan.loanDate.isNotEmpty
+        ? (DateTime.tryParse(loan.loanDate) ?? DateTime.now())
+        : DateTime.now();
+    _disbursementDate = loan.disbursementDate.isNotEmpty
+        ? (DateTime.tryParse(loan.disbursementDate) ?? DateTime.now())
+        : DateTime.now();
 
-    _installmentsController.text = loan.installments.toString();
-    _interestRateController.text = loan.interestRate.toString();
-    _emiController.text = loan.emiAmount.toString();
-    _totalRepayableController.text = loan.totalRepayableAmount.toString();
+    _installmentsController.text = loan.installments > 0 ? loan.installments.toString() : '';
+    _interestRateController.text = loan.interestRate > 0 ? loan.interestRate.toString() : '';
+    _emiController.text = loan.emiAmount > 0 ? loan.emiAmount.toStringAsFixed(2) : '';
+    _totalRepayableController.text = loan.totalRepayableAmount > 0 ? loan.totalRepayableAmount.toStringAsFixed(2) : '';
 
-    if (_monthsList.contains(loan.firstDeductionMonth)) {
+    if (loan.firstDeductionMonth.isNotEmpty) {
+      if (!_monthsList.contains(loan.firstDeductionMonth)) {
+        _monthsList.insert(0, loan.firstDeductionMonth);
+      }
       _firstDeductionMonth = loan.firstDeductionMonth;
     } else {
-      _monthsList.add(loan.firstDeductionMonth);
-      _firstDeductionMonth = loan.firstDeductionMonth;
+      _firstDeductionMonth = '';
     }
     _lastDeductionMonth = loan.lastDeductionMonth;
     _lastDeductionController.text = _lastDeductionMonth;
 
+    if (loan.installments > 0 && loan.loanAmount > 0) {
+      _calculateRepayment();
+    }
+
     _requestedByController.text = loan.requestedBy;
     _approvedByController.text = loan.approvedBy;
     if (loan.approvalDate.isNotEmpty) {
-      _approvalDate = DateFormat('yyyy-MM-dd').parse(loan.approvalDate);
+      _approvalDate = DateTime.tryParse(loan.approvalDate);
     }
     _remarksController.text = loan.remarks;
     _status = loan.status;
@@ -177,28 +188,39 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
     final installments = int.tryParse(_installmentsController.text) ?? 0;
     final rate = double.tryParse(_interestRateController.text) ?? 0.0;
 
-    // Reducing Balance Interest:
-    // Total interest = amount * (rate / 100) * ((installments + 1) / 2)
-    final totalInterest = (installments > 0 && rate > 0)
-        ? amount * (rate / 100.0) * ((installments + 1) / 2.0)
-        : 0.0;
-    final total = amount + totalInterest;
+    if (installments > 0 && amount > 0) {
+      final totalInterest = (rate > 0)
+          ? amount * (rate / 100.0) * ((installments + 1) / 2.0)
+          : 0.0;
+      final total = amount + totalInterest;
 
-    // Month 1 EMI = Monthly Principal + First Month Interest
-    final monthlyPrincipal = installments > 0 ? amount / installments : 0.0;
-    final firstMonthInterest = amount * (rate / 100.0);
-    final firstMonthEmi = monthlyPrincipal + firstMonthInterest;
+      final monthlyPrincipal = amount / installments;
+      final firstMonthInterest = amount * (rate / 100.0);
+      final firstMonthEmi = monthlyPrincipal + firstMonthInterest;
 
-    setState(() {
-      _totalRepayableController.text = total.toStringAsFixed(2);
-      _emiController.text = firstMonthEmi.toStringAsFixed(2);
-      _lastDeductionMonth = _calculateLastDeductionMonth(_firstDeductionMonth, installments);
-      _lastDeductionController.text = _lastDeductionMonth;
-    });
+      setState(() {
+        _totalRepayableController.text = total.toStringAsFixed(2);
+        _emiController.text = firstMonthEmi.toStringAsFixed(2);
+        if (_firstDeductionMonth.isNotEmpty) {
+          _lastDeductionMonth = _calculateLastDeductionMonth(_firstDeductionMonth, installments);
+          _lastDeductionController.text = _lastDeductionMonth;
+        } else {
+          _lastDeductionMonth = '';
+          _lastDeductionController.text = '';
+        }
+      });
+    } else {
+      setState(() {
+        _totalRepayableController.text = '';
+        _emiController.text = '';
+        _lastDeductionMonth = '';
+        _lastDeductionController.text = '';
+      });
+    }
   }
 
   String _calculateLastDeductionMonth(String startMonth, int installments) {
-    if (installments <= 0) return startMonth;
+    if (installments <= 0 || startMonth.isEmpty) return '';
     final parts = startMonth.split(' ');
     if (parts.length < 2) return startMonth;
     final monthName = parts[0];
@@ -314,7 +336,13 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
       approvalDate: _approvalDate != null ? DateFormat('yyyy-MM-dd').format(_approvalDate!) : '',
       remarks: _remarksController.text,
       status: targetStatus,
-      remainingBalance: widget.loan != null ? (targetStatus == 'Closed' ? 0.0 : widget.loan!.remainingBalance) : (double.tryParse(_totalRepayableController.text) ?? 0.0),
+      remainingBalance: widget.loan != null
+          ? (targetStatus == 'Closed'
+              ? 0.0
+              : (widget.loan!.remainingBalance > 0
+                  ? widget.loan!.remainingBalance
+                  : (double.tryParse(_totalRepayableController.text) ?? 0.0)))
+          : (double.tryParse(_totalRepayableController.text) ?? 0.0),
     );
 
     try {
@@ -538,11 +566,12 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
                       Expanded(
                         child: TextFormField(
                           controller: _installmentsController,
-                          decoration: _inputDecoration('Number of EMIs / Installments (Months)'),
+                          decoration: _inputDecoration('Number of EMIs / Installments (Months) *'),
                           keyboardType: TextInputType.number,
                           validator: (val) {
-                            if (val == null || val.isEmpty) return 'Required';
-                            if (int.tryParse(val) == null) return 'Enter integer';
+                            if (val == null || val.trim().isEmpty) return 'Number of EMIs is required';
+                            final parsed = int.tryParse(val.trim());
+                            if (parsed == null || parsed <= 0) return 'Enter a valid number (> 0)';
                             return null;
                           },
                         ),
@@ -582,17 +611,19 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
                     children: [
                       Expanded(
                         child: DropdownButtonFormField<String>(
-                          decoration: _inputDecoration('First Deduction Month'),
-                          initialValue: _firstDeductionMonth,
+                          decoration: _inputDecoration('First Deduction Month *'),
+                          hint: const Text('Select Month'),
+                          initialValue: _firstDeductionMonth.isNotEmpty ? _firstDeductionMonth : null,
                           items: _monthsList.map((month) {
                             return DropdownMenuItem<String>(
                               value: month,
                               child: Text(month),
                             );
                           }).toList(),
+                          validator: (val) => val == null || val.isEmpty ? 'First deduction month is required' : null,
                           onChanged: (val) {
                             setState(() {
-                              _firstDeductionMonth = val!;
+                              _firstDeductionMonth = val ?? '';
                               _calculateRepayment();
                             });
                           },

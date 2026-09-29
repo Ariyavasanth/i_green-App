@@ -934,46 +934,20 @@ class _RequestLoanDialogState extends ConsumerState<_RequestLoanDialog> {
               : loan.loanAmount.toString())
           : '',
     );
-    _installmentsController = TextEditingController(
-      text: loan != null ? loan.installments.toString() : '12',
-    );
-    _emiController = TextEditingController(
-      text: loan != null ? loan.emiAmount.toStringAsFixed(2) : '',
-    );
     _purposeController = TextEditingController(
       text: loan?.purpose ?? '',
     );
     _descriptionController = TextEditingController(
       text: loan?.remarks ?? '',
     );
-
-    _amountController.addListener(_calculateEmi);
-    _installmentsController.addListener(_calculateEmi);
   }
 
   @override
   void dispose() {
     _amountController.dispose();
-    _installmentsController.dispose();
-    _emiController.dispose();
     _purposeController.dispose();
     _descriptionController.dispose();
     super.dispose();
-  }
-
-  void _calculateEmi() {
-    final amount = double.tryParse(_amountController.text) ?? 0.0;
-    final installments = int.tryParse(_installmentsController.text) ?? 0;
-    if (installments > 0) {
-      final emi = amount / installments;
-      setState(() {
-        _emiController.text = emi.toStringAsFixed(2);
-      });
-    } else {
-      setState(() {
-        _emiController.text = '';
-      });
-    }
   }
 
   Future<String> _generateNewLoanId() async {
@@ -991,69 +965,20 @@ class _RequestLoanDialogState extends ConsumerState<_RequestLoanDialog> {
     }
   }
 
-  String _calculateLastDeductionMonth(String startMonth, int installments) {
-    if (installments <= 0) return startMonth;
-    final parts = startMonth.split(' ');
-    if (parts.length < 2) return startMonth;
-    final monthName = parts[0];
-    final year = int.tryParse(parts[1]) ?? DateTime.now().year;
-
-    final months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    final startIndex = months.indexOf(monthName);
-    if (startIndex == -1) return startMonth;
-
-    final totalMonths = startIndex + installments - 1;
-    final finalMonthIndex = totalMonths % 12;
-    final finalYear = year + (totalMonths ~/ 12);
-
-    return '${months[finalMonthIndex]} $finalYear';
-  }
-
   Future<void> _submitRequest() async {
     if (!_formKey.currentState!.validate()) return;
 
     final amount = double.tryParse(_amountController.text) ?? 0.0;
-    final installments = int.tryParse(_installmentsController.text) ?? 12;
-    final emi = double.tryParse(_emiController.text) ?? (amount / installments);
     final isEdit = widget.loanToEdit != null;
     final now = DateTime.now();
 
     if (isEdit) {
       final existingLoan = widget.loanToEdit!;
-      final firstDeductionMonth = existingLoan.firstDeductionMonth.isNotEmpty
-          ? existingLoan.firstDeductionMonth
-          : DateFormat('MMMM yyyy').format(DateTime(now.year, now.month + 1));
-      final lastDeductionMonth = _calculateLastDeductionMonth(firstDeductionMonth, installments);
-
-      final updatedLoan = EmployeeLoan(
-        id: existingLoan.id,
-        loanId: existingLoan.loanId,
-        employeeId: widget.employee.id,
-        employeeName: widget.employee.fullName,
-        employeeCustomId: widget.employee.employeeId,
-        department: widget.employee.department,
-        designation: widget.employee.designation,
+      final updatedLoan = existingLoan.copyWith(
         loanType: _selectedLoanType,
         loanAmount: amount,
-        loanDate: existingLoan.loanDate.isNotEmpty ? existingLoan.loanDate : DateFormat('yyyy-MM-dd').format(now),
-        disbursementDate: existingLoan.disbursementDate.isNotEmpty ? existingLoan.disbursementDate : DateFormat('yyyy-MM-dd').format(now),
         purpose: _purposeController.text.trim(),
-        installments: installments,
-        emiAmount: emi,
-        firstDeductionMonth: firstDeductionMonth,
-        lastDeductionMonth: lastDeductionMonth,
-        interestRate: existingLoan.interestRate,
-        totalRepayableAmount: amount,
-        requestedBy: existingLoan.requestedBy.isNotEmpty ? existingLoan.requestedBy : widget.employee.fullName,
-        approvedBy: existingLoan.approvedBy,
-        approvalDate: existingLoan.approvalDate,
         remarks: _descriptionController.text.trim(),
-        status: existingLoan.status,
-        remainingBalance: amount,
-        repayments: existingLoan.repayments,
       );
 
       try {
@@ -1084,10 +1009,6 @@ class _RequestLoanDialogState extends ConsumerState<_RequestLoanDialog> {
         }
       }
     } else {
-      final nextMonthDate = DateTime(now.year, now.month + 1);
-      final firstDeductionMonth = DateFormat('MMMM yyyy').format(nextMonthDate);
-      final lastDeductionMonth = _calculateLastDeductionMonth(firstDeductionMonth, installments);
-
       final generatedId = await _generateNewLoanId();
 
       final loanRequest = EmployeeLoan(
@@ -1101,20 +1022,20 @@ class _RequestLoanDialogState extends ConsumerState<_RequestLoanDialog> {
         loanType: _selectedLoanType,
         loanAmount: amount,
         loanDate: DateFormat('yyyy-MM-dd').format(now),
-        disbursementDate: DateFormat('yyyy-MM-dd').format(now),
+        disbursementDate: '',
         purpose: _purposeController.text.trim(),
-        installments: installments,
-        emiAmount: emi,
-        firstDeductionMonth: firstDeductionMonth,
-        lastDeductionMonth: lastDeductionMonth,
+        installments: 0,
+        emiAmount: 0.0,
+        firstDeductionMonth: '',
+        lastDeductionMonth: '',
         interestRate: 0.0,
-        totalRepayableAmount: amount,
+        totalRepayableAmount: 0.0,
         requestedBy: widget.employee.fullName,
         approvedBy: '',
         approvalDate: '',
         remarks: _descriptionController.text.trim(),
         status: 'Pending',
-        remainingBalance: amount,
+        remainingBalance: 0.0,
       );
 
       try {

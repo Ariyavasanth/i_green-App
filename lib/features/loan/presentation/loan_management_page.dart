@@ -601,7 +601,7 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
 
   Widget _buildLoansTable(List<EmployeeLoan> loans, double screenWidth) {
     final currencyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
-    const minTableWidth = 980.0;
+    const minTableWidth = 780.0;
 
     return Container(
       decoration: BoxDecoration(
@@ -633,8 +633,6 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
                 DataColumn(label: Text('LOAN ID')),
                 DataColumn(label: Text('LOAN TYPE')),
                 DataColumn(label: Text('LOAN AMOUNT')),
-                DataColumn(label: Text('EMI')),
-                DataColumn(label: Text('BALANCE')),
                 DataColumn(label: Text('STATUS')),
                 DataColumn(label: Text('ACTIONS')),
               ],
@@ -654,8 +652,6 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
                     DataCell(Text(loan.loanId, style: const TextStyle(fontWeight: FontWeight.w500))),
                     DataCell(Text(loan.loanType)),
                     DataCell(Text(currencyFormat.format(loan.loanAmount), style: const TextStyle(fontWeight: FontWeight.w600))),
-                    DataCell(Text(currencyFormat.format(loan.emiAmount))),
-                    DataCell(Text(currencyFormat.format(loan.remainingBalance), style: const TextStyle(fontWeight: FontWeight.w600))),
                     DataCell(_buildStatusBadge(loan.status)),
                     DataCell(_buildActionsCell(loan)),
                   ],

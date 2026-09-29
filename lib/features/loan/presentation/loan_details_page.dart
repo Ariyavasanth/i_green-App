@@ -401,6 +401,46 @@ class LoanDetailsPage extends ConsumerWidget {
 
   Widget _buildLoanSummaryCard(BuildContext context, WidgetRef ref, EmployeeLoan loan) {
     final formatCurrency = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+    final hasRepaymentDetails = loan.installments > 0 && loan.firstDeductionMonth.isNotEmpty && loan.scheduleMonths.isNotEmpty;
+
+    if (!hasRepaymentDetails) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.account_balance_outlined, color: AppColors.active, size: 20),
+                SizedBox(width: 8),
+                Text(
+                  'Loan Summary',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            const Divider(height: 1, color: Color(0xFFE5E7EB)),
+            const SizedBox(height: 14),
+            _buildRowDetail('Loan ID', loan.loanId),
+            _buildRowDetail('Loan Type', loan.loanType),
+            _buildRowDetail('Requested Amount', formatCurrency.format(loan.loanAmount)),
+            _buildRowDetail('Application Date', loan.loanDate.isNotEmpty ? loan.loanDate : '-'),
+            _buildRowDetail('Purpose', loan.purpose.isNotEmpty ? loan.purpose : '-'),
+            if (loan.remarks.isNotEmpty)
+              _buildRowDetail('Description', loan.remarks),
+            _buildRowDetail('Requested By', loan.requestedBy),
+            _buildRowDetail('Status', loan.status, isStatus: true),
+          ],
+        ),
+      );
+    }
+
     final totalInterest = loan.interestRate > 0
         ? loan.calculatedTotalInterest
         : (loan.totalRepayableAmount - loan.loanAmount).clamp(0.0, double.infinity);
@@ -473,8 +513,58 @@ class LoanDetailsPage extends ConsumerWidget {
     List<PayrollRecord> payrolls,
   ) {
     final formatCurrency = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+    final hasRepaymentDetails = loan.installments > 0 && loan.firstDeductionMonth.isNotEmpty && loan.scheduleMonths.isNotEmpty;
     final scheduleMonths = loan.scheduleMonths;
     final monthlyPrincipal = loan.monthlyPrincipal;
+
+    if (!hasRepaymentDetails) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.calendar_month_outlined, color: AppColors.active, size: 20),
+                SizedBox(width: 8),
+                Text(
+                  'Repayment Schedule',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            const Divider(height: 1, color: Color(0xFFE5E7EB)),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline, color: Color(0xFF64748B), size: 20),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Repayment details have not been configured by an administrator yet.',
+                      style: TextStyle(color: Color(0xFF475569), fontSize: 13, height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -529,94 +619,88 @@ class LoanDetailsPage extends ConsumerWidget {
           const SizedBox(height: 14),
           const Divider(height: 1, color: Color(0xFFE5E7EB)),
           const SizedBox(height: 12),
-          if (scheduleMonths.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(child: Text('No deduction schedule defined.')),
-            )
-          else
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                headingRowHeight: 40,
-                dataRowMinHeight: 44,
-                columns: const [
-                  DataColumn(label: Text('Month', style: TextStyle(fontWeight: FontWeight.bold))),
-                  DataColumn(label: Text('Principal', style: TextStyle(fontWeight: FontWeight.bold))),
-                  DataColumn(label: Text('Interest', style: TextStyle(fontWeight: FontWeight.bold))),
-                  DataColumn(label: Text('Total EMI', style: TextStyle(fontWeight: FontWeight.bold))),
-                  DataColumn(label: Text('Paid', style: TextStyle(fontWeight: FontWeight.bold))),
-                  DataColumn(label: Text('Remaining', style: TextStyle(fontWeight: FontWeight.bold))),
-                  DataColumn(label: Text('Status', style: TextStyle(fontWeight: FontWeight.bold))),
-                  DataColumn(label: Text('Payroll Ref', style: TextStyle(fontWeight: FontWeight.bold))),
-                ],
-                rows: List<DataRow>.generate(scheduleMonths.length, (index) {
-                  final month = scheduleMonths[index];
-                  final monthInterest = loan.interestForInstallment(index);
-                  final monthEmi = loan.emiForInstallment(index);
-                  final endingPrincipal = loan.endPrincipalForInstallment(index);
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              headingRowHeight: 40,
+              dataRowMinHeight: 44,
+              columns: const [
+                DataColumn(label: Text('Month', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Principal', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Interest', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Total EMI', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Paid', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Remaining', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Status', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Payroll Ref', style: TextStyle(fontWeight: FontWeight.bold))),
+              ],
+              rows: List<DataRow>.generate(scheduleMonths.length, (index) {
+                final month = scheduleMonths[index];
+                final monthInterest = loan.interestForInstallment(index);
+                final monthEmi = loan.emiForInstallment(index);
+                final endingPrincipal = loan.endPrincipalForInstallment(index);
 
-                  // Check if repayment ledger has an entry for this month
-                  final ledgerRepayment = loan.repayments.where((r) => r.month.trim().toLowerCase() == month.trim().toLowerCase()).firstOrNull;
+                // Check if repayment ledger has an entry for this month
+                final ledgerRepayment = loan.repayments.where((r) => r.month.trim().toLowerCase() == month.trim().toLowerCase()).firstOrNull;
 
-                  // Check if payroll has a paid record
-                  final matchingPayroll = payrolls.where((p) =>
-                      p.employeeId == loan.employeeId &&
-                      p.month.trim().toLowerCase() == month.trim().toLowerCase() &&
-                      p.status.toLowerCase() == 'paid' &&
-                      p.companyLoan > 0).firstOrNull;
+                // Check if payroll has a paid record
+                final matchingPayroll = payrolls.where((p) =>
+                    p.employeeId == loan.employeeId &&
+                    p.month.trim().toLowerCase() == month.trim().toLowerCase() &&
+                    p.status.toLowerCase() == 'paid' &&
+                    p.companyLoan > 0).firstOrNull;
 
-                  final isPaid = ledgerRepayment != null || matchingPayroll != null || index < loan.paidInstallments;
-                  final paidAmount = isPaid ? (ledgerRepayment?.amount ?? monthEmi) : 0.0;
+                final isPaid = ledgerRepayment != null || matchingPayroll != null || index < loan.paidInstallments;
+                final paidAmount = isPaid ? (ledgerRepayment?.amount ?? monthEmi) : 0.0;
 
-                  final payrollRef = ledgerRepayment?.payrollId.isNotEmpty == true
-                      ? ledgerRepayment!.payrollId
-                      : (matchingPayroll != null ? matchingPayroll.month : '-');
+                final payrollRef = ledgerRepayment?.payrollId.isNotEmpty == true
+                    ? ledgerRepayment!.payrollId
+                    : (matchingPayroll != null ? matchingPayroll.month : '-');
 
-                  return DataRow(
-                    cells: [
-                      DataCell(Text(month, style: const TextStyle(fontWeight: FontWeight.w500))),
-                      DataCell(Text(formatCurrency.format(monthlyPrincipal))),
-                      DataCell(Text(
-                        formatCurrency.format(monthInterest),
-                        style: TextStyle(
-                          color: monthInterest > 0 ? Colors.orange.shade800 : AppColors.textSecondary,
-                          fontWeight: monthInterest > 0 ? FontWeight.w600 : FontWeight.normal,
-                        ),
-                      )),
-                      DataCell(Text(
-                        formatCurrency.format(monthEmi),
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      )),
-                      DataCell(Text(formatCurrency.format(paidAmount))),
-                      DataCell(Text(formatCurrency.format(endingPrincipal))),
-                      DataCell(
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              isPaid ? Icons.check_circle : (loan.status == 'Active' && index == loan.paidInstallments ? Icons.schedule : Icons.circle_outlined),
-                              size: 14,
+                return DataRow(
+                  cells: [
+                    DataCell(Text(month, style: const TextStyle(fontWeight: FontWeight.w500))),
+                    DataCell(Text(formatCurrency.format(monthlyPrincipal))),
+                    DataCell(Text(
+                      formatCurrency.format(monthInterest),
+                      style: TextStyle(
+                        color: monthInterest > 0 ? Colors.orange.shade800 : AppColors.textSecondary,
+                        fontWeight: monthInterest > 0 ? FontWeight.w600 : FontWeight.normal,
+                      ),
+                    )),
+                    DataCell(Text(
+                      formatCurrency.format(monthEmi),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    )),
+                    DataCell(Text(formatCurrency.format(paidAmount))),
+                    DataCell(Text(formatCurrency.format(endingPrincipal))),
+                    DataCell(
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isPaid ? Icons.check_circle : (loan.status == 'Active' && index == loan.paidInstallments ? Icons.schedule : Icons.circle_outlined),
+                            size: 14,
+                            color: isPaid ? AppColors.primary : (loan.status == 'Active' && index == loan.paidInstallments ? Colors.orange : Colors.grey),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            isPaid ? 'Paid' : (loan.status == 'Active' && index == loan.paidInstallments ? 'Upcoming' : 'Scheduled'),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
                               color: isPaid ? AppColors.primary : (loan.status == 'Active' && index == loan.paidInstallments ? Colors.orange : Colors.grey),
                             ),
-                            const SizedBox(width: 4),
-                            Text(
-                              isPaid ? 'Paid' : (loan.status == 'Active' && index == loan.paidInstallments ? 'Upcoming' : 'Scheduled'),
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: isPaid ? AppColors.primary : (loan.status == 'Active' && index == loan.paidInstallments ? Colors.orange : Colors.grey),
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                      DataCell(Text(payrollRef, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
-                    ],
-                  );
-                }),
-              ),
+                    ),
+                    DataCell(Text(payrollRef, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
+                  ],
+                );
+              }),
             ),
+          ),
         ],
       ),
     );
