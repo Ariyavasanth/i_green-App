@@ -453,6 +453,7 @@ class _AttendanceCorrectionDialogState extends State<AttendanceCorrectionDialog>
                                 validator: (v) {
                                   if (_selectedStatus == 'Absent' ||
                                       _selectedStatus == 'On Leave' ||
+                                      _selectedStatus == 'Loss of Pay' ||
                                       _selectedStatus == 'Weekly Off' ||
                                       _selectedStatus == 'Holiday') {
                                     return null;
@@ -491,6 +492,7 @@ class _AttendanceCorrectionDialogState extends State<AttendanceCorrectionDialog>
                             'Missing Check-Out',
                             'Absent',
                             'On Leave',
+                            'Loss of Pay',
                             'On Duty',
                             'Insufficient Hours',
                             'Weekly Off',
@@ -511,6 +513,7 @@ class _AttendanceCorrectionDialogState extends State<AttendanceCorrectionDialog>
                             DropdownMenuItem(value: 'Missing Check-Out', child: Text('Missing Check-Out (MC)')),
                             DropdownMenuItem(value: 'Absent', child: Text('Absent (A)')),
                             DropdownMenuItem(value: 'On Leave', child: Text('On Leave (OL)')),
+                            DropdownMenuItem(value: 'Loss of Pay', child: Text('Loss of Pay (LOP)')),
                             DropdownMenuItem(value: 'On Duty', child: Text('On Duty (OD)')),
                             DropdownMenuItem(value: 'Insufficient Hours', child: Text('Insufficient Hours (IH)')),
                             DropdownMenuItem(value: 'Weekly Off', child: Text('Weekly Off (WO)')),

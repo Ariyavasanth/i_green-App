@@ -271,6 +271,9 @@ class MonthlyAttendanceCalculator {
         case AttendanceStatusInfo.onLeave:
           onLeaveCount++;
           break;
+        case AttendanceStatusInfo.lop:
+          absentCount++;
+          break;
         case AttendanceStatusInfo.onDuty:
           onDutyCount++;
           break;

@@ -374,19 +374,29 @@ class FirebaseLeaveRepository implements LeaveRepository {
     String adminName, {
     String approvalMode = 'as_calculated',
     String? overrideReason,
+    LeaveRequest? fallbackRequest,
+    List<String>? customApprovedDates,
+    List<String>? customLopDates,
   }) async {
     // 1. Find the document
     final doc = await _findRequestDoc(id);
-    if (doc == null || !doc.exists || doc.data() == null) {
+    LeaveRequest req;
+    DocumentReference<Map<String, dynamic>> docRef;
+
+    if (doc != null && doc.exists && doc.data() != null) {
+      req = _requestFromDoc(doc.data()!, doc.id);
+      docRef = doc.reference;
+      await _revertPreviousApprovalEffects(req);
+    } else if (fallbackRequest != null) {
+      req = fallbackRequest;
+      docRef = _requestsRef.doc(id != 0 ? id.toString() : null);
+    } else {
       throw Exception('Leave request document not found for ID: $id');
     }
 
-    final req = _requestFromDoc(doc.data()!, doc.id);
-    await _revertPreviousApprovalEffects(req);
-
     // 2. Fetch employee details for leave policy and salary
     double grossSalary = 0.0;
-    String employeePolicy = 'As Needed';
+    String employeePolicy = req.leavePolicySnapshot.isNotEmpty ? req.leavePolicySnapshot : 'Monthly Allocation';
     final empSnap = await _employeesRef
         .where('id', isEqualTo: req.employeeId)
         .limit(1)
@@ -405,11 +415,43 @@ class FirebaseLeaveRepository implements LeaveRepository {
     final allDates = _datesBetween(req.fromDate, req.toDate);
     final approvedDates = <String>[];
     final lopDates = <String>[];
-    bool isOverride = (approvalMode == 'all_paid' && (employeePolicy == 'Manual Allocation' || employeePolicy == 'No Leave'));
+    bool isOverride = (approvalMode == 'all_paid' && (employeePolicy == 'Manual Allocation' || employeePolicy == 'Monthly Allocation' || employeePolicy == 'No Leave'));
 
     final batch = _firestore.batch();
 
-    if (employeePolicy == 'As Needed') {
+    if (customApprovedDates != null || customLopDates != null) {
+      final selectedApproved = customApprovedDates ?? [];
+      final selectedLop = customLopDates ?? [];
+      approvedDates.addAll(selectedApproved);
+      lopDates.addAll(selectedLop);
+
+      for (final d in lopDates) {
+        final lopRef = _lopRef.doc();
+        batch.set(lopRef, {
+          'employee_id': req.employeeId,
+          'leave_request_id': id,
+          'date': d,
+          'amount': perDaySalary,
+          'created_at': DateTime.now().toIso8601String(),
+        });
+      }
+
+      final requestLeaveType = req.leaveType.startsWith('Permission') ? 'Permission' : req.leaveType;
+      final balance = await getLeaveBalance(req.employeeId, requestLeaveType);
+      final balanceDocRef = await _findBalanceDocRef(req.employeeId, requestLeaveType);
+
+      if (balanceDocRef != null && approvedDates.isNotEmpty) {
+        batch.update(balanceDocRef, {
+          'used_leaves': balance.usedLeaves + approvedDates.length,
+          'available_leaves': (balance.availableLeaves - approvedDates.length).clamp(0.0, balance.allowedLeaves),
+          'updated_at': FieldValue.serverTimestamp(),
+        });
+      }
+
+      if (approvedDates.length > balance.availableLeaves) {
+        isOverride = true;
+      }
+    } else if (employeePolicy == 'As Needed') {
       approvedDates.addAll(allDates);
     } else if (employeePolicy == 'No Leave') {
       if (approvalMode == 'all_paid') {
@@ -429,7 +471,7 @@ class FirebaseLeaveRepository implements LeaveRepository {
         }
       }
     } else {
-      // Manual Allocation
+      // Manual Allocation / Monthly Allocation
       final requestLeaveType = req.leaveType.startsWith('Permission') ? 'Permission' : req.leaveType;
       final balance = await getLeaveBalance(req.employeeId, requestLeaveType);
       final balanceDocRef = await _findBalanceDocRef(req.employeeId, requestLeaveType);
@@ -489,20 +531,27 @@ class FirebaseLeaveRepository implements LeaveRepository {
     }
 
     // Update leave request
-    batch.update(doc.reference, {
-      'id': req.id,
+    batch.set(docRef, {
+      ...req.toMap(),
+      'id': req.id != 0 ? req.id : id,
       'status': 'Approved',
       'approved_dates': approvedDates,
       'lop_dates': lopDates,
+      'calculated_paid_days': approvedDates.length.toDouble(),
+      'calculated_lop_days': lopDates.length.toDouble(),
+      'paid_days': approvedDates.length.toDouble(),
+      'lop_days': lopDates.length.toDouble(),
       'is_override': isOverride,
       'override_reason': overrideReason,
       'approved_by': adminName,
       'updated_at': FieldValue.serverTimestamp(),
-    });
+    }, SetOptions(merge: true));
 
-    final detailText = isOverride
-        ? 'Approved all ${allDates.length} day(s) as Paid Leave via Super Admin Override. Reason: ${overrideReason ?? "N/A"}'
-        : 'Approved ${allDates.length} day(s): ${approvedDates.length} Paid, ${lopDates.length} LOP';
+    final detailText = approvalMode == 'custom_split'
+        ? 'Custom Approval: ${approvedDates.length} Paid, ${lopDates.length} LOP (${approvedDates.join(", ")} | LOP: ${lopDates.join(", ")})'
+        : isOverride
+            ? 'Approved all ${allDates.length} day(s) as Paid Leave via Super Admin Override. Reason: ${overrideReason ?? "N/A"}'
+            : 'Approved ${allDates.length} day(s): ${approvedDates.length} Paid, ${lopDates.length} LOP';
 
     final auditRef = _auditRef.doc();
     batch.set(auditRef, {
@@ -517,25 +566,33 @@ class FirebaseLeaveRepository implements LeaveRepository {
   }
 
   @override
-  Future<void> denyLeaveRequest(int id, String adminName, {String? reason}) async {
+  Future<void> denyLeaveRequest(int id, String adminName, {String? reason, LeaveRequest? fallbackRequest}) async {
     final doc = await _findRequestDoc(id);
-    if (doc == null || !doc.exists || doc.data() == null) {
+    LeaveRequest req;
+    DocumentReference<Map<String, dynamic>> docRef;
+
+    if (doc != null && doc.exists && doc.data() != null) {
+      req = _requestFromDoc(doc.data()!, doc.id);
+      docRef = doc.reference;
+      await _revertPreviousApprovalEffects(req);
+    } else if (fallbackRequest != null) {
+      req = fallbackRequest;
+      docRef = _requestsRef.doc(id != 0 ? id.toString() : null);
+    } else {
       throw Exception('Leave request document not found for ID: $id');
     }
-    final req = _requestFromDoc(doc.data()!, doc.id);
-    await _revertPreviousApprovalEffects(req);
 
-    final docRef = doc.reference;
     final batch = _firestore.batch();
 
-    batch.update(docRef, {
-      'id': id,
+    batch.set(docRef, {
+      ...req.toMap(),
+      'id': req.id != 0 ? req.id : id,
       'status': 'Denied',
       'approved_dates': [],
       'lop_dates': [],
       if (reason != null && reason.isNotEmpty) 'rejection_reason': reason,
       'updated_at': FieldValue.serverTimestamp(),
-    });
+    }, SetOptions(merge: true));
 
     final auditRef = _auditRef.doc();
     batch.set(auditRef, {

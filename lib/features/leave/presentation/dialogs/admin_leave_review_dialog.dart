@@ -22,11 +22,88 @@ class _AdminLeaveReviewDialogState extends ConsumerState<AdminLeaveReviewDialog>
   final _remarkController = TextEditingController();
   bool _isProcessing = false;
   String _selectedMode = 'as_calculated';
+  Map<String, String> _customDayStatus = {};
+  bool _customStatusInitialized = false;
 
   @override
   void dispose() {
     _remarkController.dispose();
     super.dispose();
+  }
+
+  List<String> _datesBetween(String fromStr, String toStr) {
+    DateTime? parse(String str) {
+      final parts = str.split('-');
+      if (parts.length == 3) {
+        final p0 = int.tryParse(parts[0]);
+        final p1 = int.tryParse(parts[1]);
+        final p2 = int.tryParse(parts[2]);
+        if (p0 != null && p1 != null && p2 != null) {
+          if (p0 > 1900) return DateTime(p0, p1, p2);
+          return DateTime(p2, p1, p0);
+        }
+      }
+      return null;
+    }
+
+    final from = parse(fromStr);
+    final to = parse(toStr);
+    if (from == null || to == null) return [fromStr];
+
+    final list = <String>[];
+    var curr = from;
+    while (!curr.isAfter(to)) {
+      final d = curr.day.toString().padLeft(2, '0');
+      final m = curr.month.toString().padLeft(2, '0');
+      list.add('$d-$m-${curr.year}');
+      curr = curr.add(const Duration(days: 1));
+    }
+    return list;
+  }
+
+  String _formatDateWithDay(String dateStr) {
+    final parts = dateStr.split('-');
+    if (parts.length == 3) {
+      final d = int.tryParse(parts[0]);
+      final m = int.tryParse(parts[1]);
+      final y = int.tryParse(parts[2]);
+      if (d != null && m != null && y != null) {
+        final dt = DateTime(y, m, d);
+        const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        return '$dateStr (${weekdays[dt.weekday - 1]})';
+      }
+    }
+    return dateStr;
+  }
+
+  void _initCustomStatusIfNeeded(double availLeaves, String policy, double reqDays) {
+    if (_customStatusInitialized) return;
+    _customStatusInitialized = true;
+    _resetCustomStatusToCalculated(availLeaves, policy, reqDays);
+  }
+
+  void _resetCustomStatusToCalculated(double availLeaves, String policy, double reqDays) {
+    final allDates = _datesBetween(widget.request.fromDate, widget.request.toDate);
+    final map = <String, String>{};
+    int paidLeft = policy == 'No Leave' ? 0 : (policy == 'As Needed' ? 999 : availLeaves.toInt());
+    for (final d in allDates) {
+      if (paidLeft > 0) {
+        map[d] = 'paid';
+        paidLeft--;
+      } else {
+        map[d] = 'lop';
+      }
+    }
+    _customDayStatus = map;
+  }
+
+  void _setAllDaysStatus(String status) {
+    final allDates = _datesBetween(widget.request.fromDate, widget.request.toDate);
+    final map = <String, String>{};
+    for (final d in allDates) {
+      map[d] = status;
+    }
+    _customDayStatus = map;
   }
 
   Future<void> _handleSubmit() async {
@@ -42,8 +119,17 @@ class _AdminLeaveReviewDialogState extends ConsumerState<AdminLeaveReviewDialog>
         final reason = _remarkController.text.trim().isNotEmpty
             ? _remarkController.text.trim()
             : 'Rejected by Admin';
-        await repo.denyLeaveRequest(widget.request.id, adminName, reason: reason);
+        await repo.denyLeaveRequest(widget.request.id, adminName, reason: reason, fallbackRequest: widget.request);
       } else {
+        final customApprovedDates = _customDayStatus.entries
+            .where((e) => e.value == 'paid')
+            .map((e) => e.key)
+            .toList();
+        final customLopDates = _customDayStatus.entries
+            .where((e) => e.value == 'lop')
+            .map((e) => e.key)
+            .toList();
+
         await repo.approveLeaveRequest(
           widget.request.id,
           adminName,
@@ -51,6 +137,9 @@ class _AdminLeaveReviewDialogState extends ConsumerState<AdminLeaveReviewDialog>
           overrideReason: _remarkController.text.trim().isNotEmpty
               ? _remarkController.text.trim()
               : null,
+          fallbackRequest: widget.request,
+          customApprovedDates: customApprovedDates,
+          customLopDates: customLopDates,
         );
       }
 
@@ -89,6 +178,8 @@ class _AdminLeaveReviewDialogState extends ConsumerState<AdminLeaveReviewDialog>
     final availLeaves = emp != null ? emp.allowedLeaves : allowance;
     final reqDays = req.requestedDays > 0 ? req.requestedDays : req.numDays;
 
+    _initCustomStatusIfNeeded(availLeaves, policy, reqDays);
+
     double paidRec = 0.0;
     double lopRec = 0.0;
 
@@ -103,10 +194,16 @@ class _AdminLeaveReviewDialogState extends ConsumerState<AdminLeaveReviewDialog>
       lopRec = (reqDays - paidRec).clamp(0.0, 999.0).toDouble();
     }
 
+    final customPaidCount = _customDayStatus.values.where((v) => v == 'paid').length;
+    final customLopCount = _customDayStatus.values.where((v) => v == 'lop').length;
+
     final String buttonLabel;
     final Color buttonColor;
     if (_selectedMode == 'as_calculated') {
       buttonLabel = 'Approve Leave';
+      buttonColor = AdminLeaveReviewDialog.primaryGreen;
+    } else if (_selectedMode == 'custom_split') {
+      buttonLabel = 'Approve ($customPaidCount Paid, $customLopCount LOP)';
       buttonColor = AdminLeaveReviewDialog.primaryGreen;
     } else if (_selectedMode == 'all_paid') {
       buttonLabel = 'Approve as Paid';
@@ -119,10 +216,12 @@ class _AdminLeaveReviewDialogState extends ConsumerState<AdminLeaveReviewDialog>
       buttonColor = Colors.red.shade700;
     }
 
+    final allDatesList = _datesBetween(req.fromDate, req.toDate);
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560),
+        constraints: const BoxConstraints(maxWidth: 580),
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -281,7 +380,6 @@ class _AdminLeaveReviewDialogState extends ConsumerState<AdminLeaveReviewDialog>
                         spacing: 14,
                         runSpacing: 4,
                         children: [
-                          Text('• Allowance: ${allowance % 1 == 0 ? allowance.toInt() : allowance} Days', style: const TextStyle(fontSize: 12)),
                           Text('• Available: ${availLeaves % 1 == 0 ? availLeaves.toInt() : availLeaves} Days', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                           Text('• Requested: ${reqDays % 1 == 0 ? reqDays.toInt() : reqDays} Days', style: const TextStyle(fontSize: 12)),
                         ],
@@ -318,11 +416,139 @@ class _AdminLeaveReviewDialogState extends ConsumerState<AdminLeaveReviewDialog>
               const SizedBox(height: 16),
 
               // CARD 3 — ADMIN DECISION & PAYROLL TREATMENT
-              const Text(
-                'Admin Decision & Payroll Treatment',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AdminLeaveReviewDialog.darkNeutral),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Admin Decision & Daily Treatment',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AdminLeaveReviewDialog.darkNeutral),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AdminLeaveReviewDialog.primaryGreen.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '$customPaidCount Paid • $customLopCount LOP',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF2E7D32)),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
+
+              // ALWAYS VISIBLE DAY-BY-DAY SELECTION BOX
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9FAFB),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Tap Paid (OL) or LOP to customize any specific date:',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: AdminLeaveReviewDialog.darkNeutral),
+                    ),
+                    const SizedBox(height: 8),
+                    ...allDatesList.map((dateStr) {
+                      final currentStatus = _customDayStatus[dateStr] ?? 'paid';
+                      final isPaid = currentStatus == 'paid';
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isPaid ? AdminLeaveReviewDialog.primaryGreen.withOpacity(0.4) : Colors.orange.shade300,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.calendar_today_outlined, size: 14, color: Colors.grey.shade700),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _formatDateWithDay(dateStr),
+                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: AdminLeaveReviewDialog.darkNeutral),
+                              ),
+                            ),
+                            // Paid toggle button
+                            InkWell(
+                              onTap: () {
+                                setState(() {
+                                  _selectedMode = 'custom_split';
+                                  _customDayStatus[dateStr] = 'paid';
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(6),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: isPaid ? AdminLeaveReviewDialog.primaryGreen : Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: isPaid ? AdminLeaveReviewDialog.primaryGreen : Colors.grey.shade300,
+                                  ),
+                                ),
+                                child: Text(
+                                  'Paid (OL)',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: isPaid ? Colors.white : Colors.grey.shade700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            // LOP toggle button
+                            InkWell(
+                              onTap: () {
+                                setState(() {
+                                  _selectedMode = 'custom_split';
+                                  _customDayStatus[dateStr] = 'lop';
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(6),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: !isPaid ? const Color(0xFFC2410C) : Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: !isPaid ? const Color(0xFFC2410C) : Colors.grey.shade300,
+                                  ),
+                                ),
+                                child: Text(
+                                  'LOP',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: !isPaid ? Colors.white : Colors.grey.shade700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              const Text(
+                'Approval Presets & Override:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey),
+              ),
+              const SizedBox(height: 4),
 
               RadioListTile<String>(
                 contentPadding: EdgeInsets.zero,
@@ -330,14 +556,35 @@ class _AdminLeaveReviewDialogState extends ConsumerState<AdminLeaveReviewDialog>
                 groupValue: _selectedMode,
                 activeColor: AdminLeaveReviewDialog.primaryGreen,
                 title: Text(
-                  'Approve as Calculated (${paidRec % 1 == 0 ? paidRec.toInt() : paidRec} Paid, ${lopRec % 1 == 0 ? lopRec.toInt() : lopRec} LOP)',
+                  'System Recommended Split (${paidRec % 1 == 0 ? paidRec.toInt() : paidRec} Paid, ${lopRec % 1 == 0 ? lopRec.toInt() : lopRec} LOP)',
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                 ),
-                subtitle: const Text('Approve with system-calculated quota split.'),
+                subtitle: const Text('Reset day statuses to system-calculated quota split.'),
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _selectedMode = val;
+                      _resetCustomStatusToCalculated(availLeaves, policy, reqDays);
+                    });
+                  }
+                },
+              ),
+
+              RadioListTile<String>(
+                contentPadding: EdgeInsets.zero,
+                value: 'custom_split',
+                groupValue: _selectedMode,
+                activeColor: AdminLeaveReviewDialog.primaryGreen,
+                title: Text(
+                  'Custom Selection ($customPaidCount Paid, $customLopCount LOP)',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text('Approve with the customized day-by-day selection above.'),
                 onChanged: (val) {
                   if (val != null) setState(() => _selectedMode = val);
                 },
               ),
+
               RadioListTile<String>(
                 contentPadding: EdgeInsets.zero,
                 value: 'all_paid',
@@ -347,11 +594,17 @@ class _AdminLeaveReviewDialogState extends ConsumerState<AdminLeaveReviewDialog>
                   'Approve All as Paid Leave (${reqDays % 1 == 0 ? reqDays.toInt() : reqDays} Days Paid)',
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                 ),
-                subtitle: const Text('Admin override: Grant all requested days as paid leave.'),
+                subtitle: const Text('Admin override: Mark all requested dates as Paid Leave.'),
                 onChanged: (val) {
-                  if (val != null) setState(() => _selectedMode = val);
+                  if (val != null) {
+                    setState(() {
+                      _selectedMode = val;
+                      _setAllDaysStatus('paid');
+                    });
+                  }
                 },
               ),
+
               RadioListTile<String>(
                 contentPadding: EdgeInsets.zero,
                 value: 'all_lop',
@@ -361,11 +614,17 @@ class _AdminLeaveReviewDialogState extends ConsumerState<AdminLeaveReviewDialog>
                   'Approve All as LOP (${reqDays % 1 == 0 ? reqDays.toInt() : reqDays} Days LOP)',
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                 ),
-                subtitle: const Text('Leave authorized, but marked as Loss of Pay in Payroll.'),
+                subtitle: const Text('Admin override: Mark all requested dates as Loss of Pay.'),
                 onChanged: (val) {
-                  if (val != null) setState(() => _selectedMode = val);
+                  if (val != null) {
+                    setState(() {
+                      _selectedMode = val;
+                      _setAllDaysStatus('lop');
+                    });
+                  }
                 },
               ),
+
               RadioListTile<String>(
                 contentPadding: EdgeInsets.zero,
                 value: 'reject',

@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../attendance/domain/attendance_record.dart';
+import '../../attendance/domain/attendance_session.dart';
 import '../domain/attendance_management_repository.dart';
 import '../domain/attendance_management_stats.dart';
 
@@ -367,26 +368,41 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
       final key = record.employeeCode.isNotEmpty ? record.employeeCode : record.employeeId.toString();
       final docId = '${key}_${record.date.replaceAll('-', '')}';
 
-      double totalHours = 0.0;
-      if (record.sessions.isNotEmpty) {
-        for (final s in record.sessions) {
-          if (s.isCompleted) {
-            totalHours += s.effectiveDurationHours;
-          }
-        }
-        totalHours = double.parse(totalHours.toStringAsFixed(2));
-      }
-      if (totalHours == 0.0 && record.totalHours > 0) {
-        totalHours = record.totalHours;
-      }
-      if (totalHours == 0.0 && record.effectiveCheckInTime.isNotEmpty && record.checkOutTime.isNotEmpty) {
+      double totalHours = record.totalHours;
+      List<AttendanceSession> sessions = List.from(record.sessions);
+
+      if (record.effectiveCheckInTime.isNotEmpty && record.checkOutTime.isNotEmpty) {
         try {
           final inMin = _parseTimeToMinutes(record.effectiveCheckInTime);
           final outMin = _parseTimeToMinutes(record.checkOutTime);
-          if (inMin != null && outMin != null && outMin > inMin) {
+          if (inMin != null && outMin != null && outMin >= inMin) {
             totalHours = double.parse(((outMin - inMin) / 60.0).toStringAsFixed(2));
+            sessions = [
+              AttendanceSession(
+                id: sessions.isNotEmpty ? sessions.first.id : 'session_office_1',
+                type: sessions.isNotEmpty ? sessions.first.type : 'office',
+                checkInTime: record.effectiveCheckInTime,
+                checkOutTime: record.checkOutTime,
+                durationHours: totalHours,
+                durationMinutes: outMin - inMin,
+                checkInVerificationStatus: record.effectiveCheckInVerification,
+                checkOutVerificationStatus: record.checkOutVerificationStatus.isNotEmpty
+                    ? record.checkOutVerificationStatus
+                    : record.effectiveCheckInVerification,
+                checkInMethod: 'Admin Override',
+                checkOutMethod: 'Admin Override',
+              ),
+            ];
           }
         } catch (_) {}
+      } else if (sessions.isNotEmpty) {
+        double sum = 0.0;
+        for (final s in sessions) {
+          if (s.isCompleted) {
+            sum += s.effectiveDurationHours;
+          }
+        }
+        totalHours = double.parse(sum.toStringAsFixed(2));
       }
 
       String status = record.status;
@@ -399,9 +415,11 @@ class FirebaseAttendanceManagementRepository implements AttendanceManagementRepo
         checkInTime: record.effectiveCheckInTime,
         status: status,
         totalHours: totalHours,
+        sessions: sessions,
         markedAt: record.markedAt.isNotEmpty ? record.markedAt : DateTime.now().toIso8601String(),
       );
 
+      _localMemoryCache[cacheKey] = toSave;
       await _recordsRef.doc(docId).set(toSave.toMap(), SetOptions(merge: true));
     } catch (_) {}
   }

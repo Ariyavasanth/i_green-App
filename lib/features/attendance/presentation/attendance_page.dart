@@ -2843,7 +2843,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    existingRequest != null ? 'Edit Leave Request' : 'Apply For Leave',
+                    existingRequest != null ? 'Edit Leave Request' : 'Request for Leave',
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF414A51)),
                   ),
                   IconButton(

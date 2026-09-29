@@ -1,5 +1,6 @@
 import '../../../core/utils/time_formatter.dart';
 import 'attendance_session.dart';
+export 'attendance_session.dart';
 
 String formatToLocal12HourTime(String timeStr, {bool forceSeconds = false}) {
   return TimeFormatter.formatToLocal12HourTime(timeStr, forceSeconds: forceSeconds);

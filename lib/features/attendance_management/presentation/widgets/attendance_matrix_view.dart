@@ -406,14 +406,17 @@ class AttendanceMatrixView extends StatelessWidget {
               color: statusInfo != null ? textColor.withValues(alpha: 0.25) : const Color(0xFFE2E8F0),
             ),
           ),
-          child: Text(
-            codeStr,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              color: textColor,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                codeStr,
+                style: TextStyle(
+                  fontSize: codeStr.length > 2 ? 9.5 : 11,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                ),
+              ),
             ),
-          ),
         ),
       ),
     );

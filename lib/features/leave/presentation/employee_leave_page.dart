@@ -211,7 +211,7 @@ class _EmployeeLeavePageState extends ConsumerState<EmployeeLeavePage> {
               title: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Apply For Leave', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF414A51))),
+                  const Text('Request for Leave', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF414A51))),
                   IconButton(
                     icon: const Icon(Icons.close, color: Color(0xFF64748B)),
                     onPressed: () => Navigator.pop(dialogCtx),

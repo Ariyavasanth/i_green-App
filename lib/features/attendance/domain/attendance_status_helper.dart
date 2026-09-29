@@ -11,6 +11,7 @@ enum AttendanceStatusInfo {
   late('L', 'Late', Color(0xFFFFEDD5), Color(0xFFEA580C)),
   absent('A', 'Absent', Color(0xFFFEE2E2), Color(0xFFDC2626)),
   onLeave('OL', 'On Leave', Color(0xFFFEF9C3), Color(0xFFCA8A04)),
+  lop('LOP', 'Loss of Pay', Color(0xFFFFEDD5), Color(0xFFC2410C)),
   onDuty('OD', 'On Duty', Color(0xFFE0F2FE), Color(0xFF0284C7)),
   missingCheckout('MC', 'Missing Checkout', Color(0xFFF3E8FF), Color(0xFF9333EA)),
   insufficientHours('IH', 'Insufficient Hours', Color(0xFFFFEDD5), Color(0xFFD97706)),
@@ -67,6 +68,9 @@ class AttendanceStatusHelper {
       if (stLower == 'absent') {
         return AttendanceStatusInfo.absent;
       }
+      if (stLower == 'lop' || stLower == 'loss of pay') {
+        return AttendanceStatusInfo.lop;
+      }
       if (stLower.contains('leave') || stLower == 'half day' || stLower == 'ol') {
         return AttendanceStatusInfo.onLeave;
       }
@@ -103,7 +107,7 @@ class AttendanceStatusHelper {
       return AttendanceStatusInfo.present;
     }
 
-    // 2. Check Leave Requests (Only Approved leaves resolve to On Leave, strictly isolated by employeeCode)
+    // 2. Check Leave Requests (Only Approved leaves resolve to On Leave or LOP, strictly isolated by employeeCode)
     if (leaves != null && leaves.isNotEmpty) {
       for (final leave in leaves) {
         final leaveCode = leave.employeeCustomId.trim().toUpperCase();
@@ -118,6 +122,49 @@ class AttendanceStatusHelper {
             final fromClean = DateTime(fromDt.year, fromDt.month, fromDt.day);
             final toClean = DateTime(toDt.year, toDt.month, toDt.day);
             if (!targetDate.isBefore(fromClean) && !targetDate.isAfter(toClean)) {
+              // Check if specific date was designated as Loss of Pay (LOP)
+              bool isLopDate = false;
+              if (leave.lopDates.isNotEmpty) {
+                for (final ld in leave.lopDates) {
+                  if (ld.trim() == dateStr) {
+                    isLopDate = true;
+                    break;
+                  }
+                  final parsedLd = _parseDate(ld);
+                  if (parsedLd != null && DateTime(parsedLd.year, parsedLd.month, parsedLd.day) == targetDate) {
+                    isLopDate = true;
+                    break;
+                  }
+                }
+              } else if (leave.approvedDates.isNotEmpty) {
+                // If approvedDates is present, any date in the leave window not in approvedDates is LOP
+                bool inApproved = false;
+                for (final ad in leave.approvedDates) {
+                  if (ad.trim() == dateStr) {
+                    inApproved = true;
+                    break;
+                  }
+                  final parsedAd = _parseDate(ad);
+                  if (parsedAd != null && DateTime(parsedAd.year, parsedAd.month, parsedAd.day) == targetDate) {
+                    inApproved = true;
+                    break;
+                  }
+                }
+                if (!inApproved) {
+                  isLopDate = true;
+                }
+              } else if (leave.lopDays > 0 || leave.calculatedLopDays > 0) {
+                // Fallback for requests approved as split before explicit date arrays
+                final effectivePaid = leave.paidDays > 0 ? leave.paidDays : leave.calculatedPaidDays;
+                final dayIndex = targetDate.difference(fromClean).inDays;
+                if (dayIndex >= effectivePaid) {
+                  isLopDate = true;
+                }
+              }
+
+              if (isLopDate) {
+                return AttendanceStatusInfo.lop;
+              }
               return AttendanceStatusInfo.onLeave;
             }
           }

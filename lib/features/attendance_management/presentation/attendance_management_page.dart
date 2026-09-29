@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/smart_network_image.dart';
 import '../../attendance/domain/attendance_record.dart';
+import '../../attendance/domain/attendance_session.dart';
 import '../../attendance/domain/attendance_status_helper.dart';
 import '../../attendance/presentation/widgets/attendance_details_dialog.dart';
 import '../../attendance/providers/attendance_providers.dart';
@@ -31,6 +32,7 @@ import 'widgets/attendance_audit_logs_embedded_view.dart';
 import 'widgets/attendance_matrix_view.dart';
 import 'widgets/attendance_table_view.dart';
 import 'widgets/monthly_attendance_result_view.dart';
+import '../../../tools/seed_all_employees_attendance.dart';
 
 enum AttendanceCategoryTab {
   staticAttendance,
@@ -79,6 +81,15 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
   void initState() {
     super.initState();
     _activeTab = widget.initialTab;
+    Future.microtask(() async {
+      await syncEmployeeJoiningAndAttendance();
+      if (mounted) {
+        ref.invalidate(attendanceManagementRecordsProvider);
+        ref.invalidate(attendanceManagementStatsProvider);
+        ref.invalidate(allLeaveRequestsProvider);
+        ref.invalidate(employeesProvider);
+      }
+    });
   }
 
   @override
@@ -123,6 +134,41 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
         }) async {
           final dateStr = DateFormat('dd-MM-yyyy').format(date);
           final repo = ref.read(attendanceManagementRepositoryProvider);
+
+          double computedHours = 0.0;
+          List<AttendanceSession> sessions = [];
+          if (correctedCheckIn.isNotEmpty && correctedCheckOut.isNotEmpty) {
+            final inMins = AttendanceSession.parseTimeToMinutes(correctedCheckIn);
+            final outMins = AttendanceSession.parseTimeToMinutes(correctedCheckOut);
+            if (inMins != null && outMins != null && outMins > inMins) {
+              computedHours = double.parse(((outMins - inMins) / 60.0).toStringAsFixed(2));
+              sessions = [
+                AttendanceSession(
+                  id: 'session_office_1',
+                  type: 'office',
+                  checkInTime: correctedCheckIn,
+                  checkOutTime: correctedCheckOut,
+                  durationHours: computedHours,
+                  durationMinutes: outMins - inMins,
+                  checkInVerificationStatus: 'Admin Correction (Firestore)',
+                  checkOutVerificationStatus: 'Admin Correction (Firestore)',
+                  checkInMethod: 'Admin Override',
+                  checkOutMethod: 'Admin Override',
+                ),
+              ];
+            }
+          } else if (correctedCheckIn.isNotEmpty) {
+            sessions = [
+              AttendanceSession(
+                id: 'session_office_1',
+                type: 'office',
+                checkInTime: correctedCheckIn,
+                checkInVerificationStatus: 'Admin Correction (Firestore)',
+                checkInMethod: 'Admin Override',
+              ),
+            ];
+          }
+
           final updatedRecord = AttendanceRecord(
             id: record?.id ?? 0,
             employeeId: emp.id,
@@ -139,8 +185,8 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
             checkOutVerificationStatus: correctedCheckOut.isNotEmpty ? 'Admin Correction (Firestore)' : '',
             checkInSimilarityScore: 1.0,
             checkOutSimilarityScore: correctedCheckOut.isNotEmpty ? 1.0 : 0.0,
-            totalHours: record?.totalHours ?? 0.0,
-            sessions: record?.sessions ?? const [],
+            totalHours: computedHours,
+            sessions: sessions,
             notes: reason,
             markedAt: record?.markedAt ?? DateTime.now().toIso8601String(),
           );
@@ -410,27 +456,54 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
         Row(
           children: [
             // Live Sync Pill Badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: const Color(0xFF9CC70A).withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.3)),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.sensors, size: 13, color: Color(0xFF414A51)),
-                  SizedBox(width: 4),
-                  Text(
-                    'Live Sync',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF414A51),
+            Tooltip(
+              message: 'Click to sync and refresh attendance data',
+              child: InkWell(
+                onTap: () async {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Syncing attendance database...'),
+                      duration: Duration(seconds: 1),
                     ),
+                  );
+                  await syncEmployeeJoiningAndAttendance();
+                  if (mounted) {
+                    ref.invalidate(attendanceManagementRecordsProvider);
+                    ref.invalidate(attendanceManagementStatsProvider);
+                    ref.invalidate(allLeaveRequestsProvider);
+                    ref.invalidate(employeesProvider);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Attendance database synced successfully!'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                },
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF9CC70A).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.3)),
                   ),
-                ],
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.sensors, size: 13, color: Color(0xFF414A51)),
+                      SizedBox(width: 4),
+                      Text(
+                        'Live Sync',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF414A51),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: 10),
@@ -1598,9 +1671,10 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
             child: Row(
               children: [
                 _buildStatusFilterChip('P', 'Present', const Color(0xFFE6F4EA), const Color(0xFF1E88E5)),
-                _buildStatusFilterChip('A', 'Late', const Color(0xFFFFF3E0), const Color(0xFFE65100)),
+                _buildStatusFilterChip('L', 'Late', const Color(0xFFFFF3E0), const Color(0xFFE65100)),
                 _buildStatusFilterChip('A', 'Absent', const Color(0xFFFFEBEE), const Color(0xFFC62828)),
                 _buildStatusFilterChip('OL', 'On Leave', const Color(0xFFFEF9C3), const Color(0xFF854D0E)),
+                _buildStatusFilterChip('LOP', 'Loss of Pay', const Color(0xFFFFEDD5), const Color(0xFFC2410C)),
                 _buildStatusFilterChip('OD', 'On Duty', const Color(0xFFE0F2FE), const Color(0xFF0369A1)),
                 _buildStatusFilterChip('MC', 'Missing', const Color(0xFFF3E8FF), const Color(0xFF7E22CE)),
                 _buildStatusFilterChip('IH', 'Ins. Hours', const Color(0xFFFFEDD5), const Color(0xFFC2410C)),

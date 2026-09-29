@@ -259,6 +259,12 @@ Future<void> syncEmployeeJoiningAndAttendance() async {
           continue;
         }
 
+        // Exclude EMP-5407 for Sep 1 to Sep 5, 2026
+        final isEmp5407 = empCode.toUpperCase().contains('5407') || empId == 5407 || empName.toLowerCase().contains('sam');
+        if (isEmp5407 && dt.year == 2026 && dt.month == 9 && dt.day >= 1 && dt.day <= 5) {
+          continue;
+        }
+
         final dateStr = '${dt.day.toString().padLeft(2, '0')}-${dt.month.toString().padLeft(2, '0')}-${dt.year}';
         final attDocRef = firestore.collection('attendance_records').doc('${empCode}_$dateStr');
 
@@ -287,14 +293,112 @@ Future<void> syncEmployeeJoiningAndAttendance() async {
       await batch.commit();
     }
 
-    // 4. Reset/Delete any generated payroll records for EMP-5406 so status becomes "Not Generated"
+    // 4. Exhaustively delete attendance records for EMP-5407 for Sep 1 to Sep 5, 2026
+    try {
+      final targets = [
+        '01-09-2026', '02-09-2026', '03-09-2026', '04-09-2026', '05-09-2026',
+        '1-9-2026', '2-9-2026', '3-9-2026', '4-9-2026', '5-9-2026',
+        '2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04', '2026-09-05',
+        '01/09/2026', '02/09/2026', '03/09/2026', '04/09/2026', '05/09/2026',
+        '1/9/2026', '2/9/2026', '3/9/2026', '4/9/2026', '5/9/2026',
+      ];
+
+      // Direct doc ID deletions
+      for (final prefix in ['EMP-5407', '5407', 'EMP5407', 'emp-5407', 'emp5407']) {
+        for (final d in targets) {
+          final docRef = firestore.collection('attendance_records').doc('${prefix}_$d');
+          final snap = await docRef.get();
+          if (snap.exists) {
+            await docRef.delete();
+            debugPrint('🗑️ [attendance_records] Deleted record: ${docRef.id}');
+          }
+        }
+      }
+
+      // Query and delete any matching documents in attendance_records
+      final attSnap = await firestore.collection('attendance_records').get();
+      for (final doc in attSnap.docs) {
+        final data = doc.data();
+        final eCode = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
+        final eName = (data['employee_name'] ?? '').toString().trim().toLowerCase();
+        final eId = data['employee_id'] is int
+            ? data['employee_id'] as int
+            : (int.tryParse(data['employee_id']?.toString() ?? '') ?? 0);
+        final docId = doc.id.toUpperCase();
+
+        final matchesEmp = eCode.contains('5407') || eId == 5407 || eName.contains('sam') ||
+            docId.contains('5407');
+
+        if (matchesEmp) {
+          final rawDate = (data['date'] ?? '').toString().trim();
+          bool isTargetSepDate = targets.contains(rawDate);
+
+          for (final t in targets) {
+            if (docId.endsWith(t.toUpperCase())) {
+              isTargetSepDate = true;
+              break;
+            }
+          }
+
+          if (!isTargetSepDate && rawDate.isNotEmpty) {
+            try {
+              final parsed = DateTime.tryParse(rawDate);
+              if (parsed != null && parsed.year == 2026 && parsed.month == 9 && parsed.day >= 1 && parsed.day <= 5) {
+                isTargetSepDate = true;
+              } else {
+                final parts = rawDate.replaceAll('/', '-').split('-');
+                if (parts.length == 3) {
+                  int y = int.tryParse(parts[2]) ?? 0;
+                  int m = int.tryParse(parts[1]) ?? 0;
+                  int d = int.tryParse(parts[0]) ?? 0;
+                  if (y == 2026 && m == 9 && d >= 1 && d <= 5) {
+                    isTargetSepDate = true;
+                  }
+                }
+              }
+            } catch (_) {}
+          }
+
+          if (isTargetSepDate) {
+            await doc.reference.delete();
+            debugPrint('🗑️ [attendance_records] Deleted record for EMP-5407: ${doc.id}');
+          }
+        }
+      }
+
+      // Delete any matching attendance_attempts
+      final attemptSnap = await firestore.collection('attendance_attempts').get();
+      for (final doc in attemptSnap.docs) {
+        final data = doc.data();
+        final eCode = (data['employee_code'] ?? data['employee_id'] ?? '').toString().trim().toUpperCase();
+        final eId = data['employee_id'] is int
+            ? data['employee_id'] as int
+            : (int.tryParse(data['employee_id']?.toString() ?? '') ?? 0);
+        final docId = doc.id.toUpperCase();
+
+        final matchesEmp = eCode.contains('5407') || eId == 5407 || docId.contains('5407');
+
+        if (matchesEmp) {
+          final rawDate = (data['date'] ?? '').toString().trim();
+          if (targets.contains(rawDate) || rawDate.contains('09-2026') || rawDate.contains('2026-09')) {
+            await doc.reference.delete();
+            debugPrint('🗑️ [attendance_attempts] Deleted attempt for EMP-5407: ${doc.id}');
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ [attendance_records] Error deleting EMP-5407 records: $e');
+    }
+
+    // 5. Reset/Delete any generated payroll records for EMP-5406 and EMP-5407 so status becomes "Not Generated"
     try {
       final payrollSnap = await firestore.collection('payrolls').get();
       for (final doc in payrollSnap.docs) {
         final data = doc.data();
         final empId = data['employee_id'];
         final docId = doc.id;
-        if (empId == 5406 || docId.startsWith('5406_') || docId.startsWith('EMP-5406_') || docId.startsWith('EMP5406_')) {
+        if (empId == 5406 || docId.startsWith('5406_') || docId.startsWith('EMP-5406_') || docId.startsWith('EMP5406_') ||
+            empId == 5407 || docId.startsWith('5407_') || docId.startsWith('EMP-5407_') || docId.startsWith('EMP5407_')) {
           await doc.reference.delete();
           debugPrint('🗑️ [payrolls] Deleted payroll document to reset status to Not Generated: $docId');
         }

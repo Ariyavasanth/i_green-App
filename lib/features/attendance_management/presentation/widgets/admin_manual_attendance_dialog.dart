@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../attendance/domain/attendance_record.dart';
+import '../../../attendance/domain/attendance_session.dart';
 import '../../../employee/providers/employee_providers.dart';
 import '../../providers/attendance_management_providers.dart';
 
@@ -71,28 +72,56 @@ class _AdminManualAttendanceDialogState extends ConsumerState<AdminManualAttenda
     setState(() => _saving = true);
 
     try {
-      final repo = ref.read(attendanceManagementRepositoryProvider);
+      final inTime = _checkInController.text.trim();
+      final outTime = _checkOutController.text.trim();
+      double computedHours = 0.0;
+      List<AttendanceSession> sessions = [];
+
+      if (inTime.isNotEmpty && outTime.isNotEmpty) {
+        final inMins = AttendanceSession.parseTimeToMinutes(inTime);
+        final outMins = AttendanceSession.parseTimeToMinutes(outTime);
+        if (inMins != null && outMins != null && outMins > inMins) {
+          computedHours = double.parse(((outMins - inMins) / 60.0).toStringAsFixed(2));
+          sessions = [
+            AttendanceSession(
+              id: 'session_office_1',
+              type: 'office',
+              checkInTime: inTime,
+              checkOutTime: outTime,
+              durationHours: computedHours,
+              durationMinutes: outMins - inMins,
+              checkInVerificationStatus: 'Admin Override (Firestore)',
+              checkOutVerificationStatus: 'Admin Override (Firestore)',
+              checkInMethod: 'Admin Override',
+              checkOutMethod: 'Admin Override',
+            ),
+          ];
+        }
+      }
+
       final record = AttendanceRecord(
         id: widget.existingRecord?.id ?? 0,
         employeeId: _selectedEmployeeId!,
         employeeCode: _selectedEmployeeCode,
         employeeName: _selectedEmployeeName,
         date: _dateController.text.trim(),
-        time: _checkInController.text.trim(),
+        time: inTime,
         status: _status,
         verificationStatus: 'Admin Override (Firestore)',
         similarityScore: 1.0,
-        checkInTime: _checkInController.text.trim(),
-        checkOutTime: _checkOutController.text.trim(),
+        checkInTime: inTime,
+        checkOutTime: outTime,
         checkInVerificationStatus: 'Admin Override (Firestore)',
-        checkOutVerificationStatus: _checkOutController.text.trim().isNotEmpty ? 'Admin Override (Firestore)' : '',
+        checkOutVerificationStatus: outTime.isNotEmpty ? 'Admin Override (Firestore)' : '',
         checkInSimilarityScore: 1.0,
-        checkOutSimilarityScore: _checkOutController.text.trim().isNotEmpty ? 1.0 : 0.0,
-        totalHours: 0.0,
+        checkOutSimilarityScore: outTime.isNotEmpty ? 1.0 : 0.0,
+        totalHours: computedHours,
+        sessions: sessions,
         notes: _notesController.text.trim(),
         markedAt: widget.existingRecord?.markedAt ?? DateTime.now().toIso8601String(),
       );
 
+      final repo = ref.read(attendanceManagementRepositoryProvider);
       await repo.saveOrOverrideAttendance(record);
       widget.onSaved();
       if (mounted) {

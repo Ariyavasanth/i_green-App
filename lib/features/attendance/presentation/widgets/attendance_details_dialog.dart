@@ -83,6 +83,7 @@ class AttendanceDetailsDialog extends StatelessWidget {
     if (record == null) {
       if (statusInfo == AttendanceStatusInfo.absent) return 'System Auto-Resolved (Absent)';
       if (statusInfo == AttendanceStatusInfo.onLeave) return 'Approved Leave Application';
+      if (statusInfo == AttendanceStatusInfo.lop) return 'Approved Leave (Loss of Pay)';
       if (statusInfo == AttendanceStatusInfo.onDuty) return 'Approved OD Assignment';
       if (statusInfo == AttendanceStatusInfo.weeklyOff) return 'Weekly Off Roster';
       if (statusInfo == AttendanceStatusInfo.holiday) return 'Company Holiday Calendar';

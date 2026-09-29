@@ -2076,7 +2076,7 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
             return AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               title: Text(
-                isEditing ? 'Edit Leave Request' : 'Apply for Leave',
+                isEditing ? 'Edit Leave Request' : 'Request for Leave',
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1E293B)),
               ),
               content: SingleChildScrollView(

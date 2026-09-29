@@ -23,10 +23,13 @@ abstract class LeaveRepository {
   Future<void> approveLeaveRequest(
     int id,
     String adminName, {
-    String approvalMode = 'as_calculated', // 'as_calculated', 'all_paid', 'all_lop'
+    String approvalMode = 'as_calculated', // 'as_calculated', 'custom_split', 'all_paid', 'all_lop'
     String? overrideReason,
+    LeaveRequest? fallbackRequest,
+    List<String>? customApprovedDates,
+    List<String>? customLopDates,
   });
-  Future<void> denyLeaveRequest(int id, String adminName, {String? reason});
+  Future<void> denyLeaveRequest(int id, String adminName, {String? reason, LeaveRequest? fallbackRequest});
   Future<void> cancelLeaveRequest(int id, String employeeName);
   Future<List<LeaveRequest>> getLeaveRequestsForCalendar();
   Future<List<LeaveBalance>> getLeaveBalances(int employeeId);
