@@ -6,6 +6,7 @@ import '../../../attendance/domain/monthly_attendance_result.dart';
 import '../../../employee/domain/employee.dart';
 import '../../../leave/domain/leave_request.dart';
 import '../../../on_duty/domain/on_duty_assignment.dart';
+import '../../../permission/domain/permission_request.dart';
 
 class MonthlyAttendanceResultView extends StatefulWidget {
   const MonthlyAttendanceResultView({
@@ -19,6 +20,7 @@ class MonthlyAttendanceResultView extends StatefulWidget {
     this.leaves,
     this.onDutyAssignments,
     this.holidays,
+    this.permissions,
     this.isMobile = false,
     this.onRowTap,
   });
@@ -32,6 +34,7 @@ class MonthlyAttendanceResultView extends StatefulWidget {
   final List<LeaveRequest>? leaves;
   final List<OnDutyAssignment>? onDutyAssignments;
   final List<String>? holidays;
+  final List<PermissionRequest>? permissions;
   final bool isMobile;
   final void Function(DailyAttendanceResult dailyResult, Employee employee)? onRowTap;
 
@@ -127,6 +130,7 @@ class _MonthlyAttendanceResultViewState extends State<MonthlyAttendanceResultVie
             leaves: widget.leaves,
             onDutyAssignments: widget.onDutyAssignments,
             holidays: widget.holidays,
+            permissions: widget.permissions,
             referenceDate: DateTime.now(),
           )
         : MonthlyAttendanceResult.empty(

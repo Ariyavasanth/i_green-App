@@ -13,6 +13,7 @@ import '../../attendance/domain/attendance_record.dart';
 import '../../on_duty/domain/on_duty_assignment.dart';
 import '../../attendance/domain/monthly_attendance_result.dart';
 import '../../payroll/domain/payroll.dart';
+import '../../permission/domain/permission_request.dart';
 
 /// Full Firestore implementation of LeaveRepository.
 /// Collections used:
@@ -911,6 +912,17 @@ class FirebaseLeaveRepository implements LeaveRepository {
       attRecords = attSnap.docs.map((doc) => AttendanceRecord.fromMap(doc.data())).toList();
     } catch (_) {}
 
+    List<PermissionRequest> permissions = [];
+    try {
+      final permSnap = await _firestore
+          .collection('permission_requests')
+          .where('employee_id', isEqualTo: employeeId)
+          .get();
+      permissions = permSnap.docs
+          .map((doc) => PermissionRequest.fromMap(doc.data()))
+          .toList();
+    } catch (_) {}
+
     List<String> holidays = [];
     try {
       holidays = await getHolidays();
@@ -927,6 +939,7 @@ class FirebaseLeaveRepository implements LeaveRepository {
         leaves: leaves,
         onDutyAssignments: odAssignments,
         holidays: holidays,
+        permissions: permissions,
         startDate: effStart,
         endDateExclusive: effEndExclusive,
         referenceDate: effEndExclusive.subtract(const Duration(seconds: 1)),

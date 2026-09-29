@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import '../../employee/domain/employee.dart';
 import '../../leave/domain/leave_request.dart';
 import '../../on_duty/domain/on_duty_assignment.dart';
+import '../../permission/domain/permission_enums.dart';
+import '../../permission/domain/permission_request.dart';
 import 'attendance_record.dart';
 
 enum AttendanceStatusInfo {
@@ -35,6 +37,7 @@ class AttendanceStatusHelper {
     List<LeaveRequest>? leaves,
     List<OnDutyAssignment>? onDutyAssignments,
     List<String>? holidays,
+    List<PermissionRequest>? permissions,
     DateTime? referenceDate,
   }) {
     final now = referenceDate ?? DateTime.now();
@@ -55,6 +58,28 @@ class AttendanceStatusHelper {
     }
 
     final curEmpCode = employee.employeeId.trim().toUpperCase();
+
+    // Check if approved permission exists for this employee on this date
+    bool hasApprovedPermission = false;
+    if (permissions != null && permissions.isNotEmpty) {
+      for (final perm in permissions) {
+        final permEmpCode = perm.employeeCode.trim().toUpperCase();
+        if (curEmpCode.isNotEmpty && permEmpCode.isNotEmpty && permEmpCode != curEmpCode) {
+          continue;
+        }
+        final isEmpMatch = perm.employeeId == employee.id ||
+            (curEmpCode.isNotEmpty && permEmpCode == curEmpCode) ||
+            (perm.employeeName.trim().toLowerCase() == employee.fullName.trim().toLowerCase() && employee.fullName.trim().isNotEmpty);
+        final isApproved = perm.status == PermissionStatus.approved;
+        if (isEmpMatch && isApproved) {
+          final pDate = DateTime(perm.date.year, perm.date.month, perm.date.day);
+          if (pDate == targetDate) {
+            hasApprovedPermission = true;
+            break;
+          }
+        }
+      }
+    }
 
     // 1. If an explicit AttendanceRecord exists (ensure it does not belong to another employee code)
     final recEmpCode = record?.employeeCode.trim().toUpperCase() ?? '';
@@ -84,6 +109,9 @@ class AttendanceStatusHelper {
         return AttendanceStatusInfo.missingCheckout;
       }
       if (stLower.contains('insufficient') || stLower == 'ih') {
+        if (hasApprovedPermission) {
+          return AttendanceStatusInfo.present;
+        }
         return AttendanceStatusInfo.insufficientHours;
       }
 
@@ -95,6 +123,9 @@ class AttendanceStatusHelper {
       }
 
       if (stLower == 'late') {
+        if (hasApprovedPermission) {
+          return AttendanceStatusInfo.present;
+        }
         return AttendanceStatusInfo.late;
       }
       if (stLower.contains('on duty') || stLower == 'od') {

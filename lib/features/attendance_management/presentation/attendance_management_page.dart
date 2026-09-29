@@ -33,6 +33,8 @@ import 'widgets/attendance_matrix_view.dart';
 import 'widgets/attendance_table_view.dart';
 import 'widgets/monthly_attendance_result_view.dart';
 import '../../../tools/seed_all_employees_attendance.dart';
+import '../../payroll/providers/payroll_providers.dart';
+import '../../permission/providers/permission_providers.dart';
 
 enum AttendanceCategoryTab {
   staticAttendance,
@@ -470,11 +472,15 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                   if (mounted) {
                     ref.invalidate(attendanceManagementRecordsProvider);
                     ref.invalidate(attendanceManagementStatsProvider);
+                    ref.invalidate(allAttendanceRecordsProvider);
+                    ref.invalidate(attendanceRecordsProvider);
                     ref.invalidate(allLeaveRequestsProvider);
                     ref.invalidate(employeesProvider);
+                    ref.invalidate(payrollRecordsForMonthProvider);
+                    ref.invalidate(allPayrollRecordsProvider);
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Attendance database synced successfully!'),
+                        content: Text('Attendance & Payroll synced successfully!'),
                         duration: Duration(seconds: 2),
                       ),
                     );
@@ -887,6 +893,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     final allLeaves = ref.watch(allLeaveRequestsProvider).valueOrNull;
     final allOnDuty = ref.watch(allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: null))).valueOrNull;
     final allHolidays = ref.watch(holidaysProvider).valueOrNull;
+    final allPermissions = ref.watch(allPermissionRequestsProvider(const AllPermissionRequestsFilter())).valueOrNull;
 
     return recordsAsync.when(
       loading: () => const Center(
@@ -920,6 +927,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
           leaves: allLeaves,
           onDutyAssignments: allOnDuty,
           holidays: allHolidays,
+          permissions: allPermissions,
           isMobile: isMobile,
           onRowTap: (dailyResult, emp) {
             showDialog(
@@ -929,6 +937,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                 date: dailyResult.date,
                 record: dailyResult.record,
                 statusInfo: dailyResult.statusInfo,
+                permissions: allPermissions,
                 onEdit: () {
                   _openAttendanceCorrectionDialog(
                     emp,
@@ -997,6 +1006,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                 final allLeaves = ref.watch(allLeaveRequestsProvider).valueOrNull;
                 final allOnDuty = ref.watch(allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: null))).valueOrNull;
                 final allHolidays = ref.watch(holidaysProvider).valueOrNull;
+                final allPermissions = ref.watch(allPermissionRequestsProvider(const AllPermissionRequestsFilter())).valueOrNull;
 
                 if (_viewMode == AttendanceViewMode.matrix) {
                   return Column(
@@ -1008,6 +1018,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                         leaves: allLeaves,
                         onDutyAssignments: allOnDuty,
                         holidays: allHolidays,
+                        permissions: allPermissions,
                         onCellTap: (emp, date, record, statusInfo) {
                           showDialog(
                             context: context,
@@ -1016,6 +1027,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                               date: date,
                               record: record,
                               statusInfo: statusInfo,
+                              permissions: allPermissions,
                               onEdit: () {
                                 _openAttendanceCorrectionDialog(emp, date, record, statusInfo);
                               },
@@ -1036,6 +1048,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                         employees: fixedEmployees,
                         leaves: allLeaves,
                         onDutyAssignments: allOnDuty,
+                        permissions: allPermissions,
                         onEdit: (record) => _openAdminStaticEntryDialog(record, record.employeeId, record.date),
                         onDelete: (record) => _handleDeleteStaticRecord(record),
                         onRowTap: (record, emp) {
@@ -1060,6 +1073,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                                   record: record,
                                   leaves: allLeaves,
                                   onDutyAssignments: allOnDuty,
+                                  permissions: allPermissions,
                                 )
                               : null;
 
@@ -1086,6 +1100,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                               date: dateDt,
                               record: record,
                               statusInfo: statusInfo,
+                              permissions: allPermissions,
                               onEdit: () {
                                 if (emp != null) {
                                   _openAttendanceCorrectionDialog(emp, dateDt, record, statusInfo);

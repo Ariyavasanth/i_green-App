@@ -7,6 +7,7 @@ import '../../../attendance/domain/attendance_status_helper.dart';
 import '../../../employee/domain/employee.dart';
 import '../../../leave/domain/leave_request.dart';
 import '../../../on_duty/domain/on_duty_assignment.dart';
+import '../../../permission/domain/permission_request.dart';
 
 class AttendanceMatrixView extends StatelessWidget {
   const AttendanceMatrixView({
@@ -17,6 +18,7 @@ class AttendanceMatrixView extends StatelessWidget {
     this.leaves,
     this.onDutyAssignments,
     this.holidays,
+    this.permissions,
     required this.onCellTap,
   });
 
@@ -26,6 +28,7 @@ class AttendanceMatrixView extends StatelessWidget {
   final List<LeaveRequest>? leaves;
   final List<OnDutyAssignment>? onDutyAssignments;
   final List<String>? holidays;
+  final List<PermissionRequest>? permissions;
   final void Function(
     Employee employee,
     DateTime date,
@@ -366,6 +369,7 @@ class AttendanceMatrixView extends StatelessWidget {
       leaves: leaves,
       onDutyAssignments: onDutyAssignments,
       holidays: holidays,
+      permissions: permissions,
     );
 
     Color bgColor = statusInfo?.bgColor ?? const Color(0xFFF8FAFC);

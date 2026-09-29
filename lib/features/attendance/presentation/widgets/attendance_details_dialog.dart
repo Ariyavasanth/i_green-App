@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../employee/domain/employee.dart';
+import '../../../permission/domain/permission_enums.dart';
+import '../../../permission/domain/permission_request.dart';
 import '../../domain/attendance_record.dart';
 import '../../domain/attendance_status_helper.dart';
 
 /// Read-only Attendance Details dialog displaying the comprehensive attendance breakdown:
 /// - Check-in / Check-out
-/// - Office, OD, Lunch (counted), Tea Break (counted), Meeting/Other hours
+/// - Office, OD, Lunch (counted), Tea Break (counted), Meeting/Other, Permission hours
 /// - Total Working Hours, Required Working Hours, Shortfall
 /// - Status, Audit & Source Info
 class AttendanceDetailsDialog extends StatelessWidget {
@@ -17,6 +19,7 @@ class AttendanceDetailsDialog extends StatelessWidget {
     required this.date,
     this.record,
     this.statusInfo,
+    this.permissions,
     this.onEdit,
   });
 
@@ -24,18 +27,24 @@ class AttendanceDetailsDialog extends StatelessWidget {
   final DateTime date;
   final AttendanceRecord? record;
   final AttendanceStatusInfo? statusInfo;
+  final List<PermissionRequest>? permissions;
   final VoidCallback? onEdit;
 
-  int _calculateLateMinutes() {
+  int _calculateLateMinutes([bool isPermissionCovered = false]) {
     if (record == null) return 0;
+    if (statusInfo == AttendanceStatusInfo.present || isPermissionCovered) return 0;
     if (record!.notes.isNotEmpty) {
+      if (record!.notes.toLowerCase().contains('permission authorized') ||
+          record!.notes.toLowerCase().contains('permission approved')) return 0;
       final reg = RegExp(r'Late\s*=\s*(\d+)', caseSensitive: false);
       final match = reg.firstMatch(record!.notes);
       if (match != null && match.groupCount >= 1) {
         return int.tryParse(match.group(1) ?? '0') ?? 0;
       }
     }
-    if (record!.status.trim().toLowerCase() == 'late' && record!.effectiveCheckInTime.isNotEmpty) {
+    if ((statusInfo == AttendanceStatusInfo.late || record!.status.trim().toLowerCase() == 'late') &&
+        statusInfo != AttendanceStatusInfo.present &&
+        record!.effectiveCheckInTime.isNotEmpty) {
       try {
         final inTimeStr = employee.inTime.trim();
         if (inTimeStr.isEmpty) return 0;
@@ -79,7 +88,7 @@ class AttendanceDetailsDialog extends StatelessWidget {
     return 'Flexible Schedule';
   }
 
-  String _resolveAttendanceSource() {
+  String _resolveAttendanceSource([bool isPermissionCovered = false, double permissionHours = 0.0]) {
     if (record == null) {
       if (statusInfo == AttendanceStatusInfo.absent) return 'System Auto-Resolved (Absent)';
       if (statusInfo == AttendanceStatusInfo.onLeave) return 'Approved Leave Application';
@@ -87,7 +96,11 @@ class AttendanceDetailsDialog extends StatelessWidget {
       if (statusInfo == AttendanceStatusInfo.onDuty) return 'Approved OD Assignment';
       if (statusInfo == AttendanceStatusInfo.weeklyOff) return 'Weekly Off Roster';
       if (statusInfo == AttendanceStatusInfo.holiday) return 'Company Holiday Calendar';
+      if (isPermissionCovered) return 'Approved Permission (${permissionHours > 0 ? "${permissionHours.toStringAsFixed(permissionHours.truncateToDouble() == permissionHours ? 0 : 1)}hr" : "2hr"})';
       return 'No Attendance Record';
+    }
+    if (isPermissionCovered) {
+      return 'Office Check-in + Approved Permission (${permissionHours > 0 ? "${permissionHours.toStringAsFixed(permissionHours.truncateToDouble() == permissionHours ? 0 : 1)}hr" : "2hr"})';
     }
     final ver = record!.effectiveCheckInVerification.trim();
     if (ver.isNotEmpty) return ver;
@@ -106,24 +119,65 @@ class AttendanceDetailsDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final curEmpCode = employee.employeeId.trim().toUpperCase();
+    final targetDate = DateTime(date.year, date.month, date.day);
+    PermissionRequest? matchedPermission;
+    if (permissions != null && permissions!.isNotEmpty) {
+      for (final perm in permissions!) {
+        final permEmpCode = perm.employeeCode.trim().toUpperCase();
+        if (curEmpCode.isNotEmpty && permEmpCode.isNotEmpty && permEmpCode != curEmpCode) {
+          continue;
+        }
+        final isEmpMatch = perm.employeeId == employee.id ||
+            (curEmpCode.isNotEmpty && permEmpCode == curEmpCode) ||
+            (perm.employeeName.trim().toLowerCase() == employee.fullName.trim().toLowerCase() && employee.fullName.trim().isNotEmpty);
+        final isApproved = perm.status == PermissionStatus.approved;
+        if (isEmpMatch && isApproved) {
+          final pDate = DateTime(perm.date.year, perm.date.month, perm.date.day);
+          if (pDate == targetDate) {
+            matchedPermission = perm;
+            break;
+          }
+        }
+      }
+    }
+
+    final hasApprovedPermissionNote = record?.notes.toLowerCase().contains('permission authorized') == true ||
+        record?.notes.toLowerCase().contains('permission approved') == true ||
+        (record?.notes.toLowerCase().contains('permission') == true && !record!.notes.toLowerCase().contains('rejected'));
+    final isPermissionCovered = matchedPermission != null || hasApprovedPermissionNote;
+    final permissionMinutes = matchedPermission?.durationMinutes ?? (hasApprovedPermissionNote ? 120 : 0);
+    final permissionHours = permissionMinutes / 60.0;
+
     final dateStr = DateFormat('EEEE, dd MMMM yyyy').format(date);
     final status = statusInfo;
     final size = MediaQuery.of(context).size;
     final isMobile = size.width < 550;
-    final lateMins = _calculateLateMinutes();
+    final lateMins = _calculateLateMinutes(isPermissionCovered);
 
     final empCode = employee.employeeId.isNotEmpty ? employee.employeeId : 'EMP${employee.id.toString().padLeft(3, '0')}';
     final deptName = employee.department.isNotEmpty ? employee.department : 'General';
-    final reqHours = employee.requiredWorkingHours;
+    final reqHours = employee.requiredWorkingHours > 0 ? employee.requiredWorkingHours : 9.0;
 
     final isAbsent = status == AttendanceStatusInfo.absent;
-    final totalHoursStr = record != null
-        ? record!.formattedTotalHours
-        : (isAbsent ? '0hr' : '--');
+    final isPresent = status == AttendanceStatusInfo.present;
 
-    final shortfallStr = record != null
-        ? record!.formattedShortfall(reqHours)
-        : (isAbsent ? '${reqHours.toStringAsFixed(1)}hr' : '0hr');
+    final workedHours = record?.computedTotalHours ?? 0.0;
+    final totalCreditedHours = isPermissionCovered ? workedHours + permissionHours : workedHours;
+    final totalHoursStr = record != null
+        ? (isPermissionCovered
+            ? '${totalCreditedHours.toStringAsFixed(totalCreditedHours.truncateToDouble() == totalCreditedHours ? 0 : 1)}hr'
+            : record!.formattedTotalHours)
+        : (isAbsent ? '0hr' : (isPermissionCovered ? '${permissionHours.toStringAsFixed(permissionHours.truncateToDouble() == permissionHours ? 0 : 1)}hr' : '--'));
+
+    final rawShortfall = record != null
+        ? record!.calculateShortfall(reqHours)
+        : (isAbsent ? reqHours : 0.0);
+    final effectiveShortfall = (isPresent || isPermissionCovered) ? 0.0 : rawShortfall;
+
+    final shortfallStr = effectiveShortfall > 0
+        ? '${effectiveShortfall.toStringAsFixed(effectiveShortfall.truncateToDouble() == effectiveShortfall ? 0 : 1)}hr'
+        : '0hr';
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -276,6 +330,70 @@ class AttendanceDetailsDialog extends StatelessWidget {
                           ],
                         ),
                       ),
+
+                      // 2b. Approved Permission Banner (Shown whenever permission is approved for this date)
+                      if (isPermissionCovered) ...[
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF9CC70A).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFF9CC70A).withValues(alpha: 0.5)),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF9CC70A).withValues(alpha: 0.25),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.verified_outlined, size: 16, color: Color(0xFF414A51)),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(
+                                          matchedPermission != null
+                                              ? 'Approved Permission (${permissionHours.toStringAsFixed(permissionHours.truncateToDouble() == permissionHours ? 0 : 1)} Hours)'
+                                              : 'Approved Permission (${permissionHours.toStringAsFixed(0)} Hours)',
+                                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                                        ),
+                                        const Spacer(),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF16A34A).withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: const Text(
+                                            'Approved',
+                                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF16A34A)),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      matchedPermission != null
+                                          ? 'Timing: ${matchedPermission.fromTime} - ${matchedPermission.toTime}${matchedPermission.reason.isNotEmpty ? " • Reason: ${matchedPermission.reason}" : ""} • Counted toward working hours'
+                                          : (record?.notes.isNotEmpty == true
+                                              ? record!.notes
+                                              : 'Permission approved and counted toward working hours'),
+                                      style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 10),
 
                       // 3. Check-in & Check-out Card
@@ -369,6 +487,16 @@ class AttendanceDetailsDialog extends StatelessWidget {
                                     color: const Color(0xFF7C3AED),
                                   ),
                                 ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: _buildMiniSessionBadge(
+                                    label: 'Permission (Paid)',
+                                    value: isPermissionCovered
+                                        ? '${permissionHours.toStringAsFixed(permissionHours.truncateToDouble() == permissionHours ? 0 : 1)}hr'
+                                        : '--',
+                                    color: const Color(0xFF16A34A),
+                                  ),
+                                ),
                               ],
                             ),
                           ],
@@ -420,7 +548,7 @@ class AttendanceDetailsDialog extends StatelessWidget {
                                   child: _buildSummaryMetric(
                                     title: 'Shortfall',
                                     value: shortfallStr,
-                                    color: (record?.calculateShortfall(reqHours) ?? (isAbsent ? reqHours : 0)) > 0
+                                    color: effectiveShortfall > 0
                                         ? const Color(0xFFDC2626)
                                         : const Color(0xFF16A34A),
                                   ),
@@ -464,7 +592,7 @@ class AttendanceDetailsDialog extends StatelessWidget {
                           Expanded(
                             child: _buildDetailMetric(
                               label: 'Attendance Source',
-                              value: _resolveAttendanceSource(),
+                              value: _resolveAttendanceSource(isPermissionCovered, permissionHours),
                               icon: Icons.verified_user_outlined,
                               iconColor: const Color(0xFF9333EA),
                             ),

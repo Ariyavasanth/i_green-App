@@ -6,6 +6,7 @@ import '../../../attendance/domain/attendance_status_helper.dart';
 import '../../../employee/domain/employee.dart';
 import '../../../leave/domain/leave_request.dart';
 import '../../../on_duty/domain/on_duty_assignment.dart';
+import '../../../permission/domain/permission_request.dart';
 
 class AttendanceTableView extends StatelessWidget {
   const AttendanceTableView({
@@ -14,6 +15,7 @@ class AttendanceTableView extends StatelessWidget {
     this.employees = const [],
     this.leaves,
     this.onDutyAssignments,
+    this.permissions,
     required this.onEdit,
     required this.onDelete,
     this.onRowTap,
@@ -24,6 +26,7 @@ class AttendanceTableView extends StatelessWidget {
   final List<Employee> employees;
   final List<LeaveRequest>? leaves;
   final List<OnDutyAssignment>? onDutyAssignments;
+  final List<PermissionRequest>? permissions;
   final void Function(AttendanceRecord record) onEdit;
   final void Function(AttendanceRecord record) onDelete;
   final void Function(AttendanceRecord record, Employee? employee)? onRowTap;
@@ -225,6 +228,7 @@ class AttendanceTableView extends StatelessWidget {
             record: record,
             leaves: leaves,
             onDutyAssignments: onDutyAssignments,
+            permissions: permissions,
           )
         : null;
 
@@ -395,6 +399,7 @@ class AttendanceTableView extends StatelessWidget {
             record: record,
             leaves: leaves,
             onDutyAssignments: onDutyAssignments,
+            permissions: permissions,
           )
         : null;
 

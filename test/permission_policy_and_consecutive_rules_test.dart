@@ -196,7 +196,7 @@ void main() {
       expect(isConsecutiveAllowed(DateTime(2026, 8, 30)), isTrue);
     });
 
-    test('5. Consecutive Late Rule: Late on Sep 1 + Late on Sep 2 -> Sep 2 results in Loss of Pay (LOP)', () {
+    test('5. Consecutive Late Days: Late on Sep 1 + Late on Sep 2 -> both remain Late (no LOP penalty conversion)', () {
       final employee = Employee.fromMap({
         'id': 1,
         'employee_id': 'EMP-001',
@@ -234,7 +234,7 @@ void main() {
           status: 'Late',
           notes: 'Late = 20 minutes',
         ),
-        // Sep 2: Consecutive Late arrival (Second consecutive late)
+        // Sep 2: Consecutive Late arrival (Second late)
         const AttendanceRecord(
           id: 2,
           employeeId: 1,
@@ -286,14 +286,18 @@ void main() {
       expect(day1.statusInfo, AttendanceStatusInfo.late);
       expect(day1.statusCode, 'L');
 
-      // Day 2: Consecutive Late -> Loss of Pay (LOP)
-      expect(day2.statusInfo, AttendanceStatusInfo.lop);
-      expect(day2.statusCode, 'LOP');
-      expect(day2.statusLabel, contains('Loss of Pay'));
+      // Day 2: Late (preserved as Late, no LOP penalty)
+      expect(day2.statusInfo, AttendanceStatusInfo.late);
+      expect(day2.statusCode, 'L');
 
       // Day 3: Present
       expect(day3.statusInfo, AttendanceStatusInfo.present);
       expect(day3.statusCode, 'P');
+
+      // Summary counts
+      expect(result.lateCount, 2);
+      expect(result.absentCount, 0);
+      expect(result.presentCount, 1);
     });
   });
 }

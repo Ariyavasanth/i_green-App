@@ -3940,6 +3940,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
               final isToday = key == todayKey;
               final record = attendanceMap[key];
               final currentEmp = ref.watch(currentEmployeeProvider);
+              final permissionRequests = currentEmp != null ? ref.watch(myPermissionRequestsProvider(currentEmp.id)).valueOrNull : null;
 
               final holidays = ref.watch(holidaysProvider).valueOrNull ?? [];
               final statusInfo = currentEmp != null
@@ -3949,6 +3950,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                       record: record,
                       leaves: leaveRequests,
                       holidays: holidays,
+                      permissions: permissionRequests,
                     )
                   : null;
 
@@ -3967,6 +3969,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                           date: date,
                           record: record,
                           statusInfo: statusInfo,
+                          permissions: permissionRequests,
                         ),
                       );
                     }

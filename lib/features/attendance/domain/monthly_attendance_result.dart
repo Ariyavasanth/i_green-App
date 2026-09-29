@@ -1,6 +1,8 @@
 import '../../employee/domain/employee.dart';
 import '../../leave/domain/leave_request.dart';
 import '../../on_duty/domain/on_duty_assignment.dart';
+import '../../permission/domain/permission_request.dart';
+import '../../permission/domain/permission_enums.dart';
 import 'attendance_record.dart';
 import 'attendance_status_helper.dart';
 
@@ -170,6 +172,7 @@ class MonthlyAttendanceCalculator {
     List<LeaveRequest>? leaves,
     List<OnDutyAssignment>? onDutyAssignments,
     List<String>? holidays,
+    List<PermissionRequest>? permissions,
     DateTime? referenceDate,
     DateTime? startDate,
     DateTime? endDateExclusive,
@@ -225,7 +228,6 @@ class MonthlyAttendanceCalculator {
     final dailyRequiredHours =
         employee.requiredWorkingHours > 0 ? employee.requiredWorkingHours : 9.0;
 
-    bool previousWorkingDayWasLate = false;
 
     DateTime cursor = start;
     while (cursor.isBefore(endExclusive)) {
@@ -243,6 +245,7 @@ class MonthlyAttendanceCalculator {
         leaves: leaves,
         onDutyAssignments: onDutyAssignments,
         holidays: holidays,
+        permissions: permissions,
         referenceDate: effectiveRefDate,
       );
 
@@ -255,30 +258,38 @@ class MonthlyAttendanceCalculator {
         totalWorkingDays++;
       }
 
-      // 1.5 Consecutive Late Rule:
-      // If employee takes consecutive late (late on consecutive working days), the next day results in Loss of Pay (LOP).
-      AttendanceStatusInfo? statusInfo = rawStatusInfo;
-      String? customStatusLabel;
+      // Working hours from dynamic sessions / record
+      final statusInfo = rawStatusInfo;
+      final String? customStatusLabel = null;
 
-      if (isWorkingDay) {
-        if (rawStatusInfo == AttendanceStatusInfo.late) {
-          if (previousWorkingDayWasLate) {
-            statusInfo = AttendanceStatusInfo.lop;
-            customStatusLabel = 'Loss of Pay (Consecutive Late)';
-          } else {
-            previousWorkingDayWasLate = true;
+      // Calculate approved permission hours for this date
+      double approvedPermissionHours = 0.0;
+      if (permissions != null && permissions.isNotEmpty) {
+        final targetDate = DateTime(date.year, date.month, date.day);
+        for (final perm in permissions) {
+          final permEmpCode = perm.employeeCode.trim().toUpperCase();
+          if (empCodeUpper.isNotEmpty && permEmpCode.isNotEmpty && permEmpCode != empCodeUpper) {
+            continue;
           }
-        } else if (rawStatusInfo == AttendanceStatusInfo.present ||
-            rawStatusInfo == AttendanceStatusInfo.onDuty ||
-            rawStatusInfo == AttendanceStatusInfo.onLeave ||
-            rawStatusInfo == AttendanceStatusInfo.insufficientHours) {
-          previousWorkingDayWasLate = false;
+          final isEmpMatch = perm.employeeId == employee.id ||
+              (empCodeUpper.isNotEmpty && permEmpCode == empCodeUpper) ||
+              (perm.employeeName.trim().toLowerCase() == employee.fullName.trim().toLowerCase() && employee.fullName.trim().isNotEmpty);
+          final isApproved = perm.status == PermissionStatus.approved;
+          if (isEmpMatch && isApproved) {
+            final pDate = DateTime(perm.date.year, perm.date.month, perm.date.day);
+            if (pDate == targetDate) {
+              approvedPermissionHours += perm.durationMinutes / 60.0;
+            }
+          }
         }
       }
 
-      // Working hours from dynamic sessions / record
+      // Working hours from dynamic sessions / record + approved permission hours
       final dayWorkingHours = record?.computedTotalHours ?? 0.0;
-      totalWorkingHours += dayWorkingHours;
+      final effectiveDayWorkingHours = isWorkingDay
+          ? dayWorkingHours + approvedPermissionHours
+          : dayWorkingHours;
+      totalWorkingHours += effectiveDayWorkingHours;
 
       // Status categorization counters
       switch (statusInfo) {
@@ -321,7 +332,7 @@ class MonthlyAttendanceCalculator {
 
       final reqHoursForDay = isWorkingDay ? dailyRequiredHours : 0.0;
       final shortfallForDay =
-          isWorkingDay ? (reqHoursForDay - dayWorkingHours).clamp(0.0, 999.0) : 0.0;
+          isWorkingDay ? (reqHoursForDay - effectiveDayWorkingHours).clamp(0.0, 999.0) : 0.0;
 
       dailyResults.add(DailyAttendanceResult(
         date: date,
@@ -332,7 +343,7 @@ class MonthlyAttendanceCalculator {
         record: record,
         isWorkingDay: isWorkingDay,
         requiredHours: reqHoursForDay,
-        workingHours: dayWorkingHours,
+        workingHours: effectiveDayWorkingHours,
         shortfallHours: double.parse(shortfallForDay.toStringAsFixed(2)),
       ));
 

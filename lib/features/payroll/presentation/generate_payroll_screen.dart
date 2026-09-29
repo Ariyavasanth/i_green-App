@@ -18,6 +18,8 @@ import '../../leave/providers/leave_providers.dart';
 import '../../loan/providers/loan_providers.dart';
 import '../../on_duty/domain/on_duty_assignment.dart';
 import '../../on_duty/providers/on_duty_providers.dart';
+import '../../permission/domain/permission_request.dart';
+import '../../permission/providers/permission_providers.dart';
 
 class GeneratePayrollScreen extends ConsumerStatefulWidget {
   const GeneratePayrollScreen({required this.employeeId, super.key});
@@ -268,6 +270,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     List<LeaveRequest>? leaves,
     List<OnDutyAssignment>? onDutyAssignments,
     List<String>? holidays,
+    List<PermissionRequest>? permissions,
   }) {
     final now = DateTime.now();
     int year = now.year;
@@ -306,6 +309,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
       leaves: leaves,
       onDutyAssignments: onDutyAssignments,
       holidays: holidays,
+      permissions: permissions,
       startDate: period.startDate,
       endDateExclusive: period.endDateExclusive,
     );
@@ -583,6 +587,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
           final leavesAsync = ref.watch(leaveRequestsProvider(widget.employeeId));
           final onDutyAsync = ref.watch(employeeOnDutyAssignmentsProvider((employeeId: widget.employeeId, date: null)));
           final holidaysAsync = ref.watch(holidaysProvider);
+          final permissionsAsync = ref.watch(allPermissionRequestsProvider(const AllPermissionRequestsFilter()));
 
           return settingsAsync.when(
             data: (settings) {
@@ -594,6 +599,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
               final leaves = leavesAsync.value;
               final onDuty = onDutyAsync.value;
               final holidays = holidaysAsync.value ?? [];
+              final permissions = permissionsAsync.value ?? [];
               _calculateAttendanceMetrics(
                 employee,
                 records,
@@ -602,6 +608,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
                 leaves: leaves,
                 onDutyAssignments: onDuty,
                 holidays: holidays,
+                permissions: permissions,
               );
 
               return LayoutBuilder(

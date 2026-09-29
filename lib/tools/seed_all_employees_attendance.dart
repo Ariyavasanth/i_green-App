@@ -225,6 +225,41 @@ Future<void> syncEmployeeJoiningAndAttendance() async {
     final allEmpSnap = await firestore.collection('employees').get();
     int totalAttendanceRecords = 0;
 
+    // Read approved permissions so sync does not overwrite approved permission days
+    final permissionRequestsSnap = await firestore.collection('permission_requests').get();
+    final approvedPermissionKeys = <String>{};
+    for (final doc in permissionRequestsSnap.docs) {
+      final data = doc.data();
+      if ((data['status'] ?? '').toString().toLowerCase() == 'approved') {
+        final eId = (data['employee_id'] ?? '').toString().trim();
+        final eCode = (data['employee_code'] ?? '').toString().trim().toUpperCase();
+        final rawDate = data['date'];
+        DateTime? pDt;
+        if (rawDate is Timestamp) {
+          pDt = rawDate.toDate();
+        } else if (rawDate is DateTime) {
+          pDt = rawDate;
+        } else if (rawDate is String) {
+          pDt = DateTime.tryParse(rawDate);
+          if (pDt == null) {
+            final parts = rawDate.split(RegExp(r'[-/]'));
+            if (parts.length == 3) {
+              if (parts[0].length == 4) {
+                pDt = DateTime.tryParse('${parts[0]}-${parts[1].padLeft(2, '0')}-${parts[2].padLeft(2, '0')}');
+              } else if (parts[2].length == 4) {
+                pDt = DateTime.tryParse('${parts[2]}-${parts[1].padLeft(2, '0')}-${parts[0].padLeft(2, '0')}');
+              }
+            }
+          }
+        }
+        if (pDt != null) {
+          final pDateStr = '${pDt.day.toString().padLeft(2, '0')}-${pDt.month.toString().padLeft(2, '0')}-${pDt.year}';
+          if (eId.isNotEmpty) approvedPermissionKeys.add('${eId}_$pDateStr');
+          if (eCode.isNotEmpty) approvedPermissionKeys.add('${eCode}_$pDateStr');
+        }
+      }
+    }
+
     for (final doc in allEmpSnap.docs) {
       final data = doc.data();
       final docId = doc.id.trim();
@@ -268,20 +303,68 @@ Future<void> syncEmployeeJoiningAndAttendance() async {
         final dateStr = '${dt.day.toString().padLeft(2, '0')}-${dt.month.toString().padLeft(2, '0')}-${dt.year}';
         final attDocRef = firestore.collection('attendance_records').doc('${empCode}_$dateStr');
 
-        batch.set(attDocRef, {
-          'employee_id': empId,
-          'employee_code': empCode,
-          'employee_name': empName,
-          'date': dateStr,
-          'time': '09:00:00',
-          'check_in_time': '09:00:00',
-          'check_out_time': '18:00:00',
-          'status': 'Present',
-          'verification_status': 'Face Verified',
-          'similarity_score': 0.98,
-          'total_hours': 9.0,
-          'notes': 'Present (Full Shift 9.0 hrs)',
-        }, SetOptions(merge: true));
+        // Check if Thanigavel (EMP-5408) Late Day on Sep 1, Sep 3, Sep 5, Sep 7
+        final isEmp5408 = empCode.toUpperCase().contains('5408') || empId == 5408 || empName.toLowerCase().contains('thanigavel');
+        final isLateDay5408 = isEmp5408 && dt.year == 2026 && dt.month == 9 && (dt.day == 1 || dt.day == 3 || dt.day == 5 || dt.day == 7);
+        final hasApprovedPerm = approvedPermissionKeys.contains('${empId}_$dateStr') ||
+            approvedPermissionKeys.contains('${empCode.toUpperCase()}_$dateStr') ||
+            approvedPermissionKeys.contains('5408_$dateStr') ||
+            approvedPermissionKeys.contains('EMP-5408_$dateStr');
+
+        final Map<String, dynamic> recordData = (isLateDay5408 && !hasApprovedPerm)
+            ? {
+                'employee_id': empId,
+                'employee_code': empCode,
+                'employee_name': empName,
+                'date': dateStr,
+                'time': '11:00:00',
+                'check_in_time': '11:00:00',
+                'check_out_time': '18:00:00',
+                'status': 'Late',
+                'verification_status': 'Face Verified',
+                'similarity_score': 0.98,
+                'total_hours': 7.0,
+                'notes': 'Late check-in at 11:00 AM (7.0 hrs worked, 2.0 hrs deficit)',
+              }
+            : (isLateDay5408 && hasApprovedPerm)
+                ? {
+                    'employee_id': empId,
+                    'employee_code': empCode,
+                    'employee_name': empName,
+                    'date': dateStr,
+                    'time': '11:00:00',
+                    'check_in_time': '11:00:00',
+                    'check_out_time': '18:00:00',
+                    'status': 'Present',
+                    'verification_status': 'Face Verified',
+                    'similarity_score': 0.98,
+                    'total_hours': 7.0,
+                    'notes': 'Worked 7.0 hrs (Permission Authorized)',
+                  }
+                : {
+                    'employee_id': empId,
+                    'employee_code': empCode,
+                    'employee_name': empName,
+                    'date': dateStr,
+                    'time': '09:00:00',
+                    'check_in_time': '09:00:00',
+                    'check_out_time': '18:00:00',
+                    'status': 'Present',
+                    'verification_status': 'Face Verified',
+                    'similarity_score': 0.98,
+                    'total_hours': 9.0,
+                    'notes': 'Present (Full Shift 9.0 hrs)',
+                  };
+
+        // Write to both empCode and variations to guarantee exact match in Firestore
+        final docKeys = {empCode};
+        if (isEmp5408) {
+          docKeys.addAll(['EMP-5408', 'EMP5408', '5408']);
+        }
+        for (final k in docKeys) {
+          final ref = firestore.collection('attendance_records').doc('${k}_$dateStr');
+          batch.set(ref, recordData, SetOptions(merge: true));
+        }
 
         opCount++;
         totalAttendanceRecords++;
@@ -398,7 +481,8 @@ Future<void> syncEmployeeJoiningAndAttendance() async {
         final empId = data['employee_id'];
         final docId = doc.id;
         if (empId == 5406 || docId.startsWith('5406_') || docId.startsWith('EMP-5406_') || docId.startsWith('EMP5406_') ||
-            empId == 5407 || docId.startsWith('5407_') || docId.startsWith('EMP-5407_') || docId.startsWith('EMP5407_')) {
+            empId == 5407 || docId.startsWith('5407_') || docId.startsWith('EMP-5407_') || docId.startsWith('EMP5407_') ||
+            empId == 5408 || docId.startsWith('5408_') || docId.startsWith('EMP-5408_') || docId.startsWith('EMP5408_')) {
           await doc.reference.delete();
           debugPrint('🗑️ [payrolls] Deleted payroll document to reset status to Not Generated: $docId');
         }
