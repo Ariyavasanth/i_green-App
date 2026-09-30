@@ -311,6 +311,13 @@ Future<void> syncEmployeeJoiningAndAttendance() async {
             approvedPermissionKeys.contains('5408_$dateStr') ||
             approvedPermissionKeys.contains('EMP-5408_$dateStr');
 
+        final empInTime = (data['in_time'] != null && data['in_time'].toString().trim().isNotEmpty)
+            ? data['in_time'].toString().trim()
+            : '09:00:00';
+        final empOutTime = (data['out_time'] != null && data['out_time'].toString().trim().isNotEmpty)
+            ? data['out_time'].toString().trim()
+            : '18:00:00';
+
         final Map<String, dynamic> recordData = (isLateDay5408 && !hasApprovedPerm)
             ? {
                 'employee_id': empId,
@@ -346,9 +353,9 @@ Future<void> syncEmployeeJoiningAndAttendance() async {
                     'employee_code': empCode,
                     'employee_name': empName,
                     'date': dateStr,
-                    'time': '09:00:00',
-                    'check_in_time': '09:00:00',
-                    'check_out_time': '18:00:00',
+                    'time': empInTime,
+                    'check_in_time': empInTime,
+                    'check_out_time': empOutTime,
                     'status': 'Present',
                     'verification_status': 'Face Verified',
                     'similarity_score': 0.98,
@@ -491,9 +498,6 @@ Future<void> syncEmployeeJoiningAndAttendance() async {
       debugPrint('⚠️ [payrolls] Payroll reset notice: $e');
     }
 
-    // 6. Delete all attendance records and attempts for today (30-09-2026 / current date) for all employees
-    await removeTodayAttendanceForAllEmployees();
-
     debugPrint('✅ [attendance_records] Successfully created/updated $totalAttendanceRecords Present records across all employees.');
     debugPrint('=====================================================');
     debugPrint('[Attendance Sync] Completed successfully.');
@@ -622,6 +626,56 @@ Future<void> removeTodayAttendanceForAllEmployees() async {
       await attemptBatch.commit();
     }
     debugPrint('🗑️ [attendance_attempts] Successfully deleted $deletedAttempts attendance attempts for today.');
+
+    // 3. Clean on_duty_assignments for today
+    final odSnap = await firestore.collection('on_duty_assignments').get();
+    int deletedOds = 0;
+    WriteBatch odBatch = firestore.batch();
+    int odOpCount = 0;
+
+    for (final doc in odSnap.docs) {
+      final data = doc.data();
+      final rawDate = (data['date'] ?? '').toString().trim();
+      final docId = doc.id.trim();
+
+      bool isTodayMatch = targetDates.contains(rawDate);
+      if (!isTodayMatch) {
+        for (final t in targetDates) {
+          if (docId.contains(t) || docId.endsWith(t)) {
+            isTodayMatch = true;
+            break;
+          }
+        }
+      }
+
+      if (!isTodayMatch && rawDate.isNotEmpty) {
+        try {
+          final dt = DateTime.tryParse(rawDate);
+          if (dt != null) {
+            if ((dt.year == 2026 && dt.month == 9 && dt.day == 30) ||
+                (dt.year == now.year && dt.month == now.month && dt.day == now.day)) {
+              isTodayMatch = true;
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (isTodayMatch) {
+        odBatch.delete(doc.reference);
+        deletedOds++;
+        odOpCount++;
+        if (odOpCount >= 400) {
+          await odBatch.commit();
+          odBatch = firestore.batch();
+          odOpCount = 0;
+        }
+      }
+    }
+
+    if (odOpCount > 0) {
+      await odBatch.commit();
+    }
+    debugPrint('🗑️ [on_duty_assignments] Successfully deleted $deletedOds on-duty assignments for today.');
   } catch (e) {
     debugPrint('⚠️ [Attendance Cleanup] Error removing today attendance: $e');
   }

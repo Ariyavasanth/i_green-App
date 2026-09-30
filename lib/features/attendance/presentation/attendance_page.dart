@@ -535,7 +535,12 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
           const SizedBox(height: 12),
           const Divider(height: 1, color: Color(0xFFE2E8F0)),
           const SizedBox(height: 12),
-          ...record.sessions.asMap().entries.map((entry) {
+          ...record.sessions.where((s) {
+            if (s.isOd && s.durationMinutes == 0 && s.checkInTime.isNotEmpty && s.checkInTime == s.checkOutTime) {
+              return false;
+            }
+            return true;
+          }).toList().asMap().entries.map((entry) {
             final idx = entry.key;
             final session = entry.value;
             final isOd = session.isOd;

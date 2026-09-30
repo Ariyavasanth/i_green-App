@@ -41,7 +41,6 @@ void _runBackgroundDataSync() {
       await seedDemoKiruthika();
       await syncEmployeeJoiningAndAttendance();
       await seedDemoIncentives();
-      await removeTodayAttendanceForAllEmployees();
     } catch (e) {
       debugPrint('Background sync notice: $e');
     }
