@@ -22,6 +22,8 @@ class _AttendanceSettingsDialogState extends ConsumerState<AttendanceSettingsDia
   bool _requireGpsVerification = true;
   bool _saving = false;
 
+  List<AttendanceLocationItem> _locations = [];
+
   @override
   void initState() {
     super.initState();
@@ -31,6 +33,7 @@ class _AttendanceSettingsDialogState extends ConsumerState<AttendanceSettingsDia
     _longitudeController = TextEditingController(text: settings.officeLongitude.toStringAsFixed(6));
     _radiusController = TextEditingController(text: settings.allowedAttendanceRadiusMeters.toString());
     _requireGpsVerification = settings.requireGpsVerification;
+    _locations = List.from(settings.locations);
   }
 
   @override
@@ -51,6 +54,7 @@ class _AttendanceSettingsDialogState extends ConsumerState<AttendanceSettingsDia
       officeLongitude: double.parse(_longitudeController.text.trim()),
       allowedAttendanceRadiusMeters: int.parse(_radiusController.text.trim()),
       requireGpsVerification: _requireGpsVerification,
+      locations: _locations,
     );
     await ref.read(attendanceSettingsRepositoryProvider).saveAttendanceSettings(settings);
     ref.invalidate(attendanceSettingsProvider);

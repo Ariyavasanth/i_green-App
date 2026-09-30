@@ -5,6 +5,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../attendance/domain/attendance_settings.dart';
 import '../../providers/attendance_settings_providers.dart';
 import 'attendance_location_fields.dart';
+import 'workplace_location_dialog.dart';
 
 class AttendanceSettingsEmbeddedView extends ConsumerStatefulWidget {
   const AttendanceSettingsEmbeddedView({super.key});
@@ -20,6 +21,7 @@ class _AttendanceSettingsEmbeddedViewState extends ConsumerState<AttendanceSetti
   late final TextEditingController _longitudeController;
   late final TextEditingController _radiusController;
   bool _requireGpsVerification = true;
+  List<AttendanceLocationItem> _workplaceLocations = [];
   bool _saving = false;
   bool _initialized = false;
 
@@ -49,6 +51,34 @@ class _AttendanceSettingsEmbeddedViewState extends ConsumerState<AttendanceSetti
     _longitudeController.text = settings.officeLongitude.toStringAsFixed(6);
     _radiusController.text = settings.allowedAttendanceRadiusMeters.toString();
     _requireGpsVerification = settings.requireGpsVerification;
+    _workplaceLocations = List.from(settings.locations);
+  }
+
+  Future<void> _addOrEditLocation([AttendanceLocationItem? existing]) async {
+    final result = await showDialog<AttendanceLocationItem>(
+      context: context,
+      builder: (ctx) => WorkplaceLocationDialog(location: existing),
+    );
+    if (result == null || !mounted) return;
+
+    setState(() {
+      if (existing != null) {
+        final index = _workplaceLocations.indexWhere((l) => l.id == existing.id);
+        if (index != -1) {
+          _workplaceLocations[index] = result;
+        } else {
+          _workplaceLocations.add(result);
+        }
+      } else {
+        _workplaceLocations.add(result);
+      }
+    });
+  }
+
+  void _deleteLocation(AttendanceLocationItem loc) {
+    setState(() {
+      _workplaceLocations.removeWhere((l) => l.id == loc.id);
+    });
   }
 
   Future<void> _save() async {
@@ -72,6 +102,7 @@ class _AttendanceSettingsEmbeddedViewState extends ConsumerState<AttendanceSetti
       officeLongitude: longitude,
       allowedAttendanceRadiusMeters: int.parse(_radiusController.text.trim()),
       requireGpsVerification: _requireGpsVerification,
+      locations: _workplaceLocations,
     );
 
     try {
@@ -120,6 +151,136 @@ class _AttendanceSettingsEmbeddedViewState extends ConsumerState<AttendanceSetti
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Workplace Locations Card
+                Card(
+                  elevation: 1,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(Icons.location_city_outlined, color: Color(0xFF9CC70A), size: 24),
+                                SizedBox(width: 10),
+                                Text(
+                                  'Workplace Locations',
+                                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                                ),
+                              ],
+                            ),
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF9CC70A),
+                                side: const BorderSide(color: Color(0xFF9CC70A)),
+                              ),
+                              onPressed: _saving ? null : () => _addOrEditLocation(),
+                              icon: const Icon(Icons.add_location_alt_outlined, size: 16),
+                              label: const Text('Add Workplace'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Configure geofences for each workplace (Head Office, Factory, Warehouse, etc.). Employees check in against their assigned location.',
+                          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                        const Divider(height: 24),
+                        if (_workplaceLocations.isEmpty)
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF9FAFB),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.divider),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.info_outline, color: AppColors.textSecondary, size: 20),
+                                SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    'No specific workplaces added yet. Employees will validate against the default office fallback location below.',
+                                    style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        else
+                          ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: _workplaceLocations.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 8),
+                            itemBuilder: (ctx, idx) {
+                              final loc = _workplaceLocations[idx];
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFAFCFF),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF9CC70A).withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: const Icon(Icons.business, color: Color(0xFF9CC70A), size: 20),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            loc.name,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                              color: AppColors.textPrimary,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            '${loc.latitude.toStringAsFixed(4)}, ${loc.longitude.toStringAsFixed(4)} • Radius: ${loc.radiusMeters}m • GPS: ${loc.requireGpsVerification ? "Required" : "Optional"}',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              color: AppColors.textSecondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.edit_outlined, size: 18, color: Color(0xFF414A51)),
+                                      tooltip: 'Edit Location',
+                                      onPressed: _saving ? null : () => _addOrEditLocation(loc),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                                      tooltip: 'Delete Location',
+                                      onPressed: _saving ? null : () => _deleteLocation(loc),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
                 // Timing Rules Card
                 Card(
                   elevation: 1,
@@ -147,7 +308,7 @@ class _AttendanceSettingsEmbeddedViewState extends ConsumerState<AttendanceSetti
                 ),
                 const SizedBox(height: 16),
 
-                // Office Location & Geofence Card
+                // Office Location & Geofence Card (Fallback)
                 Card(
                   elevation: 1,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -161,10 +322,15 @@ class _AttendanceSettingsEmbeddedViewState extends ConsumerState<AttendanceSetti
                             Icon(Icons.pin_drop_outlined, color: Color(0xFF9CC70A), size: 24),
                             SizedBox(width: 10),
                             Text(
-                              'Office Location & Geofence Settings',
+                              'Global / Default Office Fallback Geofence',
                               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                             ),
                           ],
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Fallback coordinates used when an employee has no specific workplace match.',
+                          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                         ),
                         const Divider(height: 24),
                         AttendanceLocationFields(
@@ -230,3 +396,4 @@ class _AttendanceSettingsEmbeddedViewState extends ConsumerState<AttendanceSetti
     );
   }
 }
+

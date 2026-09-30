@@ -4618,10 +4618,40 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
       final emp = widget.currentEmployee;
       final settings = await widget.attendanceRepository.getAttendanceSettings();
       final bool isSite = emp.isDynamicEmployee && (emp.siteLatitude != 0 || emp.siteLongitude != 0);
-      final double targetLat = isSite ? emp.siteLatitude : settings.officeLatitude;
-      final double targetLng = isSite ? emp.siteLongitude : settings.officeLongitude;
-      final int targetRadius = isSite ? emp.siteAllowedRadiusMeters : settings.allowedAttendanceRadiusMeters;
-      final bool requireGps = isSite ? emp.siteRequireGpsVerification : settings.requireGpsVerification;
+
+      final AttendanceLocationItem? matchedLoc = !isSite && emp.workLocation.trim().isNotEmpty
+          ? settings.findMatchingLocation(emp.workLocation)
+          : null;
+
+      final double targetLat = isSite
+          ? emp.siteLatitude
+          : (matchedLoc != null && (matchedLoc.latitude != 0 || matchedLoc.longitude != 0))
+              ? matchedLoc.latitude
+              : settings.officeLatitude;
+
+      final double targetLng = isSite
+          ? emp.siteLongitude
+          : (matchedLoc != null && (matchedLoc.latitude != 0 || matchedLoc.longitude != 0))
+              ? matchedLoc.longitude
+              : settings.officeLongitude;
+
+      final int targetRadius = isSite
+          ? emp.siteAllowedRadiusMeters
+          : (matchedLoc != null)
+              ? matchedLoc.radiusMeters
+              : settings.allowedAttendanceRadiusMeters;
+
+      final bool requireGps = isSite
+          ? emp.siteRequireGpsVerification
+          : (matchedLoc != null)
+              ? matchedLoc.requireGpsVerification
+              : settings.requireGpsVerification;
+
+      final String locationDisplayName = isSite
+          ? 'your site location'
+          : (matchedLoc != null && matchedLoc.name.isNotEmpty)
+              ? matchedLoc.name
+              : 'the office location';
 
       if (!requireGps || (targetLat == 0 && targetLng == 0)) {
         if (!mounted) return;
@@ -4681,7 +4711,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
             ? null
             : isSite
                 ? 'You are not at your site location. Please go to your site location.'
-                : 'You are not at the office. Please go to the office location.';
+                : 'You are not at $locationDisplayName. Please go to the assigned workplace location.';
       });
     } catch (e) {
       if (!mounted) return;

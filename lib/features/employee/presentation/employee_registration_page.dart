@@ -19,6 +19,7 @@ import '../services/welcome_letter_generator.dart';
 import '../../salary_settings/domain/salary_settings.dart';
 import '../../salary_settings/providers/salary_settings_providers.dart';
 import '../../attendance_settings/presentation/widgets/attendance_location_fields.dart';
+import '../../attendance_settings/providers/attendance_settings_providers.dart';
 import '../../organization/domain/business_unit.dart';
 import '../../organization/domain/department.dart';
 import '../../organization/domain/designation.dart';
@@ -4474,6 +4475,14 @@ class _EmployeeRegistrationPageState
               );
               final locList = locAsync.valueOrNull ?? [];
               final locNames = locList.map((e) => e.locationName).toList();
+              final attSettings = ref.watch(attendanceSettingsProvider).valueOrNull;
+              if (attSettings != null) {
+                for (final loc in attSettings.locations) {
+                  if (loc.name.trim().isNotEmpty && !locNames.contains(loc.name.trim())) {
+                    locNames.add(loc.name.trim());
+                  }
+                }
+              }
               if (_workLocation.isNotEmpty &&
                   !locNames.contains(_workLocation)) {
                 locNames.insert(0, _workLocation);

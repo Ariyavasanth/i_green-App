@@ -644,6 +644,7 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       final snap = await _firestore.collection('employees').where('id', isEqualTo: employeeId).limit(1).get();
       if (snap.docs.isNotEmpty) {
         final emp = Employee.fromMap(snap.docs.first.data());
+        // 1. Dynamic Site / On-Duty Priority
         if (emp.isDynamicEmployee && (emp.siteLatitude != 0 || emp.siteLongitude != 0)) {
           return {
             'targetLat': emp.siteLatitude,
@@ -651,16 +652,35 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
             'targetRadius': emp.siteAllowedRadiusMeters,
             'requireGps': emp.siteRequireGpsVerification,
             'isSite': true,
+            'locationName': 'Assigned Site',
           };
+        }
+
+        // 2. Matching Workplace Location Priority
+        if (emp.workLocation.trim().isNotEmpty) {
+          final matchedLoc = globalSettings.findMatchingLocation(emp.workLocation);
+          if (matchedLoc != null && (matchedLoc.latitude != 0 || matchedLoc.longitude != 0)) {
+            return {
+              'targetLat': matchedLoc.latitude,
+              'targetLng': matchedLoc.longitude,
+              'targetRadius': matchedLoc.radiusMeters,
+              'requireGps': matchedLoc.requireGpsVerification,
+              'isSite': false,
+              'locationName': matchedLoc.name,
+            };
+          }
         }
       }
     } catch (_) {}
+
+    // 3. Fallback to global office settings
     return {
       'targetLat': globalSettings.officeLatitude,
       'targetLng': globalSettings.officeLongitude,
       'targetRadius': globalSettings.allowedAttendanceRadiusMeters,
       'requireGps': globalSettings.requireGpsVerification,
       'isSite': false,
+      'locationName': 'Office',
     };
   }
 
