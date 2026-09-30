@@ -142,4 +142,54 @@ class FirebaseIncentiveRepository implements IncentiveRepository {
       'updated_at': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
+
+  @override
+  Future<List<IncentiveRequest>> getApprovedRequestsForEmployee({
+    int? employeeId,
+    String? employeeName,
+    String? employeeCode,
+    DateTime? startDate,
+    DateTime? endDateExclusive,
+  }) async {
+    final all = await getAllRequests();
+    final normEmpName = employeeName?.trim().toLowerCase() ?? '';
+    final normEmpCode = employeeCode?.trim().toLowerCase().replaceAll('-', '') ?? '';
+
+    return all.where((req) {
+      if (req.status.trim().toLowerCase() != 'approved') return false;
+
+      final reqName = req.employeeName.trim().toLowerCase();
+      final reqCode = reqName.replaceAll('-', '');
+
+      bool matchesEmp = false;
+      if (employeeId != null && req.employeeId != null && req.employeeId == employeeId) {
+        matchesEmp = true;
+      } else if (normEmpName.isNotEmpty && reqName == normEmpName) {
+        matchesEmp = true;
+      } else if (normEmpCode.isNotEmpty && (reqCode == normEmpCode || reqName.contains(normEmpCode))) {
+        matchesEmp = true;
+      } else if (normEmpName.isNotEmpty && (reqName.contains(normEmpName) || normEmpName.contains(reqName))) {
+        matchesEmp = true;
+      }
+
+      if (!matchesEmp) return false;
+
+      if (startDate != null || endDateExclusive != null) {
+        final reqDate = DateTime.tryParse(req.createdAt);
+        if (reqDate != null) {
+          final reqLocal = reqDate.toLocal();
+          if (startDate != null) {
+            final startLocal = startDate.toLocal();
+            if (reqLocal.isBefore(startLocal)) return false;
+          }
+          if (endDateExclusive != null) {
+            final endLocal = endDateExclusive.toLocal();
+            if (!reqLocal.isBefore(endLocal)) return false;
+          }
+        }
+      }
+
+      return true;
+    }).toList();
+  }
 }

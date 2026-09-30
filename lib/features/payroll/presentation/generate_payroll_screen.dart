@@ -20,6 +20,8 @@ import '../../on_duty/domain/on_duty_assignment.dart';
 import '../../on_duty/providers/on_duty_providers.dart';
 import '../../permission/domain/permission_request.dart';
 import '../../permission/providers/permission_providers.dart';
+import '../../incentive/providers/incentive_providers.dart';
+import '../../incentive/domain/incentive_request.dart';
 
 class GeneratePayrollScreen extends ConsumerStatefulWidget {
   const GeneratePayrollScreen({required this.employeeId, super.key});
@@ -78,6 +80,8 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
   double _hourlyRate = 0.0;
   double _scheduledHours = 0.0;
   MonthlyAttendanceResult? _attendanceResult;
+  double? _lastCalculatedIncentive;
+  double? _lastCalculatedCumulativeIncentive;
 
   @override
   void initState() {
@@ -163,12 +167,12 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     _otherAllowanceController.text = otherAllowance.toStringAsFixed(2);
 
     // Initial values for dynamic monthly inputs
-    _incentiveController.text = '0.00';
-    _carryForwardController.text = '-';
-    _othersEarningController.text = '0.00';
-    _cumulativeIncentiveController.text = '0.00';
-    _bonusController.text = '0.00';
-    _otController.text = '0.00';
+    if (_incentiveController.text.isEmpty) _incentiveController.text = '0.00';
+    if (_carryForwardController.text.isEmpty) _carryForwardController.text = '-';
+    if (_othersEarningController.text.isEmpty) _othersEarningController.text = '0.00';
+    if (_cumulativeIncentiveController.text.isEmpty) _cumulativeIncentiveController.text = '0.00';
+    if (_bonusController.text.isEmpty) _bonusController.text = '0.00';
+    if (_otController.text.isEmpty) _otController.text = '0.00';
 
     _pfController.text = pf.toStringAsFixed(2);
     _taxController.text = tax.toStringAsFixed(2);
@@ -184,6 +188,118 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     _recalculate();
     _loadActiveLoan(employee.id, selectedMonth, settings);
     _loadLopDetails(employee.id, selectedMonth, settings);
+  }
+
+  DateTime? _parseDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    try {
+      if ((value as dynamic).toDate != null) {
+        return (value as dynamic).toDate() as DateTime;
+      }
+    } catch (_) {}
+    final str = value.toString().trim();
+    if (str.isEmpty) return null;
+    final iso = DateTime.tryParse(str);
+    if (iso != null) return iso;
+    final dmyMatch = RegExp(r'^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})').firstMatch(str);
+    if (dmyMatch != null) {
+      final day = int.tryParse(dmyMatch.group(1)!);
+      final month = int.tryParse(dmyMatch.group(2)!);
+      final year = int.tryParse(dmyMatch.group(3)!);
+      if (day != null && month != null && year != null) {
+        return DateTime(year, month, day);
+      }
+    }
+    return null;
+  }
+
+  void _calculateIncentiveMetrics(
+    Employee employee,
+    List<IncentiveRequest> requests,
+    String month,
+    PayrollSettings settings,
+  ) {
+    final now = DateTime.now();
+    int year = now.year;
+    int monthNum = now.month;
+
+    final parts = month.trim().split(' ');
+    if (parts.length >= 2) {
+      final yearParsed = int.tryParse(parts[1]);
+      if (yearParsed != null) year = yearParsed;
+      final monthMap = {
+        'january': 1, 'jan': 1, 'february': 2, 'feb': 2, 'march': 3, 'mar': 3,
+        'april': 4, 'apr': 4, 'may': 5, 'june': 6, 'jun': 6, 'july': 7, 'jul': 7,
+        'august': 8, 'aug': 8, 'september': 9, 'sep': 9, 'october': 10, 'oct': 10,
+        'november': 11, 'nov': 11, 'december': 12, 'dec': 12
+      };
+      final m = monthMap[parts[0].toLowerCase()];
+      if (m != null) monthNum = m;
+    }
+
+    final period = settings.getPayrollPeriod(year, monthNum);
+    final normEmpName = employee.fullName.trim().toLowerCase();
+    final normFirstName = employee.firstName.trim().toLowerCase();
+    final normEmpCode = employee.employeeId.trim().toLowerCase().replaceAll('-', '').replaceAll(' ', '');
+
+    final approved = requests.where((req) {
+      if (req.status.trim().toLowerCase() != 'approved') return false;
+
+      final reqName = req.employeeName.trim().toLowerCase();
+      final reqCode = reqName.replaceAll('-', '').replaceAll(' ', '');
+
+      if (req.employeeId != null && req.employeeId == employee.id) return true;
+      if (normEmpName.isNotEmpty && (reqName == normEmpName || reqName.contains(normEmpName) || normEmpName.contains(reqName))) return true;
+      if (normFirstName.isNotEmpty && reqName.contains(normFirstName)) return true;
+      if (normEmpCode.isNotEmpty && (reqCode == normEmpCode || reqCode.contains(normEmpCode) || normEmpCode.contains(reqCode))) return true;
+
+      return false;
+    }).toList();
+
+    double cycleIncentive = 0.0;
+    double cumulativeTotal = 0.0;
+
+    final startOnly = DateTime(period.startDate.year, period.startDate.month, period.startDate.day);
+    final endOnly = DateTime(period.endDateExclusive.year, period.endDateExclusive.month, period.endDateExclusive.day);
+
+    for (final req in approved) {
+      final amt = req.approvedAmount ?? req.amount;
+      final dt = _parseDateTime(req.createdAt);
+      if (dt == null) {
+        cycleIncentive += amt;
+        cumulativeTotal += amt;
+        continue;
+      }
+      final localDt = dt.toLocal();
+      final dateOnly = DateTime(localDt.year, localDt.month, localDt.day);
+
+      // Check if inside cycle
+      final inCycle = !dateOnly.isBefore(startOnly) && dateOnly.isBefore(endOnly);
+      if (inCycle) {
+        cycleIncentive += amt;
+      }
+
+      // Check if up to end of cycle for cumulative
+      if (dateOnly.isBefore(endOnly)) {
+        cumulativeTotal += amt;
+      }
+    }
+
+    final currentIncentiveVal = double.tryParse(_incentiveController.text) ?? -1.0;
+    final currentCumVal = double.tryParse(_cumulativeIncentiveController.text) ?? -1.0;
+
+    if (currentIncentiveVal != cycleIncentive || currentCumVal != cumulativeTotal) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _incentiveController.text = cycleIncentive.toStringAsFixed(2);
+            _cumulativeIncentiveController.text = cumulativeTotal.toStringAsFixed(2);
+            _recalculate();
+          });
+        }
+      });
+    }
   }
 
   Future<void> _loadLopDetails(int employeeId, String month, PayrollSettings settings) async {
@@ -588,6 +704,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
           final onDutyAsync = ref.watch(employeeOnDutyAssignmentsProvider((employeeId: widget.employeeId, date: null)));
           final holidaysAsync = ref.watch(holidaysProvider);
           final permissionsAsync = ref.watch(allPermissionRequestsProvider(const AllPermissionRequestsFilter()));
+          final incentivesAsync = ref.watch(allIncentiveRequestsProvider);
 
           return settingsAsync.when(
             data: (settings) {
@@ -609,6 +726,12 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
                 onDutyAssignments: onDuty,
                 holidays: holidays,
                 permissions: permissions,
+              );
+              _calculateIncentiveMetrics(
+                employee,
+                incentivesAsync.value ?? [],
+                selectedMonth,
+                settings,
               );
 
               return LayoutBuilder(

@@ -17,4 +17,11 @@ abstract class IncentiveRepository {
   });
   Future<IncentiveSettings> getIncentiveSettings();
   Future<void> updateIncentiveSettings(IncentiveSettings settings);
+  Future<List<IncentiveRequest>> getApprovedRequestsForEmployee({
+    int? employeeId,
+    String? employeeName,
+    String? employeeCode,
+    DateTime? startDate,
+    DateTime? endDateExclusive,
+  });
 }

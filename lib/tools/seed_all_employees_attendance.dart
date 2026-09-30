@@ -210,14 +210,14 @@ Future<void> syncEmployeeJoiningAndAttendance() async {
     }
 
     // 3. Generate Present Attendance Records for ALL Employees
-    // Date range: 20-08-2026 to 30-09-2026
+    // Date range: 20-08-2026 to 29-09-2026 (Excludes today 30-09-2026)
     final List<DateTime> datesToSeed = [];
     // August 2026 (20th to 31st)
     for (int day = 20; day <= 31; day++) {
       datesToSeed.add(DateTime(2026, 8, day));
     }
-    // September 2026 (1st to 30th)
-    for (int day = 1; day <= 30; day++) {
+    // September 2026 (1st to 29th - 30th left unseeded for today)
+    for (int day = 1; day <= 29; day++) {
       datesToSeed.add(DateTime(2026, 9, day));
     }
 
@@ -491,11 +491,138 @@ Future<void> syncEmployeeJoiningAndAttendance() async {
       debugPrint('⚠️ [payrolls] Payroll reset notice: $e');
     }
 
+    // 6. Delete all attendance records and attempts for today (30-09-2026 / current date) for all employees
+    await removeTodayAttendanceForAllEmployees();
+
     debugPrint('✅ [attendance_records] Successfully created/updated $totalAttendanceRecords Present records across all employees.');
     debugPrint('=====================================================');
     debugPrint('[Attendance Sync] Completed successfully.');
     debugPrint('=====================================================');
   } catch (e, st) {
     debugPrint('❌ [Attendance Sync] Error during sync: $e\n$st');
+  }
+}
+
+/// Removes all attendance records and attendance attempts for today (30-09-2026 and dynamic today)
+/// across all employees in Firestore.
+Future<void> removeTodayAttendanceForAllEmployees() async {
+  debugPrint('=====================================================');
+  debugPrint('[Attendance Cleanup] Removing today attendance for ALL employees...');
+  debugPrint('=====================================================');
+
+  final firestore = FirebaseFirestore.instance;
+  final now = DateTime.now();
+
+  final Set<String> targetDates = {
+    '30-09-2026', '30-9-2026', '2026-09-30', '30/09/2026', '30/9/2026', '2026/09/30',
+    DateFormat('dd-MM-yyyy').format(now),
+    DateFormat('d-M-yyyy').format(now),
+    DateFormat('yyyy-MM-dd').format(now),
+    DateFormat('dd/MM/yyyy').format(now),
+    DateFormat('d/M/yyyy').format(now),
+    DateFormat('yyyy/MM/dd').format(now),
+  };
+
+  try {
+    // 1. Clean attendance_records
+    final attSnap = await firestore.collection('attendance_records').get();
+    int deletedRecords = 0;
+    WriteBatch batch = firestore.batch();
+    int opCount = 0;
+
+    for (final doc in attSnap.docs) {
+      final data = doc.data();
+      final rawDate = (data['date'] ?? '').toString().trim();
+      final docId = doc.id.trim();
+
+      bool isTodayMatch = targetDates.contains(rawDate);
+      if (!isTodayMatch) {
+        for (final t in targetDates) {
+          if (docId.endsWith(t) || docId.endsWith('_$t')) {
+            isTodayMatch = true;
+            break;
+          }
+        }
+      }
+
+      if (!isTodayMatch && rawDate.isNotEmpty) {
+        try {
+          final dt = DateTime.tryParse(rawDate);
+          if (dt != null) {
+            if ((dt.year == 2026 && dt.month == 9 && dt.day == 30) ||
+                (dt.year == now.year && dt.month == now.month && dt.day == now.day)) {
+              isTodayMatch = true;
+            }
+          } else {
+            final parts = rawDate.replaceAll('/', '-').split('-');
+            if (parts.length == 3) {
+              int y = int.tryParse(parts[2].length == 4 ? parts[2] : parts[0]) ?? 0;
+              int m = int.tryParse(parts[1]) ?? 0;
+              int d = int.tryParse(parts[2].length == 4 ? parts[0] : parts[2]) ?? 0;
+              if ((y == 2026 && m == 9 && d == 30) ||
+                  (y == now.year && m == now.month && d == now.day)) {
+                isTodayMatch = true;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (isTodayMatch) {
+        batch.delete(doc.reference);
+        deletedRecords++;
+        opCount++;
+        if (opCount >= 400) {
+          await batch.commit();
+          batch = firestore.batch();
+          opCount = 0;
+        }
+      }
+    }
+
+    if (opCount > 0) {
+      await batch.commit();
+    }
+    debugPrint('🗑️ [attendance_records] Successfully deleted $deletedRecords attendance records for today.');
+
+    // 2. Clean attendance_attempts
+    final attemptSnap = await firestore.collection('attendance_attempts').get();
+    int deletedAttempts = 0;
+    WriteBatch attemptBatch = firestore.batch();
+    int attemptOpCount = 0;
+
+    for (final doc in attemptSnap.docs) {
+      final data = doc.data();
+      final rawDate = (data['date'] ?? '').toString().trim();
+      final docId = doc.id.trim();
+
+      bool isTodayMatch = targetDates.contains(rawDate);
+      if (!isTodayMatch) {
+        for (final t in targetDates) {
+          if (docId.endsWith(t) || docId.endsWith('_$t')) {
+            isTodayMatch = true;
+            break;
+          }
+        }
+      }
+
+      if (isTodayMatch) {
+        attemptBatch.delete(doc.reference);
+        deletedAttempts++;
+        attemptOpCount++;
+        if (attemptOpCount >= 400) {
+          await attemptBatch.commit();
+          attemptBatch = firestore.batch();
+          attemptOpCount = 0;
+        }
+      }
+    }
+
+    if (attemptOpCount > 0) {
+      await attemptBatch.commit();
+    }
+    debugPrint('🗑️ [attendance_attempts] Successfully deleted $deletedAttempts attendance attempts for today.');
+  } catch (e) {
+    debugPrint('⚠️ [Attendance Cleanup] Error removing today attendance: $e');
   }
 }

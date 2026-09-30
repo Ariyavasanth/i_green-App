@@ -6,6 +6,7 @@ import 'app.dart';
 import 'tools/seed_demo_ravi_kumar.dart';
 import 'tools/seed_demo_kiruthika.dart';
 import 'tools/seed_all_employees_attendance.dart';
+import 'tools/seed_demo_incentive.dart';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
@@ -39,6 +40,8 @@ void _runBackgroundDataSync() {
       await seedDemoRaviKumar();
       await seedDemoKiruthika();
       await syncEmployeeJoiningAndAttendance();
+      await seedDemoIncentives();
+      await removeTodayAttendanceForAllEmployees();
     } catch (e) {
       debugPrint('Background sync notice: $e');
     }
