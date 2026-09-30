@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:i_green_technology/features/attendance/domain/attendance_settings.dart';
+import 'package:flutter_application_1/features/attendance/domain/attendance_settings.dart';
 
 void main() {
   group('AttendanceSettings & Multi-Location Geofence Tests', () {
