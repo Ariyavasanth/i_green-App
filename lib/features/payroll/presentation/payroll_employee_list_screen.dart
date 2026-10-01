@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/layout/responsive_layout.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../employee/providers/employee_providers.dart';
 import '../../employee/domain/employee.dart';
-import '../../attendance/providers/attendance_providers.dart';
+import '../../employee/providers/employee_providers.dart';
+import '../../organization/domain/department.dart';
+import '../../organization/domain/organization.dart';
+import '../../organization/providers/organization_providers.dart';
 import '../domain/payroll.dart';
 import '../providers/payroll_providers.dart';
 
@@ -21,82 +24,490 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
+  // Filter Selection State
+  Organization? _selectedOrganization;
+  String? _selectedDepartment;
+  String? _selectedMonth;
+
+  // Submitted Filter State (used to display results)
+  bool _hasSubmitted = false;
+  Organization? _submittedOrganization;
+  String? _submittedDepartment;
+  String? _submittedMonth;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedMonth = ref.read(selectedPayrollMonthProvider);
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
 
+  List<String> _getAvailableMonths() {
+    final now = DateTime.now();
+    final formatter = DateFormat('MMMM yyyy');
+    final months = <String>[];
+    for (int i = -12; i <= 3; i++) {
+      final date = DateTime(now.year, now.month + i);
+      months.add(formatter.format(date));
+    }
+    final currentSelected = ref.read(selectedPayrollMonthProvider);
+    if (!months.contains(currentSelected)) {
+      months.add(currentSelected);
+    }
+    return months;
+  }
+
+  void _handleSubmit() {
+    if (_selectedOrganization == null ||
+        _selectedDepartment == null ||
+        _selectedDepartment!.trim().isEmpty ||
+        _selectedMonth == null ||
+        _selectedMonth!.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select organisation, department, and month first.'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    // Sync global selected month provider
+    ref.read(selectedPayrollMonthProvider.notifier).state = _selectedMonth!;
+
+    setState(() {
+      _hasSubmitted = true;
+      _submittedOrganization = _selectedOrganization;
+      _submittedDepartment = _selectedDepartment;
+      _submittedMonth = _selectedMonth;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final selectedMonth = ref.watch(selectedPayrollMonthProvider);
+    final String activeMonth = _submittedMonth ?? _selectedMonth ?? ref.watch(selectedPayrollMonthProvider);
     final settingsAsync = ref.watch(payrollSettingsProvider);
     final settings = settingsAsync.value ?? const PayrollSettings();
     final employeesAsync = ref.watch(employeesProvider);
     final payrollRecordsAsync = ref.watch(payrollRecordsForMonthProvider);
-    final attendanceRecordsAsync = ref.watch(allAttendanceRecordsProvider);
+    final orgsAsync = ref.watch(organizationsProvider);
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
-
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          onPressed: () => context.pop(),
+        ),
+        title: const Text(
+          'Run Payroll',
+          style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+      ),
       body: LayoutBuilder(
         builder: (context, constraints) {
           final isMobile = constraints.maxWidth < AppBreakpoints.tablet;
           final gutter = AppLayout.gutter(constraints.maxWidth);
 
-          return employeesAsync.when(
-            data: (employees) => payrollRecordsAsync.when(
-              data: (records) => attendanceRecordsAsync.when(
-                data: (attendanceRecords) {
-                  // Filter employees by search query
-                  final filteredEmployees = employees.where((emp) {
-                    if (_searchQuery.isEmpty) return true;
-                    final query = _searchQuery.toLowerCase();
-                    final name = '${emp.firstName} ${emp.lastName}'.toLowerCase();
-                    final id = 'emp${emp.id}'.toLowerCase();
-                    final dept = emp.department.toLowerCase();
-                    final desig = emp.designation.toLowerCase();
-                    return name.contains(query) || id.contains(query) || dept.contains(query) || desig.contains(query);
-                  }).toList();
+          return SingleChildScrollView(
+            padding: EdgeInsets.all(gutter),
+            child: ResponsiveContent(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // 1. Organisation -> Department -> Month Filter Section
+                  _buildFilterControlCard(context, orgsAsync, isMobile),
+                  const SizedBox(height: 16),
 
-                  return SingleChildScrollView(
-                    padding: EdgeInsets.all(gutter),
-                    child: ResponsiveContent(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _buildSubHeader(selectedMonth, settings),
-                          const SizedBox(height: 16),
-                          _buildSearchBar(),
-                          const SizedBox(height: 16),
-                          isMobile
+                  // 2. If not submitted, show initial prompt
+                  if (!_hasSubmitted) ...[
+                    _buildInitialPromptCard(),
+                  ] else ...[
+                    // 3. If submitted, show payroll period header & employee list
+                    _buildSubHeader(activeMonth, settings),
+                    const SizedBox(height: 16),
+                    _buildSearchBar(),
+                    const SizedBox(height: 16),
+
+                    employeesAsync.when(
+                      data: (employees) => payrollRecordsAsync.when(
+                        data: (records) {
+                          // Strict filter: organizationId = selected organisation AND department = selected department
+                          final matchingEmployees = employees.where((emp) {
+                            final submittedOrg = _submittedOrganization!;
+                            final orgId = emp.organizationId.trim();
+
+                            final matchesOrg = (orgId.isNotEmpty &&
+                                    (orgId == submittedOrg.canonicalId ||
+                                        orgId == submittedOrg.id.toString() ||
+                                        orgId == submittedOrg.docId)) ||
+                                (orgId.isEmpty &&
+                                    emp.organizationName.trim().toLowerCase() ==
+                                        submittedOrg.name.trim().toLowerCase());
+
+                            final matchesDept = emp.department.trim().toLowerCase() ==
+                                _submittedDepartment!.trim().toLowerCase();
+
+                            return matchesOrg && matchesDept;
+                          }).toList();
+
+                          // Search query within the matching employees
+                          final filteredEmployees = matchingEmployees.where((emp) {
+                            if (_searchQuery.isEmpty) return true;
+                            final query = _searchQuery.toLowerCase();
+                            final name = '${emp.firstName} ${emp.lastName}'.toLowerCase();
+                            final id = 'emp${emp.id}'.toLowerCase();
+                            final desig = emp.designation.toLowerCase();
+                            return name.contains(query) || id.contains(query) || desig.contains(query);
+                          }).toList();
+
+                          if (filteredEmployees.isEmpty) {
+                            return _buildEmptyState();
+                          }
+
+                          return isMobile
                               ? _buildMobileEmployeeList(
                                   context,
                                   filteredEmployees,
                                   records,
-                                  selectedMonth,
+                                  activeMonth,
                                 )
                               : _buildDesktopEmployeeList(
                                   context,
                                   filteredEmployees,
                                   records,
-                                  selectedMonth,
-                                ),
-                        ],
+                                  activeMonth,
+                                );
+                        },
+                        loading: () => const Center(child: CircularProgressIndicator()),
+                        error: (err, _) => Center(child: Text('Error loading payroll records: $err')),
                       ),
+                      loading: () => const Center(child: CircularProgressIndicator()),
+                      error: (err, _) => Center(child: Text('Error loading employees: $err')),
                     ),
-                  );
-                },
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (err, _) => Center(child: Text('Error loading attendance: $err')),
+                  ],
+                ],
               ),
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, _) => Center(child: Text('Error loading payroll: $err')),
             ),
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, _) => Center(child: Text('Error loading employees: $err')),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildFilterControlCard(
+    BuildContext context,
+    AsyncValue<List<Organization>> orgsAsync,
+    bool isMobile,
+  ) {
+    final availableMonths = _getAvailableMonths();
+    final String currentMonth = _selectedMonth ?? ref.watch(selectedPayrollMonthProvider);
+
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: AppColors.divider),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: orgsAsync.when(
+          data: (organizations) {
+            final activeOrgs = organizations.where((o) => o.isActive).toList();
+
+            // Department options for selected organization
+            List<String> departmentNames = [];
+            if (_selectedOrganization != null) {
+              final deptsAsync = ref.watch(filteredDepartmentsProvider(
+                DepartmentFilter(organizationId: _selectedOrganization!.canonicalId),
+              ));
+              final rawDepts = deptsAsync.valueOrNull ?? [];
+
+              // Also fallback to all departments in case they are mapped by organizationName or numerical ID
+              final allDepts = ref.watch(departmentsProvider).valueOrNull ?? [];
+              final combined = <Department>[...rawDepts];
+              for (final d in allDepts) {
+                final matchOrg = d.organizationId == _selectedOrganization!.canonicalId ||
+                    d.organizationId == _selectedOrganization!.id.toString() ||
+                    d.organizationName.trim().toLowerCase() == _selectedOrganization!.name.trim().toLowerCase();
+                if (matchOrg && !combined.any((c) => c.departmentName.trim().toLowerCase() == d.departmentName.trim().toLowerCase())) {
+                  combined.add(d);
+                }
+              }
+
+              departmentNames = combined
+                  .map((d) => d.departmentName.trim())
+                  .where((name) => name.isNotEmpty)
+                  .toSet()
+                  .toList();
+              departmentNames.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+            }
+
+            final isDepartmentEnabled = _selectedOrganization != null && departmentNames.isNotEmpty;
+
+            if (isMobile) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildOrgDropdown(activeOrgs),
+                  const SizedBox(height: 14),
+                  _buildDeptDropdown(departmentNames, isDepartmentEnabled),
+                  const SizedBox(height: 14),
+                  _buildMonthDropdown(availableMonths, currentMonth),
+                  const SizedBox(height: 18),
+                  ElevatedButton.icon(
+                    onPressed: _handleSubmit,
+                    icon: const Icon(Icons.search, size: 18),
+                    label: const Text('Submit', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: _buildOrgDropdown(activeOrgs),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  flex: 3,
+                  child: _buildDeptDropdown(departmentNames, isDepartmentEnabled),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  flex: 3,
+                  child: _buildMonthDropdown(availableMonths, currentMonth),
+                ),
+                const SizedBox(width: 16),
+                SizedBox(
+                  height: 44,
+                  child: ElevatedButton.icon(
+                    onPressed: _handleSubmit,
+                    icon: const Icon(Icons.search, size: 18),
+                    label: const Text('Submit', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, _) => Center(child: Text('Error loading organizations: $err')),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOrgDropdown(List<Organization> organizations) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Organisation',
+          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<Organization>(
+              isExpanded: true,
+              value: _selectedOrganization != null &&
+                      organizations.any((o) => o.canonicalId == _selectedOrganization!.canonicalId || o.id == _selectedOrganization!.id)
+                  ? organizations.firstWhere((o) => o.canonicalId == _selectedOrganization!.canonicalId || o.id == _selectedOrganization!.id)
+                  : null,
+              hint: const Text('Select Organisation', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+              icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textSecondary, size: 20),
+              style: const TextStyle(fontSize: 13, color: AppColors.textPrimary, fontWeight: FontWeight.w500),
+              onChanged: (Organization? newOrg) {
+                setState(() {
+                  _selectedOrganization = newOrg;
+                  _selectedDepartment = null; // Clear previously selected department
+                });
+              },
+              items: organizations.map((org) {
+                return DropdownMenuItem<Organization>(
+                  value: org,
+                  child: Text(org.name, overflow: TextOverflow.ellipsis),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDeptDropdown(List<String> departmentNames, bool isEnabled) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Department',
+          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: isEnabled ? Colors.white : const Color(0xFFF3F4F6),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              isExpanded: true,
+              value: isEnabled && _selectedDepartment != null && departmentNames.contains(_selectedDepartment)
+                  ? _selectedDepartment
+                  : null,
+              hint: Text(
+                _selectedOrganization == null
+                    ? 'Select Organisation first'
+                    : (departmentNames.isEmpty ? 'No departments found' : 'Select Department'),
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+              icon: Icon(
+                Icons.keyboard_arrow_down,
+                color: isEnabled ? AppColors.textSecondary : Colors.grey[400],
+                size: 20,
+              ),
+              style: TextStyle(
+                fontSize: 13,
+                color: isEnabled ? AppColors.textPrimary : AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+              onChanged: isEnabled
+                  ? (String? newDept) {
+                      setState(() {
+                        _selectedDepartment = newDept;
+                      });
+                    }
+                  : null,
+              items: isEnabled
+                  ? departmentNames.map((dept) {
+                      return DropdownMenuItem<String>(
+                        value: dept,
+                        child: Text(dept, overflow: TextOverflow.ellipsis),
+                      );
+                    }).toList()
+                  : null,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMonthDropdown(List<String> availableMonths, String currentMonth) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Month',
+          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              isExpanded: true,
+              value: availableMonths.contains(_selectedMonth ?? currentMonth)
+                  ? (_selectedMonth ?? currentMonth)
+                  : (availableMonths.isNotEmpty ? availableMonths.first : null),
+              hint: const Text('Select Month', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+              icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textSecondary, size: 20),
+              style: const TextStyle(fontSize: 13, color: AppColors.textPrimary, fontWeight: FontWeight.w500),
+              onChanged: (String? newMonth) {
+                if (newMonth != null) {
+                  setState(() {
+                    _selectedMonth = newMonth;
+                  });
+                }
+              },
+              items: availableMonths.map((m) {
+                return DropdownMenuItem<String>(
+                  value: m,
+                  child: Text(m, overflow: TextOverflow.ellipsis),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInitialPromptCard() {
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: AppColors.divider),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.filter_alt_outlined, size: 36, color: AppColors.primary),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Select Filters to Run Payroll',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Choose an Organisation, Department, and Month above, then click Submit to load eligible employees.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -115,6 +526,9 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
     }
     final period = settings.getPayrollPeriod(year, monthNum);
 
+    final orgName = _submittedOrganization?.name ?? '';
+    final deptName = _submittedDepartment ?? '';
+
     return Card(
       elevation: 0,
       color: Colors.white,
@@ -130,7 +544,7 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Running payroll for period: $month (${period.displayPeriodString}). Select an employee to review or calculate monthly salary.',
+                'Running payroll for $orgName • $deptName • $month (${period.displayPeriodString}). Select an employee to review or calculate monthly salary.',
                 style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
               ),
             ),
@@ -148,7 +562,7 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
         onChanged: (val) => setState(() => _searchQuery = val),
         style: const TextStyle(fontSize: 13),
         decoration: InputDecoration(
-          hintText: 'Search Employee by Name, ID, Department, Designation...',
+          hintText: 'Search Employee by Name, ID, Designation...',
           prefixIcon: const Icon(Icons.search, size: 18, color: AppColors.textSecondary),
           contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
           filled: true,
@@ -176,10 +590,6 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
     List<PayrollRecord> records,
     String selectedMonth,
   ) {
-    if (employees.isEmpty) {
-      return _buildEmptyState();
-    }
-
     return Card(
       elevation: 0,
       color: Colors.white,
@@ -303,10 +713,6 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
     List<PayrollRecord> records,
     String selectedMonth,
   ) {
-    if (employees.isEmpty) {
-      return _buildEmptyState();
-    }
-
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -489,7 +895,7 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
         padding: EdgeInsets.symmetric(vertical: 40, horizontal: 16),
         child: Center(
           child: Text(
-            'No matching employees found.',
+            'No matching employees found for the selected organization and department.',
             style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
           ),
         ),
