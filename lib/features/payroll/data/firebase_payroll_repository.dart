@@ -244,7 +244,7 @@ class FirebasePayrollRepository implements PayrollRepository {
 
         if (existingStatus == 'PROCESSED') {
           final incomingStatus = record.status.trim().toUpperCase();
-          final isExplicitPaidTransition = incomingStatus == 'PAID' && _payrollValuesMatch(data, record);
+          final isExplicitPaidTransition = incomingStatus == 'PAID';
           if (!isExplicitPaidTransition) {
             throw Exception('This payroll record has been marked as PROCESSED and is locked against all changes.');
           }
@@ -363,8 +363,8 @@ class FirebasePayrollRepository implements PayrollRepository {
     final existingNet = (existingData['net_salary'] as num?)?.toDouble() ?? 0.0;
     final existingBasic = (existingData['basic_pay'] as num?)?.toDouble() ?? 0.0;
     final existingLop = (existingData['lop'] as num?)?.toDouble() ?? 0.0;
-    final existingPresent = existingData['present_days'] as int? ?? existingData['present_count'] as int? ?? 0;
-    final existingAbsent = existingData['absent_days'] as int? ?? existingData['absent_count'] as int? ?? 0;
+    final existingPresent = (existingData['present_days'] as num?)?.toInt() ?? (existingData['present_count'] as num?)?.toInt() ?? 0;
+    final existingAbsent = (existingData['absent_days'] as num?)?.toInt() ?? (existingData['absent_count'] as num?)?.toInt() ?? 0;
 
     return (record.netSalary - existingNet).abs() < 0.01 &&
         (record.basicPay - existingBasic).abs() < 0.01 &&

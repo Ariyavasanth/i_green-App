@@ -390,9 +390,7 @@ class _ApproveLoanDialogState extends ConsumerState<ApproveLoanDialog> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                activeDays < cycleDays
-                                    ? 'Principal: ${currencyFormat.format(monthlyPrincipal)} + 1st Month Int: ${currencyFormat.format(firstMonthInterest)} ($activeDays/$cycleDays days)'
-                                    : 'Principal: ${currencyFormat.format(monthlyPrincipal)} + 1st Month Int: ${currencyFormat.format(firstMonthInterest)}',
+                                'Principal: ${currencyFormat.format(monthlyPrincipal)} + 1st Month Int: ${currencyFormat.format(firstMonthInterest)}',
                                 style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF166534)),
                               ),
                               Text(

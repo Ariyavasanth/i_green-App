@@ -6,6 +6,46 @@ import '../../employee/domain/employee.dart';
 import '../domain/payroll_input_override.dart';
 
 class PayrollUploadParser {
+  static const Map<String, String> editableFieldLabels = {
+    'basic': 'Basic',
+    'hra': 'HRA',
+    'education_allowance': 'Education Allowance',
+    'special_allowance': 'Special Allowance',
+    'travel_allowance': 'Travel Allowance',
+    'other_allowance': 'Other Allowance',
+    'incentive': 'Incentive',
+    'others_earning': 'Others Earning',
+    'bonus': 'Bonus',
+    'ot': 'OT',
+    'pf': 'PF',
+    'tax': 'TDS',
+    'esi': 'ESI',
+    'salary_advance': 'Salary Advance',
+    'others_deduction': 'Others Deduction',
+    'staff_welfare': 'Staff Welfare',
+  };
+
+  static const Map<String, String> systemControlledFieldLabels = {
+    'employee_id': 'Employee ID',
+    'employee_name': 'Employee Name',
+    'organisation': 'Organisation',
+    'department': 'Department',
+    'payroll_month': 'Payroll Month',
+    'present_days': 'Present Days',
+    'late_days': 'Late Days',
+    'lop_hours': 'LOP Hours',
+    'leave_days': 'Leave Days',
+    'absent_days': 'Absent Days',
+    'weekly_off': 'Weekly Off',
+    'working_days': 'Working Days',
+    'lop_deduction': 'LOP Deduction',
+    'company_loan': 'Company Loan',
+    'gross_salary': 'Gross Salary',
+    'total_deductions': 'Total Deductions',
+    'net_salary': 'Net Salary',
+    'status': 'Status',
+  };
+
   /// Parses bytes from CSV, TSV, or XLSX and validates each row against the currently filtered employees.
   static Future<PayrollUploadValidationReport> parseAndValidate({
     required Uint8List bytes,
@@ -56,10 +96,20 @@ class PayrollUploadParser {
     // Identify header row
     final headerRow = rawTable.first;
     final headerMap = <String, int>{};
+    final detectedEditable = <String>[];
+    final detectedSystem = <String>[];
+
     for (int i = 0; i < headerRow.length; i++) {
       final normalized = _normalizeHeader(headerRow[i]);
       if (normalized.isNotEmpty) {
         headerMap[normalized] = i;
+        if (editableFieldLabels.containsKey(normalized)) {
+          final label = editableFieldLabels[normalized]!;
+          if (!detectedEditable.contains(label)) detectedEditable.add(label);
+        } else if (systemControlledFieldLabels.containsKey(normalized)) {
+          final label = systemControlledFieldLabels[normalized]!;
+          if (!detectedSystem.contains(label)) detectedSystem.add(label);
+        }
       }
     }
 
@@ -77,6 +127,8 @@ class PayrollUploadParser {
             errorMessage: 'Missing required "Employee ID" header column in file.',
           ),
         ],
+        detectedEditableColumns: detectedEditable,
+        detectedSystemColumns: detectedSystem,
       );
     }
 
@@ -142,7 +194,7 @@ class PayrollUploadParser {
         continue;
       }
 
-      // Parse and validate numeric overrides
+      // Parse and validate numeric overrides (only editable fields!)
       String? parseError;
       double? parseNum(String key, String label) {
         if (parseError != null) return null;
@@ -223,17 +275,71 @@ class PayrollUploadParser {
       totalRows: validRows.length + invalidRows.length,
       validRows: validRows,
       invalidRows: invalidRows,
+      detectedEditableColumns: detectedEditable,
+      detectedSystemColumns: detectedSystem,
     );
   }
 
   static String _normalizeHeader(String header) {
     final clean = header.trim().toLowerCase().replaceAll(RegExp(r'[\s_\-\(\)\/\.]'), '');
+    
+    // System-controlled identifiers
     if (clean == 'employeeid' || clean == 'empid' || clean == 'employeecode' || clean == 'empcode' || clean == 'id') {
       return 'employee_id';
     }
     if (clean == 'employeename' || clean == 'empname' || clean == 'name' || clean == 'fullname') {
       return 'employee_name';
     }
+    if (clean == 'organisation' || clean == 'organization' || clean == 'org' || clean == 'company') {
+      return 'organisation';
+    }
+    if (clean == 'department' || clean == 'dept') {
+      return 'department';
+    }
+    if (clean == 'payrollmonth' || clean == 'month' || clean == 'cycle') {
+      return 'payroll_month';
+    }
+    if (clean == 'presentdays' || clean == 'presentcount' || clean == 'present') {
+      return 'present_days';
+    }
+    if (clean == 'latedays' || clean == 'latecount' || clean == 'late') {
+      return 'late_days';
+    }
+    if (clean == 'lophours' || clean == 'shortfallhours' || clean == 'lophour') {
+      return 'lop_hours';
+    }
+    if (clean == 'leavedays' || clean == 'onleavecount' || clean == 'leave') {
+      return 'leave_days';
+    }
+    if (clean == 'absentdays' || clean == 'absentcount' || clean == 'absent') {
+      return 'absent_days';
+    }
+    if (clean == 'weeklyoff' || clean == 'weeklyoffcount' || clean == 'offdays') {
+      return 'weekly_off';
+    }
+    if (clean == 'workingdays' || clean == 'totalworkingdays') {
+      return 'working_days';
+    }
+    if (clean == 'lopdeduction' || clean == 'lop' || clean == 'lopamount') {
+      return 'lop_deduction';
+    }
+    if (clean == 'companyloan' || clean == 'loan' || clean == 'loanemi' || clean == 'companyloanemi') {
+      return 'company_loan';
+    }
+    if (clean == 'grosssalary' || clean == 'gross' || clean == 'grosspay' || clean == 'totalgross') {
+      return 'gross_salary';
+    }
+    if (clean == 'totaldeductions' || clean == 'totaldeduction' || clean == 'deductions' || clean == 'totalded') {
+      return 'total_deductions';
+    }
+    if (clean == 'netsalary' || clean == 'net' || clean == 'netpay' || clean == 'takehome') {
+      return 'net_salary';
+    }
+    if (clean == 'status') {
+      return 'status';
+    }
+
+    // Editable payroll inputs
     if (clean == 'basic' || clean == 'basicsalary' || clean == 'basicpay') {
       return 'basic';
     }
@@ -284,6 +390,7 @@ class PayrollUploadParser {
     }
     return '';
   }
+
 
   static List<List<String>> _parseCsvOrTsv(Uint8List bytes) {
     String content;

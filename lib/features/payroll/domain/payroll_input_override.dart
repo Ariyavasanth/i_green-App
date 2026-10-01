@@ -69,6 +69,8 @@ class PayrollUploadValidationReport {
   final int totalRows;
   final List<UploadRowValidation> validRows;
   final List<UploadRowValidation> invalidRows;
+  final List<String> detectedEditableColumns;
+  final List<String> detectedSystemColumns;
 
   bool get hasErrors => invalidRows.isNotEmpty;
   bool get hasValidRows => validRows.isNotEmpty;
@@ -78,5 +80,8 @@ class PayrollUploadValidationReport {
     required this.totalRows,
     required this.validRows,
     required this.invalidRows,
+    this.detectedEditableColumns = const [],
+    this.detectedSystemColumns = const [],
   });
 }
+

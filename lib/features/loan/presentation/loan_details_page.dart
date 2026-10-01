@@ -675,23 +675,12 @@ class LoanDetailsPage extends ConsumerWidget {
                   cells: [
                     DataCell(Text(month, style: const TextStyle(fontWeight: FontWeight.w500))),
                     DataCell(Text(formatCurrency.format(monthlyPrincipal))),
-                    DataCell(Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          formatCurrency.format(monthInterest),
-                          style: TextStyle(
-                            color: monthInterest > 0 ? Colors.orange.shade800 : AppColors.textSecondary,
-                            fontWeight: monthInterest > 0 ? FontWeight.w600 : FontWeight.normal,
-                          ),
-                        ),
-                        if (monthInterest > 0 && activeDays < cycleDays)
-                          Text(
-                            '$activeDays/$cycleDays days',
-                            style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
-                          ),
-                      ],
+                    DataCell(Text(
+                      formatCurrency.format(monthInterest),
+                      style: TextStyle(
+                        color: monthInterest > 0 ? Colors.orange.shade800 : AppColors.textSecondary,
+                        fontWeight: monthInterest > 0 ? FontWeight.w600 : FontWeight.normal,
+                      ),
                     )),
                     DataCell(Text(
                       formatCurrency.format(monthEmi),

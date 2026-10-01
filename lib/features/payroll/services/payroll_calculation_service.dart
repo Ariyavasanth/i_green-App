@@ -127,16 +127,9 @@ class PayrollCalculationService {
         ? loan.emiForInstallment(monthIdx, payrollStartDay: pStart, payrollEndDay: pEnd)
         : (loan.interestRate > 0 ? loan.emiForInstallment(loan.paidInstallments, payrollStartDay: pStart, payrollEndDay: pEnd) : loan.emiAmount);
 
-    final activeDays = monthIdx != -1 ? loan.activeDaysForInstallment(monthIdx, payrollStartDay: pStart, payrollEndDay: pEnd) : 30;
-    final cycleDays = monthIdx != -1 ? loan.cycleDaysForInstallment(monthIdx, payrollStartDay: pStart, payrollEndDay: pEnd) : 30;
-
-    String installmentNote = monthIdx != -1
+    final String installmentNote = monthIdx != -1
         ? 'Installment ${monthIdx + 1} of ${loan.installments} (${loan.loanId})'
         : (loan.loanId.isNotEmpty ? 'Loan EMI (${loan.loanId})' : 'Loan EMI');
-
-    if (monthIdx == 0 && activeDays < cycleDays && loan.interestRate > 0) {
-      installmentNote += ' • Pro-rata $activeDays/$cycleDays days';
-    }
 
     return (emiAmount: currentMonthEmi, loanDescription: installmentNote);
   }

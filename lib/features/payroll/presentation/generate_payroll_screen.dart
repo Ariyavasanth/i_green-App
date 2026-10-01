@@ -12,6 +12,7 @@ import '../../attendance/providers/attendance_providers.dart';
 import '../../attendance/domain/attendance_record.dart';
 import '../../attendance/domain/monthly_attendance_result.dart';
 import '../domain/payroll.dart';
+import '../domain/payroll_input_override.dart';
 import '../providers/payroll_providers.dart';
 import '../../leave/domain/leave_request.dart';
 import '../../leave/providers/leave_providers.dart';
@@ -142,22 +143,27 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     super.dispose();
   }
 
-  void _initializeValues(dynamic employee, PayrollSettings settings, String selectedMonth) {
+  void _initializeValues(
+    dynamic employee,
+    PayrollSettings settings,
+    String selectedMonth, {
+    PayrollInputOverride? overrideInput,
+  }) {
     if (_initialized) return;
     _initialized = true;
     _totalDays = settings.workingDaysInMonth.toInt();
 
-    // Use employee standard CTC details directly from employee record
-    final basic = (employee.salaryBasic as num?)?.toDouble() ?? 0.0;
-    final hra = (employee.salaryHra as num?)?.toDouble() ?? 0.0;
-    final special = (employee.salarySpecialAllowance as num?)?.toDouble() ?? 0.0;
-    final edu = (employee.salaryEducationAllowance as num?)?.toDouble() ?? 0.0;
-    final travel = (employee.salaryTravelAllowance as num?)?.toDouble() ?? 0.0;
-    final otherAllowance = (employee.salaryOtherAllowance as num?)?.toDouble() ?? 0.0;
+    // Use employee standard CTC details, overridden by uploaded input if available
+    final basic = overrideInput?.basic ?? (employee.salaryBasic as num?)?.toDouble() ?? 0.0;
+    final hra = overrideInput?.hra ?? (employee.salaryHra as num?)?.toDouble() ?? 0.0;
+    final special = overrideInput?.specialAllowance ?? (employee.salarySpecialAllowance as num?)?.toDouble() ?? 0.0;
+    final edu = overrideInput?.educationAllowance ?? (employee.salaryEducationAllowance as num?)?.toDouble() ?? 0.0;
+    final travel = overrideInput?.travelAllowance ?? (employee.salaryTravelAllowance as num?)?.toDouble() ?? 0.0;
+    final otherAllowance = overrideInput?.otherAllowance ?? (employee.salaryOtherAllowance as num?)?.toDouble() ?? 0.0;
 
-    final pf = (employee.salaryPf as num?)?.toDouble() ?? 0.0;
-    final tax = (employee.salaryTax as num?)?.toDouble() ?? 0.0;
-    final esi = (employee.salaryEsi as num?)?.toDouble() ?? 0.0;
+    final pf = overrideInput?.pf ?? (employee.salaryPf as num?)?.toDouble() ?? 0.0;
+    final tax = overrideInput?.tax ?? (employee.salaryTax as num?)?.toDouble() ?? 0.0;
+    final esi = overrideInput?.esi ?? (employee.salaryEsi as num?)?.toDouble() ?? 0.0;
 
     _basicController.text = basic.toStringAsFixed(2);
     _hraController.text = hra.toStringAsFixed(2);
@@ -167,12 +173,33 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     _otherAllowanceController.text = otherAllowance.toStringAsFixed(2);
 
     // Initial values for dynamic monthly inputs
-    if (_incentiveController.text.isEmpty) _incentiveController.text = '0.00';
+    if (overrideInput?.incentive != null) {
+      _incentiveController.text = overrideInput!.incentive!.toStringAsFixed(2);
+    } else if (_incentiveController.text.isEmpty) {
+      _incentiveController.text = '0.00';
+    }
+
     if (_carryForwardController.text.isEmpty) _carryForwardController.text = '-';
-    if (_othersEarningController.text.isEmpty) _othersEarningController.text = '0.00';
+
+    if (overrideInput?.othersEarning != null) {
+      _othersEarningController.text = overrideInput!.othersEarning!.toStringAsFixed(2);
+    } else if (_othersEarningController.text.isEmpty) {
+      _othersEarningController.text = '0.00';
+    }
+
     if (_cumulativeIncentiveController.text.isEmpty) _cumulativeIncentiveController.text = '0.00';
-    if (_bonusController.text.isEmpty) _bonusController.text = '0.00';
-    if (_otController.text.isEmpty) _otController.text = '0.00';
+
+    if (overrideInput?.bonus != null) {
+      _bonusController.text = overrideInput!.bonus!.toStringAsFixed(2);
+    } else if (_bonusController.text.isEmpty) {
+      _bonusController.text = '0.00';
+    }
+
+    if (overrideInput?.ot != null) {
+      _otController.text = overrideInput!.ot!.toStringAsFixed(2);
+    } else if (_otController.text.isEmpty) {
+      _otController.text = '0.00';
+    }
 
     _pfController.text = pf.toStringAsFixed(2);
     _taxController.text = tax.toStringAsFixed(2);
@@ -181,9 +208,9 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     _lopController.text = '0.00';
     _companyLoanController.text = '0.00';
     _loanDescController.text = '';
-    _salaryAdvanceController.text = '0.00';
-    _othersDeductionController.text = '0.00';
-    _staffWelfareController.text = '0.00';
+    _salaryAdvanceController.text = overrideInput?.salaryAdvance?.toStringAsFixed(2) ?? '0.00';
+    _othersDeductionController.text = overrideInput?.othersDeduction?.toStringAsFixed(2) ?? '0.00';
+    _staffWelfareController.text = overrideInput?.staffWelfare?.toStringAsFixed(2) ?? '0.00';
 
     _recalculate();
     _loadActiveLoan(employee.id, selectedMonth, settings);
@@ -218,8 +245,9 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     Employee employee,
     List<IncentiveRequest> requests,
     String month,
-    PayrollSettings settings,
-  ) {
+    PayrollSettings settings, {
+    double? overrideIncentive,
+  }) {
     final now = DateTime.now();
     int year = now.year;
     int monthNum = now.month;
@@ -286,14 +314,15 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
       }
     }
 
+    final effectiveIncentive = overrideIncentive ?? cycleIncentive;
     final currentIncentiveVal = double.tryParse(_incentiveController.text) ?? -1.0;
     final currentCumVal = double.tryParse(_cumulativeIncentiveController.text) ?? -1.0;
 
-    if (currentIncentiveVal != cycleIncentive || currentCumVal != cumulativeTotal) {
+    if (currentIncentiveVal != effectiveIncentive || currentCumVal != cumulativeTotal) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           setState(() {
-            _incentiveController.text = cycleIncentive.toStringAsFixed(2);
+            _incentiveController.text = effectiveIncentive.toStringAsFixed(2);
             _cumulativeIncentiveController.text = cumulativeTotal.toStringAsFixed(2);
             _recalculate();
           });
@@ -358,16 +387,9 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
             ? loan.emiForInstallment(monthIdx, payrollStartDay: pStart, payrollEndDay: pEnd)
             : (loan.interestRate > 0 ? loan.emiForInstallment(loan.paidInstallments, payrollStartDay: pStart, payrollEndDay: pEnd) : loan.emiAmount);
 
-        final activeDays = monthIdx != -1 ? loan.activeDaysForInstallment(monthIdx, payrollStartDay: pStart, payrollEndDay: pEnd) : 30;
-        final cycleDays = monthIdx != -1 ? loan.cycleDaysForInstallment(monthIdx, payrollStartDay: pStart, payrollEndDay: pEnd) : 30;
-
-        String installmentNote = monthIdx != -1
+        final String installmentNote = monthIdx != -1
             ? 'Installment ${monthIdx + 1} of ${loan.installments} (${loan.loanId})'
             : (loan.loanId.isNotEmpty ? 'Loan EMI (${loan.loanId})' : 'Loan EMI');
-
-        if (monthIdx == 0 && activeDays < cycleDays && loan.interestRate > 0) {
-          installmentNote += ' • Pro-rata $activeDays/$cycleDays days';
-        }
 
         setState(() {
           _companyLoanController.text = currentMonthEmi.toStringAsFixed(2);
@@ -706,12 +728,16 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
           final permissionsAsync = ref.watch(allPermissionRequestsProvider(const AllPermissionRequestsFilter()));
           final incentivesAsync = ref.watch(allIncentiveRequestsProvider);
 
+          final overridesMap = ref.watch(payrollInputOverridesProvider);
+          final overrideInput = overridesMap[widget.employeeId.toString()] ??
+              overridesMap[employee.employeeId.trim().toLowerCase()];
+
           return settingsAsync.when(
             data: (settings) {
               if (attendanceAsync.isLoading || leavesAsync.isLoading) {
                 return const Center(child: CircularProgressIndicator());
               }
-              _initializeValues(employee, settings, selectedMonth);
+              _initializeValues(employee, settings, selectedMonth, overrideInput: overrideInput);
               final records = attendanceAsync.value ?? [];
               final leaves = leavesAsync.value;
               final onDuty = onDutyAsync.value;
@@ -732,6 +758,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
                 incentivesAsync.value ?? [],
                 selectedMonth,
                 settings,
+                overrideIncentive: overrideInput?.incentive,
               );
 
               return LayoutBuilder(
@@ -740,10 +767,10 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
                   final gutter = AppLayout.gutter(constraints.maxWidth);
 
                   if (isMobile) {
-                    return _buildMobileStepFlow(context, employee, selectedMonth, settings);
+                    return _buildMobileStepFlow(context, employee, selectedMonth, settings, overrideInput: overrideInput);
                   }
 
-                  return _buildDesktopLayout(context, employee, selectedMonth, settings, gutter);
+                  return _buildDesktopLayout(context, employee, selectedMonth, settings, gutter, overrideInput: overrideInput);
                 },
               );
             },
@@ -789,8 +816,9 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     dynamic employee,
     String selectedMonth,
     PayrollSettings settings,
-    double gutter,
-  ) {
+    double gutter, {
+    PayrollInputOverride? overrideInput,
+  }) {
     return Column(
       children: [
         Expanded(
@@ -810,7 +838,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _buildEmployeeOverviewCard(employee, selectedMonth),
+                        _buildEmployeeOverviewCard(employee, selectedMonth, overrideInput: overrideInput),
                         const SizedBox(height: 16),
                         _buildEarningsCard(),
                         const SizedBox(height: 16),
@@ -828,7 +856,13 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     );
   }
 
-  Widget _buildMobileStepFlow(BuildContext context, dynamic employee, String selectedMonth, PayrollSettings settings) {
+  Widget _buildMobileStepFlow(
+    BuildContext context,
+    dynamic employee,
+    String selectedMonth,
+    PayrollSettings settings, {
+    PayrollInputOverride? overrideInput,
+  }) {
     Widget stepWidget;
     String stepTitle;
 
@@ -851,7 +885,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
         stepWidget = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildEmployeeOverviewCard(employee, selectedMonth),
+            _buildEmployeeOverviewCard(employee, selectedMonth, overrideInput: overrideInput),
             const SizedBox(height: 12),
             _buildSummaryRow('Basic Pay', _basicController.text),
             _buildSummaryRow('HRA', _hraController.text),
@@ -924,7 +958,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     );
   }
 
-  Widget _buildEmployeeOverviewCard(dynamic employee, String selectedMonth) {
+  Widget _buildEmployeeOverviewCard(dynamic employee, String selectedMonth, {PayrollInputOverride? overrideInput}) {
     return Card(
       elevation: 0,
       color: Colors.white,
@@ -955,6 +989,28 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
                     'EMP${employee.id} • ${employee.designation} • $selectedMonth',
                     style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
                   ),
+                  if (overrideInput != null) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDCFCE7),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFF86EFAC)),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.check_circle_outline_rounded, size: 13, color: Color(0xFF16A34A)),
+                          SizedBox(width: 4),
+                          Text(
+                            'Excel Upload Overrides Applied',
+                            style: TextStyle(fontSize: 11, color: Color(0xFF15803D), fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

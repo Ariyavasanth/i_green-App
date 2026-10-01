@@ -31,7 +31,7 @@ Future<void> main() async {
   runApp(const ProviderScope(child: BooksApp()));
 
   // Run database sync asynchronously in the background
-  _runBackgroundDataSync();
+  // _runBackgroundDataSync();
 }
 
 void _runBackgroundDataSync() {

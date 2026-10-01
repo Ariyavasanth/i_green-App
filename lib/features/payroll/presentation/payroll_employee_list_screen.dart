@@ -23,8 +23,10 @@ import '../../permission/domain/permission_request.dart';
 import '../../permission/providers/permission_providers.dart';
 import '../domain/payroll.dart';
 import '../domain/payroll_input_override.dart';
+import '../domain/payroll_report_dataset.dart';
 import '../providers/payroll_providers.dart';
 import '../services/payroll_calculation_service.dart';
+import '../services/payroll_export_service.dart';
 import '../services/payroll_upload_parser.dart';
 
 class PayrollEmployeeListScreen extends ConsumerStatefulWidget {
@@ -51,6 +53,7 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
 
   // Batch Generation State
   bool _isGeneratingAll = false;
+  bool _isMarkingAllPaid = false;
 
   // In-memory Upload Overrides (scoped to currently submitted filter)
   final Map<String, PayrollInputOverride> _appliedOverrides = {};
@@ -110,6 +113,7 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
       // Clear previous upload overrides on fresh filter submission
       _appliedOverrides.clear();
       _uploadedFileName = null;
+      ref.read(payrollInputOverridesProvider.notifier).state = {};
     });
   }
 
@@ -173,6 +177,7 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
               }
             }
             _uploadedFileName = file.name;
+            ref.read(payrollInputOverridesProvider.notifier).state = Map.from(_appliedOverrides);
           });
 
           ScaffoldMessenger.of(context).showSnackBar(
@@ -199,6 +204,175 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
     }
   }
 
+  void _showExcelInstructionsDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Row(
+          children: [
+            Icon(Icons.menu_book_rounded, color: Color(0xFF414A51), size: 24),
+            SizedBox(width: 8),
+            Text(
+              'Excel Instructions & Field Guide',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.textPrimary),
+            ),
+          ],
+        ),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 580, maxHeight: 520),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.divider),
+                  ),
+                  child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'How the Excel Edit Workflow Works:',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textPrimary),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        '1. Export the payroll Excel file using the Export menu.\n'
+                        '2. Edit allowed payroll inputs for any employee in the file.\n'
+                        '3. Save and upload the same file using "Upload Excel/CSV".\n'
+                        '4. Click "Generate All" to recalculate and save updated payroll records.',
+                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Row(
+                  children: [
+                    Icon(Icons.check_circle_outline, color: Color(0xFF16A34A), size: 18),
+                    SizedBox(width: 6),
+                    Text(
+                      'EDITABLE PAYROLL INPUTS (16)',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF166534)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0FDF4),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFF86EFAC)),
+                  ),
+                  child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '• Basic\n'
+                        '• HRA\n'
+                        '• Education Allowance\n'
+                        '• Special Allowance\n'
+                        '• Travel Allowance\n'
+                        '• Other Allowance\n'
+                        '• Incentive\n'
+                        '• Others Earning\n'
+                        '• Bonus\n'
+                        '• OT\n'
+                        '• PF\n'
+                        '• TDS / Tax\n'
+                        '• ESI\n'
+                        '• Salary Advance\n'
+                        '• Others Deduction\n'
+                        '• Staff Welfare',
+                        style: TextStyle(fontSize: 12, color: Color(0xFF14532D), height: 1.4),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'Note: Only editable payroll input fields are used as Excel overrides.',
+                        style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, fontWeight: FontWeight.w600, color: Color(0xFF166534)),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Row(
+                  children: [
+                    Icon(Icons.lock_outline, color: Color(0xFF414A51), size: 18),
+                    SizedBox(width: 6),
+                    Text(
+                      'SYSTEM CONTROLLED / NOT EDITABLE (18)',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF414A51)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.divider),
+                  ),
+                  child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '• Employee ID\n'
+                        '• Employee Name\n'
+                        '• Organisation\n'
+                        '• Department\n'
+                        '• Payroll Month\n'
+                        '• Present Days\n'
+                        '• Late Days\n'
+                        '• LOP Hours\n'
+                        '• Leave Days\n'
+                        '• Absent Days\n'
+                        '• Weekly Off\n'
+                        '• Working Days\n'
+                        '• LOP Deduction\n'
+                        '• Company Loan\n'
+                        '• Gross Salary\n'
+                        '• Total Deductions\n'
+                        '• Net Salary\n'
+                        '• Status',
+                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        '• Employee ID is used to identify the employee and must not be changed.\n'
+                        '• Attendance and calculated payroll fields are calculated by the system.',
+                        style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF9CC70A),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Got It', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showUploadPreviewDialog({
     required BuildContext context,
     required PayrollUploadValidationReport report,
@@ -209,18 +383,18 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
       builder: (ctx) => AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: Row(
+        title: const Row(
           children: [
-            const Icon(Icons.file_present_rounded, color: Color(0xFF414A51), size: 24),
-            const SizedBox(width: 8),
-            const Text(
+            Icon(Icons.file_present_rounded, color: Color(0xFF414A51), size: 24),
+            SizedBox(width: 8),
+            Text(
               'Upload Validation Preview',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
             ),
           ],
         ),
         content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520, maxHeight: 460),
+          constraints: const BoxConstraints(maxWidth: 540, maxHeight: 500),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -241,6 +415,104 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
                   ],
                 ),
                 const SizedBox(height: 16),
+
+                // 1. Detected Editable Columns
+                if (report.detectedEditableColumns.isNotEmpty) ...[
+                  Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline, size: 16, color: Color(0xFF16A34A)),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Editable fields detected (${report.detectedEditableColumns.length}):',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF166534)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0FDF4),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF86EFAC)),
+                    ),
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: report.detectedEditableColumns
+                          .map((col) => Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: const Color(0xFF86EFAC)),
+                                ),
+                                child: Text(
+                                  col,
+                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF15803D)),
+                                ),
+                              ))
+                          .toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                // 2. Detected System-Controlled Columns
+                if (report.detectedSystemColumns.isNotEmpty) ...[
+                  Row(
+                    children: [
+                      const Icon(Icons.info_outline, size: 16, color: Color(0xFF414A51)),
+                      const SizedBox(width: 6),
+                      Text(
+                        'System-controlled fields are ignored (${report.detectedSystemColumns.length}):',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF414A51)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.divider),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: report.detectedSystemColumns
+                              .map((col) => Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: AppColors.divider),
+                                    ),
+                                    child: Text(
+                                      col,
+                                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                    ),
+                                  ))
+                              .toList(),
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Attendance and calculated totals will be dynamically calculated by the system during generation.',
+                          style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                // 3. Validation Issues
                 if (report.hasErrors) ...[
                   Text(
                     'Validation Issues (${report.invalidRows.length}):',
@@ -270,6 +542,8 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
                   ),
                   const SizedBox(height: 12),
                 ],
+
+                // 4. Valid Rows
                 if (report.hasValidRows) ...[
                   Text(
                     'Valid Rows Ready to Apply (${report.validRows.length}):',
@@ -352,6 +626,7 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
       ),
     );
   }
+
 
   Future<void> _handleGenerateAll({
     required BuildContext context,
@@ -457,12 +732,13 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
 
     int currentCompleted = 0;
     final int totalCount = matchingEmployees.length;
-    String currentEmployeeName = '';
     int successCount = 0;
     final List<String> skippedList = [];
     final List<String> failedList = [];
 
-    late StateSetter setProgressDialogState;
+    final progressNotifier = ValueNotifier<({int completed, String employeeName})>(
+      (completed: 0, employeeName: ''),
+    );
 
     // Show persistent progress dialog
     showDialog(
@@ -470,10 +746,12 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
       barrierDismissible: false,
       builder: (ctx) => PopScope(
         canPop: false,
-        child: StatefulBuilder(
-          builder: (dialogCtx, setStateFunc) {
-            setProgressDialogState = setStateFunc;
-            final double progressValue = totalCount > 0 ? (currentCompleted / totalCount) : 0.0;
+        child: ValueListenableBuilder<({int completed, String employeeName})>(
+          valueListenable: progressNotifier,
+          builder: (dialogCtx, progressData, _) {
+            final int currentCompletedCount = progressData.completed;
+            final double progressValue = totalCount > 0 ? (currentCompletedCount / totalCount) : 0.0;
+            final String currentEmployeeName = progressData.employeeName;
 
             return AlertDialog(
               backgroundColor: Colors.white,
@@ -483,17 +761,17 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
+                  const Row(
                     children: [
-                      const SizedBox(
+                      SizedBox(
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFF9CC70A)),
                       ),
-                      const SizedBox(width: 14),
+                      SizedBox(width: 14),
                       Text(
                         'Generating payroll...',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
                     ],
                   ),
@@ -510,7 +788,7 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        '$currentCompleted / $totalCount employees completed',
+                        '$currentCompletedCount / $totalCount employees completed',
                         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
                       ),
                       Text(
@@ -548,18 +826,17 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
       final onDutyRepo = ref.read(onDutyRepositoryProvider);
 
       for (final emp in matchingEmployees) {
-        setProgressDialogState(() {
-          currentEmployeeName = '${emp.firstName} ${emp.lastName} (EMP${emp.id})';
-        });
+        final empDisplayName = '${emp.firstName} ${emp.lastName} (EMP${emp.id})';
+        progressNotifier.value = (completed: currentCompleted, employeeName: empDisplayName);
 
         // Check if existing record is protected (PAID or PROCESSED)
         final existingRecord = records.where((r) => r.employeeId == emp.id && r.id != 0).firstOrNull;
         if (existingRecord != null) {
           final statusUpper = existingRecord.status.trim().toUpperCase();
           if (statusUpper == 'PAID' || statusUpper == 'PROCESSED') {
-            skippedList.add('${emp.firstName} ${emp.lastName} (EMP${emp.id}) — Status is already ${existingRecord.status}');
+            skippedList.add('$empDisplayName — Status is already ${existingRecord.status}');
             currentCompleted++;
-            setProgressDialogState(() {});
+            progressNotifier.value = (completed: currentCompleted, employeeName: '');
             continue;
           }
         }
@@ -595,11 +872,11 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
           await payrollRepo.savePayrollRecord(calculatedRecord);
           successCount++;
         } catch (e) {
-          failedList.add('${emp.firstName} ${emp.lastName} (EMP${emp.id}): $e');
+          failedList.add('$empDisplayName: $e');
         }
 
         currentCompleted++;
-        setProgressDialogState(() {});
+        progressNotifier.value = (completed: currentCompleted, employeeName: '');
       }
     } catch (globalErr) {
       debugPrint('Error during batch payroll generation: $globalErr');
@@ -608,8 +885,10 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
       if (context.mounted && Navigator.of(context, rootNavigator: true).canPop()) {
         Navigator.of(context, rootNavigator: true).pop();
       }
+      progressNotifier.dispose();
 
       // Refresh payroll providers to update table statuses
+      ref.read(selectedPayrollMonthProvider.notifier).state = month;
       ref.invalidate(payrollRecordsForMonthProvider);
       ref.invalidate(allPayrollRecordsProvider);
 
@@ -625,7 +904,271 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
           skippedList: skippedList,
           failedList: failedList,
           totalProcessed: totalCount,
+          title: 'Payroll Generation Summary',
         );
+      }
+    }
+  }
+
+  Future<void> _handleMarkAllAsPaid({
+    required BuildContext context,
+    required List<Employee> matchingEmployees,
+    required List<PayrollRecord> records,
+    required String month,
+  }) async {
+    if (_isMarkingAllPaid || _isGeneratingAll || matchingEmployees.isEmpty) return;
+
+    final matchingEmployeeIds = matchingEmployees.map((e) => e.id).toSet();
+    final eligibleRecords = records.where((r) =>
+      matchingEmployeeIds.contains(r.employeeId) &&
+      r.status.trim().toLowerCase() == 'processed'
+    ).toList();
+
+    if (eligibleRecords.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No processed payroll records available to mark as paid.'),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
+    final empMap = {for (final e in matchingEmployees) e.id: e};
+
+    // 1. Confirmation Dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Row(
+          children: [
+            Icon(Icons.payment_rounded, color: Color(0xFF414A51), size: 24),
+            SizedBox(width: 8),
+            Text(
+              'Confirm Mark All as Paid',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This will mark ${eligibleRecords.length} processed payroll records as Paid. Paid payroll cannot be edited afterward.',
+              style: const TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3F4F6),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.divider),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Organisation: ${_submittedOrganization?.name ?? "-"}',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Department: ${_submittedDepartment ?? "-"}',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Month: $month',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Eligible Records: ${eligibleRecords.length}',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF166534)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          OutlinedButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.textPrimary,
+              side: const BorderSide(color: AppColors.divider),
+            ),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF414A51),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Mark as Paid', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() {
+      _isMarkingAllPaid = true;
+    });
+
+    int currentCompleted = 0;
+    final int totalCount = eligibleRecords.length;
+    int successCount = 0;
+    final List<String> failedList = [];
+
+    final progressNotifier = ValueNotifier<({int completed, String employeeName})>(
+      (completed: 0, employeeName: ''),
+    );
+
+    // Show persistent progress dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: ValueListenableBuilder<({int completed, String employeeName})>(
+          valueListenable: progressNotifier,
+          builder: (dialogCtx, progressData, _) {
+            final int currentCompletedCount = progressData.completed;
+            final double progressValue = totalCount > 0 ? (currentCompletedCount / totalCount) : 0.0;
+            final String currentEmployeeName = progressData.employeeName;
+
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFF414A51)),
+                      ),
+                      SizedBox(width: 14),
+                      Text(
+                        'Marking payroll as paid...',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  LinearProgressIndicator(
+                    value: progressValue,
+                    backgroundColor: const Color(0xFFE5E7EB),
+                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF414A51)),
+                    minHeight: 6,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '$currentCompletedCount / $totalCount records completed',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                      ),
+                      Text(
+                        '${(progressValue * 100).toInt()}%',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                      ),
+                    ],
+                  ),
+                  if (currentEmployeeName.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Processing: $currentEmployeeName',
+                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    final paymentDateFormatted = DateFormat('dd-MM-yyyy').format(DateTime.now());
+    final payrollRepo = ref.read(payrollRepositoryProvider);
+
+    try {
+      for (final rec in eligibleRecords) {
+        final emp = empMap[rec.employeeId];
+        final empDisplayName = emp != null ? '${emp.firstName} ${emp.lastName} (EMP${emp.id})' : 'EMP #${rec.employeeId}';
+
+        progressNotifier.value = (completed: currentCompleted, employeeName: empDisplayName);
+
+        try {
+          final updated = rec.copyWith(
+            status: 'Paid',
+            paymentDate: paymentDateFormatted,
+          );
+          await payrollRepo.savePayrollRecord(updated);
+          successCount++;
+        } catch (e) {
+          failedList.add('$empDisplayName: $e');
+        }
+
+        currentCompleted++;
+        progressNotifier.value = (completed: currentCompleted, employeeName: '');
+      }
+    } catch (globalErr) {
+      debugPrint('Error during batch mark as paid: $globalErr');
+    } finally {
+      // Close progress dialog
+      if (context.mounted && Navigator.of(context, rootNavigator: true).canPop()) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+      progressNotifier.dispose();
+
+      // Refresh payroll providers to update table statuses
+      ref.read(selectedPayrollMonthProvider.notifier).state = month;
+      ref.invalidate(payrollRecordsForMonthProvider);
+      ref.invalidate(allPayrollRecordsProvider);
+
+      if (mounted) {
+        setState(() {
+          _isMarkingAllPaid = false;
+        });
+
+        if (failedList.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('$successCount payroll records marked as Paid.'),
+              backgroundColor: const Color(0xFF16A34A),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } else {
+          _showSummaryDialog(
+            context: context,
+            successCount: successCount,
+            skippedList: [],
+            failedList: failedList,
+            totalProcessed: totalCount,
+            title: 'Mark as Paid Summary',
+          );
+        }
       }
     }
   }
@@ -636,6 +1179,7 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
     required List<String> skippedList,
     required List<String> failedList,
     required int totalProcessed,
+    String title = 'Payroll Generation Summary',
   }) {
     showDialog(
       context: context,
@@ -650,7 +1194,7 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
               size: 24,
             ),
             const SizedBox(width: 8),
-            const Text('Payroll Generation Summary', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           ],
         ),
         content: ConstrainedBox(
@@ -813,7 +1357,7 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
                     employeesAsync.when(
                       data: (employees) => payrollRecordsAsync.when(
                         data: (records) {
-                          // Strict filter: organizationId = selected organisation AND department = selected department
+                          // Strict filter: organizationId = selected organisation AND department = selected department (or All Departments)
                           final matchingEmployees = employees.where((emp) {
                             final submittedOrg = _submittedOrganization!;
                             final orgId = emp.organizationId.trim();
@@ -826,8 +1370,10 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
                                     emp.organizationName.trim().toLowerCase() ==
                                         submittedOrg.name.trim().toLowerCase());
 
-                            final matchesDept = emp.department.trim().toLowerCase() ==
-                                _submittedDepartment!.trim().toLowerCase();
+                            final isAllDepts = _submittedDepartment == 'All Departments';
+                            final matchesDept = isAllDepts ||
+                                emp.department.trim().toLowerCase() ==
+                                    _submittedDepartment!.trim().toLowerCase();
 
                             return matchesOrg && matchesDept;
                           }).toList();
@@ -924,6 +1470,7 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
               setState(() {
                 _appliedOverrides.clear();
                 _uploadedFileName = null;
+                ref.read(payrollInputOverridesProvider.notifier).state = {};
               });
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -939,6 +1486,104 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
     );
   }
 
+  Future<void> _handleExport({
+    required String type,
+    required List<Employee> matchingEmployees,
+    required List<PayrollRecord> records,
+    required PayrollSettings settings,
+  }) async {
+    if (_submittedOrganization == null || _submittedDepartment == null || _submittedMonth == null) {
+      return;
+    }
+
+    // Pre-fetch shared resources for live calculation of ungenerated employees
+    final holidays = await ref.read(leaveRepositoryProvider).getHolidays();
+    final permissions = await ref.read(permissionRepositoryProvider).getAllRequests();
+    final incentives = await ref.read(incentiveRepositoryProvider).getAllRequests();
+    final loanRepo = ref.read(loanRepositoryProvider);
+    final attendanceRepo = ref.read(attendanceRepositoryProvider);
+    final leaveRepo = ref.read(leaveRepositoryProvider);
+    final onDutyRepo = ref.read(onDutyRepositoryProvider);
+
+    final resolvedRecords = <PayrollRecord>[];
+
+    for (final emp in matchingEmployees) {
+      final existingRecord = records.where((r) => r.employeeId == emp.id && r.id != 0).firstOrNull;
+      if (existingRecord != null) {
+        resolvedRecords.add(existingRecord);
+      } else {
+        try {
+          final empAttendance = await attendanceRepo.getAttendanceRecords(emp.id);
+          final empLeaves = await leaveRepo.getLeaveRequests(emp.id);
+          final empOnDuty = await onDutyRepo.getAssignmentsForEmployee(employeeId: emp.id, date: null);
+          final activeLoan = await loanRepo.getActiveLoanForEmployee(emp.id, _submittedMonth!);
+
+          final override = _appliedOverrides[emp.id.toString()] ??
+              _appliedOverrides[emp.employeeId.trim().toLowerCase()];
+
+          final liveRecord = PayrollCalculationService.calculatePayrollRecord(
+            employee: emp,
+            month: _submittedMonth!,
+            settings: settings,
+            attendanceRecords: empAttendance,
+            leaves: empLeaves,
+            onDutyAssignments: empOnDuty,
+            holidays: holidays,
+            permissions: permissions,
+            incentives: incentives,
+            activeLoan: activeLoan,
+            overrideInput: override,
+            status: 'Not Generated',
+          );
+          resolvedRecords.add(liveRecord);
+        } catch (e) {
+          debugPrint('Error calculating live payroll record for export: $e');
+        }
+      }
+    }
+
+    final dataset = PayrollReportDataset.build(
+      organization: _submittedOrganization!,
+      department: _submittedDepartment!,
+      month: _submittedMonth!,
+      employees: matchingEmployees,
+      records: resolvedRecords,
+    );
+
+    try {
+      if (type == 'copy') {
+        await PayrollExportService.copyToClipboard(dataset);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Payroll report copied to clipboard (tab-separated format).'),
+              backgroundColor: Color(0xFF16A34A),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } else if (type == 'csv') {
+        await PayrollExportService.exportCsv(context, dataset);
+      } else if (type == 'excel') {
+        await PayrollExportService.exportExcel(context, dataset);
+      } else if (type == 'pdf') {
+        await PayrollExportService.exportPdf(context, dataset);
+      } else if (type == 'print') {
+        await PayrollExportService.printReport(context, dataset);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Export error: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildActionsBar({
     required BuildContext context,
     required List<Employee> matchingEmployees,
@@ -947,6 +1592,106 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
     required PayrollSettings settings,
     required bool isMobile,
   }) {
+    final exportMenuBtn = PopupMenuButton<String>(
+      onSelected: (type) => _handleExport(
+        type: type,
+        matchingEmployees: matchingEmployees,
+        records: records,
+        settings: settings,
+      ),
+      tooltip: 'Export Payroll Report',
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      itemBuilder: (ctx) => [
+        const PopupMenuItem(
+          value: 'copy',
+          child: Row(
+            children: [
+              Icon(Icons.copy_rounded, size: 18, color: AppColors.textPrimary),
+              SizedBox(width: 10),
+              Text('Copy', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'csv',
+          child: Row(
+            children: [
+              Icon(Icons.description_outlined, size: 18, color: AppColors.textPrimary),
+              SizedBox(width: 10),
+              Text('CSV', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'excel',
+          child: Row(
+            children: [
+              Icon(Icons.table_chart_outlined, size: 18, color: Color(0xFF16A34A)),
+              SizedBox(width: 10),
+              Text('Excel (.xlsx)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'pdf',
+          child: Row(
+            children: [
+              Icon(Icons.picture_as_pdf_outlined, size: 18, color: Colors.red),
+              SizedBox(width: 10),
+              Text('PDF', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'print',
+          child: Row(
+            children: [
+              Icon(Icons.print_outlined, size: 18, color: AppColors.textPrimary),
+              SizedBox(width: 10),
+              Text('Print', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ),
+      ],
+      child: Container(
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.divider),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.file_download_outlined, size: 18, color: AppColors.textPrimary),
+            SizedBox(width: 6),
+            Text(
+              'Export',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
+            ),
+            SizedBox(width: 4),
+            Icon(Icons.arrow_drop_down, size: 18, color: AppColors.textSecondary),
+          ],
+        ),
+      ),
+    );
+
+    final instructionsBtn = OutlinedButton.icon(
+      onPressed: () => _showExcelInstructionsDialog(context),
+      icon: const Icon(Icons.help_outline_rounded, size: 18),
+      label: const Text(
+        'Excel Guide',
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+      ),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: const Color(0xFF414A51),
+        side: const BorderSide(color: AppColors.divider, width: 1.2),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+
     final uploadBtn = OutlinedButton.icon(
       onPressed: _isGeneratingAll
           ? null
@@ -996,6 +1741,43 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
       ),
     );
 
+    final matchingEmpIds = matchingEmployees.map((e) => e.id).toSet();
+    final processedCount = records
+        .where((r) => matchingEmpIds.contains(r.employeeId) && r.status.trim().toLowerCase() == 'processed')
+        .length;
+
+    final markAllAsPaidBtn = ElevatedButton.icon(
+      onPressed: (_isGeneratingAll || _isMarkingAllPaid || processedCount == 0)
+          ? null
+          : () => _handleMarkAllAsPaid(
+                context: context,
+                matchingEmployees: matchingEmployees,
+                records: records,
+                month: activeMonth,
+              ),
+      icon: _isMarkingAllPaid
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+            )
+          : const Icon(Icons.check_circle_outline, size: 18),
+      label: Text(
+        _isMarkingAllPaid
+            ? 'Marking Paid...'
+            : (processedCount > 0 ? 'Mark All as Paid ($processedCount)' : 'Mark All as Paid'),
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF414A51),
+        foregroundColor: Colors.white,
+        disabledBackgroundColor: const Color(0xFFE2E8F0),
+        disabledForegroundColor: const Color(0xFF94A3B8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+
     if (isMobile) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1004,11 +1786,17 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: uploadBtn),
+              Expanded(child: exportMenuBtn),
               const SizedBox(width: 8),
-              Expanded(child: generateAllBtn),
+              Expanded(child: instructionsBtn),
             ],
           ),
+          const SizedBox(height: 8),
+          uploadBtn,
+          const SizedBox(height: 8),
+          generateAllBtn,
+          const SizedBox(height: 8),
+          markAllAsPaidBtn,
         ],
       );
     }
@@ -1016,13 +1804,20 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
     return Row(
       children: [
         Expanded(child: _buildSearchBar()),
-        const SizedBox(width: 12),
-        uploadBtn,
         const SizedBox(width: 10),
+        exportMenuBtn,
+        const SizedBox(width: 8),
+        instructionsBtn,
+        const SizedBox(width: 8),
+        uploadBtn,
+        const SizedBox(width: 8),
         generateAllBtn,
+        const SizedBox(width: 8),
+        markAllAsPaidBtn,
       ],
     );
   }
+
 
   Widget _buildFilterControlCard(
     BuildContext context,
@@ -1087,9 +1882,10 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
                   .toSet()
                   .toList();
               departmentNames.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+              departmentNames.insert(0, 'All Departments');
             }
 
-            final isDepartmentEnabled = _selectedOrganization != null && departmentNames.isNotEmpty;
+            final isDepartmentEnabled = _selectedOrganization != null;
 
             if (isMobile) {
               return Column(

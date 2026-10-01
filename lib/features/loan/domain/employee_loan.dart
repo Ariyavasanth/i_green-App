@@ -187,7 +187,7 @@ class EmployeeLoan {
   }
 
   /// Interest amount for a specific installment month (0-indexed)
-  /// calculated on daily pro-rata basis: Starting Principal * (Rate / 100) * (Active Days / Cycle Days)
+  /// calculated on full-month reducing balance: Starting Principal * (Rate / 100)
   double interestForInstallment(
     int index, {
     int payrollStartDay = 20,
@@ -197,23 +197,11 @@ class EmployeeLoan {
     final start = startPrincipalForInstallment(index);
     if (start <= 0) return 0.0;
 
-    final activeDays = activeDaysForInstallment(
-      index,
-      payrollStartDay: payrollStartDay,
-      payrollEndDay: payrollEndDay,
-    );
-    final cycleDays = cycleDaysForInstallment(
-      index,
-      payrollStartDay: payrollStartDay,
-      payrollEndDay: payrollEndDay,
-    );
-    final proRataFactor = cycleDays > 0 ? (activeDays / cycleDays) : 1.0;
-
-    return start * (interestRate / 100.0) * proRataFactor;
+    return start * (interestRate / 100.0);
   }
 
   /// Total EMI for a specific installment month (0-indexed)
-  /// = Monthly Principal + Pro-rata Interest for that month
+  /// = Monthly Principal + Full-Month Interest for that month
   double emiForInstallment(
     int index, {
     int payrollStartDay = 20,
@@ -226,7 +214,7 @@ class EmployeeLoan {
     );
   }
 
-  /// Total interest calculated across all installments considering daily pro-rata basis
+  /// Total interest calculated across all installments (Full-Month Reducing Balance)
   double calculatedTotalInterestWithDays({
     int payrollStartDay = 20,
     int payrollEndDay = 20,
@@ -243,10 +231,10 @@ class EmployeeLoan {
     return total;
   }
 
-  /// Total interest calculated using pro-rata daily formula
+  /// Total interest calculated using full-month reducing balance formula
   double get calculatedTotalInterest => calculatedTotalInterestWithDays();
 
-  /// Total repayable amount (Principal + Total Pro-rata Interest)
+  /// Total repayable amount (Principal + Total Full-Month Reducing Balance Interest)
   double calculatedTotalRepayableWithDays({
     int payrollStartDay = 20,
     int payrollEndDay = 20,

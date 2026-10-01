@@ -39,7 +39,7 @@ Future<void> seedDemoKiruthika() async {
         'phone_number': '9876543211',
         'gender': 'Female',
         'dob': '1996-08-20',
-        'organization_name': 'I Green Technology',
+        'organization_name': 'IGREEN TECHNOLOGIES',
         'department': 'Operations',
         'designation': 'Executive',
         'employment_type': 'Full Time',

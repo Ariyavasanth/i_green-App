@@ -3,7 +3,12 @@ import 'package:intl/intl.dart';
 import '../../loan/providers/loan_providers.dart';
 import '../data/firebase_payroll_repository.dart';
 import '../domain/payroll.dart';
+import '../domain/payroll_input_override.dart';
 import '../domain/payroll_repository.dart';
+
+final payrollInputOverridesProvider = StateProvider<Map<String, PayrollInputOverride>>((ref) {
+  return {};
+});
 
 final payrollRepositoryProvider = Provider<PayrollRepository>(
   (ref) => FirebasePayrollRepository(

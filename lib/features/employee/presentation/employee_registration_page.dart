@@ -9726,10 +9726,9 @@ class _EmployeeRegistrationPageState
                   basis: '% of Basic',
                   amountController: _pfController,
                   percentController: _pfPercentController,
-                  placeholder: '1800.00',
+                  placeholder: '3600.00',
                   basisValue: basicPay,
                   isMobile: isMobile,
-                  showPercentageField: false,
                 ),
                 if (monthlyBasis > 0 && monthlyBasis <= 21000) ...[
                   _buildSalaryComponentRow(
