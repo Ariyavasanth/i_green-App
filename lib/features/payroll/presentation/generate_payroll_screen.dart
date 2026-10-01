@@ -14,6 +14,7 @@ import '../../attendance/domain/monthly_attendance_result.dart';
 import '../domain/payroll.dart';
 import '../domain/payroll_input_override.dart';
 import '../providers/payroll_providers.dart';
+import '../services/payroll_calculation_service.dart';
 import '../../leave/domain/leave_request.dart';
 import '../../leave/providers/leave_providers.dart';
 import '../../loan/providers/loan_providers.dart';
@@ -379,21 +380,15 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     try {
       final loan = await ref.read(loanRepositoryProvider).getActiveLoanForEmployee(employeeId, month);
       if (loan != null && mounted) {
-        final pStart = settings.payrollStartDay;
-        final pEnd = settings.payrollEndDay;
-
-        final monthIdx = loan.scheduleMonths.indexWhere((m) => m.trim().toLowerCase() == month.trim().toLowerCase());
-        final currentMonthEmi = monthIdx != -1
-            ? loan.emiForInstallment(monthIdx, payrollStartDay: pStart, payrollEndDay: pEnd)
-            : (loan.interestRate > 0 ? loan.emiForInstallment(loan.paidInstallments, payrollStartDay: pStart, payrollEndDay: pEnd) : loan.emiAmount);
-
-        final String installmentNote = monthIdx != -1
-            ? 'Installment ${monthIdx + 1} of ${loan.installments} (${loan.loanId})'
-            : (loan.loanId.isNotEmpty ? 'Loan EMI (${loan.loanId})' : 'Loan EMI');
+        final loanMetrics = PayrollCalculationService.calculateLoanEmi(
+          loan: loan,
+          month: month,
+          settings: settings,
+        );
 
         setState(() {
-          _companyLoanController.text = currentMonthEmi.toStringAsFixed(2);
-          _loanDescController.text = installmentNote;
+          _companyLoanController.text = loanMetrics.emiAmount.toStringAsFixed(2);
+          _loanDescController.text = loanMetrics.loanDescription;
           _recalculate();
         });
       }

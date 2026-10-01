@@ -22,3 +22,7 @@ final loanByIdProvider = FutureProvider.family<EmployeeLoan?, int>((ref, id) {
 final activeLoanForEmployeeProvider = FutureProvider.family<EmployeeLoan?, ({int employeeId, String month})>((ref, arg) {
   return ref.watch(loanRepositoryProvider).getActiveLoanForEmployee(arg.employeeId, arg.month);
 });
+
+final pendingPauseRequestsProvider = FutureProvider<List<LoanEmiPauseRequest>>((ref) {
+  return ref.watch(loanRepositoryProvider).getAllPendingPauseRequests();
+});

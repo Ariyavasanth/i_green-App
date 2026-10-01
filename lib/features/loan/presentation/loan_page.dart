@@ -14,6 +14,7 @@ import '../../payroll/providers/payroll_providers.dart';
 import '../domain/employee_loan.dart';
 import '../providers/loan_providers.dart';
 import '../services/loan_statement_pdf_generator.dart';
+import 'widgets/request_emi_pause_dialog.dart';
 
 class LoanPage extends ConsumerStatefulWidget {
   const LoanPage({super.key});
@@ -444,6 +445,9 @@ class _LoanPageState extends ConsumerState<LoanPage> {
           status: loan.status,
           onView: () => context.push('/loan/details/${loan.id}'),
           onEdit: isPending ? () => _showRequestLoanDialog(context, employee, loanToEdit: loan) : null,
+          onPauseEmi: (loan.status.trim().toLowerCase() == 'active' && loan.remainingInstallments > 0)
+              ? () => RequestEmiPauseDialog.show(context, loan)
+              : null,
           onDownload: () => _downloadStatement(loan),
         );
       },
@@ -554,6 +558,12 @@ class _LoanPageState extends ConsumerState<LoanPage> {
                               onPressed: () => _showRequestLoanDialog(context, employee, loanToEdit: loan),
                               tooltip: 'Edit Request',
                             ),
+                          if (loan.status.trim().toLowerCase() == 'active' && loan.remainingInstallments > 0)
+                            IconButton(
+                              icon: const Icon(Icons.pause_circle_outline, size: 20, color: Colors.orange),
+                              onPressed: () => RequestEmiPauseDialog.show(context, loan),
+                              tooltip: 'Request EMI Pause',
+                            ),
                           IconButton(
                             icon: const Icon(Icons.visibility_outlined, size: 20),
                             onPressed: () => context.push('/loan/details/${loan.id}'),
@@ -641,6 +651,7 @@ class _EmployeeMobileLoanCard extends StatelessWidget {
   final String status;
   final VoidCallback onView;
   final VoidCallback? onEdit;
+  final VoidCallback? onPauseEmi;
   final VoidCallback onDownload;
 
   const _EmployeeMobileLoanCard({
@@ -652,6 +663,7 @@ class _EmployeeMobileLoanCard extends StatelessWidget {
     required this.status,
     required this.onView,
     this.onEdit,
+    this.onPauseEmi,
     required this.onDownload,
   });
 
@@ -729,6 +741,9 @@ class _EmployeeMobileLoanCard extends StatelessWidget {
                     case 'edit':
                       onEdit?.call();
                       break;
+                    case 'pause':
+                      onPauseEmi?.call();
+                      break;
                     case 'view':
                       onView();
                       break;
@@ -746,6 +761,16 @@ class _EmployeeMobileLoanCard extends StatelessWidget {
                         contentPadding: EdgeInsets.zero,
                         leading: Icon(Icons.edit_outlined, size: 20),
                         title: Text('Edit loan'),
+                      ),
+                    ),
+                  if (onPauseEmi != null)
+                    const PopupMenuItem(
+                      value: 'pause',
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.pause_circle_outline, size: 20, color: Colors.orange),
+                        title: Text('Request EMI Pause'),
                       ),
                     ),
                   const PopupMenuItem(
@@ -861,6 +886,21 @@ class _EmployeeMobileLoanCard extends StatelessWidget {
                   ),
                 ),
               ),
+              if (onPauseEmi != null) ...[
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: onPauseEmi,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.orange.shade800,
+                    side: BorderSide(color: Colors.orange.shade300),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    visualDensity: VisualDensity.compact,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.pause_circle_outline, size: 14),
+                  label: const Text('Pause EMI', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                ),
+              ],
               const Spacer(),
               TextButton(
                 onPressed: onView,

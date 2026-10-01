@@ -115,23 +115,54 @@ class PayrollCalculationService {
     required String month,
     required PayrollSettings settings,
   }) {
-    if (loan == null) {
+    if (loan == null || loan.actualRemainingBalance <= 0 || loan.status == 'Closed') {
       return (emiAmount: 0.0, loanDescription: '');
     }
 
     final pStart = settings.payrollStartDay;
     final pEnd = settings.payrollEndDay;
 
+    // 1. Case A: Current month has an approved EMI pause request
+    if (loan.isMonthPaused(month)) {
+      final String pauseNote = loan.loanId.isNotEmpty
+          ? 'EMI Deferred for $month (${loan.loanId}) - Carried forward'
+          : 'EMI Deferred for $month - Carried forward';
+      return (emiAmount: 0.0, loanDescription: pauseNote);
+    }
+
     final monthIdx = loan.scheduleMonths.indexWhere((m) => m.trim().toLowerCase() == month.trim().toLowerCase());
     final currentMonthEmi = monthIdx != -1
         ? loan.emiForInstallment(monthIdx, payrollStartDay: pStart, payrollEndDay: pEnd)
         : (loan.interestRate > 0 ? loan.emiForInstallment(loan.paidInstallments, payrollStartDay: pStart, payrollEndDay: pEnd) : loan.emiAmount);
 
+    // 2. Case B: Recovering an unrecovered deferred pause from an earlier month (2x EMI)
+    final unrecoveredDeferred = loan.getUnrecoveredDeferredRequestBefore(month);
+    if (unrecoveredDeferred != null) {
+      final defMonthIdx = loan.scheduleMonths.indexWhere((m) => m.trim().toLowerCase() == unrecoveredDeferred.month.trim().toLowerCase());
+      final defMonthEmi = defMonthIdx != -1
+          ? loan.emiForInstallment(defMonthIdx, payrollStartDay: pStart, payrollEndDay: pEnd)
+          : (loan.interestRate > 0 ? loan.emiForInstallment(loan.paidInstallments, payrollStartDay: pStart, payrollEndDay: pEnd) : loan.emiAmount);
+
+      final total2xAmount = currentMonthEmi + defMonthEmi;
+      final maxRecoverable = loan.actualRemainingBalance;
+      final finalEmi = (total2xAmount > maxRecoverable && maxRecoverable > 0) ? maxRecoverable : total2xAmount;
+
+      final note = loan.loanId.isNotEmpty
+          ? 'Loan EMI (${loan.loanId} - 2 EMIs: deferred ${unrecoveredDeferred.month} + $month)'
+          : 'Loan EMI (2 EMIs: deferred ${unrecoveredDeferred.month} + $month)';
+
+      return (emiAmount: double.parse(finalEmi.toStringAsFixed(2)), loanDescription: note);
+    }
+
+    // 3. Case C: Normal installment deduction
+    final maxRecoverable = loan.actualRemainingBalance;
+    final finalEmi = (currentMonthEmi > maxRecoverable && maxRecoverable > 0) ? maxRecoverable : currentMonthEmi;
+
     final String installmentNote = monthIdx != -1
         ? 'Installment ${monthIdx + 1} of ${loan.installments} (${loan.loanId})'
         : (loan.loanId.isNotEmpty ? 'Loan EMI (${loan.loanId})' : 'Loan EMI');
 
-    return (emiAmount: currentMonthEmi, loanDescription: installmentNote);
+    return (emiAmount: double.parse(finalEmi.toStringAsFixed(2)), loanDescription: installmentNote);
   }
 
   /// Single Source of Truth for Employee Payroll Calculation

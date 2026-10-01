@@ -30,4 +30,21 @@ abstract class LoanRepository {
   });
   Future<void> disburseLoan(int id, String disbursementDate);
   Future<void> rejectLoan(int id, String reason);
+  Future<void> submitEmiPauseRequest(LoanEmiPauseRequest request);
+  Future<void> reviewEmiPauseRequest({
+    required String loanId,
+    required String requestId,
+    required String status,
+    required String reviewedBy,
+    String? adminRemarks,
+  });
+  Future<void> markPauseRequestRecovered({
+    required String loanId,
+    required String requestId,
+  });
+  Future<void> cancelEmiPauseRequest({
+    required String loanId,
+    required String requestId,
+  });
+  Future<List<LoanEmiPauseRequest>> getAllPendingPauseRequests();
 }

@@ -15,6 +15,8 @@ import '../domain/employee_loan.dart';
 import '../providers/loan_providers.dart';
 import '../services/loan_statement_pdf_generator.dart';
 import 'widgets/approve_loan_dialog.dart';
+import 'widgets/request_emi_pause_dialog.dart';
+import 'widgets/review_emi_pause_dialog.dart';
 
 class LoanDetailsPage extends ConsumerWidget {
   const LoanDetailsPage({required this.loanId, super.key});
@@ -107,6 +109,8 @@ class LoanDetailsPage extends ConsumerWidget {
                       const SizedBox(height: 16),
                       _buildLoanSummaryCard(context, ref, loan),
                       const SizedBox(height: 16),
+                      _buildEmiPauseRequestsCard(context, ref, loan, isAdminManagementView, isEmployeeRoute),
+                      const SizedBox(height: 16),
                       _buildRepaymentScheduleCard(context, ref, loan, payrolls),
                       if (isAdminManagementView) ...[
                         const SizedBox(height: 16),
@@ -119,6 +123,170 @@ class LoanDetailsPage extends ConsumerWidget {
             },
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildEmiPauseRequestsCard(
+    BuildContext context,
+    WidgetRef ref,
+    EmployeeLoan loan,
+    bool isAdminManagementView,
+    bool isEmployeeRoute,
+  ) {
+    final pauseRequests = loan.pauseRequests;
+    final isActive = loan.status.trim().toLowerCase() == 'active';
+    final hasUnpaidMonths = loan.remainingInstallments > 0 && loan.actualRemainingBalance > 0;
+    final canRequestPause = isActive && hasUnpaidMonths;
+
+    if (pauseRequests.isEmpty && !canRequestPause) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.pause_circle_outline, color: AppColors.primary, size: 18),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'EMI Pause / Deferral Requests',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  ),
+                ],
+              ),
+              if (canRequestPause)
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    visualDensity: VisualDensity.compact,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Request EMI Pause', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  onPressed: () => RequestEmiPauseDialog.show(context, loan),
+                ),
+            ],
+          ),
+          if (pauseRequests.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            const Divider(height: 1, color: Color(0xFFE5E7EB)),
+            const SizedBox(height: 12),
+            ...pauseRequests.map((req) {
+              final statusNorm = req.status.trim().toLowerCase();
+              Color badgeColor = Colors.orange;
+              Color badgeBg = Colors.orange.shade50;
+              IconData badgeIcon = Icons.hourglass_empty;
+
+              if (statusNorm == 'approved') {
+                badgeColor = AppColors.primary;
+                badgeBg = AppColors.primary.withValues(alpha: 0.12);
+                badgeIcon = Icons.check_circle;
+              } else if (statusNorm == 'rejected') {
+                badgeColor = Colors.red.shade700;
+                badgeBg = Colors.red.shade50;
+                badgeIcon = Icons.cancel;
+              } else if (statusNorm == 'cancelled') {
+                badgeColor = Colors.grey.shade700;
+                badgeBg = Colors.grey.shade100;
+                badgeIcon = Icons.block;
+              }
+
+              final isPending = statusNorm == 'pending';
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Month: ${req.month}',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: badgeBg,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(badgeIcon, size: 12, color: badgeColor),
+                              const SizedBox(width: 4),
+                              Text(
+                                req.isRecovered ? 'Approved (Recovered)' : req.status,
+                                style: TextStyle(color: badgeColor, fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text('Reason: ${req.reason}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                    if (req.adminRemarks.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text('Admin Note: ${req.adminRemarks}', style: TextStyle(fontSize: 11, color: Colors.blue.shade800, fontStyle: FontStyle.italic)),
+                    ],
+                    if (isAdminManagementView && isPending) ...[
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                            side: const BorderSide(color: AppColors.primary),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          icon: const Icon(Icons.rate_review_outlined, size: 14),
+                          label: const Text('Review Pause Request', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          onPressed: () => ReviewEmiPauseDialog.show(context, loan: loan, request: req),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }),
+          ] else if (canRequestPause) ...[
+            const SizedBox(height: 10),
+            const Text(
+              'Need to skip an EMI for financial reasons? Click "Request EMI Pause" to request deferral to the next month.',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -605,9 +773,23 @@ class LoanDetailsPage extends ConsumerWidget {
                   ),
                 ],
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
+                  if (loan.status.trim().toLowerCase() == 'active' && loan.remainingInstallments > 0)
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.orange.shade800,
+                        side: BorderSide(color: Colors.orange.shade400),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      icon: const Icon(Icons.pause_circle_outline, size: 16),
+                      label: const Text('Request EMI Pause', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      onPressed: () => RequestEmiPauseDialog.show(context, loan),
+                    ),
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.primary,
@@ -619,7 +801,6 @@ class LoanDetailsPage extends ConsumerWidget {
                     label: const Text('Download Statement', style: TextStyle(fontSize: 12)),
                     onPressed: () => _downloadStatement(context, ref, loan, payrolls),
                   ),
-                  const SizedBox(width: 8),
                   Text(
                     '${loan.paidInstallments} / ${loan.installments} Paid',
                     style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
@@ -633,31 +814,45 @@ class LoanDetailsPage extends ConsumerWidget {
           const SizedBox(height: 12),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            child: DataTable(
-              headingRowHeight: 40,
-              dataRowMinHeight: 44,
-              columns: const [
-                DataColumn(label: Text('Month', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Principal', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Interest', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Total EMI', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Paid', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Remaining', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Status', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Payroll Ref', style: TextStyle(fontWeight: FontWeight.bold))),
-              ],
-              rows: List<DataRow>.generate(scheduleMonths.length, (index) {
+            child: () {
+              // Pre-calculate running dynamic principal and deferrals
+              double runningPrincipal = loan.loanAmount;
+              final List<({
+                int index,
+                String month,
+                double principal,
+                double interest,
+                double scheduledEmi,
+                double deferredEmi,
+                String deferredMonthName,
+                double amountDue,
+                String amountDueSubtext,
+                double paidAmount,
+                double remainingPrincipal,
+                bool isPaid,
+                bool is2xPaid,
+                bool isPaused,
+                String carriedToMonth,
+                bool is2xDue,
+                bool isPausePending,
+                bool isUpcoming,
+                String payrollRef,
+              })> rowList = [];
+
+              double pendingDeferredPrincipal = 0.0;
+              double pendingDeferredEmi = 0.0;
+              String pendingDeferredMonth = '';
+
+              for (int index = 0; index < scheduleMonths.length; index++) {
                 final month = scheduleMonths[index];
                 final monthInterest = loan.interestForInstallment(index, payrollStartDay: pStart, payrollEndDay: pEnd);
                 final monthEmi = loan.emiForInstallment(index, payrollStartDay: pStart, payrollEndDay: pEnd);
-                final endingPrincipal = loan.endPrincipalForInstallment(index);
-                final activeDays = loan.activeDaysForInstallment(index, payrollStartDay: pStart, payrollEndDay: pEnd);
-                final cycleDays = loan.cycleDaysForInstallment(index, payrollStartDay: pStart, payrollEndDay: pEnd);
 
-                // Check if repayment ledger has an entry for this month
+                final pauseReq = loan.getPauseRequestForMonth(month);
+                final isPaused = pauseReq != null && pauseReq.status.toLowerCase() == 'approved';
+                final isPausePending = pauseReq != null && pauseReq.status.toLowerCase() == 'pending';
+
                 final ledgerRepayment = loan.repayments.where((r) => r.month.trim().toLowerCase() == month.trim().toLowerCase()).firstOrNull;
-
-                // Check if payroll has a paid record
                 final matchingPayroll = payrolls.where((p) =>
                     p.employeeId == loan.employeeId &&
                     p.month.trim().toLowerCase() == month.trim().toLowerCase() &&
@@ -665,58 +860,254 @@ class LoanDetailsPage extends ConsumerWidget {
                     p.companyLoan > 0).firstOrNull;
 
                 final isPaid = ledgerRepayment != null || matchingPayroll != null || index < loan.paidInstallments;
-                final paidAmount = isPaid ? (ledgerRepayment?.amount ?? monthEmi) : 0.0;
+
+                double deferredEmi = 0.0;
+                String defMonthName = '';
+                bool is2xDue = false;
+
+                if (pendingDeferredEmi > 0 && !isPaused) {
+                  deferredEmi = pendingDeferredEmi;
+                  defMonthName = pendingDeferredMonth;
+                  is2xDue = true;
+                }
+
+                double amountDue = monthEmi;
+                String amountDueSubtext = '';
+
+                if (isPaused) {
+                  amountDue = 0.0;
+                  amountDueSubtext = 'Deferred';
+                  pendingDeferredPrincipal += monthlyPrincipal;
+                  pendingDeferredEmi += monthEmi;
+                  pendingDeferredMonth = month;
+                } else if (is2xDue) {
+                  amountDue = monthEmi + deferredEmi;
+                  amountDueSubtext = '${formatCurrency.format(deferredEmi)} def. + ${formatCurrency.format(monthEmi)} cur.';
+                }
+
+                // Dynamic principal reduction calculation
+                if (isPaused) {
+                  // No principal deducted in deferred month
+                } else if (is2xDue) {
+                  runningPrincipal -= (monthlyPrincipal + pendingDeferredPrincipal);
+                  pendingDeferredPrincipal = 0.0;
+                  pendingDeferredEmi = 0.0;
+                  pendingDeferredMonth = '';
+                } else {
+                  runningPrincipal -= monthlyPrincipal;
+                }
+
+                final remainingPrincipal = runningPrincipal < 0.01 ? 0.0 : runningPrincipal;
+                final is2xPaid = isPaid && (matchingPayroll != null && matchingPayroll.companyLoan > monthEmi * 1.3 || is2xDue);
+                final paidAmount = isPaid ? (ledgerRepayment?.amount ?? (is2xPaid ? amountDue : monthEmi)) : 0.0;
 
                 final payrollRef = ledgerRepayment?.payrollId.isNotEmpty == true
                     ? ledgerRepayment!.payrollId
                     : (matchingPayroll != null ? matchingPayroll.month : '-');
 
-                return DataRow(
-                  cells: [
-                    DataCell(Text(month, style: const TextStyle(fontWeight: FontWeight.w500))),
-                    DataCell(Text(formatCurrency.format(monthlyPrincipal))),
-                    DataCell(Text(
-                      formatCurrency.format(monthInterest),
-                      style: TextStyle(
-                        color: monthInterest > 0 ? Colors.orange.shade800 : AppColors.textSecondary,
-                        fontWeight: monthInterest > 0 ? FontWeight.w600 : FontWeight.normal,
+                final isUpcoming = !isPaid && !isPaused && (loan.status == 'Active' && index == loan.paidInstallments);
+                final carriedToMonth = (index + 1 < scheduleMonths.length) ? scheduleMonths[index + 1] : 'Next cycle';
+
+                rowList.add((
+                  index: index,
+                  month: month,
+                  principal: monthlyPrincipal,
+                  interest: monthInterest,
+                  scheduledEmi: monthEmi,
+                  deferredEmi: deferredEmi,
+                  deferredMonthName: defMonthName,
+                  amountDue: amountDue,
+                  amountDueSubtext: amountDueSubtext,
+                  paidAmount: paidAmount,
+                  remainingPrincipal: remainingPrincipal,
+                  isPaid: isPaid,
+                  is2xPaid: is2xPaid,
+                  isPaused: isPaused,
+                  carriedToMonth: carriedToMonth,
+                  is2xDue: is2xDue,
+                  isPausePending: isPausePending,
+                  isUpcoming: isUpcoming,
+                  payrollRef: payrollRef,
+                ));
+              }
+
+              return DataTable(
+                headingRowHeight: 44,
+                dataRowMinHeight: 52,
+                dataRowMaxHeight: 64,
+                horizontalMargin: 16,
+                columnSpacing: 18,
+                columns: const [
+                  DataColumn(label: Text('Month', style: TextStyle(fontWeight: FontWeight.bold))),
+                  DataColumn(label: Text('Principal', style: TextStyle(fontWeight: FontWeight.bold))),
+                  DataColumn(label: Text('Interest', style: TextStyle(fontWeight: FontWeight.bold))),
+                  DataColumn(label: Text('Scheduled EMI', style: TextStyle(fontWeight: FontWeight.bold))),
+                  DataColumn(label: Text('Deferred EMI', style: TextStyle(fontWeight: FontWeight.bold))),
+                  DataColumn(label: Text('Amount Due', style: TextStyle(fontWeight: FontWeight.bold))),
+                  DataColumn(label: Text('Paid', style: TextStyle(fontWeight: FontWeight.bold))),
+                  DataColumn(label: Text('Remaining', style: TextStyle(fontWeight: FontWeight.bold))),
+                  DataColumn(label: Text('Status', style: TextStyle(fontWeight: FontWeight.bold))),
+                  DataColumn(label: Text('Payroll Ref', style: TextStyle(fontWeight: FontWeight.bold))),
+                ],
+                rows: rowList.map((row) {
+                  // Status Cell formatting
+                  Widget statusWidget;
+                  if (row.isPaid) {
+                    if (row.is2xPaid) {
+                      final defShort = row.deferredMonthName.isNotEmpty ? row.deferredMonthName.split(' ')[0] : 'Prev';
+                      final curShort = row.month.split(' ')[0];
+                      statusWidget = _buildStatusWithSubtext(
+                        icon: Icons.check_circle,
+                        color: AppColors.primary,
+                        title: 'Paid — 2 EMIs',
+                        subtitle: '$defShort + $curShort',
+                      );
+                    } else {
+                      statusWidget = _buildStatusWithSubtext(
+                        icon: Icons.check_circle,
+                        color: AppColors.primary,
+                        title: 'Paid',
+                        subtitle: 'Installment ${row.index + 1}',
+                      );
+                    }
+                  } else if (row.isPaused) {
+                    final carriedShort = row.carriedToMonth.isNotEmpty ? row.carriedToMonth.split(' ')[0] : 'Next';
+                    statusWidget = _buildStatusWithSubtext(
+                      icon: Icons.pause_circle_outline,
+                      color: Colors.orange.shade800,
+                      title: 'Deferred',
+                      subtitle: 'Carried to $carriedShort',
+                    );
+                  } else if (row.is2xDue) {
+                    statusWidget = _buildStatusWithSubtext(
+                      icon: Icons.error_outline,
+                      color: Colors.blue.shade700,
+                      title: '2 EMIs Due',
+                      subtitle: row.amountDueSubtext,
+                    );
+                  } else if (row.isPausePending) {
+                    statusWidget = _buildStatusWithSubtext(
+                      icon: Icons.hourglass_empty,
+                      color: Colors.amber.shade800,
+                      title: 'Pause Pending',
+                      subtitle: 'Awaiting review',
+                    );
+                  } else if (row.isUpcoming) {
+                    statusWidget = _buildStatusWithSubtext(
+                      icon: Icons.schedule,
+                      color: Colors.orange.shade700,
+                      title: 'Upcoming',
+                      subtitle: 'Due this cycle',
+                    );
+                  } else {
+                    statusWidget = _buildStatusWithSubtext(
+                      icon: Icons.circle_outlined,
+                      color: Colors.grey.shade600,
+                      title: 'Scheduled',
+                      subtitle: 'Future installment',
+                    );
+                  }
+
+                  return DataRow(
+                    cells: [
+                      DataCell(Text(row.month, style: const TextStyle(fontWeight: FontWeight.w600))),
+                      DataCell(Text(formatCurrency.format(row.principal))),
+                      DataCell(Text(
+                        formatCurrency.format(row.interest),
+                        style: TextStyle(
+                          color: row.interest > 0 ? Colors.orange.shade800 : AppColors.textSecondary,
+                          fontWeight: row.interest > 0 ? FontWeight.w600 : FontWeight.normal,
+                        ),
+                      )),
+                      DataCell(Text(formatCurrency.format(row.scheduledEmi), style: const TextStyle(fontWeight: FontWeight.w600))),
+                      DataCell(
+                        row.deferredEmi > 0
+                            ? Text(
+                                '+${formatCurrency.format(row.deferredEmi)}',
+                                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue.shade800),
+                              )
+                            : const Text('—', style: TextStyle(color: AppColors.textSecondary)),
                       ),
-                    )),
-                    DataCell(Text(
-                      formatCurrency.format(monthEmi),
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    )),
-                    DataCell(Text(formatCurrency.format(paidAmount))),
-                    DataCell(Text(formatCurrency.format(endingPrincipal))),
-                    DataCell(
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            isPaid ? Icons.check_circle : (loan.status == 'Active' && index == loan.paidInstallments ? Icons.schedule : Icons.circle_outlined),
-                            size: 14,
-                            color: isPaid ? AppColors.primary : (loan.status == 'Active' && index == loan.paidInstallments ? Colors.orange : Colors.grey),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            isPaid ? 'Paid' : (loan.status == 'Active' && index == loan.paidInstallments ? 'Upcoming' : 'Scheduled'),
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: isPaid ? AppColors.primary : (loan.status == 'Active' && index == loan.paidInstallments ? Colors.orange : Colors.grey),
+                      DataCell(
+                        Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              formatCurrency.format(row.amountDue),
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: row.amountDue == 0 ? Colors.orange.shade800 : (row.is2xDue ? Colors.blue.shade800 : AppColors.textPrimary),
+                              ),
                             ),
-                          ),
-                        ],
+                            if (row.amountDueSubtext.isNotEmpty)
+                              Text(
+                                row.amountDueSubtext,
+                                style: TextStyle(fontSize: 10, color: row.isPaused ? Colors.orange.shade700 : Colors.blue.shade700),
+                              ),
+                          ],
+                        ),
                       ),
-                    ),
-                    DataCell(Text(payrollRef, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
-                  ],
-                );
-              }),
-            ),
+                      DataCell(Text(
+                        formatCurrency.format(row.paidAmount),
+                        style: TextStyle(
+                          fontWeight: row.isPaid ? FontWeight.bold : FontWeight.normal,
+                          color: row.isPaid ? AppColors.primary : AppColors.textSecondary,
+                        ),
+                      )),
+                      DataCell(Text(
+                        formatCurrency.format(row.remainingPrincipal),
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      )),
+                      DataCell(statusWidget),
+                      DataCell(Text(row.payrollRef, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
+                    ],
+                  );
+                }).toList(),
+              );
+            }(),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildStatusWithSubtext({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 6),
+        Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            if (subtitle.isNotEmpty)
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: color.withValues(alpha: 0.85),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+          ],
+        ),
+      ],
     );
   }
 

@@ -276,6 +276,15 @@ class FirebasePayrollRepository implements PayrollRepository {
           targetLoan ??= await loanRepo.getActiveLoanForEmployee(record.employeeId, record.month);
 
           if (targetLoan != null) {
+            // Check if this deduction recovered a deferred EMI pause
+            final unrecovered = targetLoan.getUnrecoveredDeferredRequestBefore(record.month);
+            if (unrecovered != null) {
+              await loanRepo.markPauseRequestRecovered(
+                loanId: targetLoan.loanId,
+                requestId: unrecovered.requestId,
+              );
+            }
+
             await loanRepo.recordRepayment(
               loanId: targetLoan.loanId,
               payrollId: docId,

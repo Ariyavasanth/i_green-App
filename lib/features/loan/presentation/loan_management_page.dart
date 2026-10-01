@@ -14,6 +14,7 @@ import '../domain/employee_loan.dart';
 import '../providers/loan_providers.dart';
 import '../services/loan_statement_pdf_generator.dart';
 import 'widgets/approve_loan_dialog.dart';
+import 'widgets/review_emi_pause_dialog.dart';
 
 class LoanManagementPage extends ConsumerStatefulWidget {
   const LoanManagementPage({super.key});
@@ -105,7 +106,13 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
                       child: Text('Error loading summary: $err',
                           style: TextStyle(color: Colors.red.shade700)),
                     ),
-                    data: (loans) => _buildDashboardSummary(loans, isMobile),
+                    data: (loans) => Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildDashboardSummary(loans, isMobile),
+                        _buildPendingPauseRequestsSection(loans, isMobile),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 20),
 
@@ -368,6 +375,96 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildPendingPauseRequestsSection(List<EmployeeLoan> loans, bool isMobile) {
+    final List<({EmployeeLoan loan, LoanEmiPauseRequest request})> pendingList = [];
+    for (final loan in loans) {
+      for (final req in loan.pauseRequests) {
+        if (req.status.trim().toLowerCase() == 'pending') {
+          pendingList.add((loan: loan, request: req));
+        }
+      }
+    }
+
+    if (pendingList.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.amber.shade300),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.pause_circle_outline, color: Colors.amber.shade900, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Pending EMI Pause Requests (${pendingList.length})',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.amber.shade900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...pendingList.map((item) {
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.amber.shade200),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${item.loan.employeeName} (${item.loan.employeeCustomId}) — ${item.request.month}',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          'Reason: ${item.request.reason}',
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      visualDensity: VisualDensity.compact,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    ),
+                    onPressed: () => ReviewEmiPauseDialog.show(
+                      context,
+                      loan: item.loan,
+                      request: item.request,
+                    ),
+                    child: const Text('Review', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
     );
   }
 

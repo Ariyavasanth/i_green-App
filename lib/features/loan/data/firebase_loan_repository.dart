@@ -293,4 +293,123 @@ class FirebaseLoanRepository implements LoanRepository {
       });
     } catch (_) {}
   }
+
+  @override
+  Future<void> submitEmiPauseRequest(LoanEmiPauseRequest request) async {
+    try {
+      final loan = await getLoanByLoanId(request.loanId);
+      if (loan == null) return;
+
+      final docId = loan.loanId.isNotEmpty ? loan.loanId : 'loan_${loan.id}';
+      // Replace existing request for same month if pending or append new
+      final updatedList = loan.pauseRequests.where((r) => r.requestId != request.requestId && r.month.trim().toLowerCase() != request.month.trim().toLowerCase()).toList();
+      updatedList.add(request);
+
+      await _loansRef.doc(docId).update({
+        'pause_requests': updatedList.map((r) => r.toMap()).toList(),
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {}
+  }
+
+  @override
+  Future<void> reviewEmiPauseRequest({
+    required String loanId,
+    required String requestId,
+    required String status,
+    required String reviewedBy,
+    String? adminRemarks,
+  }) async {
+    try {
+      final loan = await getLoanByLoanId(loanId);
+      if (loan == null) return;
+
+      final docId = loan.loanId.isNotEmpty ? loan.loanId : 'loan_${loan.id}';
+      final nowStr = DateTime.now().toIso8601String();
+
+      final updatedList = loan.pauseRequests.map((r) {
+        if (r.requestId == requestId || (r.month.trim().isNotEmpty && r.requestId.isEmpty)) {
+          return r.copyWith(
+            status: status,
+            reviewedBy: reviewedBy,
+            reviewedAt: nowStr,
+            adminRemarks: adminRemarks ?? r.adminRemarks,
+          );
+        }
+        return r;
+      }).toList();
+
+      await _loansRef.doc(docId).update({
+        'pause_requests': updatedList.map((r) => r.toMap()).toList(),
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {}
+  }
+
+  @override
+  Future<void> markPauseRequestRecovered({
+    required String loanId,
+    required String requestId,
+  }) async {
+    try {
+      final loan = await getLoanByLoanId(loanId);
+      if (loan == null) return;
+
+      final docId = loan.loanId.isNotEmpty ? loan.loanId : 'loan_${loan.id}';
+      final updatedList = loan.pauseRequests.map((r) {
+        if (r.requestId == requestId) {
+          return r.copyWith(isRecovered: true);
+        }
+        return r;
+      }).toList();
+
+      await _loansRef.doc(docId).update({
+        'pause_requests': updatedList.map((r) => r.toMap()).toList(),
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {}
+  }
+
+  @override
+  Future<void> cancelEmiPauseRequest({
+    required String loanId,
+    required String requestId,
+  }) async {
+    try {
+      final loan = await getLoanByLoanId(loanId);
+      if (loan == null) return;
+
+      final docId = loan.loanId.isNotEmpty ? loan.loanId : 'loan_${loan.id}';
+      final updatedList = loan.pauseRequests.map((r) {
+        if (r.requestId == requestId) {
+          return r.copyWith(status: 'Cancelled');
+        }
+        return r;
+      }).toList();
+
+      await _loansRef.doc(docId).update({
+        'pause_requests': updatedList.map((r) => r.toMap()).toList(),
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {}
+  }
+
+  @override
+  Future<List<LoanEmiPauseRequest>> getAllPendingPauseRequests() async {
+    try {
+      final all = await getAllLoans();
+      final List<LoanEmiPauseRequest> pending = [];
+      for (final loan in all) {
+        for (final req in loan.pauseRequests) {
+          if (req.status.trim().toLowerCase() == 'pending') {
+            pending.add(req);
+          }
+        }
+      }
+      pending.sort((a, b) => b.requestedAt.compareTo(a.requestedAt));
+      return pending;
+    } catch (_) {
+      return [];
+    }
+  }
 }

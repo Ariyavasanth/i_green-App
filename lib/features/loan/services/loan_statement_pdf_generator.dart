@@ -267,9 +267,13 @@ class LoanStatementPdfGenerator {
                 child: pw.Text('No repayment schedule defined for this loan.', style: const pw.TextStyle(fontSize: 10)),
               )
             else
-              pw.Table(
-                border: pw.TableBorder.all(color: borderColor, width: 0.5),
-                children: [
+              () {
+                double runningPrincipal = loan.loanAmount;
+                double pendingDeferredPrincipal = 0.0;
+                double pendingDeferredEmi = 0.0;
+                String pendingDeferredMonth = '';
+
+                final rows = <pw.TableRow>[
                   // Table Header
                   pw.TableRow(
                     decoration: const pw.BoxDecoration(color: darkHeaderColor),
@@ -277,57 +281,119 @@ class LoanStatementPdfGenerator {
                       _buildTableHeaderCell('#', align: pw.TextAlign.center),
                       _buildTableHeaderCell('Month'),
                       _buildTableHeaderCell('Principal', align: pw.TextAlign.right),
-                      _buildTableHeaderCell('Interest (${loan.interestRate}%)', align: pw.TextAlign.right),
-                      _buildTableHeaderCell('Total EMI', align: pw.TextAlign.right),
+                      _buildTableHeaderCell('Interest', align: pw.TextAlign.right),
+                      _buildTableHeaderCell('Scheduled', align: pw.TextAlign.right),
+                      _buildTableHeaderCell('Deferred', align: pw.TextAlign.right),
+                      _buildTableHeaderCell('Amount Due', align: pw.TextAlign.right),
                       _buildTableHeaderCell('Paid', align: pw.TextAlign.right),
-                      _buildTableHeaderCell('Balance', align: pw.TextAlign.right),
+                      _buildTableHeaderCell('Remaining', align: pw.TextAlign.right),
                       _buildTableHeaderCell('Status', align: pw.TextAlign.center),
                     ],
                   ),
-                  // Table Rows
-                  ...List<pw.TableRow>.generate(scheduleMonths.length, (index) {
-                    final month = scheduleMonths[index];
-                    final monthlyPrincipal = loan.monthlyPrincipal;
-                    final monthInterest = loan.interestForInstallment(index, payrollStartDay: pStart, payrollEndDay: pEnd);
-                    final monthEmi = loan.emiForInstallment(index, payrollStartDay: pStart, payrollEndDay: pEnd);
-                    final endingPrincipal = loan.endPrincipalForInstallment(index);
+                ];
 
-                    // Check if ledger repayment or payroll paid record matches
-                    final ledgerRepayment = loan.repayments.where(
-                      (r) => r.month.trim().toLowerCase() == month.trim().toLowerCase(),
-                    ).firstOrNull;
+                for (int index = 0; index < scheduleMonths.length; index++) {
+                  final month = scheduleMonths[index];
+                  final monthlyPrincipal = loan.monthlyPrincipal;
+                  final monthInterest = loan.interestForInstallment(index, payrollStartDay: pStart, payrollEndDay: pEnd);
+                  final monthEmi = loan.emiForInstallment(index, payrollStartDay: pStart, payrollEndDay: pEnd);
 
-                    final matchingPayroll = payrolls.where((p) =>
-                        p.employeeId == loan.employeeId &&
-                        p.month.trim().toLowerCase() == month.trim().toLowerCase() &&
-                        p.status.toLowerCase() == 'paid' &&
-                        p.companyLoan > 0).firstOrNull;
+                  final ledgerRepayment = loan.repayments.where(
+                    (r) => r.month.trim().toLowerCase() == month.trim().toLowerCase(),
+                  ).firstOrNull;
 
-                    final isPaid = ledgerRepayment != null || matchingPayroll != null || index < loan.paidInstallments;
-                    final paidAmount = isPaid ? (ledgerRepayment?.amount ?? monthEmi) : 0.0;
-                    final rowBgColor = index % 2 == 0 ? PdfColors.white : lightBgColor;
+                  final matchingPayroll = payrolls.where((p) =>
+                      p.employeeId == loan.employeeId &&
+                      p.month.trim().toLowerCase() == month.trim().toLowerCase() &&
+                      p.status.toLowerCase() == 'paid' &&
+                      p.companyLoan > 0).firstOrNull;
 
-                    return pw.TableRow(
+                  final pauseReq = loan.getPauseRequestForMonth(month);
+                  final isPaused = pauseReq != null && pauseReq.status.toLowerCase() == 'approved';
+
+                  final isPaid = ledgerRepayment != null || matchingPayroll != null || index < loan.paidInstallments;
+
+                  double deferredEmi = 0.0;
+                  bool is2xDue = false;
+
+                  if (pendingDeferredEmi > 0 && !isPaused) {
+                    deferredEmi = pendingDeferredEmi;
+                    is2xDue = true;
+                  }
+
+                  double amountDue = monthEmi;
+                  if (isPaused) {
+                    amountDue = 0.0;
+                    pendingDeferredPrincipal += monthlyPrincipal;
+                    pendingDeferredEmi += monthEmi;
+                    pendingDeferredMonth = month;
+                  } else if (is2xDue) {
+                    amountDue = monthEmi + deferredEmi;
+                  }
+
+                  // Dynamic principal deduction
+                  if (isPaused) {
+                    // No principal deducted
+                  } else if (is2xDue) {
+                    runningPrincipal -= (monthlyPrincipal + pendingDeferredPrincipal);
+                    pendingDeferredPrincipal = 0.0;
+                    pendingDeferredEmi = 0.0;
+                    pendingDeferredMonth = '';
+                  } else {
+                    runningPrincipal -= monthlyPrincipal;
+                  }
+
+                  final remainingPrincipal = runningPrincipal < 0.01 ? 0.0 : runningPrincipal;
+                  final is2xPaid = isPaid && (matchingPayroll != null && matchingPayroll.companyLoan > monthEmi * 1.3 || is2xDue);
+                  final paidAmount = isPaid ? (ledgerRepayment?.amount ?? (is2xPaid ? amountDue : monthEmi)) : 0.0;
+                  final rowBgColor = index % 2 == 0 ? PdfColors.white : lightBgColor;
+
+                  String statusText = 'SCHEDULED';
+                  PdfColor statusColor = PdfColors.grey700;
+
+                  if (isPaid) {
+                    statusText = is2xPaid ? 'PAID (2 EMIs)' : 'PAID';
+                    statusColor = primaryColor;
+                  } else if (isPaused) {
+                    statusText = 'DEFERRED';
+                    statusColor = PdfColors.orange800;
+                  } else if (is2xDue) {
+                    statusText = '2 EMIs DUE';
+                    statusColor = PdfColors.blue800;
+                  } else if (loan.status == 'Active' && index == loan.paidInstallments) {
+                    statusText = 'UPCOMING';
+                    statusColor = PdfColors.orange800;
+                  }
+
+                  rows.add(
+                    pw.TableRow(
                       decoration: pw.BoxDecoration(color: rowBgColor),
                       children: [
                         _buildTableCell('${index + 1}', align: pw.TextAlign.center),
                         _buildTableCell(month, isBold: true),
                         _buildTableCell(_currencyFormat.format(monthlyPrincipal), align: pw.TextAlign.right),
                         _buildTableCell(_currencyFormat.format(monthInterest), align: pw.TextAlign.right),
-                        _buildTableCell(_currencyFormat.format(monthEmi), align: pw.TextAlign.right, isBold: true),
+                        _buildTableCell(_currencyFormat.format(monthEmi), align: pw.TextAlign.right),
+                        _buildTableCell(deferredEmi > 0 ? '+${_currencyFormat.format(deferredEmi)}' : '—', align: pw.TextAlign.right, color: deferredEmi > 0 ? PdfColors.blue800 : PdfColors.grey600),
+                        _buildTableCell(_currencyFormat.format(amountDue), align: pw.TextAlign.right, isBold: true, color: isPaused ? PdfColors.orange800 : (is2xDue ? PdfColors.blue800 : PdfColors.black)),
                         _buildTableCell(_currencyFormat.format(paidAmount), align: pw.TextAlign.right, color: isPaid ? primaryColor : PdfColors.grey600),
-                        _buildTableCell(_currencyFormat.format(endingPrincipal), align: pw.TextAlign.right),
+                        _buildTableCell(_currencyFormat.format(remainingPrincipal), align: pw.TextAlign.right),
                         _buildTableCell(
-                          isPaid ? 'PAID' : (loan.status == 'Active' && index == loan.paidInstallments ? 'UPCOMING' : 'SCHEDULED'),
+                          statusText,
                           align: pw.TextAlign.center,
                           isBold: true,
-                          color: isPaid ? primaryColor : (loan.status == 'Active' && index == loan.paidInstallments ? PdfColors.orange800 : PdfColors.grey700),
+                          color: statusColor,
                         ),
                       ],
-                    );
-                  }),
-                ],
-              ),
+                    ),
+                  );
+                }
+
+                return pw.Table(
+                  border: pw.TableBorder.all(color: borderColor, width: 0.5),
+                  children: rows,
+                );
+              }(),
             pw.SizedBox(height: 24),
 
             // ── FOOTER & SIGNATORY SECTION ────────────────────────────────

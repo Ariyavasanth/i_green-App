@@ -42,6 +42,100 @@ class LoanRepayment {
   }
 }
 
+class LoanEmiPauseRequest {
+  final String requestId;
+  final String loanId;
+  final int employeeId;
+  final String employeeName;
+  final String month; // e.g. "October 2026"
+  final String reason;
+  final String status; // 'Pending', 'Approved', 'Rejected', 'Cancelled'
+  final String requestedAt; // ISO8601
+  final String reviewedBy;
+  final String reviewedAt;
+  final String adminRemarks;
+  final bool isRecovered; // true once the following month recovers the deferred 2x EMI
+
+  const LoanEmiPauseRequest({
+    required this.requestId,
+    required this.loanId,
+    required this.employeeId,
+    required this.employeeName,
+    required this.month,
+    required this.reason,
+    this.status = 'Pending',
+    required this.requestedAt,
+    this.reviewedBy = '',
+    this.reviewedAt = '',
+    this.adminRemarks = '',
+    this.isRecovered = false,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'request_id': requestId,
+      'loan_id': loanId,
+      'employee_id': employeeId,
+      'employee_name': employeeName,
+      'month': month,
+      'reason': reason,
+      'status': status,
+      'requested_at': requestedAt,
+      'reviewed_by': reviewedBy,
+      'reviewed_at': reviewedAt,
+      'admin_remarks': adminRemarks,
+      'is_recovered': isRecovered,
+    };
+  }
+
+  factory LoanEmiPauseRequest.fromMap(Map<String, dynamic> map) {
+    return LoanEmiPauseRequest(
+      requestId: map['request_id'] as String? ?? '',
+      loanId: map['loan_id'] as String? ?? '',
+      employeeId: map['employee_id'] as int? ?? 0,
+      employeeName: map['employee_name'] as String? ?? '',
+      month: map['month'] as String? ?? '',
+      reason: map['reason'] as String? ?? '',
+      status: map['status'] as String? ?? 'Pending',
+      requestedAt: map['requested_at'] as String? ?? '',
+      reviewedBy: map['reviewed_by'] as String? ?? '',
+      reviewedAt: map['reviewed_at'] as String? ?? '',
+      adminRemarks: map['admin_remarks'] as String? ?? '',
+      isRecovered: map['is_recovered'] as bool? ?? false,
+    );
+  }
+
+  LoanEmiPauseRequest copyWith({
+    String? requestId,
+    String? loanId,
+    int? employeeId,
+    String? employeeName,
+    String? month,
+    String? reason,
+    String? status,
+    String? requestedAt,
+    String? reviewedBy,
+    String? reviewedAt,
+    String? adminRemarks,
+    bool? isRecovered,
+  }) {
+    return LoanEmiPauseRequest(
+      requestId: requestId ?? this.requestId,
+      loanId: loanId ?? this.loanId,
+      employeeId: employeeId ?? this.employeeId,
+      employeeName: employeeName ?? this.employeeName,
+      month: month ?? this.month,
+      reason: reason ?? this.reason,
+      status: status ?? this.status,
+      requestedAt: requestedAt ?? this.requestedAt,
+      reviewedBy: reviewedBy ?? this.reviewedBy,
+      reviewedAt: reviewedAt ?? this.reviewedAt,
+      adminRemarks: adminRemarks ?? this.adminRemarks,
+      isRecovered: isRecovered ?? this.isRecovered,
+    );
+  }
+}
+
 class EmployeeLoan {
   final int id;
   final String loanId; // e.g. LN001
@@ -68,6 +162,7 @@ class EmployeeLoan {
   final String status; // Pending, Approved, Rejected, Active, Closed
   final double remainingBalance;
   final List<LoanRepayment> repayments;
+  final List<LoanEmiPauseRequest> pauseRequests;
 
   const EmployeeLoan({
     required this.id,
@@ -95,6 +190,7 @@ class EmployeeLoan {
     required this.status,
     required this.remainingBalance,
     this.repayments = const [],
+    this.pauseRequests = const [],
   });
 
   /// Parse "Month Year" (e.g. "September 2026") into (year, monthNumber)
@@ -322,6 +418,33 @@ class EmployeeLoan {
     return months.last;
   }
 
+  /// Get pause/deferral request for a specific month
+  LoanEmiPauseRequest? getPauseRequestForMonth(String month) {
+    final norm = month.trim().toLowerCase();
+    return pauseRequests.where((r) => r.month.trim().toLowerCase() == norm).firstOrNull;
+  }
+
+  /// Check if a given month has an approved EMI pause
+  bool isMonthPaused(String month) {
+    final req = getPauseRequestForMonth(month);
+    return req != null && req.status.trim().toLowerCase() == 'approved';
+  }
+
+  /// Get unrecovered approved pause request from an earlier month
+  LoanEmiPauseRequest? getUnrecoveredDeferredRequestBefore(String currentMonth) {
+    final (cYear, cMonth) = parseMonthYear(currentMonth);
+    for (final req in pauseRequests) {
+      if (req.status.trim().toLowerCase() == 'approved' && !req.isRecovered) {
+        final (rYear, rMonth) = parseMonthYear(req.month);
+        final isBefore = rYear < cYear || (rYear == cYear && rMonth < cMonth);
+        if (isBefore) {
+          return req;
+        }
+      }
+    }
+    return null;
+  }
+
   Map<String, dynamic> toMap() {
     return {
       if (id != 0) 'id': id,
@@ -349,6 +472,7 @@ class EmployeeLoan {
       'status': status,
       'remaining_balance': actualRemainingBalance,
       'repayments': repayments.map((r) => r.toMap()).toList(),
+      'pause_requests': pauseRequests.map((r) => r.toMap()).toList(),
     };
   }
 
@@ -358,6 +482,14 @@ class EmployeeLoan {
     if (rawRepayments is List) {
       repaymentsList = rawRepayments
           .map((r) => LoanRepayment.fromMap(Map<String, dynamic>.from(r as Map)))
+          .toList();
+    }
+
+    var rawPauseRequests = map['pause_requests'];
+    List<LoanEmiPauseRequest> pauseList = [];
+    if (rawPauseRequests is List) {
+      pauseList = rawPauseRequests
+          .map((p) => LoanEmiPauseRequest.fromMap(Map<String, dynamic>.from(p as Map)))
           .toList();
     }
 
@@ -387,6 +519,7 @@ class EmployeeLoan {
       status: map['status'] as String? ?? 'Pending',
       remainingBalance: (map['remaining_balance'] as num?)?.toDouble() ?? 0.0,
       repayments: repaymentsList,
+      pauseRequests: pauseList,
     );
   }
 
@@ -416,6 +549,7 @@ class EmployeeLoan {
     String? status,
     double? remainingBalance,
     List<LoanRepayment>? repayments,
+    List<LoanEmiPauseRequest>? pauseRequests,
   }) {
     return EmployeeLoan(
       id: id ?? this.id,
@@ -443,6 +577,7 @@ class EmployeeLoan {
       status: status ?? this.status,
       remainingBalance: remainingBalance ?? this.remainingBalance,
       repayments: repayments ?? this.repayments,
+      pauseRequests: pauseRequests ?? this.pauseRequests,
     );
   }
 }
