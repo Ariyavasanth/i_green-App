@@ -133,11 +133,16 @@ class _PayrollDashboardScreenState extends ConsumerState<PayrollDashboardScreen>
     String selectedMonth,
     bool isMobile,
   ) {
-    final availableMonths = [
-      'July 2026',
-      'August 2026',
-      'September 2026',
-    ];
+    final now = DateTime.now();
+    final formatter = DateFormat('MMMM yyyy');
+    final availableMonths = <String>[];
+    for (int i = -12; i <= 3; i++) {
+      final date = DateTime(now.year, now.month + i);
+      availableMonths.add(formatter.format(date));
+    }
+    if (!availableMonths.contains(selectedMonth)) {
+      availableMonths.add(selectedMonth);
+    }
 
     final monthDropdown = Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
