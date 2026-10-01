@@ -393,16 +393,25 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
       debugPrint('Error getting departments: $e');
     }
     var res = _memoryDepts;
-    if (organizationId != null && organizationId.isNotEmpty && organizationId != 'All') {
-      res = res.where((d) => d.organizationId.isEmpty || d.organizationId == organizationId).toList();
-    } else if (organizationName != null && organizationName.isNotEmpty && organizationName != 'All') {
-      res = res.where((d) => d.organizationName.isEmpty || d.organizationName == organizationName).toList();
+    final hasOrgId = organizationId != null && organizationId.isNotEmpty && organizationId != 'All';
+    final hasOrgName = organizationName != null && organizationName.isNotEmpty && organizationName != 'All';
+
+    if (hasOrgId || hasOrgName) {
+      res = res.where((d) {
+        final dOrgId = d.organizationId.trim();
+        final dOrgName = d.organizationName.trim().toLowerCase();
+
+        final matchesId = hasOrgId && dOrgId.isNotEmpty && dOrgId == organizationId;
+        final matchesName = hasOrgName && dOrgName.isNotEmpty && dOrgName == organizationName.trim().toLowerCase();
+
+        return matchesId || matchesName;
+      }).toList();
     }
     if (businessUnitName != null && businessUnitName.isNotEmpty && businessUnitName != 'All') {
-      res = res.where((d) => d.businessUnitName.isEmpty || d.businessUnitName == businessUnitName).toList();
+      res = res.where((d) => d.businessUnitName.isNotEmpty && d.businessUnitName == businessUnitName).toList();
     }
     if (workLocation != null && workLocation.isNotEmpty && workLocation != 'All') {
-      res = res.where((d) => d.workLocation.isEmpty || d.workLocation == workLocation).toList();
+      res = res.where((d) => d.workLocation.isNotEmpty && d.workLocation == workLocation).toList();
     }
     return List.from(res);
   }
