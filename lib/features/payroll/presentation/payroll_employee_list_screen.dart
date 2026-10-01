@@ -11,12 +11,15 @@ import '../../../core/theme/app_colors.dart';
 import '../../attendance/providers/attendance_providers.dart';
 import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
+import '../../incentive/domain/incentive_payout_ledger.dart';
+import '../../incentive/domain/incentive_settings.dart';
 import '../../incentive/providers/incentive_providers.dart';
 import '../../leave/providers/leave_providers.dart';
 import '../../loan/providers/loan_providers.dart';
 import '../../on_duty/providers/on_duty_providers.dart';
 import '../../organization/domain/department.dart';
 import '../../organization/domain/organization.dart';
+
 import '../../organization/providers/organization_providers.dart';
 import '../../permission/domain/permission_enums.dart';
 import '../../permission/domain/permission_request.dart';
@@ -819,6 +822,8 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
       final holidays = await ref.read(leaveRepositoryProvider).getHolidays();
       final permissions = await ref.read(permissionRepositoryProvider).getAllRequests();
       final incentives = await ref.read(incentiveRepositoryProvider).getAllRequests();
+      final incentiveSettings = await ref.read(incentiveRepositoryProvider).getIncentiveSettings();
+      final allLedgers = await ref.read(incentiveRepositoryProvider).getAllPayoutLedgers();
       final payrollRepo = ref.read(payrollRepositoryProvider);
       final loanRepo = ref.read(loanRepositoryProvider);
       final attendanceRepo = ref.read(attendanceRepositoryProvider);
@@ -863,6 +868,8 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
             holidays: holidays,
             permissions: permissions,
             incentives: incentives,
+            incentiveSettings: incentiveSettings,
+            ledgers: allLedgers,
             activeLoan: activeLoan,
             overrideInput: override,
             status: 'Processed',
@@ -870,6 +877,49 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
 
           // 4. Save via repository
           await payrollRepo.savePayrollRecord(calculatedRecord);
+
+          // 5. Update 3-Table Incentive Ledger
+          final parsed = PayrollCalculationService.parseMonthYear(month);
+          final period = settings.getPayrollPeriod(parsed.year, parsed.monthNum);
+          final incentiveMetrics = PayrollCalculationService.calculateIncentives(
+            employee: emp,
+            requests: incentives,
+            period: period,
+            cycleMonth: month,
+            incentiveSettings: incentiveSettings,
+            ledgers: allLedgers,
+          );
+
+          if (incentiveMetrics.totalEarnedIncentive > 0) {
+            await ref.read(incentiveRepositoryProvider).savePayoutLedger(
+              IncentivePayoutLedger(
+                id: 'ledger_${emp.id}_${month.replaceAll(' ', '_')}',
+                employeeId: emp.id,
+                employeeName: emp.fullName,
+                earnedCycle: month,
+                totalEarnedAmount: incentiveMetrics.totalEarnedIncentive,
+                immediateAmount: incentiveMetrics.immediateIncentive,
+                deferredAmount: incentiveMetrics.currentDeferredIncentive,
+                status: 'Pending',
+                createdAt: DateTime.now().toIso8601String(),
+              ),
+            );
+          }
+
+          if (incentiveMetrics.eligibleLedgersToRelease.isNotEmpty) {
+            final pendingIds = incentiveMetrics.eligibleLedgersToRelease
+                .where((l) => l.isPending)
+                .map((l) => l.id)
+                .toList();
+            if (pendingIds.isNotEmpty) {
+              await ref.read(incentiveRepositoryProvider).markPayoutLedgersReleased(
+                ledgerIds: pendingIds,
+                releaseCycle: month,
+                releasedAt: DateTime.now(),
+              );
+            }
+          }
+
           successCount++;
         } catch (e) {
           failedList.add('$empDisplayName: $e');
@@ -878,6 +928,7 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
         currentCompleted++;
         progressNotifier.value = (completed: currentCompleted, employeeName: '');
       }
+
     } catch (globalErr) {
       debugPrint('Error during batch payroll generation: $globalErr');
     } finally {
@@ -1500,6 +1551,8 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
     final holidays = await ref.read(leaveRepositoryProvider).getHolidays();
     final permissions = await ref.read(permissionRepositoryProvider).getAllRequests();
     final incentives = await ref.read(incentiveRepositoryProvider).getAllRequests();
+    final incentiveSettings = await ref.read(incentiveRepositoryProvider).getIncentiveSettings();
+    final allLedgers = await ref.read(incentiveRepositoryProvider).getAllPayoutLedgers();
     final loanRepo = ref.read(loanRepositoryProvider);
     final attendanceRepo = ref.read(attendanceRepositoryProvider);
     final leaveRepo = ref.read(leaveRepositoryProvider);
@@ -1531,12 +1584,15 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
             holidays: holidays,
             permissions: permissions,
             incentives: incentives,
+            incentiveSettings: incentiveSettings,
+            ledgers: allLedgers,
             activeLoan: activeLoan,
             overrideInput: override,
             status: 'Not Generated',
           );
           resolvedRecords.add(liveRecord);
         } catch (e) {
+
           debugPrint('Error calculating live payroll record for export: $e');
         }
       }

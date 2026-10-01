@@ -1,3 +1,4 @@
+import 'incentive_payout_ledger.dart';
 import 'incentive_request.dart';
 import 'incentive_settings.dart';
 
@@ -24,4 +25,17 @@ abstract class IncentiveRepository {
     DateTime? startDate,
     DateTime? endDateExclusive,
   });
+
+  // 3-Table Payout & Deferred Ledger Operations
+  Future<List<IncentivePayoutLedger>> getPayoutLedgersForEmployee(int employeeId);
+  Future<List<IncentivePayoutLedger>> getAllPayoutLedgers();
+  Stream<List<IncentivePayoutLedger>> watchPayoutLedgersForEmployee(int employeeId);
+  Future<void> savePayoutLedger(IncentivePayoutLedger ledger);
+  Future<void> markPayoutLedgersReleased({
+    required List<String> ledgerIds,
+    required String releaseCycle,
+    required DateTime releasedAt,
+    int? payrollRecordId,
+  });
 }
+

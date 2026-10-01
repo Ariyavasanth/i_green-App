@@ -24,6 +24,8 @@ import '../../permission/domain/permission_request.dart';
 import '../../permission/providers/permission_providers.dart';
 import '../../incentive/providers/incentive_providers.dart';
 import '../../incentive/domain/incentive_request.dart';
+import '../../incentive/domain/incentive_payout_ledger.dart';
+import '../../incentive/domain/incentive_settings.dart';
 
 class GeneratePayrollScreen extends ConsumerStatefulWidget {
   const GeneratePayrollScreen({required this.employeeId, super.key});
@@ -82,8 +84,10 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
   double _hourlyRate = 0.0;
   double _scheduledHours = 0.0;
   MonthlyAttendanceResult? _attendanceResult;
+  IncentiveCalculationResult? _incentiveResult;
   double? _lastCalculatedIncentive;
   double? _lastCalculatedCumulativeIncentive;
+
 
   @override
   void initState() {
@@ -247,90 +251,43 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     List<IncentiveRequest> requests,
     String month,
     PayrollSettings settings, {
+    IncentiveSettings incentiveSettings = const IncentiveSettings(),
+    List<IncentivePayoutLedger>? ledgers,
     double? overrideIncentive,
   }) {
-    final now = DateTime.now();
-    int year = now.year;
-    int monthNum = now.month;
+    final parsed = PayrollCalculationService.parseMonthYear(month);
+    final period = settings.getPayrollPeriod(parsed.year, parsed.monthNum);
 
-    final parts = month.trim().split(' ');
-    if (parts.length >= 2) {
-      final yearParsed = int.tryParse(parts[1]);
-      if (yearParsed != null) year = yearParsed;
-      final monthMap = {
-        'january': 1, 'jan': 1, 'february': 2, 'feb': 2, 'march': 3, 'mar': 3,
-        'april': 4, 'apr': 4, 'may': 5, 'june': 6, 'jun': 6, 'july': 7, 'jul': 7,
-        'august': 8, 'aug': 8, 'september': 9, 'sep': 9, 'october': 10, 'oct': 10,
-        'november': 11, 'nov': 11, 'december': 12, 'dec': 12
-      };
-      final m = monthMap[parts[0].toLowerCase()];
-      if (m != null) monthNum = m;
-    }
+    final result = PayrollCalculationService.calculateIncentives(
+      employee: employee,
+      requests: requests,
+      period: period,
+      cycleMonth: month,
+      incentiveSettings: incentiveSettings,
+      ledgers: ledgers,
+    );
 
-    final period = settings.getPayrollPeriod(year, monthNum);
-    final normEmpName = employee.fullName.trim().toLowerCase();
-    final normFirstName = employee.firstName.trim().toLowerCase();
-    final normEmpCode = employee.employeeId.trim().toLowerCase().replaceAll('-', '').replaceAll(' ', '');
-
-    final approved = requests.where((req) {
-      if (req.status.trim().toLowerCase() != 'approved') return false;
-
-      final reqName = req.employeeName.trim().toLowerCase();
-      final reqCode = reqName.replaceAll('-', '').replaceAll(' ', '');
-
-      if (req.employeeId != null && req.employeeId == employee.id) return true;
-      if (normEmpName.isNotEmpty && (reqName == normEmpName || reqName.contains(normEmpName) || normEmpName.contains(reqName))) return true;
-      if (normFirstName.isNotEmpty && reqName.contains(normFirstName)) return true;
-      if (normEmpCode.isNotEmpty && (reqCode == normEmpCode || reqCode.contains(normEmpCode) || normEmpCode.contains(reqCode))) return true;
-
-      return false;
-    }).toList();
-
-    double cycleIncentive = 0.0;
-    double cumulativeTotal = 0.0;
-
-    final startOnly = DateTime(period.startDate.year, period.startDate.month, period.startDate.day);
-    final endOnly = DateTime(period.endDateExclusive.year, period.endDateExclusive.month, period.endDateExclusive.day);
-
-    for (final req in approved) {
-      final amt = req.approvedAmount ?? req.amount;
-      final dt = _parseDateTime(req.createdAt);
-      if (dt == null) {
-        cycleIncentive += amt;
-        cumulativeTotal += amt;
-        continue;
-      }
-      final localDt = dt.toLocal();
-      final dateOnly = DateTime(localDt.year, localDt.month, localDt.day);
-
-      // Check if inside cycle
-      final inCycle = !dateOnly.isBefore(startOnly) && dateOnly.isBefore(endOnly);
-      if (inCycle) {
-        cycleIncentive += amt;
-      }
-
-      // Check if up to end of cycle for cumulative
-      if (dateOnly.isBefore(endOnly)) {
-        cumulativeTotal += amt;
-      }
-    }
-
-    final effectiveIncentive = overrideIncentive ?? cycleIncentive;
+    _incentiveResult = result;
+    final effectiveIncentive = overrideIncentive ?? result.totalPayableIncentive;
     final currentIncentiveVal = double.tryParse(_incentiveController.text) ?? -1.0;
     final currentCumVal = double.tryParse(_cumulativeIncentiveController.text) ?? -1.0;
 
-    if (currentIncentiveVal != effectiveIncentive || currentCumVal != cumulativeTotal) {
+    if (currentIncentiveVal != effectiveIncentive || currentCumVal != result.cumulativeTotal) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           setState(() {
             _incentiveController.text = effectiveIncentive.toStringAsFixed(2);
-            _cumulativeIncentiveController.text = cumulativeTotal.toStringAsFixed(2);
+            _cumulativeIncentiveController.text = result.cumulativeTotal.toStringAsFixed(2);
+            if ((_carryForwardController.text.isEmpty || _carryForwardController.text == '-') && result.currentDeferredIncentive > 0) {
+              _carryForwardController.text = '₹${result.currentDeferredIncentive.toStringAsFixed(2)} (Deferred)';
+            }
             _recalculate();
           });
         }
       });
     }
   }
+
 
   Future<void> _loadLopDetails(int employeeId, String month, PayrollSettings settings) async {
     try {
@@ -659,8 +616,44 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
 
     try {
       await ref.read(payrollRepositoryProvider).savePayrollRecord(record);
+
+      // Save / Update 3-Table Incentive Payout Ledger
+      if (_incentiveResult != null) {
+        if (_incentiveResult!.totalEarnedIncentive > 0) {
+          final ledger = IncentivePayoutLedger(
+            id: 'ledger_${employee.id}_${month.replaceAll(' ', '_')}',
+            employeeId: employee.id,
+            employeeName: employee.fullName,
+            earnedCycle: month,
+            totalEarnedAmount: _incentiveResult!.totalEarnedIncentive,
+            immediateAmount: _incentiveResult!.immediateIncentive,
+            deferredAmount: _incentiveResult!.currentDeferredIncentive,
+            status: 'Pending', // Current cycle 50% deferred ALWAYS stays Pending
+            createdAt: DateTime.now().toIso8601String(),
+          );
+          await ref.read(incentiveRepositoryProvider).savePayoutLedger(ledger);
+        }
+
+        // If this is a release cycle and there are eligible pending ledgers from previous cycles, mark them as Released
+        if (saveStatus == 'Processed' && _incentiveResult!.eligibleLedgersToRelease.isNotEmpty) {
+          final pendingIds = _incentiveResult!.eligibleLedgersToRelease
+              .where((l) => l.isPending)
+              .map((l) => l.id)
+              .toList();
+          if (pendingIds.isNotEmpty) {
+            await ref.read(incentiveRepositoryProvider).markPayoutLedgersReleased(
+              ledgerIds: pendingIds,
+              releaseCycle: month,
+              releasedAt: DateTime.now(),
+            );
+          }
+        }
+      }
+
       ref.invalidate(payrollRecordsForMonthProvider);
       ref.invalidate(allPayrollRecordsProvider);
+      ref.invalidate(employeePayoutLedgersProvider(employee.id));
+      ref.invalidate(allPayoutLedgersProvider);
 
       if (mounted) {
         final actionText = saveStatus == 'Draft' ? 'saved as Draft' : 'processed successfully';
@@ -697,6 +690,8 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     final selectedMonth = ref.watch(selectedPayrollMonthProvider);
     final employeesAsync = ref.watch(employeesProvider);
     final settingsAsync = ref.watch(payrollSettingsProvider);
+    final incentiveSettingsAsync = ref.watch(incentiveSettingsProvider);
+    final ledgersAsync = ref.watch(employeePayoutLedgersProvider(widget.employeeId));
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
@@ -753,6 +748,8 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
                 incentivesAsync.value ?? [],
                 selectedMonth,
                 settings,
+                incentiveSettings: incentiveSettingsAsync.value ?? const IncentiveSettings(),
+                ledgers: ledgersAsync.value ?? [],
                 overrideIncentive: overrideInput?.incentive,
               );
 
@@ -769,6 +766,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
                 },
               );
             },
+
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (err, _) => Center(
               child: Padding(
@@ -1119,6 +1117,20 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
   }
 
   Widget _buildEarningsCard() {
+    String? incentiveHelper;
+    if (_incentiveResult != null) {
+      if (_incentiveResult!.releasedDeferredIncentive > 0) {
+        incentiveHelper = 'Immediate (50%): ₹${_incentiveResult!.immediateIncentive.toStringAsFixed(2)} + Deferred Released: ₹${_incentiveResult!.releasedDeferredIncentive.toStringAsFixed(2)} (Total Earned: ₹${_incentiveResult!.totalEarnedIncentive.toStringAsFixed(2)})';
+      } else if (_incentiveResult!.totalEarnedIncentive > 0) {
+        incentiveHelper = 'Immediate (50%): ₹${_incentiveResult!.immediateIncentive.toStringAsFixed(2)} | Deferred (50%): ₹${_incentiveResult!.currentDeferredIncentive.toStringAsFixed(2)} (Total Earned: ₹${_incentiveResult!.totalEarnedIncentive.toStringAsFixed(2)})';
+      }
+    }
+
+    String? carryForwardHelper;
+    if (_incentiveResult != null && _incentiveResult!.currentDeferredIncentive > 0) {
+      carryForwardHelper = 'Current cycle deferred: ₹${_incentiveResult!.currentDeferredIncentive.toStringAsFixed(2)} (Total pending balance: ₹${_incentiveResult!.totalPendingDeferredBalance.toStringAsFixed(2)})';
+    }
+
     return Card(
       elevation: 0,
       color: Colors.white,
@@ -1147,9 +1159,9 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
             const Divider(height: 24),
             const Text('Monthly Inputs', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
             const SizedBox(height: 12),
-            _buildInputField('Incentive', _incentiveController),
+            _buildInputField('Incentive', _incentiveController, helperText: incentiveHelper),
             const SizedBox(height: 12),
-            _buildInputField('Carry Forward', _carryForwardController, isText: true),
+            _buildInputField('Carry Forward', _carryForwardController, isText: true, helperText: carryForwardHelper),
             const SizedBox(height: 12),
             _buildInputField('Others Earning', _othersEarningController),
             const SizedBox(height: 12),
@@ -1163,6 +1175,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
       ),
     );
   }
+
 
   Widget _buildDeductionsCard() {
     final lopHelper = _lopHours > 0

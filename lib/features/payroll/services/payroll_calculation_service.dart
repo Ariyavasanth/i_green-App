@@ -1,13 +1,42 @@
 import '../../attendance/domain/attendance_record.dart';
 import '../../attendance/domain/monthly_attendance_result.dart';
 import '../../employee/domain/employee.dart';
+import '../../incentive/domain/incentive_payout_ledger.dart';
 import '../../incentive/domain/incentive_request.dart';
+import '../../incentive/domain/incentive_settings.dart';
 import '../../leave/domain/leave_request.dart';
 import '../../loan/domain/employee_loan.dart';
 import '../../on_duty/domain/on_duty_assignment.dart';
 import '../../permission/domain/permission_request.dart';
 import '../domain/payroll.dart';
 import '../domain/payroll_input_override.dart';
+
+class IncentiveCalculationResult {
+  final double totalEarnedIncentive;
+  final double immediateIncentive;
+  final double currentDeferredIncentive;
+  final double releasedDeferredIncentive;
+  final double totalPayableIncentive;
+  final double cumulativeTotal;
+  final double totalPendingDeferredBalance;
+  final List<IncentivePayoutLedger> eligibleLedgersToRelease;
+  final bool isReleaseCycle;
+
+  const IncentiveCalculationResult({
+    required this.totalEarnedIncentive,
+    required this.immediateIncentive,
+    required this.currentDeferredIncentive,
+    required this.releasedDeferredIncentive,
+    required this.totalPayableIncentive,
+    required this.cumulativeTotal,
+    required this.totalPendingDeferredBalance,
+    required this.eligibleLedgersToRelease,
+    required this.isReleaseCycle,
+  });
+
+  // Backward compatibility aliases
+  double get cycleIncentive => totalPayableIncentive;
+}
 
 class PayrollCalculationService {
   static DateTime? _parseDateTime(dynamic value) {
@@ -55,10 +84,14 @@ class PayrollCalculationService {
     return (year: year, monthNum: monthNum);
   }
 
-  static ({double cycleIncentive, double cumulativeTotal}) calculateIncentives({
+  /// Single source of truth for 3-Table Incentive calculation
+  static IncentiveCalculationResult calculateIncentives({
     required Employee employee,
     required List<IncentiveRequest> requests,
     required PayrollPeriod period,
+    String? cycleMonth,
+    IncentiveSettings incentiveSettings = const IncentiveSettings(),
+    List<IncentivePayoutLedger>? ledgers,
   }) {
     final normEmpName = employee.fullName.trim().toLowerCase();
     final normFirstName = employee.firstName.trim().toLowerCase();
@@ -78,7 +111,7 @@ class PayrollCalculationService {
       return false;
     }).toList();
 
-    double cycleIncentive = 0.0;
+    double totalEarnedInCycle = 0.0;
     double cumulativeTotal = 0.0;
 
     final startOnly = DateTime(period.startDate.year, period.startDate.month, period.startDate.day);
@@ -88,7 +121,7 @@ class PayrollCalculationService {
       final amt = req.approvedAmount ?? req.amount;
       final dt = _parseDateTime(req.createdAt);
       if (dt == null) {
-        cycleIncentive += amt;
+        totalEarnedInCycle += amt;
         cumulativeTotal += amt;
         continue;
       }
@@ -98,7 +131,7 @@ class PayrollCalculationService {
       // Check if inside cycle
       final inCycle = !dateOnly.isBefore(startOnly) && dateOnly.isBefore(endOnly);
       if (inCycle) {
-        cycleIncentive += amt;
+        totalEarnedInCycle += amt;
       }
 
       // Check if up to end of cycle for cumulative
@@ -107,8 +140,67 @@ class PayrollCalculationService {
       }
     }
 
-    return (cycleIncentive: cycleIncentive, cumulativeTotal: cumulativeTotal);
+    // 1. Table 1 & Table 2 Split (50% Immediate / 50% Deferred)
+    final double immediatePercentage = incentiveSettings.immediatePercentage / 100.0;
+    final double deferredPercentage = incentiveSettings.deferredPercentage / 100.0;
+
+    final double immediateIncentive = incentiveSettings.is3TableRuleEnabled
+        ? (totalEarnedInCycle * immediatePercentage)
+        : totalEarnedInCycle;
+
+    final double currentDeferredIncentive = incentiveSettings.is3TableRuleEnabled
+        ? (totalEarnedInCycle * deferredPercentage)
+        : 0.0;
+
+    // 2. Table 3: Check if this is a configured release cycle
+    final currentCycleName = cycleMonth ?? '';
+    final parsed = parseMonthYear(currentCycleName);
+    final bool isReleaseCycle = incentiveSettings.isReleaseCycle(currentCycleName, monthNum: parsed.monthNum);
+
+    double releasedDeferredIncentive = 0.0;
+    final List<IncentivePayoutLedger> eligibleLedgers = [];
+
+    // Filter ledgers for this employee
+    final empLedgers = (ledgers ?? []).where((l) => l.employeeId == employee.id).toList();
+
+    double pastPendingBalance = 0.0;
+    for (final l in empLedgers) {
+      final isFromPastCycle = l.earnedCycle.trim().toLowerCase() != currentCycleName.trim().toLowerCase();
+
+      // Check if eligible to be released in this cycle:
+      // (a) It was from a previous cycle and is currently Pending
+      // (b) OR it was already marked Released for *this specific* cycle (idempotency during payroll re-calculation)
+      final isReleasedForThisCycle = l.isReleased && l.releaseCycle?.trim().toLowerCase() == currentCycleName.trim().toLowerCase();
+
+      if (isFromPastCycle && (l.isPending || isReleasedForThisCycle)) {
+        if (isReleaseCycle) {
+          releasedDeferredIncentive += l.deferredAmount;
+          eligibleLedgers.add(l);
+        } else if (l.isPending) {
+          pastPendingBalance += l.deferredAmount;
+        }
+      } else if (isFromPastCycle && l.isPending) {
+        pastPendingBalance += l.deferredAmount;
+      }
+    }
+
+    final double totalPayableIncentive = immediateIncentive + releasedDeferredIncentive;
+    final double totalPendingDeferredBalance = pastPendingBalance + currentDeferredIncentive;
+
+    return IncentiveCalculationResult(
+      totalEarnedIncentive: totalEarnedInCycle,
+      immediateIncentive: immediateIncentive,
+      currentDeferredIncentive: currentDeferredIncentive,
+      releasedDeferredIncentive: releasedDeferredIncentive,
+      totalPayableIncentive: totalPayableIncentive,
+      cumulativeTotal: cumulativeTotal,
+      totalPendingDeferredBalance: totalPendingDeferredBalance,
+      eligibleLedgersToRelease: eligibleLedgers,
+      isReleaseCycle: isReleaseCycle,
+    );
+
   }
+
 
   static ({double emiAmount, String loanDescription}) calculateLoanEmi({
     required EmployeeLoan? loan,
@@ -176,6 +268,8 @@ class PayrollCalculationService {
     List<String>? holidays,
     List<PermissionRequest>? permissions,
     List<IncentiveRequest>? incentives,
+    IncentiveSettings incentiveSettings = const IncentiveSettings(),
+    List<IncentivePayoutLedger>? ledgers,
     EmployeeLoan? activeLoan,
     PayrollInputOverride? overrideInput,
     double manualOthersEarning = 0.0,
@@ -258,16 +352,27 @@ class PayrollCalculationService {
     final tax = overrideInput?.tax ?? (employee.salaryTax as num?)?.toDouble() ?? 0.0;
     final esi = overrideInput?.esi ?? (employee.salaryEsi as num?)?.toDouble() ?? 0.0;
 
-    // 4. Incentives
+    // 4. Incentives (3-Table calculation: 50% Immediate + 50% Deferred + Release)
     final incentiveMetrics = calculateIncentives(
       employee: employee,
       requests: incentives ?? [],
       period: period,
+      cycleMonth: month,
+      incentiveSettings: incentiveSettings,
+      ledgers: ledgers,
     );
-    final effectiveIncentive = overrideInput?.incentive ?? incentiveMetrics.cycleIncentive;
+    final effectiveIncentive = overrideInput?.incentive ?? incentiveMetrics.totalPayableIncentive;
     final effectiveOthersEarning = overrideInput?.othersEarning ?? manualOthersEarning;
     final effectiveBonus = overrideInput?.bonus ?? manualBonus;
     final effectiveOt = overrideInput?.ot ?? manualOt;
+
+    // Determine Carry Forward text if not manually provided
+    String resolvedCarryForward = carryForward;
+    if (resolvedCarryForward == '-' || resolvedCarryForward.isEmpty) {
+      if (incentiveMetrics.currentDeferredIncentive > 0) {
+        resolvedCarryForward = '₹${incentiveMetrics.currentDeferredIncentive.toStringAsFixed(2)} (Deferred)';
+      }
+    }
 
     // 5. Loan EMI
     final loanMetrics = calculateLoanEmi(
@@ -324,7 +429,7 @@ class PayrollCalculationService {
       otherAllowance: double.parse(effectiveOther.toStringAsFixed(2)),
 
       incentive: double.parse(effectiveIncentive.toStringAsFixed(2)),
-      carryForward: carryForward,
+      carryForward: resolvedCarryForward,
       othersEarning: effectiveOthersEarning,
       cumulativeIncentive: double.parse(incentiveMetrics.cumulativeTotal.toStringAsFixed(2)),
       bonus: effectiveBonus,
@@ -354,3 +459,4 @@ class PayrollCalculationService {
     return record.copyWithAttendanceResult(attendanceResult);
   }
 }
+

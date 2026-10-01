@@ -212,13 +212,14 @@ class _IncentiveManagementPageState extends ConsumerState<IncentiveManagementPag
                 ),
                 ElevatedButton(
                   onPressed: () async {
-                    final newSettings = IncentiveSettings(
+                    final newSettings = currentSettings.copyWith(
                       isLockActive: isLockActive,
                       lockFromDate: fromDateController.text.trim(),
                       lockToDate: toDateController.text.trim(),
                     );
                     await ref.read(incentiveManagementRepositoryProvider).updateIncentiveSettings(newSettings);
                     ref.invalidate(incentiveSettingsProvider);
+
 
                     if (mounted) {
                       Navigator.pop(dialogContext);

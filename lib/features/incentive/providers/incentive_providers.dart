@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/firebase_incentive_repository.dart';
+import '../domain/incentive_payout_ledger.dart';
 import '../domain/incentive_repository.dart';
 import '../domain/incentive_request.dart';
 import '../domain/incentive_settings.dart';
@@ -22,3 +23,12 @@ final employeeDesignationProvider = StateProvider<String>((ref) => 'Operator');
 final incentiveSettingsProvider = FutureProvider<IncentiveSettings>((ref) {
   return ref.watch(incentiveRepositoryProvider).getIncentiveSettings();
 });
+
+final employeePayoutLedgersProvider = StreamProvider.family<List<IncentivePayoutLedger>, int>((ref, employeeId) {
+  return ref.watch(incentiveRepositoryProvider).watchPayoutLedgersForEmployee(employeeId);
+});
+
+final allPayoutLedgersProvider = FutureProvider<List<IncentivePayoutLedger>>((ref) {
+  return ref.watch(incentiveRepositoryProvider).getAllPayoutLedgers();
+});
+

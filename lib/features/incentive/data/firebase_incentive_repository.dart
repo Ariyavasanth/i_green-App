@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../domain/incentive_payout_ledger.dart';
 import '../domain/incentive_repository.dart';
 import '../domain/incentive_request.dart';
 import '../domain/incentive_settings.dart';
@@ -12,6 +13,9 @@ class FirebaseIncentiveRepository implements IncentiveRepository {
 
   CollectionReference<Map<String, dynamic>> get _requests =>
       _firestore.collection('incentive_requests');
+
+  CollectionReference<Map<String, dynamic>> get _payoutLedgers =>
+      _firestore.collection('incentive_payout_ledgers');
 
   DocumentReference<Map<String, dynamic>> get _settings =>
       _firestore.collection('incentive_settings').doc('global');
@@ -30,6 +34,19 @@ class FirebaseIncentiveRepository implements IncentiveRepository {
           (data['created_at'] as Timestamp).toDate().toIso8601String();
     }
     return IncentiveRequest.fromMap(data);
+  }
+
+  IncentivePayoutLedger _ledger(Map<String, dynamic> source, String documentId) {
+    final data = Map<String, dynamic>.from(source);
+    if (data['created_at'] is Timestamp) {
+      data['created_at'] =
+          (data['created_at'] as Timestamp).toDate().toIso8601String();
+    }
+    if (data['released_at'] is Timestamp) {
+      data['released_at'] =
+          (data['released_at'] as Timestamp).toDate().toIso8601String();
+    }
+    return IncentivePayoutLedger.fromMap(data, documentId);
   }
 
   Future<DocumentSnapshot<Map<String, dynamic>>?> _find(int id) async {
@@ -192,4 +209,78 @@ class FirebaseIncentiveRepository implements IncentiveRepository {
       return true;
     }).toList();
   }
+
+  // 3-Table Payout & Deferred Ledger Operations
+  @override
+  Future<List<IncentivePayoutLedger>> getPayoutLedgersForEmployee(int employeeId) async {
+    final snapshot = await _payoutLedgers
+        .where('employee_id', isEqualTo: employeeId)
+        .get();
+    final result = snapshot.docs
+        .map((doc) => _ledger(doc.data(), doc.id))
+        .toList();
+    result.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return result;
+  }
+
+  @override
+  Future<List<IncentivePayoutLedger>> getAllPayoutLedgers() async {
+    final snapshot = await _payoutLedgers.get();
+    final result = snapshot.docs
+        .map((doc) => _ledger(doc.data(), doc.id))
+        .toList();
+    result.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return result;
+  }
+
+  @override
+  Stream<List<IncentivePayoutLedger>> watchPayoutLedgersForEmployee(int employeeId) {
+    return _payoutLedgers
+        .where('employee_id', isEqualTo: employeeId)
+        .snapshots()
+        .map((snapshot) {
+      final result = snapshot.docs
+          .map((doc) => _ledger(doc.data(), doc.id))
+          .toList();
+      result.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return result;
+    });
+  }
+
+  @override
+  Future<void> savePayoutLedger(IncentivePayoutLedger ledger) async {
+    final docId = ledger.id.isNotEmpty
+        ? ledger.id
+        : 'ledger_${ledger.employeeId}_${ledger.earnedCycle.replaceAll(' ', '_')}';
+    final data = Map<String, dynamic>.from(ledger.toMap());
+    data['id'] = docId;
+    data['updated_at'] = FieldValue.serverTimestamp();
+    await _payoutLedgers.doc(docId).set(data, SetOptions(merge: true));
+  }
+
+  @override
+  Future<void> markPayoutLedgersReleased({
+    required List<String> ledgerIds,
+    required String releaseCycle,
+    required DateTime releasedAt,
+    int? payrollRecordId,
+  }) async {
+    if (ledgerIds.isEmpty) return;
+    final batch = _firestore.batch();
+    for (final id in ledgerIds) {
+      final docRef = _payoutLedgers.doc(id);
+      final updateData = <String, dynamic>{
+        'status': 'Released',
+        'release_cycle': releaseCycle,
+        'released_at': releasedAt.toIso8601String(),
+        'updated_at': FieldValue.serverTimestamp(),
+      };
+      if (payrollRecordId != null) {
+        updateData['payroll_record_id'] = payrollRecordId;
+      }
+      batch.set(docRef, updateData, SetOptions(merge: true));
+    }
+    await batch.commit();
+  }
 }
+
