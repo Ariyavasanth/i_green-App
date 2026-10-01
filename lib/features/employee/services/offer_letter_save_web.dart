@@ -21,7 +21,13 @@ Future<void> saveAndDownloadOfferLetter({
   html.document.body?.append(anchor);
   anchor.click();
   anchor.remove();
-  html.Url.revokeObjectUrl(url);
+  
+  // Delay revoking the Object URL to allow browser download stream to start
+  Future.delayed(const Duration(seconds: 5), () {
+    try {
+      html.Url.revokeObjectUrl(url);
+    } catch (_) {}
+  });
 
   final titleStr = docTitle ?? (fileName.startsWith('BOM') ? 'BOM Details' : 'File');
 

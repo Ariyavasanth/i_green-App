@@ -10,6 +10,7 @@ import '../../employee/providers/employee_providers.dart';
 import '../../employee/services/offer_letter_save_stub.dart'
     if (dart.library.html) '../../employee/services/offer_letter_save_web.dart'
     if (dart.library.io) '../../employee/services/offer_letter_save_io.dart';
+import '../../organization/domain/organization.dart';
 import '../../organization/providers/organization_providers.dart';
 import '../domain/payroll.dart';
 import '../providers/payroll_providers.dart';
@@ -41,17 +42,27 @@ class _EmployeePayslipListScreenState extends ConsumerState<EmployeePayslipListS
 
     try {
       final organizations = ref.read(organizationsProvider).valueOrNull ?? [];
-      final resolvedOrg = organizations.where((o) =>
+      Organization? resolvedOrg = organizations.where((o) =>
           o.docId == employee.organizationId ||
           o.canonicalId == employee.organizationId ||
-          o.name.trim().toLowerCase() == employee.organizationName.trim().toLowerCase()).firstOrNull ??
-          (organizations.isNotEmpty ? organizations.first : null);
+          o.name.trim().toLowerCase() == employee.organizationName.trim().toLowerCase()).firstOrNull;
+
+      if (resolvedOrg == null && organizations.isNotEmpty) {
+        if (employee.organizationName.toLowerCase().contains('technolog') ||
+            employee.employeeId.toUpperCase().startsWith('EMP')) {
+          resolvedOrg = organizations.where((o) => o.name.toLowerCase().contains('technolog')).firstOrNull;
+        } else if (employee.organizationName.toLowerCase().contains('engineering') ||
+            employee.employeeId.toUpperCase().startsWith('IGT')) {
+          resolvedOrg = organizations.where((o) => o.name.toLowerCase().contains('engineering')).firstOrNull;
+        }
+        resolvedOrg ??= organizations.firstOrNull;
+      }
 
       final pdfBytes = await PayslipPdfGenerator.generatePayslipPdf(
         record: record,
         employee: employee,
         organization: resolvedOrg,
-      );
+      ).timeout(const Duration(seconds: 8));
 
       final cleanEmpId = (employee.employeeId.isNotEmpty ? employee.employeeId : 'EMP_${record.employeeId}')
           .replaceAll(RegExp(r'[^\w\-_]'), '_');

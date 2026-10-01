@@ -16,6 +16,8 @@ import '../domain/payroll.dart';
 import '../providers/payroll_providers.dart';
 import '../services/payslip_pdf_generator.dart';
 import '../utils/currency_words_helper.dart';
+import '../utils/organization_branding_helper.dart';
+import 'widgets/payslip_brand_logo_widget.dart';
 
 class PayslipScreen extends ConsumerStatefulWidget {
   const PayslipScreen({required this.payrollId, super.key});
@@ -60,7 +62,7 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
         record: record,
         employee: employee,
         organization: organization,
-      );
+      ).timeout(const Duration(seconds: 8));
 
       final cleanEmpId = (employee?.employeeId.isNotEmpty == true
               ? employee!.employeeId
@@ -192,7 +194,16 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
           }
         }
         if (resolvedOrg == null && organizations.isNotEmpty) {
-          resolvedOrg = organizations.firstOrNull;
+          if (matchingEmp != null) {
+            final empOrgNameLower = matchingEmp.organizationName.toLowerCase();
+            final empCode = matchingEmp.employeeId.toUpperCase();
+            if (empOrgNameLower.contains('technolog') || empCode.startsWith('EMP')) {
+              resolvedOrg = organizations.where((o) => o.name.toLowerCase().contains('technolog')).firstOrNull;
+            } else if (empOrgNameLower.contains('engineering') || empCode.startsWith('IGT')) {
+              resolvedOrg = organizations.where((o) => o.name.toLowerCase().contains('engineering')).firstOrNull;
+            }
+          }
+          resolvedOrg ??= organizations.firstOrNull;
         }
 
         return LayoutBuilder(
@@ -365,14 +376,11 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
   }) {
     final currencyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹ ', decimalDigits: 0);
 
-    // Organization details
-    final orgName = organization?.name.isNotEmpty == true
-        ? organization!.name
-        : (employee?.organizationName.isNotEmpty == true
-            ? employee!.organizationName
-            : 'I-GREEN TECHNOLOGIES');
-    final orgEmail = organization?.emailAddress ?? '';
-    final orgTan = organization?.tanNumber ?? '';
+    // Dynamic Organization Branding
+    final branding = OrganizationPayslipBranding.resolve(
+      organization: organization,
+      employee: employee,
+    );
 
     // Employee & Statutory Details (prefer snapshot in PayrollRecord)
     final displayName = record.employeeName.isNotEmpty
@@ -381,7 +389,11 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
 
     final displayEmpId = employee?.employeeId.isNotEmpty == true
         ? employee!.employeeId
-        : (record.employeeId > 0 ? 'EMP-${record.employeeId.toString().padLeft(4, '0')}' : '-');
+        : (record.employeeId > 0
+            ? (branding.isTecEngineering
+                ? 'IGT - ${record.employeeId.toString().padLeft(4, '0')}'
+                : 'EMP-${record.employeeId.toString().padLeft(4, '0')}')
+            : '-');
 
     final displayDesignation = record.designation.isNotEmpty
         ? record.designation
@@ -489,7 +501,7 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 1. HEADER SECTION (Organization Branding & Header)
+            // 1. HEADER SECTION (Dynamic Organization Branding, Email & TAN Number)
             Container(
               padding: EdgeInsets.all(isMobile ? 12 : 18),
               decoration: const BoxDecoration(
@@ -501,32 +513,11 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            _buildCompanyLogo(),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    orgName.toUpperCase(),
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF414A51),
-                                    ),
-                                  ),
-                                  const Text(
-                                    'PAYSLIP',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF9CC70A),
-                                      letterSpacing: 1.1,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                            PayslipBrandLogoWidget(
+                              branding: branding,
+                              height: 44,
                             ),
                             _buildStatusPill(record),
                           ],
@@ -537,93 +528,59 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              'Period: ${record.month}',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF414A51),
-                              ),
-                            ),
-                            if (orgTan.isNotEmpty)
+                            if (branding.email.isNotEmpty)
                               Text(
-                                'TAN: $orgTan',
-                                style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                                'EMAIL : ${branding.email.toUpperCase()}',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            if (branding.tanNumber.isNotEmpty)
+                              Text(
+                                'TAN No: ${branding.tanNumber}',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF414A51),
+                                ),
                               ),
                           ],
                         ),
-                        if (orgEmail.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Text(
-                              'Email: $orgEmail',
-                              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
-                            ),
-                          ),
                       ],
                     )
                   : Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Row(
-                          children: [
-                            _buildCompanyLogo(),
-                            const SizedBox(width: 12),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  orgName.toUpperCase(),
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF414A51),
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                const Text(
-                                  'PAYSLIP',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF9CC70A),
-                                    letterSpacing: 1.2,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+                        PayslipBrandLogoWidget(
+                          branding: branding,
+                          height: 54,
                         ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  'Period: ${record.month}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF414A51),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                _buildStatusPill(record),
-                              ],
+                        if (branding.email.isNotEmpty)
+                          Text(
+                            'EMAIL : ${branding.email.toUpperCase()}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF414A51),
                             ),
-                            const SizedBox(height: 4),
-                            if (orgEmail.isNotEmpty)
+                          ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (branding.tanNumber.isNotEmpty)
                               Text(
-                                'Email: $orgEmail',
-                                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                'TAN No: ${branding.tanNumber}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF414A51),
+                                ),
                               ),
-                            if (orgTan.isNotEmpty)
-                              Text(
-                                'TAN: $orgTan',
-                                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                              ),
+                            const SizedBox(width: 10),
+                            _buildStatusPill(record),
                           ],
                         ),
                       ],
@@ -852,26 +809,7 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
     );
   }
 
-  Widget _buildCompanyLogo() {
-    return Container(
-      width: 42,
-      height: 42,
-      decoration: BoxDecoration(
-        color: const Color(0xFF9CC70A).withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      padding: const EdgeInsets.all(4),
-      child: Image.asset(
-        'assets/reference_logo_base.png',
-        fit: BoxFit.contain,
-        errorBuilder: (context, error, stackTrace) => const Icon(
-          Icons.apartment_rounded,
-          color: Color(0xFF9CC70A),
-          size: 26,
-        ),
-      ),
-    );
-  }
+
 
   Widget _buildLeftDetailsBox({
     required PayrollRecord record,
@@ -888,6 +826,25 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8F9FA),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: const Text(
+              'PAYSLIP PERIOD',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF414A51),
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          _buildDetailRow('Month-Year', record.month),
+          const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 6),
             decoration: BoxDecoration(
@@ -938,7 +895,7 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
               borderRadius: BorderRadius.circular(4),
             ),
             child: const Text(
-              'STATUTORY & BANK DETAILS',
+              'STATUTORY DETAILS',
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
@@ -947,10 +904,28 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           _buildDetailRow('PAN Number', pan),
           _buildDetailRow('PF / UAN', pf),
           _buildDetailRow('ESI Number', esi),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8F9FA),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: const Text(
+              'BANK DETAILS',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF414A51),
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
           _buildDetailRow('Bank Name', bankName),
           _buildDetailRow('Bank Account No', bankAcct),
           _buildDetailRow('Branch', branch),
@@ -1268,10 +1243,8 @@ class _PayslipScreenState extends ConsumerState<PayslipScreen> {
     required Organization? organization,
     required bool isMobile,
   }) {
-    final canDownload = record.status == 'Processed' || record.status == 'Paid';
-
     final downloadBtn = ElevatedButton.icon(
-      onPressed: (!canDownload || _downloading)
+      onPressed: _downloading
           ? null
           : () => _handleDownloadPdf(context, record, employee, organization),
       icon: _downloading

@@ -9,10 +9,13 @@ import 'tools/seed_all_employees_attendance.dart';
 import 'tools/seed_demo_incentive.dart';
 
 import 'package:firebase_core/firebase_core.dart';
+import 'core/theme/payslip_logo_assets.dart';
 import 'firebase_options.dart';
+import 'tools/setup_payslip_logos.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  setupPayslipLogosDirect();
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,

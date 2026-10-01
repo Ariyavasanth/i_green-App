@@ -91,6 +91,8 @@ flutter:
     - assets/icones/
     - assets/reference_logo_base.png
     - assets/inner_wheel_rotating.png
+    - assets/igreen_logo_engineering.png
+    - assets/igreen_logo_technology.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
