@@ -606,7 +606,7 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
         final cleanFileName = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
         final cleanDocTitle = docTitle.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
         
-        final storagePath = 'organizations/$orgId/$folderCategory/$cleanDocTitle/${DateTime.now().millisecondsSinceEpoch}_$cleanFileName';
+        final storagePath = 'Organization documents/$orgId/$cleanDocTitle/${DateTime.now().millisecondsSinceEpoch}_$cleanFileName';
         final storageRef = _storage.ref().child(storagePath);
         
         final uploadTask = await storageRef.putData(

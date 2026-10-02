@@ -48,6 +48,9 @@ class OnDutyAssignment {
     this.returnTravelDurationMinutes = 0,
     required this.status,
     this.notes = '',
+    this.voiceNoteText,
+    this.originalVoiceText,
+    this.voiceLanguage,
     required this.assignedBy,
     this.durationMinutes = 0,
     this.afterCompletionOption = 'RETURN_TO_OFFICE',
@@ -113,6 +116,9 @@ class OnDutyAssignment {
 
   final String status; // 'ASSIGNED', 'TRAVELING_TO_DESTINATION', 'IN_PROGRESS', 'REACHED_DESTINATION', 'WORK_COMPLETED', 'RETURNING_TO_OFFICE', 'COMPLETED', 'CANCELLED'
   final String notes;
+  final String? voiceNoteText;
+  final String? originalVoiceText;
+  final String? voiceLanguage;
   final String assignedBy;
   final int durationMinutes;
   final String afterCompletionOption; // 'RETURN_TO_OFFICE', 'CHECKOUT_FROM_OD'
@@ -326,6 +332,9 @@ class OnDutyAssignment {
         'return_travel_duration_minutes': returnTravelDurationMinutes,
         'status': status,
         'notes': notes,
+        if (voiceNoteText != null && voiceNoteText!.isNotEmpty) 'voice_note_text': voiceNoteText,
+        if (originalVoiceText != null && originalVoiceText!.isNotEmpty) 'original_voice_text': originalVoiceText,
+        if (voiceLanguage != null && voiceLanguage!.isNotEmpty) 'voice_language': voiceLanguage,
         'assigned_by': assignedBy,
         'duration_minutes': durationMinutes,
         'after_completion_option': afterCompletionOption,
@@ -494,6 +503,9 @@ class OnDutyAssignment {
       returnTravelDurationMinutes: parseId(map['return_travel_duration_minutes']),
       status: rawStatus,
       notes: map['notes']?.toString() ?? map['instructions']?.toString() ?? '',
+      voiceNoteText: map['voice_note_text']?.toString(),
+      originalVoiceText: map['original_voice_text']?.toString(),
+      voiceLanguage: map['voice_language']?.toString(),
       assignedBy: map['assigned_by']?.toString() ?? 'Admin',
       durationMinutes: parseId(map['duration_minutes']),
       afterCompletionOption: opt,
@@ -551,6 +563,9 @@ class OnDutyAssignment {
     int? returnTravelDurationMinutes,
     String? status,
     String? notes,
+    String? voiceNoteText,
+    String? originalVoiceText,
+    String? voiceLanguage,
     String? assignedBy,
     int? durationMinutes,
     String? afterCompletionOption,
@@ -608,6 +623,9 @@ class OnDutyAssignment {
       returnTravelDurationMinutes: returnTravelDurationMinutes ?? this.returnTravelDurationMinutes,
       status: status ?? this.status,
       notes: notes ?? this.notes,
+      voiceNoteText: voiceNoteText ?? this.voiceNoteText,
+      originalVoiceText: originalVoiceText ?? this.originalVoiceText,
+      voiceLanguage: voiceLanguage ?? this.voiceLanguage,
       assignedBy: assignedBy ?? this.assignedBy,
       durationMinutes: durationMinutes ?? this.durationMinutes,
       afterCompletionOption: afterCompletionOption ?? this.afterCompletionOption,

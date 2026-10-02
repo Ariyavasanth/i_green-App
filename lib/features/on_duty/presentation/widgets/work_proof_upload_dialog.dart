@@ -1,14 +1,20 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../../data/gemini_od_voice_service.dart';
+import '../../domain/od_voice_service.dart';
 import 'on_duty_camera_page.dart';
 
 class OdStatusSubmitResult {
   final List<String> photos;
   final String text;
+  final String? originalVoiceText;
+  final String? voiceLanguage;
 
   const OdStatusSubmitResult({
     required this.photos,
     required this.text,
+    this.originalVoiceText,
+    this.voiceLanguage,
   });
 }
 
@@ -38,6 +44,14 @@ class _WorkProofUploadDialogState extends State<WorkProofUploadDialog> {
   late final TextEditingController _textController;
   bool _isCapturing = false;
 
+  final OdVoiceService _voiceService = GeminiOdVoiceService();
+  bool _isListening = false;
+  bool _isAiProcessing = false;
+  String _liveTranscript = '';
+  String? _originalVoiceText;
+  String? _voiceLanguage;
+  final String _selectedLocale = 'auto'; // 'auto', 'ta_IN', 'en_IN'
+
   @override
   void initState() {
     super.initState();
@@ -49,8 +63,81 @@ class _WorkProofUploadDialogState extends State<WorkProofUploadDialog> {
 
   @override
   void dispose() {
+    _voiceService.cancelListening();
     _textController.dispose();
     super.dispose();
+  }
+
+  Future<void> _toggleVoiceRecording() async {
+    if (_isAiProcessing) return;
+
+    if (_isListening) {
+      await _voiceService.stopListening();
+      final capturedSpeech = _liveTranscript.trim();
+      setState(() {
+        _isListening = false;
+        _isAiProcessing = true;
+      });
+
+      try {
+        final result = await _voiceService.processWithGemini(
+          rawSpokenText: capturedSpeech,
+          contextInfo: 'Site: ${widget.siteName}, Mode: ${widget.isNotCompleted ? "Not Completed" : "Completed"}',
+        );
+
+        if (mounted) {
+          setState(() {
+            if (result.englishSummary.isNotEmpty) {
+              _textController.text = result.englishSummary;
+            } else if (capturedSpeech.isNotEmpty) {
+              _textController.text = capturedSpeech;
+            }
+            _originalVoiceText = result.originalTranscript.isNotEmpty ? result.originalTranscript : capturedSpeech;
+            _voiceLanguage = result.detectedLanguage;
+            _isAiProcessing = false;
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            if (capturedSpeech.isNotEmpty) {
+              _textController.text = capturedSpeech;
+              _originalVoiceText = capturedSpeech;
+            }
+            _isAiProcessing = false;
+          });
+        }
+      }
+    } else {
+      final hasInit = await _voiceService.initialize();
+      if (!hasInit) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Microphone permission not granted or speech service unavailable.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      setState(() {
+        _isListening = true;
+        _liveTranscript = '';
+      });
+
+      await _voiceService.startListening(
+        localeId: _selectedLocale == 'auto' ? null : _selectedLocale,
+        onLiveTranscript: (text) {
+          if (mounted) {
+            setState(() {
+              _liveTranscript = text;
+            });
+          }
+        },
+      );
+    }
   }
 
   int get _uploadedCount => _photos.where((p) => p != null && p.isNotEmpty).length;
@@ -131,7 +218,12 @@ class _WorkProofUploadDialogState extends State<WorkProofUploadDialog> {
     }
 
     Navigator.of(context).pop(
-      OdStatusSubmitResult(photos: validPhotos, text: textVal),
+      OdStatusSubmitResult(
+        photos: validPhotos,
+        text: textVal,
+        originalVoiceText: _originalVoiceText,
+        voiceLanguage: _voiceLanguage,
+      ),
     );
   }
 
@@ -143,8 +235,8 @@ class _WorkProofUploadDialogState extends State<WorkProofUploadDialog> {
     final headerTitle = isNotComp ? 'Mark OD as Not Completed' : 'Mark OD as Completed';
     final textLabel = isNotComp ? 'Reason for Not Completed *' : 'Purpose / Details of Completed OD *';
     final textHint = isNotComp
-        ? 'Enter reason why this On-Duty was not completed...'
-        : 'Enter purpose and completed details of this On-Duty...';
+        ? 'Enter reason why this On-Duty was not completed or use Voice (Any Language)...'
+        : 'Enter purpose and completed details of this On-Duty or use Voice (Any Language)...';
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -215,16 +307,135 @@ class _WorkProofUploadDialogState extends State<WorkProofUploadDialog> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Purpose / Reason Input Field
-                    Text(
-                      textLabel,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1E293B),
-                      ),
+                    // Purpose / Reason Header Row with Voice Input Button
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            textLabel,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1E293B),
+                            ),
+                          ),
+                        ),
+                        InkWell(
+                          onTap: _isAiProcessing ? null : _toggleVoiceRecording,
+                          borderRadius: BorderRadius.circular(20),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 250),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: _isListening
+                                  ? const Color(0xFFDC2626)
+                                  : (_isAiProcessing
+                                      ? const Color(0xFF414A51)
+                                      : primaryColor.withValues(alpha: 0.18)),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: _isListening
+                                    ? const Color(0xFFDC2626)
+                                    : (_isAiProcessing
+                                        ? const Color(0xFF414A51)
+                                        : primaryColor),
+                                width: 1.2,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (_isAiProcessing) ...[
+                                  const SizedBox(
+                                    width: 12,
+                                    height: 12,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  const Text(
+                                    'AI Translating...',
+                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                                  ),
+                                ] else if (_isListening) ...[
+                                  const Icon(Icons.stop_circle, size: 14, color: Colors.white),
+                                  const SizedBox(width: 5),
+                                  const Text(
+                                    'Stop & Translate',
+                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                                  ),
+                                ] else ...[
+                                  const Icon(Icons.mic, size: 14, color: Color(0xFF414A51)),
+                                  const SizedBox(width: 5),
+                                  const Text(
+                                    'Voice (Any Language)',
+                                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 6),
+
+                    // Live Speech Banner when listening
+                    if (_isListening) ...[
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF2F2),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFFCA5A5)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.record_voice_over, size: 16, color: Color(0xFFDC2626)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _liveTranscript.isNotEmpty
+                                    ? _liveTranscript
+                                    : 'Listening... Speak in any language (Tamil, Hindi, Telugu, English, etc.)',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF991B1B),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    // AI Processing Notice
+                    if (_isAiProcessing) ...[
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF0FDF4),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF86EFAC)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.auto_awesome, size: 16, color: Color(0xFF16A34A)),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Gemini AI is translating speech into professional English...',
+                                style: TextStyle(fontSize: 12, color: Color(0xFF166534), fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
                     TextField(
                       controller: _textController,
                       maxLines: 3,
@@ -252,6 +463,43 @@ class _WorkProofUploadDialogState extends State<WorkProofUploadDialog> {
                         fillColor: const Color(0xFFF8FAFC),
                       ),
                     ),
+
+                    // Spoken Original Tamil Card if translated
+                    if (_originalVoiceText != null &&
+                        _originalVoiceText!.isNotEmpty &&
+                        _originalVoiceText != _textController.text) ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFCBD5E1)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.translate, size: 14, color: Color(0xFF414A51)),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: RichText(
+                                text: TextSpan(
+                                  style: const TextStyle(fontSize: 11.5, color: Color(0xFF334155)),
+                                  children: [
+                                    TextSpan(
+                                      text: 'Original Spoken (${_voiceLanguage ?? "Tamil"}): ',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                                    ),
+                                    TextSpan(text: '$_originalVoiceText'),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
                     const SizedBox(height: 16),
 
                     // Guideline Banner

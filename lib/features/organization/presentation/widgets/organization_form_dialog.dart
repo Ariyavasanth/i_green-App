@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../domain/organization.dart';
@@ -264,6 +265,28 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error picking file: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _openDocUrl(String url) async {
+    if (url.isEmpty) return;
+    try {
+      final uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not open document link.')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error opening document: $e')),
         );
       }
     }
@@ -986,7 +1009,12 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
           ),
           const SizedBox(width: 10),
           if (hasPicked || hasExisting) ...[
-            if (hasExisting)
+            if (hasExisting && item.existingDoc?.fileUrl.isNotEmpty == true) ...[
+              IconButton(
+                icon: const Icon(Icons.remove_red_eye_outlined, size: 18, color: Color(0xFF414A51)),
+                tooltip: 'View Document',
+                onPressed: () => _openDocUrl(item.existingDoc!.fileUrl),
+              ),
               IconButton(
                 icon: const Icon(Icons.file_download_outlined, size: 18, color: AppColors.primary),
                 tooltip: 'Download Document',
@@ -997,6 +1025,7 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
                   docTitle: item.title,
                 ),
               ),
+            ],
             TextButton.icon(
               onPressed: () => _pickFileForDoc(item),
               icon: const Icon(Icons.sync_rounded, size: 14, color: AppColors.primary),

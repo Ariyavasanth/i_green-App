@@ -956,6 +956,8 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
     if (result == null) return;
     final List<String> photos = result is OdStatusSubmitResult ? result.photos : (result is List<String> ? result : []);
     final String purposeDetails = result is OdStatusSubmitResult ? result.text : '';
+    final String? origVoice = result is OdStatusSubmitResult ? result.originalVoiceText : null;
+    final String? voiceLang = result is OdStatusSubmitResult ? result.voiceLanguage : null;
 
     if (photos.isEmpty) return;
 
@@ -973,6 +975,10 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
         workCompletedTime: nowStr,
         workPhoto: photos.first,
         workPhotos: photos,
+        notes: purposeDetails.isNotEmpty ? purposeDetails : site.notes,
+        voiceNoteText: purposeDetails.isNotEmpty ? purposeDetails : site.voiceNoteText,
+        originalVoiceText: origVoice ?? site.originalVoiceText,
+        voiceLanguage: voiceLang ?? site.voiceLanguage,
         workEndLatitude: position?.latitude,
         workEndLongitude: position?.longitude,
       );
@@ -1010,6 +1016,10 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
         final updated = _assignment.copyWith(
           status: nextStatus,
           purpose: purposeDetails.isNotEmpty ? purposeDetails : _assignment.purpose,
+          notes: purposeDetails.isNotEmpty ? purposeDetails : _assignment.notes,
+          voiceNoteText: purposeDetails.isNotEmpty ? purposeDetails : _assignment.voiceNoteText,
+          originalVoiceText: origVoice ?? _assignment.originalVoiceText,
+          voiceLanguage: voiceLang ?? _assignment.voiceLanguage,
           workCompletedTime: nowStr,
           workPhoto: photos.first,
           workPhotos: photos,
@@ -1046,6 +1056,10 @@ class _EmployeeOnDutyCardState extends ConsumerState<EmployeeOnDutyCard> {
       } else {
         final updated = _assignment.copyWith(
           status: 'IN_PROGRESS',
+          notes: purposeDetails.isNotEmpty ? purposeDetails : _assignment.notes,
+          voiceNoteText: purposeDetails.isNotEmpty ? purposeDetails : _assignment.voiceNoteText,
+          originalVoiceText: origVoice ?? _assignment.originalVoiceText,
+          voiceLanguage: voiceLang ?? _assignment.voiceLanguage,
           workCompletedTime: nowStr,
           workPhoto: photos.first,
           workPhotos: photos,

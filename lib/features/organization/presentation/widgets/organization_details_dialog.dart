@@ -35,6 +35,10 @@ class OrganizationDetailsDialog extends StatelessWidget {
       final cleanTitle = doc.title.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
 
       final candidates = [
+        'Organization documents/$orgId/$cleanTitle/${doc.fileName}',
+        'Organization documents/$orgId/$cleanTitle/$cleanFileName',
+        'Organization documents/$orgId/${doc.fileName}',
+        'Organization documents/$orgId/$cleanFileName',
         'organizations/$orgId/documents/$cleanTitle/${doc.fileName}',
         'organizations/$orgId/images/$cleanTitle/${doc.fileName}',
         'organizations/$orgId/documents/$cleanTitle/$cleanFileName',

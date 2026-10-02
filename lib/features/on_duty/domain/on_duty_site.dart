@@ -24,6 +24,9 @@ class OnDutySite {
     this.travelDurationMinutes = 0,
     this.workDurationMinutes = 0,
     this.notes = '',
+    this.voiceNoteText,
+    this.originalVoiceText,
+    this.voiceLanguage,
   }) : _workPhoto = workPhoto;
 
   final String siteId;
@@ -51,6 +54,9 @@ class OnDutySite {
   final int travelDurationMinutes;
   final int workDurationMinutes;
   final String notes;
+  final String? voiceNoteText;
+  final String? originalVoiceText;
+  final String? voiceLanguage;
 
   bool get isPending => status == 'PENDING' && !isTraveling && !isReached && !isCompleted && !isNotCompleted;
   bool get isTraveling => (status == 'TRAVELING' || status == 'IN_PROGRESS') && !isReached && !isCompleted && !isNotCompleted;
@@ -98,6 +104,9 @@ class OnDutySite {
         'travel_duration_minutes': travelDurationMinutes,
         'work_duration_minutes': workDurationMinutes,
         if (notes.isNotEmpty) 'notes': notes,
+        if (voiceNoteText != null && voiceNoteText!.isNotEmpty) 'voice_note_text': voiceNoteText,
+        if (originalVoiceText != null && originalVoiceText!.isNotEmpty) 'original_voice_text': originalVoiceText,
+        if (voiceLanguage != null && voiceLanguage!.isNotEmpty) 'voice_language': voiceLanguage,
       };
 
   factory OnDutySite.fromMap(Map<String, dynamic> map) {
@@ -133,6 +142,9 @@ class OnDutySite {
       travelDurationMinutes: (map['travel_duration_minutes'] as num?)?.toInt() ?? 0,
       workDurationMinutes: (map['work_duration_minutes'] as num?)?.toInt() ?? 0,
       notes: map['notes']?.toString() ?? '',
+      voiceNoteText: map['voice_note_text']?.toString(),
+      originalVoiceText: map['original_voice_text']?.toString(),
+      voiceLanguage: map['voice_language']?.toString(),
     );
   }
 
@@ -161,6 +173,9 @@ class OnDutySite {
     int? travelDurationMinutes,
     int? workDurationMinutes,
     String? notes,
+    String? voiceNoteText,
+    String? originalVoiceText,
+    String? voiceLanguage,
   }) {
     return OnDutySite(
       siteId: siteId ?? this.siteId,
@@ -187,6 +202,9 @@ class OnDutySite {
       travelDurationMinutes: travelDurationMinutes ?? this.travelDurationMinutes,
       workDurationMinutes: workDurationMinutes ?? this.workDurationMinutes,
       notes: notes ?? this.notes,
+      voiceNoteText: voiceNoteText ?? this.voiceNoteText,
+      originalVoiceText: originalVoiceText ?? this.originalVoiceText,
+      voiceLanguage: voiceLanguage ?? this.voiceLanguage,
     );
   }
 }

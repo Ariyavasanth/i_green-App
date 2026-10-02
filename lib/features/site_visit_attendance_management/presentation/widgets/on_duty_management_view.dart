@@ -20,10 +20,7 @@ class OnDutyManagementView extends ConsumerStatefulWidget {
 class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
   String _searchQuery = '';
   String _selectedStatus = 'All';
-  DateTimeRange _selectedDateRange = DateTimeRange(
-    start: DateTime.now(),
-    end: DateTime.now(),
-  );
+  DateTimeRange? _selectedDateRange;
   final _searchController = TextEditingController();
 
   @override
@@ -66,9 +63,14 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
   }
 
   Future<void> _pickDateRange() async {
+    final now = DateTime.now();
     final picked = await showDateRangePicker(
       context: context,
-      initialDateRange: _selectedDateRange,
+      initialDateRange: _selectedDateRange ??
+          DateTimeRange(
+            start: now.subtract(const Duration(days: 30)),
+            end: now,
+          ),
       firstDate: DateTime(2023),
       lastDate: DateTime(2030),
       builder: (context, child) {
@@ -95,8 +97,11 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
   }
 
   String _getDateRangeDisplayLabel({bool isMobile = false}) {
-    final start = _selectedDateRange.start;
-    final end = _selectedDateRange.end;
+    if (_selectedDateRange == null) {
+      return 'All Dates';
+    }
+    final start = _selectedDateRange!.start;
+    final end = _selectedDateRange!.end;
     final isSingleDay = start.year == end.year && start.month == end.month && start.day == end.day;
     final now = DateTime.now();
     final isToday = isSingleDay && start.year == now.year && start.month == now.month && start.day == now.day;
@@ -135,19 +140,22 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final isSingleDay = _selectedDateRange.start.year == _selectedDateRange.end.year &&
-        _selectedDateRange.start.month == _selectedDateRange.end.month &&
-        _selectedDateRange.start.day == _selectedDateRange.end.day;
+    final isSingleDay = _selectedDateRange != null &&
+        _selectedDateRange!.start.year == _selectedDateRange!.end.year &&
+        _selectedDateRange!.start.month == _selectedDateRange!.end.month &&
+        _selectedDateRange!.start.day == _selectedDateRange!.end.day;
     final isToday = isSingleDay &&
-        _selectedDateRange.start.year == now.year &&
-        _selectedDateRange.start.month == now.month &&
-        _selectedDateRange.start.day == now.day;
+        _selectedDateRange!.start.year == now.year &&
+        _selectedDateRange!.start.month == now.month &&
+        _selectedDateRange!.start.day == now.day;
 
-    final dateRangeLabel = isSingleDay
-        ? (isToday
-            ? 'Today (${DateFormat('dd-MM-yyyy').format(_selectedDateRange.start)})'
-            : DateFormat('dd-MM-yyyy').format(_selectedDateRange.start))
-        : '${DateFormat('dd-MM-yyyy').format(_selectedDateRange.start)} to ${DateFormat('dd-MM-yyyy').format(_selectedDateRange.end)}';
+    final dateRangeLabel = _selectedDateRange == null
+        ? 'All Dates'
+        : (isSingleDay
+            ? (isToday
+                ? 'Today (${DateFormat('dd-MM-yyyy').format(_selectedDateRange!.start)})'
+                : DateFormat('dd-MM-yyyy').format(_selectedDateRange!.start))
+            : '${DateFormat('dd-MM-yyyy').format(_selectedDateRange!.start)} to ${DateFormat('dd-MM-yyyy').format(_selectedDateRange!.end)}');
 
     final assignmentsAsync = ref.watch(
       allOnDutyAssignmentsProvider((date: null, statusFilter: null, employeeId: null)),
@@ -312,14 +320,11 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                                 ],
                               ),
                             ),
-                            if (!isToday) ...[
+                            if (_selectedDateRange != null) ...[
                               InkWell(
                                 onTap: () {
                                   setState(() {
-                                    _selectedDateRange = DateTimeRange(
-                                      start: DateTime.now(),
-                                      end: DateTime.now(),
-                                    );
+                                    _selectedDateRange = null;
                                   });
                                 },
                                 borderRadius: BorderRadius.circular(12),
@@ -369,29 +374,31 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
               ),
               error: (e, _) => Center(child: Text('Error loading On-Duty assignments: $e')),
               data: (allAssignments) {
-                final startDay = DateTime(
-                  _selectedDateRange.start.year,
-                  _selectedDateRange.start.month,
-                  _selectedDateRange.start.day,
-                );
-                final endDay = DateTime(
-                  _selectedDateRange.end.year,
-                  _selectedDateRange.end.month,
-                  _selectedDateRange.end.day,
-                  23,
-                  59,
-                  59,
-                  999,
-                );
-
                 final filtered = allAssignments.where((item) {
-                  final itemDt = _parseOdDate(item.date);
-                  bool matchesDate = false;
-                  if (itemDt != null) {
-                    matchesDate = !itemDt.isBefore(startDay) && !itemDt.isAfter(endDay);
-                  } else {
-                    final startStr = DateFormat('dd-MM-yyyy').format(_selectedDateRange.start);
-                    matchesDate = item.date == startStr;
+                  bool matchesDate = true;
+                  if (_selectedDateRange != null) {
+                    final startDay = DateTime(
+                      _selectedDateRange!.start.year,
+                      _selectedDateRange!.start.month,
+                      _selectedDateRange!.start.day,
+                    );
+                    final endDay = DateTime(
+                      _selectedDateRange!.end.year,
+                      _selectedDateRange!.end.month,
+                      _selectedDateRange!.end.day,
+                      23,
+                      59,
+                      59,
+                      999,
+                    );
+
+                    final itemDt = _parseOdDate(item.date);
+                    if (itemDt != null) {
+                      matchesDate = !itemDt.isBefore(startDay) && !itemDt.isAfter(endDay);
+                    } else {
+                      final startStr = DateFormat('dd-MM-yyyy').format(_selectedDateRange!.start);
+                      matchesDate = item.date == startStr;
+                    }
                   }
 
                   final matchSearch = _searchQuery.isEmpty ||
@@ -876,6 +883,11 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                             Expanded(child: _buildTimeMetricColumn('Completed Time', completedTimeStr, Colors.green.shade800)),
                             Expanded(child: _buildTimeMetricColumn('Duration', durationText, const Color(0xFF414A51))),
                           ],
+                        ),
+                        _buildVoiceNoteSummaryBox(
+                          voiceNote: site.voiceNoteText ?? (displaySites.length == 1 ? item.voiceNoteText : null),
+                          originalVoice: site.originalVoiceText ?? (displaySites.length == 1 ? item.originalVoiceText : null),
+                          language: site.voiceLanguage ?? (displaySites.length == 1 ? item.voiceLanguage : null),
                         ),
                       ],
                     ),
@@ -1517,11 +1529,123 @@ class _OnDutyManagementViewState extends ConsumerState<OnDutyManagementView> {
                         ],
                       ),
                     ],
+
+                    _buildVoiceNoteSummaryBox(
+                      voiceNote: site.voiceNoteText ?? (siteIndex == 1 ? assignment?.voiceNoteText : null),
+                      originalVoice: site.originalVoiceText ?? (siteIndex == 1 ? assignment?.originalVoiceText : null),
+                      language: site.voiceLanguage ?? (siteIndex == 1 ? assignment?.voiceLanguage : null),
+                    ),
                   ],
                 ),
               ),
             );
           }
+
+  Widget _buildVoiceNoteSummaryBox({
+    String? voiceNote,
+    String? originalVoice,
+    String? language,
+  }) {
+    final note = (voiceNote != null && voiceNote.isNotEmpty) ? voiceNote : null;
+    final orig = (originalVoice != null && originalVoice.isNotEmpty && originalVoice != note) ? originalVoice : null;
+    if (note == null && orig == null) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF9CC70A).withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.mic, size: 12, color: Color(0xFF414A51)),
+                    SizedBox(width: 4),
+                    Text(
+                      'AI Voice Summary',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF414A51),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (language != null && language.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    language,
+                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (note != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              note,
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1E293B),
+                height: 1.35,
+              ),
+            ),
+          ],
+          if (orig != null) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFFCBD5E1)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.translate, size: 13, color: Color(0xFF64748B)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: RichText(
+                      text: TextSpan(
+                        style: const TextStyle(fontSize: 11, color: Color(0xFF334155)),
+                        children: [
+                          const TextSpan(text: 'Original Spoken: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                          TextSpan(text: orig),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 
   Widget _buildLocationRow({
     required IconData icon,

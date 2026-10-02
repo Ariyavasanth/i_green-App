@@ -559,6 +559,11 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                     ),
                   ],
                 ),
+                _buildVoiceNoteSummaryBox(
+                  voiceNote: item.voiceNoteText ?? (item.sites.isNotEmpty ? item.sites.first.voiceNoteText : null),
+                  originalVoice: item.originalVoiceText ?? (item.sites.isNotEmpty ? item.sites.first.originalVoiceText : null),
+                  language: item.voiceLanguage ?? (item.sites.isNotEmpty ? item.sites.first.voiceLanguage : null),
+                ),
                 const SizedBox(height: 10),
                 Divider(height: 1, color: Colors.grey.shade200),
                 const SizedBox(height: 10),
@@ -1230,11 +1235,123 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
                         ],
                       ),
                     ],
+
+                    _buildVoiceNoteSummaryBox(
+                      voiceNote: site.voiceNoteText ?? (siteIndex == 1 ? assignment?.voiceNoteText : null),
+                      originalVoice: site.originalVoiceText ?? (siteIndex == 1 ? assignment?.originalVoiceText : null),
+                      language: site.voiceLanguage ?? (siteIndex == 1 ? assignment?.voiceLanguage : null),
+                    ),
                   ],
                 ),
               ),
             );
           }
+
+  Widget _buildVoiceNoteSummaryBox({
+    String? voiceNote,
+    String? originalVoice,
+    String? language,
+  }) {
+    final note = (voiceNote != null && voiceNote.isNotEmpty) ? voiceNote : null;
+    final orig = (originalVoice != null && originalVoice.isNotEmpty && originalVoice != note) ? originalVoice : null;
+    if (note == null && orig == null) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF9CC70A).withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.mic, size: 12, color: Color(0xFF414A51)),
+                    SizedBox(width: 4),
+                    Text(
+                      'AI Voice Summary',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF414A51),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (language != null && language.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    language,
+                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (note != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              note,
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1E293B),
+                height: 1.35,
+              ),
+            ),
+          ],
+          if (orig != null) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFFCBD5E1)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.translate, size: 13, color: Color(0xFF64748B)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: RichText(
+                      text: TextSpan(
+                        style: const TextStyle(fontSize: 11, color: Color(0xFF334155)),
+                        children: [
+                          const TextSpan(text: 'Original Spoken: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                          TextSpan(text: orig),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 
   Widget _buildLocationRow({
     required IconData icon,
