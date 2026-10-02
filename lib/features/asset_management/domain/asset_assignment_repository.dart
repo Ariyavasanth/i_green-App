@@ -10,6 +10,8 @@ abstract interface class AssetAssignmentRepository {
   Future<void> deleteAssignment(int id);
   Future<List<AssetTransferRequest>> getTransferRequests();
   Future<AssetTransferRequest> createTransferRequest(AssetTransferRequest request);
+  Future<void> updateTransferRequest(AssetTransferRequest request);
+  Future<void> cancelTransferRequest(int id);
   Future<void> respondToTransferRequest(AssetTransferRequest request, {required bool approve});
   Future<List<AssetReturnRequest>> getReturnRequests();
   Future<AssetReturnRequest> createReturnRequest(AssetReturnRequest request);

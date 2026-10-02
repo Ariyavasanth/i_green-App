@@ -147,6 +147,42 @@ class FirebaseAssetAssignmentRepository implements AssetAssignmentRepository {
   }
 
   @override
+  Future<void> updateTransferRequest(AssetTransferRequest request) async {
+    try {
+      final snapshot = await _transferRef
+          .where('id', isEqualTo: request.id)
+          .limit(1)
+          .get();
+      String docId = snapshot.docs.isNotEmpty
+          ? snapshot.docs.first.id
+          : request.id.toString();
+      final data = request.toMap();
+      data['updated_at'] = FieldValue.serverTimestamp();
+      await _transferRef.doc(docId).set(data, SetOptions(merge: true));
+    } catch (_) {}
+  }
+
+  @override
+  Future<void> cancelTransferRequest(int id) async {
+    try {
+      final snapshot = await _transferRef.where('id', isEqualTo: id).limit(1).get();
+      if (snapshot.docs.isNotEmpty) {
+        await snapshot.docs.first.reference.update({
+          'status': 'Cancelled',
+          'responded_at': DateTime.now().toIso8601String(),
+          'updated_at': FieldValue.serverTimestamp(),
+        });
+        return;
+      }
+      await _transferRef.doc(id.toString()).set({
+        'status': 'Cancelled',
+        'responded_at': DateTime.now().toIso8601String(),
+        'updated_at': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {}
+  }
+
+  @override
   Future<void> respondToTransferRequest(
     AssetTransferRequest request, {
     required bool approve,

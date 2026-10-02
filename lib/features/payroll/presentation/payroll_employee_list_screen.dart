@@ -888,6 +888,7 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
             cycleMonth: month,
             incentiveSettings: incentiveSettings,
             ledgers: allLedgers,
+            overrideEarnedIncentive: override?.incentive,
           );
 
           if (incentiveMetrics.totalEarnedIncentive > 0) {

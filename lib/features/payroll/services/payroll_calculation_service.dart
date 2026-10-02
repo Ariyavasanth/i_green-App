@@ -92,6 +92,7 @@ class PayrollCalculationService {
     String? cycleMonth,
     IncentiveSettings incentiveSettings = const IncentiveSettings(),
     List<IncentivePayoutLedger>? ledgers,
+    double? overrideEarnedIncentive,
   }) {
     final normEmpName = employee.fullName.trim().toLowerCase();
     final normFirstName = employee.firstName.trim().toLowerCase();
@@ -138,6 +139,12 @@ class PayrollCalculationService {
       if (dateOnly.isBefore(endOnly)) {
         cumulativeTotal += amt;
       }
+    }
+
+    // Apply manual or CSV/Excel override to total earned incentive if provided
+    if (overrideEarnedIncentive != null) {
+      cumulativeTotal = (cumulativeTotal - totalEarnedInCycle + overrideEarnedIncentive).clamp(0.0, double.infinity);
+      totalEarnedInCycle = overrideEarnedIncentive;
     }
 
     // 1. Table 1 & Table 2 Split (50% Immediate / 50% Deferred)
@@ -198,7 +205,6 @@ class PayrollCalculationService {
       eligibleLedgersToRelease: eligibleLedgers,
       isReleaseCycle: isReleaseCycle,
     );
-
   }
 
 
@@ -360,8 +366,9 @@ class PayrollCalculationService {
       cycleMonth: month,
       incentiveSettings: incentiveSettings,
       ledgers: ledgers,
+      overrideEarnedIncentive: overrideInput?.incentive,
     );
-    final effectiveIncentive = overrideInput?.incentive ?? incentiveMetrics.totalPayableIncentive;
+    final effectiveIncentive = incentiveMetrics.totalPayableIncentive;
     final effectiveOthersEarning = overrideInput?.othersEarning ?? manualOthersEarning;
     final effectiveBonus = overrideInput?.bonus ?? manualBonus;
     final effectiveOt = overrideInput?.ot ?? manualOt;

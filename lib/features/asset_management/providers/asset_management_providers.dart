@@ -71,6 +71,38 @@ final myIncomingAssetTransferRequestsProvider = FutureProvider<List<AssetTransfe
   }).toList();
 });
 
+final myOutgoingAssetTransferRequestsProvider = FutureProvider<List<AssetTransferRequest>>((ref) async {
+  final requests = await ref.watch(assetTransferRequestsProvider.future);
+  final employee = ref.watch(myAssetSelectedEmployeeProvider) ?? ref.watch(currentEmployeeProvider);
+  if (employee == null) return const [];
+  final code = employee.employeeId.trim().toLowerCase();
+  final name = employee.fullName.trim().toLowerCase();
+  return requests.where((request) {
+    return (employee.id > 0 && request.fromEmployeeId == employee.id) ||
+        (code.isNotEmpty && request.fromEmployeeCode.trim().toLowerCase() == code) ||
+        (name.isNotEmpty && request.fromEmployeeName.trim().toLowerCase() == name);
+  }).toList();
+});
+
+final myAllAssetTransferRequestsProvider = FutureProvider<List<AssetTransferRequest>>((ref) async {
+  final requests = await ref.watch(assetTransferRequestsProvider.future);
+  final employee = ref.watch(myAssetSelectedEmployeeProvider) ?? ref.watch(currentEmployeeProvider);
+  if (employee == null) return const [];
+  final code = employee.employeeId.trim().toLowerCase();
+  final name = employee.fullName.trim().toLowerCase();
+  return requests.where((request) {
+    final isIncoming = (employee.id > 0 && request.toEmployeeId == employee.id) ||
+        (code.isNotEmpty && request.toEmployeeCode.trim().toLowerCase() == code) ||
+        (name.isNotEmpty && request.toEmployeeName.trim().toLowerCase() == name);
+    final isOutgoing = (employee.id > 0 && request.fromEmployeeId == employee.id) ||
+        (code.isNotEmpty && request.fromEmployeeCode.trim().toLowerCase() == code) ||
+        (name.isNotEmpty && request.fromEmployeeName.trim().toLowerCase() == name);
+    return isIncoming || isOutgoing;
+  }).toList();
+});
+
+final myAssetTransferFilterProvider = StateProvider<String>((ref) => 'All');
+
 final assetReturnRequestsProvider = FutureProvider<List<AssetReturnRequest>>((ref) async {
   return ref.watch(assetAssignmentRepositoryProvider).getReturnRequests();
 });

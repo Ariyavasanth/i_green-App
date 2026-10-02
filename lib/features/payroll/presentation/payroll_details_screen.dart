@@ -408,9 +408,8 @@ class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
       ('Education Allowance', record.educationAllowance),
       ('Travel Allowance', record.travelAllowance),
       ('Other Allowance', record.otherAllowance),
-      ('Incentive', record.incentive),
+      ('Incentive (Payable)', record.incentive),
       ('Others Earning', record.othersEarning),
-      ('Cumulative Incentive', record.cumulativeIncentive),
       ('Bonus', record.bonus),
       ('OT (Overtime)', record.ot),
     ];
@@ -435,7 +434,6 @@ class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
         record.otherAllowance +
         record.incentive +
         record.othersEarning +
-        record.cumulativeIncentive +
         record.bonus +
         record.ot;
 
@@ -448,6 +446,10 @@ class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
         record.othersDeduction +
         record.staffWelfareContribution +
         record.greeting;
+
+    final hasIncentiveInfo = record.incentive > 0 ||
+        (record.carryForward.isNotEmpty && record.carryForward != '-') ||
+        record.cumulativeIncentive > 0;
 
     return Card(
       elevation: 0,
@@ -469,6 +471,34 @@ class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
                 _buildAmountRow(earn.$1, earn.$2),
             const Divider(height: 20),
             _buildAmountRow('Total Earnings', totalEarnings, isBold: true),
+
+            if (hasIncentiveInfo) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.divider),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Incentive & Deferred Info (3-Table Summary)',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(height: 6),
+                    if (record.incentive > 0)
+                      _buildInfoRow('Current Payable Incentive', '₹${record.incentive.toStringAsFixed(2)}'),
+                    if (record.carryForward.isNotEmpty && record.carryForward != '-')
+                      _buildInfoRow('Carry Forward (Deferred 50%)', record.carryForward),
+                    if (record.cumulativeIncentive > 0)
+                      _buildInfoRow('Cumulative Incentive (Reference)', '₹${record.cumulativeIncentive.toStringAsFixed(2)}'),
+                  ],
+                ),
+              ),
+            ],
 
             const SizedBox(height: 24),
 
@@ -499,6 +529,19 @@ class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+          Text(value, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF414A51))),
+        ],
       ),
     );
   }

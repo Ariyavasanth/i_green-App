@@ -557,6 +557,9 @@ class _MyAssetPageState extends ConsumerState<MyAssetPage> {
                               ),
                             );
                             ref.invalidate(assetTransferRequestsProvider);
+                            ref.invalidate(myAllAssetTransferRequestsProvider);
+                            ref.invalidate(myIncomingAssetTransferRequestsProvider);
+                            ref.invalidate(myOutgoingAssetTransferRequestsProvider);
 
                             if (ctx.mounted) {
                               Navigator.pop(ctx);
@@ -1146,7 +1149,7 @@ class _MyAssetPageState extends ConsumerState<MyAssetPage> {
           );
         },
       ),
-        _buildIncomingRequests(),
+        _buildTransferRequestsTab(),
         ]),
       ),
       ),
@@ -1154,101 +1157,987 @@ class _MyAssetPageState extends ConsumerState<MyAssetPage> {
 
   }
 
-  Widget _buildIncomingRequests() {
-    final requestsAsync = ref.watch(myIncomingAssetTransferRequestsProvider);
-    return requestsAsync.when(
+  String _formatTimestamp(String? isoString) {
+    if (isoString == null || isoString.isEmpty) return '';
+    try {
+      final dt = DateTime.parse(isoString).toLocal();
+      return DateFormat('dd MMM yyyy, hh:mm a').format(dt);
+    } catch (_) {
+      return isoString;
+    }
+  }
+
+  Widget _buildTransferRequestsTab() {
+    final allRequestsAsync = ref.watch(myAllAssetTransferRequestsProvider);
+    final transferFilter = ref.watch(myAssetTransferFilterProvider);
+    final overrideEmp = ref.watch(myAssetSelectedEmployeeProvider);
+    final currentEmp = overrideEmp ?? ref.watch(currentEmployeeProvider);
+
+    return allRequestsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF9CC70A))),
       error: (error, _) => Center(child: Text('Error loading transfer requests: $error')),
       data: (requests) {
-        if (requests.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.move_to_inbox_outlined, size: 64, color: Colors.grey[400]),
-                const SizedBox(height: 12),
-                const Text('No transfer requests', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF414A51))),
-                const SizedBox(height: 6),
-                Text('Incoming asset transfer requests will appear here.', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-              ],
-            ),
-          );
+        final code = currentEmp?.employeeId.trim().toLowerCase() ?? '';
+        final name = currentEmp?.fullName.trim().toLowerCase() ?? '';
+        final empId = currentEmp?.id ?? 0;
+
+        bool isOutgoingReq(AssetTransferRequest r) {
+          return (empId > 0 && r.fromEmployeeId == empId) ||
+              (code.isNotEmpty && r.fromEmployeeCode.trim().toLowerCase() == code) ||
+              (name.isNotEmpty && r.fromEmployeeName.trim().toLowerCase() == name);
         }
-        return ListView.separated(
-          padding: const EdgeInsets.all(16),
-          itemCount: requests.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (_, index) => _buildTransferRequestCard(requests[index]),
+
+        bool isIncomingReq(AssetTransferRequest r) {
+          return (empId > 0 && r.toEmployeeId == empId) ||
+              (code.isNotEmpty && r.toEmployeeCode.trim().toLowerCase() == code) ||
+              (name.isNotEmpty && r.toEmployeeName.trim().toLowerCase() == name);
+        }
+
+        final incomingRequests = requests.where(isIncomingReq).toList();
+        final outgoingRequests = requests.where(isOutgoingReq).toList();
+
+        final pendingIncomingCount = incomingRequests.where((r) => r.status == 'Pending').length;
+        final pendingOutgoingCount = outgoingRequests.where((r) => r.status == 'Pending').length;
+
+        List<AssetTransferRequest> displayedRequests = [];
+        if (transferFilter == 'Received') {
+          displayedRequests = incomingRequests;
+        } else if (transferFilter == 'Sent') {
+          displayedRequests = outgoingRequests;
+        } else {
+          displayedRequests = requests;
+        }
+
+        final employees = ref.watch(employeesProvider).asData?.value ?? [];
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Filter Toolbar
+              Card(
+                elevation: 0.5,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.filter_list, size: 20, color: Color(0xFF414A51)),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Filter:',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF414A51)),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              _buildTransferFilterChip(
+                                label: 'All Transfers',
+                                count: requests.length,
+                                isSelected: transferFilter == 'All',
+                                onSelected: () => ref.read(myAssetTransferFilterProvider.notifier).state = 'All',
+                              ),
+                              const SizedBox(width: 8),
+                              _buildTransferFilterChip(
+                                label: 'Received (Incoming)',
+                                count: incomingRequests.length,
+                                badgePending: pendingIncomingCount > 0 ? pendingIncomingCount : null,
+                                isSelected: transferFilter == 'Received',
+                                onSelected: () => ref.read(myAssetTransferFilterProvider.notifier).state = 'Received',
+                              ),
+                              const SizedBox(width: 8),
+                              _buildTransferFilterChip(
+                                label: 'Sent (Outgoing)',
+                                count: outgoingRequests.length,
+                                badgePending: pendingOutgoingCount > 0 ? pendingOutgoingCount : null,
+                                isSelected: transferFilter == 'Sent',
+                                onSelected: () => ref.read(myAssetTransferFilterProvider.notifier).state = 'Sent',
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              if (displayedRequests.isEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey[200]!),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.swap_horiz_outlined, size: 64, color: Colors.grey[400]),
+                      const SizedBox(height: 12),
+                      Text(
+                        transferFilter == 'Received'
+                            ? 'No incoming transfer requests.'
+                            : transferFilter == 'Sent'
+                                ? 'No outgoing transfer requests.'
+                                : 'No asset transfer requests found.',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF414A51)),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        transferFilter == 'Received'
+                            ? 'When another employee initiates a transfer to you, it will appear here for your acceptance.'
+                            : transferFilter == 'Sent'
+                                ? 'When you transfer an assigned asset to another employee, track its acceptance status here.'
+                                : 'Incoming and outgoing asset transfer requests will appear here.',
+                        style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                )
+              else
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: displayedRequests.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (_, index) {
+                    final req = displayedRequests[index];
+                    final isOutgoing = isOutgoingReq(req);
+                    final isIncoming = isIncomingReq(req);
+                    return _buildTransferRequestCard(
+                      req,
+                      isOutgoing: isOutgoing,
+                      isIncoming: isIncoming,
+                      employees: employees,
+                    );
+                  },
+                ),
+            ],
+          ),
         );
       },
     );
   }
 
-  Widget _buildTransferRequestCard(AssetTransferRequest request) {
+  Widget _buildTransferFilterChip({
+    required String label,
+    required int count,
+    int? badgePending,
+    required bool isSelected,
+    required VoidCallback onSelected,
+  }) {
+    return ChoiceChip(
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('$label ($count)'),
+          if (badgePending != null && badgePending > 0) ...[
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: isSelected ? Colors.white : const Color(0xFFFF9800),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$badgePending pending',
+                style: TextStyle(
+                  color: isSelected ? const Color(0xFFFF9800) : Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+      selected: isSelected,
+      selectedColor: const Color(0xFF9CC70A),
+      backgroundColor: Colors.grey[100],
+      labelStyle: TextStyle(
+        color: isSelected ? Colors.white : AppColors.textPrimary,
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        fontSize: 13,
+      ),
+      onSelected: (_) => onSelected(),
+    );
+  }
+
+  Widget _buildTransferRequestCard(
+    AssetTransferRequest request, {
+    required bool isOutgoing,
+    required bool isIncoming,
+    required List<Employee> employees,
+  }) {
     final pending = request.status == 'Pending';
-    final statusColor = request.status == 'Approved'
+    final approved = request.status == 'Approved';
+    final rejected = request.status == 'Rejected';
+    final cancelled = request.status == 'Cancelled';
+
+    final statusColor = approved
         ? const Color(0xFF9CC70A)
-        : request.status == 'Rejected' ? Colors.red : const Color(0xFFFF9800);
+        : rejected
+            ? const Color(0xFFDC2626)
+            : cancelled
+                ? const Color(0xFF64748B)
+                : const Color(0xFFFF9800);
+
+    final statusLabel = approved
+        ? 'Accepted'
+        : rejected
+            ? 'Declined'
+            : cancelled
+                ? 'Cancelled'
+                : 'Pending';
+
     return Card(
       elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: Colors.grey[200]!)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(
+          color: pending ? const Color(0xFFFFE082) : Colors.grey[200]!,
+          width: pending ? 1.5 : 1.0,
+        ),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: const Color(0xFF9CC70A).withOpacity(.12), borderRadius: BorderRadius.circular(10)),
-              child: Icon(_getAssetIcon(request.assetTypeName), color: const Color(0xFF9CC70A)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top Row: Icon, Asset Name, Direction Badge & Status Badge
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF9CC70A).withOpacity(.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(_getAssetIcon(request.assetTypeName), color: const Color(0xFF414A51), size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        request.assetName.isEmpty ? request.assetTypeName : request.assetName,
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        '${request.assetTypeName} • Serial: ${request.serialNumber.isEmpty ? "N/A" : request.serialNumber}',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      ),
+                    ],
+                  ),
+                ),
+                // Direction Badge (Sent / Received)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isOutgoing
+                        ? const Color(0xFF414A51).withOpacity(0.08)
+                        : const Color(0xFF9CC70A).withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isOutgoing
+                          ? const Color(0xFF414A51).withOpacity(0.2)
+                          : const Color(0xFF9CC70A).withOpacity(0.3),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isOutgoing ? Icons.upload_outlined : Icons.download_outlined,
+                        size: 13,
+                        color: isOutgoing ? const Color(0xFF414A51) : const Color(0xFF6B8B00),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        isOutgoing ? 'Sent' : 'Received',
+                        style: TextStyle(
+                          color: isOutgoing ? const Color(0xFF414A51) : const Color(0xFF6B8B00),
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Status Badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: statusColor.withOpacity(0.4)),
+                  ),
+                  child: Text(
+                    statusLabel,
+                    style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(request.assetName.isEmpty ? request.assetTypeName : request.assetName, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-              Text('${request.assetTypeName} • ${request.serialNumber.isEmpty ? "N/A" : request.serialNumber}', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-            ])),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-              decoration: BoxDecoration(color: statusColor.withOpacity(.12), borderRadius: BorderRadius.circular(12)),
-              child: Text(request.status, style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold)),
-            ),
-          ]),
-          const SizedBox(height: 14),
-          Text('From: ${request.fromEmployeeName}${request.fromEmployeeCode.isEmpty ? "" : " (${request.fromEmployeeCode})"}', style: const TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 5),
-          Text('Transfer date: ${request.transferDate}', style: TextStyle(color: Colors.grey[700], fontSize: 13)),
-          const SizedBox(height: 8),
-          Text(request.reason, style: TextStyle(color: Colors.grey[700], fontSize: 13)),
-          if (pending) ...[
             const SizedBox(height: 14),
-            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              OutlinedButton.icon(
-                onPressed: () => _respondToTransfer(request, false),
-                icon: const Icon(Icons.close, size: 17),
-                label: const Text('Reject'),
+
+            // Transfer Details Grid (From, To, Date, Reason)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8F9FA),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.grey[200]!),
               ),
-              const SizedBox(width: 8),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF9CC70A), foregroundColor: Colors.white),
-                onPressed: () => _respondToTransfer(request, true),
-                icon: const Icon(Icons.check, size: 17),
-                label: const Text('Accept'),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('From (Sender)', style: TextStyle(fontSize: 11, color: Colors.grey[600], fontWeight: FontWeight.w500)),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${request.fromEmployeeName}${request.fromEmployeeCode.isNotEmpty ? " (${request.fromEmployeeCode})" : ""}',
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF212121)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('To (Recipient)', style: TextStyle(fontSize: 11, color: Colors.grey[600], fontWeight: FontWeight.w500)),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${request.toEmployeeName}${request.toEmployeeCode.isNotEmpty ? " (${request.toEmployeeCode})" : ""}',
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF212121)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Transfer Date', style: TextStyle(fontSize: 11, color: Colors.grey[600], fontWeight: FontWeight.w500)),
+                            const SizedBox(height: 2),
+                            Text(
+                              request.transferDate.isNotEmpty ? request.transferDate : 'N/A',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (request.createdAt != null && request.createdAt!.isNotEmpty)
+                        Expanded(
+                          child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Requested On', style: TextStyle(fontSize: 11, color: Colors.grey[600], fontWeight: FontWeight.w500)),
+                            const SizedBox(height: 2),
+                            Text(
+                              _formatTimestamp(request.createdAt),
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (request.reason.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    const Divider(height: 12),
+                    Text('Reason / Description:', style: TextStyle(fontSize: 11, color: Colors.grey[600], fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 2),
+                    Text(
+                      request.reason,
+                      style: const TextStyle(fontSize: 12.5, color: Color(0xFF333333)),
+                    ),
+                  ],
+                ],
               ),
-            ]),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Status Description Notice / Action Footer
+            if (isOutgoing) ...[
+              if (pending) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF8E1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFFFE082)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.hourglass_top_outlined, color: Color(0xFFFF9800), size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Waiting for ${request.toEmployeeName} to accept this transfer request. The asset remains under your assignment until accepted.',
+                          style: const TextStyle(fontSize: 12, color: Color(0xFFE65100), fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFDC2626),
+                        side: const BorderSide(color: Color(0xFFFCA5A5)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () => _confirmCancelTransferRequest(request),
+                      icon: const Icon(Icons.cancel_outlined, size: 17),
+                      label: const Text('Cancel Request'),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF414A51),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () => _showEditTransferDialog(request, employees),
+                      icon: const Icon(Icons.edit_outlined, size: 17),
+                      label: const Text('Edit Request'),
+                    ),
+                  ],
+                ),
+              ] else if (approved)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F8E9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFC5E1A5)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline, color: Color(0xFF9CC70A), size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Accepted by ${request.toEmployeeName}${request.toEmployeeCode.isNotEmpty ? " (${request.toEmployeeCode})" : ""}${request.respondedAt != null ? " on ${_formatTimestamp(request.respondedAt)}" : ""}. The asset has been transferred.',
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF33691E), fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else if (rejected)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFFCA5A5)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.cancel_outlined, color: Color(0xFFDC2626), size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Declined by ${request.toEmployeeName}${request.respondedAt != null ? " on ${_formatTimestamp(request.respondedAt)}" : ""}. The asset remains assigned to you.',
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF991B1B), fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else if (cancelled)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.block_outlined, color: Color(0xFF64748B), size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'You cancelled this transfer request${request.respondedAt != null ? " on ${_formatTimestamp(request.respondedAt)}" : ""}. The asset remains assigned to you.',
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF475569), fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ] else if (isIncoming) ...[
+              if (pending) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF8E1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFFFE082)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline, color: Color(0xFFFF9800), size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '${request.fromEmployeeName} has initiated a transfer of this asset to you. Please accept to add it to your assigned assets, or reject.',
+                          style: const TextStyle(fontSize: 12, color: Color(0xFFE65100), fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFDC2626),
+                        side: const BorderSide(color: Color(0xFFFCA5A5)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () => _respondToTransfer(request, false),
+                      icon: const Icon(Icons.close, size: 17),
+                      label: const Text('Reject'),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF9CC70A),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () => _respondToTransfer(request, true),
+                      icon: const Icon(Icons.check, size: 17),
+                      label: const Text('Accept Transfer'),
+                    ),
+                  ],
+                ),
+              ] else if (approved)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F8E9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFC5E1A5)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline, color: Color(0xFF9CC70A), size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'You accepted this asset transfer${request.respondedAt != null ? " on ${_formatTimestamp(request.respondedAt)}" : ""}. It is now in your active assets list.',
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF33691E), fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else if (rejected)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFFCA5A5)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.cancel_outlined, color: Color(0xFFDC2626), size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'You declined this asset transfer request${request.respondedAt != null ? " on ${_formatTimestamp(request.respondedAt)}" : ""}.',
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF991B1B), fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else if (cancelled)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.block_outlined, color: Color(0xFF64748B), size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'This transfer request was cancelled by ${request.fromEmployeeName}${request.respondedAt != null ? " on ${_formatTimestamp(request.respondedAt)}" : ""}.',
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF475569), fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
           ],
-        ]),
+        ),
       ),
     );
+  }
+
+  // ── Edit Transfer Request Dialog ─────────────────────────────────────────
+  Future<void> _showEditTransferDialog(
+    AssetTransferRequest request,
+    List<Employee> employees,
+  ) async {
+    final formKey = GlobalKey<FormState>();
+    final availableEmployees = employees.where((e) => e.id != request.fromEmployeeId).toList();
+    final matchingEmployees = availableEmployees.where(
+      (e) => (request.toEmployeeId > 0 && e.id == request.toEmployeeId) ||
+          (request.toEmployeeCode.isNotEmpty && e.employeeId.toLowerCase() == request.toEmployeeCode.toLowerCase()),
+    ).toList();
+    Employee? selectedTargetEmployee = matchingEmployees.isNotEmpty
+        ? matchingEmployees.first
+        : (availableEmployees.isNotEmpty ? availableEmployees.first : null);
+
+    final transferDateController = TextEditingController(text: request.transferDate);
+    final reasonController = TextEditingController(text: request.reason);
+    bool isSubmitting = false;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: const [
+                  Icon(Icons.edit_note_outlined, color: Color(0xFF9CC70A), size: 24),
+                  SizedBox(width: 10),
+                  Text('Edit Transfer Request', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                ],
+              ),
+              content: SizedBox(
+                width: 480,
+                child: SingleChildScrollView(
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Asset Summary Banner
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8F9FA),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.grey[300]!),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(_getAssetIcon(request.assetTypeName), color: const Color(0xFF414A51), size: 22),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      request.assetName.isNotEmpty ? request.assetName : request.assetTypeName,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                    ),
+                                    Text(
+                                      'Serial: ${request.serialNumber.isNotEmpty ? request.serialNumber : "N/A"} • Type: ${request.assetTypeName}',
+                                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Transfer To Employee Dropdown *
+                        DropdownButtonFormField<Employee>(
+                          value: selectedTargetEmployee,
+                          decoration: InputDecoration(
+                            labelText: 'Transfer To Employee *',
+                            hintText: 'Select employee from list...',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            isDense: true,
+                            prefixIcon: const Icon(Icons.person_outline, size: 20),
+                          ),
+                          items: availableEmployees.map((emp) {
+                            return DropdownMenuItem<Employee>(
+                              value: emp,
+                              child: Text(
+                                '${emp.fullName} (${emp.employeeId.isNotEmpty ? emp.employeeId : "Emp #${emp.id}"})',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            setDialogState(() => selectedTargetEmployee = val);
+                          },
+                          validator: (val) {
+                            if (val == null) {
+                              return 'Please select an employee to transfer asset to';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 14),
+
+                        // Transfer Date *
+                        TextFormField(
+                          controller: transferDateController,
+                          readOnly: true,
+                          decoration: InputDecoration(
+                            labelText: 'Transfer Date *',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            isDense: true,
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.calendar_today_outlined, size: 18),
+                              onPressed: () async {
+                                final cur = DateTime.tryParse(transferDateController.text) ?? DateTime.now();
+                                final picked = await showDatePicker(
+                                  context: dialogCtx,
+                                  initialDate: cur,
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2035),
+                                );
+                                if (picked != null) {
+                                  setDialogState(() {
+                                    transferDateController.text = DateFormat('yyyy-MM-dd').format(picked);
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                          validator: (val) {
+                            if (val == null || val.trim().isEmpty) {
+                              return 'Transfer date required';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 14),
+
+                        // Reason / Description *
+                        TextFormField(
+                          controller: reasonController,
+                          maxLines: 2,
+                          decoration: InputDecoration(
+                            labelText: 'Reason for Transfer / Description *',
+                            hintText: 'Enter reason or notes for asset transfer...',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          validator: (val) {
+                            if (val == null || val.trim().isEmpty) {
+                              return 'Please provide a transfer reason or note';
+                            }
+                            return null;
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              actions: [
+                OutlinedButton(
+                  onPressed: isSubmitting ? null : () => Navigator.pop(dialogCtx),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF9CC70A),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          if (!formKey.currentState!.validate()) return;
+                          setDialogState(() => isSubmitting = true);
+
+                          try {
+                            final target = selectedTargetEmployee!;
+                            final updated = request.copyWith(
+                              toEmployeeId: target.id,
+                              toEmployeeName: target.fullName,
+                              toEmployeeCode: target.employeeId,
+                              transferDate: transferDateController.text.trim(),
+                              reason: reasonController.text.trim(),
+                            );
+                            await ref.read(assetAssignmentRepositoryProvider).updateTransferRequest(updated);
+                            ref.invalidate(assetTransferRequestsProvider);
+                            ref.invalidate(myAllAssetTransferRequestsProvider);
+                            ref.invalidate(myIncomingAssetTransferRequestsProvider);
+                            ref.invalidate(myOutgoingAssetTransferRequestsProvider);
+
+                            if (ctx.mounted) {
+                              Navigator.pop(ctx);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      const Icon(Icons.check_circle, color: Colors.white),
+                                      const SizedBox(width: 10),
+                                      const Expanded(
+                                        child: Text('Transfer request updated successfully.'),
+                                      ),
+                                    ],
+                                  ),
+                                  backgroundColor: const Color(0xFF9CC70A),
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setDialogState(() => isSubmitting = false);
+                            if (ctx.mounted) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                SnackBar(content: Text('Error updating transfer request: $e')),
+                              );
+                            }
+                          }
+                        },
+                  icon: isSubmitting
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Icon(Icons.save_outlined, size: 18),
+                  label: const Text('Save Changes'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    transferDateController.dispose();
+    reasonController.dispose();
+  }
+
+  // ── Cancel Transfer Request Dialog ───────────────────────────────────────
+  Future<void> _confirmCancelTransferRequest(AssetTransferRequest request) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: const [
+            Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 24),
+            SizedBox(width: 10),
+            Text('Cancel Transfer Request', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to cancel the transfer request for "${request.assetName.isNotEmpty ? request.assetName : request.assetTypeName}" to ${request.toEmployeeName}?',
+          style: const TextStyle(fontSize: 14),
+        ),
+        actions: [
+          OutlinedButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep Request'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Yes, Cancel Request'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await ref.read(assetAssignmentRepositoryProvider).cancelTransferRequest(request.id);
+        ref.invalidate(assetTransferRequestsProvider);
+        ref.invalidate(myAllAssetTransferRequestsProvider);
+        ref.invalidate(myIncomingAssetTransferRequestsProvider);
+        ref.invalidate(myOutgoingAssetTransferRequestsProvider);
+        ref.invalidate(assetAssignmentsProvider);
+        ref.invalidate(myAssetAssignmentsProvider);
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Transfer request cancelled successfully.'),
+            backgroundColor: const Color(0xFF414A51),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error cancelling transfer request: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _respondToTransfer(AssetTransferRequest request, bool approve) async {
     try {
       await ref.read(assetAssignmentRepositoryProvider).respondToTransferRequest(request, approve: approve);
       ref.invalidate(assetTransferRequestsProvider);
+      ref.invalidate(myAllAssetTransferRequestsProvider);
+      ref.invalidate(myIncomingAssetTransferRequestsProvider);
+      ref.invalidate(myOutgoingAssetTransferRequestsProvider);
       ref.invalidate(assetAssignmentsProvider);
+      ref.invalidate(myAssetAssignmentsProvider);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(approve ? 'Asset transfer accepted.' : 'Asset transfer rejected.'),
+        content: Text(approve ? 'Asset transfer accepted successfully.' : 'Asset transfer declined.'),
         backgroundColor: approve ? const Color(0xFF9CC70A) : const Color(0xFF414A51),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ));
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not update request: $error')));

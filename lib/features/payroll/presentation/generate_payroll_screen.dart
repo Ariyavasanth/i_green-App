@@ -265,10 +265,11 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
       cycleMonth: month,
       incentiveSettings: incentiveSettings,
       ledgers: ledgers,
+      overrideEarnedIncentive: overrideIncentive,
     );
 
     _incentiveResult = result;
-    final effectiveIncentive = overrideIncentive ?? result.totalPayableIncentive;
+    final effectiveIncentive = result.totalPayableIncentive;
     final currentIncentiveVal = double.tryParse(_incentiveController.text) ?? -1.0;
     final currentCumVal = double.tryParse(_cumulativeIncentiveController.text) ?? -1.0;
 
@@ -278,8 +279,10 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
           setState(() {
             _incentiveController.text = effectiveIncentive.toStringAsFixed(2);
             _cumulativeIncentiveController.text = result.cumulativeTotal.toStringAsFixed(2);
-            if ((_carryForwardController.text.isEmpty || _carryForwardController.text == '-') && result.currentDeferredIncentive > 0) {
+            if (result.currentDeferredIncentive > 0) {
               _carryForwardController.text = '₹${result.currentDeferredIncentive.toStringAsFixed(2)} (Deferred)';
+            } else if (_carryForwardController.text.isEmpty) {
+              _carryForwardController.text = '-';
             }
             _recalculate();
           });
@@ -1120,9 +1123,9 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     String? incentiveHelper;
     if (_incentiveResult != null) {
       if (_incentiveResult!.releasedDeferredIncentive > 0) {
-        incentiveHelper = 'Immediate (50%): ₹${_incentiveResult!.immediateIncentive.toStringAsFixed(2)} + Deferred Released: ₹${_incentiveResult!.releasedDeferredIncentive.toStringAsFixed(2)} (Total Earned: ₹${_incentiveResult!.totalEarnedIncentive.toStringAsFixed(2)})';
+        incentiveHelper = 'Immediate (50%): ₹${_incentiveResult!.immediateIncentive.toStringAsFixed(2)} + Released: ₹${_incentiveResult!.releasedDeferredIncentive.toStringAsFixed(2)} = ₹${_incentiveResult!.totalPayableIncentive.toStringAsFixed(2)} payable (Total Earned: ₹${_incentiveResult!.totalEarnedIncentive.toStringAsFixed(2)})';
       } else if (_incentiveResult!.totalEarnedIncentive > 0) {
-        incentiveHelper = 'Immediate (50%): ₹${_incentiveResult!.immediateIncentive.toStringAsFixed(2)} | Deferred (50%): ₹${_incentiveResult!.currentDeferredIncentive.toStringAsFixed(2)} (Total Earned: ₹${_incentiveResult!.totalEarnedIncentive.toStringAsFixed(2)})';
+        incentiveHelper = 'Immediate (50%): ₹${_incentiveResult!.immediateIncentive.toStringAsFixed(2)} payable | Deferred (50%): ₹${_incentiveResult!.currentDeferredIncentive.toStringAsFixed(2)} (Total Earned: ₹${_incentiveResult!.totalEarnedIncentive.toStringAsFixed(2)})';
       }
     }
 
@@ -1157,15 +1160,15 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
             const SizedBox(height: 12),
             _buildInputField('Other Allowance', _otherAllowanceController),
             const Divider(height: 24),
-            const Text('Monthly Inputs', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+            const Text('Monthly Inputs & Incentives', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
             const SizedBox(height: 12),
-            _buildInputField('Incentive', _incentiveController, helperText: incentiveHelper),
+            _buildInputField('Incentive (Payable)', _incentiveController, helperText: incentiveHelper),
             const SizedBox(height: 12),
-            _buildInputField('Carry Forward', _carryForwardController, isText: true, helperText: carryForwardHelper),
+            _buildInputField('Carry Forward (Deferred 50%)', _carryForwardController, isText: true, helperText: carryForwardHelper),
             const SizedBox(height: 12),
             _buildInputField('Others Earning', _othersEarningController),
             const SizedBox(height: 12),
-            _buildInputField('Cumulative Incentive', _cumulativeIncentiveController),
+            _buildInputField('Cumulative Incentive (Informational)', _cumulativeIncentiveController, helperText: 'Informational accrued reference – not added to net salary'),
             const SizedBox(height: 12),
             _buildInputField('Bonus', _bonusController),
             const SizedBox(height: 12),

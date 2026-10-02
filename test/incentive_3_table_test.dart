@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_application_1/features/attendance/domain/attendance_record.dart';
 import 'package:flutter_application_1/features/employee/domain/employee.dart';
 import 'package:flutter_application_1/features/incentive/domain/incentive_payout_ledger.dart';
 import 'package:flutter_application_1/features/incentive/domain/incentive_request.dart';
@@ -480,6 +481,100 @@ void main() {
       expect(result.immediateIncentive, equals(0.0));
       expect(result.currentDeferredIncentive, equals(0.0));
       expect(result.totalPayableIncentive, equals(0.0));
+    });
+
+    test('9. CSV/Excel Override with ₹10,000 passes through 3-table calculation (₹5,000 payable + ₹5,000 deferred)', () {
+      final period = standardSettings.getPayrollPeriod(2026, 10);
+      final incentiveSettings = const IncentiveSettings(
+        is3TableRuleEnabled: true,
+        immediatePercentage: 50.0,
+        deferredPercentage: 50.0,
+      );
+
+      final result = PayrollCalculationService.calculateIncentives(
+        employee: testEmployee,
+        requests: [], // No standard requests
+        period: period,
+        cycleMonth: 'October 2026',
+        incentiveSettings: incentiveSettings,
+        ledgers: [],
+        overrideEarnedIncentive: 10000.0, // Admin uploaded ₹10,000 override
+      );
+
+      expect(result.totalEarnedIncentive, equals(10000.0));
+      expect(result.immediateIncentive, equals(5000.0));
+      expect(result.currentDeferredIncentive, equals(5000.0));
+      expect(result.releasedDeferredIncentive, equals(0.0));
+      expect(result.totalPayableIncentive, equals(5000.0));
+      expect(result.cumulativeTotal, equals(10000.0));
+      expect(result.totalPendingDeferredBalance, equals(5000.0));
+    });
+
+    test('10. calculatePayrollRecord: ₹10,000 earned incentive yields ₹5,000 payable in record.incentive, carry forward ₹5,000, and cumulative incentive ₹10,000 is NEVER added to Net Salary', () {
+      final period = standardSettings.getPayrollPeriod(2026, 10);
+      final incentiveSettings = const IncentiveSettings(
+        is3TableRuleEnabled: true,
+        immediatePercentage: 50.0,
+        deferredPercentage: 50.0,
+      );
+
+      final requests = [
+        IncentiveRequest(
+          id: 1,
+          requestId: 'INC001',
+          employeeId: 101,
+          employeeName: 'Priya M',
+          designation: 'Operator',
+          site: 'Main Unit',
+          productName: 'Solar Panel',
+          meters: 100,
+          rate: 100,
+          amount: 10000.0,
+          approvedAmount: 10000.0,
+          status: 'Approved',
+          createdAt: '2026-10-05T10:00:00.000Z',
+        ),
+      ];
+
+      final attendance = <AttendanceRecord>[];
+      for (int i = 0; i < 30; i++) {
+        final d = period.startDate.add(Duration(days: i));
+        if (d.weekday != DateTime.sunday) {
+          attendance.add(AttendanceRecord(
+            id: i + 1,
+            employeeId: 101,
+            employeeName: 'Priya M',
+            date: '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}',
+            time: '09:00 AM',
+            checkInTime: '09:00 AM',
+            checkOutTime: '06:00 PM',
+            totalHours: 9.0,
+            status: 'Present',
+            verificationStatus: 'Verified',
+            similarityScore: 1.0,
+          ));
+        }
+      }
+
+      final record = PayrollCalculationService.calculatePayrollRecord(
+        employee: testEmployee, // basic: 20000, hra: 10000
+        month: 'October 2026',
+        settings: standardSettings,
+        attendanceRecords: attendance,
+        incentives: requests,
+        incentiveSettings: incentiveSettings,
+        ledgers: [],
+      );
+
+      // Verify payable incentive vs deferred vs cumulative
+      expect(record.incentive, equals(5000.0));
+      expect(record.carryForward, contains('5000.00'));
+      expect(record.cumulativeIncentive, equals(10000.0));
+
+      // Standard basic 20000 + hra 10000 + incentive 5000 = 35000 gross
+      // If cumulative (10000) was erroneously added, net salary would be 45000.
+      expect(record.netSalary, equals(35000.0));
+      expect(record.netSalary, isNot(equals(45000.0)));
     });
   });
 }
