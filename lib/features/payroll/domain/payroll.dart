@@ -22,6 +22,7 @@ class PayrollRecord {
   final double totalRequiredHours;
   final double totalWorkingHours;
   final double totalShortfallHours;
+  final double totalOvertimeHours;
 
   // Aliases for Phase 2C metric naming
   int get presentCount => presentDays;
@@ -107,6 +108,7 @@ class PayrollRecord {
     this.totalRequiredHours = 0.0,
     this.totalWorkingHours = 0.0,
     this.totalShortfallHours = 0.0,
+    this.totalOvertimeHours = 0.0,
     this.designation = '',
     this.department = '',
     this.emailId = '',
@@ -192,6 +194,7 @@ class PayrollRecord {
       'total_required_hours': totalRequiredHours,
       'total_working_hours': totalWorkingHours,
       'total_shortfall_hours': totalShortfallHours,
+      'total_overtime_hours': totalOvertimeHours,
       'designation': designation,
       'department': department,
       'email_id': emailId,
@@ -256,6 +259,7 @@ class PayrollRecord {
       totalRequiredHours: (map['total_required_hours'] as num?)?.toDouble() ?? 0.0,
       totalWorkingHours: (map['total_working_hours'] as num?)?.toDouble() ?? 0.0,
       totalShortfallHours: (map['total_shortfall_hours'] as num?)?.toDouble() ?? 0.0,
+      totalOvertimeHours: (map['total_overtime_hours'] as num?)?.toDouble() ?? 0.0,
       designation: map['designation'] as String? ?? '',
       department: map['department'] as String? ?? '',
       emailId: map['email_id'] as String? ?? '',
@@ -319,6 +323,7 @@ class PayrollRecord {
     double? totalRequiredHours,
     double? totalWorkingHours,
     double? totalShortfallHours,
+    double? totalOvertimeHours,
     String? designation,
     String? department,
     String? emailId,
@@ -380,6 +385,7 @@ class PayrollRecord {
       totalRequiredHours: totalRequiredHours ?? this.totalRequiredHours,
       totalWorkingHours: totalWorkingHours ?? this.totalWorkingHours,
       totalShortfallHours: totalShortfallHours ?? this.totalShortfallHours,
+      totalOvertimeHours: totalOvertimeHours ?? this.totalOvertimeHours,
       designation: designation ?? this.designation,
       department: department ?? this.department,
       emailId: emailId ?? this.emailId,

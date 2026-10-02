@@ -18,6 +18,7 @@ class DailyAttendanceResult {
     required this.requiredHours,
     required this.workingHours,
     required this.shortfallHours,
+    this.overtimeHours = 0.0,
   });
 
   final DateTime date;
@@ -30,6 +31,7 @@ class DailyAttendanceResult {
   final double requiredHours;
   final double workingHours;
   final double shortfallHours;
+  final double overtimeHours;
 
   Map<String, dynamic> toMap() => {
         'date': date.toIso8601String(),
@@ -40,6 +42,7 @@ class DailyAttendanceResult {
         'required_hours': requiredHours,
         'working_hours': workingHours,
         'shortfall_hours': shortfallHours,
+        'overtime_hours': overtimeHours,
         if (record != null) 'record': record!.toMap(),
       };
 }
@@ -67,6 +70,7 @@ class MonthlyAttendanceResult {
     required this.totalRequiredHours,
     required this.totalWorkingHours,
     required this.totalShortfallHours,
+    this.totalOvertimeHours = 0.0,
     required this.dailyResults,
   });
 
@@ -95,6 +99,7 @@ class MonthlyAttendanceResult {
   final double totalRequiredHours;
   final double totalWorkingHours;
   final double totalShortfallHours;
+  final double totalOvertimeHours;
 
   final List<DailyAttendanceResult> dailyResults;
 
@@ -222,6 +227,7 @@ class MonthlyAttendanceCalculator {
     int beforeJoiningCount = 0;
 
     double totalWorkingHours = 0.0;
+    double totalOvertimeHours = 0.0;
     int totalWorkingDays = 0;
     final List<DailyAttendanceResult> dailyResults = [];
 
@@ -291,6 +297,12 @@ class MonthlyAttendanceCalculator {
           : dayWorkingHours;
       totalWorkingHours += effectiveDayWorkingHours;
 
+      double dayOvertimeHours = 0.0;
+      if (record != null) {
+        dayOvertimeHours = record.calculateOvertimeHours(shiftOutTime: employee.outTime);
+      }
+      totalOvertimeHours += dayOvertimeHours;
+
       // Status categorization counters
       switch (statusInfo) {
         case AttendanceStatusInfo.present:
@@ -345,6 +357,7 @@ class MonthlyAttendanceCalculator {
         requiredHours: reqHoursForDay,
         workingHours: effectiveDayWorkingHours,
         shortfallHours: double.parse(shortfallForDay.toStringAsFixed(2)),
+        overtimeHours: dayOvertimeHours,
       ));
 
       cursor = cursor.add(const Duration(days: 1));
@@ -379,6 +392,7 @@ class MonthlyAttendanceCalculator {
       totalRequiredHours: totalRequiredHours,
       totalWorkingHours: totalWorkingHours,
       totalShortfallHours: totalShortfallHours,
+      totalOvertimeHours: double.parse(totalOvertimeHours.toStringAsFixed(2)),
       dailyResults: dailyResults,
     );
   }

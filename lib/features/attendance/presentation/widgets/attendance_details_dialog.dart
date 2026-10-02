@@ -77,6 +77,9 @@ class AttendanceDetailsDialog extends StatelessWidget {
   }
 
   String _resolveShiftLabel() {
+    if (record?.scheduledInTime.isNotEmpty == true && record?.scheduledOutTime.isNotEmpty == true) {
+      return '${record!.scheduledInTime} - ${record!.scheduledOutTime}';
+    }
     if (employee.isDynamicEmployee) {
       return 'Dynamic / Flexible';
     }
@@ -157,7 +160,9 @@ class AttendanceDetailsDialog extends StatelessWidget {
 
     final empCode = employee.employeeId.isNotEmpty ? employee.employeeId : 'EMP${employee.id.toString().padLeft(3, '0')}';
     final deptName = employee.department.isNotEmpty ? employee.department : 'General';
-    final reqHours = employee.requiredWorkingHours > 0 ? employee.requiredWorkingHours : 9.0;
+    final reqHours = (record?.requiredHours != null && record!.requiredHours > 0)
+        ? record!.requiredHours
+        : (employee.requiredWorkingHours > 0 ? employee.requiredWorkingHours : 9.0);
 
     final isAbsent = status == AttendanceStatusInfo.absent;
     final isPresent = status == AttendanceStatusInfo.present;
@@ -495,6 +500,20 @@ class AttendanceDetailsDialog extends StatelessWidget {
                                         ? '${permissionHours.toStringAsFixed(permissionHours.truncateToDouble() == permissionHours ? 0 : 1)}hr'
                                         : '--',
                                     color: const Color(0xFF16A34A),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildMiniSessionBadge(
+                                    label: 'Overtime (OT)',
+                                    value: record != null && record!.calculateOvertimeMinutes(shiftOutTime: employee.outTime) > 0
+                                        ? record!.formattedOvertimeHours(shiftOutTime: employee.outTime)
+                                        : '--',
+                                    color: const Color(0xFF9CC70A),
                                   ),
                                 ),
                               ],

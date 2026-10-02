@@ -130,4 +130,10 @@ abstract class AttendanceRepository {
     required String date,
     required String time,
   });
+  Future<bool> handleGeofenceExitAutoCheckOut({
+    required int employeeId,
+    required double currentLatitude,
+    required double currentLongitude,
+    String? exitTime,
+  });
 }

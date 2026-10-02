@@ -1043,9 +1043,13 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
             ? '${_attendanceResult!.totalShortfallHours.toStringAsFixed(1)} Hrs'
             : '0.0 Hrs');
 
+    final otHours = _attendanceResult?.totalOvertimeHours ?? 0.0;
+    final otHoursStr = '${otHours.toStringAsFixed(1)} Hrs';
+
     final summaries = [
       ('Present Days', '$_presentDays Days', Icons.check_circle_outline, Colors.green),
       ('Late Days', '$_lateDays Days', Icons.watch_later_outlined, Colors.amber),
+      ('Overtime (OT)', otHoursStr, Icons.more_time_rounded, const Color(0xFF9CC70A)),
       ('LOP Hours', lopHoursStr, Icons.timer_outlined, Colors.deepOrange),
       ('Leave Days', '$_leaveDays Days', Icons.event_note_outlined, Colors.blue),
       ('Absent Days', '$_absentDays Days', Icons.cancel_outlined, Colors.red),

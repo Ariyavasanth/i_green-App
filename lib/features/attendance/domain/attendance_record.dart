@@ -24,6 +24,9 @@ class AttendanceRecord {
     this.checkInSimilarityScore = 0.0,
     this.checkOutSimilarityScore = 0.0,
     this.totalHours = 0.0,
+    this.requiredHours = 0.0,
+    this.scheduledInTime = '',
+    this.scheduledOutTime = '',
     this.notes = '',
     this.markedAt = '',
     this.sessions = const [],
@@ -45,6 +48,9 @@ class AttendanceRecord {
   final double checkInSimilarityScore;
   final double checkOutSimilarityScore;
   final double totalHours;
+  final double requiredHours;
+  final String scheduledInTime;
+  final String scheduledOutTime;
   final String notes;
   final String markedAt;
   final List<AttendanceSession> sessions;
@@ -231,6 +237,62 @@ class AttendanceRecord {
     return formatHours(sf);
   }
 
+  /// Calculates overtime in minutes past (shiftOutTime + bufferMinutes).
+  /// E.g. shift ends at 7:00 PM, buffer is 30 mins -> OT begins at 7:30 PM.
+  /// If checkout is at 8:10 PM -> OT = 40 minutes.
+  /// If checkout is at 9:15 PM -> OT = 105 minutes (1 hr 45 min).
+  int calculateOvertimeMinutes({String? shiftOutTime, int bufferMinutes = 30}) {
+    final effectiveShiftOut = (shiftOutTime != null && shiftOutTime.trim().isNotEmpty)
+        ? shiftOutTime
+        : (scheduledOutTime.trim().isNotEmpty ? scheduledOutTime : '07:00 PM');
+    final shiftOutMins = TimeFormatter.parseTimeToMinutes(effectiveShiftOut) ?? 1140;
+    final otStartMins = shiftOutMins + bufferMinutes;
+
+    int? outMins;
+    if (checkOutTime.trim().isNotEmpty) {
+      outMins = TimeFormatter.parseTimeToMinutes(checkOutTime);
+    } else if (effectiveCheckInTime.trim().isNotEmpty && sessions.any((s) => s.isActive)) {
+      final now = DateTime.now();
+      outMins = now.hour * 60 + now.minute;
+    }
+
+    if (outMins != null && outMins > otStartMins) {
+      return outMins - otStartMins;
+    }
+    return 0;
+  }
+
+  /// Calculates overtime in hours past (shiftOutTime + bufferMinutes).
+  double calculateOvertimeHours({String? shiftOutTime, int bufferMinutes = 30}) {
+    final mins = calculateOvertimeMinutes(shiftOutTime: shiftOutTime, bufferMinutes: bufferMinutes);
+    if (mins <= 0) return 0.0;
+    return double.parse((mins / 60.0).toStringAsFixed(2));
+  }
+
+  /// Checks whether the employee has met the minimum required OT duration (e.g. 60 mins / 1 hour).
+  bool hasMetMinOvertimeThreshold({
+    String? shiftOutTime,
+    int bufferMinutes = 30,
+    int minOtMinutes = 60,
+  }) {
+    return calculateOvertimeMinutes(shiftOutTime: shiftOutTime, bufferMinutes: bufferMinutes) >= minOtMinutes;
+  }
+
+  /// Formatted overtime string (e.g. "1hr 45min", "40min", "0hr").
+  String formattedOvertimeHours({String? shiftOutTime, int bufferMinutes = 30}) {
+    final mins = calculateOvertimeMinutes(shiftOutTime: shiftOutTime, bufferMinutes: bufferMinutes);
+    if (mins <= 0) return '0hr';
+    final h = mins ~/ 60;
+    final m = mins % 60;
+    if (h > 0 && m > 0) {
+      return '${h}hr ${m}min';
+    } else if (h > 0 && m == 0) {
+      return '${h}hr';
+    } else {
+      return '${m}min';
+    }
+  }
+
   String get formattedTotalHours {
     int totalSeconds = 0;
     if (sessions.isNotEmpty) {
@@ -297,6 +359,9 @@ class AttendanceRecord {
     double? checkInSimilarityScore,
     double? checkOutSimilarityScore,
     double? totalHours,
+    double? requiredHours,
+    String? scheduledInTime,
+    String? scheduledOutTime,
     String? notes,
     String? markedAt,
     List<AttendanceSession>? sessions,
@@ -318,6 +383,9 @@ class AttendanceRecord {
       checkInSimilarityScore: checkInSimilarityScore ?? this.checkInSimilarityScore,
       checkOutSimilarityScore: checkOutSimilarityScore ?? this.checkOutSimilarityScore,
       totalHours: totalHours ?? this.totalHours,
+      requiredHours: requiredHours ?? this.requiredHours,
+      scheduledInTime: scheduledInTime ?? this.scheduledInTime,
+      scheduledOutTime: scheduledOutTime ?? this.scheduledOutTime,
       notes: notes ?? this.notes,
       markedAt: markedAt ?? this.markedAt,
       sessions: sessions ?? this.sessions,
@@ -341,6 +409,9 @@ class AttendanceRecord {
         'check_in_similarity_score': effectiveCheckInSimilarity,
         'check_out_similarity_score': checkOutSimilarityScore,
         'total_hours': totalHours,
+        if (requiredHours > 0) 'required_hours': requiredHours,
+        if (scheduledInTime.isNotEmpty) 'scheduled_in_time': scheduledInTime,
+        if (scheduledOutTime.isNotEmpty) 'scheduled_out_time': scheduledOutTime,
         'notes': notes,
         'marked_at': markedAt,
         if (sessions.isNotEmpty) 'sessions': sessions.map((s) => s.toMap()).toList(),
@@ -357,6 +428,9 @@ class AttendanceRecord {
     final rawEmpId = map['employee_id'] is int
         ? map['employee_id'] as int
         : (int.tryParse(map['employee_id']?.toString() ?? '') ?? 0);
+    final rawReqHours = (map['required_hours'] ?? map['requiredHours'] as num?)?.toDouble() ?? 0.0;
+    final rawSchedIn = (map['scheduled_in_time'] ?? map['scheduledInTime'] ?? map['in_time'] ?? map['inTime'] ?? '').toString().trim();
+    final rawSchedOut = (map['scheduled_out_time'] ?? map['scheduledOutTime'] ?? map['out_time'] ?? map['outTime'] ?? '').toString().trim();
 
     final rawSessions = map['sessions'];
     final List<AttendanceSession> parsedSessions = (rawSessions is List)
@@ -383,6 +457,9 @@ class AttendanceRecord {
       checkInSimilarityScore: rawCheckInScore,
       checkOutSimilarityScore: (map['check_out_similarity_score'] as num?)?.toDouble() ?? 0.0,
       totalHours: (map['total_hours'] as num?)?.toDouble() ?? 0.0,
+      requiredHours: rawReqHours,
+      scheduledInTime: rawSchedIn,
+      scheduledOutTime: rawSchedOut,
       notes: map['notes'] as String? ?? '',
       markedAt: map['marked_at'] as String? ?? '',
       sessions: parsedSessions,

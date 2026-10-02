@@ -55,6 +55,56 @@ class TimeFormatter {
 
     return trimmed;
   }
+
+  static int? parseTimeToMinutes(String? timeStr) {
+    if (timeStr == null) return null;
+    final trimmed = timeStr.trim();
+    if (trimmed.isEmpty ||
+        trimmed == '--:--' ||
+        trimmed == '--:--:--' ||
+        trimmed == '--' ||
+        trimmed.toLowerCase() == 'active' ||
+        trimmed.toLowerCase() == 'running') {
+      return null;
+    }
+
+    try {
+      if (trimmed.contains('T')) {
+        final dt = DateTime.tryParse(trimmed);
+        if (dt != null) {
+          return dt.hour * 60 + dt.minute;
+        }
+      }
+
+      final upper = trimmed.toUpperCase();
+      final isPm = upper.contains('PM');
+      final isAm = upper.contains('AM');
+
+      if (isPm || isAm) {
+        final clean = upper.replaceAll(RegExp(r'[A-Z]'), '').trim();
+        final parts = clean.split(':');
+        if (parts.length >= 2) {
+          int hour = int.tryParse(parts[0]) ?? 0;
+          final minute = int.tryParse(parts[1]) ?? 0;
+          if (isPm && hour < 12) hour += 12;
+          if (isAm && hour == 12) hour = 0;
+          return hour * 60 + minute;
+        }
+      }
+
+      // 24-hour format e.g. "20:10" or "08:10:00"
+      final parts = trimmed.split(':');
+      if (parts.length >= 2) {
+        final hour = int.tryParse(parts[0]);
+        final minute = int.tryParse(parts[1]);
+        if (hour != null && minute != null && hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
+          return hour * 60 + minute;
+        }
+      }
+    } catch (_) {}
+
+    return null;
+  }
 }
 
 String formatToLocal12HourTime(String timeStr, {bool forceSeconds = false}) {

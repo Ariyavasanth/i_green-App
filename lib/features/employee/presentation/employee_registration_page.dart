@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/location_data.dart';
+import '../../../../core/utils/time_formatter.dart';
 import '../domain/employee.dart';
 import '../domain/registration_link.dart';
 import '../domain/candidate_response.dart';
@@ -2344,12 +2345,44 @@ class _EmployeeRegistrationPageState
       final hour = picked.hourOfPeriod == 0 ? 12 : picked.hourOfPeriod;
       final minute = picked.minute.toString().padLeft(2, '0');
       final period = picked.period == DayPeriod.am ? 'AM' : 'PM';
-      final formatted = '${hour.toString().padLeft(2, '0')}:$minute$period';
+      final formatted = '${hour.toString().padLeft(2, '0')}:$minute $period';
       controller.text = formatted;
+      _syncRequiredWorkingHours();
       if (tabName != null) {
         _markTabUnsaved(tabName);
       }
     }
+  }
+
+  void _syncRequiredWorkingHours() {
+    if (_workScheduleType == 'Fixed Schedule') {
+      final inMins = TimeFormatter.parseTimeToMinutes(_inTimeController.text);
+      final outMins = TimeFormatter.parseTimeToMinutes(_outTimeController.text);
+      if (inMins != null && outMins != null) {
+        final diffMins = outMins >= inMins ? (outMins - inMins) : ((outMins + 1440) - inMins);
+        final hours = double.parse((diffMins / 60.0).toStringAsFixed(2));
+        _requiredWorkingHoursController.text =
+            '${hours.toStringAsFixed(hours.truncateToDouble() == hours ? 0 : 1)} Hours';
+      }
+    }
+  }
+
+  double _getCalculatedRequiredWorkingHours() {
+    if (_workScheduleType == 'Fixed Schedule') {
+      final inMins = TimeFormatter.parseTimeToMinutes(_inTimeController.text);
+      final outMins = TimeFormatter.parseTimeToMinutes(_outTimeController.text);
+      if (inMins != null && outMins != null) {
+        final diffMins = outMins >= inMins ? (outMins - inMins) : ((outMins + 1440) - inMins);
+        return double.parse((diffMins / 60.0).toStringAsFixed(2));
+      }
+    }
+    return double.tryParse(
+          _requiredWorkingHoursController.text.replaceAll(
+            RegExp(r'[^0-9.]'),
+            '',
+          ),
+        ) ??
+        9.0;
   }
 
   void _removeProfileImage() {
@@ -2687,14 +2720,7 @@ class _EmployeeRegistrationPageState
         outTime: _workScheduleType == 'Fixed Schedule'
             ? _outTimeController.text.trim()
             : '',
-        requiredWorkingHours:
-            double.tryParse(
-              _requiredWorkingHoursController.text.replaceAll(
-                RegExp(r'[^0-9.]'),
-                '',
-              ),
-            ) ??
-            9.0,
+        requiredWorkingHours: _getCalculatedRequiredWorkingHours(),
         weeklyOffDay: _weeklyOffDayController.text.trim(),
         reportingManager: _reportingToController.text.trim(),
         reportingManagerTitle: _reportingManagerTitleController.text.trim(),
@@ -10538,14 +10564,7 @@ class _EmployeeRegistrationPageState
       outTime: _workScheduleType == 'Fixed Schedule'
           ? _outTimeController.text.trim()
           : '',
-      requiredWorkingHours:
-          double.tryParse(
-            _requiredWorkingHoursController.text.replaceAll(
-              RegExp(r'[^0-9.]'),
-              '',
-            ),
-          ) ??
-          9.0,
+      requiredWorkingHours: _getCalculatedRequiredWorkingHours(),
       weeklyOffDay: _weeklyOffDayController.text.trim(),
       salaryType: _salaryType,
       salaryTotalCtc:

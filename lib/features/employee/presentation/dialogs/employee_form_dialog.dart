@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/time_formatter.dart';
 import '../../domain/employee.dart';
 import '../../providers/employee_providers.dart';
 import '../../../organization/providers/organization_providers.dart';
@@ -190,8 +191,34 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
       final hour = picked.hourOfPeriod == 0 ? 12 : picked.hourOfPeriod;
       final minute = picked.minute.toString().padLeft(2, '0');
       final period = picked.period == DayPeriod.am ? 'AM' : 'PM';
-      controller.text = '${hour.toString().padLeft(2, '0')}:$minute$period';
+      controller.text = '${hour.toString().padLeft(2, '0')}:$minute $period';
+      _syncRequiredWorkingHours();
     }
+  }
+
+  void _syncRequiredWorkingHours() {
+    if (_workScheduleType == 'Fixed Schedule') {
+      final inMins = TimeFormatter.parseTimeToMinutes(_inTimeController.text);
+      final outMins = TimeFormatter.parseTimeToMinutes(_outTimeController.text);
+      if (inMins != null && outMins != null) {
+        final diffMins = outMins >= inMins ? (outMins - inMins) : ((outMins + 1440) - inMins);
+        final hours = double.parse((diffMins / 60.0).toStringAsFixed(2));
+        _requiredWorkingHoursController.text =
+            '${hours.toStringAsFixed(hours.truncateToDouble() == hours ? 0 : 1)} Hours';
+      }
+    }
+  }
+
+  double _getCalculatedRequiredWorkingHours() {
+    if (_workScheduleType == 'Fixed Schedule') {
+      final inMins = TimeFormatter.parseTimeToMinutes(_inTimeController.text);
+      final outMins = TimeFormatter.parseTimeToMinutes(_outTimeController.text);
+      if (inMins != null && outMins != null) {
+        final diffMins = outMins >= inMins ? (outMins - inMins) : ((outMins + 1440) - inMins);
+        return double.parse((diffMins / 60.0).toStringAsFixed(2));
+      }
+    }
+    return double.tryParse(_requiredWorkingHoursController.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 9.0;
   }
 
   Future<void> _pickBloodGroupDocFile() async {
@@ -255,7 +282,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
         leaveAllocationFrequency: _leaveType == 'Manual Allocation' ? _leaveAllocationFrequency : '',
         inTime: _workScheduleType == 'Fixed Schedule' ? _inTimeController.text.trim() : '',
         outTime: _workScheduleType == 'Fixed Schedule' ? _outTimeController.text.trim() : '',
-        requiredWorkingHours: double.tryParse(_requiredWorkingHoursController.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 9.0,
+        requiredWorkingHours: _getCalculatedRequiredWorkingHours(),
         allowedLeaves: _leaveType == 'Manual Allocation' ? (double.tryParse(_allowedLeavesController.text.trim()) ?? 0.0) : 0.0,
         effectiveDate: _leaveEffectiveDateController.text.trim(),
         accessPermissions: _selectedPermissions.toList(),

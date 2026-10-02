@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/time_formatter.dart';
 import '../domain/attendance_record.dart';
 import '../domain/attendance_settings.dart';
 import '../domain/attendance_status_helper.dart';
@@ -27,6 +28,7 @@ import '../../permission/providers/permission_providers.dart';
 import '../../attendance_settings/providers/attendance_settings_providers.dart';
 import '../providers/attendance_providers.dart';
 import '../../attendance_management/providers/attendance_management_providers.dart';
+import '../services/attendance_location_service.dart';
 import '../../employee/providers/employee_providers.dart';
 
 class AttendancePage extends ConsumerStatefulWidget {
@@ -41,6 +43,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
   DateTime _focusedMonth = DateTime.now();
 
   Timer? _liveClockTimer;
+  int? _monitoredEmployeeId;
 
   @override
   void initState() {
@@ -158,6 +161,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
   void dispose() {
     _liveClockTimer?.cancel();
     _reasonController.dispose();
+    AttendanceLocationService.instance.stopPeriodicGeofenceMonitoring();
     super.dispose();
   }
 
@@ -285,6 +289,18 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       );
     }
 
+    if (currentEmp.id > 0 && _monitoredEmployeeId != currentEmp.id) {
+      _monitoredEmployeeId = currentEmp.id;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          AttendanceLocationService.instance.startPeriodicGeofenceMonitoring(
+            ref: ref,
+            employeeId: currentEmp.id,
+            interval: const Duration(seconds: 30),
+          );
+        }
+      });
+    }
     final attendanceAsync = ref.watch(attendanceRecordsProvider(currentEmp.id));
     final todayAttendanceAsync = ref.watch(todayAttendanceRecordProvider(currentEmp.id));
     final leaveAsync = ref.watch(attendanceLeaveRequestsProvider(currentEmp.id));
@@ -407,7 +423,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                 return Column(
                   children: [
                     const SizedBox(height: 16),
-                    _buildTodaySessionsBreakdownCard(todayRec),
+                    _buildTodaySessionsBreakdownCard(todayRec, employee: currentEmp),
                   ],
                 );
               },
@@ -470,11 +486,29 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     );
   }
 
-  Widget _buildTodaySessionsBreakdownCard(AttendanceRecord record) {
+  Widget _buildTodaySessionsBreakdownCard(AttendanceRecord record, {Employee? employee}) {
     if (record.sessions.isEmpty) return const SizedBox.shrink();
 
     final totalMinutes = record.sessions.fold<int>(0, (sum, s) => sum + s.durationMinutes);
     final totalDisplay = '${totalMinutes ~/ 60}h ${(totalMinutes % 60).toString().padLeft(2, '0')}m';
+
+    final shiftOutStr = (employee != null && employee.outTime.trim().isNotEmpty)
+        ? employee.outTime.trim()
+        : (record.scheduledOutTime.trim().isNotEmpty ? record.scheduledOutTime.trim() : '07:00 PM');
+    final shiftOutMins = TimeFormatter.parseTimeToMinutes(shiftOutStr);
+
+    String? otStartTimeStr;
+    if (shiftOutMins != null) {
+      final otStartMins = shiftOutMins + 30;
+      final otStartHour = otStartMins ~/ 60;
+      final otStartMin = otStartMins % 60;
+      final otStartPeriod = otStartHour >= 12 ? 'PM' : 'AM';
+      final otStartDisplayHour = otStartHour == 0 ? 12 : (otStartHour > 12 ? otStartHour - 12 : otStartHour);
+      otStartTimeStr = '${otStartDisplayHour.toString().padLeft(2, '0')}:${otStartMin.toString().padLeft(2, '0')} $otStartPeriod';
+    }
+
+    final otMins = record.calculateOvertimeMinutes(shiftOutTime: shiftOutStr);
+    final hasOt = otMins > 0 && otStartTimeStr != null;
 
     return Container(
       width: double.infinity,
@@ -587,15 +621,17 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
             }
 
             final durationDisplay = session.isActive
-                ? 'Active'
+                ? (hasOt ? 'Completed' : 'Active')
                 : '${session.durationMinutes ~/ 60}h ${(session.durationMinutes % 60).toString().padLeft(2, '0')}m';
 
-            final timeRange = session.checkOutTime.isNotEmpty
-                ? '${session.formattedCheckInTime} → ${session.formattedCheckOutTime}'
-                : '${session.formattedCheckInTime} → Active';
+            final timeRange = hasOt && session.isOffice
+                ? '${session.formattedCheckInTime} → $otStartTimeStr'
+                : (session.checkOutTime.isNotEmpty
+                    ? '${session.formattedCheckInTime} → ${session.formattedCheckOutTime}'
+                    : '${session.formattedCheckInTime} → Active');
 
             return Padding(
-              padding: EdgeInsets.only(bottom: idx < record.sessions.length - 1 ? 10 : 0),
+              padding: EdgeInsets.only(bottom: (idx < record.sessions.length - 1 || hasOt) ? 10 : 0),
               child: Row(
                 children: [
                   // Type badge
@@ -637,10 +673,10 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: session.isActive ? const Color(0xFFFEF3C7) : const Color(0xFFF8FAFC),
+                      color: (session.isActive && !hasOt) ? const Color(0xFFFEF3C7) : const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(6),
                       border: Border.all(
-                        color: session.isActive ? const Color(0xFFFCD34D) : const Color(0xFFE2E8F0),
+                        color: (session.isActive && !hasOt) ? const Color(0xFFFCD34D) : const Color(0xFFE2E8F0),
                       ),
                     ),
                     child: Text(
@@ -648,7 +684,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
-                        color: session.isActive ? const Color(0xFF92400E) : const Color(0xFF334155),
+                        color: (session.isActive && !hasOt) ? const Color(0xFF92400E) : const Color(0xFF334155),
                       ),
                     ),
                   ),
@@ -656,6 +692,74 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
               ),
             );
           }),
+          if (hasOt) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Row(
+                children: [
+                  // OT Type Badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFDCFCE7),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF86EFAC)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.more_time_rounded, size: 13, color: Color(0xFF15803D)),
+                        SizedBox(width: 4),
+                        Text(
+                          'OT',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF15803D),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  // Time range
+                  Expanded(
+                    child: Text(
+                      record.checkOutTime.isNotEmpty
+                          ? '$otStartTimeStr → ${record.formattedCheckOutTime}'
+                          : '$otStartTimeStr → Active',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                  ),
+                  // Duration chip
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: record.checkOutTime.isEmpty ? const Color(0xFFFEF3C7) : const Color(0xFFDCFCE7),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: record.checkOutTime.isEmpty ? const Color(0xFFFCD34D) : const Color(0xFF86EFAC),
+                      ),
+                    ),
+                    child: Text(
+                      record.checkOutTime.isEmpty
+                          ? 'Active (${record.formattedOvertimeHours(shiftOutTime: shiftOutStr)})'
+                          : record.formattedOvertimeHours(shiftOutTime: shiftOutStr),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: record.checkOutTime.isEmpty ? const Color(0xFF92400E) : const Color(0xFF15803D),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -3389,6 +3493,31 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
           });
         }
 
+        final shiftOutStr = officialOutTimeStr.isNotEmpty ? officialOutTimeStr : employee.outTime;
+        final shiftOutMins = TimeFormatter.parseTimeToMinutes(shiftOutStr);
+        final otMins = todayRecord != null ? todayRecord.calculateOvertimeMinutes(shiftOutTime: shiftOutStr) : 0;
+        final isOvertimeActive = hasCheckedIn && !hasCheckedOut && otMins > 0;
+        final nowMins = now.hour * 60 + now.minute;
+        final isInBuffer = hasCheckedIn && !hasCheckedOut && shiftOutMins != null && nowMins > shiftOutMins && nowMins <= (shiftOutMins + 30);
+        final bufferMinsRemaining = shiftOutMins != null ? ((shiftOutMins + 30) - nowMins) : 0;
+
+        String sessionStatusSubtext;
+        if (hasCheckedIn) {
+          if (hasCheckedOut) {
+            sessionStatusSubtext = 'Shift completed: ${todayRecord.formattedCheckInTime} – ${todayRecord.formattedCheckOutTime}';
+          } else if (isOvertimeActive) {
+            sessionStatusSubtext = 'Checked in at ${todayRecord.formattedCheckInTime} • Overtime Active: ${todayRecord.formattedOvertimeHours(shiftOutTime: shiftOutStr)}';
+          } else if (isInBuffer) {
+            sessionStatusSubtext = 'Checked in at ${todayRecord.formattedCheckInTime} • Buffer Window (OT starts in ${bufferMinsRemaining}m)';
+          } else {
+            sessionStatusSubtext = 'Checked in at ${todayRecord.formattedCheckInTime}${officialOutTimeStr.isNotEmpty ? " • Expected Check-out: $officialOutTimeStr" : ""}';
+          }
+        } else {
+          sessionStatusSubtext = officialOutTimeStr.isNotEmpty
+              ? 'Expected Shift: $officialTimeStr – $officialOutTimeStr'
+              : 'Expected Check-in Time: $officialTimeStr';
+        }
+
         return Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -3435,24 +3564,20 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          hasCheckedIn
-                              ? (hasCheckedOut
-                                  ? 'Shift completed: ${todayRecord.formattedCheckInTime} – ${todayRecord.formattedCheckOutTime}'
-                                  : 'Checked in at ${todayRecord.formattedCheckInTime}${officialOutTimeStr.isNotEmpty ? " • Expected Check-out: $officialOutTimeStr" : ""}')
-                              : (officialOutTimeStr.isNotEmpty
-                                  ? 'Expected Shift: $officialTimeStr – $officialOutTimeStr'
-                                  : 'Expected Check-in Time: $officialTimeStr'),
-                          style: const TextStyle(
+                          sessionStatusSubtext,
+                          style: TextStyle(
                             fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.textSecondary,
+                            fontWeight: isOvertimeActive || isInBuffer ? FontWeight.bold : FontWeight.w500,
+                            color: isOvertimeActive
+                                ? const Color(0xFF15803D)
+                                : (isInBuffer ? const Color(0xFFB45309) : AppColors.textSecondary),
                           ),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(width: 8),
-                  _buildStatusChip(todayRecord),
+                  _buildStatusChip(todayRecord, isOvertimeActive: isOvertimeActive, isInBuffer: isInBuffer),
                 ],
               ),
               const SizedBox(height: 16),
@@ -3591,13 +3716,21 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     );
   }
 
-  Widget _buildStatusChip(AttendanceRecord? record) {
+  Widget _buildStatusChip(AttendanceRecord? record, {bool isOvertimeActive = false, bool isInBuffer = false}) {
     if (record == null) {
       return const SizedBox.shrink();
     }
     Color color;
+    String displayLabel = record.status;
     final st = record.status.trim().toLowerCase();
-    if (st == 'present' || st == 'completed') {
+
+    if (isOvertimeActive) {
+      color = const Color(0xFF15803D);
+      displayLabel = 'Present • OT Active';
+    } else if (isInBuffer) {
+      color = const Color(0xFFB45309);
+      displayLabel = 'Present (Buffer)';
+    } else if (st == 'present' || st == 'completed') {
       color = const Color(0xFF2E7D32);
     } else if (st == 'late' || st == 'insufficient hours' || st == 'insufficient') {
       color = const Color(0xFFE65100);
@@ -3611,12 +3744,12 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
+        border: Border.all(color: color.withValues(alpha: 0.6)),
       ),
       child: Text(
-        record.status,
+        displayLabel,
         style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color),
       ),
     );
@@ -4594,6 +4727,7 @@ class AttendanceVerificationDialog extends ConsumerStatefulWidget {
 
 class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerificationDialog> {
   bool _verifying = false;
+  bool _isFetchingLocation = true;
   String? _message;
   bool? _withinAllowedRadius;
   String? _locationMessage;
@@ -4614,6 +4748,11 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
   }
 
   Future<void> _refreshLocationGate() async {
+    setState(() {
+      _isFetchingLocation = true;
+      _withinAllowedRadius = null;
+      _locationMessage = null;
+    });
     try {
       final emp = widget.currentEmployee;
       final settings = await widget.attendanceRepository.getAttendanceSettings();
@@ -4656,6 +4795,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
       if (!requireGps || (targetLat == 0 && targetLng == 0)) {
         if (!mounted) return;
         setState(() {
+          _isFetchingLocation = false;
           _withinAllowedRadius = true;
           _locationMessage = null;
         });
@@ -4667,6 +4807,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
         if (!serviceEnabled) {
           if (!mounted) return;
           setState(() {
+            _isFetchingLocation = false;
             _withinAllowedRadius = false;
             _locationMessage = 'Location services are turned off on this device.';
           });
@@ -4681,6 +4822,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
       if (permission == LocationPermission.denied) {
         if (!mounted) return;
         setState(() {
+          _isFetchingLocation = false;
           _withinAllowedRadius = false;
           _locationMessage = 'Location permission was denied.';
         });
@@ -4689,6 +4831,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
       if (permission == LocationPermission.deniedForever) {
         if (!mounted) return;
         setState(() {
+          _isFetchingLocation = false;
           _withinAllowedRadius = false;
           _locationMessage = 'Location permission is permanently denied. Enable it in system settings.';
         });
@@ -4706,6 +4849,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
           distance <= targetRadius;
       if (!mounted) return;
       setState(() {
+        _isFetchingLocation = false;
         _withinAllowedRadius = withinRadius;
         _locationMessage = withinRadius
             ? null
@@ -4716,6 +4860,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
     } catch (e) {
       if (!mounted) return;
       setState(() {
+        _isFetchingLocation = false;
         _withinAllowedRadius = false;
         _locationMessage = e.toString().replaceFirst('Exception: ', '');
       });
@@ -4726,21 +4871,36 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
     required String label,
     required bool done,
     required IconData icon,
+    bool isLoading = false,
   }) {
-    final color = done ? const Color(0xFF2E7D32) : AppColors.textSecondary;
+    final color = isLoading
+        ? AppColors.primary
+        : done
+            ? const Color(0xFF2E7D32)
+            : AppColors.textSecondary;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Icon(done ? Icons.check_circle : icon, size: 18, color: color),
+          if (isLoading)
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.primary,
+              ),
+            )
+          else
+            Icon(done ? Icons.check_circle : icon, size: 18, color: color),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               label,
               style: TextStyle(
                 fontSize: 13,
-                fontWeight: done ? FontWeight.w600 : FontWeight.w500,
-                color: color,
+                fontWeight: done || isLoading ? FontWeight.w600 : FontWeight.w500,
+                color: isLoading ? AppColors.textPrimary : color,
               ),
             ),
           ),
@@ -4834,48 +4994,6 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
     }
   }
 
-  Future<void> _unmarkAttendance() async {
-    if (_verifying) return;
-    setState(() {
-      _verifying = true;
-      _message = null;
-    });
-    try {
-      final now = DateTime.now();
-      final dateKey = _formatKey(widget.date);
-      final time = DateFormat('hh:mm:ss a').format(now);
-
-      await widget.attendanceRepository.unmarkAttendance(
-        employeeId: widget.currentEmployee.id,
-        date: dateKey,
-      );
-      await widget.attendanceRepository.logAttendanceAttempt(
-        employeeId: widget.currentEmployee.id,
-        employeeName: widget.currentEmployee.fullName,
-        date: dateKey,
-        time: time,
-        verificationStatus: 'Unmarked',
-        similarityScore: 0.0,
-        message: 'Attendance unmarked successfully.',
-      );
-      if (!mounted) return;
-      setState(() => _message = 'Attendance unmarked successfully.');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Attendance unmarked successfully.')),
-      );
-      widget.onAttendanceMarked();
-      Navigator.of(context).pop(true);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _message = e.toString().replaceFirst('Exception: ', ''));
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-      );
-    } finally {
-      if (mounted) setState(() => _verifying = false);
-    }
-  }
-
   Future<void> _cancel() async {
     if (mounted) Navigator.of(context).pop();
   }
@@ -4924,9 +5042,14 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
                     ),
                     const SizedBox(height: 8),
                     _checkItem(
-                      label: 'GPS location is within office radius',
+                      label: _isFetchingLocation
+                          ? 'Fetching GPS location...'
+                          : (_withinAllowedRadius == true
+                              ? 'GPS location is within office radius'
+                              : 'GPS location is outside office radius'),
                       done: _withinAllowedRadius == true,
                       icon: Icons.location_on_outlined,
+                      isLoading: _isFetchingLocation,
                     ),
                     _checkItem(
                       label: 'GPS verification only',
@@ -4968,12 +5091,6 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
       ),
       actions: [
         TextButton(onPressed: _cancel, child: const Text('Cancel')),
-        if (widget.existingRecord != null)
-          TextButton(
-            onPressed: _verifying ? null : _unmarkAttendance,
-            style: TextButton.styleFrom(foregroundColor: const Color(0xFFE53935)),
-            child: Text(_verifying ? 'Working...' : 'Unmark Attendance'),
-          ),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
             backgroundColor: widget.isCheckOut ? const Color(0xFF414A51) : AppColors.active,

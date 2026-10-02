@@ -850,6 +850,15 @@ class _MonthlyAttendanceResultViewState extends State<MonthlyAttendanceResultVie
               iconColor: hasShortfall ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
               bgColor: hasShortfall ? const Color(0xFFFEE2E2) : const Color(0xFFF0FDF4),
             ),
+            const SizedBox(height: 10),
+            _buildHourMetricTile(
+              title: 'Total Overtime (OT)',
+              value: '${result.totalOvertimeHours.toStringAsFixed(1)}hr',
+              subtext: '${result.totalOvertimeHours} hrs overtime',
+              icon: Icons.more_time_rounded,
+              iconColor: const Color(0xFF9CC70A),
+              bgColor: const Color(0xFF9CC70A).withValues(alpha: 0.12),
+            ),
           ] else ...[
             Row(
               children: [
@@ -883,6 +892,17 @@ class _MonthlyAttendanceResultViewState extends State<MonthlyAttendanceResultVie
                     icon: Icons.trending_down_outlined,
                     iconColor: hasShortfall ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
                     bgColor: hasShortfall ? const Color(0xFFFEE2E2) : const Color(0xFFF0FDF4),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildHourMetricTile(
+                    title: 'Total Overtime (OT)',
+                    value: '${result.totalOvertimeHours.toStringAsFixed(1)}hr',
+                    subtext: '${result.totalOvertimeHours} hrs overtime',
+                    icon: Icons.more_time_rounded,
+                    iconColor: const Color(0xFF9CC70A),
+                    bgColor: const Color(0xFF9CC70A).withValues(alpha: 0.12),
                   ),
                 ),
               ],

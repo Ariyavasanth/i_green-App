@@ -716,6 +716,107 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
   }
 
   @override
+  Future<bool> handleGeofenceExitAutoCheckOut({
+    required int employeeId,
+    required double currentLatitude,
+    required double currentLongitude,
+    String? exitTime,
+  }) async {
+    try {
+      final now = DateTime.now();
+      final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final existingRecord = await getAttendanceRecordForDate(employeeId, todayStr);
+      if (existingRecord == null) return false;
+
+      // If already checked out, do nothing
+      if (existingRecord.checkOutTime.trim().isNotEmpty || existingRecord.status == 'Checked Out') {
+        return false;
+      }
+
+      // Check active sessions
+      final List<AttendanceSession> sessions = existingRecord.sessions;
+      final activeSession = sessions.where((s) => s.isActive).firstOrNull;
+
+      // If active session is OD or OD-related, DO NOT auto-checkout
+      if ((activeSession != null && activeSession.isOd) || _isOdRecord(existingRecord)) {
+        return false;
+      }
+
+      // If no active session and no check-in, do nothing
+      if (activeSession == null && existingRecord.checkInTime.trim().isEmpty) {
+        return false;
+      }
+
+      // Verify geofence: If still inside geofence, do nothing
+      final isInside = await verifyLocationWithinGeofence(
+        employeeId: employeeId,
+        latitude: currentLatitude,
+        longitude: currentLongitude,
+      );
+      if (isInside) {
+        return false; // Still inside office -> Do NOT auto-checkout
+      }
+
+      // Employee has exited the geofence -> Trigger Auto Check-Out!
+      final time = exitTime ?? DateFormat('hh:mm:ss a').format(now);
+      final employee = await _getEmployeeById(employeeId);
+      final employeeName = employee?.name ?? existingRecord.employeeName;
+      final employeeCode = employee?.employeeId ?? existingRecord.employeeCode;
+
+      // Complete the office session
+      final result = await _completeOfficeAttendanceSession(
+        employeeId: employeeId,
+        employeeName: employeeName,
+        employeeCode: employeeCode,
+        date: todayStr,
+        time: time,
+        verificationStatus: 'Auto-Checked Out (Geofence Exit)',
+        similarityScore: 1.0,
+        currentLatitude: currentLatitude,
+        currentLongitude: currentLongitude,
+      );
+
+      // Check and append Overtime (OT) note if applicable (past Shift Out Time + 30 mins)
+      if (result.allowed) {
+        final updatedRecord = await getAttendanceRecordForDate(employeeId, todayStr);
+        if (updatedRecord != null) {
+          final shiftOut = updatedRecord.scheduledOutTime.trim().isNotEmpty
+              ? updatedRecord.scheduledOutTime.trim()
+              : (employee?.outTime.trim().isNotEmpty == true
+                  ? employee!.outTime.trim()
+                  : '07:00 PM');
+          final otMins = updatedRecord.calculateOvertimeMinutes(shiftOutTime: shiftOut, bufferMinutes: 30);
+          if (otMins > 0) {
+            final otFormatted = updatedRecord.formattedOvertimeHours(shiftOutTime: shiftOut, bufferMinutes: 30);
+            final minOtSatisfied = updatedRecord.hasMetMinOvertimeThreshold(shiftOutTime: shiftOut, bufferMinutes: 30, minOtMinutes: 60);
+            final otTag = minOtSatisfied
+                ? 'OT: $otFormatted (1-hr threshold met)'
+                : 'OT: $otFormatted (< 1-hr threshold)';
+
+            final newNotes = updatedRecord.notes.isNotEmpty
+                ? '${updatedRecord.notes} | $otTag'
+                : otTag;
+
+            final finalRec = updatedRecord.copyWith(notes: newNotes);
+            final normDate = _normalizeDateKey(todayStr);
+            final docId = '${employeeId}_${normDate.replaceAll('-', '')}';
+            await _recordsRef.doc(docId).set(finalRec.toMap(), SetOptions(merge: true));
+            if (employeeCode.isNotEmpty) {
+              await _recordsRef.doc('${employeeCode}_${normDate.replaceAll('-', '')}').set(finalRec.toMap(), SetOptions(merge: true));
+            }
+            _localMemoryCache[docId] = finalRec;
+            _localMemoryCache['${employeeId}_$todayStr'] = finalRec;
+          }
+        }
+      }
+
+      return result.allowed;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  @override
   Future<void> startActivitySession({
     required int employeeId,
     required String date,
@@ -1111,6 +1212,11 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       updatedSessions.add(newSession);
     }
 
+    final employee = await _getEmployeeById(employeeId);
+    final currentReqHours = (employee?.requiredWorkingHours ?? 0) > 0 ? employee!.requiredWorkingHours : 9.0;
+    final currentSchedIn = employee?.inTime.trim() ?? '';
+    final currentSchedOut = employee?.outTime.trim() ?? '';
+
     final AttendanceRecord updatedRecord;
     if (existingRecord != null) {
       updatedRecord = existingRecord.copyWith(
@@ -1133,6 +1239,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
             ? existingRecord.checkInSimilarityScore
             : similarityScore,
         totalHours: existingRecord.totalHours,
+        requiredHours: existingRecord.requiredHours > 0 ? existingRecord.requiredHours : currentReqHours,
+        scheduledInTime: existingRecord.scheduledInTime.isNotEmpty ? existingRecord.scheduledInTime : currentSchedIn,
+        scheduledOutTime: existingRecord.scheduledOutTime.isNotEmpty ? existingRecord.scheduledOutTime : currentSchedOut,
         notes: existingRecord.notes.isNotEmpty ? existingRecord.notes : notes,
         markedAt: existingRecord.markedAt.isNotEmpty
             ? existingRecord.markedAt
@@ -1155,6 +1264,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         checkInVerificationStatus: verificationStatus,
         checkInSimilarityScore: similarityScore,
         totalHours: 0.0,
+        requiredHours: currentReqHours,
+        scheduledInTime: currentSchedIn,
+        scheduledOutTime: currentSchedOut,
         notes: notes,
         markedAt: DateTime.now().toIso8601String(),
         sessions: updatedSessions,
@@ -1387,9 +1499,11 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
     final employee = await _getEmployeeById(employeeId);
     final isDynamic = employee?.isDynamicEmployee ?? false;
-    final requiredHours = (employee?.requiredWorkingHours ?? 0) > 0
-        ? employee!.requiredWorkingHours
-        : 9.0;
+    final requiredHours = existingRecord.requiredHours > 0
+        ? existingRecord.requiredHours
+        : ((employee?.requiredWorkingHours ?? 0) > 0
+            ? employee!.requiredWorkingHours
+            : 9.0);
 
     final shortfallHours = (requiredHours - totalDailyHours).clamp(0, requiredHours);
     final shortfallMins = (shortfallHours * 60).ceil();

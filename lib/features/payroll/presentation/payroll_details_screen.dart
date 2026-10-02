@@ -356,6 +356,7 @@ class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
     final list = [
       ('Present Days', '${record.presentDays} Days', Colors.green),
       ('Late Days', '${record.lateDays} Days', Colors.amber),
+      ('Overtime (OT)', '${record.totalOvertimeHours.toStringAsFixed(1)} Hrs', const Color(0xFF9CC70A)),
       ('Leave Days', '${record.leaveDays} Days', Colors.blue),
       ('Absent Days', '${record.absentDays} Days', Colors.red),
       ('Weekly Off', '${record.weeklyOffCount} Days', const Color(0xFF64748B)),
