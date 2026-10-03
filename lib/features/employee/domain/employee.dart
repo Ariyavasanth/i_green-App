@@ -261,9 +261,7 @@ class Employee {
   }
 
   /// Indicates whether this employee is required to track daily attendance.
-  /// Super Admins manage the system and are not attendance-tracked by default.
   bool get isAttendanceTracked {
-    if (isSuperAdmin) return false;
     return true;
   }
 
