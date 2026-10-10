@@ -175,6 +175,16 @@ class MockAttendanceRepository implements AttendanceRepository {
   }
 
   @override
+  Future<AttendanceRecord?> getActiveAttendanceRecord(int employeeId) async {
+    for (final rec in _storage.values) {
+      if (rec.employeeId == employeeId && (rec.sessions.any((s) => s.isActive) || (rec.effectiveCheckInTime.isNotEmpty && rec.checkOutTime.isEmpty))) {
+        return rec;
+      }
+    }
+    return null;
+  }
+
+  @override
   Future<List<AttendanceRecord>> getAttendanceRecords(int employeeId) async {
     return _storage.values.where((r) => r.employeeId == employeeId || employeeId == 0).toList();
   }
@@ -723,6 +733,7 @@ void main() {
         employee: testEmployee,
         date: DateTime(2026, 9, 19),
         record: latestRecords.first,
+        referenceDate: DateTime(2026, 9, 19, 12, 0),
       );
       expect(statusInfo, equals(AttendanceStatusInfo.present));
       expect(statusInfo?.code, equals('P'));
@@ -821,6 +832,7 @@ void main() {
         employee: testEmployee,
         date: DateTime(2026, 9, 19),
         record: latestRecords.first,
+        referenceDate: DateTime(2026, 9, 19, 12, 0),
       );
       expect(statusInfo, equals(AttendanceStatusInfo.late));
       expect(statusInfo?.code, equals('L'));

@@ -3493,29 +3493,43 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
           });
         }
 
-        final shiftOutStr = officialOutTimeStr.isNotEmpty ? officialOutTimeStr : employee.outTime;
-        final shiftOutMins = TimeFormatter.parseTimeToMinutes(shiftOutStr);
-        final otMins = todayRecord != null ? todayRecord.calculateOvertimeMinutes(shiftOutTime: shiftOutStr) : 0;
-        final isOvertimeActive = hasCheckedIn && !hasCheckedOut && otMins > 0;
+        final isFlexibleEmployee = employee.isDynamicEmployee ||
+            employee.workScheduleType.trim().toLowerCase() == 'flexible schedule';
+        final shiftOutStr = !isFlexibleEmployee && officialOutTimeStr.isNotEmpty ? officialOutTimeStr : employee.outTime;
+        final shiftOutMins = !isFlexibleEmployee ? TimeFormatter.parseTimeToMinutes(shiftOutStr) : null;
+        final otMins = (!isFlexibleEmployee && todayRecord != null) ? todayRecord.calculateOvertimeMinutes(shiftOutTime: shiftOutStr) : 0;
+        final isOvertimeActive = !isFlexibleEmployee && hasCheckedIn && !hasCheckedOut && otMins > 0;
         final nowMins = now.hour * 60 + now.minute;
-        final isInBuffer = hasCheckedIn && !hasCheckedOut && shiftOutMins != null && nowMins > shiftOutMins && nowMins <= (shiftOutMins + 30);
-        final bufferMinsRemaining = shiftOutMins != null ? ((shiftOutMins + 30) - nowMins) : 0;
+        final isInBuffer = !isFlexibleEmployee && hasCheckedIn && !hasCheckedOut && shiftOutMins != null && nowMins > shiftOutMins && nowMins <= (shiftOutMins + 30);
+        final bufferMinsRemaining = (!isFlexibleEmployee && shiftOutMins != null) ? ((shiftOutMins + 30) - nowMins) : 0;
 
         String sessionStatusSubtext;
-        if (hasCheckedIn) {
-          if (hasCheckedOut) {
-            sessionStatusSubtext = 'Shift completed: ${todayRecord.formattedCheckInTime} – ${todayRecord.formattedCheckOutTime}';
-          } else if (isOvertimeActive) {
-            sessionStatusSubtext = 'Checked in at ${todayRecord.formattedCheckInTime} • Overtime Active: ${todayRecord.formattedOvertimeHours(shiftOutTime: shiftOutStr)}';
-          } else if (isInBuffer) {
-            sessionStatusSubtext = 'Checked in at ${todayRecord.formattedCheckInTime} • Buffer Window (OT starts in ${bufferMinsRemaining}m)';
+        if (isFlexibleEmployee) {
+          if (hasCheckedIn) {
+            if (hasCheckedOut) {
+              sessionStatusSubtext = 'Work completed: ${todayRecord.formattedCheckInTime} – ${todayRecord.formattedCheckOutTime} (${todayRecord.formattedTotalHours})';
+            } else {
+              sessionStatusSubtext = 'Checked in at ${todayRecord.formattedCheckInTime} • Target: 9 Working Hours';
+            }
           } else {
-            sessionStatusSubtext = 'Checked in at ${todayRecord.formattedCheckInTime}${officialOutTimeStr.isNotEmpty ? " • Expected Check-out: $officialOutTimeStr" : ""}';
+            sessionStatusSubtext = 'Flexible Schedule • 9 Working Hours Required';
           }
         } else {
-          sessionStatusSubtext = officialOutTimeStr.isNotEmpty
-              ? 'Expected Shift: $officialTimeStr – $officialOutTimeStr'
-              : 'Expected Check-in Time: $officialTimeStr';
+          if (hasCheckedIn) {
+            if (hasCheckedOut) {
+              sessionStatusSubtext = 'Shift completed: ${todayRecord.formattedCheckInTime} – ${todayRecord.formattedCheckOutTime}';
+            } else if (isOvertimeActive) {
+              sessionStatusSubtext = 'Checked in at ${todayRecord.formattedCheckInTime} • Overtime Active: ${todayRecord.formattedOvertimeHours(shiftOutTime: shiftOutStr)}';
+            } else if (isInBuffer) {
+              sessionStatusSubtext = 'Checked in at ${todayRecord.formattedCheckInTime} • Buffer Window (OT starts in ${bufferMinsRemaining}m)';
+            } else {
+              sessionStatusSubtext = 'Checked in at ${todayRecord.formattedCheckInTime}${officialOutTimeStr.isNotEmpty ? " • Expected Check-out: $officialOutTimeStr" : ""}';
+            }
+          } else {
+            sessionStatusSubtext = officialOutTimeStr.isNotEmpty
+                ? 'Expected Shift: $officialTimeStr – $officialOutTimeStr'
+                : 'Expected Check-in Time: $officialTimeStr';
+          }
         }
 
         return Container(
@@ -4922,9 +4936,9 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
     });
 
     try {
-      final actionTitle = widget.isCheckOut ? 'Check Out' : 'Check In';
-      final now = DateTime.now();
-      final dateKey = _formatKey(widget.date);
+      final dateKey = (widget.isCheckOut && widget.existingRecord != null && widget.existingRecord!.date.isNotEmpty)
+          ? widget.existingRecord!.date
+          : _formatKey(widget.date);
 
       final emp = widget.currentEmployee;
       final settings = await widget.attendanceRepository.getAttendanceSettings();
@@ -4978,6 +4992,7 @@ class _AttendanceVerificationDialogState extends ConsumerState<AttendanceVerific
 
       if (!mounted) return;
       setState(() => _message = verifyResult.message);
+      final actionTitle = widget.isCheckOut ? 'Check Out' : 'Check In';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('$actionTitle completed successfully!')),
       );

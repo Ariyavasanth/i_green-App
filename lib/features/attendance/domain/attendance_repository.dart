@@ -21,6 +21,7 @@ abstract class AttendanceRepository {
   Future<List<AttendanceRecord>> getAttendanceRecords(int employeeId);
   Future<List<AttendanceRecord>> getAllAttendanceRecords();
   Future<AttendanceRecord?> getAttendanceRecordForDate(int employeeId, String date);
+  Future<AttendanceRecord?> getActiveAttendanceRecord(int employeeId);
   Future<bool> hasAttendanceForDate(int employeeId, String date);
   Future<AttendanceSettings> getAttendanceSettings();
   Future<void> saveAttendanceSettings(AttendanceSettings settings);

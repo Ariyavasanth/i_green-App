@@ -298,7 +298,9 @@ class MonthlyAttendanceCalculator {
       totalWorkingHours += effectiveDayWorkingHours;
 
       double dayOvertimeHours = 0.0;
-      if (record != null) {
+      final bool isFlexibleEmp = employee.isDynamicEmployee ||
+          employee.workScheduleType.trim().toLowerCase() == 'flexible schedule';
+      if (record != null && !isFlexibleEmp) {
         dayOvertimeHours = record.calculateOvertimeHours(shiftOutTime: employee.outTime);
       }
       totalOvertimeHours += dayOvertimeHours;

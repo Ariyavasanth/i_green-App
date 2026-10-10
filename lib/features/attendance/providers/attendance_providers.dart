@@ -21,9 +21,12 @@ final allAttendanceRecordsProvider = FutureProvider<List<AttendanceRecord>>(
 );
 
 final todayAttendanceRecordProvider = FutureProvider.family<AttendanceRecord?, int>(
-  (ref, employeeId) {
+  (ref, employeeId) async {
+    final repo = ref.watch(attendanceRepositoryProvider);
+    final activeRecord = await repo.getActiveAttendanceRecord(employeeId);
+    if (activeRecord != null) return activeRecord;
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    return ref.watch(attendanceRepositoryProvider).getAttendanceRecordForDate(employeeId, today);
+    return repo.getAttendanceRecordForDate(employeeId, today);
   },
 );
 

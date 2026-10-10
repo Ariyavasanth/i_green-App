@@ -116,10 +116,24 @@ class AttendanceStatusHelper {
       }
 
       // If check-in is present but no check-out on a past day -> Missing Check-Out
+      // (Unless it is an active overnight session checked in within the last 24 hours)
       if (targetDate.isBefore(today) &&
           effectiveRecord.effectiveCheckInTime.isNotEmpty &&
           effectiveRecord.checkOutTime.isEmpty) {
-        return AttendanceStatusInfo.missingCheckout;
+        bool isRecentOvernight = false;
+        try {
+          final inMins = AttendanceSession.parseTimeToMinutes(effectiveRecord.effectiveCheckInTime);
+          if (inMins != null) {
+            final checkInDt = DateTime(targetDate.year, targetDate.month, targetDate.day, inMins ~/ 60, inMins % 60);
+            if (now.difference(checkInDt).inHours < 24) {
+              isRecentOvernight = true;
+            }
+          }
+        } catch (_) {}
+
+        if (!isRecentOvernight) {
+          return AttendanceStatusInfo.missingCheckout;
+        }
       }
 
       if (stLower == 'late') {

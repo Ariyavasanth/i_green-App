@@ -133,8 +133,12 @@ class AttendanceSession {
     if (isCompleted) {
       final inMinutes = _parseTimeToMinutes(checkInTime);
       final outMinutes = _parseTimeToMinutes(checkOutTime);
-      if (inMinutes != null && outMinutes != null && outMinutes >= inMinutes) {
-        return (outMinutes - inMinutes) / 60.0;
+      if (inMinutes != null && outMinutes != null) {
+        int diff = outMinutes - inMinutes;
+        if (diff < 0) {
+          diff += 1440; // 24 hours wrap-around for overnight work session
+        }
+        return diff / 60.0;
       }
     }
     return 0.0;
@@ -149,8 +153,12 @@ class AttendanceSession {
     if (isCompleted) {
       final inMinutes = _parseTimeToMinutes(checkInTime);
       final outMinutes = _parseTimeToMinutes(checkOutTime);
-      if (inMinutes != null && outMinutes != null && outMinutes >= inMinutes) {
-        return outMinutes - inMinutes;
+      if (inMinutes != null && outMinutes != null) {
+        int diff = outMinutes - inMinutes;
+        if (diff < 0) {
+          diff += 1440; // 24 hours wrap-around for overnight work session
+        }
+        return diff;
       }
     }
     return 0;

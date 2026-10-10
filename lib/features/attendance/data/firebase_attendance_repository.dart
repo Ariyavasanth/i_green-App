@@ -361,6 +361,26 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         bool isPastDate = normDate.compareTo(todayStr) < 0;
 
         if (isPastDate) {
+          // If the record was checked in within the last 24 hours (e.g. overnight shift), do NOT mark Missing Check-Out yet.
+          bool isRecentOvernight = false;
+          try {
+            final recDate = DateTime.tryParse(normDate);
+            if (recDate != null) {
+              final inMins = _parseMinutes(inTimeStr);
+              if (inMins != null) {
+                final checkInDt = DateTime(recDate.year, recDate.month, recDate.day, inMins ~/ 60, inMins % 60);
+                final hoursSinceCheckIn = now.difference(checkInDt).inHours;
+                if (hoursSinceCheckIn < 24) {
+                  isRecentOvernight = true;
+                }
+              }
+            }
+          } catch (_) {}
+
+          if (isRecentOvernight) {
+            continue;
+          }
+
           final existingNotes = (data['notes'] ?? '').toString();
           final newNotes = existingNotes.isNotEmpty
               ? (existingNotes.contains('Missing Check-Out') ? existingNotes : '$existingNotes | Missing Check-Out (Requires Correction)')
@@ -610,6 +630,47 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         _localMemoryCache['${employeeId}_$normDate'] ??
         _localMemoryCache['${employeeId}_$dmyDate'] ??
         _localMemoryCache['${employeeId}_${normDate.replaceAll('-', '')}'];
+  }
+
+  @override
+  Future<AttendanceRecord?> getActiveAttendanceRecord(int employeeId) async {
+    final now = DateTime.now();
+    final todayStr = DateFormat('yyyy-MM-dd').format(now);
+    final yesterdayStr = DateFormat('yyyy-MM-dd').format(now.subtract(const Duration(days: 1)));
+
+    // 1. Check today's record for an active session
+    final todayRec = await getAttendanceRecordForDate(employeeId, todayStr);
+    if (todayRec != null) {
+      final bool hasActiveSession = todayRec.sessions.any((s) => s.isActive);
+      final bool hasLegacyActiveSession = todayRec.sessions.isEmpty &&
+          todayRec.effectiveCheckInTime.isNotEmpty &&
+          todayRec.checkOutTime.isEmpty;
+      if (hasActiveSession || hasLegacyActiveSession) {
+        return todayRec;
+      }
+    }
+
+    // 2. Check yesterday's record (e.g. overnight shift started yesterday)
+    final yesterdayRec = await getAttendanceRecordForDate(employeeId, yesterdayStr);
+    if (yesterdayRec != null) {
+      final bool hasActiveSession = yesterdayRec.sessions.any((s) => s.isActive);
+      final bool hasLegacyActiveSession = yesterdayRec.sessions.isEmpty &&
+          yesterdayRec.effectiveCheckInTime.isNotEmpty &&
+          yesterdayRec.checkOutTime.isEmpty;
+      if (hasActiveSession || hasLegacyActiveSession) {
+        final inTimeMins = AttendanceSession.parseTimeToMinutes(yesterdayRec.effectiveCheckInTime);
+        if (inTimeMins != null) {
+          final yesterdayDate = DateTime.tryParse(yesterdayStr) ?? now.subtract(const Duration(days: 1));
+          final checkInDt = DateTime(yesterdayDate.year, yesterdayDate.month, yesterdayDate.day, inTimeMins ~/ 60, inTimeMins % 60);
+          final diffHours = now.difference(checkInDt).inHours;
+          if (diffHours < 28) {
+            return yesterdayRec;
+          }
+        }
+      }
+    }
+
+    return todayRec;
   }
 
   @override
@@ -1396,8 +1457,14 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     final normDate = _normalizeDateKey(date);
     final docId = '${employeeId}_${normDate.replaceAll('-', '')}';
 
-    // 1. Fetch existing attendance record for this date
+    // 1. Fetch existing attendance record for this date (or active session from yesterday)
     AttendanceRecord? existingRecord = await getAttendanceRecordForDate(employeeId, date);
+    if (existingRecord == null || (!existingRecord.sessions.any((s) => s.isActive) && !(existingRecord.sessions.isEmpty && existingRecord.checkInTime.isNotEmpty && existingRecord.checkOutTime.isEmpty))) {
+      final activeRec = await getActiveAttendanceRecord(employeeId);
+      if (activeRec != null) {
+        existingRecord = activeRec;
+      }
+    }
 
     if (existingRecord == null) {
       return AttendanceVerificationResult(
@@ -1471,8 +1538,12 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
     final inMin = _parseMinutes(activeSession.checkInTime);
     final outMin = _parseMinutes(time);
-    if (inMin != null && outMin != null && outMin >= inMin) {
-      sessionDurationMinutes = outMin - inMin;
+    if (inMin != null && outMin != null) {
+      int diff = outMin - inMin;
+      if (diff < 0) {
+        diff += 1440; // Overnight wrap-around
+      }
+      sessionDurationMinutes = diff;
       sessionDurationHours = double.parse((sessionDurationMinutes / 60.0).toStringAsFixed(2));
     }
 
@@ -1552,17 +1623,20 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       sessions: updatedSessions,
     );
 
+    final actualNormDate = _normalizeDateKey(existingRecord.date.isNotEmpty ? existingRecord.date : date);
+    final actualDocId = '${employeeId}_${actualNormDate.replaceAll('-', '')}';
+
     // 7. Update Firestore first, then local cache upon success
     try {
-      await _recordsRef.doc(docId).set(updatedRecord.toMap(), SetOptions(merge: true));
+      await _recordsRef.doc(actualDocId).set(updatedRecord.toMap(), SetOptions(merge: true));
       if (employeeCode.isNotEmpty) {
         await _recordsRef
-            .doc('${employeeCode}_${normDate.replaceAll('-', '')}')
+            .doc('${employeeCode}_${actualNormDate.replaceAll('-', '')}')
             .set(updatedRecord.toMap(), SetOptions(merge: true));
       }
       if (existingRecord.employeeCode.isNotEmpty && existingRecord.employeeCode != employeeCode) {
         await _recordsRef
-            .doc('${existingRecord.employeeCode}_${normDate.replaceAll('-', '')}')
+            .doc('${existingRecord.employeeCode}_${actualNormDate.replaceAll('-', '')}')
             .set(updatedRecord.toMap(), SetOptions(merge: true));
       }
     } catch (_) {
@@ -1577,13 +1651,20 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
     _localMemoryCache['${employeeId}_$date'] = updatedRecord;
     _localMemoryCache['${employeeId}_$normDate'] = updatedRecord;
+    _localMemoryCache['${employeeId}_$actualNormDate'] = updatedRecord;
+    _localMemoryCache['${employeeId}_${existingRecord.date}'] = updatedRecord;
+    _localMemoryCache[actualDocId] = updatedRecord;
     if (employeeCode.isNotEmpty) {
       _localMemoryCache['${employeeCode}_$date'] = updatedRecord;
       _localMemoryCache['${employeeCode}_$normDate'] = updatedRecord;
+      _localMemoryCache['${employeeCode}_$actualNormDate'] = updatedRecord;
+      _localMemoryCache['${employeeCode}_${existingRecord.date}'] = updatedRecord;
     }
     if (existingRecord.employeeCode.isNotEmpty) {
       _localMemoryCache['${existingRecord.employeeCode}_$date'] = updatedRecord;
       _localMemoryCache['${existingRecord.employeeCode}_$normDate'] = updatedRecord;
+      _localMemoryCache['${existingRecord.employeeCode}_$actualNormDate'] = updatedRecord;
+      _localMemoryCache['${existingRecord.employeeCode}_${existingRecord.date}'] = updatedRecord;
     }
 
     return AttendanceVerificationResult(
@@ -2256,7 +2337,17 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     } catch (_) {}
 
     record ??= await getAttendanceRecordForDate(employeeId, date);
+    if (record == null || (!record.sessions.any((s) => s.isActive) && !(record.sessions.isEmpty && record.effectiveCheckInTime.isNotEmpty && record.checkOutTime.isEmpty))) {
+      final activeRec = await getActiveAttendanceRecord(employeeId);
+      if (activeRec != null) {
+        record = activeRec;
+      }
+    }
     if (record == null) return;
+
+    final actualNormDate = _normalizeDateKey(record.date.isNotEmpty ? record.date : date);
+    final actualDocId = '${employeeId}_${actualNormDate.replaceAll('-', '')}';
+    final actualDocRef = _recordsRef.doc(actualDocId);
 
     // Update active session inside sessions list if present
     final List<AttendanceSession> updatedSessions = List<AttendanceSession>.from(record.sessions);
@@ -2267,8 +2358,12 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
       final outMin = _parseMinutes(checkOutTime);
       int sessMins = 0;
       double sessHours = 0.0;
-      if (inMin != null && outMin != null && outMin >= inMin) {
-        sessMins = outMin - inMin;
+      if (inMin != null && outMin != null) {
+        int diff = outMin - inMin;
+        if (diff < 0) {
+          diff += 1440; // Overnight wrap-around
+        }
+        sessMins = diff;
         sessHours = double.parse((sessMins / 60.0).toStringAsFixed(2));
       }
       updatedSessions[activeIdx] = activeSess.copyWith(
@@ -2295,8 +2390,12 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
         try {
           final inMin = _parseMinutes(inTime);
           final outMin = _parseMinutes(checkOutTime);
-          if (inMin != null && outMin != null && outMin > inMin) {
-            hours = double.parse(((outMin - inMin) / 60.0).toStringAsFixed(2));
+          if (inMin != null && outMin != null) {
+            int diff = outMin - inMin;
+            if (diff < 0) {
+              diff += 1440;
+            }
+            hours = double.parse((diff / 60.0).toStringAsFixed(2));
           }
         } catch (_) {}
       }
@@ -2367,13 +2466,18 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
     );
     _localMemoryCache['${employeeId}_$date'] = updatedRec;
     _localMemoryCache['${employeeId}_$normDate'] = updatedRec;
+    _localMemoryCache['${employeeId}_$actualNormDate'] = updatedRec;
+    _localMemoryCache['${employeeId}_${record.date}'] = updatedRec;
+    _localMemoryCache[actualDocId] = updatedRec;
     if (record.employeeCode.isNotEmpty) {
       _localMemoryCache['${record.employeeCode}_$date'] = updatedRec;
       _localMemoryCache['${record.employeeCode}_$normDate'] = updatedRec;
+      _localMemoryCache['${record.employeeCode}_$actualNormDate'] = updatedRec;
+      _localMemoryCache['${record.employeeCode}_${record.date}'] = updatedRec;
     }
 
     try {
-      await docRef.set(updatedRec.toMap(), SetOptions(merge: true));
+      await actualDocRef.set(updatedRec.toMap(), SetOptions(merge: true));
 
       final allSnap = await _recordsRef.get();
       for (final doc in allSnap.docs) {
@@ -2390,9 +2494,9 @@ class FirebaseAttendanceRepository implements AttendanceRepository {
 
         final docDate = (data['date'] ?? '').toString();
         final normDocDate = _normalizeDateKey(docDate);
-        final isDateMatch = docDate == date || docDate.replaceAll('-', '') == date.replaceAll('-', '') || normDocDate == normDate;
+        final isDateMatch = docDate == date || docDate == record.date || docDate.replaceAll('-', '') == actualNormDate.replaceAll('-', '') || normDocDate == actualNormDate || normDocDate == normDate;
 
-        if (isEmpMatch && isDateMatch && doc.id != docId) {
+        if (isEmpMatch && isDateMatch && doc.id != actualDocId) {
           await doc.reference.set(updatedRec.toMap(), SetOptions(merge: true));
         }
       }

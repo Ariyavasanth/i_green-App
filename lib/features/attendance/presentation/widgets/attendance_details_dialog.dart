@@ -32,6 +32,8 @@ class AttendanceDetailsDialog extends StatelessWidget {
 
   int _calculateLateMinutes([bool isPermissionCovered = false]) {
     if (record == null) return 0;
+    final isFlexibleEmp = employee.isDynamicEmployee || employee.workScheduleType.trim().toLowerCase() == 'flexible schedule';
+    if (isFlexibleEmp) return 0;
     if (statusInfo == AttendanceStatusInfo.present || isPermissionCovered) return 0;
     if (record!.notes.isNotEmpty) {
       if (record!.notes.toLowerCase().contains('permission authorized') ||
@@ -77,11 +79,12 @@ class AttendanceDetailsDialog extends StatelessWidget {
   }
 
   String _resolveShiftLabel() {
+    final isFlexibleEmp = employee.isDynamicEmployee || employee.workScheduleType.trim().toLowerCase() == 'flexible schedule';
+    if (isFlexibleEmp) {
+      return 'Flexible Schedule (9.0hr Target)';
+    }
     if (record?.scheduledInTime.isNotEmpty == true && record?.scheduledOutTime.isNotEmpty == true) {
       return '${record!.scheduledInTime} - ${record!.scheduledOutTime}';
-    }
-    if (employee.isDynamicEmployee) {
-      return 'Dynamic / Flexible';
     }
     if (employee.inTime.isNotEmpty && employee.outTime.isNotEmpty) {
       return '${employee.inTime} - ${employee.outTime}';
@@ -166,19 +169,23 @@ class AttendanceDetailsDialog extends StatelessWidget {
 
     final isAbsent = status == AttendanceStatusInfo.absent;
     final isPresent = status == AttendanceStatusInfo.present;
+    final isFlexibleEmp = employee.isDynamicEmployee || employee.workScheduleType.trim().toLowerCase() == 'flexible schedule';
+    final isActiveSession = record != null && record!.effectiveCheckInTime.isNotEmpty && record!.checkOutTime.isEmpty;
 
     final workedHours = record?.computedTotalHours ?? 0.0;
     final totalCreditedHours = isPermissionCovered ? workedHours + permissionHours : workedHours;
     final totalHoursStr = record != null
-        ? (isPermissionCovered
-            ? '${totalCreditedHours.toStringAsFixed(totalCreditedHours.truncateToDouble() == totalCreditedHours ? 0 : 1)}hr'
-            : record!.formattedTotalHours)
+        ? (isActiveSession
+            ? 'In Progress'
+            : (isPermissionCovered
+                ? '${totalCreditedHours.toStringAsFixed(totalCreditedHours.truncateToDouble() == totalCreditedHours ? 0 : 1)}hr'
+                : record!.formattedTotalHours))
         : (isAbsent ? '0hr' : (isPermissionCovered ? '${permissionHours.toStringAsFixed(permissionHours.truncateToDouble() == permissionHours ? 0 : 1)}hr' : '--'));
 
     final rawShortfall = record != null
-        ? record!.calculateShortfall(reqHours)
+        ? (isActiveSession ? 0.0 : record!.calculateShortfall(reqHours))
         : (isAbsent ? reqHours : 0.0);
-    final effectiveShortfall = (isPresent || isPermissionCovered) ? 0.0 : rawShortfall;
+    final effectiveShortfall = (isPresent || isPermissionCovered || isActiveSession) ? 0.0 : rawShortfall;
 
     final shortfallStr = effectiveShortfall > 0
         ? '${effectiveShortfall.toStringAsFixed(effectiveShortfall.truncateToDouble() == effectiveShortfall ? 0 : 1)}hr'
@@ -510,7 +517,7 @@ class AttendanceDetailsDialog extends StatelessWidget {
                                 Expanded(
                                   child: _buildMiniSessionBadge(
                                     label: 'Overtime (OT)',
-                                    value: record != null && record!.calculateOvertimeMinutes(shiftOutTime: employee.outTime) > 0
+                                    value: !isFlexibleEmp && record != null && record!.calculateOvertimeMinutes(shiftOutTime: employee.outTime) > 0
                                         ? record!.formattedOvertimeHours(shiftOutTime: employee.outTime)
                                         : '--',
                                     color: const Color(0xFF9CC70A),

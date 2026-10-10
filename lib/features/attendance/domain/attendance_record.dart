@@ -122,8 +122,12 @@ class AttendanceRecord {
     if (effectiveCheckInTime.isNotEmpty && checkOutTime.isNotEmpty) {
       final inMins = AttendanceSession.parseTimeToMinutes(effectiveCheckInTime);
       final outMins = AttendanceSession.parseTimeToMinutes(checkOutTime);
-      if (inMins != null && outMins != null && outMins > inMins) {
-        return double.parse(((outMins - inMins) / 60.0).toStringAsFixed(2));
+      if (inMins != null && outMins != null) {
+        int diff = outMins - inMins;
+        if (diff < 0) {
+          diff += 1440; // 24 hours wrap-around for overnight work session
+        }
+        return double.parse((diff / 60.0).toStringAsFixed(2));
       }
     }
 
@@ -315,8 +319,12 @@ class AttendanceRecord {
     if (totalSeconds == 0 && effectiveCheckInTime.isNotEmpty && checkOutTime.isNotEmpty) {
       final inMins = AttendanceSession.parseTimeToMinutes(effectiveCheckInTime);
       final outMins = AttendanceSession.parseTimeToMinutes(checkOutTime);
-      if (inMins != null && outMins != null && outMins > inMins) {
-        totalSeconds = (outMins - inMins) * 60;
+      if (inMins != null && outMins != null) {
+        int diff = outMins - inMins;
+        if (diff < 0) {
+          diff += 1440;
+        }
+        totalSeconds = diff * 60;
       }
     }
 

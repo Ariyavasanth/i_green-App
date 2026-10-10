@@ -1,3 +1,4 @@
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -5,11 +6,160 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../domain/models/project_document.dart';
 import '../../domain/models/site_project.dart';
+import '../../../employee/services/offer_letter_save_stub.dart'
+    if (dart.library.html) '../../../employee/services/offer_letter_save_web.dart'
+    if (dart.library.io) '../../../employee/services/offer_letter_save_io.dart';
 
 class ProjectDetailsDialog extends StatelessWidget {
   const ProjectDetailsDialog({required this.project, super.key});
 
   final SiteProject project;
+
+  Future<String> _resolveFileUrl(ProjectDocument doc) async {
+    String url = doc.downloadUrl.trim();
+    if (url.isNotEmpty) return url;
+
+    try {
+      final storage = FirebaseStorage.instance;
+      final projId = project.id.isNotEmpty ? project.id : '';
+      final projCode = project.projectCode.isNotEmpty ? project.projectCode : '';
+      final cleanFileName = doc.name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+      final rawFileName = doc.name;
+
+      final candidates = <String>[
+        if (doc.storagePath.isNotEmpty) doc.storagePath,
+        if (projCode.isNotEmpty) ...[
+          'project module/$projCode/$rawFileName',
+          'project module/$projCode/$cleanFileName',
+          if (doc.category.isNotEmpty) ...[
+            'project module/$projCode/${doc.category}/$rawFileName',
+            'project module/$projCode/${doc.category}/$cleanFileName',
+          ],
+          'Project module/$projCode/$rawFileName',
+          'Project module/$projCode/$cleanFileName',
+          'projects/$projCode/$rawFileName',
+          'projects/$projCode/$cleanFileName',
+          if (doc.category.isNotEmpty) ...[
+            'projects/$projCode/${doc.category}/$rawFileName',
+            'projects/$projCode/${doc.category}/$cleanFileName',
+          ],
+        ],
+        if (projId.isNotEmpty) ...[
+          'project module/$projId/$rawFileName',
+          'project module/$projId/$cleanFileName',
+          if (doc.category.isNotEmpty) ...[
+            'project module/$projId/${doc.category}/$rawFileName',
+            'project module/$projId/${doc.category}/$cleanFileName',
+          ],
+          'Project module/$projId/$rawFileName',
+          'Project module/$projId/$cleanFileName',
+          'projects/$projId/$rawFileName',
+          'projects/$projId/$cleanFileName',
+          if (doc.category.isNotEmpty) ...[
+            'projects/$projId/${doc.category}/$rawFileName',
+            'projects/$projId/${doc.category}/$cleanFileName',
+          ],
+        ],
+      ];
+
+      for (final path in candidates) {
+        try {
+          final resolved = await storage.ref().child(path).getDownloadURL();
+          if (resolved.isNotEmpty) return resolved;
+        } catch (_) {}
+      }
+
+      final folderCandidates = <String>[
+        if (projCode.isNotEmpty) ...[
+          'project module/$projCode',
+          if (doc.category.isNotEmpty) 'project module/$projCode/${doc.category}',
+          'Project module/$projCode',
+          'projects/$projCode',
+          if (doc.category.isNotEmpty) 'projects/$projCode/${doc.category}',
+        ],
+        if (projId.isNotEmpty) ...[
+          'project module/$projId',
+          if (doc.category.isNotEmpty) 'project module/$projId/${doc.category}',
+          'Project module/$projId',
+          'projects/$projId',
+          if (doc.category.isNotEmpty) 'projects/$projId/${doc.category}',
+        ],
+      ];
+
+      for (final folder in folderCandidates) {
+        try {
+          final listResult = await storage.ref().child(folder).listAll();
+          for (final item in listResult.items) {
+            if (item.name.toLowerCase().contains(cleanFileName.toLowerCase()) ||
+                item.name.toLowerCase().contains(rawFileName.toLowerCase())) {
+              final resolved = await item.getDownloadURL();
+              if (resolved.isNotEmpty) return resolved;
+            }
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+
+    return '';
+  }
+
+  Future<void> _handleView(BuildContext context, ProjectDocument doc) async {
+    final url = await _resolveFileUrl(doc);
+    if (url.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Document link not available for ${doc.name}'),
+            backgroundColor: const Color(0xFFDC2626),
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      final uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not open document link.')),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error opening document: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleDownload(BuildContext context, ProjectDocument doc) async {
+    final url = await _resolveFileUrl(doc);
+    if (url.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Document link not available for ${doc.name}'),
+            backgroundColor: const Color(0xFFDC2626),
+          ),
+        );
+      }
+      return;
+    }
+
+    if (context.mounted) {
+      await downloadFileFromUrl(
+        context: context,
+        url: url,
+        fileName: doc.name.isNotEmpty ? doc.name : 'project_document',
+        docTitle: doc.name,
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -141,6 +291,7 @@ class ProjectDetailsDialog extends StatelessWidget {
                       if (project.tenderSpecRemark.isNotEmpty || project.tenderSpecDocuments.isNotEmpty) ...[
                         const SizedBox(height: 14),
                         _buildDocsSection(
+                          context,
                           title: 'TENDER / ENQUIRY SPEC',
                           remark: project.tenderSpecRemark,
                           docs: project.tenderSpecDocuments,
@@ -149,6 +300,7 @@ class ProjectDetailsDialog extends StatelessWidget {
                       if (project.bqrRemark.isNotEmpty || project.bqrDocuments.isNotEmpty) ...[
                         const SizedBox(height: 14),
                         _buildDocsSection(
+                          context,
                           title: 'BQR (BIDDER QUALIFICATION REQUIREMENT)',
                           remark: project.bqrRemark,
                           docs: project.bqrDocuments,
@@ -157,6 +309,7 @@ class ProjectDetailsDialog extends StatelessWidget {
                       if (project.emdRemark.isNotEmpty || project.emdDocuments.isNotEmpty) ...[
                         const SizedBox(height: 14),
                         _buildDocsSection(
+                          context,
                           title: 'EMD / EMD EXEMPTION',
                           remark: project.emdRemark,
                           docs: project.emdDocuments,
@@ -273,7 +426,8 @@ class ProjectDetailsDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildDocsSection({
+  Widget _buildDocsSection(
+    BuildContext context, {
     required String title,
     required String remark,
     required List<ProjectDocument> docs,
@@ -310,34 +464,63 @@ class ProjectDetailsDialog extends StatelessWidget {
           if (docs.isNotEmpty) ...[
             const SizedBox(height: 8),
             for (final doc in docs)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
+              Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFE5E8E2)),
+                ),
                 child: Row(
                   children: [
                     const Icon(Icons.attachment_rounded, size: 16, color: Color(0xFF718096)),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         doc.name,
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF414A51),
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    Text(
-                      '${(doc.size / 1024).toStringAsFixed(0)} KB',
-                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                    ),
-                    if (doc.downloadUrl.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      IconButton(
-                        icon: const Icon(Icons.download_rounded, size: 16),
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () async {
-                          final uri = Uri.tryParse(doc.downloadUrl);
-                          if (uri != null) launchUrl(uri);
-                        },
+                    if (doc.size > 0) ...[
+                      Text(
+                        '${(doc.size / 1024).toStringAsFixed(0)} KB',
+                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
                       ),
+                      const SizedBox(width: 8),
                     ],
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF414A51),
+                        side: const BorderSide(color: Color(0xFFD0D5DD)),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        minimumSize: const Size(54, 28),
+                        visualDensity: VisualDensity.compact,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      ),
+                      onPressed: () => _handleView(context, doc),
+                      icon: const Icon(Icons.open_in_new_rounded, size: 12),
+                      label: const Text('View', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                    ),
+                    const SizedBox(width: 6),
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF9CC70A),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        minimumSize: const Size(64, 28),
+                        visualDensity: VisualDensity.compact,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      ),
+                      onPressed: () => _handleDownload(context, doc),
+                      icon: const Icon(Icons.download_rounded, size: 13),
+                      label: const Text('Download', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                    ),
                   ],
                 ),
               ),

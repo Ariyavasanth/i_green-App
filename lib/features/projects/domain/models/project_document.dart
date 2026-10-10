@@ -5,6 +5,7 @@ class ProjectDocument {
     this.downloadUrl = '',
     this.localPath = '',
     this.category = '',
+    this.storagePath = '',
     required this.uploadedAt,
   });
 
@@ -13,6 +14,7 @@ class ProjectDocument {
   final String downloadUrl;
   final String localPath;
   final String category;
+  final String storagePath;
   final DateTime uploadedAt;
 
   Map<String, dynamic> toJson() => {
@@ -21,6 +23,7 @@ class ProjectDocument {
         'download_url': downloadUrl,
         'local_path': localPath,
         'category': category,
+        'storage_path': storagePath,
         'uploaded_at': uploadedAt.toIso8601String(),
       };
 
@@ -28,9 +31,13 @@ class ProjectDocument {
       ProjectDocument(
         name: json['name'] as String? ?? '',
         size: (json['size'] as num?)?.toInt() ?? 0,
-        downloadUrl: json['download_url'] as String? ?? '',
+        downloadUrl: json['download_url'] as String? ??
+            json['file_url'] as String? ??
+            json['url'] as String? ??
+            '',
         localPath: json['local_path'] as String? ?? '',
         category: json['category'] as String? ?? '',
+        storagePath: json['storage_path'] as String? ?? '',
         uploadedAt: json['uploaded_at'] != null
             ? DateTime.tryParse(json['uploaded_at'].toString()) ??
                 DateTime.now()
@@ -43,6 +50,7 @@ class ProjectDocument {
     String? downloadUrl,
     String? localPath,
     String? category,
+    String? storagePath,
     DateTime? uploadedAt,
   }) {
     return ProjectDocument(
@@ -51,6 +59,7 @@ class ProjectDocument {
       downloadUrl: downloadUrl ?? this.downloadUrl,
       localPath: localPath ?? this.localPath,
       category: category ?? this.category,
+      storagePath: storagePath ?? this.storagePath,
       uploadedAt: uploadedAt ?? this.uploadedAt,
     );
   }

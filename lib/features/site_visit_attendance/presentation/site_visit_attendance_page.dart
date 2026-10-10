@@ -1456,52 +1456,116 @@ class _SiteVisitAttendancePageState extends ConsumerState<SiteVisitAttendancePag
               ),
               const SizedBox(height: 24),
 
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'My Leave Requests',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
-                  ),
-                  Row(
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final isCompact = constraints.maxWidth < 460;
+                  if (isCompact) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'My Leave Requests',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF414A51),
+                                  side: const BorderSide(color: Color(0xFFCBD5E1)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                onPressed: () => Navigator.of(context, rootNavigator: true).push(
+                                  MaterialPageRoute(
+                                    builder: (context) => MyLeaveRequestsPage(currentEmp: currentEmp),
+                                  ),
+                                ),
+                                icon: const Icon(Icons.list_alt, size: 16, color: Color(0xFF414A51)),
+                                label: const Text(
+                                  'My Requests',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF9CC70A),
+                                  foregroundColor: const Color(0xFF414A51),
+                                  elevation: 1,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                onPressed: () => _showApplyLeaveDialog(currentEmp),
+                                icon: const Icon(Icons.add, size: 18),
+                                label: const Text(
+                                  'Apply Leave',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF414A51),
-                          side: const BorderSide(color: Color(0xFFCBD5E1)),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        onPressed: () => Navigator.of(context, rootNavigator: true).push(
-                          MaterialPageRoute(
-                            builder: (context) => MyLeaveRequestsPage(currentEmp: currentEmp),
-                          ),
-                        ),
-                        icon: const Icon(Icons.list_alt, size: 16, color: Color(0xFF414A51)),
-                        label: const Text(
-                          'My Requests',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                        ),
+                      const Text(
+                        'My Leave Requests',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
                       ),
-                      const SizedBox(width: 8),
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF9CC70A),
-                          foregroundColor: const Color(0xFF414A51),
-                          elevation: 1,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        onPressed: () => _showApplyLeaveDialog(currentEmp),
-                        icon: const Icon(Icons.add, size: 18),
-                        label: const Text(
-                          'Apply Leave',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                        ),
+                      Row(
+                        children: [
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF414A51),
+                              side: const BorderSide(color: Color(0xFFCBD5E1)),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onPressed: () => Navigator.of(context, rootNavigator: true).push(
+                              MaterialPageRoute(
+                                builder: (context) => MyLeaveRequestsPage(currentEmp: currentEmp),
+                              ),
+                            ),
+                            icon: const Icon(Icons.list_alt, size: 16, color: Color(0xFF414A51)),
+                            label: const Text(
+                              'My Requests',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF9CC70A),
+                              foregroundColor: const Color(0xFF414A51),
+                              elevation: 1,
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onPressed: () => _showApplyLeaveDialog(currentEmp),
+                            icon: const Icon(Icons.add, size: 18),
+                            label: const Text(
+                              'Apply Leave',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
-                  ),
-                ],
+                  );
+                },
               ),
               const SizedBox(height: 14),
 

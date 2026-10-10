@@ -1,7 +1,9 @@
 import 'dart:developer' as developer;
+import 'dart:io' as io;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../domain/models/project_document.dart';
 import '../../domain/models/site_project.dart';
@@ -45,6 +47,10 @@ class FirebaseProjectRepository implements ProjectRepository {
       // 1. Generate new document ID
       final docRef = _projectsRef.doc();
       final docId = docRef.id;
+      final storageFolderId = (project.projectCode.trim().isNotEmpty
+              ? project.projectCode.trim()
+              : docId)
+          .replaceAll('/', '_');
 
       // 2. Upload attachments per category if provided
       final tenderDocs = List<ProjectDocument>.from(project.tenderSpecDocuments);
@@ -54,7 +60,7 @@ class FirebaseProjectRepository implements ProjectRepository {
       if (filesByCategory != null) {
         if (filesByCategory['tender_spec'] != null) {
           final uploaded = await _uploadFiles(
-            docId,
+            storageFolderId,
             'tender_spec',
             filesByCategory['tender_spec']!,
           );
@@ -62,7 +68,7 @@ class FirebaseProjectRepository implements ProjectRepository {
         }
         if (filesByCategory['bqr'] != null) {
           final uploaded = await _uploadFiles(
-            docId,
+            storageFolderId,
             'bqr',
             filesByCategory['bqr']!,
           );
@@ -70,7 +76,7 @@ class FirebaseProjectRepository implements ProjectRepository {
         }
         if (filesByCategory['emd'] != null) {
           final uploaded = await _uploadFiles(
-            docId,
+            storageFolderId,
             'emd',
             filesByCategory['emd']!,
           );
@@ -108,12 +114,24 @@ class FirebaseProjectRepository implements ProjectRepository {
 
     for (final file in files) {
       String downloadUrl = '';
+      String storagePath = '';
       try {
-        if (file.bytes != null) {
+        Uint8List? bytes = file.bytes;
+        if (bytes == null && file.path != null && file.path!.isNotEmpty) {
+          if (!kIsWeb) {
+            final f = io.File(file.path!);
+            if (await f.exists()) {
+              bytes = await f.readAsBytes();
+            }
+          }
+        }
+
+        if (bytes != null) {
           final cleanFileName = file.name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-          final ref = _storage.ref().child('projects/$projectId/$category/${DateTime.now().millisecondsSinceEpoch}_$cleanFileName');
+          storagePath = 'project module/$projectId/${DateTime.now().millisecondsSinceEpoch}_$cleanFileName';
+          final ref = _storage.ref().child(storagePath);
           final uploadTask = await ref.putData(
-            file.bytes!,
+            bytes,
             SettableMetadata(contentType: _getContentType(file.extension)),
           );
           downloadUrl = await uploadTask.ref.getDownloadURL();
@@ -131,6 +149,7 @@ class FirebaseProjectRepository implements ProjectRepository {
           downloadUrl: downloadUrl,
           localPath: file.path ?? '',
           category: category,
+          storagePath: storagePath,
           uploadedAt: DateTime.now(),
         ),
       );

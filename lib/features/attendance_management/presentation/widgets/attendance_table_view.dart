@@ -229,6 +229,9 @@ class AttendanceTableView extends StatelessWidget {
             leaves: leaves,
             onDutyAssignments: onDutyAssignments,
             permissions: permissions,
+            referenceDate: (dateDt.year == DateTime.now().year && dateDt.month == DateTime.now().month && dateDt.day == DateTime.now().day)
+                ? null
+                : DateTime(dateDt.year, dateDt.month, dateDt.day, 23, 59),
           )
         : null;
 
@@ -400,6 +403,9 @@ class AttendanceTableView extends StatelessWidget {
             leaves: leaves,
             onDutyAssignments: onDutyAssignments,
             permissions: permissions,
+            referenceDate: (dateDt.year == DateTime.now().year && dateDt.month == DateTime.now().month && dateDt.day == DateTime.now().day)
+                ? null
+                : DateTime(dateDt.year, dateDt.month, dateDt.day, 23, 59),
           )
         : null;
 

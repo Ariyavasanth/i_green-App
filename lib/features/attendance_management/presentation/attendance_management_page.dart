@@ -142,8 +142,10 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
           if (correctedCheckIn.isNotEmpty && correctedCheckOut.isNotEmpty) {
             final inMins = AttendanceSession.parseTimeToMinutes(correctedCheckIn);
             final outMins = AttendanceSession.parseTimeToMinutes(correctedCheckOut);
-            if (inMins != null && outMins != null && outMins > inMins) {
-              computedHours = double.parse(((outMins - inMins) / 60.0).toStringAsFixed(2));
+            if (inMins != null && outMins != null) {
+              int diff = outMins - inMins;
+              if (diff < 0) diff += 1440;
+              computedHours = double.parse((diff / 60.0).toStringAsFixed(2));
               sessions = [
                 AttendanceSession(
                   id: 'session_office_1',
@@ -151,7 +153,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                   checkInTime: correctedCheckIn,
                   checkOutTime: correctedCheckOut,
                   durationHours: computedHours,
-                  durationMinutes: outMins - inMins,
+                  durationMinutes: diff,
                   checkInVerificationStatus: 'Admin Correction (Firestore)',
                   checkOutVerificationStatus: 'Admin Correction (Firestore)',
                   checkInMethod: 'Admin Override',
@@ -3243,25 +3245,45 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
     List<SiteVisitRecord> dayVisits, [
     List<OnDutyAssignment> dayOD = const [],
   ]) {
+    final size = MediaQuery.of(context).size;
+    final isMobile = size.width < 600;
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        titlePadding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
         title: Row(
           children: [
-            const Icon(Icons.location_on_outlined, color: Color(0xFF9CC70A)),
-            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF9CC70A).withValues(alpha: 0.18),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.location_on_outlined, color: Color(0xFF414A51), size: 18),
+            ),
+            const SizedBox(width: 10),
             Expanded(
               child: Text(
                 'Site Visits: $employeeName ($dateStr)',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
         ),
-        content: SizedBox(
-          width: 500,
+        content: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: isMobile ? size.width * 0.92 : 520,
+            maxHeight: size.height * 0.75,
+          ),
           child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -3292,15 +3314,17 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Expanded(
                                     child: Text(
                                       'On-Duty: ${od.destination.isNotEmpty ? od.destination : od.destinationName}',
                                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0369A1)),
+                                      maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
+                                  const SizedBox(width: 8),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
@@ -3308,21 +3332,21 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Text(
-                                      od.status.replaceAll('_', ' '),
+                                      od.status.replaceAll('_', ' ').toUpperCase(),
                                       style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
                                     ),
                                   ),
                                 ],
                               ),
                               if (od.purpose.isNotEmpty) ...[
-                                const SizedBox(height: 3),
+                                const SizedBox(height: 4),
                                 Text(
                                   'Purpose: ${od.purpose}',
                                   style: const TextStyle(fontSize: 11, color: Color(0xFF334155)),
                                 ),
                               ],
                               if (od.destinationLatitude != null && od.destinationLongitude != null) ...[
-                                const SizedBox(height: 4),
+                                const SizedBox(height: 6),
                                 InkWell(
                                   onTap: () async {
                                     final mapsUrl = Uri.parse(
@@ -3331,24 +3355,58 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                                       await launchUrl(mapsUrl, mode: LaunchMode.externalApplication);
                                     }
                                   },
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.pin_drop_rounded, size: 14, color: Color(0xFF2563EB)),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        od.destinationAddress.isNotEmpty ? od.destinationAddress : 'View Destination on Google Maps',
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          color: Color(0xFF2563EB),
-                                          fontWeight: FontWeight.w600,
-                                          decoration: TextDecoration.underline,
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 2),
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Padding(
+                                          padding: EdgeInsets.only(top: 2),
+                                          child: Icon(Icons.pin_drop_rounded, size: 14, color: Color(0xFF2563EB)),
                                         ),
-                                      ),
-                                      const SizedBox(width: 3),
-                                      const Icon(Icons.open_in_new, size: 11, color: Color(0xFF2563EB)),
-                                    ],
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Text(
+                                            od.destinationAddress.isNotEmpty ? od.destinationAddress : 'View Destination on Google Maps',
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              color: Color(0xFF2563EB),
+                                              fontWeight: FontWeight.w600,
+                                              decoration: TextDecoration.underline,
+                                            ),
+                                            maxLines: 3,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        const Padding(
+                                          padding: EdgeInsets.only(top: 2),
+                                          child: Icon(Icons.open_in_new, size: 11, color: Color(0xFF2563EB)),
+                                        ),
+                                      ],
+                                    ),
                                   ),
+                                ),
+                              ] else if (od.destinationAddress.isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Padding(
+                                      padding: EdgeInsets.only(top: 2),
+                                      child: Icon(Icons.location_on_outlined, size: 14, color: Color(0xFF64748B)),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                      child: Text(
+                                        od.destinationAddress,
+                                        style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                                        maxLines: 3,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ],
@@ -3437,6 +3495,7 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                                       ],
                                     ),
                                   ),
+                                  const SizedBox(width: 8),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                     decoration: BoxDecoration(
@@ -3466,37 +3525,49 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                                   child: Padding(
                                     padding: const EdgeInsets.symmetric(vertical: 2),
                                     child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        const Icon(Icons.pin_drop_rounded, size: 14, color: Color(0xFF2563EB)),
+                                        const Padding(
+                                          padding: EdgeInsets.only(top: 2),
+                                          child: Icon(Icons.pin_drop_rounded, size: 14, color: Color(0xFF2563EB)),
+                                        ),
                                         const SizedBox(width: 4),
                                         Expanded(
                                           child: Text(
                                             v.address.isNotEmpty ? v.address : 'View location on Google Maps (${v.latitude.toStringAsFixed(4)}, ${v.longitude.toStringAsFixed(4)})',
                                             style: const TextStyle(
-                                              fontSize: 12,
+                                              fontSize: 11,
                                               color: Color(0xFF2563EB),
                                               fontWeight: FontWeight.w600,
                                               decoration: TextDecoration.underline,
                                             ),
-                                            maxLines: 2,
+                                            maxLines: 3,
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
                                         const SizedBox(width: 4),
-                                        const Icon(Icons.open_in_new, size: 12, color: Color(0xFF2563EB)),
+                                        const Padding(
+                                          padding: EdgeInsets.only(top: 2),
+                                          child: Icon(Icons.open_in_new, size: 11, color: Color(0xFF2563EB)),
+                                        ),
                                       ],
                                     ),
                                   ),
                                 )
                               else if (v.address.isNotEmpty)
                                 Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Icon(Icons.location_on_outlined, size: 14, color: Color(0xFF64748B)),
+                                    const Padding(
+                                      padding: EdgeInsets.only(top: 2),
+                                      child: Icon(Icons.location_on_outlined, size: 14, color: Color(0xFF64748B)),
+                                    ),
                                     const SizedBox(width: 4),
                                     Expanded(
                                       child: Text(
                                         v.address,
-                                        style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                        style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                                        maxLines: 3,
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
@@ -3518,7 +3589,14 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFF414A51),
+              textStyle: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            child: const Text('Close'),
+          ),
         ],
       ),
     );
