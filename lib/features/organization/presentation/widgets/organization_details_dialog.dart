@@ -21,15 +21,24 @@ class OrganizationDetailsDialog extends StatelessWidget {
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
-  Future<String> _resolveFileUrl(OrgDocument doc) async {
+  Future<({String url, String? error})> _resolveFileUrl(OrgDocument doc) async {
     String url = doc.fileUrl.trim();
-    if (url.isNotEmpty) return url;
+    if (url.isNotEmpty &&
+        (url.startsWith('http://') ||
+            url.startsWith('https://') ||
+            url.startsWith('blob:') ||
+            url.startsWith('data:'))) {
+      return (url: url, error: null);
+    }
 
     try {
       final storage = FirebaseStorage.instance;
-      final orgId = organization.canonicalId.isNotEmpty
-          ? organization.canonicalId
-          : (organization.id != 0 ? '${organization.id}' : '1');
+      if (url.startsWith('gs://')) {
+        try {
+          final resolved = await storage.refFromURL(url).getDownloadURL();
+          if (resolved.isNotEmpty) return (url: resolved, error: null);
+        } catch (_) {}
+      }
 
       final cleanFileName = doc.fileName.replaceAll(
         RegExp(r'[^a-zA-Z0-9._-]'),
@@ -37,41 +46,106 @@ class OrganizationDetailsDialog extends StatelessWidget {
       );
       final cleanTitle = doc.title.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
 
-      final candidates = [
-        'Organization documents/$orgId/$cleanTitle/${doc.fileName}',
-        'Organization documents/$orgId/$cleanTitle/$cleanFileName',
-        'Organization documents/$orgId/${doc.fileName}',
-        'Organization documents/$orgId/$cleanFileName',
-        'organizations/$orgId/documents/$cleanTitle/${doc.fileName}',
-        'organizations/$orgId/images/$cleanTitle/${doc.fileName}',
-        'organizations/$orgId/documents/$cleanTitle/$cleanFileName',
-        'organizations/$orgId/images/$cleanTitle/$cleanFileName',
-        'organizations/$orgId/$cleanTitle/${doc.fileName}',
-        'organizations/$orgId/$cleanTitle/$cleanFileName',
-        'organizations/$orgId/${doc.fileName}',
-        'organizations/$orgId/$cleanFileName',
-      ];
+      // Organizations may be stored under numeric id (e.g. 17904938941), canonicalId, or docId
+      final orgIds = <String>{
+        if (organization.id != 0) '${organization.id}',
+        if (organization.canonicalId.isNotEmpty) organization.canonicalId,
+        if (organization.docId.isNotEmpty) organization.docId,
+        '1',
+      }.toList();
 
-      for (final path in candidates) {
+      for (final currentOrgId in orgIds) {
+        // 1. Scan folder listing under Organization documents/$currentOrgId
         try {
-          final resolved = await storage.ref().child(path).getDownloadURL();
-          if (resolved.isNotEmpty) return resolved;
-        } catch (_) {}
-      }
-    } catch (_) {}
+          final orgFolderRef = storage.ref('Organization documents/$currentOrgId');
+          final rootRes = await orgFolderRef.listAll();
 
-    return '';
+          // Check direct items
+          for (final item in rootRes.items) {
+            final name = item.name.toLowerCase();
+            final targetDocName = doc.fileName.toLowerCase();
+            final targetCleanName = cleanFileName.toLowerCase();
+
+            if (name == targetDocName ||
+                name == targetCleanName ||
+                name.endsWith('_$targetCleanName') ||
+                name.endsWith('_$targetDocName') ||
+                (targetCleanName.isNotEmpty && name.contains(targetCleanName))) {
+              final resolved = await item.getDownloadURL();
+              if (resolved.isNotEmpty) return (url: resolved, error: null);
+            }
+          }
+
+          // Check subfolders (like cleanTitle or documentTitle)
+          for (final subFolder in rootRes.prefixes) {
+            try {
+              final subRes = await subFolder.listAll();
+              for (final item in subRes.items) {
+                final name = item.name.toLowerCase();
+                final targetDocName = doc.fileName.toLowerCase();
+                final targetCleanName = cleanFileName.toLowerCase();
+
+                if (name == targetDocName ||
+                    name == targetCleanName ||
+                    name.endsWith('_$targetCleanName') ||
+                    name.endsWith('_$targetDocName') ||
+                    (targetCleanName.isNotEmpty && name.contains(targetCleanName))) {
+                  final resolved = await item.getDownloadURL();
+                  if (resolved.isNotEmpty) return (url: resolved, error: null);
+                }
+              }
+            } catch (_) {}
+          }
+        } catch (_) {}
+
+        // 2. Also check candidate exact paths
+        final candidates = [
+          'Organization documents/$currentOrgId/$cleanTitle/${doc.fileName}',
+          'Organization documents/$currentOrgId/$cleanTitle/$cleanFileName',
+          'Organization documents/$currentOrgId/${doc.fileName}',
+          'Organization documents/$currentOrgId/$cleanFileName',
+          'organizations/$currentOrgId/documents/$cleanTitle/${doc.fileName}',
+          'organizations/$currentOrgId/images/$cleanTitle/${doc.fileName}',
+          'organizations/$currentOrgId/documents/$cleanTitle/$cleanFileName',
+          'organizations/$currentOrgId/images/$cleanTitle/$cleanFileName',
+          'organizations/$currentOrgId/$cleanTitle/${doc.fileName}',
+          'organizations/$currentOrgId/$cleanTitle/$cleanFileName',
+          'organizations/$currentOrgId/${doc.fileName}',
+          'organizations/$currentOrgId/$cleanFileName',
+        ];
+
+        for (final path in candidates) {
+          try {
+            final resolved = await storage.ref().child(path).getDownloadURL();
+            if (resolved.isNotEmpty) return (url: resolved, error: null);
+          } catch (_) {}
+        }
+      }
+    } on FirebaseException catch (e) {
+      debugPrint('[FirebaseStorage] Error: ${e.code} - ${e.message}');
+      return (url: '', error: e.message ?? e.code);
+    } catch (e) {
+      debugPrint('[FirebaseStorage] Unexpected error: $e');
+      return (url: '', error: e.toString());
+    }
+
+    return (url: '', error: null);
   }
 
   Future<void> _handleDownload(BuildContext context, OrgDocument doc) async {
-    final url = await _resolveFileUrl(doc);
+    final result = await _resolveFileUrl(doc);
+    final url = result.url;
     if (url.isEmpty) {
       if (context.mounted) {
+        final msg = (result.error != null &&
+                (result.error!.toLowerCase().contains('billing') ||
+                    result.error!.toLowerCase().contains('delinquent') ||
+                    result.error!.toLowerCase().contains('permission')))
+            ? 'Firebase Storage: ${result.error}'
+            : 'Document link not available for ${doc.title} (${doc.fileName}). Please edit the organization to re-upload this file.';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Document link not available for ${doc.title} (${doc.fileName})',
-            ),
+            content: Text(msg),
             backgroundColor: const Color(0xFFDC2626),
           ),
         );
@@ -90,14 +164,19 @@ class OrganizationDetailsDialog extends StatelessWidget {
   }
 
   Future<void> _handleView(BuildContext context, OrgDocument doc) async {
-    final url = await _resolveFileUrl(doc);
+    final result = await _resolveFileUrl(doc);
+    final url = result.url;
     if (url.isEmpty) {
       if (context.mounted) {
+        final msg = (result.error != null &&
+                (result.error!.toLowerCase().contains('billing') ||
+                    result.error!.toLowerCase().contains('delinquent') ||
+                    result.error!.toLowerCase().contains('permission')))
+            ? 'Firebase Storage: ${result.error}'
+            : 'Document link not available for ${doc.title} (${doc.fileName}). Please edit the organization to re-upload this file.';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Document link not available for ${doc.title} (${doc.fileName})',
-            ),
+            content: Text(msg),
             backgroundColor: const Color(0xFFDC2626),
           ),
         );

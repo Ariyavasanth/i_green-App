@@ -617,6 +617,7 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
       }
     } catch (e) {
       debugPrint('Error uploading organization document/image to Firebase Storage: $e');
+      rethrow;
     }
 
     return OrgDocument(

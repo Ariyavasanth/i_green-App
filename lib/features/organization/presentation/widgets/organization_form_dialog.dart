@@ -528,6 +528,9 @@ class _OrganizationFormDialogState
             docTitle: docItem.title,
             file: docItem.pickedFile,
           );
+          if (uploaded.fileUrl.isEmpty) {
+            throw Exception('Failed to upload "${docItem.title}". Please try again.');
+          }
           finalDocs.add(uploaded);
         } else if (docItem.existingDoc != null) {
           finalDocs.add(docItem.existingDoc!);
@@ -1303,7 +1306,8 @@ class _OrganizationFormDialogState
   Widget _buildDocUploadCard(_DocUploadItem item) {
     final hasPicked = item.pickedFile != null;
     final hasExisting =
-        item.existingDoc != null && item.existingDoc!.fileUrl.isNotEmpty;
+        item.existingDoc != null &&
+        (item.existingDoc!.fileUrl.isNotEmpty || item.existingDoc!.fileName.isNotEmpty);
     final fileName = hasPicked
         ? item.pickedFile!.name
         : (hasExisting ? item.existingDoc!.fileName : null);
@@ -1357,19 +1361,38 @@ class _OrganizationFormDialogState
                 ),
                 const SizedBox(height: 2),
                 if (fileName != null)
-                  Text(
-                    hasPicked ? 'New: $fileName' : fileName,
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: hasPicked
-                          ? const Color(0xFF15803D)
-                          : const Color(0xFF64748B),
-                      fontWeight: hasPicked
-                          ? FontWeight.w500
-                          : FontWeight.normal,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        hasPicked ? 'New: $fileName' : fileName,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: hasPicked
+                              ? const Color(0xFF15803D)
+                              : const Color(0xFF64748B),
+                          fontWeight: hasPicked
+                              ? FontWeight.w500
+                              : FontWeight.normal,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (!hasPicked &&
+                          hasExisting &&
+                          (item.existingDoc?.fileUrl.isEmpty ?? true))
+                        const Padding(
+                          padding: EdgeInsets.only(left: 6),
+                          child: Text(
+                            '(Re-upload required)',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFFDC2626),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                    ],
                   )
                 else
                   const Text(
@@ -1516,7 +1539,8 @@ class _OrganizationFormDialogState
     final hasPickedCheque = bankItem.pickedChequeFile != null;
     final hasExistingCheque =
         bankItem.existingChequeDoc != null &&
-        bankItem.existingChequeDoc!.fileUrl.isNotEmpty;
+        (bankItem.existingChequeDoc!.fileUrl.isNotEmpty ||
+            bankItem.existingChequeDoc!.fileName.isNotEmpty);
     final chequeFileName = hasPickedCheque
         ? bankItem.pickedChequeFile!.name
         : (hasExistingCheque ? bankItem.existingChequeDoc!.fileName : null);
