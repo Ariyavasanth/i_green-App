@@ -31,7 +31,10 @@ class OrganizationDetailsDialog extends StatelessWidget {
           ? organization.canonicalId
           : (organization.id != 0 ? '${organization.id}' : '1');
 
-      final cleanFileName = doc.fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+      final cleanFileName = doc.fileName.replaceAll(
+        RegExp(r'[^a-zA-Z0-9._-]'),
+        '_',
+      );
       final cleanTitle = doc.title.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
 
       final candidates = [
@@ -66,7 +69,9 @@ class OrganizationDetailsDialog extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Document link not available for ${doc.title} (${doc.fileName})'),
+            content: Text(
+              'Document link not available for ${doc.title} (${doc.fileName})',
+            ),
             backgroundColor: const Color(0xFFDC2626),
           ),
         );
@@ -90,7 +95,9 @@ class OrganizationDetailsDialog extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Document link not available for ${doc.title} (${doc.fileName})'),
+            content: Text(
+              'Document link not available for ${doc.title} (${doc.fileName})',
+            ),
             backgroundColor: const Color(0xFFDC2626),
           ),
         );
@@ -118,9 +125,9 @@ class OrganizationDetailsDialog extends StatelessWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error opening document: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error opening document: $e')));
       }
     }
   }
@@ -161,13 +168,21 @@ class OrganizationDetailsDialog extends StatelessWidget {
                     color: AppColors.primary.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.remove_red_eye_outlined, color: AppColors.primary, size: 20),
+                  child: const Icon(
+                    Icons.remove_red_eye_outlined,
+                    color: AppColors.primary,
+                    size: 20,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 const Expanded(
                   child: Text(
                     'Organization Profile & Statutory Details',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF101828)),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF101828),
+                    ),
                   ),
                 ),
                 IconButton(
@@ -195,7 +210,11 @@ class OrganizationDetailsDialog extends StatelessWidget {
                       color: AppColors.primary.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.business_rounded, color: AppColors.primary, size: 26),
+                    child: const Icon(
+                      Icons.business_rounded,
+                      color: AppColors.primary,
+                      size: 26,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -204,7 +223,11 @@ class OrganizationDetailsDialog extends StatelessWidget {
                       children: [
                         Text(
                           organization.name,
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF101828)),
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF101828),
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Wrap(
@@ -213,26 +236,44 @@ class OrganizationDetailsDialog extends StatelessWidget {
                           children: [
                             if (organization.businessType.isNotEmpty)
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: AppColors.primary.withValues(alpha: 0.15),
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.15,
+                                  ),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
                                   organization.businessType,
-                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primary),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.primary,
+                                  ),
                                 ),
                               ),
                             if (organization.industryType.isNotEmpty)
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF414A51).withValues(alpha: 0.12),
+                                  color: const Color(
+                                    0xFF414A51,
+                                  ).withValues(alpha: 0.12),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
                                   organization.industryType,
-                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF414A51)),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF414A51),
+                                  ),
                                 ),
                               ),
                           ],
@@ -326,45 +367,78 @@ class OrganizationDetailsDialog extends StatelessWidget {
                       title: 'Contact Numbers',
                       icon: Icons.phone_outlined,
                       children: [
-                        if (organization.contactNumbers.isEmpty && organization.phoneNumber.isEmpty)
-                          const Text('No contact numbers registered', style: TextStyle(fontSize: 12.5, color: Color(0xFF94A3B8)))
+                        if (organization.contactNumbers.isEmpty &&
+                            organization.phoneNumber.isEmpty)
+                          const Text(
+                            'No contact numbers registered',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: Color(0xFF94A3B8),
+                            ),
+                          )
                         else if (organization.contactNumbers.isNotEmpty)
                           Wrap(
                             spacing: 10,
                             runSpacing: 8,
                             children: organization.contactNumbers.map((c) {
                               return Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFF8FAFC),
                                   borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                  border: Border.all(
+                                    color: const Color(0xFFE2E8F0),
+                                  ),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.phone, size: 14, color: AppColors.primary),
+                                    Icon(
+                                      Icons.phone,
+                                      size: 14,
+                                      color: AppColors.primary,
+                                    ),
                                     const SizedBox(width: 6),
                                     Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Text(
                                           c.label,
-                                          style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                                          style: const TextStyle(
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF64748B),
+                                          ),
                                         ),
                                         Text(
                                           c.number,
-                                          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                                          style: const TextStyle(
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF1E293B),
+                                          ),
                                         ),
                                       ],
                                     ),
                                     const SizedBox(width: 4),
                                     InkWell(
-                                      onTap: () => _copyToClipboard(context, c.number, c.label),
+                                      onTap: () => _copyToClipboard(
+                                        context,
+                                        c.number,
+                                        c.label,
+                                      ),
                                       child: const Padding(
                                         padding: EdgeInsets.all(4),
-                                        child: Icon(Icons.copy_rounded, size: 13, color: Color(0xFF94A3B8)),
+                                        child: Icon(
+                                          Icons.copy_rounded,
+                                          size: 13,
+                                          color: Color(0xFF94A3B8),
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -393,7 +467,9 @@ class OrganizationDetailsDialog extends StatelessWidget {
                               child: _buildIdChip(
                                 context,
                                 label: 'GST / VAT Number',
-                                value: organization.gstNumber.isNotEmpty ? organization.gstNumber : organization.taxId,
+                                value: organization.gstNumber.isNotEmpty
+                                    ? organization.gstNumber
+                                    : organization.taxId,
                               ),
                             ),
                             const SizedBox(width: 10),
@@ -437,50 +513,85 @@ class OrganizationDetailsDialog extends StatelessWidget {
                       icon: Icons.people_outline_rounded,
                       children: [
                         if (organization.directors.isEmpty)
-                          const Text('No directors registered yet', style: TextStyle(fontSize: 12.5, color: Color(0xFF94A3B8)))
+                          const Text(
+                            'No directors registered yet',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: Color(0xFF94A3B8),
+                            ),
+                          )
                         else
                           Column(
                             children: organization.directors.map((d) {
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 6),
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFF8FAFC),
                                   borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                  border: Border.all(
+                                    color: const Color(0xFFE2E8F0),
+                                  ),
                                 ),
                                 child: Row(
                                   children: [
                                     Container(
                                       padding: const EdgeInsets.all(6),
                                       decoration: BoxDecoration(
-                                        color: AppColors.primary.withValues(alpha: 0.12),
+                                        color: AppColors.primary.withValues(
+                                          alpha: 0.12,
+                                        ),
                                         shape: BoxShape.circle,
                                       ),
-                                      child: const Icon(Icons.person, size: 15, color: AppColors.primary),
+                                      child: const Icon(
+                                        Icons.person,
+                                        size: 15,
+                                        color: AppColors.primary,
+                                      ),
                                     ),
                                     const SizedBox(width: 10),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            d.name.isNotEmpty ? d.name : 'Director',
-                                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                                            d.name.isNotEmpty
+                                                ? d.name
+                                                : 'Director',
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                              color: Color(0xFF1E293B),
+                                            ),
                                           ),
                                           if (d.din.isNotEmpty)
                                             Text(
                                               'DIN: ${d.din}',
-                                              style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                                              style: const TextStyle(
+                                                fontSize: 11.5,
+                                                color: Color(0xFF64748B),
+                                              ),
                                             ),
                                         ],
                                       ),
                                     ),
                                     if (d.din.isNotEmpty)
                                       IconButton(
-                                        icon: const Icon(Icons.copy_rounded, size: 14, color: Color(0xFF94A3B8)),
+                                        icon: const Icon(
+                                          Icons.copy_rounded,
+                                          size: 14,
+                                          color: Color(0xFF94A3B8),
+                                        ),
                                         tooltip: 'Copy DIN',
-                                        onPressed: () => _copyToClipboard(context, d.din, 'DIN'),
+                                        onPressed: () => _copyToClipboard(
+                                          context,
+                                          d.din,
+                                          'DIN',
+                                        ),
                                       ),
                                   ],
                                 ),
@@ -497,7 +608,13 @@ class OrganizationDetailsDialog extends StatelessWidget {
                       icon: Icons.folder_open_outlined,
                       children: [
                         if (organization.documents.isEmpty)
-                          const Text('No statutory documents uploaded yet', style: TextStyle(fontSize: 12.5, color: Color(0xFF94A3B8)))
+                          const Text(
+                            'No statutory documents uploaded yet',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: Color(0xFF94A3B8),
+                            ),
+                          )
                         else
                           Column(
                             children: organization.documents.map((doc) {
@@ -506,11 +623,16 @@ class OrganizationDetailsDialog extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(8),
                                 child: Container(
                                   margin: const EdgeInsets.only(bottom: 8),
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 8,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: const Color(0xFFF8FAFC),
                                     borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                                    border: Border.all(
+                                      color: const Color(0xFFE2E8F0),
+                                    ),
                                   ),
                                   child: Row(
                                     children: [
@@ -518,23 +640,37 @@ class OrganizationDetailsDialog extends StatelessWidget {
                                         padding: const EdgeInsets.all(8),
                                         decoration: BoxDecoration(
                                           color: const Color(0xFFDCFCE7),
-                                          borderRadius: BorderRadius.circular(6),
+                                          borderRadius: BorderRadius.circular(
+                                            6,
+                                          ),
                                         ),
-                                        child: const Icon(Icons.description_rounded, size: 18, color: Color(0xFF15803D)),
+                                        child: const Icon(
+                                          Icons.description_rounded,
+                                          size: 18,
+                                          color: Color(0xFF15803D),
+                                        ),
                                       ),
                                       const SizedBox(width: 10),
                                       Expanded(
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Text(
                                               doc.title,
-                                              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                                              style: const TextStyle(
+                                                fontSize: 12.5,
+                                                fontWeight: FontWeight.w600,
+                                                color: Color(0xFF1E293B),
+                                              ),
                                             ),
                                             if (doc.fileName.isNotEmpty)
                                               Text(
                                                 doc.fileName,
-                                                style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                                                style: const TextStyle(
+                                                  fontSize: 11,
+                                                  color: Color(0xFF64748B),
+                                                ),
                                                 maxLines: 1,
                                                 overflow: TextOverflow.ellipsis,
                                               ),
@@ -544,15 +680,33 @@ class OrganizationDetailsDialog extends StatelessWidget {
                                       const SizedBox(width: 6),
                                       OutlinedButton.icon(
                                         style: OutlinedButton.styleFrom(
-                                          foregroundColor: const Color(0xFF414A51),
-                                          side: const BorderSide(color: Color(0xFFD0D5DD)),
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                          foregroundColor: const Color(
+                                            0xFF414A51,
+                                          ),
+                                          side: const BorderSide(
+                                            color: Color(0xFFD0D5DD),
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 6,
+                                          ),
                                           minimumSize: const Size(60, 30),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              6,
+                                            ),
+                                          ),
                                         ),
-                                        onPressed: () => _handleView(context, doc),
-                                        icon: const Icon(Icons.open_in_new_rounded, size: 12),
-                                        label: const Text('View', style: TextStyle(fontSize: 11)),
+                                        onPressed: () =>
+                                            _handleView(context, doc),
+                                        icon: const Icon(
+                                          Icons.open_in_new_rounded,
+                                          size: 12,
+                                        ),
+                                        label: const Text(
+                                          'View',
+                                          style: TextStyle(fontSize: 11),
+                                        ),
                                       ),
                                       const SizedBox(width: 6),
                                       ElevatedButton.icon(
@@ -560,17 +714,64 @@ class OrganizationDetailsDialog extends StatelessWidget {
                                           backgroundColor: AppColors.primary,
                                           foregroundColor: Colors.white,
                                           elevation: 0,
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 6,
+                                          ),
                                           minimumSize: const Size(80, 30),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              6,
+                                            ),
+                                          ),
                                         ),
-                                        onPressed: () => _handleDownload(context, doc),
-                                        icon: const Icon(Icons.file_download_outlined, size: 14),
-                                        label: const Text('Download', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
+                                        onPressed: () =>
+                                            _handleDownload(context, doc),
+                                        icon: const Icon(
+                                          Icons.file_download_outlined,
+                                          size: 14,
+                                        ),
+                                        label: const Text(
+                                          'Download',
+                                          style: TextStyle(
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
                                       ),
                                     ],
                                   ),
                                 ),
+                              );
+                            }).toList(),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Section 6: Bank Account Details
+                    _buildSectionContainer(
+                      title: 'Bank Account Details',
+                      icon: Icons.account_balance_outlined,
+                      children: [
+                        if (organization.bankDetails.isEmpty)
+                          const Text(
+                            'No bank details registered',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: Color(0xFF94A3B8),
+                            ),
+                          )
+                        else
+                          Column(
+                            children: organization.bankDetails.map((b) {
+                              return _BankDetailViewCard(
+                                bank: b,
+                                onCopy: (text, label) =>
+                                    _copyToClipboard(context, text, label),
+                                onViewDoc: (doc) => _handleView(context, doc),
+                                onDownloadDoc: (doc) =>
+                                    _handleDownload(context, doc),
                               );
                             }).toList(),
                           ),
@@ -590,12 +791,20 @@ class OrganizationDetailsDialog extends StatelessWidget {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 10,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                     elevation: 0,
                   ),
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Close', style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: const Text(
+                    'Close',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             ),
@@ -626,7 +835,11 @@ class OrganizationDetailsDialog extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 title,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E293B),
+                ),
               ),
             ],
           ),
@@ -637,7 +850,11 @@ class OrganizationDetailsDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildIdChip(BuildContext context, {required String label, required String value}) {
+  Widget _buildIdChip(
+    BuildContext context, {
+    required String label,
+    required String value,
+  }) {
     final hasVal = value.isNotEmpty;
     return Container(
       padding: const EdgeInsets.all(10),
@@ -651,7 +868,11 @@ class OrganizationDetailsDialog extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+            style: const TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF64748B),
+            ),
           ),
           const SizedBox(height: 3),
           Row(
@@ -662,7 +883,9 @@ class OrganizationDetailsDialog extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w600,
-                    color: hasVal ? const Color(0xFF1E293B) : const Color(0xFF94A3B8),
+                    color: hasVal
+                        ? const Color(0xFF1E293B)
+                        : const Color(0xFF94A3B8),
                   ),
                 ),
               ),
@@ -671,7 +894,11 @@ class OrganizationDetailsDialog extends StatelessWidget {
                   onTap: () => _copyToClipboard(context, value, label),
                   child: const Padding(
                     padding: EdgeInsets.all(2),
-                    child: Icon(Icons.copy_rounded, size: 13, color: Color(0xFF94A3B8)),
+                    child: Icon(
+                      Icons.copy_rounded,
+                      size: 13,
+                      color: Color(0xFF94A3B8),
+                    ),
                   ),
                 ),
             ],
@@ -691,7 +918,11 @@ class OrganizationDetailsDialog extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF667085)),
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF667085),
+          ),
         ),
         const SizedBox(height: 2),
         Text(
@@ -703,6 +934,342 @@ class OrganizationDetailsDialog extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _BankDetailViewCard extends StatefulWidget {
+  const _BankDetailViewCard({
+    required this.bank,
+    required this.onCopy,
+    required this.onViewDoc,
+    required this.onDownloadDoc,
+  });
+
+  final OrganizationBankDetail bank;
+  final void Function(String text, String label) onCopy;
+  final void Function(OrgDocument doc) onViewDoc;
+  final void Function(OrgDocument doc) onDownloadDoc;
+
+  @override
+  State<_BankDetailViewCard> createState() => _BankDetailViewCardState();
+}
+
+class _BankDetailViewCardState extends State<_BankDetailViewCard> {
+  bool _isAccountRevealed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = widget.bank;
+    final maskedNumber = b.accountNumber.length > 4
+        ? '•••• •••• •••• ${b.accountNumber.substring(b.accountNumber.length - 4)}'
+        : (b.accountNumber.isNotEmpty ? '•••• ••••' : '-');
+    final displayedNumber = _isAccountRevealed ? b.accountNumber : maskedNumber;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.account_balance_rounded,
+                  size: 16,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      b.bankName.isNotEmpty ? b.bankName : 'Bank Account',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                    if (b.branch.isNotEmpty)
+                      Text(
+                        'Branch: ${b.branch}',
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFFEAECF0)),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Account Number',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                            Text(
+                              displayedNumber,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1E293B),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (b.accountNumber.isNotEmpty) ...[
+                        IconButton(
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          icon: Icon(
+                            _isAccountRevealed
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                            size: 15,
+                            color: const Color(0xFF64748B),
+                          ),
+                          tooltip: _isAccountRevealed ? 'Mask' : 'Reveal',
+                          onPressed: () => setState(
+                            () => _isAccountRevealed = !_isAccountRevealed,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        IconButton(
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          icon: const Icon(
+                            Icons.copy_rounded,
+                            size: 14,
+                            color: Color(0xFF94A3B8),
+                          ),
+                          tooltip: 'Copy Account Number',
+                          onPressed: () =>
+                              widget.onCopy(b.accountNumber, 'Account number'),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFFEAECF0)),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'IFSC Code',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                            Text(
+                              b.ifscCode.isNotEmpty ? b.ifscCode : '-',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1E293B),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (b.ifscCode.isNotEmpty)
+                        IconButton(
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          icon: const Icon(
+                            Icons.copy_rounded,
+                            size: 14,
+                            color: Color(0xFF94A3B8),
+                          ),
+                          tooltip: 'Copy IFSC',
+                          onPressed: () =>
+                              widget.onCopy(b.ifscCode, 'IFSC code'),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (b.cifCode.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFFEAECF0)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'CIF Code',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                        Text(
+                          b.cifCode,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1E293B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    icon: const Icon(
+                      Icons.copy_rounded,
+                      size: 14,
+                      color: Color(0xFF94A3B8),
+                    ),
+                    tooltip: 'Copy CIF',
+                    onPressed: () => widget.onCopy(b.cifCode, 'CIF code'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (b.cancelledChequeDoc != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0FDF4),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFF86EFAC)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.description_rounded,
+                    size: 15,
+                    color: Color(0xFF15803D),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Cancelled Cheque: ${b.cancelledChequeDoc!.fileName.isNotEmpty ? b.cancelledChequeDoc!.fileName : "Document Attached"}',
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF15803D),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF414A51),
+                      side: const BorderSide(color: Color(0xFFD0D5DD)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 4,
+                      ),
+                      minimumSize: const Size(48, 26),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    onPressed: () => widget.onViewDoc(b.cancelledChequeDoc!),
+                    child: const Text('View', style: TextStyle(fontSize: 10.5)),
+                  ),
+                  const SizedBox(width: 4),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      minimumSize: const Size(64, 26),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    onPressed: () =>
+                        widget.onDownloadDoc(b.cancelledChequeDoc!),
+                    child: const Text(
+                      'Download',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

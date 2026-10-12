@@ -1,16 +1,10 @@
 class ContactNumber {
-  const ContactNumber({
-    required this.label,
-    required this.number,
-  });
+  const ContactNumber({required this.label, required this.number});
 
   final String label;
   final String number;
 
-  ContactNumber copyWith({
-    String? label,
-    String? number,
-  }) {
+  ContactNumber copyWith({String? label, String? number}) {
     return ContactNumber(
       label: label ?? this.label,
       number: number ?? this.number,
@@ -18,10 +12,7 @@ class ContactNumber {
   }
 
   Map<String, dynamic> toMap() {
-    return {
-      'label': label,
-      'number': number,
-    };
+    return {'label': label, 'number': number};
   }
 
   factory ContactNumber.fromMap(Map<String, dynamic> map) {
@@ -33,29 +24,17 @@ class ContactNumber {
 }
 
 class DirectorDetail {
-  const DirectorDetail({
-    required this.name,
-    required this.din,
-  });
+  const DirectorDetail({required this.name, required this.din});
 
   final String name;
   final String din;
 
-  DirectorDetail copyWith({
-    String? name,
-    String? din,
-  }) {
-    return DirectorDetail(
-      name: name ?? this.name,
-      din: din ?? this.din,
-    );
+  DirectorDetail copyWith({String? name, String? din}) {
+    return DirectorDetail(name: name ?? this.name, din: din ?? this.din);
   }
 
   Map<String, dynamic> toMap() {
-    return {
-      'name': name,
-      'din': din,
-    };
+    return {'name': name, 'din': din};
   }
 
   factory DirectorDetail.fromMap(Map<String, dynamic> map) {
@@ -107,17 +86,101 @@ class OrgDocument {
   factory OrgDocument.fromMap(Map<String, dynamic> map) {
     return OrgDocument(
       title: map['title']?.toString() ?? '',
-      fileName: map['file_name']?.toString() ??
+      fileName:
+          map['file_name']?.toString() ??
           map['fileName']?.toString() ??
           map['name']?.toString() ??
           '',
-      fileUrl: map['file_url']?.toString() ??
+      fileUrl:
+          map['file_url']?.toString() ??
           map['fileUrl']?.toString() ??
           map['url']?.toString() ??
           map['download_url']?.toString() ??
           map['downloadUrl']?.toString() ??
           '',
-      uploadedAt: map['uploaded_at']?.toString() ?? map['uploadedAt']?.toString(),
+      uploadedAt:
+          map['uploaded_at']?.toString() ?? map['uploadedAt']?.toString(),
+    );
+  }
+}
+
+class OrganizationBankDetail {
+  const OrganizationBankDetail({
+    this.id = '',
+    required this.bankName,
+    required this.accountNumber,
+    required this.ifscCode,
+    this.cifCode = '',
+    this.branch = '',
+    this.cancelledChequeDoc,
+  });
+
+  final String id;
+  final String bankName;
+  final String accountNumber;
+  final String ifscCode;
+  final String cifCode;
+  final String branch;
+  final OrgDocument? cancelledChequeDoc;
+
+  OrganizationBankDetail copyWith({
+    String? id,
+    String? bankName,
+    String? accountNumber,
+    String? ifscCode,
+    String? cifCode,
+    String? branch,
+    OrgDocument? cancelledChequeDoc,
+  }) {
+    return OrganizationBankDetail(
+      id: id ?? this.id,
+      bankName: bankName ?? this.bankName,
+      accountNumber: accountNumber ?? this.accountNumber,
+      ifscCode: ifscCode ?? this.ifscCode,
+      cifCode: cifCode ?? this.cifCode,
+      branch: branch ?? this.branch,
+      cancelledChequeDoc: cancelledChequeDoc ?? this.cancelledChequeDoc,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      if (id.isNotEmpty) 'id': id,
+      'bank_name': bankName,
+      'account_number': accountNumber,
+      'ifsc_code': ifscCode,
+      if (cifCode.isNotEmpty) 'cif_code': cifCode,
+      if (branch.isNotEmpty) 'branch': branch,
+      if (cancelledChequeDoc != null)
+        'cancelled_cheque_doc': cancelledChequeDoc!.toMap(),
+    };
+  }
+
+  factory OrganizationBankDetail.fromMap(Map<String, dynamic> map) {
+    OrgDocument? chequeDoc;
+    if (map['cancelled_cheque_doc'] is Map<String, dynamic>) {
+      chequeDoc = OrgDocument.fromMap(
+        map['cancelled_cheque_doc'] as Map<String, dynamic>,
+      );
+    } else if (map['cancelledChequeDoc'] is Map<String, dynamic>) {
+      chequeDoc = OrgDocument.fromMap(
+        map['cancelledChequeDoc'] as Map<String, dynamic>,
+      );
+    }
+
+    return OrganizationBankDetail(
+      id: map['id']?.toString() ?? '',
+      bankName:
+          map['bank_name']?.toString() ?? map['bankName']?.toString() ?? '',
+      accountNumber:
+          map['account_number']?.toString() ??
+          map['accountNumber']?.toString() ??
+          '',
+      ifscCode:
+          map['ifsc_code']?.toString() ?? map['ifscCode']?.toString() ?? '',
+      cifCode: map['cif_code']?.toString() ?? map['cifCode']?.toString() ?? '',
+      branch: map['branch']?.toString() ?? '',
+      cancelledChequeDoc: chequeDoc,
     );
   }
 }
@@ -145,6 +208,7 @@ class Organization {
     this.tanNumber = '',
     this.directors = const [],
     this.documents = const [],
+    this.bankDetails = const [],
   });
 
   final int id;
@@ -168,10 +232,12 @@ class Organization {
   final String tanNumber;
   final List<DirectorDetail> directors;
   final List<OrgDocument> documents;
+  final List<OrganizationBankDetail> bankDetails;
 
   bool get isActive => status.toLowerCase() != 'inactive';
 
-  String get canonicalId => docId.isNotEmpty ? docId : (id != 0 ? 'org_$id' : '');
+  String get canonicalId =>
+      docId.isNotEmpty ? docId : (id != 0 ? 'org_$id' : '');
 
   Organization copyWith({
     int? id,
@@ -195,6 +261,7 @@ class Organization {
     String? tanNumber,
     List<DirectorDetail>? directors,
     List<OrgDocument>? documents,
+    List<OrganizationBankDetail>? bankDetails,
   }) {
     return Organization(
       id: id ?? this.id,
@@ -218,6 +285,7 @@ class Organization {
       tanNumber: tanNumber ?? this.tanNumber,
       directors: directors ?? this.directors,
       documents: documents ?? this.documents,
+      bankDetails: bankDetails ?? this.bankDetails,
     );
   }
 
@@ -225,7 +293,9 @@ class Organization {
     final effectiveTaxId = gstNumber.isNotEmpty ? gstNumber : taxId;
     final effectivePhone = phoneNumber.isNotEmpty
         ? phoneNumber
-        : (contactNumbers.isNotEmpty ? contactNumbers.map((c) => '${c.label}: ${c.number}').join(', ') : '');
+        : (contactNumbers.isNotEmpty
+              ? contactNumbers.map((c) => '${c.label}: ${c.number}').join(', ')
+              : '');
 
     return {
       if (id != 0) 'id': id,
@@ -249,6 +319,7 @@ class Organization {
       'tan_number': tanNumber,
       'directors': directors.map((d) => d.toMap()).toList(),
       'documents': documents.map((doc) => doc.toMap()).toList(),
+      'bank_details': bankDetails.map((b) => b.toMap()).toList(),
     };
   }
 
@@ -260,7 +331,8 @@ class Organization {
           .whereType<Map<String, dynamic>>()
           .map((m) => ContactNumber.fromMap(m))
           .toList();
-    } else if (map['phone_number'] != null && map['phone_number'].toString().isNotEmpty) {
+    } else if (map['phone_number'] != null &&
+        map['phone_number'].toString().isNotEmpty) {
       final rawPhone = map['phone_number'].toString();
       contacts = [ContactNumber(label: 'Primary', number: rawPhone)];
     }
@@ -283,9 +355,27 @@ class Organization {
           .toList();
     }
 
-    final gst = map['gst_number']?.toString() ?? map['tax_id']?.toString() ?? '';
+    // Parse bank details safely (supports legacy documents without bank_details)
+    List<OrganizationBankDetail> banksList = [];
+    if (map['bank_details'] is List) {
+      banksList = (map['bank_details'] as List)
+          .whereType<Map<String, dynamic>>()
+          .map((m) => OrganizationBankDetail.fromMap(m))
+          .toList();
+    } else if (map['bankDetails'] is List) {
+      banksList = (map['bankDetails'] as List)
+          .whereType<Map<String, dynamic>>()
+          .map((m) => OrganizationBankDetail.fromMap(m))
+          .toList();
+    }
+
+    final gst =
+        map['gst_number']?.toString() ?? map['tax_id']?.toString() ?? '';
     final parsedId = (map['id'] as num?)?.toInt() ?? 0;
-    final resolvedDocId = documentId ?? map['doc_id']?.toString() ?? (parsedId != 0 ? 'org_$parsedId' : '');
+    final resolvedDocId =
+        documentId ??
+        map['doc_id']?.toString() ??
+        (parsedId != 0 ? 'org_$parsedId' : '');
 
     return Organization(
       id: parsedId,
@@ -298,7 +388,9 @@ class Organization {
       locations: map['locations']?.toString() ?? '',
       address: map['address']?.toString() ?? '',
       pincode: map['pincode']?.toString() ?? '',
-      phoneNumber: map['phone_number']?.toString() ?? (contacts.isNotEmpty ? contacts.first.number : ''),
+      phoneNumber:
+          map['phone_number']?.toString() ??
+          (contacts.isNotEmpty ? contacts.first.number : ''),
       contactNumbers: contacts,
       emailAddress: map['email_address']?.toString() ?? '',
       website: map['website']?.toString() ?? '',
@@ -309,6 +401,7 @@ class Organization {
       tanNumber: map['tan_number']?.toString() ?? '',
       directors: directorsList,
       documents: docsList,
+      bankDetails: banksList,
     );
   }
 }

@@ -41,6 +41,7 @@ class _OrganizationManagementPageState
     'TAN Number',
     'Directors / DIN',
     'Documents',
+    'Bank Accounts',
   ];
 
   int _currentPage = 0;
@@ -78,7 +79,12 @@ class _OrganizationManagementPageState
       backgroundColor: Colors.white,
       body: Column(
         children: [
-          _buildToolbar(context, prefAsync, orgsAsync.valueOrNull ?? [], isMobile),
+          _buildToolbar(
+            context,
+            prefAsync,
+            orgsAsync.valueOrNull ?? [],
+            isMobile,
+          ),
           _buildActiveFilterChips(),
           const Divider(height: 1, color: Color(0xFFEAECF0)),
           Expanded(
@@ -91,15 +97,16 @@ class _OrganizationManagementPageState
               },
               child: orgsAsync.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (err, _) => Center(
-                  child: Text('Unable to load organizations: $err'),
-                ),
+                error: (err, _) =>
+                    Center(child: Text('Unable to load organizations: $err')),
                 data: (orgs) {
                   final filtered = orgs.where((org) {
-                    if (_selectedBusinessTypeFilter != 'All' && org.businessType != _selectedBusinessTypeFilter) {
+                    if (_selectedBusinessTypeFilter != 'All' &&
+                        org.businessType != _selectedBusinessTypeFilter) {
                       return false;
                     }
-                    if (_selectedIndustryTypeFilter != 'All' && org.industryType != _selectedIndustryTypeFilter) {
+                    if (_selectedIndustryTypeFilter != 'All' &&
+                        org.industryType != _selectedIndustryTypeFilter) {
                       return false;
                     }
                     if (searchQuery.trim().isEmpty) return true;
@@ -116,8 +123,16 @@ class _OrganizationManagementPageState
                         org.cinNumber.toLowerCase().contains(q) ||
                         org.panNumber.toLowerCase().contains(q) ||
                         org.tanNumber.toLowerCase().contains(q) ||
-                        org.contactNumbers.any((c) => c.number.toLowerCase().contains(q) || c.label.toLowerCase().contains(q)) ||
-                        org.directors.any((d) => d.name.toLowerCase().contains(q) || d.din.toLowerCase().contains(q));
+                        org.contactNumbers.any(
+                          (c) =>
+                              c.number.toLowerCase().contains(q) ||
+                              c.label.toLowerCase().contains(q),
+                        ) ||
+                        org.directors.any(
+                          (d) =>
+                              d.name.toLowerCase().contains(q) ||
+                              d.din.toLowerCase().contains(q),
+                        );
                   }).toList();
 
                   if (filtered.isEmpty) {
@@ -130,9 +145,13 @@ class _OrganizationManagementPageState
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
-                              isFirstTimeSetup ? Icons.business_outlined : Icons.search_off_rounded,
+                              isFirstTimeSetup
+                                  ? Icons.business_outlined
+                                  : Icons.search_off_rounded,
                               size: 48,
-                              color: AppColors.textSecondary.withValues(alpha: 0.5),
+                              color: AppColors.textSecondary.withValues(
+                                alpha: 0.5,
+                              ),
                             ),
                             const SizedBox(height: 16),
                             Text(
@@ -158,14 +177,18 @@ class _OrganizationManagementPageState
                             if (isFirstTimeSetup) ...[
                               const SizedBox(height: 20),
                               ElevatedButton.icon(
-                                onPressed: () => OrganizationFormDialog.show(context),
+                                onPressed: () =>
+                                    OrganizationFormDialog.show(context),
                                 icon: const Icon(Icons.add, size: 18),
                                 label: const Text('Add Organization'),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF9CC70A),
                                   foregroundColor: Colors.white,
                                   elevation: 0,
-                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                    vertical: 12,
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(6),
                                   ),
@@ -180,13 +203,21 @@ class _OrganizationManagementPageState
 
                   final pref = prefAsync.valueOrNull;
                   final effectiveSet = _getEffectiveVisibleColumns(pref);
-                  final visibleCols = _defaultAllColumns.where((c) => effectiveSet.contains(c)).toList();
+                  final visibleCols = _defaultAllColumns
+                      .where((c) => effectiveSet.contains(c))
+                      .toList();
 
                   final totalItems = filtered.length;
                   final totalPages = (totalItems / _rowsPerPage).ceil();
-                  final pageIndex = _currentPage.clamp(0, (totalPages - 1).clamp(0, 999));
+                  final pageIndex = _currentPage.clamp(
+                    0,
+                    (totalPages - 1).clamp(0, 999),
+                  );
                   final startIndex = pageIndex * _rowsPerPage;
-                  final endIndex = (startIndex + _rowsPerPage).clamp(0, totalItems);
+                  final endIndex = (startIndex + _rowsPerPage).clamp(
+                    0,
+                    totalItems,
+                  );
                   final pageItems = filtered.sublist(startIndex, endIndex);
 
                   return Column(
@@ -214,7 +245,6 @@ class _OrganizationManagementPageState
               ),
             ),
           ),
-
         ],
       ),
     );
@@ -254,15 +284,24 @@ class _OrganizationManagementPageState
                     fontSize: 13,
                     color: Color(0xFF667085),
                   ),
-                  prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF667085)),
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    size: 20,
+                    color: Color(0xFF667085),
+                  ),
                   suffixIcon: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (searchController.text.isNotEmpty)
                         IconButton(
-                          icon: const Icon(Icons.clear, size: 18, color: Color(0xFF667085)),
+                          icon: const Icon(
+                            Icons.clear,
+                            size: 18,
+                            color: Color(0xFF667085),
+                          ),
                           onPressed: () {
-                            ref.read(orgSearchQueryProvider.notifier).state = '';
+                            ref.read(orgSearchQueryProvider.notifier).state =
+                                '';
                             setState(() => _currentPage = 0);
                           },
                         ),
@@ -321,7 +360,10 @@ class _OrganizationManagementPageState
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                    borderSide: const BorderSide(
+                      color: AppColors.primary,
+                      width: 1.5,
+                    ),
                   ),
                 ),
                 onChanged: (val) {
@@ -345,7 +387,11 @@ class _OrganizationManagementPageState
               ),
               tooltip: 'Data Migration & ID Audit',
               onPressed: () => _openMigrationDialog(context),
-              icon: const Icon(Icons.published_with_changes_rounded, size: 20, color: AppColors.primary),
+              icon: const Icon(
+                Icons.published_with_changes_rounded,
+                size: 20,
+                color: AppColors.primary,
+              ),
             ),
             const SizedBox(width: 8),
             _buildColumnsDropdownButton(context, visibleCols, pref),
@@ -356,7 +402,9 @@ class _OrganizationManagementPageState
               style: IconButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 minimumSize: const Size(42, 42),
               ),
               tooltip: 'Add Organization',
@@ -369,9 +417,14 @@ class _OrganizationManagementPageState
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 minimumSize: const Size(0, 42),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
               onPressed: () => _openAddDialog(context),
               icon: const Icon(Icons.add, size: 18),
@@ -417,7 +470,8 @@ class _OrganizationManagementPageState
   }
 
   void _showColumnsDropdown() {
-    final renderBox = _columnsButtonKey.currentContext?.findRenderObject() as RenderBox?;
+    final renderBox =
+        _columnsButtonKey.currentContext?.findRenderObject() as RenderBox?;
     if (renderBox == null) return;
 
     final size = renderBox.size;
@@ -452,7 +506,10 @@ class _OrganizationManagementPageState
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFEAECF0), width: 1),
+                      border: Border.all(
+                        color: const Color(0xFFEAECF0),
+                        width: 1,
+                      ),
                     ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -476,7 +533,10 @@ class _OrganizationManagementPageState
                                   InkWell(
                                     onTap: () => _toggleAllColumns(true),
                                     child: const Padding(
-                                      padding: EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 5,
+                                        vertical: 3,
+                                      ),
                                       child: Text(
                                         'All',
                                         style: TextStyle(
@@ -491,7 +551,10 @@ class _OrganizationManagementPageState
                                   InkWell(
                                     onTap: _resetColumnsToDefault,
                                     child: const Padding(
-                                      padding: EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 5,
+                                        vertical: 3,
+                                      ),
                                       child: Text(
                                         'Reset',
                                         style: TextStyle(
@@ -519,7 +582,10 @@ class _OrganizationManagementPageState
                               return InkWell(
                                 onTap: () => _toggleColumn(col, !isChecked),
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 5,
+                                  ),
                                   child: Row(
                                     children: [
                                       IgnorePointer(
@@ -529,7 +595,10 @@ class _OrganizationManagementPageState
                                           child: Checkbox(
                                             value: isChecked,
                                             activeColor: AppColors.primary,
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                            ),
                                             onChanged: (_) {},
                                           ),
                                         ),
@@ -540,8 +609,12 @@ class _OrganizationManagementPageState
                                           col,
                                           style: TextStyle(
                                             fontSize: 12.5,
-                                            fontWeight: isChecked ? FontWeight.w600 : FontWeight.normal,
-                                            color: isChecked ? const Color(0xFF101828) : const Color(0xFF667085),
+                                            fontWeight: isChecked
+                                                ? FontWeight.w600
+                                                : FontWeight.normal,
+                                            color: isChecked
+                                                ? const Color(0xFF101828)
+                                                : const Color(0xFF667085),
                                           ),
                                         ),
                                       ),
@@ -558,12 +631,21 @@ class _OrganizationManagementPageState
                             _closeColumnsDropdown();
                             _openColumnSelection(context, pref);
                           },
-                          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(10)),
+                          borderRadius: const BorderRadius.vertical(
+                            bottom: Radius.circular(10),
+                          ),
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
                             child: Row(
                               children: const [
-                                Icon(Icons.tune, size: 16, color: AppColors.primary),
+                                Icon(
+                                  Icons.tune,
+                                  size: 16,
+                                  color: AppColors.primary,
+                                ),
                                 SizedBox(width: 8),
                                 Text(
                                   'Reorder & Settings...',
@@ -607,16 +689,24 @@ class _OrganizationManagementPageState
           height: 42,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-            color: _isColumnsDropdownOpen ? const Color(0xFFF9FAFB) : Colors.white,
+            color: _isColumnsDropdownOpen
+                ? const Color(0xFFF9FAFB)
+                : Colors.white,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: _isColumnsDropdownOpen ? AppColors.primary : const Color(0xFFD0D5DD),
+              color: _isColumnsDropdownOpen
+                  ? AppColors.primary
+                  : const Color(0xFFD0D5DD),
             ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: const [
-              Icon(Icons.view_column_outlined, size: 18, color: Color(0xFF344054)),
+              Icon(
+                Icons.view_column_outlined,
+                size: 18,
+                color: Color(0xFF344054),
+              ),
               SizedBox(width: 6),
               Text(
                 'Columns',
@@ -627,7 +717,11 @@ class _OrganizationManagementPageState
                 ),
               ),
               SizedBox(width: 4),
-              Icon(Icons.keyboard_arrow_down, size: 16, color: Color(0xFF667085)),
+              Icon(
+                Icons.keyboard_arrow_down,
+                size: 16,
+                color: Color(0xFF667085),
+              ),
             ],
           ),
         ),
@@ -637,7 +731,9 @@ class _OrganizationManagementPageState
 
   void _toggleColumn(String col, bool enable) {
     final current = Set<String>.from(
-      _getEffectiveVisibleColumns(ref.read(columnPreferenceProvider(_tableId)).valueOrNull),
+      _getEffectiveVisibleColumns(
+        ref.read(columnPreferenceProvider(_tableId)).valueOrNull,
+      ),
     );
 
     if (enable) {
@@ -645,7 +741,9 @@ class _OrganizationManagementPageState
     } else {
       if (current.length <= 1) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('At least one column must remain visible.')),
+          const SnackBar(
+            content: Text('At least one column must remain visible.'),
+          ),
         );
         return;
       }
@@ -658,7 +756,9 @@ class _OrganizationManagementPageState
 
     _columnsOverlayEntry?.markNeedsBuild();
 
-    final ordered = _defaultAllColumns.where((c) => current.contains(c)).toList();
+    final ordered = _defaultAllColumns
+        .where((c) => current.contains(c))
+        .toList();
     final pref = ColumnPreference(
       tableId: _tableId,
       visibleColumns: ordered,
@@ -669,14 +769,18 @@ class _OrganizationManagementPageState
   }
 
   void _toggleAllColumns(bool selectAll) {
-    final updated = selectAll ? _defaultAllColumns.toSet() : {_defaultAllColumns.first};
+    final updated = selectAll
+        ? _defaultAllColumns.toSet()
+        : {_defaultAllColumns.first};
     setState(() {
       _activeVisibleColumns = updated;
     });
 
     _columnsOverlayEntry?.markNeedsBuild();
 
-    final ordered = _defaultAllColumns.where((c) => updated.contains(c)).toList();
+    final ordered = _defaultAllColumns
+        .where((c) => updated.contains(c))
+        .toList();
     final pref = ColumnPreference(
       tableId: _tableId,
       visibleColumns: ordered,
@@ -713,7 +817,14 @@ class _OrganizationManagementPageState
         runSpacing: 6,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          const Text('Filters:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
+          const Text(
+            'Filters:',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF64748B),
+            ),
+          ),
           if (_selectedBusinessTypeFilter != 'All')
             _buildFilterChip('Business: $_selectedBusinessTypeFilter', () {
               setState(() {
@@ -738,7 +849,14 @@ class _OrganizationManagementPageState
             },
             child: const Padding(
               padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              child: Text('Reset All', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.red)),
+              child: Text(
+                'Reset All',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.red,
+                ),
+              ),
             ),
           ),
         ],
@@ -759,7 +877,11 @@ class _OrganizationManagementPageState
         children: [
           Text(
             label,
-            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+            style: const TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
           ),
           const SizedBox(width: 4),
           InkWell(
@@ -772,8 +894,14 @@ class _OrganizationManagementPageState
   }
 
   void _openFilterModal(BuildContext context, List<Organization> allOrgs) {
-    final businessOptions = <String>{'All', ...allOrgs.map((o) => o.businessType).where((s) => s.isNotEmpty)}.toList();
-    final industryOptions = <String>{'All', ...allOrgs.map((o) => o.industryType).where((s) => s.isNotEmpty)}.toList();
+    final businessOptions = <String>{
+      'All',
+      ...allOrgs.map((o) => o.businessType).where((s) => s.isNotEmpty),
+    }.toList();
+    final industryOptions = <String>{
+      'All',
+      ...allOrgs.map((o) => o.industryType).where((s) => s.isNotEmpty),
+    }.toList();
 
     String tempBusiness = _selectedBusinessTypeFilter;
     String tempIndustry = _selectedIndustryTypeFilter;
@@ -804,7 +932,11 @@ class _OrganizationManagementPageState
                     children: [
                       const Text(
                         'Filter Organizations',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E293B),
+                        ),
                       ),
                       TextButton(
                         onPressed: () {
@@ -813,7 +945,10 @@ class _OrganizationManagementPageState
                             tempIndustry = 'All';
                           });
                         },
-                        child: const Text('Reset', style: TextStyle(color: Colors.red, fontSize: 13)),
+                        child: const Text(
+                          'Reset',
+                          style: TextStyle(color: Colors.red, fontSize: 13),
+                        ),
                       ),
                     ],
                   ),
@@ -853,9 +988,17 @@ class _OrganizationManagementPageState
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
-                      child: const Text('Apply Filters', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      child: const Text(
+                        'Apply Filters',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -915,7 +1058,9 @@ class _OrganizationManagementPageState
           ),
           FilledButton(
             style: FilledButton.styleFrom(
-              backgroundColor: org.isActive ? const Color(0xFFD97706) : AppColors.primary,
+              backgroundColor: org.isActive
+                  ? const Color(0xFFD97706)
+                  : AppColors.primary,
             ),
             onPressed: () => Navigator.of(context).pop(true),
             child: Text(actionName),
@@ -926,9 +1071,13 @@ class _OrganizationManagementPageState
 
     if (confirm == true) {
       if (org.isActive) {
-        await ref.read(organizationRepositoryProvider).deactivateOrganization(org.id, org.docId);
+        await ref
+            .read(organizationRepositoryProvider)
+            .deactivateOrganization(org.id, org.docId);
       } else {
-        await ref.read(organizationRepositoryProvider).reactivateOrganization(org.id, org.docId);
+        await ref
+            .read(organizationRepositoryProvider)
+            .reactivateOrganization(org.id, org.docId);
       }
       ref.invalidate(organizationsProvider);
       if (!mounted) return;
@@ -940,7 +1089,9 @@ class _OrganizationManagementPageState
 
   Future<void> _confirmDelete(BuildContext context, Organization org) async {
     // Audit dependencies first
-    final deps = await ref.read(organizationRepositoryProvider).checkOrganizationDependencies(org.canonicalId, org.name);
+    final deps = await ref
+        .read(organizationRepositoryProvider)
+        .checkOrganizationDependencies(org.canonicalId, org.name);
     final totalDeps = deps.values.fold<int>(0, (sum, val) => sum + val);
 
     if (totalDeps > 0) {
@@ -964,12 +1115,14 @@ class _OrganizationManagementPageState
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 12),
-              ...deps.entries.where((e) => e.value > 0).map(
-                (e) => Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text('• ${e.value} ${e.key.replaceAll('_', ' ')}'),
-                ),
-              ),
+              ...deps.entries
+                  .where((e) => e.value > 0)
+                  .map(
+                    (e) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text('• ${e.value} ${e.key.replaceAll('_', ' ')}'),
+                    ),
+                  ),
               const SizedBox(height: 12),
               const Text(
                 'To protect employee attendance, leave, and payroll history, please deactivate this organization instead.',
@@ -983,7 +1136,9 @@ class _OrganizationManagementPageState
               child: const Text('Cancel'),
             ),
             FilledButton.icon(
-              style: FilledButton.styleFrom(backgroundColor: const Color(0xFFD97706)),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFD97706),
+              ),
               onPressed: () => Navigator.of(context).pop(true),
               icon: const Icon(Icons.pause_circle_outline, size: 18),
               label: const Text('Deactivate Organization'),
@@ -993,12 +1148,14 @@ class _OrganizationManagementPageState
       );
 
       if (shouldDeactivate == true) {
-        await ref.read(organizationRepositoryProvider).deactivateOrganization(org.id, org.docId);
+        await ref
+            .read(organizationRepositoryProvider)
+            .deactivateOrganization(org.id, org.docId);
         ref.invalidate(organizationsProvider);
         if (!mounted) return;
-        ScaffoldMessenger.of(this.context).showSnackBar(
-          SnackBar(content: Text('Deactivated "${org.name}"')),
-        );
+        ScaffoldMessenger.of(
+          this.context,
+        ).showSnackBar(SnackBar(content: Text('Deactivated "${org.name}"')));
       }
       return;
     }
@@ -1031,12 +1188,14 @@ class _OrganizationManagementPageState
     );
 
     if (confirm == true) {
-      await ref.read(organizationRepositoryProvider).deleteOrganization(org.id, org.docId);
+      await ref
+          .read(organizationRepositoryProvider)
+          .deleteOrganization(org.id, org.docId);
       ref.invalidate(organizationsProvider);
       if (!mounted) return;
-      ScaffoldMessenger.of(this.context).showSnackBar(
-        SnackBar(content: Text('Deleted "${org.name}"')),
-      );
+      ScaffoldMessenger.of(
+        this.context,
+      ).showSnackBar(SnackBar(content: Text('Deleted "${org.name}"')));
     }
   }
 
@@ -1070,9 +1229,7 @@ class _OrganizationManagementPageState
             }
             return Colors.transparent;
           }),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(4),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
           side: const BorderSide(color: Color(0xFFD0D5DD), width: 1.5),
         ),
       ),
@@ -1095,7 +1252,9 @@ class _OrganizationManagementPageState
                 horizontalMargin: 16,
                 columnSpacing: 20,
                 showCheckboxColumn: true,
-                headingRowColor: WidgetStateProperty.all(const Color(0xFFF9FAFB)),
+                headingRowColor: WidgetStateProperty.all(
+                  const Color(0xFFF9FAFB),
+                ),
                 dataRowColor: WidgetStateProperty.resolveWith<Color?>((states) {
                   if (states.contains(WidgetState.selected)) {
                     return const Color(0xFF9CC70A).withValues(alpha: 0.08);
@@ -1223,6 +1382,8 @@ class _OrganizationManagementPageState
         return 150;
       case 'Documents':
         return 120;
+      case 'Bank Accounts':
+        return 130;
       default:
         return 140;
     }
@@ -1242,11 +1403,7 @@ class _OrganizationManagementPageState
         ),
       ),
       child: PopupMenuButton<String>(
-        icon: const Icon(
-          Icons.more_vert,
-          size: 20,
-          color: Color(0xFF98A2B3),
-        ),
+        icon: const Icon(Icons.more_vert, size: 20, color: Color(0xFF98A2B3)),
         tooltip: 'Row Actions',
         offset: const Offset(0, 36),
         shape: RoundedRectangleBorder(
@@ -1285,11 +1442,7 @@ class _OrganizationManagementPageState
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: const [
-                Icon(
-                  Icons.edit_outlined,
-                  size: 20,
-                  color: AppColors.primary,
-                ),
+                Icon(Icons.edit_outlined, size: 20, color: AppColors.primary),
                 SizedBox(width: 12),
                 Text(
                   'Edit Organization',
@@ -1308,11 +1461,7 @@ class _OrganizationManagementPageState
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: const [
-                Icon(
-                  Icons.share_outlined,
-                  size: 20,
-                  color: AppColors.primary,
-                ),
+                Icon(Icons.share_outlined, size: 20, color: AppColors.primary),
                 SizedBox(width: 12),
                 Text(
                   'Share Organization',
@@ -1332,9 +1481,13 @@ class _OrganizationManagementPageState
             child: Row(
               children: [
                 Icon(
-                  org.isActive ? Icons.pause_circle_outline : Icons.play_circle_outline,
+                  org.isActive
+                      ? Icons.pause_circle_outline
+                      : Icons.play_circle_outline,
                   size: 20,
-                  color: org.isActive ? const Color(0xFFD97706) : const Color(0xFF16A34A),
+                  color: org.isActive
+                      ? const Color(0xFFD97706)
+                      : const Color(0xFF16A34A),
                 ),
                 const SizedBox(width: 12),
                 Text(
@@ -1342,7 +1495,9 @@ class _OrganizationManagementPageState
                   style: TextStyle(
                     fontSize: 13.5,
                     fontWeight: FontWeight.w600,
-                    color: org.isActive ? const Color(0xFFD97706) : const Color(0xFF16A34A),
+                    color: org.isActive
+                        ? const Color(0xFFD97706)
+                        : const Color(0xFF16A34A),
                   ),
                 ),
               ],
@@ -1354,11 +1509,7 @@ class _OrganizationManagementPageState
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: const [
-                Icon(
-                  Icons.delete_outline,
-                  size: 20,
-                  color: Color(0xFFFF4D4F),
-                ),
+                Icon(Icons.delete_outline, size: 20, color: Color(0xFFFF4D4F)),
                 SizedBox(width: 12),
                 Text(
                   'Delete Organization',
@@ -1398,10 +1549,14 @@ class _OrganizationManagementPageState
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           decoration: BoxDecoration(
-            color: org.isActive ? const Color(0xFFDCFCE7) : const Color(0xFFF3F4F6),
+            color: org.isActive
+                ? const Color(0xFFDCFCE7)
+                : const Color(0xFFF3F4F6),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: org.isActive ? const Color(0xFF86EFAC) : const Color(0xFFE5E7EB),
+              color: org.isActive
+                  ? const Color(0xFF86EFAC)
+                  : const Color(0xFFE5E7EB),
             ),
           ),
           child: Row(
@@ -1412,7 +1567,9 @@ class _OrganizationManagementPageState
                 height: 6,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: org.isActive ? const Color(0xFF16A34A) : const Color(0xFF6B7280),
+                  color: org.isActive
+                      ? const Color(0xFF16A34A)
+                      : const Color(0xFF6B7280),
                 ),
               ),
               const SizedBox(width: 6),
@@ -1421,7 +1578,9 @@ class _OrganizationManagementPageState
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: org.isActive ? const Color(0xFF166534) : const Color(0xFF4B5563),
+                  color: org.isActive
+                      ? const Color(0xFF166534)
+                      : const Color(0xFF4B5563),
                 ),
               ),
             ],
@@ -1458,7 +1617,9 @@ class _OrganizationManagementPageState
         break;
       case 'Phone Number':
         if (org.contactNumbers.isNotEmpty) {
-          value = org.contactNumbers.map((c) => '${c.label}:\n${c.number}').join('\n');
+          value = org.contactNumbers
+              .map((c) => '${c.label}:\n${c.number}')
+              .join('\n');
         } else {
           value = org.phoneNumber;
         }
@@ -1495,12 +1656,24 @@ class _OrganizationManagementPageState
         break;
       case 'Directors / DIN':
         value = org.directors.isNotEmpty
-            ? org.directors.map((d) => d.din.isNotEmpty ? '${d.name} (${d.din})' : d.name).join(', ')
+            ? org.directors
+                  .map(
+                    (d) => d.din.isNotEmpty ? '${d.name} (${d.din})' : d.name,
+                  )
+                  .join(', ')
             : '';
         style = const TextStyle(fontSize: 12.5, color: Color(0xFF344054));
         break;
       case 'Documents':
-        value = org.documents.isNotEmpty ? '${org.documents.length} document(s)' : '';
+        value = org.documents.isNotEmpty
+            ? '${org.documents.length} document(s)'
+            : '';
+        style = const TextStyle(fontSize: 12.5, color: Color(0xFF344054));
+        break;
+      case 'Bank Accounts':
+        value = org.bankDetails.isNotEmpty
+            ? '${org.bankDetails.length} account(s)'
+            : '';
         style = const TextStyle(fontSize: 12.5, color: Color(0xFF344054));
         break;
       default:
@@ -1516,7 +1689,8 @@ class _OrganizationManagementPageState
         displayText,
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
-        style: style ?? const TextStyle(fontSize: 12.5, color: Color(0xFF344054)),
+        style:
+            style ?? const TextStyle(fontSize: 12.5, color: Color(0xFF344054)),
       ),
     );
   }
@@ -1584,11 +1758,16 @@ class _OrganizationManagementPageState
                             children: [
                               if (org.businessType.isNotEmpty)
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: const Color(0xFFEFF6FF),
                                     borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: const Color(0xFFDBEAFE)),
+                                    border: Border.all(
+                                      color: const Color(0xFFDBEAFE),
+                                    ),
                                   ),
                                   child: Text(
                                     org.businessType,
@@ -1601,11 +1780,16 @@ class _OrganizationManagementPageState
                                 ),
                               if (org.industryType.isNotEmpty)
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: const Color(0xFFF3E8FF),
                                     borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: const Color(0xFFE9D5FF)),
+                                    border: Border.all(
+                                      color: const Color(0xFFE9D5FF),
+                                    ),
                                   ),
                                   child: Text(
                                     org.industryType,
@@ -1626,17 +1810,31 @@ class _OrganizationManagementPageState
                       width: 44,
                       height: 44,
                       child: PopupMenuButton<String>(
-                        icon: const Icon(Icons.more_vert, size: 20, color: Color(0xFF667085)),
+                        icon: const Icon(
+                          Icons.more_vert,
+                          size: 20,
+                          color: Color(0xFF667085),
+                        ),
                         padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                        constraints: const BoxConstraints(
+                          minWidth: 44,
+                          minHeight: 44,
+                        ),
                         itemBuilder: (context) => [
                           const PopupMenuItem(
                             value: 'view',
                             child: Row(
                               children: [
-                                Icon(Icons.remove_red_eye_outlined, size: 18, color: AppColors.primary),
+                                Icon(
+                                  Icons.remove_red_eye_outlined,
+                                  size: 18,
+                                  color: AppColors.primary,
+                                ),
                                 SizedBox(width: 8),
-                                Text('View Details', style: TextStyle(fontSize: 13)),
+                                Text(
+                                  'View Details',
+                                  style: TextStyle(fontSize: 13),
+                                ),
                               ],
                             ),
                           ),
@@ -1644,9 +1842,16 @@ class _OrganizationManagementPageState
                             value: 'edit',
                             child: Row(
                               children: [
-                                Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                                Icon(
+                                  Icons.edit_outlined,
+                                  size: 18,
+                                  color: AppColors.primary,
+                                ),
                                 SizedBox(width: 8),
-                                Text('Edit Organization', style: TextStyle(fontSize: 13)),
+                                Text(
+                                  'Edit Organization',
+                                  style: TextStyle(fontSize: 13),
+                                ),
                               ],
                             ),
                           ),
@@ -1654,9 +1859,16 @@ class _OrganizationManagementPageState
                             value: 'share',
                             child: Row(
                               children: [
-                                Icon(Icons.share_outlined, size: 18, color: AppColors.primary),
+                                Icon(
+                                  Icons.share_outlined,
+                                  size: 18,
+                                  color: AppColors.primary,
+                                ),
                                 SizedBox(width: 8),
-                                Text('Share Organization', style: TextStyle(fontSize: 13)),
+                                Text(
+                                  'Share Organization',
+                                  style: TextStyle(fontSize: 13),
+                                ),
                               ],
                             ),
                           ),
@@ -1665,16 +1877,22 @@ class _OrganizationManagementPageState
                             child: Row(
                               children: [
                                 Icon(
-                                  org.isActive ? Icons.pause_circle_outline : Icons.play_circle_outline,
+                                  org.isActive
+                                      ? Icons.pause_circle_outline
+                                      : Icons.play_circle_outline,
                                   size: 18,
-                                  color: org.isActive ? const Color(0xFFD97706) : const Color(0xFF16A34A),
+                                  color: org.isActive
+                                      ? const Color(0xFFD97706)
+                                      : const Color(0xFF16A34A),
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
                                   org.isActive ? 'Deactivate' : 'Reactivate',
                                   style: TextStyle(
                                     fontSize: 13,
-                                    color: org.isActive ? const Color(0xFFD97706) : const Color(0xFF16A34A),
+                                    color: org.isActive
+                                        ? const Color(0xFFD97706)
+                                        : const Color(0xFF16A34A),
                                   ),
                                 ),
                               ],
@@ -1684,9 +1902,19 @@ class _OrganizationManagementPageState
                             value: 'delete',
                             child: Row(
                               children: [
-                                Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                                Icon(
+                                  Icons.delete_outline,
+                                  size: 18,
+                                  color: Colors.redAccent,
+                                ),
                                 SizedBox(width: 8),
-                                Text('Delete Organization', style: TextStyle(fontSize: 13, color: Colors.redAccent)),
+                                Text(
+                                  'Delete Organization',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.redAccent,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -1695,7 +1923,8 @@ class _OrganizationManagementPageState
                           if (val == 'view') _openViewDialog(context, org);
                           if (val == 'edit') _openEditDialog(context, org);
                           if (val == 'share') _openShareDialog(context, org);
-                          if (val == 'status_toggle') _toggleStatus(context, org);
+                          if (val == 'status_toggle')
+                            _toggleStatus(context, org);
                           if (val == 'delete') _confirmDelete(context, org);
                         },
                       ),
@@ -1712,12 +1941,19 @@ class _OrganizationManagementPageState
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.location_on_outlined, size: 16, color: Color(0xFF2563EB)),
+                        const Icon(
+                          Icons.location_on_outlined,
+                          size: 16,
+                          color: Color(0xFF2563EB),
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             org.locations,
-                            style: const TextStyle(fontSize: 12.5, color: Color(0xFF344054)),
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              color: Color(0xFF344054),
+                            ),
                           ),
                         ),
                       ],
@@ -1729,12 +1965,19 @@ class _OrganizationManagementPageState
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.account_tree_outlined, size: 16, color: Color(0xFF9333EA)),
+                        const Icon(
+                          Icons.account_tree_outlined,
+                          size: 16,
+                          color: Color(0xFF9333EA),
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             org.businessUnits,
-                            style: const TextStyle(fontSize: 12.5, color: Color(0xFF344054)),
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              color: Color(0xFF344054),
+                            ),
                           ),
                         ),
                       ],
@@ -1743,20 +1986,51 @@ class _OrganizationManagementPageState
                 Row(
                   children: [
                     if (org.phoneNumber.isNotEmpty) ...[
-                      const Icon(Icons.phone_outlined, size: 15, color: Color(0xFF667085)),
+                      const Icon(
+                        Icons.phone_outlined,
+                        size: 15,
+                        color: Color(0xFF667085),
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         org.phoneNumber,
-                        style: const TextStyle(fontSize: 12, color: Color(0xFF344054)),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF344054),
+                        ),
                       ),
                       const SizedBox(width: 14),
                     ],
                     if (org.taxId.isNotEmpty) ...[
-                      const Icon(Icons.receipt_long_outlined, size: 15, color: Color(0xFF667085)),
+                      const Icon(
+                        Icons.receipt_long_outlined,
+                        size: 15,
+                        color: Color(0xFF667085),
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         'GST: ${org.taxId}',
-                        style: const TextStyle(fontSize: 12, color: Color(0xFF344054), fontWeight: FontWeight.w500),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF344054),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                    ],
+                    if (org.bankDetails.isNotEmpty) ...[
+                      const Icon(
+                        Icons.account_balance_outlined,
+                        size: 14,
+                        color: Color(0xFF667085),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${org.bankDetails.length} Bank A/C',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF344054),
+                        ),
                       ),
                     ],
                   ],
@@ -1787,18 +2061,37 @@ class _OrganizationManagementPageState
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            totalItems == 0 ? 'Showing 0 of 0' : 'Showing ${startIndex + 1} - $endIndex of $totalItems',
-            style: const TextStyle(fontSize: 12, color: Color(0xFF667085), fontWeight: FontWeight.w500),
+            totalItems == 0
+                ? 'Showing 0 of 0'
+                : 'Showing ${startIndex + 1} - $endIndex of $totalItems',
+            style: const TextStyle(
+              fontSize: 12,
+              color: Color(0xFF667085),
+              fontWeight: FontWeight.w500,
+            ),
           ),
           if (!isMobile)
             Row(
               children: [
-                const Text('Rows per page ', style: TextStyle(fontSize: 12, color: Color(0xFF667085))),
+                const Text(
+                  'Rows per page ',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF667085)),
+                ),
                 DropdownButtonHideUnderline(
                   child: DropdownButton<int>(
                     value: _rowsPerPage,
                     isDense: true,
-                    items: [5, 10, 20, 50].map((val) => DropdownMenuItem(value: val, child: Text('$val', style: const TextStyle(fontSize: 12)))).toList(),
+                    items: [5, 10, 20, 50]
+                        .map(
+                          (val) => DropdownMenuItem(
+                            value: val,
+                            child: Text(
+                              '$val',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                        )
+                        .toList(),
                     onChanged: (val) {
                       if (val != null) {
                         setState(() {
@@ -1812,27 +2105,44 @@ class _OrganizationManagementPageState
                 const SizedBox(width: 12),
                 IconButton(
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  constraints: const BoxConstraints(
+                    minWidth: 28,
+                    minHeight: 28,
+                  ),
                   icon: const Icon(Icons.chevron_left, size: 20),
-                  onPressed: currentPage > 0 ? () => setState(() => _currentPage -= 1) : null,
+                  onPressed: currentPage > 0
+                      ? () => setState(() => _currentPage -= 1)
+                      : null,
                 ),
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.primary,
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
                     '${currentPage + 1}',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
                 IconButton(
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  constraints: const BoxConstraints(
+                    minWidth: 28,
+                    minHeight: 28,
+                  ),
                   icon: const Icon(Icons.chevron_right, size: 20),
-                  onPressed: currentPage < totalPages - 1 ? () => setState(() => _currentPage += 1) : null,
+                  onPressed: currentPage < totalPages - 1
+                      ? () => setState(() => _currentPage += 1)
+                      : null,
                 ),
               ],
             )
@@ -1841,19 +2151,33 @@ class _OrganizationManagementPageState
               children: [
                 IconButton(
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
                   icon: const Icon(Icons.chevron_left, size: 22),
-                  onPressed: currentPage > 0 ? () => setState(() => _currentPage -= 1) : null,
+                  onPressed: currentPage > 0
+                      ? () => setState(() => _currentPage -= 1)
+                      : null,
                 ),
                 Text(
                   '${currentPage + 1} / ${totalPages == 0 ? 1 : totalPages}',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF344054)),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF344054),
+                  ),
                 ),
                 IconButton(
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
                   icon: const Icon(Icons.chevron_right, size: 22),
-                  onPressed: currentPage < totalPages - 1 ? () => setState(() => _currentPage += 1) : null,
+                  onPressed: currentPage < totalPages - 1
+                      ? () => setState(() => _currentPage += 1)
+                      : null,
                 ),
               ],
             ),
@@ -1867,10 +2191,12 @@ class _MigrationManagementDialog extends StatefulWidget {
   const _MigrationManagementDialog();
 
   @override
-  State<_MigrationManagementDialog> createState() => _MigrationManagementDialogState();
+  State<_MigrationManagementDialog> createState() =>
+      _MigrationManagementDialogState();
 }
 
-class _MigrationManagementDialogState extends State<_MigrationManagementDialog> {
+class _MigrationManagementDialogState
+    extends State<_MigrationManagementDialog> {
   bool _isLoading = false;
   MigrationReport? _report;
   String? _errorMessage;
@@ -1923,7 +2249,11 @@ class _MigrationManagementDialogState extends State<_MigrationManagementDialog> 
                     color: AppColors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.published_with_changes_rounded, color: AppColors.primary, size: 24),
+                  child: const Icon(
+                    Icons.published_with_changes_rounded,
+                    color: AppColors.primary,
+                    size: 24,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -1932,11 +2262,18 @@ class _MigrationManagementDialogState extends State<_MigrationManagementDialog> 
                     children: const [
                       Text(
                         'Organization ID Migration & Health Audit',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF101828)),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF101828),
+                        ),
                       ),
                       Text(
                         'Audit records across Firestore collections and securely link them to canonical organization IDs.',
-                        style: TextStyle(fontSize: 12.5, color: Color(0xFF667085)),
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: Color(0xFF667085),
+                        ),
                       ),
                     ],
                   ),
@@ -1966,7 +2303,10 @@ class _MigrationManagementDialogState extends State<_MigrationManagementDialog> 
             else if (_errorMessage != null)
               Expanded(
                 child: Center(
-                  child: Text('Error: $_errorMessage', style: const TextStyle(color: Colors.red)),
+                  child: Text(
+                    'Error: $_errorMessage',
+                    style: const TextStyle(color: Colors.red),
+                  ),
                 ),
               )
             else if (_report != null)
@@ -1978,17 +2318,25 @@ class _MigrationManagementDialogState extends State<_MigrationManagementDialog> 
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: _report!.isDryRun ? const Color(0xFFEFF6FF) : const Color(0xFFECFDF5),
+                        color: _report!.isDryRun
+                            ? const Color(0xFFEFF6FF)
+                            : const Color(0xFFECFDF5),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: _report!.isDryRun ? const Color(0xFFBFDBFE) : const Color(0xFFA7F3D0),
+                          color: _report!.isDryRun
+                              ? const Color(0xFFBFDBFE)
+                              : const Color(0xFFA7F3D0),
                         ),
                       ),
                       child: Row(
                         children: [
                           Icon(
-                            _report!.isDryRun ? Icons.info_outline : Icons.check_circle_outline,
-                            color: _report!.isDryRun ? const Color(0xFF2563EB) : const Color(0xFF059669),
+                            _report!.isDryRun
+                                ? Icons.info_outline
+                                : Icons.check_circle_outline,
+                            color: _report!.isDryRun
+                                ? const Color(0xFF2563EB)
+                                : const Color(0xFF059669),
                             size: 20,
                           ),
                           const SizedBox(width: 10),
@@ -2000,7 +2348,9 @@ class _MigrationManagementDialogState extends State<_MigrationManagementDialog> 
                               style: TextStyle(
                                 fontSize: 12.5,
                                 fontWeight: FontWeight.w600,
-                                color: _report!.isDryRun ? const Color(0xFF1E40AF) : const Color(0xFF065F46),
+                                color: _report!.isDryRun
+                                    ? const Color(0xFF1E40AF)
+                                    : const Color(0xFF065F46),
                               ),
                             ),
                           ),
@@ -2011,19 +2361,45 @@ class _MigrationManagementDialogState extends State<_MigrationManagementDialog> 
                     // Summary Cards Row
                     Row(
                       children: [
-                        _buildStatBox('Organizations', '${_report!.totalOrganizationsFound}', Colors.blueGrey),
+                        _buildStatBox(
+                          'Organizations',
+                          '${_report!.totalOrganizationsFound}',
+                          Colors.blueGrey,
+                        ),
                         const SizedBox(width: 8),
-                        _buildStatBox('Already Linked', '${_report!.totalAlreadyMigrated}', const Color(0xFF059669)),
+                        _buildStatBox(
+                          'Already Linked',
+                          '${_report!.totalAlreadyMigrated}',
+                          const Color(0xFF059669),
+                        ),
                         const SizedBox(width: 8),
-                        _buildStatBox('Ready to Link', '${_report!.totalMatched}', const Color(0xFF2563EB)),
+                        _buildStatBox(
+                          'Ready to Link',
+                          '${_report!.totalMatched}',
+                          const Color(0xFF2563EB),
+                        ),
                         const SizedBox(width: 8),
-                        _buildStatBox('Unmatched', '${_report!.totalUnmatched}', const Color(0xFFD97706)),
+                        _buildStatBox(
+                          'Unmatched',
+                          '${_report!.totalUnmatched}',
+                          const Color(0xFFD97706),
+                        ),
                         const SizedBox(width: 8),
-                        _buildStatBox('Ambiguous', '${_report!.totalAmbiguous}', Colors.red),
+                        _buildStatBox(
+                          'Ambiguous',
+                          '${_report!.totalAmbiguous}',
+                          Colors.red,
+                        ),
                       ],
                     ),
                     const SizedBox(height: 14),
-                    const Text('Detailed Log:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                    const Text(
+                      'Detailed Log:',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 6),
                     Expanded(
                       child: Container(
@@ -2057,17 +2433,27 @@ class _MigrationManagementDialogState extends State<_MigrationManagementDialog> 
                 ),
                 const SizedBox(width: 10),
                 OutlinedButton.icon(
-                  onPressed: _isLoading ? null : () => _runMigration(dryRun: true),
+                  onPressed: _isLoading
+                      ? null
+                      : () => _runMigration(dryRun: true),
                   icon: const Icon(Icons.refresh, size: 16),
                   label: const Text('Re-run Dry-Run'),
                 ),
-                if (_report != null && _report!.isDryRun && _report!.totalMatched > 0) ...[
+                if (_report != null &&
+                    _report!.isDryRun &&
+                    _report!.totalMatched > 0) ...[
                   const SizedBox(width: 10),
                   FilledButton.icon(
-                    style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
-                    onPressed: _isLoading ? null : () => _runMigration(dryRun: false),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                    ),
+                    onPressed: _isLoading
+                        ? null
+                        : () => _runMigration(dryRun: false),
                     icon: const Icon(Icons.bolt, size: 18),
-                    label: Text('Apply Migration (${_report!.totalMatched} records)'),
+                    label: Text(
+                      'Apply Migration (${_report!.totalMatched} records)',
+                    ),
                   ),
                 ],
               ],
@@ -2089,11 +2475,22 @@ class _MigrationManagementDialogState extends State<_MigrationManagementDialog> 
         ),
         child: Column(
           children: [
-            Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
             const SizedBox(height: 2),
             Text(
               label,
-              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: color.withValues(alpha: 0.85)),
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+                color: color.withValues(alpha: 0.85),
+              ),
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

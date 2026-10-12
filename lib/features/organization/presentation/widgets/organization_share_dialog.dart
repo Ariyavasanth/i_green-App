@@ -6,10 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../domain/organization.dart';
 
 class OrganizationShareDialog extends StatefulWidget {
-  const OrganizationShareDialog({
-    required this.organization,
-    super.key,
-  });
+  const OrganizationShareDialog({required this.organization, super.key});
 
   final Organization organization;
 
@@ -31,7 +28,7 @@ class _OrganizationShareDialogState extends State<OrganizationShareDialog> {
   @override
   void initState() {
     super.initState();
-    // Default: select key useful fields
+    // Default: select key useful fields, keep sensitive financial & document options unchecked by default
     _selectedFields = {
       'Organization Name': true,
       'Business Type': widget.organization.businessType.isNotEmpty,
@@ -39,16 +36,21 @@ class _OrganizationShareDialogState extends State<OrganizationShareDialog> {
       'Business Unit(s)': widget.organization.businessUnits.isNotEmpty,
       'Location(s)': widget.organization.locations.isNotEmpty,
       'Address': widget.organization.address.isNotEmpty,
-      'Phone Number': widget.organization.phoneNumber.isNotEmpty ||
+      'Phone Number':
+          widget.organization.phoneNumber.isNotEmpty ||
           widget.organization.contactNumbers.isNotEmpty,
       'Email Address': widget.organization.emailAddress.isNotEmpty,
       'Website': widget.organization.website.isNotEmpty,
-      'GST / VAT Number': widget.organization.gstNumber.isNotEmpty ||
+      'GST / VAT Number':
+          widget.organization.gstNumber.isNotEmpty ||
           widget.organization.taxId.isNotEmpty,
       'CIN Number': widget.organization.cinNumber.isNotEmpty,
       'PAN Number': widget.organization.panNumber.isNotEmpty,
       'TAN Number': widget.organization.tanNumber.isNotEmpty,
       'Directors / DIN': widget.organization.directors.isNotEmpty,
+      'Bank Account Details': false, // SENSITIVE: Default unchecked
+      'Statutory Documents': false, // SENSITIVE: Default unchecked
+      'Cancelled Cheque Documents': false, // SENSITIVE: Default unchecked
     };
   }
 
@@ -91,12 +93,86 @@ class _OrganizationShareDialogState extends State<OrganizationShareDialog> {
       case 'Directors / DIN':
         return org.directors.isNotEmpty
             ? org.directors
-                .map((d) => d.din.isNotEmpty ? '${d.name} (${d.din})' : d.name)
-                .join(', ')
+                  .map(
+                    (d) => d.din.isNotEmpty ? '${d.name} (${d.din})' : d.name,
+                  )
+                  .join(', ')
             : '';
+      case 'Bank Account Details':
+        if (org.bankDetails.isNotEmpty) {
+          return org.bankDetails
+              .map((b) {
+                final maskedAcc = b.accountNumber.length > 4
+                    ? '••••${b.accountNumber.substring(b.accountNumber.length - 4)}'
+                    : b.accountNumber;
+                final parts = [
+                  b.bankName,
+                  'A/C: $maskedAcc',
+                  if (b.ifscCode.isNotEmpty) 'IFSC: ${b.ifscCode}',
+                  if (b.cifCode.isNotEmpty) 'CIF: ${b.cifCode}',
+                  if (b.branch.isNotEmpty) 'Branch: ${b.branch}',
+                ];
+                return '• ${parts.join(" | ")}';
+              })
+              .join('\n');
+        }
+        return '';
+      case 'Statutory Documents':
+        if (org.documents.isNotEmpty) {
+          return org.documents
+              .map((d) {
+                final hasUrl = d.fileUrl.trim().isNotEmpty;
+                return hasUrl
+                    ? '• ${d.title}: ${d.fileName} (${d.fileUrl})'
+                    : '• ${d.title}: ${d.fileName.isNotEmpty ? d.fileName : "Attached"}';
+              })
+              .join('\n');
+        }
+        return '';
+      case 'Cancelled Cheque Documents':
+        final chequeBanks = org.bankDetails.where(
+          (b) =>
+              b.cancelledChequeDoc != null &&
+              b.cancelledChequeDoc!.fileUrl.isNotEmpty,
+        );
+        if (chequeBanks.isNotEmpty) {
+          return chequeBanks
+              .map((b) {
+                final doc = b.cancelledChequeDoc!;
+                return '• ${b.bankName} Cheque: ${doc.fileName.isNotEmpty ? doc.fileName : "Attached"} (${doc.fileUrl})';
+              })
+              .join('\n');
+        }
+        return '';
       default:
         return '';
     }
+  }
+
+  String _getFieldSubtitle(String key) {
+    final org = widget.organization;
+    if (key == 'Bank Account Details') {
+      return org.bankDetails.isNotEmpty
+          ? '(${org.bankDetails.length} account(s))'
+          : '(Not set)';
+    }
+    if (key == 'Statutory Documents') {
+      return org.documents.isNotEmpty
+          ? '(${org.documents.length} document(s))'
+          : '(Not set)';
+    }
+    if (key == 'Cancelled Cheque Documents') {
+      final count = org.bankDetails
+          .where(
+            (b) =>
+                b.cancelledChequeDoc != null &&
+                b.cancelledChequeDoc!.fileUrl.isNotEmpty,
+          )
+          .length;
+      return count > 0 ? '($count document(s))' : '(Not set)';
+    }
+    final val = _getFieldValue(key);
+    return val.isNotEmpty ? '($val)' : '(Not set)';
   }
 
   String _generateShareText() {
@@ -110,7 +186,12 @@ class _OrganizationShareDialogState extends State<OrganizationShareDialog> {
       if (entry.value) {
         final val = _getFieldValue(entry.key);
         if (val.isNotEmpty) {
-          buffer.writeln('*${entry.key}:* $val');
+          if (val.contains('\n')) {
+            buffer.writeln('*${entry.key}:*');
+            buffer.writeln(val);
+          } else {
+            buffer.writeln('*${entry.key}:* $val');
+          }
         }
       }
     }
@@ -123,7 +204,14 @@ class _OrganizationShareDialogState extends State<OrganizationShareDialog> {
     setState(() {
       for (final key in _selectedFields.keys) {
         final val = _getFieldValue(key);
-        _selectedFields[key] = select && val.isNotEmpty;
+        if (key == 'Bank Account Details' ||
+            key == 'Cancelled Cheque Documents' ||
+            key == 'Statutory Documents') {
+          // Sensitive data remains false by default on select all for data protection
+          _selectedFields[key] = false;
+        } else {
+          _selectedFields[key] = select && val.isNotEmpty;
+        }
       }
     });
   }
@@ -221,7 +309,11 @@ class _OrganizationShareDialogState extends State<OrganizationShareDialog> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, size: 20, color: Color(0xFF667085)),
+                    icon: const Icon(
+                      Icons.close,
+                      size: 20,
+                      color: Color(0xFF667085),
+                    ),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
@@ -247,7 +339,10 @@ class _OrganizationShareDialogState extends State<OrganizationShareDialog> {
                       InkWell(
                         onTap: () => _selectAll(true),
                         child: const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 4,
+                          ),
                           child: Text(
                             'Select All',
                             style: TextStyle(
@@ -258,11 +353,20 @@ class _OrganizationShareDialogState extends State<OrganizationShareDialog> {
                           ),
                         ),
                       ),
-                      const Text(' | ', style: TextStyle(color: Color(0xFFD0D5DD), fontSize: 11)),
+                      const Text(
+                        ' | ',
+                        style: TextStyle(
+                          color: Color(0xFFD0D5DD),
+                          fontSize: 11,
+                        ),
+                      ),
                       InkWell(
                         onTap: () => _selectAll(false),
                         child: const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 4,
+                          ),
                           child: Text(
                             'Clear',
                             style: TextStyle(
@@ -337,15 +441,15 @@ class _OrganizationShareDialogState extends State<OrganizationShareDialog> {
                                             : FontWeight.normal,
                                         color: isAvailable
                                             ? (isChecked
-                                                ? const Color(0xFF101828)
-                                                : const Color(0xFF475467))
+                                                  ? const Color(0xFF101828)
+                                                  : const Color(0xFF475467))
                                             : const Color(0xFF98A2B3),
                                       ),
                                     ),
                                     const SizedBox(width: 6),
                                     Expanded(
                                       child: Text(
-                                        isAvailable ? '($val)' : '(Not set)',
+                                        _getFieldSubtitle(fieldKey),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
@@ -426,10 +530,18 @@ class _OrganizationShareDialogState extends State<OrganizationShareDialog> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    icon: const Icon(Icons.copy_rounded, size: 16, color: Color(0xFF344054)),
+                    icon: const Icon(
+                      Icons.copy_rounded,
+                      size: 16,
+                      color: Color(0xFF344054),
+                    ),
                     label: const Text(
                       'Copy Text',
-                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF344054)),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF344054),
+                      ),
                     ),
                   ),
                   ElevatedButton.icon(
@@ -449,7 +561,10 @@ class _OrganizationShareDialogState extends State<OrganizationShareDialog> {
                     icon: const Icon(Icons.chat_bubble_outline, size: 16),
                     label: const Text(
                       'WhatsApp',
-                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   ElevatedButton.icon(
@@ -469,7 +584,10 @@ class _OrganizationShareDialogState extends State<OrganizationShareDialog> {
                     icon: const Icon(Icons.share, size: 16),
                     label: const Text(
                       'Share',
-                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],

@@ -15,15 +15,22 @@ class OrganizationFormDialog extends ConsumerStatefulWidget {
 
   final Organization? organization;
 
-  static Future<bool?> show(BuildContext context, {Organization? organization}) {
-    final isMobile = MediaQuery.of(context).size.width < 640 || MediaQuery.of(context).size.height < 700;
+  static Future<bool?> show(
+    BuildContext context, {
+    Organization? organization,
+  }) {
+    final isMobile =
+        MediaQuery.of(context).size.width < 640 ||
+        MediaQuery.of(context).size.height < 700;
     if (isMobile) {
       return showModalBottomSheet<bool>(
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
         builder: (context) => Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
           child: OrganizationFormDialog(organization: organization),
         ),
       );
@@ -33,7 +40,10 @@ class OrganizationFormDialog extends ConsumerStatefulWidget {
         barrierDismissible: false,
         builder: (context) => Dialog(
           backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 20,
+          ),
           child: OrganizationFormDialog(organization: organization),
         ),
       );
@@ -41,13 +51,14 @@ class OrganizationFormDialog extends ConsumerStatefulWidget {
   }
 
   @override
-  ConsumerState<OrganizationFormDialog> createState() => _OrganizationFormDialogState();
+  ConsumerState<OrganizationFormDialog> createState() =>
+      _OrganizationFormDialogState();
 }
 
 class _ContactItemState {
   _ContactItemState({required String label, required String number})
-      : labelController = TextEditingController(text: label),
-        numberController = TextEditingController(text: number);
+    : labelController = TextEditingController(text: label),
+      numberController = TextEditingController(text: number);
 
   final TextEditingController labelController;
   final TextEditingController numberController;
@@ -60,8 +71,8 @@ class _ContactItemState {
 
 class _DirectorItemState {
   _DirectorItemState({required String name, required String din})
-      : nameController = TextEditingController(text: name),
-        dinController = TextEditingController(text: din);
+    : nameController = TextEditingController(text: name),
+      dinController = TextEditingController(text: din);
 
   final TextEditingController nameController;
   final TextEditingController dinController;
@@ -73,18 +84,49 @@ class _DirectorItemState {
 }
 
 class _DocUploadItem {
-  _DocUploadItem({
-    required this.title,
-    this.existingDoc,
-    this.pickedFile,
-  });
+  _DocUploadItem({required this.title, this.existingDoc, this.pickedFile});
 
   final String title;
   OrgDocument? existingDoc;
   PlatformFile? pickedFile;
 }
 
-class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog> {
+class _BankDetailItemState {
+  _BankDetailItemState({
+    String? id,
+    String bankName = '',
+    String accountNumber = '',
+    String ifscCode = '',
+    String cifCode = '',
+    String branch = '',
+    this.existingChequeDoc,
+  }) : id = id ?? 'bank_${DateTime.now().microsecondsSinceEpoch}',
+       bankNameController = TextEditingController(text: bankName),
+       accountNumberController = TextEditingController(text: accountNumber),
+       ifscCodeController = TextEditingController(text: ifscCode),
+       cifCodeController = TextEditingController(text: cifCode),
+       branchController = TextEditingController(text: branch);
+
+  final String id;
+  final TextEditingController bankNameController;
+  final TextEditingController accountNumberController;
+  final TextEditingController ifscCodeController;
+  final TextEditingController cifCodeController;
+  final TextEditingController branchController;
+  OrgDocument? existingChequeDoc;
+  PlatformFile? pickedChequeFile;
+
+  void dispose() {
+    bankNameController.dispose();
+    accountNumberController.dispose();
+    ifscCodeController.dispose();
+    cifCodeController.dispose();
+    branchController.dispose();
+  }
+}
+
+class _OrganizationFormDialogState
+    extends ConsumerState<OrganizationFormDialog> {
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _nameController;
@@ -113,11 +155,22 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
 
   // Statutory Documents
   final Map<String, _DocUploadItem> _statutoryDocs = {
-    'Certificate of Incorporation': _DocUploadItem(title: 'Certificate of Incorporation'),
-    'Memorandum of Association (MOA)': _DocUploadItem(title: 'Memorandum of Association (MOA)'),
-    'Articles of Association (AOA)': _DocUploadItem(title: 'Articles of Association (AOA)'),
+    'Certificate of Incorporation': _DocUploadItem(
+      title: 'Certificate of Incorporation',
+    ),
+    'Memorandum of Association (MOA)': _DocUploadItem(
+      title: 'Memorandum of Association (MOA)',
+    ),
+    'Articles of Association (AOA)': _DocUploadItem(
+      title: 'Articles of Association (AOA)',
+    ),
+    'GSTIN Certificate': _DocUploadItem(title: 'GSTIN Certificate'),
+    'PAN Certificate': _DocUploadItem(title: 'PAN Certificate'),
   };
   final List<_DocUploadItem> _extraDocs = [];
+
+  // Bank Account Details
+  final List<_BankDetailItemState> _bankDetails = [];
 
   bool _isSaving = false;
   String _uploadStatusMessage = '';
@@ -137,8 +190,14 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
     super.initState();
     final org = widget.organization;
     _nameController = TextEditingController(text: org?.name ?? '');
-    _businessTypeController = TextEditingController(text: org?.businessType.isNotEmpty == true ? org!.businessType : 'Private Limited Company');
-    _industryTypeController = TextEditingController(text: org?.industryType ?? '');
+    _businessTypeController = TextEditingController(
+      text: org?.businessType.isNotEmpty == true
+          ? org!.businessType
+          : 'Private Limited Company',
+    );
+    _industryTypeController = TextEditingController(
+      text: org?.industryType ?? '',
+    );
     _businessUnits = (org?.businessUnits ?? '')
         .split(',')
         .map((s) => s.trim())
@@ -154,7 +213,11 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
     _emailController = TextEditingController(text: org?.emailAddress ?? '');
     _websiteController = TextEditingController(text: org?.website ?? '');
 
-    _gstController = TextEditingController(text: org?.gstNumber.isNotEmpty == true ? org!.gstNumber : (org?.taxId ?? ''));
+    _gstController = TextEditingController(
+      text: org?.gstNumber.isNotEmpty == true
+          ? org!.gstNumber
+          : (org?.taxId ?? ''),
+    );
     _cinController = TextEditingController(text: org?.cinNumber ?? '');
     _panController = TextEditingController(text: org?.panNumber ?? '');
     _tanController = TextEditingController(text: org?.tanNumber ?? '');
@@ -165,7 +228,9 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
         _contacts.add(_ContactItemState(label: c.label, number: c.number));
       }
     } else if (org != null && org.phoneNumber.isNotEmpty) {
-      _contacts.add(_ContactItemState(label: 'Primary Mobile', number: org.phoneNumber));
+      _contacts.add(
+        _ContactItemState(label: 'Primary Mobile', number: org.phoneNumber),
+      );
     } else {
       _contacts.add(_ContactItemState(label: 'Primary Mobile', number: ''));
     }
@@ -185,13 +250,38 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
         } else if (doc.title == 'Certificate of Incorporation' ||
             doc.title.contains('Incorporation')) {
           _statutoryDocs['Certificate of Incorporation']!.existingDoc = doc;
-        } else if (doc.title.contains('MOA') || doc.title.contains('Memorandum')) {
+        } else if (doc.title.contains('MOA') ||
+            doc.title.contains('Memorandum')) {
           _statutoryDocs['Memorandum of Association (MOA)']!.existingDoc = doc;
-        } else if (doc.title.contains('AOA') || doc.title.contains('Articles')) {
+        } else if (doc.title.contains('AOA') ||
+            doc.title.contains('Articles')) {
           _statutoryDocs['Articles of Association (AOA)']!.existingDoc = doc;
+        } else if (doc.title.contains('GSTIN') ||
+            doc.title.contains('GST Certificate')) {
+          _statutoryDocs['GSTIN Certificate']!.existingDoc = doc;
+        } else if (doc.title.contains('PAN Certificate') ||
+            (doc.title.contains('PAN') && !doc.title.contains('TAN'))) {
+          _statutoryDocs['PAN Certificate']!.existingDoc = doc;
         } else {
           _extraDocs.add(_DocUploadItem(title: doc.title, existingDoc: doc));
         }
+      }
+    }
+
+    // Initialize existing bank details
+    if (org != null && org.bankDetails.isNotEmpty) {
+      for (final b in org.bankDetails) {
+        _bankDetails.add(
+          _BankDetailItemState(
+            id: b.id.isNotEmpty ? b.id : null,
+            bankName: b.bankName,
+            accountNumber: b.accountNumber,
+            ifscCode: b.ifscCode,
+            cifCode: b.cifCode,
+            branch: b.branch,
+            existingChequeDoc: b.cancelledChequeDoc,
+          ),
+        );
       }
     }
   }
@@ -217,13 +307,19 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
     for (final d in _directors) {
       d.dispose();
     }
+    for (final b in _bankDetails) {
+      b.dispose();
+    }
     super.dispose();
   }
 
   void _addBusinessUnit([String? value]) {
     final text = (value ?? _newBuController.text).trim();
     if (text.isEmpty) return;
-    final items = text.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty);
+    final items = text
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty);
     setState(() {
       for (final item in items) {
         if (!_businessUnits.contains(item)) {
@@ -237,7 +333,10 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
   void _addLocation([String? value]) {
     final text = (value ?? _newLocController.text).trim();
     if (text.isEmpty) return;
-    final items = text.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty);
+    final items = text
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty);
     setState(() {
       for (final item in items) {
         if (!_locations.contains(item)) {
@@ -263,8 +362,30 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
       }
     } catch (e) {
       if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error picking file: $e')));
+      }
+    }
+  }
+
+  Future<void> _pickFileForCheque(_BankDetailItemState item) async {
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'],
+        withData: true,
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        setState(() {
+          item.pickedChequeFile = result.files.first;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error picking file: $e')),
+          SnackBar(content: Text('Error picking cancelled cheque: $e')),
         );
       }
     }
@@ -285,9 +406,9 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error opening document: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error opening document: $e')));
       }
     }
   }
@@ -297,7 +418,10 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
     final customTitle = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Add Statutory Document', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Add Statutory Document',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
         content: TextField(
           controller: titleController,
           autofocus: true,
@@ -309,9 +433,15 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF9CC70A), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF9CC70A),
+              foregroundColor: Colors.white,
+            ),
             onPressed: () {
               final t = titleController.text.trim();
               if (t.isNotEmpty) Navigator.pop(ctx, t);
@@ -355,21 +485,33 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
       // Prepare contact numbers
       final contactList = _contacts
           .where((c) => c.numberController.text.trim().isNotEmpty)
-          .map((c) => ContactNumber(
-                label: c.labelController.text.trim().isNotEmpty ? c.labelController.text.trim() : 'Mobile',
-                number: c.numberController.text.trim(),
-              ))
+          .map(
+            (c) => ContactNumber(
+              label: c.labelController.text.trim().isNotEmpty
+                  ? c.labelController.text.trim()
+                  : 'Mobile',
+              number: c.numberController.text.trim(),
+            ),
+          )
           .toList();
 
-      final primaryPhone = contactList.isNotEmpty ? contactList.first.number : '';
+      final primaryPhone = contactList.isNotEmpty
+          ? contactList.first.number
+          : '';
 
       // Prepare directors
       final directorsList = _directors
-          .where((d) => d.nameController.text.trim().isNotEmpty || d.dinController.text.trim().isNotEmpty)
-          .map((d) => DirectorDetail(
-                name: d.nameController.text.trim(),
-                din: d.dinController.text.trim(),
-              ))
+          .where(
+            (d) =>
+                d.nameController.text.trim().isNotEmpty ||
+                d.dinController.text.trim().isNotEmpty,
+          )
+          .map(
+            (d) => DirectorDetail(
+              name: d.nameController.text.trim(),
+              din: d.dinController.text.trim(),
+            ),
+          )
           .toList();
 
       // Process and upload documents
@@ -392,6 +534,50 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
         }
       }
 
+      // Process and upload bank details & cancelled cheques
+      final finalBanks = <OrganizationBankDetail>[];
+      for (int i = 0; i < _bankDetails.length; i++) {
+        final bankItem = _bankDetails[i];
+        final bName = bankItem.bankNameController.text.trim();
+        final aNum = bankItem.accountNumberController.text.trim();
+        final ifsc = bankItem.ifscCodeController.text.trim().toUpperCase();
+        final cif = bankItem.cifCodeController.text.trim();
+        final branch = bankItem.branchController.text.trim();
+
+        if (bName.isEmpty && aNum.isEmpty && ifsc.isEmpty) continue;
+
+        OrgDocument? chequeDoc = bankItem.existingChequeDoc;
+        if (bankItem.pickedChequeFile != null) {
+          setState(() {
+            _uploadStatusMessage = 'Uploading cancelled cheque for $bName...';
+          });
+          try {
+            final docTitle =
+                'Cancelled Cheque - ${aNum.isNotEmpty ? aNum : bankItem.id}';
+            chequeDoc = await repo.uploadDocument(
+              orgId: orgId,
+              docTitle: docTitle,
+              file: bankItem.pickedChequeFile,
+            );
+          } catch (e) {
+            debugPrint('Failed to upload cancelled cheque: $e');
+            chequeDoc = bankItem.existingChequeDoc;
+          }
+        }
+
+        finalBanks.add(
+          OrganizationBankDetail(
+            id: bankItem.id,
+            bankName: bName,
+            accountNumber: aNum,
+            ifscCode: ifsc,
+            cifCode: cif,
+            branch: branch,
+            cancelledChequeDoc: chequeDoc,
+          ),
+        );
+      }
+
       final org = Organization(
         id: orgId,
         name: _nameController.text.trim(),
@@ -412,6 +598,7 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
         tanNumber: _tanController.text.trim(),
         directors: directorsList,
         documents: finalDocs,
+        bankDetails: finalBanks,
       );
 
       if (widget.organization == null) {
@@ -503,13 +690,20 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
                         ),
                         const Text(
                           'Configure company details, statutory IDs, directors & documents',
-                          style: TextStyle(fontSize: 12, color: Color(0xFF667085)),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF667085),
+                          ),
                         ),
                       ],
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, size: 20, color: Color(0xFF667085)),
+                    icon: const Icon(
+                      Icons.close,
+                      size: 20,
+                      color: Color(0xFF667085),
+                    ),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
@@ -520,228 +714,337 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
             // Scrollable Form Body
             Expanded(
               child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Section 1: Basic Organization Info
-                    _buildSectionHeader(Icons.business_outlined, 'General Information'),
-                    const SizedBox(height: 12),
-                    _buildField(
-                      label: 'Organization Name *',
-                      controller: _nameController,
-                      validator: (v) => v == null || v.trim().isEmpty ? 'Organization name is required' : null,
-                      hint: 'e.g. IGreentec Engg. India Pvt. Ltd.',
-                    ),
-                    const SizedBox(height: 14),
-                    _buildResponsiveRow(
-                      isSingleColumn: isSingleColumn,
-                      left: _buildField(
-                        label: 'Business Type',
-                        controller: _businessTypeController,
-                        hint: 'e.g. Private Limited Company, LLP, Partnership',
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Section 1: Basic Organization Info
+                      _buildSectionHeader(
+                        Icons.business_outlined,
+                        'General Information',
                       ),
-                      right: _buildField(
-                        label: 'Industry Type',
-                        controller: _industryTypeController,
-                        hint: 'e.g. Engineering, Manufacturing, IT Services',
+                      const SizedBox(height: 12),
+                      _buildField(
+                        label: 'Organization Name *',
+                        controller: _nameController,
+                        validator: (v) => v == null || v.trim().isEmpty
+                            ? 'Organization name is required'
+                            : null,
+                        hint: 'e.g. IGreentec Engg. India Pvt. Ltd.',
                       ),
-                    ),
-                    const SizedBox(height: 14),
-                    _buildResponsiveRow(
-                      isSingleColumn: isSingleColumn,
-                      left: _buildMultiItemField(
-                        label: 'Business Unit(s)',
-                        controller: _newBuController,
-                        items: _businessUnits,
-                        onAdd: _addBusinessUnit,
-                        onRemove: (item) => setState(() => _businessUnits.remove(item)),
-                        isMobile: isSingleColumn,
-                        hint: 'e.g. Projects & Services, HDD',
+                      const SizedBox(height: 14),
+                      _buildResponsiveRow(
+                        isSingleColumn: isSingleColumn,
+                        left: _buildField(
+                          label: 'Business Type',
+                          controller: _businessTypeController,
+                          hint:
+                              'e.g. Private Limited Company, LLP, Partnership',
+                        ),
+                        right: _buildField(
+                          label: 'Industry Type',
+                          controller: _industryTypeController,
+                          hint: 'e.g. Engineering, Manufacturing, IT Services',
+                        ),
                       ),
-                      right: _buildMultiItemField(
-                        label: 'Location(s)',
-                        controller: _newLocController,
-                        items: _locations,
-                        onAdd: _addLocation,
-                        onRemove: (item) => setState(() => _locations.remove(item)),
-                        isMobile: isSingleColumn,
-                        hint: 'e.g. Chennai Head Office, Ambattur Plant',
+                      const SizedBox(height: 14),
+                      _buildResponsiveRow(
+                        isSingleColumn: isSingleColumn,
+                        left: _buildMultiItemField(
+                          label: 'Business Unit(s)',
+                          controller: _newBuController,
+                          items: _businessUnits,
+                          onAdd: _addBusinessUnit,
+                          onRemove: (item) =>
+                              setState(() => _businessUnits.remove(item)),
+                          isMobile: isSingleColumn,
+                          hint: 'e.g. Projects & Services, HDD',
+                        ),
+                        right: _buildMultiItemField(
+                          label: 'Location(s)',
+                          controller: _newLocController,
+                          items: _locations,
+                          onAdd: _addLocation,
+                          onRemove: (item) =>
+                              setState(() => _locations.remove(item)),
+                          isMobile: isSingleColumn,
+                          hint: 'e.g. Chennai Head Office, Ambattur Plant',
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 14),
-                    _buildField(
-                      label: 'Registered Office Address',
-                      controller: _addressController,
-                      hint: 'e.g. 557, Mangaldeep Apartments, D Block F1, Ramnagar',
-                      maxLines: 2,
-                    ),
-                    const SizedBox(height: 14),
-                    _buildResponsiveRow(
-                      isSingleColumn: isSingleColumn,
-                      left: _buildField(
-                        label: 'PIN / Postal Code',
-                        controller: _pincodeController,
-                        hint: 'e.g. 600058',
-                        keyboardType: TextInputType.number,
+                      const SizedBox(height: 14),
+                      _buildField(
+                        label: 'Registered Office Address',
+                        controller: _addressController,
+                        hint:
+                            'e.g. 557, Mangaldeep Apartments, D Block F1, Ramnagar',
+                        maxLines: 2,
                       ),
-                      right: _buildField(
-                        label: 'Official Email Address',
-                        controller: _emailController,
-                        hint: 'e.g. info@igreentec.example',
-                        keyboardType: TextInputType.emailAddress,
+                      const SizedBox(height: 14),
+                      _buildResponsiveRow(
+                        isSingleColumn: isSingleColumn,
+                        left: _buildField(
+                          label: 'PIN / Postal Code',
+                          controller: _pincodeController,
+                          hint: 'e.g. 600058',
+                          keyboardType: TextInputType.number,
+                        ),
+                        right: _buildField(
+                          label: 'Official Email Address',
+                          controller: _emailController,
+                          hint: 'e.g. info@igreentec.example',
+                          keyboardType: TextInputType.emailAddress,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 14),
-                    _buildField(
-                      label: 'Website URL',
-                      controller: _websiteController,
-                      hint: 'e.g. https://www.igreentec.example',
-                    ),
+                      const SizedBox(height: 14),
+                      _buildField(
+                        label: 'Website URL',
+                        controller: _websiteController,
+                        hint: 'e.g. https://www.igreentec.example',
+                      ),
 
-                    const SizedBox(height: 24),
-                    // Section 2: Multiple Contact Numbers
-                    _buildSectionHeader(
-                      Icons.call_outlined,
-                      'Contact & Phone Numbers',
-                      trailing: TextButton.icon(
-                        onPressed: () {
-                          setState(() {
-                            _contacts.add(_ContactItemState(label: 'Secondary Mobile', number: ''));
-                          });
-                        },
-                        icon: const Icon(Icons.add, size: 16, color: AppColors.primary),
-                        label: const Text('Add Number', style: TextStyle(color: AppColors.primary, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 24),
+                      // Section 2: Multiple Contact Numbers
+                      _buildSectionHeader(
+                        Icons.call_outlined,
+                        'Contact & Phone Numbers',
+                        trailing: TextButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _contacts.add(
+                                _ContactItemState(
+                                  label: 'Secondary Mobile',
+                                  number: '',
+                                ),
+                              );
+                            });
+                          },
+                          icon: const Icon(
+                            Icons.add,
+                            size: 16,
+                            color: AppColors.primary,
+                          ),
+                          label: const Text(
+                            'Add Number',
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    _buildContactNumbersList(),
+                      const SizedBox(height: 10),
+                      _buildContactNumbersList(),
 
-                    const SizedBox(height: 24),
-                    // Section 3: Tax & Legal Identification Details
-                    _buildSectionHeader(Icons.gavel_outlined, 'Tax & Legal Identification Details'),
-                    const SizedBox(height: 12),
-                    _buildResponsiveRow(
-                      isSingleColumn: isSingleColumn,
-                      left: _buildField(
-                        label: 'GST / VAT Number',
-                        controller: _gstController,
-                        hint: 'e.g. 33ABCDE1234F1Z5',
+                      const SizedBox(height: 24),
+                      // Section 3: Tax & Legal Identification Details
+                      _buildSectionHeader(
+                        Icons.gavel_outlined,
+                        'Tax & Legal Identification Details',
                       ),
-                      right: _buildField(
-                        label: 'CIN (Corporate Identification No.)',
-                        controller: _cinController,
-                        hint: 'e.g. U74999TN2020PTC123456',
+                      const SizedBox(height: 12),
+                      _buildResponsiveRow(
+                        isSingleColumn: isSingleColumn,
+                        left: _buildField(
+                          label: 'GST / VAT Number',
+                          controller: _gstController,
+                          hint: 'e.g. 33ABCDE1234F1Z5',
+                        ),
+                        right: _buildField(
+                          label: 'CIN (Corporate Identification No.)',
+                          controller: _cinController,
+                          hint: 'e.g. U74999TN2020PTC123456',
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 14),
-                    _buildResponsiveRow(
-                      isSingleColumn: isSingleColumn,
-                      left: _buildField(
-                        label: 'PAN (Permanent Account Number)',
-                        controller: _panController,
-                        hint: 'e.g. ABCDE1234F',
+                      const SizedBox(height: 14),
+                      _buildResponsiveRow(
+                        isSingleColumn: isSingleColumn,
+                        left: _buildField(
+                          label: 'PAN (Permanent Account Number)',
+                          controller: _panController,
+                          hint: 'e.g. ABCDE1234F',
+                        ),
+                        right: _buildField(
+                          label: 'TAN (Tax Deduction Account No.)',
+                          controller: _tanController,
+                          hint: 'e.g. CHNE12345F',
+                        ),
                       ),
-                      right: _buildField(
-                        label: 'TAN (Tax Deduction Account No.)',
-                        controller: _tanController,
-                        hint: 'e.g. CHNE12345F',
-                      ),
-                    ),
 
-                    const SizedBox(height: 24),
-                    // Section 4: Directors & DIN Details
-                    _buildSectionHeader(
-                      Icons.people_outline_rounded,
-                      'Directors & DIN Details',
-                      trailing: TextButton.icon(
-                        onPressed: () {
-                          setState(() {
-                            _directors.add(_DirectorItemState(name: '', din: ''));
-                          });
-                        },
-                        icon: const Icon(Icons.add, size: 16, color: AppColors.primary),
-                        label: const Text('Add Director', style: TextStyle(color: AppColors.primary, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 24),
+                      // Section 4: Directors & DIN Details
+                      _buildSectionHeader(
+                        Icons.people_outline_rounded,
+                        'Directors & DIN Details',
+                        trailing: TextButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _directors.add(
+                                _DirectorItemState(name: '', din: ''),
+                              );
+                            });
+                          },
+                          icon: const Icon(
+                            Icons.add,
+                            size: 16,
+                            color: AppColors.primary,
+                          ),
+                          label: const Text(
+                            'Add Director',
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    _buildDirectorsList(),
+                      const SizedBox(height: 10),
+                      _buildDirectorsList(),
 
-                    const SizedBox(height: 24),
-                    // Section 5: Incorporation & Statutory Document Uploads
-                    _buildSectionHeader(
-                      Icons.folder_open_outlined,
-                      'Incorporation & Statutory Documents',
-                      trailing: TextButton.icon(
-                        onPressed: _addCustomDocument,
-                        icon: const Icon(Icons.upload_file, size: 16, color: AppColors.primary),
-                        label: const Text('Add Other Doc', style: TextStyle(color: AppColors.primary, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 24),
+                      // Section 5: Incorporation & Statutory Document Uploads
+                      _buildSectionHeader(
+                        Icons.folder_open_outlined,
+                        'Incorporation & Statutory Documents',
+                        trailing: TextButton.icon(
+                          onPressed: _addCustomDocument,
+                          icon: const Icon(
+                            Icons.upload_file,
+                            size: 16,
+                            color: AppColors.primary,
+                          ),
+                          label: const Text(
+                            'Add Other Doc',
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    _buildDocumentUploadsList(),
-                  ],
+                      const SizedBox(height: 10),
+                      _buildDocumentUploadsList(),
+
+                      const SizedBox(height: 24),
+                      // Section 6: Bank Account Details
+                      _buildSectionHeader(
+                        Icons.account_balance_outlined,
+                        'Bank Account Details',
+                        trailing: TextButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _bankDetails.add(_BankDetailItemState());
+                            });
+                          },
+                          icon: const Icon(
+                            Icons.add,
+                            size: 16,
+                            color: AppColors.primary,
+                          ),
+                          label: const Text(
+                            'Add Bank Details',
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      _buildBankDetailsList(isSingleColumn),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
 
-          // Sticky Footer Action Bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(top: BorderSide(color: Color(0xFFEAECF0))),
-            ),
-            child: Row(
-              children: [
-                if (_isSaving)
-                  Expanded(
-                    child: Text(
-                      _uploadStatusMessage,
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF667085), fontStyle: FontStyle.italic),
-                      overflow: TextOverflow.ellipsis,
+            // Sticky Footer Action Bar
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(top: BorderSide(color: Color(0xFFEAECF0))),
+              ),
+              child: Row(
+                children: [
+                  if (_isSaving)
+                    Expanded(
+                      child: Text(
+                        _uploadStatusMessage,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF667085),
+                          fontStyle: FontStyle.italic,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    )
+                  else
+                    const Spacer(),
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      side: const BorderSide(color: Color(0xFFD0D5DD)),
                     ),
-                  )
-                else
-                  const Spacer(),
-                OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    side: const BorderSide(color: Color(0xFFD0D5DD)),
+                    onPressed: _isSaving
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: Color(0xFF344054),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                  onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
-                  child: const Text('Cancel', style: TextStyle(color: Color(0xFF344054), fontWeight: FontWeight.w600)),
-                ),
-                const SizedBox(width: 12),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onPressed: _isSaving ? null : _submit,
+                    child: _isSaving
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            isEdit ? 'Save Changes' : 'Add Organization',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
                   ),
-                  onPressed: _isSaving ? null : _submit,
-                  child: _isSaving
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : Text(isEdit ? 'Save Changes' : 'Add Organization', style: const TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildSectionHeader(IconData icon, String title, {Widget? trailing}) {
     return Row(
@@ -774,11 +1077,21 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
         ),
         child: Row(
           children: [
-            const Text('No contact numbers added yet.', style: TextStyle(fontSize: 12.5, color: Color(0xFF667085))),
+            const Text(
+              'No contact numbers added yet.',
+              style: TextStyle(fontSize: 12.5, color: Color(0xFF667085)),
+            ),
             const Spacer(),
             TextButton(
-              onPressed: () => setState(() => _contacts.add(_ContactItemState(label: 'Primary Mobile', number: ''))),
-              child: const Text('+ Add Number', style: TextStyle(color: AppColors.primary, fontSize: 12)),
+              onPressed: () => setState(
+                () => _contacts.add(
+                  _ContactItemState(label: 'Primary Mobile', number: ''),
+                ),
+              ),
+              child: const Text(
+                '+ Add Number',
+                style: TextStyle(color: AppColors.primary, fontSize: 12),
+              ),
             ),
           ],
         ),
@@ -801,18 +1114,35 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
                 SizedBox(
                   width: 140,
                   child: DropdownButtonFormField<String>(
-                    value: _contactLabels.contains(_contacts[i].labelController.text)
+                    value:
+                        _contactLabels.contains(
+                          _contacts[i].labelController.text,
+                        )
                         ? _contacts[i].labelController.text
                         : 'Primary Mobile',
                     isExpanded: true,
-                    style: const TextStyle(fontSize: 12.5, color: Color(0xFF1E293B)),
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: Color(0xFF1E293B),
+                    ),
                     decoration: const InputDecoration(
                       isDense: true,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
                       border: OutlineInputBorder(),
                     ),
                     items: _contactLabels
-                        .map((l) => DropdownMenuItem(value: l, child: Text(l, style: const TextStyle(fontSize: 12))))
+                        .map(
+                          (l) => DropdownMenuItem(
+                            value: l,
+                            child: Text(
+                              l,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                        )
                         .toList(),
                     onChanged: (val) {
                       if (val != null) {
@@ -830,14 +1160,21 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
                     decoration: const InputDecoration(
                       hintText: 'e.g. +91 44 4567 8900',
                       isDense: true,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
                       border: OutlineInputBorder(),
                     ),
                   ),
                 ),
                 const SizedBox(width: 6),
                 IconButton(
-                  icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                  icon: const Icon(
+                    Icons.delete_outline,
+                    size: 18,
+                    color: Colors.redAccent,
+                  ),
                   tooltip: 'Remove',
                   onPressed: () {
                     setState(() {
@@ -865,11 +1202,19 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
         ),
         child: Row(
           children: [
-            const Text('No directors added yet.', style: TextStyle(fontSize: 12.5, color: Color(0xFF667085))),
+            const Text(
+              'No directors added yet.',
+              style: TextStyle(fontSize: 12.5, color: Color(0xFF667085)),
+            ),
             const Spacer(),
             TextButton(
-              onPressed: () => setState(() => _directors.add(_DirectorItemState(name: '', din: ''))),
-              child: const Text('+ Add Director', style: TextStyle(color: AppColors.primary, fontSize: 12)),
+              onPressed: () => setState(
+                () => _directors.add(_DirectorItemState(name: '', din: '')),
+              ),
+              child: const Text(
+                '+ Add Director',
+                style: TextStyle(color: AppColors.primary, fontSize: 12),
+              ),
             ),
           ],
         ),
@@ -898,7 +1243,10 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
                       labelText: 'Director Name',
                       hintText: 'e.g. John Doe',
                       isDense: true,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -913,14 +1261,21 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
                       labelText: 'DIN Number',
                       hintText: 'e.g. 01234567',
                       isDense: true,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
                       border: OutlineInputBorder(),
                     ),
                   ),
                 ),
                 const SizedBox(width: 6),
                 IconButton(
-                  icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                  icon: const Icon(
+                    Icons.delete_outline,
+                    size: 18,
+                    color: Colors.redAccent,
+                  ),
                   tooltip: 'Remove Director',
                   onPressed: () {
                     setState(() {
@@ -947,7 +1302,8 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
 
   Widget _buildDocUploadCard(_DocUploadItem item) {
     final hasPicked = item.pickedFile != null;
-    final hasExisting = item.existingDoc != null && item.existingDoc!.fileUrl.isNotEmpty;
+    final hasExisting =
+        item.existingDoc != null && item.existingDoc!.fileUrl.isNotEmpty;
     final fileName = hasPicked
         ? item.pickedFile!.name
         : (hasExisting ? item.existingDoc!.fileName : null);
@@ -956,10 +1312,14 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: (hasPicked || hasExisting) ? const Color(0xFFF0FDF4) : const Color(0xFFF9FAFB),
+        color: (hasPicked || hasExisting)
+            ? const Color(0xFFF0FDF4)
+            : const Color(0xFFF9FAFB),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: (hasPicked || hasExisting) ? const Color(0xFF86EFAC) : const Color(0xFFEAECF0),
+          color: (hasPicked || hasExisting)
+              ? const Color(0xFF86EFAC)
+              : const Color(0xFFEAECF0),
         ),
       ),
       child: Row(
@@ -973,9 +1333,13 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
               borderRadius: BorderRadius.circular(6),
             ),
             child: Icon(
-              (hasPicked || hasExisting) ? Icons.description_rounded : Icons.cloud_upload_outlined,
+              (hasPicked || hasExisting)
+                  ? Icons.description_rounded
+                  : Icons.cloud_upload_outlined,
               size: 20,
-              color: (hasPicked || hasExisting) ? const Color(0xFF15803D) : const Color(0xFF64748B),
+              color: (hasPicked || hasExisting)
+                  ? const Color(0xFF15803D)
+                  : const Color(0xFF64748B),
             ),
           ),
           const SizedBox(width: 12),
@@ -985,7 +1349,11 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
               children: [
                 Text(
                   item.title,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1E293B),
+                  ),
                 ),
                 const SizedBox(height: 2),
                 if (fileName != null)
@@ -993,8 +1361,12 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
                     hasPicked ? 'New: $fileName' : fileName,
                     style: TextStyle(
                       fontSize: 11.5,
-                      color: hasPicked ? const Color(0xFF15803D) : const Color(0xFF64748B),
-                      fontWeight: hasPicked ? FontWeight.w500 : FontWeight.normal,
+                      color: hasPicked
+                          ? const Color(0xFF15803D)
+                          : const Color(0xFF64748B),
+                      fontWeight: hasPicked
+                          ? FontWeight.w500
+                          : FontWeight.normal,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -1009,30 +1381,52 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
           ),
           const SizedBox(width: 10),
           if (hasPicked || hasExisting) ...[
-            if (hasExisting && item.existingDoc?.fileUrl.isNotEmpty == true) ...[
+            if (hasExisting &&
+                item.existingDoc?.fileUrl.isNotEmpty == true) ...[
               IconButton(
-                icon: const Icon(Icons.remove_red_eye_outlined, size: 18, color: Color(0xFF414A51)),
+                icon: const Icon(
+                  Icons.remove_red_eye_outlined,
+                  size: 18,
+                  color: Color(0xFF414A51),
+                ),
                 tooltip: 'View Document',
                 onPressed: () => _openDocUrl(item.existingDoc!.fileUrl),
               ),
               IconButton(
-                icon: const Icon(Icons.file_download_outlined, size: 18, color: AppColors.primary),
+                icon: const Icon(
+                  Icons.file_download_outlined,
+                  size: 18,
+                  color: AppColors.primary,
+                ),
                 tooltip: 'Download Document',
                 onPressed: () => downloadFileFromUrl(
                   context: context,
                   url: item.existingDoc!.fileUrl,
-                  fileName: item.existingDoc!.fileName.isNotEmpty ? item.existingDoc!.fileName : '${item.title}.pdf',
+                  fileName: item.existingDoc!.fileName.isNotEmpty
+                      ? item.existingDoc!.fileName
+                      : '${item.title}.pdf',
                   docTitle: item.title,
                 ),
               ),
             ],
             TextButton.icon(
               onPressed: () => _pickFileForDoc(item),
-              icon: const Icon(Icons.sync_rounded, size: 14, color: AppColors.primary),
-              label: const Text('Replace', style: TextStyle(color: AppColors.primary, fontSize: 12)),
+              icon: const Icon(
+                Icons.sync_rounded,
+                size: 14,
+                color: AppColors.primary,
+              ),
+              label: const Text(
+                'Replace',
+                style: TextStyle(color: AppColors.primary, fontSize: 12),
+              ),
             ),
             IconButton(
-              icon: const Icon(Icons.close_rounded, size: 18, color: Colors.redAccent),
+              icon: const Icon(
+                Icons.close_rounded,
+                size: 18,
+                color: Colors.redAccent,
+              ),
               tooltip: 'Remove',
               onPressed: () {
                 setState(() {
@@ -1051,14 +1445,391 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
                 foregroundColor: const Color(0xFF344054),
                 elevation: 0,
                 side: const BorderSide(color: Color(0xFFD0D5DD)),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
               ),
               onPressed: () => _pickFileForDoc(item),
-              icon: const Icon(Icons.upload_file, size: 15, color: AppColors.primary),
-              label: const Text('Upload', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+              icon: const Icon(
+                Icons.upload_file,
+                size: 15,
+                color: AppColors.primary,
+              ),
+              label: const Text(
+                'Upload',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBankDetailsList(bool isSingleColumn) {
+    if (_bankDetails.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFEAECF0)),
+        ),
+        child: Row(
+          children: [
+            const Text(
+              'No bank details added yet.',
+              style: TextStyle(fontSize: 12.5, color: Color(0xFF667085)),
+            ),
+            const Spacer(),
+            TextButton(
+              onPressed: () =>
+                  setState(() => _bankDetails.add(_BankDetailItemState())),
+              child: const Text(
+                '+ Add Bank Details',
+                style: TextStyle(color: AppColors.primary, fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        for (int i = 0; i < _bankDetails.length; i++) ...[
+          _buildBankDetailCard(_bankDetails[i], i, isSingleColumn),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildBankDetailCard(
+    _BankDetailItemState bankItem,
+    int index,
+    bool isSingleColumn,
+  ) {
+    final hasPickedCheque = bankItem.pickedChequeFile != null;
+    final hasExistingCheque =
+        bankItem.existingChequeDoc != null &&
+        bankItem.existingChequeDoc!.fileUrl.isNotEmpty;
+    final chequeFileName = hasPickedCheque
+        ? bankItem.pickedChequeFile!.name
+        : (hasExistingCheque ? bankItem.existingChequeDoc!.fileName : null);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFEAECF0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'Account #${index + 1}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                  if (bankItem.bankNameController.text.trim().isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    Text(
+                      bankItem.bankNameController.text.trim(),
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              IconButton(
+                icon: const Icon(
+                  Icons.delete_outline,
+                  size: 19,
+                  color: Colors.redAccent,
+                ),
+                tooltip: 'Remove Bank Account',
+                onPressed: () {
+                  setState(() {
+                    final item = _bankDetails.removeAt(index);
+                    item.dispose();
+                  });
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildResponsiveRow(
+            isSingleColumn: isSingleColumn,
+            left: _buildField(
+              label: 'Bank Name *',
+              controller: bankItem.bankNameController,
+              hint: 'e.g. HDFC Bank, State Bank of India',
+              validator: (v) {
+                if (_bankDetails.isNotEmpty &&
+                    (v == null || v.trim().isEmpty)) {
+                  return 'Bank name is required';
+                }
+                return null;
+              },
+            ),
+            right: _buildField(
+              label: 'Account Number *',
+              controller: bankItem.accountNumberController,
+              hint: 'e.g. 50100234567890',
+              keyboardType: TextInputType.number,
+              validator: (v) {
+                if (_bankDetails.isNotEmpty) {
+                  if (v == null || v.trim().isEmpty) {
+                    return 'Account number is required';
+                  }
+                  if (!RegExp(r'^\d{6,25}$').hasMatch(v.trim())) {
+                    return 'Enter valid account number (6-25 digits)';
+                  }
+                }
+                return null;
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildResponsiveRow(
+            isSingleColumn: isSingleColumn,
+            left: _buildField(
+              label: 'IFSC Code *',
+              controller: bankItem.ifscCodeController,
+              hint: 'e.g. HDFC0001234',
+              keyboardType: TextInputType.text,
+              validator: (v) {
+                if (_bankDetails.isNotEmpty) {
+                  if (v == null || v.trim().isEmpty) {
+                    return 'IFSC code is required';
+                  }
+                  final cleaned = v.trim().toUpperCase();
+                  if (!RegExp(r'^[A-Z]{4}0[A-Z0-9]{6}$').hasMatch(cleaned)) {
+                    return 'Enter valid 11-digit IFSC (e.g. HDFC0001234)';
+                  }
+                }
+                return null;
+              },
+            ),
+            right: _buildField(
+              label: 'CIF Code',
+              controller: bankItem.cifCodeController,
+              hint: 'e.g. 123456789 (Optional)',
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildField(
+            label: 'Branch Name',
+            controller: bankItem.branchController,
+            hint: 'e.g. Ambattur Industrial Estate, Chennai',
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Cancelled Cheque Leaf Document',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF344054),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: (hasPickedCheque || hasExistingCheque)
+                  ? const Color(0xFFF0FDF4)
+                  : Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: (hasPickedCheque || hasExistingCheque)
+                    ? const Color(0xFF86EFAC)
+                    : const Color(0xFFEAECF0),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: (hasPickedCheque || hasExistingCheque)
+                        ? const Color(0xFFDCFCE7)
+                        : const Color(0xFFF2F4F7),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Icon(
+                    (hasPickedCheque || hasExistingCheque)
+                        ? Icons.description_rounded
+                        : Icons.cloud_upload_outlined,
+                    size: 18,
+                    color: (hasPickedCheque || hasExistingCheque)
+                        ? const Color(0xFF15803D)
+                        : const Color(0xFF64748B),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Cancelled Cheque Leaf',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      if (chequeFileName != null)
+                        Text(
+                          hasPickedCheque
+                              ? 'New: $chequeFileName'
+                              : chequeFileName,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: hasPickedCheque
+                                ? const Color(0xFF15803D)
+                                : const Color(0xFF64748B),
+                            fontWeight: hasPickedCheque
+                                ? FontWeight.w500
+                                : FontWeight.normal,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      else
+                        const Text(
+                          'No document attached (PDF, JPG, PNG, DOC)',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF94A3B8),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (hasPickedCheque || hasExistingCheque) ...[
+                  if (hasExistingCheque &&
+                      bankItem.existingChequeDoc?.fileUrl.isNotEmpty ==
+                          true) ...[
+                    IconButton(
+                      icon: const Icon(
+                        Icons.remove_red_eye_outlined,
+                        size: 17,
+                        color: Color(0xFF414A51),
+                      ),
+                      tooltip: 'View Cancelled Cheque',
+                      onPressed: () =>
+                          _openDocUrl(bankItem.existingChequeDoc!.fileUrl),
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.file_download_outlined,
+                        size: 17,
+                        color: AppColors.primary,
+                      ),
+                      tooltip: 'Download Cancelled Cheque',
+                      onPressed: () => downloadFileFromUrl(
+                        context: context,
+                        url: bankItem.existingChequeDoc!.fileUrl,
+                        fileName:
+                            bankItem.existingChequeDoc!.fileName.isNotEmpty
+                            ? bankItem.existingChequeDoc!.fileName
+                            : 'Cancelled_Cheque.pdf',
+                        docTitle: 'Cancelled Cheque',
+                      ),
+                    ),
+                  ],
+                  TextButton.icon(
+                    onPressed: () => _pickFileForCheque(bankItem),
+                    icon: const Icon(
+                      Icons.sync_rounded,
+                      size: 14,
+                      color: AppColors.primary,
+                    ),
+                    label: const Text(
+                      'Replace',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      size: 17,
+                      color: Colors.redAccent,
+                    ),
+                    tooltip: 'Remove Cheque',
+                    onPressed: () {
+                      setState(() {
+                        bankItem.pickedChequeFile = null;
+                        bankItem.existingChequeDoc = null;
+                      });
+                    },
+                  ),
+                ] else ...[
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF344054),
+                      elevation: 0,
+                      side: const BorderSide(color: Color(0xFFD0D5DD)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                    onPressed: () => _pickFileForCheque(bankItem),
+                    icon: const Icon(
+                      Icons.upload_file,
+                      size: 14,
+                      color: AppColors.primary,
+                    ),
+                    label: const Text(
+                      'Upload',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -1072,11 +1843,7 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
     if (isSingleColumn) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          left,
-          const SizedBox(height: 14),
-          right,
-        ],
+        children: [left, const SizedBox(height: 14), right],
       );
     }
     return Row(
@@ -1106,12 +1873,20 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
           children: [
             Text(
               label,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF344054)),
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF344054),
+              ),
             ),
             if (helperText != null)
               Text(
                 helperText,
-                style: const TextStyle(fontSize: 11, color: Color(0xFF667085), fontStyle: FontStyle.italic),
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Color(0xFF667085),
+                  fontStyle: FontStyle.italic,
+                ),
               ),
           ],
         ),
@@ -1126,7 +1901,10 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
             hintText: hint,
             hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
             isDense: true,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 11,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(color: Color(0xFFD0D5DD)),
@@ -1137,7 +1915,10 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+              borderSide: const BorderSide(
+                color: AppColors.primary,
+                width: 1.5,
+              ),
             ),
           ),
         ),
@@ -1159,7 +1940,11 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF344054)),
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF344054),
+          ),
         ),
         const SizedBox(height: 6),
         Row(
@@ -1172,9 +1957,15 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
                 onFieldSubmitted: (_) => onAdd(),
                 decoration: InputDecoration(
                   hintText: hint,
-                  hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                  hintStyle: const TextStyle(
+                    color: Color(0xFF94A3B8),
+                    fontSize: 12,
+                  ),
                   isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                     borderSide: const BorderSide(color: Color(0xFFD0D5DD)),
@@ -1185,7 +1976,10 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                    borderSide: const BorderSide(
+                      color: AppColors.primary,
+                      width: 1.5,
+                    ),
                   ),
                 ),
               ),
@@ -1216,19 +2010,29 @@ class _OrganizationFormDialogState extends ConsumerState<OrganizationFormDialog>
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       item,
-                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1E293B),
+                      ),
                     ),
                     const SizedBox(width: 4),
                     InkWell(
                       onTap: () => onRemove(item),
-                      child: const Icon(Icons.close, size: 13, color: AppColors.primary),
+                      child: const Icon(
+                        Icons.close,
+                        size: 13,
+                        color: AppColors.primary,
+                      ),
                     ),
                   ],
                 ),
