@@ -4,6 +4,7 @@ import 'department.dart';
 import 'designation.dart';
 import 'location.dart';
 import 'organization.dart';
+import 'organization_band.dart';
 
 abstract interface class OrganizationRepository {
   // Organization methods
@@ -13,31 +14,68 @@ abstract interface class OrganizationRepository {
   Future<void> deleteOrganization(int id, [String? docId]);
   Future<void> deactivateOrganization(int id, [String? docId]);
   Future<void> reactivateOrganization(int id, [String? docId]);
-  Future<Map<String, int>> checkOrganizationDependencies(String orgCanonicalId, [String? orgName]);
+  Future<Map<String, int>> checkOrganizationDependencies(
+    String orgCanonicalId, [
+    String? orgName,
+  ]);
 
   // Business Unit methods
-  Future<List<BusinessUnit>> getBusinessUnits({String? organizationName, String? organizationId});
+  Future<List<BusinessUnit>> getBusinessUnits({
+    String? organizationName,
+    String? organizationId,
+  });
   Future<void> addBusinessUnit(BusinessUnit businessUnit);
   Future<void> updateBusinessUnit(BusinessUnit businessUnit);
   Future<void> deleteBusinessUnit(int id);
 
   // Location methods
-  Future<List<Location>> getLocations({String? organizationName, String? organizationId, String? businessUnitName});
+  Future<List<Location>> getLocations({
+    String? organizationName,
+    String? organizationId,
+    String? businessUnitName,
+  });
   Future<void> addLocation(Location location);
   Future<void> updateLocation(Location location);
   Future<void> deleteLocation(int id);
 
   // Department methods
-  Future<List<Department>> getDepartments({String? organizationName, String? organizationId, String? businessUnitName, String? workLocation});
+  Future<List<Department>> getDepartments({
+    String? organizationName,
+    String? organizationId,
+    String? businessUnitName,
+    String? workLocation,
+  });
   Future<void> addDepartment(Department department);
   Future<void> updateDepartment(Department department);
   Future<void> deleteDepartment(int id);
 
   // Designation methods
-  Future<List<Designation>> getDesignations({String? organizationName, String? organizationId, String? departmentName});
+  Future<List<Designation>> getDesignations({
+    String? organizationName,
+    String? organizationId,
+    String? departmentName,
+  });
   Future<void> addDesignation(Designation designation);
   Future<void> updateDesignation(Designation designation);
   Future<void> deleteDesignation(int id);
+
+  // Band methods
+  Future<List<OrganizationBand>> getBands({
+    String? organizationId,
+    String? organizationName,
+  });
+  Future<void> addBand(OrganizationBand band);
+  Future<void> updateBand(OrganizationBand band);
+  Future<void> deleteBand(String id, {String? organizationId});
+
+  /// Explicit migration/maintenance routine to reconcile `designation_count`
+  /// on [OrganizationBand] documents against actual designation references.
+  ///
+  /// Must be run during an isolated maintenance window when mutations are paused.
+  /// Never invoke on application startup or within automatic background providers.
+  Future<Map<String, int>> reconcileBandReferenceCounts({
+    String? organizationId,
+  });
 
   // Column Preference methods
   Future<ColumnPreference?> getColumnPreference(String tableId);

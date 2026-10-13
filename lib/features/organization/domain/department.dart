@@ -57,7 +57,11 @@ class Department {
   factory Department.fromMap(Map<String, dynamic> map) {
     return Department(
       id: (map['id'] as num?)?.toInt() ?? 0,
-      organizationId: map['organization_id']?.toString() ?? map['organizationId']?.toString() ?? map['org_id']?.toString() ?? '',
+      organizationId:
+          map['organization_id']?.toString() ??
+          map['organizationId']?.toString() ??
+          map['org_id']?.toString() ??
+          '',
       organizationName: map['organization_name']?.toString() ?? '',
       businessUnitName: map['business_unit_name']?.toString() ?? '',
       departmentName: map['department_name']?.toString() ?? '',

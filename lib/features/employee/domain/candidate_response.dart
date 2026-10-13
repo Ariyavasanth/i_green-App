@@ -29,7 +29,8 @@ class CandidateResponse {
       if (id != 0) 'id': id,
       'candidate_id': candidateId,
       'link_id': linkId,
-      if (effectiveOrganizationId.isNotEmpty) 'organization_id': effectiveOrganizationId,
+      if (effectiveOrganizationId.isNotEmpty)
+        'organization_id': effectiveOrganizationId,
       'submitted_date': submittedDate,
       'status': status,
       'employee_data_json': employeeData.toJson(),
@@ -50,14 +51,18 @@ class CandidateResponse {
     }
 
     Employee empData;
-    if (map['employee_data_json'] != null && map['employee_data_json'].toString().trim().isNotEmpty) {
+    if (map['employee_data_json'] != null &&
+        map['employee_data_json'].toString().trim().isNotEmpty) {
       empData = Employee.fromJson(map['employee_data_json'].toString());
     } else {
       empData = Employee.fromMap(map);
     }
 
     final candidateId = map['candidate_id']?.toString() ?? empData.employeeId;
-    final orgId = map['organization_id']?.toString() ?? map['organizationId']?.toString() ?? empData.organizationId;
+    final orgId =
+        map['organization_id']?.toString() ??
+        map['organizationId']?.toString() ??
+        empData.organizationId;
 
     return CandidateResponse(
       id: parsedId,

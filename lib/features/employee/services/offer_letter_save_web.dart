@@ -12,8 +12,8 @@ Future<void> saveAndDownloadOfferLetter({
   final mimeType = fileName.toLowerCase().endsWith('.pdf')
       ? 'application/pdf'
       : (fileName.toLowerCase().endsWith('.docx')
-          ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-          : 'application/octet-stream');
+            ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            : 'application/octet-stream');
   final blob = html.Blob([bytes], mimeType);
   final url = html.Url.createObjectUrlFromBlob(blob);
   final anchor = html.AnchorElement(href: url)
@@ -21,7 +21,7 @@ Future<void> saveAndDownloadOfferLetter({
   html.document.body?.append(anchor);
   anchor.click();
   anchor.remove();
-  
+
   // Delay revoking the Object URL to allow browser download stream to start
   Future.delayed(const Duration(seconds: 5), () {
     try {
@@ -29,19 +29,27 @@ Future<void> saveAndDownloadOfferLetter({
     } catch (_) {}
   });
 
-  final titleStr = docTitle ?? (fileName.startsWith('BOM') ? 'BOM Details' : 'File');
+  final titleStr =
+      docTitle ?? (fileName.startsWith('BOM') ? 'BOM Details' : 'File');
 
   if (context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
-            const Icon(Icons.download_done_rounded, color: Colors.white, size: 22),
+            const Icon(
+              Icons.download_done_rounded,
+              color: Colors.white,
+              size: 22,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 '$titleStr ($fileName) downloaded successfully!',
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
               ),
             ),
           ],
@@ -62,7 +70,8 @@ Future<void> downloadFileFromUrl({
   required String fileName,
   String? docTitle,
 }) async {
-  final titleStr = docTitle ?? (fileName.startsWith('BOM') ? 'BOM Details' : 'Drawing PDF');
+  final titleStr =
+      docTitle ?? (fileName.startsWith('BOM') ? 'BOM Details' : 'Drawing PDF');
 
   // Method 1: Fetch via HttpRequest as Blob (downloads directly to local disk without opening a viewer tab)
   try {
@@ -97,12 +106,19 @@ Future<void> downloadFileFromUrl({
         SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.download_done_rounded, color: Colors.white, size: 22),
+              const Icon(
+                Icons.download_done_rounded,
+                color: Colors.white,
+                size: 22,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   '$titleStr ($fileName) downloaded successfully!',
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
                 ),
               ),
             ],
@@ -110,7 +126,9 @@ Future<void> downloadFileFromUrl({
           backgroundColor: const Color(0xFF2E7D32),
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
           duration: const Duration(seconds: 4),
         ),
       );
@@ -122,7 +140,9 @@ Future<void> downloadFileFromUrl({
 
   // Method 2: Fetch via http package
   try {
-    final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 8));
+    final res = await http
+        .get(Uri.parse(url))
+        .timeout(const Duration(seconds: 8));
     if (res.statusCode == 200 && context.mounted) {
       await saveAndDownloadOfferLetter(
         context: context,
@@ -149,12 +169,19 @@ Future<void> downloadFileFromUrl({
         SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.download_done_rounded, color: Colors.white, size: 22),
+              const Icon(
+                Icons.download_done_rounded,
+                color: Colors.white,
+                size: 22,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   '$titleStr ($fileName) download started!',
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
                 ),
               ),
             ],
@@ -162,7 +189,9 @@ Future<void> downloadFileFromUrl({
           backgroundColor: const Color(0xFF2E7D32),
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
           duration: const Duration(seconds: 4),
         ),
       );

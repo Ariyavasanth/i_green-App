@@ -70,12 +70,20 @@ class CorrectionRequest {
       linkId: map['link_id']?.toString() ?? '',
       remarks: map['remarks']?.toString() ?? '',
       status: map['status']?.toString() ?? 'active',
-      allowEditing: map['allow_editing'] as bool? ?? (map['allowEditing'] as bool? ?? true),
-      tokenHash: map['token_hash']?.toString() ?? map['tokenHash']?.toString() ?? '',
-      createdAt: map['created_at']?.toString() ?? map['createdAt']?.toString() ?? '',
-      expiresAt: map['expires_at']?.toString() ?? map['expiresAt']?.toString() ?? '',
+      allowEditing:
+          map['allow_editing'] as bool? ??
+          (map['allowEditing'] as bool? ?? true),
+      tokenHash:
+          map['token_hash']?.toString() ?? map['tokenHash']?.toString() ?? '',
+      createdAt:
+          map['created_at']?.toString() ?? map['createdAt']?.toString() ?? '',
+      expiresAt:
+          map['expires_at']?.toString() ?? map['expiresAt']?.toString() ?? '',
       usedAt: map['used_at']?.toString() ?? map['usedAt']?.toString(),
-      requestedBy: map['requested_by']?.toString() ?? map['requestedBy']?.toString() ?? '',
+      requestedBy:
+          map['requested_by']?.toString() ??
+          map['requestedBy']?.toString() ??
+          '',
     );
   }
 

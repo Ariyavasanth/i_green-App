@@ -42,9 +42,17 @@ class BusinessUnit {
   factory BusinessUnit.fromMap(Map<String, dynamic> map) {
     return BusinessUnit(
       id: (map['id'] as num?)?.toInt() ?? 0,
-      organizationId: map['organization_id']?.toString() ?? map['organizationId']?.toString() ?? map['org_id']?.toString() ?? '',
-      organizationName: map['organization_name']?.toString() ?? map['organizationName']?.toString() ?? '',
-      unitName: map['unit_name']?.toString() ?? map['unitName']?.toString() ?? '',
+      organizationId:
+          map['organization_id']?.toString() ??
+          map['organizationId']?.toString() ??
+          map['org_id']?.toString() ??
+          '',
+      organizationName:
+          map['organization_name']?.toString() ??
+          map['organizationName']?.toString() ??
+          '',
+      unitName:
+          map['unit_name']?.toString() ?? map['unitName']?.toString() ?? '',
       description: map['description']?.toString() ?? '',
     );
   }

@@ -45,7 +45,6 @@ class EmployeeRegistrationPage extends ConsumerStatefulWidget {
   final String? acceptedLinkId;
   final String? correctionToken;
 
-
   static List<Map<String, String>> get allWorldCountryCodes =>
       _EmployeeRegistrationPageState.allWorldCountryCodes;
 
@@ -83,6 +82,7 @@ class _EmployeeRegistrationPageState
   final _pfNumberController = TextEditingController();
   final _esiNumberController = TextEditingController();
   final _reportingToController = TextEditingController();
+  String _reportingManagerId = '';
   String _workScheduleType = 'Fixed Schedule';
   final _requiredWorkingHoursController = TextEditingController(
     text: '9 Hours',
@@ -303,11 +303,7 @@ class _EmployeeRegistrationPageState
       _specialAllowanceController,
       basis,
     );
-    calcAmount(
-      _eduAllowancePercentController,
-      _eduAllowanceController,
-      basis,
-    );
+    calcAmount(_eduAllowancePercentController, _eduAllowanceController, basis);
     calcAmount(
       _travelAllowancePercentController,
       _travelAllowanceController,
@@ -322,11 +318,7 @@ class _EmployeeRegistrationPageState
 
     if (basis <= 21000 && basis > 0) {
       calcAmount(_esiPercentController, _esiController, basic);
-      calcAmount(
-        _esiEmployerPercentController,
-        _esiEmployerController,
-        basis,
-      );
+      calcAmount(_esiEmployerPercentController, _esiEmployerController, basis);
     } else {
       _esiController.text = '';
       _esiEmployerController.text = '';
@@ -591,7 +583,9 @@ class _EmployeeRegistrationPageState
     } else {
       final pinRes = LocationDataHelper.lookupPincode(permPin, _permCountry);
       if (!pinRes.isValid) {
-        errors.add('Permanent Pincode: ${pinRes.errorMessage ?? "Invalid pincode for $_permCountry."}');
+        errors.add(
+          'Permanent Pincode: ${pinRes.errorMessage ?? "Invalid pincode for $_permCountry."}',
+        );
       }
     }
 
@@ -617,7 +611,9 @@ class _EmployeeRegistrationPageState
       } else {
         final pinRes = LocationDataHelper.lookupPincode(presPin, _presCountry);
         if (!pinRes.isValid) {
-          errors.add('Present Pincode: ${pinRes.errorMessage ?? "Invalid pincode for $_presCountry."}');
+          errors.add(
+            'Present Pincode: ${pinRes.errorMessage ?? "Invalid pincode for $_presCountry."}',
+          );
         }
       }
     }
@@ -780,7 +776,9 @@ class _EmployeeRegistrationPageState
       errors.add('Criminal Case Details are required when declaration is Yes');
     }
     if (!_criminalCaseDeclarationChecked) {
-      errors.add('Please check the Criminal Background Declaration acknowledgement');
+      errors.add(
+        'Please check the Criminal Background Declaration acknowledgement',
+      );
     }
     return errors;
   }
@@ -1269,14 +1267,33 @@ class _EmployeeRegistrationPageState
 
   void _recalculateSpecialAllowance() {
     if (_isPopulating) return;
-    final total = double.tryParse(_totalSalaryController.text.replaceAll(',', '').trim()) ?? 0.0;
+    final total =
+        double.tryParse(
+          _totalSalaryController.text.replaceAll(',', '').trim(),
+        ) ??
+        0.0;
     final isYearly = _salaryType.toLowerCase() == 'yearly';
     final basisTotal = isYearly ? total / 12.0 : total;
-    final basic = double.tryParse(_basicPayController.text.replaceAll(',', '').trim()) ?? 0.0;
-    final hra = double.tryParse(_hraController.text.replaceAll(',', '').trim()) ?? 0.0;
-    final edu = double.tryParse(_eduAllowanceController.text.replaceAll(',', '').trim()) ?? 0.0;
-    final travel = double.tryParse(_travelAllowanceController.text.replaceAll(',', '').trim()) ?? 0.0;
-    final other = double.tryParse(_otherAllowanceController.text.replaceAll(',', '').trim()) ?? 0.0;
+    final basic =
+        double.tryParse(_basicPayController.text.replaceAll(',', '').trim()) ??
+        0.0;
+    final hra =
+        double.tryParse(_hraController.text.replaceAll(',', '').trim()) ?? 0.0;
+    final edu =
+        double.tryParse(
+          _eduAllowanceController.text.replaceAll(',', '').trim(),
+        ) ??
+        0.0;
+    final travel =
+        double.tryParse(
+          _travelAllowanceController.text.replaceAll(',', '').trim(),
+        ) ??
+        0.0;
+    final other =
+        double.tryParse(
+          _otherAllowanceController.text.replaceAll(',', '').trim(),
+        ) ??
+        0.0;
 
     if (basisTotal > 0) {
       double special = basisTotal - basic - hra - edu - travel - other;
@@ -1554,6 +1571,7 @@ class _EmployeeRegistrationPageState
       );
       _coordinatorPhoneCountryCode = coordCc;
       _coordinatorPhoneController.text = coordNum;
+      _reportingManagerId = emp.reportingManagerId;
       _reportingToController.text = emp.reportingManager;
       if (emp.leaveType.isNotEmpty) {
         _leaveType = emp.leaveType == 'Once a Month'
@@ -1583,16 +1601,26 @@ class _EmployeeRegistrationPageState
       _siteRequireGpsVerification = emp.siteRequireGpsVerification;
 
       _permAddressController.text = emp.permanentAddress;
-      _permCountry = emp.permanentCountry.isNotEmpty ? emp.permanentCountry : 'India';
+      _permCountry = emp.permanentCountry.isNotEmpty
+          ? emp.permanentCountry
+          : 'India';
       final permStates = LocationDataHelper.getStatesForCountry(_permCountry);
-      _permState = emp.permanentState.isNotEmpty && permStates.contains(emp.permanentState)
+      _permState =
+          emp.permanentState.isNotEmpty &&
+              permStates.contains(emp.permanentState)
           ? emp.permanentState
           : (permStates.isNotEmpty ? permStates.first : '');
       _permCityController.text = emp.permanentCity;
-      _permPincodeController.text = emp.permanentPincode.isNotEmpty ? emp.permanentPincode : emp.postalCode;
+      _permPincodeController.text = emp.permanentPincode.isNotEmpty
+          ? emp.permanentPincode
+          : emp.postalCode;
       _permDistrictController.text = emp.permanentDistrict;
-      if (_permPincodeController.text.isNotEmpty && _permDistrictController.text.isEmpty) {
-        final pinRes = LocationDataHelper.lookupPincode(_permPincodeController.text, _permCountry);
+      if (_permPincodeController.text.isNotEmpty &&
+          _permDistrictController.text.isEmpty) {
+        final pinRes = LocationDataHelper.lookupPincode(
+          _permPincodeController.text,
+          _permCountry,
+        );
         if (pinRes.isValid && pinRes.district.isNotEmpty) {
           _permDistrictController.text = pinRes.district;
         }
@@ -1600,16 +1628,23 @@ class _EmployeeRegistrationPageState
 
       _sameAsPermanent = emp.sameAsPermanent;
       _presAddressController.text = emp.presentAddress;
-      _presCountry = emp.presentCountry.isNotEmpty ? emp.presentCountry : 'India';
+      _presCountry = emp.presentCountry.isNotEmpty
+          ? emp.presentCountry
+          : 'India';
       final presStates = LocationDataHelper.getStatesForCountry(_presCountry);
-      _presState = emp.presentState.isNotEmpty && presStates.contains(emp.presentState)
+      _presState =
+          emp.presentState.isNotEmpty && presStates.contains(emp.presentState)
           ? emp.presentState
           : (presStates.isNotEmpty ? presStates.first : '');
       _presCityController.text = emp.presentCity;
       _presPincodeController.text = emp.presentPincode;
       _presDistrictController.text = emp.presentDistrict;
-      if (_presPincodeController.text.isNotEmpty && _presDistrictController.text.isEmpty) {
-        final pinRes = LocationDataHelper.lookupPincode(_presPincodeController.text, _presCountry);
+      if (_presPincodeController.text.isNotEmpty &&
+          _presDistrictController.text.isEmpty) {
+        final pinRes = LocationDataHelper.lookupPincode(
+          _presPincodeController.text,
+          _presCountry,
+        );
         if (pinRes.isValid && pinRes.district.isNotEmpty) {
           _presDistrictController.text = pinRes.district;
         }
@@ -1815,7 +1850,9 @@ class _EmployeeRegistrationPageState
         _presAddressController.text.isNotEmpty ||
         _permCityController.text.isNotEmpty)
       _savedTabs.add('Address');
-    if (_educationType == 'Labour' || _educationList.isNotEmpty || _eduDegreeController.text.isNotEmpty)
+    if (_educationType == 'Labour' ||
+        _educationList.isNotEmpty ||
+        _eduDegreeController.text.isNotEmpty)
       _savedTabs.add('Education');
     if (_experienceList.isNotEmpty || _expCompanyController.text.isNotEmpty)
       _savedTabs.add('Experience');
@@ -1868,8 +1905,7 @@ class _EmployeeRegistrationPageState
   void initState() {
     super.initState();
     _attachControllerListeners();
-    _selectedPermissions =
-        widget.employee != null
+    _selectedPermissions = widget.employee != null
         ? Set<String>.from(widget.employee!.accessPermissions)
         : (!_isManagementAdd
               ? <String>{}
@@ -1895,13 +1931,16 @@ class _EmployeeRegistrationPageState
         if (req == null || !req.isValidActive) {
           if (mounted) {
             setState(() {
-              _correctionError = 'This correction link is invalid, expired, or has already been used.';
+              _correctionError =
+                  'This correction link is invalid, expired, or has already been used.';
             });
           }
           return;
         }
 
-        final candidateResp = await repo.getCandidateResponseForCorrection(widget.correctionToken!);
+        final candidateResp = await repo.getCandidateResponseForCorrection(
+          widget.correctionToken!,
+        );
         if (candidateResp != null && mounted) {
           setState(() {
             _activeCorrectionRequest = req;
@@ -1909,14 +1948,17 @@ class _EmployeeRegistrationPageState
           _populateFromEmployee(candidateResp.employeeData);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Loaded submitted details for correction. Please update the requested fields and submit.'),
+              content: Text(
+                'Loaded submitted details for correction. Please update the requested fields and submit.',
+              ),
               behavior: SnackBarBehavior.floating,
               duration: Duration(seconds: 4),
             ),
           );
         } else if (mounted) {
           setState(() {
-            _correctionError = 'Candidate details not found for this correction request.';
+            _correctionError =
+                'Candidate details not found for this correction request.';
           });
         }
       });
@@ -1924,7 +1966,6 @@ class _EmployeeRegistrationPageState
       _populateFromEmployee(widget.employee!);
     } else if (widget.acceptedLinkId != null &&
         widget.acceptedLinkId!.isNotEmpty) {
-
       _registrationMode = 'accepted_response';
       _selectedAcceptedLinkId = widget.acceptedLinkId;
       WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -1963,10 +2004,13 @@ class _EmployeeRegistrationPageState
             if (_designation.isEmpty && link.designation.isNotEmpty) {
               _designation = link.designation;
             }
-            if (_referredByNameController.text.trim().isEmpty && link.referredBy.isNotEmpty) {
+            if (_referredByNameController.text.trim().isEmpty &&
+                link.referredBy.isNotEmpty) {
               _referredByNameController.text = link.referredBy;
               if (link.referredByMobile.isNotEmpty) {
-                final (refCc, refNum) = _parsePhoneAndCountryCode(link.referredByMobile);
+                final (refCc, refNum) = _parsePhoneAndCountryCode(
+                  link.referredByMobile,
+                );
                 _referredByMobileCountryCode = refCc;
                 _referredByMobileController.text = refNum;
               }
@@ -1997,10 +2041,13 @@ class _EmployeeRegistrationPageState
             if (link.designation.isNotEmpty) {
               _designation = link.designation;
             }
-            if (_referredByNameController.text.trim().isEmpty && link.referredBy.isNotEmpty) {
+            if (_referredByNameController.text.trim().isEmpty &&
+                link.referredBy.isNotEmpty) {
               _referredByNameController.text = link.referredBy;
               if (link.referredByMobile.isNotEmpty) {
-                final (refCc, refNum) = _parsePhoneAndCountryCode(link.referredByMobile);
+                final (refCc, refNum) = _parsePhoneAndCountryCode(
+                  link.referredByMobile,
+                );
                 _referredByMobileCountryCode = refCc;
                 _referredByMobileController.text = refNum;
               }
@@ -2091,10 +2138,13 @@ class _EmployeeRegistrationPageState
             if (_designation.isEmpty && link.designation.isNotEmpty) {
               _designation = link.designation;
             }
-            if (_referredByNameController.text.trim().isEmpty && link.referredBy.isNotEmpty) {
+            if (_referredByNameController.text.trim().isEmpty &&
+                link.referredBy.isNotEmpty) {
               _referredByNameController.text = link.referredBy;
               if (link.referredByMobile.isNotEmpty) {
-                final (refCc, refNum) = _parsePhoneAndCountryCode(link.referredByMobile);
+                final (refCc, refNum) = _parsePhoneAndCountryCode(
+                  link.referredByMobile,
+                );
                 _referredByMobileCountryCode = refCc;
                 _referredByMobileController.text = refNum;
               }
@@ -2125,10 +2175,13 @@ class _EmployeeRegistrationPageState
             if (link.designation.isNotEmpty) {
               _designation = link.designation;
             }
-            if (_referredByNameController.text.trim().isEmpty && link.referredBy.isNotEmpty) {
+            if (_referredByNameController.text.trim().isEmpty &&
+                link.referredBy.isNotEmpty) {
               _referredByNameController.text = link.referredBy;
               if (link.referredByMobile.isNotEmpty) {
-                final (refCc, refNum) = _parsePhoneAndCountryCode(link.referredByMobile);
+                final (refCc, refNum) = _parsePhoneAndCountryCode(
+                  link.referredByMobile,
+                );
                 _referredByMobileCountryCode = refCc;
                 _referredByMobileController.text = refNum;
               }
@@ -2318,7 +2371,9 @@ class _EmployeeRegistrationPageState
     if (controller.text.trim().isNotEmpty) {
       try {
         final text = controller.text.trim().toUpperCase();
-        final match = RegExp(r'^(\d{1,2}):(\d{2})\s*(AM|PM)?$').firstMatch(text);
+        final match = RegExp(
+          r'^(\d{1,2}):(\d{2})\s*(AM|PM)?$',
+        ).firstMatch(text);
         if (match != null) {
           int hour = int.parse(match.group(1)!);
           final minute = int.parse(match.group(2)!);
@@ -2359,7 +2414,9 @@ class _EmployeeRegistrationPageState
       final inMins = TimeFormatter.parseTimeToMinutes(_inTimeController.text);
       final outMins = TimeFormatter.parseTimeToMinutes(_outTimeController.text);
       if (inMins != null && outMins != null) {
-        final diffMins = outMins >= inMins ? (outMins - inMins) : ((outMins + 1440) - inMins);
+        final diffMins = outMins >= inMins
+            ? (outMins - inMins)
+            : ((outMins + 1440) - inMins);
         final hours = double.parse((diffMins / 60.0).toStringAsFixed(2));
         _requiredWorkingHoursController.text =
             '${hours.toStringAsFixed(hours.truncateToDouble() == hours ? 0 : 1)} Hours';
@@ -2372,7 +2429,9 @@ class _EmployeeRegistrationPageState
       final inMins = TimeFormatter.parseTimeToMinutes(_inTimeController.text);
       final outMins = TimeFormatter.parseTimeToMinutes(_outTimeController.text);
       if (inMins != null && outMins != null) {
-        final diffMins = outMins >= inMins ? (outMins - inMins) : ((outMins + 1440) - inMins);
+        final diffMins = outMins >= inMins
+            ? (outMins - inMins)
+            : ((outMins + 1440) - inMins);
         return double.parse((diffMins / 60.0).toStringAsFixed(2));
       }
     }
@@ -2653,9 +2712,7 @@ class _EmployeeRegistrationPageState
         presentPincode: _sameAsPermanent
             ? _permPincodeController.text.trim()
             : _presPincodeController.text.trim(),
-        presentCountry: _sameAsPermanent
-            ? _permCountry
-            : _presCountry,
+        presentCountry: _sameAsPermanent ? _permCountry : _presCountry,
         educationListJson: jsonEncode(
           _educationList.map((e) => e.toMap()).toList(),
         ),
@@ -2685,14 +2742,18 @@ class _EmployeeRegistrationPageState
         fatherName: _fatherNameController.text.trim(),
         motherName: _motherNameController.text.trim(),
         maritalStatus: _maritalStatus,
-        spouseName:
-            _maritalStatus == 'Married' ? _spouseNameController.text.trim() : '',
-        kids1Name:
-            _maritalStatus == 'Married' ? _kids1NameController.text.trim() : '',
-        kids2Name:
-            _maritalStatus == 'Married' ? _kids2NameController.text.trim() : '',
-        kids3Name:
-            _maritalStatus == 'Married' ? _kids3NameController.text.trim() : '',
+        spouseName: _maritalStatus == 'Married'
+            ? _spouseNameController.text.trim()
+            : '',
+        kids1Name: _maritalStatus == 'Married'
+            ? _kids1NameController.text.trim()
+            : '',
+        kids2Name: _maritalStatus == 'Married'
+            ? _kids2NameController.text.trim()
+            : '',
+        kids3Name: _maritalStatus == 'Married'
+            ? _kids3NameController.text.trim()
+            : '',
         hasCriminalCases: _hasCriminalCases,
         criminalCaseDetails: _hasCriminalCases
             ? _criminalCaseDetailsController.text.trim()
@@ -2723,6 +2784,7 @@ class _EmployeeRegistrationPageState
         requiredWorkingHours: _getCalculatedRequiredWorkingHours(),
         weeklyOffDay: _weeklyOffDayController.text.trim(),
         reportingManager: _reportingToController.text.trim(),
+        reportingManagerId: _reportingManagerId.trim(),
         reportingManagerTitle: _reportingManagerTitleController.text.trim(),
         adminName: _adminNameController.text.trim(),
         coordinatorName: _coordinatorNameController.text.trim(),
@@ -2909,7 +2971,6 @@ class _EmployeeRegistrationPageState
             candidateData: employeeData,
           );
         }
-
       }
 
       _currentEmployee = savedEmployee;
@@ -3021,7 +3082,11 @@ class _EmployeeRegistrationPageState
                     color: Color(0xFFFEF2F2),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.link_off_rounded, color: Color(0xFFDC2626), size: 36),
+                  child: const Icon(
+                    Icons.link_off_rounded,
+                    color: Color(0xFFDC2626),
+                    size: 36,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 const Text(
@@ -3069,7 +3134,10 @@ class _EmployeeRegistrationPageState
               Container(
                 width: double.infinity,
                 margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFFBEB),
                   borderRadius: BorderRadius.circular(10),
@@ -3078,7 +3146,11 @@ class _EmployeeRegistrationPageState
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.info_outline, color: Color(0xFFD97706), size: 20),
+                    const Icon(
+                      Icons.info_outline,
+                      color: Color(0xFFD97706),
+                      size: 20,
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
@@ -3128,11 +3200,14 @@ class _EmployeeRegistrationPageState
                     );
                   }
 
-                  if (_isCorrectionMode && _activeCorrectionRequest == null && _correctionError == null) {
+                  if (_isCorrectionMode &&
+                      _activeCorrectionRequest == null &&
+                      _correctionError == null) {
                     return const Center(child: CircularProgressIndicator());
                   }
 
-                  if (_isEditing || (_isCorrectionMode && _activeCorrectionRequest != null)) {
+                  if (_isEditing ||
+                      (_isCorrectionMode && _activeCorrectionRequest != null)) {
                     final editLink =
                         link ??
                         const RegistrationLink(
@@ -3299,11 +3374,13 @@ class _EmployeeRegistrationPageState
     final isCorrection = _isCorrectionMode;
     final titleText = name.isEmpty
         ? (isEditMode
-            ? 'Edit Employee Details'
-            : (isCorrection ? 'Candidate Correction' : 'Employee Registration'))
+              ? 'Edit Employee Details'
+              : (isCorrection
+                    ? 'Candidate Correction'
+                    : 'Employee Registration'))
         : (isEditMode
-            ? 'Edit: $name'
-            : (isCorrection ? '$name (Correction)' : name));
+              ? 'Edit: $name'
+              : (isCorrection ? '$name (Correction)' : name));
 
     final submitBtn = ElevatedButton.icon(
       style: ElevatedButton.styleFrom(
@@ -3338,15 +3415,19 @@ class _EmployeeRegistrationPageState
               ),
             )
           : Icon(
-              (isEditMode || isCorrection) ? Icons.save_outlined : Icons.check_circle_outline,
+              (isEditMode || isCorrection)
+                  ? Icons.save_outlined
+                  : Icons.check_circle_outline,
               size: 16,
             ),
       label: Text(
         _isSubmitting
             ? 'Saving...'
             : (isEditMode
-                ? 'Save Changes'
-                : (isCorrection ? 'Submit Corrections' : 'Submit Registration')),
+                  ? 'Save Changes'
+                  : (isCorrection
+                        ? 'Submit Corrections'
+                        : 'Submit Registration')),
         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
       ),
     );
@@ -3386,7 +3467,9 @@ class _EmployeeRegistrationPageState
                 ),
                 if (_isManagementAdd ||
                     isEditMode ||
-                    (_isCorrectionMode && _activeCorrectionRequest != null && _submittedEmployee == null) ||
+                    (_isCorrectionMode &&
+                        _activeCorrectionRequest != null &&
+                        _submittedEmployee == null) ||
                     (link != null &&
                         link.linkStatus != 'Submitted' &&
                         link.linkStatus != 'Converted' &&
@@ -3470,7 +3553,9 @@ class _EmployeeRegistrationPageState
               const SizedBox(width: 8),
               if (_isManagementAdd ||
                   isEditMode ||
-                  (_isCorrectionMode && _activeCorrectionRequest != null && _submittedEmployee == null) ||
+                  (_isCorrectionMode &&
+                      _activeCorrectionRequest != null &&
+                      _submittedEmployee == null) ||
                   (link != null &&
                       link.linkStatus != 'Submitted' &&
                       link.linkStatus != 'Converted' &&
@@ -4501,10 +4586,13 @@ class _EmployeeRegistrationPageState
               );
               final locList = locAsync.valueOrNull ?? [];
               final locNames = locList.map((e) => e.locationName).toList();
-              final attSettings = ref.watch(attendanceSettingsProvider).valueOrNull;
+              final attSettings = ref
+                  .watch(attendanceSettingsProvider)
+                  .valueOrNull;
               if (attSettings != null) {
                 for (final loc in attSettings.locations) {
-                  if (loc.name.trim().isNotEmpty && !locNames.contains(loc.name.trim())) {
+                  if (loc.name.trim().isNotEmpty &&
+                      !locNames.contains(loc.name.trim())) {
                     locNames.add(loc.name.trim());
                   }
                 }
@@ -4643,6 +4731,9 @@ class _EmployeeRegistrationPageState
                               _workLocation = '';
                               _department = '';
                               _designation = '';
+                              _reportingManagerId = '';
+                              _reportingToController.text = '';
+                              _reportingManagerTitleController.text = '';
                             });
                             _markTabUnsaved('Job & Admin Details');
                           }
@@ -4733,7 +4824,11 @@ class _EmployeeRegistrationPageState
                         'Date Of Joining',
                         _joiningDateController,
                         placeholder: 'dd-mm-yyyy',
-                        firstDate: DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day),
+                        firstDate: DateTime(
+                          DateTime.now().year,
+                          DateTime.now().month,
+                          DateTime.now().day,
+                        ),
                       ),
                     ],
                   ),
@@ -4749,11 +4844,104 @@ class _EmployeeRegistrationPageState
                   _contractEndDateController,
                   placeholder: 'dd-mm-yyyy',
                 ),
-                _buildTextField(
-                  'Reporting To',
-                  _reportingToController,
-                  placeholder: 'e.g. Manager Name',
-                  isName: true,
+                Builder(
+                  builder: (context) {
+                    final allEmpsAsync = ref.watch(allEmployeesProvider);
+                    final allEmps = allEmpsAsync.valueOrNull ?? [];
+                    final currentEmpId =
+                        _currentEmployee?.employeeId ??
+                        widget.employee?.employeeId ??
+                        '';
+                    final currentId =
+                        _currentEmployee?.id ?? widget.employee?.id ?? 0;
+
+                    // Filter eligible managers: same organization, active status, not self
+                    final eligibleManagers = allEmps.where((e) {
+                      if (e.status.trim().toLowerCase() != 'active') {
+                        return false;
+                      }
+                      // Self-reporting prevention
+                      if (currentEmpId.isNotEmpty &&
+                          e.employeeId.trim().toLowerCase() ==
+                              currentEmpId.toLowerCase()) {
+                        return false;
+                      }
+                      if (currentId != 0 && e.id == currentId) {
+                        return false;
+                      }
+                      // Organization isolation
+                      if (_organizationName.isNotEmpty &&
+                          e.organizationName.isNotEmpty) {
+                        if (e.organizationName.trim().toLowerCase() !=
+                            _organizationName.trim().toLowerCase()) {
+                          return false;
+                        }
+                      }
+                      return true;
+                    }).toList();
+
+                    final hasLegacyText =
+                        _reportingManagerId.isEmpty &&
+                        _reportingToController.text.isNotEmpty;
+                    final isSelectedInList = eligibleManagers.any(
+                      (e) => e.employeeId == _reportingManagerId,
+                    );
+
+                    final managerItems = [
+                      '',
+                      if (hasLegacyText) '__legacy__',
+                      ...eligibleManagers.map((e) => e.employeeId),
+                    ];
+
+                    return _buildDropdown(
+                      'Reporting Manager',
+                      isSelectedInList
+                          ? _reportingManagerId
+                          : (hasLegacyText ? '__legacy__' : ''),
+                      managerItems,
+                      (val) {
+                        if (val == null || val.isEmpty) {
+                          setState(() {
+                            _reportingManagerId = '';
+                            _reportingToController.text = '';
+                            _reportingManagerTitleController.text = '';
+                          });
+                        } else if (val == '__legacy__') {
+                          // Keep legacy text
+                        } else {
+                          final mgr = eligibleManagers.firstWhere(
+                            (e) => e.employeeId == val,
+                          );
+                          setState(() {
+                            _reportingManagerId = mgr.employeeId;
+                            _reportingToController.text = mgr.fullName;
+                            _reportingManagerTitleController.text =
+                                mgr.designation.isNotEmpty
+                                ? mgr.designation
+                                : 'Manager';
+                          });
+                        }
+                        _markTabUnsaved('Job & Admin Details');
+                      },
+                      placeholder: 'Select Reporting Manager',
+                      itemLabel: (id) {
+                        if (id.isEmpty) return 'None / Unassigned';
+                        if (id == '__legacy__') {
+                          return '${_reportingToController.text} (Legacy / Name only)';
+                        }
+                        final mgr = eligibleManagers
+                            .where((e) => e.employeeId == id)
+                            .firstOrNull;
+                        if (mgr != null) {
+                          final desig = mgr.designation.isNotEmpty
+                              ? ' — ${mgr.designation}'
+                              : '';
+                          return '${mgr.fullName} (${mgr.employeeId})$desig';
+                        }
+                        return id;
+                      },
+                    );
+                  },
                 ),
                 _buildTextField(
                   'Reporting Manager Title',
@@ -4871,7 +5059,11 @@ class _EmployeeRegistrationPageState
                   'Effective Date',
                   _leaveEffectiveDateController,
                   placeholder: 'dd-mm-yyyy',
-                  firstDate: DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day),
+                  firstDate: DateTime(
+                    DateTime.now().year,
+                    DateTime.now().month,
+                    DateTime.now().day,
+                  ),
                 ),
               ],
             ),
@@ -4910,13 +5102,17 @@ class _EmployeeRegistrationPageState
         if (res.district.isNotEmpty) {
           _permDistrictController.text = res.district;
         }
-        if (res.state.isNotEmpty && LocationDataHelper.getStatesForCountry(_permCountry).contains(res.state)) {
+        if (res.state.isNotEmpty &&
+            LocationDataHelper.getStatesForCountry(
+              _permCountry,
+            ).contains(res.state)) {
           _permState = res.state;
         }
         _permPincodeError = null;
       } else {
         _permDistrictController.clear();
-        _permPincodeError = res.errorMessage ?? 'Invalid pincode for $_permCountry';
+        _permPincodeError =
+            res.errorMessage ?? 'Invalid pincode for $_permCountry';
       }
       if (_sameAsPermanent) _syncPresentWithPermanent();
     });
@@ -4938,13 +5134,17 @@ class _EmployeeRegistrationPageState
         if (res.district.isNotEmpty) {
           _presDistrictController.text = res.district;
         }
-        if (res.state.isNotEmpty && LocationDataHelper.getStatesForCountry(_presCountry).contains(res.state)) {
+        if (res.state.isNotEmpty &&
+            LocationDataHelper.getStatesForCountry(
+              _presCountry,
+            ).contains(res.state)) {
           _presState = res.state;
         }
         _presPincodeError = null;
       } else {
         _presDistrictController.clear();
-        _presPincodeError = res.errorMessage ?? 'Invalid pincode for $_presCountry';
+        _presPincodeError =
+            res.errorMessage ?? 'Invalid pincode for $_presCountry';
       }
     });
   }
@@ -5004,7 +5204,9 @@ class _EmployeeRegistrationPageState
                     if (val != null && val != _permCountry) {
                       setState(() {
                         _permCountry = val;
-                        final states = LocationDataHelper.getStatesForCountry(val);
+                        final states = LocationDataHelper.getStatesForCountry(
+                          val,
+                        );
                         _permState = states.isNotEmpty ? states.first : '';
                         _permCityController.clear();
                         _permPincodeController.clear();
@@ -5119,8 +5321,11 @@ class _EmployeeRegistrationPageState
                           if (val != null && val != _presCountry) {
                             setState(() {
                               _presCountry = val;
-                              final states = LocationDataHelper.getStatesForCountry(val);
-                              _presState = states.isNotEmpty ? states.first : '';
+                              final states =
+                                  LocationDataHelper.getStatesForCountry(val);
+                              _presState = states.isNotEmpty
+                                  ? states.first
+                                  : '';
                               _presCityController.clear();
                               _presPincodeController.clear();
                               _presDistrictController.clear();
@@ -5349,7 +5554,10 @@ class _EmployeeRegistrationPageState
                           ),
                         ),
                         onPressed: () {},
-                        child: Text(label, style: const TextStyle(fontSize: 11)),
+                        child: Text(
+                          label,
+                          style: const TextStyle(fontSize: 11),
+                        ),
                       );
                     }).toList(),
                   ),
@@ -7922,7 +8130,9 @@ class _EmployeeRegistrationPageState
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: BorderSide(
-                color: readOnly ? const Color(0xFFE4E7EC) : const Color(0xFFD0D5DD),
+                color: readOnly
+                    ? const Color(0xFFE4E7EC)
+                    : const Color(0xFFD0D5DD),
                 width: 0.8,
               ),
             ),
@@ -7964,11 +8174,8 @@ class _EmployeeRegistrationPageState
         TextFormField(
           controller: controller,
           readOnly: true,
-          onTap: () => _selectDate(
-            controller,
-            firstDate: firstDate,
-            lastDate: lastDate,
-          ),
+          onTap: () =>
+              _selectDate(controller, firstDate: firstDate, lastDate: lastDate),
           style: const TextStyle(fontSize: 12, color: Colors.black87),
           decoration: InputDecoration(
             hintText: placeholder ?? 'dd-mm-yyyy',
@@ -8069,6 +8276,7 @@ class _EmployeeRegistrationPageState
     List<String> items,
     ValueChanged<String?> onChanged, {
     String? placeholder,
+    String Function(String item)? itemLabel,
   }) {
     final effectiveItems = <String>{
       ...items,
@@ -8084,6 +8292,7 @@ class _EmployeeRegistrationPageState
       label: label,
       value: effectiveValue,
       items: effectiveItems,
+      itemLabel: itemLabel,
       placeholder: placeholder ?? 'Select $cleanLabel...',
       searchHint: 'Search $cleanLabel...',
       onChanged: onChanged,
@@ -8156,7 +8365,9 @@ class _EmployeeRegistrationPageState
               insetPadding: isMobile
                   ? const EdgeInsets.symmetric(horizontal: 12, vertical: 20)
                   : const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
               child: Container(
                 width: isMobile
                     ? double.infinity
@@ -8167,878 +8378,897 @@ class _EmployeeRegistrationPageState
                 ),
                 padding: EdgeInsets.all(isMobile ? 14 : 24),
                 child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Header
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: AppColors.active.withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.assignment_turned_in,
+                                  color: AppColors.active,
+                                  size: 24,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Registration Details Preview',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Review all details for ${name.isEmpty ? "Candidate" : name} before final submission.',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: AppColors.textSecondary,
+                                        height: 1.3,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Colors.grey),
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 20),
+                    // Body content
                     Expanded(
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: AppColors.active.withOpacity(0.1),
-                              shape: BoxShape.circle,
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Candidate Profile Photo header if present
+                            if (_profileImageBytes != null ||
+                                _profileImageDataUrl.isNotEmpty) ...[
+                              Center(
+                                child: Column(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 36,
+                                      backgroundColor: Colors.grey.shade200,
+                                      backgroundImage:
+                                          _profileImageBytes != null
+                                          ? MemoryImage(_profileImageBytes!)
+                                          : (_profileImageDataUrl.startsWith(
+                                                  'http',
+                                                )
+                                                ? NetworkImage(
+                                                        _profileImageDataUrl,
+                                                      )
+                                                      as ImageProvider
+                                                : null),
+                                      child:
+                                          (_profileImageBytes == null &&
+                                              !_profileImageDataUrl.startsWith(
+                                                'http',
+                                              ))
+                                          ? const Icon(
+                                              Icons.person,
+                                              size: 36,
+                                              color: Colors.grey,
+                                            )
+                                          : null,
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      name.isEmpty ? 'Candidate Photo' : name,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                  ],
+                                ),
+                              ),
+                            ],
+
+                            // Section 1: Personal Info
+                            _buildPreviewSectionHeader(
+                              'Personal Information',
+                              Icons.person_outline,
                             ),
-                            child: const Icon(
-                              Icons.assignment_turned_in,
-                              color: AppColors.active,
-                              size: 24,
+                            _buildPreviewGrid([
+                              _buildPreviewField(
+                                'First Name',
+                                _firstNameController.text,
+                              ),
+                              _buildPreviewField(
+                                'Last Name',
+                                _lastNameController.text,
+                              ),
+                              _buildPreviewField('Blood Group', _bloodGroup),
+                              _buildPreviewField(
+                                'Blood Group Report Doc',
+                                _bloodGroupDocFileName,
+                              ),
+                              _buildPreviewField('Gender', _gender),
+                              _buildPreviewField(
+                                'Date of Birth',
+                                _dobController.text,
+                              ),
+                              _buildPreviewField(
+                                'Aadhaar Number',
+                                _aadhaarController.text,
+                              ),
+                              _buildPreviewField(
+                                'Contact Phone',
+                                _formatPhoneWithCountryCode(
+                                  _phoneCountryCode,
+                                  _phoneController.text,
+                                ),
+                              ),
+                              _buildPreviewField(
+                                'Email Address',
+                                _emailController.text,
+                              ),
+                              _buildPreviewField(
+                                'PF Number',
+                                _pfNumberController.text,
+                              ),
+                              _buildPreviewField(
+                                'ESI Number',
+                                _esiNumberController.text,
+                              ),
+                            ]),
+                            const SizedBox(height: 20),
+
+                            // Section 2: Address
+                            _buildPreviewSectionHeader(
+                              'Address Information',
+                              Icons.location_on_outlined,
+                            ),
+                            _buildPreviewGrid([
+                              _buildPreviewField(
+                                'Permanent Address',
+                                _permAddressController.text,
+                              ),
+                              _buildPreviewField(
+                                'Permanent Country',
+                                _permCountry,
+                              ),
+                              _buildPreviewField('Permanent State', _permState),
+                              _buildPreviewField(
+                                'Permanent City',
+                                _permCityController.text,
+                              ),
+                              _buildPreviewField(
+                                'Permanent District',
+                                _permDistrictController.text,
+                              ),
+                              _buildPreviewField(
+                                'Permanent Pincode',
+                                _permPincodeController.text,
+                              ),
+                              _buildPreviewField(
+                                'Present Address',
+                                _sameAsPermanent
+                                    ? '${_permAddressController.text} (Same as permanent)'
+                                    : _presAddressController.text,
+                              ),
+                              _buildPreviewField(
+                                'Present Country',
+                                _sameAsPermanent ? _permCountry : _presCountry,
+                              ),
+                              _buildPreviewField(
+                                'Present State',
+                                _sameAsPermanent ? _permState : _presState,
+                              ),
+                              _buildPreviewField(
+                                'Present City',
+                                _sameAsPermanent
+                                    ? _permCityController.text
+                                    : _presCityController.text,
+                              ),
+                              _buildPreviewField(
+                                'Present District',
+                                _sameAsPermanent
+                                    ? _permDistrictController.text
+                                    : _presDistrictController.text,
+                              ),
+                              _buildPreviewField(
+                                'Present Pincode',
+                                _sameAsPermanent
+                                    ? _permPincodeController.text
+                                    : _presPincodeController.text,
+                              ),
+                            ]),
+                            const SizedBox(height: 20),
+
+                            // Section 3: Education
+                            _buildPreviewSectionHeader(
+                              'Education Details',
+                              Icons.school_outlined,
+                            ),
+                            if (_educationType == 'Labour')
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 4),
+                                child: Text(
+                                  'Category: Labour (Education details not required)',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.black54,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              )
+                            else if (_educationList.isEmpty)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 4),
+                                child: Text(
+                                  'No education entries added.',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.black54,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              )
+                            else
+                              ..._educationList.map(
+                                (edu) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 6),
+                                  child: Text(
+                                    '• ${edu.degreeName} from ${edu.instituteName} (${edu.passingYear}) - ${edu.result}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            const SizedBox(height: 20),
+
+                            // Section 4: Experience
+                            _buildPreviewSectionHeader(
+                              'Work Experience',
+                              Icons.work_outline,
+                            ),
+                            if (_experienceList.isEmpty)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 4),
+                                child: Text(
+                                  'No experience entries added.',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.black54,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              )
+                            else
+                              ..._experienceList.map(
+                                (exp) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 6),
+                                  child: Text(
+                                    '• ${exp.position} at ${exp.companyName} (${exp.workingDuration})',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            const SizedBox(height: 20),
+
+                            // Section 5: Personal & Family History
+                            _buildPreviewSectionHeader(
+                              'Personal & Family History',
+                              Icons.history_edu_outlined,
+                            ),
+                            _buildPreviewGrid([
+                              _buildPreviewField(
+                                'Original DOB',
+                                _originalDobController.text,
+                              ),
+                              _buildPreviewField(
+                                'Personal Mobile',
+                                _formatPhoneWithCountryCode(
+                                  _personalMobileCountryCode,
+                                  _personalMobileController.text,
+                                ),
+                              ),
+                              _buildPreviewField(
+                                'PAN Number',
+                                _panController.text,
+                              ),
+                              _buildPreviewField(
+                                'Passport Number',
+                                _passportController.text,
+                              ),
+                              _buildPreviewField(
+                                'Driving License',
+                                _drivingLicenseController.text,
+                              ),
+                              _buildPreviewField(
+                                'Health Issues',
+                                _healthIssuesController.text,
+                              ),
+                              _buildPreviewField(
+                                'Emergency Contact Name',
+                                _emergencyNameController.text,
+                              ),
+                              _buildPreviewField(
+                                'Emergency Contact Phone',
+                                _formatPhoneWithCountryCode(
+                                  _emergencyMobileCountryCode,
+                                  _emergencyMobileController.text,
+                                ),
+                              ),
+                              _buildPreviewField(
+                                'Referred By Name',
+                                _referredByNameController.text,
+                              ),
+                              _buildPreviewField(
+                                'Referred By Phone',
+                                _formatPhoneWithCountryCode(
+                                  _referredByMobileCountryCode,
+                                  _referredByMobileController.text,
+                                ),
+                              ),
+                              _buildPreviewField(
+                                'Father Name',
+                                _fatherNameController.text,
+                              ),
+                              _buildPreviewField(
+                                'Mother Name',
+                                _motherNameController.text,
+                              ),
+                              _buildPreviewField(
+                                'Marital Status',
+                                _maritalStatus,
+                              ),
+                              _buildPreviewField(
+                                'Spouse Name',
+                                _spouseNameController.text,
+                              ),
+                              _buildPreviewField(
+                                'Kids Details',
+                                [
+                                  _kids1NameController.text,
+                                  _kids2NameController.text,
+                                  _kids3NameController.text,
+                                ].where((k) => k.isNotEmpty).join(', '),
+                              ),
+                              _buildPreviewField(
+                                'Has Criminal Record',
+                                _hasCriminalCases ? 'Yes' : 'No',
+                              ),
+                              if (_hasCriminalCases)
+                                _buildPreviewField(
+                                  'Criminal Case Details',
+                                  _criminalCaseDetailsController.text,
+                                ),
+                            ]),
+                            const SizedBox(height: 20),
+
+                            // Section 6: Bank Account Details
+                            _buildPreviewSectionHeader(
+                              'Bank Account Details',
+                              Icons.account_balance_outlined,
+                            ),
+                            _buildPreviewGrid([
+                              _buildPreviewField(
+                                'Account Holder',
+                                _bankHolderController.text,
+                              ),
+                              _buildPreviewField(
+                                'Bank Name',
+                                _bankNameController.text,
+                              ),
+                              _buildPreviewField(
+                                'Account Number',
+                                _bankAccNumController.text,
+                              ),
+                              _buildPreviewField(
+                                'IFSC Code',
+                                _bankIfscController.text,
+                              ),
+                              _buildPreviewField(
+                                'Branch',
+                                _bankBranchController.text,
+                              ),
+                              _buildPreviewField(
+                                'Account Type',
+                                _bankAccountType,
+                              ),
+                            ]),
+                            const SizedBox(height: 20),
+
+                            // Section 7: Documents
+                            _buildPreviewSectionHeader(
+                              'Documents',
+                              Icons.folder_open_outlined,
+                            ),
+                            if (_documentList.isEmpty)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 4),
+                                child: Text(
+                                  'No document entries attached.',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.black54,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              )
+                            else
+                              ..._documentList.map(
+                                (doc) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 6),
+                                  child: Text(
+                                    '• ${doc.documentType}: ${doc.documentNumber} (${doc.fileName})',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            const SizedBox(height: 20),
+
+                            // Section 8: Social Profiles
+                            _buildPreviewSectionHeader(
+                              'Social Profiles',
+                              Icons.share_outlined,
+                            ),
+                            _buildPreviewGrid([
+                              _buildPreviewField(
+                                'Facebook',
+                                _facebookController.text,
+                              ),
+                              _buildPreviewField(
+                                'Twitter',
+                                _twitterController.text,
+                              ),
+                              _buildPreviewField(
+                                'LinkedIn',
+                                _linkedinController.text,
+                              ),
+                              _buildPreviewField(
+                                'Google',
+                                _googleController.text,
+                              ),
+                            ]),
+                            const SizedBox(height: 20),
+
+                            // Section 9: Job & Admin Details
+                            if (_isManagementAdd ||
+                                _isEditing ||
+                                _department.isNotEmpty ||
+                                _joiningDateController.text.isNotEmpty ||
+                                link != null) ...[
+                              _buildPreviewSectionHeader(
+                                'Job & Administrative Details',
+                                Icons.badge_outlined,
+                              ),
+                              _buildPreviewGrid([
+                                if (_organizationName.isNotEmpty)
+                                  _buildPreviewField(
+                                    'Organization',
+                                    _organizationName,
+                                  ),
+                                if (_businessUnit.isNotEmpty)
+                                  _buildPreviewField(
+                                    'Business Unit / Division',
+                                    _businessUnit,
+                                  ),
+                                if (_workLocation.isNotEmpty)
+                                  _buildPreviewField(
+                                    'Work Location',
+                                    _workLocation,
+                                  ),
+                                _buildPreviewField('Department', _department),
+                                _buildPreviewField('Designation', _designation),
+                                _buildPreviewField(
+                                  'User Role / Type',
+                                  _userType,
+                                ),
+                                _buildPreviewField('Account Status', _status),
+                                _buildPreviewField(
+                                  'Date of Joining',
+                                  _joiningDateController.text,
+                                ),
+                                _buildPreviewField(
+                                  'Contract End Date',
+                                  _contractEndDateController.text,
+                                ),
+                                _buildPreviewField(
+                                  'Reporting Manager',
+                                  _reportingToController.text,
+                                ),
+                                _buildPreviewField(
+                                  'Reporting Manager Title',
+                                  _reportingManagerTitleController.text,
+                                ),
+                                _buildPreviewField(
+                                  'Admin Name',
+                                  _adminNameController.text,
+                                ),
+                                _buildPreviewField(
+                                  'Coordinator Name',
+                                  _coordinatorNameController.text,
+                                ),
+                                _buildPreviewField(
+                                  'Coordinator Contact',
+                                  _formatPhoneWithCountryCode(
+                                    _coordinatorPhoneCountryCode,
+                                    _coordinatorPhoneController.text,
+                                  ),
+                                ),
+                                _buildPreviewField(
+                                  'Work Schedule Type',
+                                  _workScheduleType,
+                                ),
+                                _buildPreviewField(
+                                  'Weekly Off Day',
+                                  _weeklyOffDayController.text,
+                                ),
+                                if (_workScheduleType == 'Fixed Schedule')
+                                  _buildPreviewField(
+                                    'Work Hours',
+                                    '${_inTimeController.text} - ${_outTimeController.text}',
+                                  )
+                                else
+                                  _buildPreviewField(
+                                    'Required Working Hours',
+                                    _requiredWorkingHoursController.text,
+                                  ),
+                                if (_siteLatitudeController.text.isNotEmpty ||
+                                    _siteLongitudeController.text.isNotEmpty)
+                                  _buildPreviewField(
+                                    'Site Geo-Fence Location',
+                                    '${_siteLatitudeController.text}, ${_siteLongitudeController.text}',
+                                  ),
+                                if (_siteRadiusController.text.isNotEmpty)
+                                  _buildPreviewField(
+                                    'Allowed Site Radius',
+                                    '${_siteRadiusController.text} meters',
+                                  ),
+                                _buildPreviewField(
+                                  'GPS Verification Required',
+                                  _siteRequireGpsVerification ? 'Yes' : 'No',
+                                ),
+                                _buildPreviewField('Leave Type', _leaveType),
+                                if (_leaveType == 'Manual Allocation') ...[
+                                  _buildPreviewField(
+                                    'Allocation Frequency',
+                                    _leaveAllocationFrequency,
+                                  ),
+                                  _buildPreviewField(
+                                    'Allowed Leaves',
+                                    _allowedLeavesController.text,
+                                  ),
+                                  _buildPreviewField(
+                                    'Leave Effective Date',
+                                    _leaveEffectiveDateController.text,
+                                  ),
+                                ],
+                              ]),
+                              const SizedBox(height: 20),
+
+                              // Section 10: Salary Details
+                              _buildPreviewSectionHeader(
+                                'Salary Details',
+                                Icons.payments_outlined,
+                              ),
+                              _buildPreviewGrid([
+                                _buildPreviewField('Salary Type', _salaryType),
+                                _buildPreviewField(
+                                  'Total CTC (Monthly)',
+                                  _totalSalaryController.text,
+                                ),
+                                _buildPreviewField(
+                                  'Basic Pay',
+                                  _basicPayController.text,
+                                ),
+                                _buildPreviewField('HRA', _hraController.text),
+                                _buildPreviewField(
+                                  'Special Allowance',
+                                  _specialAllowanceController.text,
+                                ),
+                                _buildPreviewField(
+                                  'Education Allowance',
+                                  _eduAllowanceController.text,
+                                ),
+                                _buildPreviewField(
+                                  'Travel Allowance',
+                                  _travelAllowanceController.text,
+                                ),
+                                _buildPreviewField(
+                                  'Other Allowance',
+                                  _otherAllowanceController.text,
+                                ),
+                                _buildPreviewField(
+                                  'PF Deduction',
+                                  _pfController.text,
+                                ),
+                                _buildPreviewField(
+                                  'ESI Deduction (Employee)',
+                                  _esiController.text,
+                                ),
+                                _buildPreviewField(
+                                  'ESI Contribution (Employer)',
+                                  _esiEmployerController.text,
+                                ),
+                                _buildPreviewField(
+                                  'Professional Tax',
+                                  _professionalTaxController.text,
+                                ),
+                                _buildPreviewField('TDS', _tdsController.text),
+                              ]),
+                              const SizedBox(height: 20),
+
+                              // Section 11: Credentials & Permissions
+                              _buildPreviewSectionHeader(
+                                'Credentials & Permissions',
+                                Icons.security_outlined,
+                              ),
+                              _buildPreviewGrid([
+                                _buildPreviewField(
+                                  'Employee Custom ID',
+                                  _employeeCustomIdController.text,
+                                ),
+                                _buildPreviewField(
+                                  'Temporary Password',
+                                  _passwordController.text.isNotEmpty
+                                      ? '••••••••'
+                                      : '-',
+                                ),
+                                _buildPreviewField('User Role', _userType),
+                                _buildPreviewField('Account Status', _status),
+                                _buildPreviewField(
+                                  'Access Permissions',
+                                  _selectedPermissions.isEmpty
+                                      ? '-'
+                                      : _selectedPermissions.join(', '),
+                                ),
+                              ]),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    const Divider(height: 16),
+                    // Final Submission Declaration Card
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: finalDeclarationAgreed
+                            ? const Color(0xFFF0FDF4)
+                            : const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: finalDeclarationAgreed
+                              ? const Color(0xFF86EFAC)
+                              : const Color(0xFFCBD5E1),
+                        ),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Checkbox(
+                            value: finalDeclarationAgreed,
+                            activeColor: AppColors.active,
+                            onChanged: (val) {
+                              setDialogState(() {
+                                finalDeclarationAgreed = val ?? false;
+                              });
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: InkWell(
+                                onTap: () {
+                                  setDialogState(() {
+                                    finalDeclarationAgreed =
+                                        !finalDeclarationAgreed;
+                                  });
+                                },
+                                child: const Text(
+                                  'I hereby declare that all the information, credentials, and documents submitted in this registration form are true, accurate, and complete to the best of my knowledge.',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF1E293B),
+                                    height: 1.35,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Footer Action Buttons
+                    if (isMobile)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: finalDeclarationAgreed
+                                  ? AppColors.active
+                                  : Colors.grey.shade400,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                            ),
+                            onPressed: !finalDeclarationAgreed
+                                ? () {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Please check the declaration box before submitting.',
+                                        ),
+                                        backgroundColor: Colors.orange,
+                                        duration: Duration(seconds: 3),
+                                      ),
+                                    );
+                                  }
+                                : () {
+                                    Navigator.of(context).pop();
+                                    _submitForm(link, isSubmit: true);
+                                  },
+                            icon: const Icon(
+                              Icons.check_circle_outline,
+                              size: 18,
+                            ),
+                            label: Text(
+                              _isEditing
+                                  ? 'Confirm & Save Changes'
+                                  : (_isCorrectionMode
+                                        ? 'Confirm & Submit Corrections'
+                                        : 'Confirm & Submit Registration'),
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              side: const BorderSide(color: Colors.grey),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                            ),
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: const Icon(
+                              Icons.edit,
+                              size: 16,
+                              color: Colors.black87,
+                            ),
+                            label: const Text(
+                              'Go Back & Edit',
+                              style: TextStyle(
+                                color: Colors.black87,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 10,
+                              ),
+                              side: const BorderSide(color: Colors.grey),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: const Icon(
+                              Icons.edit,
+                              size: 16,
+                              color: Colors.black87,
+                            ),
+                            label: const Text(
+                              'Go Back & Edit',
+                              style: TextStyle(
+                                color: Colors.black87,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Registration Details Preview',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.textPrimary,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Review all details for ${name.isEmpty ? "Candidate" : name} before final submission.',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: AppColors.textSecondary,
-                                    height: 1.3,
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: finalDeclarationAgreed
+                                  ? AppColors.active
+                                  : Colors.grey.shade400,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 10,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                            onPressed: !finalDeclarationAgreed
+                                ? () {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Please check the declaration box before submitting.',
+                                        ),
+                                        backgroundColor: Colors.orange,
+                                        duration: Duration(seconds: 3),
+                                      ),
+                                    );
+                                  }
+                                : () {
+                                    Navigator.of(context).pop();
+                                    _submitForm(link, isSubmit: true);
+                                  },
+                            icon: const Icon(
+                              Icons.check_circle_outline,
+                              size: 18,
+                            ),
+                            label: Text(
+                              _isEditing
+                                  ? 'Confirm & Save Changes'
+                                  : (_isCorrectionMode
+                                        ? 'Confirm & Submit Corrections'
+                                        : 'Confirm & Submit Registration'),
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Colors.grey),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
                   ],
                 ),
-                const Divider(height: 20),
-                // Body content
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Candidate Profile Photo header if present
-                        if (_profileImageBytes != null ||
-                            _profileImageDataUrl.isNotEmpty) ...[
-                          Center(
-                            child: Column(
-                              children: [
-                                CircleAvatar(
-                                  radius: 36,
-                                  backgroundColor: Colors.grey.shade200,
-                                  backgroundImage: _profileImageBytes != null
-                                      ? MemoryImage(_profileImageBytes!)
-                                      : (_profileImageDataUrl.startsWith('http')
-                                            ? NetworkImage(_profileImageDataUrl)
-                                                  as ImageProvider
-                                            : null),
-                                  child:
-                                      (_profileImageBytes == null &&
-                                          !_profileImageDataUrl.startsWith(
-                                            'http',
-                                          ))
-                                      ? const Icon(
-                                          Icons.person,
-                                          size: 36,
-                                          color: Colors.grey,
-                                        )
-                                      : null,
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  name.isEmpty ? 'Candidate Photo' : name,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                              ],
-                            ),
-                          ),
-                        ],
-
-                        // Section 1: Personal Info
-                        _buildPreviewSectionHeader(
-                          'Personal Information',
-                          Icons.person_outline,
-                        ),
-                        _buildPreviewGrid([
-                          _buildPreviewField(
-                            'First Name',
-                            _firstNameController.text,
-                          ),
-                          _buildPreviewField(
-                            'Last Name',
-                            _lastNameController.text,
-                          ),
-                          _buildPreviewField('Blood Group', _bloodGroup),
-                          _buildPreviewField(
-                            'Blood Group Report Doc',
-                            _bloodGroupDocFileName,
-                          ),
-                          _buildPreviewField('Gender', _gender),
-                          _buildPreviewField(
-                            'Date of Birth',
-                            _dobController.text,
-                          ),
-                          _buildPreviewField(
-                            'Aadhaar Number',
-                            _aadhaarController.text,
-                          ),
-                          _buildPreviewField(
-                            'Contact Phone',
-                            _formatPhoneWithCountryCode(
-                              _phoneCountryCode,
-                              _phoneController.text,
-                            ),
-                          ),
-                          _buildPreviewField(
-                            'Email Address',
-                            _emailController.text,
-                          ),
-                          _buildPreviewField(
-                            'PF Number',
-                            _pfNumberController.text,
-                          ),
-                          _buildPreviewField(
-                            'ESI Number',
-                            _esiNumberController.text,
-                          ),
-                        ]),
-                        const SizedBox(height: 20),
-
-                        // Section 2: Address
-                        _buildPreviewSectionHeader(
-                          'Address Information',
-                          Icons.location_on_outlined,
-                        ),
-                        _buildPreviewGrid([
-                          _buildPreviewField(
-                            'Permanent Address',
-                            _permAddressController.text,
-                          ),
-                          _buildPreviewField(
-                            'Permanent Country',
-                            _permCountry,
-                          ),
-                          _buildPreviewField(
-                            'Permanent State',
-                            _permState,
-                          ),
-                          _buildPreviewField(
-                            'Permanent City',
-                            _permCityController.text,
-                          ),
-                          _buildPreviewField(
-                            'Permanent District',
-                            _permDistrictController.text,
-                          ),
-                          _buildPreviewField(
-                            'Permanent Pincode',
-                            _permPincodeController.text,
-                          ),
-                          _buildPreviewField(
-                            'Present Address',
-                            _sameAsPermanent
-                                ? '${_permAddressController.text} (Same as permanent)'
-                                : _presAddressController.text,
-                          ),
-                          _buildPreviewField(
-                            'Present Country',
-                            _sameAsPermanent
-                                ? _permCountry
-                                : _presCountry,
-                          ),
-                          _buildPreviewField(
-                            'Present State',
-                            _sameAsPermanent
-                                ? _permState
-                                : _presState,
-                          ),
-                          _buildPreviewField(
-                            'Present City',
-                            _sameAsPermanent
-                                ? _permCityController.text
-                                : _presCityController.text,
-                          ),
-                          _buildPreviewField(
-                            'Present District',
-                            _sameAsPermanent
-                                ? _permDistrictController.text
-                                : _presDistrictController.text,
-                          ),
-                          _buildPreviewField(
-                            'Present Pincode',
-                            _sameAsPermanent
-                                ? _permPincodeController.text
-                                : _presPincodeController.text,
-                          ),
-                        ]),
-                        const SizedBox(height: 20),
-
-                        // Section 3: Education
-                        _buildPreviewSectionHeader(
-                          'Education Details',
-                          Icons.school_outlined,
-                        ),
-                        if (_educationType == 'Labour')
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 4),
-                            child: Text(
-                              'Category: Labour (Education details not required)',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.black54,
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                          )
-                        else if (_educationList.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 4),
-                            child: Text(
-                              'No education entries added.',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.black54,
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                          )
-                        else
-                          ..._educationList.map(
-                            (edu) => Padding(
-                              padding: const EdgeInsets.only(bottom: 6),
-                              child: Text(
-                                '• ${edu.degreeName} from ${edu.instituteName} (${edu.passingYear}) - ${edu.result}',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                            ),
-                          ),
-                        const SizedBox(height: 20),
-
-                        // Section 4: Experience
-                        _buildPreviewSectionHeader(
-                          'Work Experience',
-                          Icons.work_outline,
-                        ),
-                        if (_experienceList.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 4),
-                            child: Text(
-                              'No experience entries added.',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.black54,
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                          )
-                        else
-                          ..._experienceList.map(
-                            (exp) => Padding(
-                              padding: const EdgeInsets.only(bottom: 6),
-                              child: Text(
-                                '• ${exp.position} at ${exp.companyName} (${exp.workingDuration})',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                            ),
-                          ),
-                        const SizedBox(height: 20),
-
-                        // Section 5: Personal & Family History
-                        _buildPreviewSectionHeader(
-                          'Personal & Family History',
-                          Icons.history_edu_outlined,
-                        ),
-                        _buildPreviewGrid([
-                          _buildPreviewField(
-                            'Original DOB',
-                            _originalDobController.text,
-                          ),
-                          _buildPreviewField(
-                            'Personal Mobile',
-                            _formatPhoneWithCountryCode(
-                              _personalMobileCountryCode,
-                              _personalMobileController.text,
-                            ),
-                          ),
-                          _buildPreviewField('PAN Number', _panController.text),
-                          _buildPreviewField(
-                            'Passport Number',
-                            _passportController.text,
-                          ),
-                          _buildPreviewField(
-                            'Driving License',
-                            _drivingLicenseController.text,
-                          ),
-                          _buildPreviewField(
-                            'Health Issues',
-                            _healthIssuesController.text,
-                          ),
-                          _buildPreviewField(
-                            'Emergency Contact Name',
-                            _emergencyNameController.text,
-                          ),
-                          _buildPreviewField(
-                            'Emergency Contact Phone',
-                            _formatPhoneWithCountryCode(
-                              _emergencyMobileCountryCode,
-                              _emergencyMobileController.text,
-                            ),
-                          ),
-                          _buildPreviewField(
-                            'Referred By Name',
-                            _referredByNameController.text,
-                          ),
-                          _buildPreviewField(
-                            'Referred By Phone',
-                            _formatPhoneWithCountryCode(
-                              _referredByMobileCountryCode,
-                              _referredByMobileController.text,
-                            ),
-                          ),
-                          _buildPreviewField(
-                            'Father Name',
-                            _fatherNameController.text,
-                          ),
-                          _buildPreviewField(
-                            'Mother Name',
-                            _motherNameController.text,
-                          ),
-                          _buildPreviewField('Marital Status', _maritalStatus),
-                          _buildPreviewField(
-                            'Spouse Name',
-                            _spouseNameController.text,
-                          ),
-                          _buildPreviewField(
-                            'Kids Details',
-                            [
-                              _kids1NameController.text,
-                              _kids2NameController.text,
-                              _kids3NameController.text,
-                            ].where((k) => k.isNotEmpty).join(', '),
-                          ),
-                          _buildPreviewField(
-                            'Has Criminal Record',
-                            _hasCriminalCases ? 'Yes' : 'No',
-                          ),
-                          if (_hasCriminalCases)
-                            _buildPreviewField(
-                              'Criminal Case Details',
-                              _criminalCaseDetailsController.text,
-                            ),
-                        ]),
-                        const SizedBox(height: 20),
-
-                        // Section 6: Bank Account Details
-                        _buildPreviewSectionHeader(
-                          'Bank Account Details',
-                          Icons.account_balance_outlined,
-                        ),
-                        _buildPreviewGrid([
-                          _buildPreviewField(
-                            'Account Holder',
-                            _bankHolderController.text,
-                          ),
-                          _buildPreviewField(
-                            'Bank Name',
-                            _bankNameController.text,
-                          ),
-                          _buildPreviewField(
-                            'Account Number',
-                            _bankAccNumController.text,
-                          ),
-                          _buildPreviewField(
-                            'IFSC Code',
-                            _bankIfscController.text,
-                          ),
-                          _buildPreviewField(
-                            'Branch',
-                            _bankBranchController.text,
-                          ),
-                          _buildPreviewField('Account Type', _bankAccountType),
-                        ]),
-                        const SizedBox(height: 20),
-
-                        // Section 7: Documents
-                        _buildPreviewSectionHeader(
-                          'Documents',
-                          Icons.folder_open_outlined,
-                        ),
-                        if (_documentList.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 4),
-                            child: Text(
-                              'No document entries attached.',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.black54,
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                          )
-                        else
-                          ..._documentList.map(
-                            (doc) => Padding(
-                              padding: const EdgeInsets.only(bottom: 6),
-                              child: Text(
-                                '• ${doc.documentType}: ${doc.documentNumber} (${doc.fileName})',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                            ),
-                          ),
-                        const SizedBox(height: 20),
-
-                        // Section 8: Social Profiles
-                        _buildPreviewSectionHeader(
-                          'Social Profiles',
-                          Icons.share_outlined,
-                        ),
-                        _buildPreviewGrid([
-                          _buildPreviewField(
-                            'Facebook',
-                            _facebookController.text,
-                          ),
-                          _buildPreviewField(
-                            'Twitter',
-                            _twitterController.text,
-                          ),
-                          _buildPreviewField(
-                            'LinkedIn',
-                            _linkedinController.text,
-                          ),
-                          _buildPreviewField('Google', _googleController.text),
-                        ]),
-                        const SizedBox(height: 20),
-
-                        // Section 9: Job & Admin Details
-                        if (_isManagementAdd ||
-                            _isEditing ||
-                            _department.isNotEmpty ||
-                            _joiningDateController.text.isNotEmpty ||
-                            link != null) ...[
-                          _buildPreviewSectionHeader(
-                            'Job & Administrative Details',
-                            Icons.badge_outlined,
-                          ),
-                          _buildPreviewGrid([
-                            if (_organizationName.isNotEmpty)
-                              _buildPreviewField(
-                                'Organization',
-                                _organizationName,
-                              ),
-                            if (_businessUnit.isNotEmpty)
-                              _buildPreviewField(
-                                'Business Unit / Division',
-                                _businessUnit,
-                              ),
-                            if (_workLocation.isNotEmpty)
-                              _buildPreviewField(
-                                'Work Location',
-                                _workLocation,
-                              ),
-                            _buildPreviewField('Department', _department),
-                            _buildPreviewField('Designation', _designation),
-                            _buildPreviewField('User Role / Type', _userType),
-                            _buildPreviewField('Account Status', _status),
-                            _buildPreviewField(
-                              'Date of Joining',
-                              _joiningDateController.text,
-                            ),
-                            _buildPreviewField(
-                              'Contract End Date',
-                              _contractEndDateController.text,
-                            ),
-                            _buildPreviewField(
-                              'Reporting Manager',
-                              _reportingToController.text,
-                            ),
-                            _buildPreviewField(
-                              'Reporting Manager Title',
-                              _reportingManagerTitleController.text,
-                            ),
-                            _buildPreviewField(
-                              'Admin Name',
-                              _adminNameController.text,
-                            ),
-                            _buildPreviewField(
-                              'Coordinator Name',
-                              _coordinatorNameController.text,
-                            ),
-                            _buildPreviewField(
-                              'Coordinator Contact',
-                              _formatPhoneWithCountryCode(
-                                _coordinatorPhoneCountryCode,
-                                _coordinatorPhoneController.text,
-                              ),
-                            ),
-                            _buildPreviewField(
-                              'Work Schedule Type',
-                              _workScheduleType,
-                            ),
-                            _buildPreviewField(
-                              'Weekly Off Day',
-                              _weeklyOffDayController.text,
-                            ),
-                            if (_workScheduleType == 'Fixed Schedule')
-                              _buildPreviewField(
-                                'Work Hours',
-                                '${_inTimeController.text} - ${_outTimeController.text}',
-                              )
-                            else
-                              _buildPreviewField(
-                                'Required Working Hours',
-                                _requiredWorkingHoursController.text,
-                              ),
-                            if (_siteLatitudeController.text.isNotEmpty ||
-                                _siteLongitudeController.text.isNotEmpty)
-                              _buildPreviewField(
-                                'Site Geo-Fence Location',
-                                '${_siteLatitudeController.text}, ${_siteLongitudeController.text}',
-                              ),
-                            if (_siteRadiusController.text.isNotEmpty)
-                              _buildPreviewField(
-                                'Allowed Site Radius',
-                                '${_siteRadiusController.text} meters',
-                              ),
-                            _buildPreviewField(
-                              'GPS Verification Required',
-                              _siteRequireGpsVerification ? 'Yes' : 'No',
-                            ),
-                            _buildPreviewField('Leave Type', _leaveType),
-                            if (_leaveType == 'Manual Allocation') ...[
-                              _buildPreviewField(
-                                'Allocation Frequency',
-                                _leaveAllocationFrequency,
-                              ),
-                              _buildPreviewField(
-                                'Allowed Leaves',
-                                _allowedLeavesController.text,
-                              ),
-                              _buildPreviewField(
-                                'Leave Effective Date',
-                                _leaveEffectiveDateController.text,
-                              ),
-                            ],
-                          ]),
-                          const SizedBox(height: 20),
-
-                          // Section 10: Salary Details
-                          _buildPreviewSectionHeader(
-                            'Salary Details',
-                            Icons.payments_outlined,
-                          ),
-                          _buildPreviewGrid([
-                            _buildPreviewField('Salary Type', _salaryType),
-                            _buildPreviewField(
-                              'Total CTC (Monthly)',
-                              _totalSalaryController.text,
-                            ),
-                            _buildPreviewField(
-                              'Basic Pay',
-                              _basicPayController.text,
-                            ),
-                            _buildPreviewField('HRA', _hraController.text),
-                            _buildPreviewField(
-                              'Special Allowance',
-                              _specialAllowanceController.text,
-                            ),
-                            _buildPreviewField(
-                              'Education Allowance',
-                              _eduAllowanceController.text,
-                            ),
-                            _buildPreviewField(
-                              'Travel Allowance',
-                              _travelAllowanceController.text,
-                            ),
-                            _buildPreviewField(
-                              'Other Allowance',
-                              _otherAllowanceController.text,
-                            ),
-                            _buildPreviewField(
-                              'PF Deduction',
-                              _pfController.text,
-                            ),
-                            _buildPreviewField(
-                              'ESI Deduction (Employee)',
-                              _esiController.text,
-                            ),
-                            _buildPreviewField(
-                              'ESI Contribution (Employer)',
-                              _esiEmployerController.text,
-                            ),
-                            _buildPreviewField(
-                              'Professional Tax',
-                              _professionalTaxController.text,
-                            ),
-                            _buildPreviewField('TDS', _tdsController.text),
-                          ]),
-                          const SizedBox(height: 20),
-
-                          // Section 11: Credentials & Permissions
-                          _buildPreviewSectionHeader(
-                            'Credentials & Permissions',
-                            Icons.security_outlined,
-                          ),
-                          _buildPreviewGrid([
-                            _buildPreviewField(
-                              'Employee Custom ID',
-                              _employeeCustomIdController.text,
-                            ),
-                            _buildPreviewField(
-                              'Temporary Password',
-                              _passwordController.text.isNotEmpty
-                                  ? '••••••••'
-                                  : '-',
-                            ),
-                            _buildPreviewField('User Role', _userType),
-                            _buildPreviewField('Account Status', _status),
-                            _buildPreviewField(
-                              'Access Permissions',
-                              _selectedPermissions.isEmpty
-                                  ? '-'
-                                  : _selectedPermissions.join(', '),
-                            ),
-                          ]),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-                const Divider(height: 16),
-                // Final Submission Declaration Card
-                Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: finalDeclarationAgreed
-                        ? const Color(0xFFF0FDF4)
-                        : const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: finalDeclarationAgreed
-                          ? const Color(0xFF86EFAC)
-                          : const Color(0xFFCBD5E1),
-                    ),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Checkbox(
-                        value: finalDeclarationAgreed,
-                        activeColor: AppColors.active,
-                        onChanged: (val) {
-                          setDialogState(() {
-                            finalDeclarationAgreed = val ?? false;
-                          });
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: InkWell(
-                            onTap: () {
-                              setDialogState(() {
-                                finalDeclarationAgreed =
-                                    !finalDeclarationAgreed;
-                              });
-                            },
-                            child: const Text(
-                              'I hereby declare that all the information, credentials, and documents submitted in this registration form are true, accurate, and complete to the best of my knowledge.',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF1E293B),
-                                height: 1.35,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Footer Action Buttons
-                if (isMobile)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: finalDeclarationAgreed
-                              ? AppColors.active
-                              : Colors.grey.shade400,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                        ),
-                        onPressed: !finalDeclarationAgreed
-                            ? () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Please check the declaration box before submitting.',
-                                    ),
-                                    backgroundColor: Colors.orange,
-                                    duration: Duration(seconds: 3),
-                                  ),
-                                );
-                              }
-                            : () {
-                                Navigator.of(context).pop();
-                                _submitForm(link, isSubmit: true);
-                              },
-                        icon: const Icon(Icons.check_circle_outline, size: 18),
-                        label: Text(
-                          _isEditing
-                              ? 'Confirm & Save Changes'
-                              : (_isCorrectionMode
-                                  ? 'Confirm & Submit Corrections'
-                                  : 'Confirm & Submit Registration'),
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          side: const BorderSide(color: Colors.grey),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                        ),
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(
-                          Icons.edit,
-                          size: 16,
-                          color: Colors.black87,
-                        ),
-                        label: const Text(
-                          'Go Back & Edit',
-                          style: TextStyle(
-                            color: Colors.black87,
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  )
-                else
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 10,
-                          ),
-                          side: const BorderSide(color: Colors.grey),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ),
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(
-                          Icons.edit,
-                          size: 16,
-                          color: Colors.black87,
-                        ),
-                        label: const Text(
-                          'Go Back & Edit',
-                          style: TextStyle(
-                            color: Colors.black87,
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: finalDeclarationAgreed
-                              ? AppColors.active
-                              : Colors.grey.shade400,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 10,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ),
-                        onPressed: !finalDeclarationAgreed
-                            ? () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Please check the declaration box before submitting.',
-                                    ),
-                                    backgroundColor: Colors.orange,
-                                    duration: Duration(seconds: 3),
-                                  ),
-                                );
-                              }
-                            : () {
-                                Navigator.of(context).pop();
-                                _submitForm(link, isSubmit: true);
-                              },
-                        icon: const Icon(Icons.check_circle_outline, size: 18),
-                        label: Text(
-                          _isEditing
-                              ? 'Confirm & Save Changes'
-                              : (_isCorrectionMode
-                                  ? 'Confirm & Submit Corrections'
-                                  : 'Confirm & Submit Registration'),
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-              ],
-            ),
-          ),
-        );
+              ),
+            );
           },
         );
       },
@@ -10489,9 +10719,7 @@ class _EmployeeRegistrationPageState
       presentPincode: _sameAsPermanent
           ? _permPincodeController.text.trim()
           : _presPincodeController.text.trim(),
-      presentCountry: _sameAsPermanent
-          ? _permCountry
-          : _presCountry,
+      presentCountry: _sameAsPermanent ? _permCountry : _presCountry,
       educationListJson: jsonEncode(
         _educationList.map((e) => e.toMap()).toList(),
       ),
@@ -10521,14 +10749,18 @@ class _EmployeeRegistrationPageState
       fatherName: _fatherNameController.text.trim(),
       motherName: _motherNameController.text.trim(),
       maritalStatus: _maritalStatus,
-      spouseName:
-          _maritalStatus == 'Married' ? _spouseNameController.text.trim() : '',
-      kids1Name:
-          _maritalStatus == 'Married' ? _kids1NameController.text.trim() : '',
-      kids2Name:
-          _maritalStatus == 'Married' ? _kids2NameController.text.trim() : '',
-      kids3Name:
-          _maritalStatus == 'Married' ? _kids3NameController.text.trim() : '',
+      spouseName: _maritalStatus == 'Married'
+          ? _spouseNameController.text.trim()
+          : '',
+      kids1Name: _maritalStatus == 'Married'
+          ? _kids1NameController.text.trim()
+          : '',
+      kids2Name: _maritalStatus == 'Married'
+          ? _kids2NameController.text.trim()
+          : '',
+      kids3Name: _maritalStatus == 'Married'
+          ? _kids3NameController.text.trim()
+          : '',
       hasCriminalCases: _hasCriminalCases,
       criminalCaseDetails: _hasCriminalCases
           ? _criminalCaseDetailsController.text.trim()
@@ -10551,6 +10783,7 @@ class _EmployeeRegistrationPageState
       pfNumber: _pfNumberController.text.trim(),
       esiNumber: _esiNumberController.text.trim(),
       reportingManager: _reportingToController.text.trim(),
+      reportingManagerId: _reportingManagerId.trim(),
       reportingManagerTitle: _reportingManagerTitleController.text.trim(),
       adminName: _adminNameController.text.trim(),
       coordinatorName: _coordinatorNameController.text.trim(),
@@ -10974,7 +11207,8 @@ class _EmployeeRegistrationPageState
                         entry.key ==
                         Employee.sidebarPermissionsByCategory.keys.first;
 
-                    final allSelected = categoryPermissions.isNotEmpty &&
+                    final allSelected =
+                        categoryPermissions.isNotEmpty &&
                         categoryPermissions.every(
                           (p) => _selectedPermissions.contains(p),
                         );

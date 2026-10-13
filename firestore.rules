@@ -189,7 +189,55 @@ service cloud.firestore {
     }
     match /designations/{desigId} {
       allow read: if isAuthenticated();
-      allow write: if isSuperAdmin() || hasPermission('Organization Structure');
+      allow create, update: if isSuperAdmin() || (
+        hasPermission('Organization Structure') &&
+        (!('band_id' in request.resource.data) ||
+          request.resource.data.band_id == '' ||
+          (
+            exists(/databases/$(database)/documents/organization_bands/$(request.resource.data.band_id)) &&
+            get(/databases/$(database)/documents/organization_bands/$(request.resource.data.band_id)).data.organization_id == request.resource.data.organization_id
+          )
+        )
+      );
+      allow delete: if isSuperAdmin() || hasPermission('Organization Structure');
+    }
+    match /organization_bands/{bandId} {
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() ||
+        (getAuthEmployee().organization_id != null && getAuthEmployee().organization_id != '' && getAuthEmployee().organization_id == resource.data.organization_id)
+      );
+      allow create, update: if isSuperAdmin() || (
+        hasPermission('Organization Structure') &&
+        getAuthEmployee().organization_id != null &&
+        getAuthEmployee().organization_id != '' &&
+        getAuthEmployee().organization_id == request.resource.data.organization_id
+      );
+      allow delete: if isSuperAdmin() || (
+        hasPermission('Organization Structure') &&
+        getAuthEmployee().organization_id != null &&
+        getAuthEmployee().organization_id != '' &&
+        getAuthEmployee().organization_id == resource.data.organization_id &&
+        ('designation_count' in resource.data && resource.data.designation_count == 0)
+      );
+    }
+    match /organization_band_locks/{lockId} {
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() ||
+        resource == null ||
+        (getAuthEmployee().organization_id != null && getAuthEmployee().organization_id != '' && getAuthEmployee().organization_id == resource.data.org_id)
+      );
+      allow create, update: if isSuperAdmin() || (
+        hasPermission('Organization Structure') &&
+        getAuthEmployee().organization_id != null &&
+        getAuthEmployee().organization_id != '' &&
+        getAuthEmployee().organization_id == request.resource.data.org_id
+      );
+      allow delete: if isSuperAdmin() || (
+        hasPermission('Organization Structure') &&
+        getAuthEmployee().organization_id != null &&
+        getAuthEmployee().organization_id != '' &&
+        getAuthEmployee().organization_id == resource.data.org_id
+      );
     }
   }
 }

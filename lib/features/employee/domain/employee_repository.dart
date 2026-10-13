@@ -62,7 +62,9 @@ abstract class EmployeeRepository {
   });
 
   Future<CandidateResponse?> getCandidateResponseByLinkId(String linkId);
-  Future<CandidateResponse?> getCandidateResponseByCandidateId(String candidateId);
+  Future<CandidateResponse?> getCandidateResponseByCandidateId(
+    String candidateId,
+  );
   Future<List<CandidateResponse>> getCandidateResponses();
 
   // Candidate Correction Requests
@@ -77,7 +79,9 @@ abstract class EmployeeRepository {
   });
   Future<CorrectionRequest?> validateCorrectionToken(String rawToken);
   Future<CandidateResponse?> getCandidateResponseForCorrection(String rawToken);
-  Future<List<CorrectionRequest>> getCorrectionRequestsForCandidate(String candidateId);
+  Future<List<CorrectionRequest>> getCorrectionRequestsForCandidate(
+    String candidateId,
+  );
   Future<bool> submitCandidateCorrection({
     required String rawToken,
     required Employee updatedEmployee,
@@ -90,4 +94,3 @@ abstract class EmployeeRepository {
 
   Future<String> getNextEmployeeId();
 }
-

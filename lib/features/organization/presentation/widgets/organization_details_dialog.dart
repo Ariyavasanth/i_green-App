@@ -21,6 +21,34 @@ class OrganizationDetailsDialog extends StatelessWidget {
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
+  static String? _formatStorageError(dynamic e) {
+    if (e == null) return null;
+    final str = e.toString().toLowerCase();
+    final message = (e is FirebaseException ? e.message?.toLowerCase() : '') ?? '';
+
+    if (str.contains('402') ||
+        str.contains('payment required') ||
+        message.contains('402') ||
+        message.contains('payment required') ||
+        str.contains('delinquent')) {
+      return 'Firebase Cloud Storage requires an active Blaze plan or billing account (HTTP 402 Payment Required). Please check your Firebase Console.';
+    }
+
+    if (str.contains('quota-exceeded') ||
+        (e is FirebaseException && e.code == 'quota-exceeded')) {
+      return 'Firebase Cloud Storage quota exceeded. Please check your storage quota in Firebase Console.';
+    }
+
+    if (str.contains('unauthorized') ||
+        str.contains('permission-denied') ||
+        (e is FirebaseException &&
+            (e.code == 'permission-denied' || e.code == 'unauthenticated'))) {
+      return 'Storage permission denied. Please verify your Firebase Storage security rules.';
+    }
+
+    return null;
+  }
+
   Future<({String url, String? error})> _resolveFileUrl(OrgDocument doc) async {
     String url = doc.fileUrl.trim();
     if (url.isNotEmpty &&
@@ -37,7 +65,10 @@ class OrganizationDetailsDialog extends StatelessWidget {
         try {
           final resolved = await storage.refFromURL(url).getDownloadURL();
           if (resolved.isNotEmpty) return (url: resolved, error: null);
-        } catch (_) {}
+        } catch (e) {
+          final fatal = _formatStorageError(e);
+          if (fatal != null) return (url: '', error: fatal);
+        }
       }
 
       final cleanFileName = doc.fileName.replaceAll(
@@ -46,7 +77,7 @@ class OrganizationDetailsDialog extends StatelessWidget {
       );
       final cleanTitle = doc.title.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
 
-      // Organizations may be stored under numeric id (e.g. 17904938941), canonicalId, or docId
+      // Organizations may be stored under numeric id, canonicalId, or docId
       final orgIds = <String>{
         if (organization.id != 0) '${organization.id}',
         if (organization.canonicalId.isNotEmpty) organization.canonicalId,
@@ -54,79 +85,105 @@ class OrganizationDetailsDialog extends StatelessWidget {
         '1',
       }.toList();
 
+      String? lastStorageError;
+
       for (final currentOrgId in orgIds) {
-        // 1. Scan folder listing under Organization documents/$currentOrgId
-        try {
-          final orgFolderRef = storage.ref('Organization documents/$currentOrgId');
-          final rootRes = await orgFolderRef.listAll();
+        // Check both organizations/ and Organization documents/
+        final folderBases = [
+          'organizations/$currentOrgId',
+          'Organization documents/$currentOrgId',
+        ];
 
-          // Check direct items
-          for (final item in rootRes.items) {
-            final name = item.name.toLowerCase();
-            final targetDocName = doc.fileName.toLowerCase();
-            final targetCleanName = cleanFileName.toLowerCase();
+        for (final folderBase in folderBases) {
+          try {
+            final orgFolderRef = storage.ref(folderBase);
+            final rootRes = await orgFolderRef.listAll();
 
-            if (name == targetDocName ||
-                name == targetCleanName ||
-                name.endsWith('_$targetCleanName') ||
-                name.endsWith('_$targetDocName') ||
-                (targetCleanName.isNotEmpty && name.contains(targetCleanName))) {
-              final resolved = await item.getDownloadURL();
-              if (resolved.isNotEmpty) return (url: resolved, error: null);
-            }
-          }
+            // Check direct items
+            for (final item in rootRes.items) {
+              final name = item.name.toLowerCase();
+              final targetDocName = doc.fileName.toLowerCase();
+              final targetCleanName = cleanFileName.toLowerCase();
 
-          // Check subfolders (like cleanTitle or documentTitle)
-          for (final subFolder in rootRes.prefixes) {
-            try {
-              final subRes = await subFolder.listAll();
-              for (final item in subRes.items) {
-                final name = item.name.toLowerCase();
-                final targetDocName = doc.fileName.toLowerCase();
-                final targetCleanName = cleanFileName.toLowerCase();
-
-                if (name == targetDocName ||
-                    name == targetCleanName ||
-                    name.endsWith('_$targetCleanName') ||
-                    name.endsWith('_$targetDocName') ||
-                    (targetCleanName.isNotEmpty && name.contains(targetCleanName))) {
-                  final resolved = await item.getDownloadURL();
-                  if (resolved.isNotEmpty) return (url: resolved, error: null);
-                }
+              if (name == targetDocName ||
+                  name == targetCleanName ||
+                  name.endsWith('_$targetCleanName') ||
+                  name.endsWith('_$targetDocName') ||
+                  (targetCleanName.isNotEmpty &&
+                      name.contains(targetCleanName))) {
+                final resolved = await item.getDownloadURL();
+                if (resolved.isNotEmpty) return (url: resolved, error: null);
               }
-            } catch (_) {}
+            }
+
+            // Check subfolders
+            for (final subFolder in rootRes.prefixes) {
+              try {
+                final subRes = await subFolder.listAll();
+                for (final item in subRes.items) {
+                  final name = item.name.toLowerCase();
+                  final targetDocName = doc.fileName.toLowerCase();
+                  final targetCleanName = cleanFileName.toLowerCase();
+
+                  if (name == targetDocName ||
+                      name == targetCleanName ||
+                      name.endsWith('_$targetCleanName') ||
+                      name.endsWith('_$targetDocName') ||
+                      (targetCleanName.isNotEmpty &&
+                          name.contains(targetCleanName))) {
+                    final resolved = await item.getDownloadURL();
+                    if (resolved.isNotEmpty) return (url: resolved, error: null);
+                  }
+                }
+              } catch (e) {
+                final err = _formatStorageError(e);
+                if (err != null) lastStorageError = err;
+              }
+            }
+          } catch (e) {
+            final err = _formatStorageError(e);
+            if (err != null) lastStorageError = err;
           }
-        } catch (_) {}
+        }
 
         // 2. Also check candidate exact paths
         final candidates = [
-          'Organization documents/$currentOrgId/$cleanTitle/${doc.fileName}',
-          'Organization documents/$currentOrgId/$cleanTitle/$cleanFileName',
-          'Organization documents/$currentOrgId/${doc.fileName}',
-          'Organization documents/$currentOrgId/$cleanFileName',
-          'organizations/$currentOrgId/documents/$cleanTitle/${doc.fileName}',
-          'organizations/$currentOrgId/images/$cleanTitle/${doc.fileName}',
-          'organizations/$currentOrgId/documents/$cleanTitle/$cleanFileName',
-          'organizations/$currentOrgId/images/$cleanTitle/$cleanFileName',
           'organizations/$currentOrgId/$cleanTitle/${doc.fileName}',
           'organizations/$currentOrgId/$cleanTitle/$cleanFileName',
           'organizations/$currentOrgId/${doc.fileName}',
           'organizations/$currentOrgId/$cleanFileName',
+          'organizations/$currentOrgId/documents/$cleanTitle/${doc.fileName}',
+          'organizations/$currentOrgId/images/$cleanTitle/${doc.fileName}',
+          'organizations/$currentOrgId/documents/$cleanTitle/$cleanFileName',
+          'organizations/$currentOrgId/images/$cleanTitle/$cleanFileName',
+          'Organization documents/$currentOrgId/$cleanTitle/${doc.fileName}',
+          'Organization documents/$currentOrgId/$cleanTitle/$cleanFileName',
+          'Organization documents/$currentOrgId/${doc.fileName}',
+          'Organization documents/$currentOrgId/$cleanFileName',
         ];
 
         for (final path in candidates) {
           try {
             final resolved = await storage.ref().child(path).getDownloadURL();
             if (resolved.isNotEmpty) return (url: resolved, error: null);
-          } catch (_) {}
+          } catch (e) {
+            final err = _formatStorageError(e);
+            if (err != null) lastStorageError = err;
+          }
         }
+      }
+
+      if (lastStorageError != null) {
+        return (url: '', error: lastStorageError);
       }
     } on FirebaseException catch (e) {
       debugPrint('[FirebaseStorage] Error: ${e.code} - ${e.message}');
-      return (url: '', error: e.message ?? e.code);
+      final msg = _formatStorageError(e) ?? (e.message ?? e.code);
+      return (url: '', error: msg);
     } catch (e) {
       debugPrint('[FirebaseStorage] Unexpected error: $e');
-      return (url: '', error: e.toString());
+      final msg = _formatStorageError(e) ?? e.toString();
+      return (url: '', error: msg);
     }
 
     return (url: '', error: null);
@@ -137,11 +194,8 @@ class OrganizationDetailsDialog extends StatelessWidget {
     final url = result.url;
     if (url.isEmpty) {
       if (context.mounted) {
-        final msg = (result.error != null &&
-                (result.error!.toLowerCase().contains('billing') ||
-                    result.error!.toLowerCase().contains('delinquent') ||
-                    result.error!.toLowerCase().contains('permission')))
-            ? 'Firebase Storage: ${result.error}'
+        final msg = (result.error != null && result.error!.isNotEmpty)
+            ? result.error!
             : 'Document link not available for ${doc.title} (${doc.fileName}). Please edit the organization to re-upload this file.';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -168,11 +222,8 @@ class OrganizationDetailsDialog extends StatelessWidget {
     final url = result.url;
     if (url.isEmpty) {
       if (context.mounted) {
-        final msg = (result.error != null &&
-                (result.error!.toLowerCase().contains('billing') ||
-                    result.error!.toLowerCase().contains('delinquent') ||
-                    result.error!.toLowerCase().contains('permission')))
-            ? 'Firebase Storage: ${result.error}'
+        final msg = (result.error != null && result.error!.isNotEmpty)
+            ? result.error!
             : 'Document link not available for ${doc.title} (${doc.fileName}). Please edit the organization to re-upload this file.';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -185,13 +236,32 @@ class OrganizationDetailsDialog extends StatelessWidget {
     }
 
     if (context.mounted) {
-      await _openDocUrl(context, url);
+      await _openDocUrl(
+        context,
+        url,
+        fileName: doc.fileName.isNotEmpty ? doc.fileName : '${doc.title}.pdf',
+        docTitle: doc.title,
+      );
     }
   }
 
-  Future<void> _openDocUrl(BuildContext context, String url) async {
+  Future<void> _openDocUrl(
+    BuildContext context,
+    String url, {
+    String? fileName,
+    String? docTitle,
+  }) async {
     if (url.isEmpty) return;
     try {
+      if (url.startsWith('data:')) {
+        await downloadFileFromUrl(
+          context: context,
+          url: url,
+          fileName: fileName ?? 'document',
+          docTitle: docTitle,
+        );
+        return;
+      }
       final uri = Uri.parse(url);
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);

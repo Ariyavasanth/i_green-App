@@ -45,7 +45,8 @@ class _EmployeeManagementPageState
   int _currentPage = 0;
   int _rowsPerPage = 10;
   final Set<int> _selectedIds = {};
-  late final TextEditingController _mobileSearchController = TextEditingController();
+  late final TextEditingController _mobileSearchController =
+      TextEditingController();
 
   @override
   void dispose() {
@@ -82,9 +83,8 @@ class _EmployeeManagementPageState
           color: Colors.white,
           child: employeesAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, _) => Center(
-              child: Text('Unable to load employees: $err'),
-            ),
+            error: (err, _) =>
+                Center(child: Text('Unable to load employees: $err')),
             data: (allEmployees) {
               // Include all registered, active, converted, submitted, and pending employees in Employee Management table
               final employees = allEmployees.where((emp) {
@@ -94,23 +94,39 @@ class _EmployeeManagementPageState
 
               // Populate unique dropdown filter choices including dynamic database entries
               final dbDepts = ref.watch(departmentsProvider).valueOrNull ?? [];
-              final dbDesigs = ref.watch(allDesignationsProvider).valueOrNull ?? [];
+              final dbDesigs =
+                  ref.watch(allDesignationsProvider).valueOrNull ?? [];
 
-              final deptList = <String>['All Departments', ...<String>{
-                ...dbDepts.map((d) => d.departmentName),
-                ...Employee.departmentOptions,
-                for (final e in employees) if (e.department.isNotEmpty) e.department,
-              }];
-              final desigList = <String>['All Designations', ...<String>{
-                ...dbDesigs.map((d) => d.designationName),
-                ...Employee.designationOptions,
-                for (final e in employees) if (e.designation.isNotEmpty) e.designation,
-              }];
-              final statusList = <String>['All Statuses', ...<String>{for (final e in employees) if (e.status.isNotEmpty) e.status}];
+              final deptList = <String>[
+                'All Departments',
+                ...<String>{
+                  ...dbDepts.map((d) => d.departmentName),
+                  ...Employee.departmentOptions,
+                  for (final e in employees)
+                    if (e.department.isNotEmpty) e.department,
+                },
+              ];
+              final desigList = <String>[
+                'All Designations',
+                ...<String>{
+                  ...dbDesigs.map((d) => d.designationName),
+                  ...Employee.designationOptions,
+                  for (final e in employees)
+                    if (e.designation.isNotEmpty) e.designation,
+                },
+              ];
+              final statusList = <String>[
+                'All Statuses',
+                ...<String>{
+                  for (final e in employees)
+                    if (e.status.isNotEmpty) e.status,
+                },
+              ];
 
               final filtered = employees.where((emp) {
                 final q = searchQuery.toLowerCase().trim();
-                final matchesSearch = q.isEmpty ||
+                final matchesSearch =
+                    q.isEmpty ||
                     emp.employeeId.toLowerCase().contains(q) ||
                     emp.fullName.toLowerCase().contains(q) ||
                     emp.organizationName.toLowerCase().contains(q) ||
@@ -119,11 +135,17 @@ class _EmployeeManagementPageState
                     emp.emailAddress.toLowerCase().contains(q) ||
                     emp.phoneNumber.toLowerCase().contains(q);
 
-                final matchesOrg = orgFilter == 'All Organizations' ||
+                final matchesOrg =
+                    orgFilter == 'All Organizations' ||
                     emp.organizationName == orgFilter ||
-                    (emp.organizationId.isNotEmpty && emp.organizationId == orgFilter);
-                final matchesDept = deptFilter == 'All Departments' || emp.department == deptFilter;
-                final matchesDesig = desigFilter == 'All Designations' || emp.designation == desigFilter;
+                    (emp.organizationId.isNotEmpty &&
+                        emp.organizationId == orgFilter);
+                final matchesDept =
+                    deptFilter == 'All Departments' ||
+                    emp.department == deptFilter;
+                final matchesDesig =
+                    desigFilter == 'All Designations' ||
+                    emp.designation == desigFilter;
 
                 final statusLower = emp.status.trim().toLowerCase();
                 final filterLower = statusFilter.trim().toLowerCase();
@@ -131,7 +153,8 @@ class _EmployeeManagementPageState
                 if (filterLower == 'all statuses' || filterLower == 'all') {
                   matchesStatus = true;
                 } else if (filterLower == 'active') {
-                  matchesStatus = statusLower == 'active' || statusLower == 'converted';
+                  matchesStatus =
+                      statusLower == 'active' || statusLower == 'converted';
                 } else if (filterLower == 'inactive') {
                   matchesStatus = statusLower == 'inactive';
                 } else if (filterLower == 'suspended') {
@@ -140,22 +163,36 @@ class _EmployeeManagementPageState
                   matchesStatus = statusLower == filterLower;
                 }
 
-                return matchesSearch && matchesOrg && matchesDept && matchesDesig && matchesStatus;
+                return matchesSearch &&
+                    matchesOrg &&
+                    matchesDept &&
+                    matchesDesig &&
+                    matchesStatus;
               }).toList();
 
               if (isMobile) {
                 final totalItems = filtered.length;
                 final totalPages = (totalItems / _rowsPerPage).ceil();
-                final pageIndex = _currentPage.clamp(0, (totalPages - 1).clamp(0, 999)).toInt();
+                final pageIndex = _currentPage
+                    .clamp(0, (totalPages - 1).clamp(0, 999))
+                    .toInt();
                 final startIndex = (pageIndex * _rowsPerPage).toInt();
-                final endIndex = (startIndex + _rowsPerPage).clamp(0, totalItems).toInt();
+                final endIndex = (startIndex + _rowsPerPage)
+                    .clamp(0, totalItems)
+                    .toInt();
                 final pageItems = filtered.sublist(startIndex, endIndex);
 
                 return Scaffold(
                   backgroundColor: Colors.white,
                   body: Column(
                     children: [
-                      _buildMobileSearchAndFilter(context, searchQuery, deptList, desigList, statusList),
+                      _buildMobileSearchAndFilter(
+                        context,
+                        searchQuery,
+                        deptList,
+                        desigList,
+                        statusList,
+                      ),
                       const SizedBox(height: 8),
                       _buildStatusSummaryCards(context, employees),
                       const SizedBox(height: 8),
@@ -199,7 +236,8 @@ class _EmployeeManagementPageState
                     backgroundColor: AppColors.active,
                     elevation: 3,
                     shape: const CircleBorder(),
-                    onPressed: () => GoRouter.of(context).push('/employee/register/new'),
+                    onPressed: () =>
+                        GoRouter.of(context).push('/employee/register/new'),
                     child: const Icon(Icons.add, color: Colors.white, size: 26),
                   ),
                 );
@@ -252,9 +290,13 @@ class _EmployeeManagementPageState
               // Pagination for desktop
               final totalItems = filtered.length;
               final totalPages = (totalItems / _rowsPerPage).ceil();
-              final pageIndex = _currentPage.clamp(0, (totalPages - 1).clamp(0, 999)).toInt();
+              final pageIndex = _currentPage
+                  .clamp(0, (totalPages - 1).clamp(0, 999))
+                  .toInt();
               final startIndex = (pageIndex * _rowsPerPage).toInt();
-              final endIndex = (startIndex + _rowsPerPage).clamp(0, totalItems).toInt();
+              final endIndex = (startIndex + _rowsPerPage)
+                  .clamp(0, totalItems)
+                  .toInt();
               final pageItems = filtered.sublist(startIndex, endIndex);
 
               return Column(
@@ -286,10 +328,7 @@ class _EmployeeManagementPageState
     );
   }
 
-  Widget _buildToolbar(
-    BuildContext context,
-    AsyncValue<dynamic> prefAsync,
-  ) {
+  Widget _buildToolbar(BuildContext context, AsyncValue<dynamic> prefAsync) {
     final searchQuery = ref.watch(empSearchQueryProvider);
 
     return AdminListToolbar(
@@ -305,7 +344,8 @@ class _EmployeeManagementPageState
       },
       primaryActionLabel: 'Add Employee',
       primaryActionIcon: Icons.add,
-      onPrimaryAction: () => GoRouter.of(context).push('/employee/register/new'),
+      onPrimaryAction: () =>
+          GoRouter.of(context).push('/employee/register/new'),
       secondaryActions: [
         AdminToolbarAction(
           label: 'Export',
@@ -339,14 +379,22 @@ class _EmployeeManagementPageState
       final s = e.status.trim().toLowerCase();
       return s == 'active' || s == 'converted';
     }).length;
-    final inactiveCount = allEmployees.where((e) => e.status.trim().toLowerCase() == 'inactive').length;
+    final inactiveCount = allEmployees
+        .where((e) => e.status.trim().toLowerCase() == 'inactive')
+        .length;
 
-    final isStatusFiltered = currentStatus != 'All Statuses' && currentStatus != 'All';
+    final isStatusFiltered =
+        currentStatus != 'All Statuses' && currentStatus != 'All';
     final isDeptFiltered = currentDept != 'All Departments';
     final isDesigFiltered = currentDesig != 'All Designations';
     final isOrgFiltered = currentOrg != 'All Organizations';
     final isSearchFiltered = searchQuery.trim().isNotEmpty;
-    final hasActiveFilters = isStatusFiltered || isDeptFiltered || isDesigFiltered || isOrgFiltered || isSearchFiltered;
+    final hasActiveFilters =
+        isStatusFiltered ||
+        isDeptFiltered ||
+        isDesigFiltered ||
+        isOrgFiltered ||
+        isSearchFiltered;
 
     return Container(
       width: double.infinity,
@@ -369,7 +417,8 @@ class _EmployeeManagementPageState
             label: 'All',
             count: allCount,
             targetValue: 'All Statuses',
-            isSelected: currentStatus == 'All Statuses' || currentStatus == 'All',
+            isSelected:
+                currentStatus == 'All Statuses' || currentStatus == 'All',
           ),
           _buildStatusPill(
             label: 'Active',
@@ -396,7 +445,9 @@ class _EmployeeManagementPageState
               color: Colors.white,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: currentDept != 'All Departments' ? AppColors.active : AppColors.divider,
+                color: currentDept != 'All Departments'
+                    ? AppColors.active
+                    : AppColors.divider,
               ),
             ),
             child: DropdownButtonHideUnderline(
@@ -406,10 +457,16 @@ class _EmployeeManagementPageState
                 icon: const Icon(Icons.keyboard_arrow_down, size: 18),
                 style: TextStyle(
                   fontSize: 12,
-                  fontWeight: currentDept != 'All Departments' ? FontWeight.w600 : FontWeight.normal,
-                  color: currentDept != 'All Departments' ? AppColors.active : AppColors.textPrimary,
+                  fontWeight: currentDept != 'All Departments'
+                      ? FontWeight.w600
+                      : FontWeight.normal,
+                  color: currentDept != 'All Departments'
+                      ? AppColors.active
+                      : AppColors.textPrimary,
                 ),
-                items: depts.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
+                items: depts
+                    .map((d) => DropdownMenuItem(value: d, child: Text(d)))
+                    .toList(),
                 onChanged: (val) {
                   if (val != null) {
                     ref.read(empDeptFilterProvider.notifier).state = val;
@@ -426,20 +483,30 @@ class _EmployeeManagementPageState
               color: Colors.white,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: currentDesig != 'All Designations' ? AppColors.active : AppColors.divider,
+                color: currentDesig != 'All Designations'
+                    ? AppColors.active
+                    : AppColors.divider,
               ),
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
-                value: desigs.contains(currentDesig) ? currentDesig : desigs.first,
+                value: desigs.contains(currentDesig)
+                    ? currentDesig
+                    : desigs.first,
                 isDense: true,
                 icon: const Icon(Icons.keyboard_arrow_down, size: 18),
                 style: TextStyle(
                   fontSize: 12,
-                  fontWeight: currentDesig != 'All Designations' ? FontWeight.w600 : FontWeight.normal,
-                  color: currentDesig != 'All Designations' ? AppColors.active : AppColors.textPrimary,
+                  fontWeight: currentDesig != 'All Designations'
+                      ? FontWeight.w600
+                      : FontWeight.normal,
+                  color: currentDesig != 'All Designations'
+                      ? AppColors.active
+                      : AppColors.textPrimary,
                 ),
-                items: desigs.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
+                items: desigs
+                    .map((d) => DropdownMenuItem(value: d, child: Text(d)))
+                    .toList(),
                 onChanged: (val) {
                   if (val != null) {
                     ref.read(empDesigFilterProvider.notifier).state = val;
@@ -453,10 +520,14 @@ class _EmployeeManagementPageState
             InkWell(
               onTap: () {
                 ref.read(empSearchQueryProvider.notifier).state = '';
-                ref.read(empOrgFilterProvider.notifier).state = 'All Organizations';
-                ref.read(empDeptFilterProvider.notifier).state = 'All Departments';
-                ref.read(empDesigFilterProvider.notifier).state = 'All Designations';
-                ref.read(empStatusFilterProvider.notifier).state = 'All Statuses';
+                ref.read(empOrgFilterProvider.notifier).state =
+                    'All Organizations';
+                ref.read(empDeptFilterProvider.notifier).state =
+                    'All Departments';
+                ref.read(empDesigFilterProvider.notifier).state =
+                    'All Designations';
+                ref.read(empStatusFilterProvider.notifier).state =
+                    'All Statuses';
                 setState(() => _currentPage = 0);
               },
               borderRadius: BorderRadius.circular(8),
@@ -465,7 +536,11 @@ class _EmployeeManagementPageState
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: const [
-                    Icon(Icons.refresh_rounded, size: 16, color: AppColors.active),
+                    Icon(
+                      Icons.refresh_rounded,
+                      size: 16,
+                      color: AppColors.active,
+                    ),
                     SizedBox(width: 4),
                     Text(
                       'Reset Filters',
@@ -500,7 +575,9 @@ class _EmployeeManagementPageState
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.active.withValues(alpha: 0.12) : Colors.white,
+          color: isSelected
+              ? AppColors.active.withValues(alpha: 0.12)
+              : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isSelected ? AppColors.active : AppColors.divider,
@@ -532,7 +609,9 @@ class _EmployeeManagementPageState
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  color: isSelected ? AppColors.active : AppColors.textSecondary,
+                  color: isSelected
+                      ? AppColors.active
+                      : AppColors.textSecondary,
                 ),
               ),
             ),
@@ -560,14 +639,18 @@ class _EmployeeManagementPageState
     final depts = ref.read(departmentsProvider).valueOrNull ?? [];
 
     final buffer = StringBuffer();
-    buffer.writeln('Employee ID,Employee Name,Organization Name,Email Address,Phone Number,Department,Designation,Joining Date,Status');
+    buffer.writeln(
+      'Employee ID,Employee Name,Organization Name,Email Address,Phone Number,Department,Designation,Joining Date,Status',
+    );
     for (final emp in employees) {
       String orgName = emp.organizationName.trim();
       if (orgName.isEmpty && emp.organizationId.isNotEmpty) {
         final matched = orgs
-            .where((o) =>
-                o.id.toString() == emp.organizationId ||
-                o.docId == emp.organizationId)
+            .where(
+              (o) =>
+                  o.id.toString() == emp.organizationId ||
+                  o.docId == emp.organizationId,
+            )
             .firstOrNull;
         if (matched != null && matched.name.isNotEmpty) {
           orgName = matched.name;
@@ -575,10 +658,12 @@ class _EmployeeManagementPageState
       }
       if (orgName.isEmpty && emp.department.isNotEmpty) {
         final matchedDept = depts
-            .where((d) =>
-                d.departmentName.trim().toLowerCase() ==
-                    emp.department.trim().toLowerCase() &&
-                d.organizationName.trim().isNotEmpty)
+            .where(
+              (d) =>
+                  d.departmentName.trim().toLowerCase() ==
+                      emp.department.trim().toLowerCase() &&
+                  d.organizationName.trim().isNotEmpty,
+            )
             .firstOrNull;
         if (matchedDept != null && matchedDept.organizationName.isNotEmpty) {
           orgName = matchedDept.organizationName;
@@ -595,7 +680,8 @@ class _EmployeeManagementPageState
 
     final String csvContent = buffer.toString();
     final bytes = utf8.encode(csvContent);
-    final fileName = 'employee_records_${DateTime.now().millisecondsSinceEpoch}.csv';
+    final fileName =
+        'employee_records_${DateTime.now().millisecondsSinceEpoch}.csv';
 
     try {
       await saveAndDownloadOfferLetter(
@@ -689,12 +775,11 @@ class _EmployeeManagementPageState
       await ref.read(employeeRepositoryProvider).deleteEmployee(emp.id);
       ref.invalidate(employeesProvider);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Deleted "${emp.fullName}"')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Deleted "${emp.fullName}"')));
     }
   }
-
 
   Color _getStatusColor(String status) {
     final normalized = status.trim().toLowerCase();
@@ -716,7 +801,10 @@ class _EmployeeManagementPageState
     List<String> visibleColumns,
     double screenWidth,
   ) {
-    final minTableWidth = (visibleColumns.length * 140.0 + 440.0).clamp(800.0, 3200.0);
+    final minTableWidth = (visibleColumns.length * 140.0 + 440.0).clamp(
+      800.0,
+      3200.0,
+    );
 
     return Container(
       margin: const EdgeInsets.all(12),
@@ -787,7 +875,11 @@ class _EmployeeManagementPageState
                         DataCell(_buildCellContent(colName, emp)),
                       DataCell(
                         PopupMenuButton<String>(
-                          icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                          icon: const Icon(
+                            Icons.more_vert,
+                            size: 20,
+                            color: AppColors.textSecondary,
+                          ),
                           padding: EdgeInsets.zero,
                           tooltip: 'Actions',
                           constraints: const BoxConstraints(),
@@ -796,9 +888,16 @@ class _EmployeeManagementPageState
                               value: 'view',
                               child: Row(
                                 children: [
-                                  Icon(Icons.visibility_outlined, size: 18, color: AppColors.textPrimary),
+                                  Icon(
+                                    Icons.visibility_outlined,
+                                    size: 18,
+                                    color: AppColors.textPrimary,
+                                  ),
                                   SizedBox(width: 8),
-                                  Text('View Details', style: TextStyle(fontSize: 13)),
+                                  Text(
+                                    'View Details',
+                                    style: TextStyle(fontSize: 13),
+                                  ),
                                 ],
                               ),
                             ),
@@ -806,9 +905,16 @@ class _EmployeeManagementPageState
                               value: 'edit',
                               child: Row(
                                 children: [
-                                  Icon(Icons.edit_outlined, size: 18, color: AppColors.textPrimary),
+                                  Icon(
+                                    Icons.edit_outlined,
+                                    size: 18,
+                                    color: AppColors.textPrimary,
+                                  ),
                                   SizedBox(width: 8),
-                                  Text('Edit Employee', style: TextStyle(fontSize: 13)),
+                                  Text(
+                                    'Edit Employee',
+                                    style: TextStyle(fontSize: 13),
+                                  ),
                                 ],
                               ),
                             ),
@@ -816,9 +922,19 @@ class _EmployeeManagementPageState
                               value: 'delete',
                               child: Row(
                                 children: [
-                                  Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                                  Icon(
+                                    Icons.delete_outline,
+                                    size: 18,
+                                    color: Colors.redAccent,
+                                  ),
                                   SizedBox(width: 8),
-                                  Text('Delete Employee', style: TextStyle(fontSize: 13, color: Colors.redAccent)),
+                                  Text(
+                                    'Delete Employee',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.redAccent,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -859,11 +975,17 @@ class _EmployeeManagementPageState
     switch (columnName) {
       case 'Employee ID':
         value = emp.employeeId;
-        style = const TextStyle(fontWeight: FontWeight.bold, color: AppColors.active);
+        style = const TextStyle(
+          fontWeight: FontWeight.bold,
+          color: AppColors.active,
+        );
         break;
       case 'Employee Name':
         value = emp.fullName;
-        style = const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary);
+        style = const TextStyle(
+          fontWeight: FontWeight.w600,
+          color: AppColors.textPrimary,
+        );
         break;
       case 'Organization':
       case 'Organization Name':
@@ -871,9 +993,11 @@ class _EmployeeManagementPageState
         if (value.isEmpty && emp.organizationId.isNotEmpty) {
           final orgs = ref.watch(organizationsProvider).valueOrNull ?? [];
           final matched = orgs
-              .where((o) =>
-                  o.id.toString() == emp.organizationId ||
-                  o.docId == emp.organizationId)
+              .where(
+                (o) =>
+                    o.id.toString() == emp.organizationId ||
+                    o.docId == emp.organizationId,
+              )
               .firstOrNull;
           if (matched != null && matched.name.isNotEmpty) {
             value = matched.name;
@@ -882,10 +1006,12 @@ class _EmployeeManagementPageState
         if (value.isEmpty && emp.department.isNotEmpty) {
           final depts = ref.watch(departmentsProvider).valueOrNull ?? [];
           final matchedDept = depts
-              .where((d) =>
-                  d.departmentName.trim().toLowerCase() ==
-                      emp.department.trim().toLowerCase() &&
-                  d.organizationName.trim().isNotEmpty)
+              .where(
+                (d) =>
+                    d.departmentName.trim().toLowerCase() ==
+                        emp.department.trim().toLowerCase() &&
+                    d.organizationName.trim().isNotEmpty,
+              )
               .firstOrNull;
           if (matchedDept != null && matchedDept.organizationName.isNotEmpty) {
             value = matchedDept.organizationName;
@@ -1004,13 +1130,21 @@ class _EmployeeManagementPageState
                 style: const TextStyle(fontSize: 14),
                 decoration: InputDecoration(
                   hintText: 'Search employees...',
-                  hintStyle: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
-                  prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
+                  hintStyle: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    size: 20,
+                    color: AppColors.textSecondary,
+                  ),
                   suffixIcon: searchQuery.isNotEmpty
                       ? IconButton(
                           icon: const Icon(Icons.clear, size: 18),
                           onPressed: () {
-                            ref.read(empSearchQueryProvider.notifier).state = '';
+                            ref.read(empSearchQueryProvider.notifier).state =
+                                '';
                             setState(() => _currentPage = 0);
                           },
                         )
@@ -1029,7 +1163,8 @@ class _EmployeeManagementPageState
           ),
           const SizedBox(width: 8),
           InkWell(
-            onTap: () => _openFilterBottomSheet(context, depts, desigs, statuses),
+            onTap: () =>
+                _openFilterBottomSheet(context, depts, desigs, statuses),
 
             borderRadius: BorderRadius.circular(16),
             child: Container(
@@ -1059,7 +1194,10 @@ class _EmployeeManagementPageState
     );
   }
 
-  Widget _buildStatusSummaryCards(BuildContext context, List<Employee> allEmployees) {
+  Widget _buildStatusSummaryCards(
+    BuildContext context,
+    List<Employee> allEmployees,
+  ) {
     final currentFilter = ref.watch(empStatusFilterProvider);
 
     final allCount = allEmployees.length;
@@ -1067,8 +1205,12 @@ class _EmployeeManagementPageState
       final s = e.status.trim().toLowerCase();
       return s == 'active' || s == 'converted';
     }).length;
-    final inactiveCount = allEmployees.where((e) => e.status.trim().toLowerCase() == 'inactive').length;
-    final suspendedCount = allEmployees.where((e) => e.status.trim().toLowerCase() == 'suspended').length;
+    final inactiveCount = allEmployees
+        .where((e) => e.status.trim().toLowerCase() == 'inactive')
+        .length;
+    final suspendedCount = allEmployees
+        .where((e) => e.status.trim().toLowerCase() == 'suspended')
+        .length;
 
     return SizedBox(
       height: 64,
@@ -1081,7 +1223,8 @@ class _EmployeeManagementPageState
             count: allCount,
             icon: Icons.grid_view_rounded,
             iconColor: const Color(0xFF3E474E),
-            isSelected: currentFilter == 'All Statuses' || currentFilter == 'All',
+            isSelected:
+                currentFilter == 'All Statuses' || currentFilter == 'All',
             onTap: () {
               ref.read(empStatusFilterProvider.notifier).state = 'All Statuses';
               setState(() => _currentPage = 0);
@@ -1224,11 +1367,7 @@ class _EmployeeManagementPageState
           const SizedBox(width: 4),
           InkWell(
             onTap: onClear,
-            child: const Icon(
-              Icons.close,
-              size: 14,
-              color: AppColors.active,
-            ),
+            child: const Icon(Icons.close, size: 14, color: AppColors.active),
           ),
         ],
       ),
@@ -1318,10 +1457,14 @@ class _EmployeeManagementPageState
                       Expanded(
                         child: OutlinedButton(
                           onPressed: () {
-                            ref.read(empOrgFilterProvider.notifier).state = 'All Organizations';
-                            ref.read(empDeptFilterProvider.notifier).state = 'All Departments';
-                            ref.read(empDesigFilterProvider.notifier).state = 'All Designations';
-                            ref.read(empStatusFilterProvider.notifier).state = 'All Statuses';
+                            ref.read(empOrgFilterProvider.notifier).state =
+                                'All Organizations';
+                            ref.read(empDeptFilterProvider.notifier).state =
+                                'All Departments';
+                            ref.read(empDesigFilterProvider.notifier).state =
+                                'All Designations';
+                            ref.read(empStatusFilterProvider.notifier).state =
+                                'All Statuses';
                             setState(() => _currentPage = 0);
                           },
                           child: const Text('Reset All'),
@@ -1378,7 +1521,12 @@ class _EmployeeManagementPageState
               value: items.contains(value) ? value : items.first,
               isExpanded: true,
               items: items
-                  .map((i) => DropdownMenuItem(value: i, child: Text(i, style: const TextStyle(fontSize: 14))))
+                  .map(
+                    (i) => DropdownMenuItem(
+                      value: i,
+                      child: Text(i, style: const TextStyle(fontSize: 14)),
+                    ),
+                  )
                   .toList(),
               onChanged: (val) {
                 if (val != null) onChanged(val);
@@ -1404,16 +1552,23 @@ class _EmployeeManagementPageState
     return colors[name.hashCode.abs() % colors.length];
   }
 
-  Widget _buildEmployeeCardAvatar(Employee emp, Color avatarBg, String initials) {
+  Widget _buildEmployeeCardAvatar(
+    Employee emp,
+    Color avatarBg,
+    String initials,
+  ) {
     final imgUrl = emp.profileImageUrl.trim();
     ImageProvider? provider;
 
     if (imgUrl.isNotEmpty) {
       if (imgUrl.startsWith('http://') || imgUrl.startsWith('https://')) {
         provider = NetworkImage(imgUrl);
-      } else if (imgUrl.startsWith('data:image') || imgUrl.contains(';base64,')) {
+      } else if (imgUrl.startsWith('data:image') ||
+          imgUrl.contains(';base64,')) {
         try {
-          final base64Str = imgUrl.contains(',') ? imgUrl.split(',').last : imgUrl;
+          final base64Str = imgUrl.contains(',')
+              ? imgUrl.split(',').last
+              : imgUrl;
           final cleaned = base64Str.replaceAll(RegExp(r'\s+'), '');
           final bytes = base64Decode(cleaned);
           if (bytes.isNotEmpty) provider = MemoryImage(bytes);
@@ -1453,7 +1608,9 @@ class _EmployeeManagementPageState
 
   Widget _buildCompactEmployeeCard(BuildContext context, Employee emp) {
     final statusColor = _getStatusColor(emp.status);
-    final empName = emp.fullName.trim().isEmpty ? 'Employee Name' : emp.fullName.trim();
+    final empName = emp.fullName.trim().isEmpty
+        ? 'Employee Name'
+        : emp.fullName.trim();
     final initials = _getInitials(empName);
     final avatarBg = _getAvatarColor(empName);
 
@@ -1512,7 +1669,10 @@ class _EmployeeManagementPageState
                 const SizedBox(width: 8),
                 // Status Badge Pill
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
@@ -1530,7 +1690,11 @@ class _EmployeeManagementPageState
                 const SizedBox(width: 4),
                 // Menu Icon (⋮)
                 PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                  icon: const Icon(
+                    Icons.more_vert,
+                    size: 20,
+                    color: AppColors.textSecondary,
+                  ),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   itemBuilder: (context) => [
@@ -1538,7 +1702,11 @@ class _EmployeeManagementPageState
                       value: 'view',
                       child: Row(
                         children: [
-                          Icon(Icons.visibility_outlined, size: 18, color: AppColors.textPrimary),
+                          Icon(
+                            Icons.visibility_outlined,
+                            size: 18,
+                            color: AppColors.textPrimary,
+                          ),
                           SizedBox(width: 8),
                           Text('Full Details', style: TextStyle(fontSize: 13)),
                         ],
@@ -1548,7 +1716,11 @@ class _EmployeeManagementPageState
                       value: 'edit',
                       child: Row(
                         children: [
-                          Icon(Icons.edit_outlined, size: 18, color: AppColors.textPrimary),
+                          Icon(
+                            Icons.edit_outlined,
+                            size: 18,
+                            color: AppColors.textPrimary,
+                          ),
                           SizedBox(width: 8),
                           Text('Edit Employee', style: TextStyle(fontSize: 13)),
                         ],
@@ -1558,9 +1730,19 @@ class _EmployeeManagementPageState
                       value: 'delete',
                       child: Row(
                         children: [
-                          Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                          Icon(
+                            Icons.delete_outline,
+                            size: 18,
+                            color: Colors.redAccent,
+                          ),
                           SizedBox(width: 8),
-                          Text('Delete Employee', style: TextStyle(fontSize: 13, color: Colors.redAccent)),
+                          Text(
+                            'Delete Employee',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.redAccent,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -1586,7 +1768,10 @@ class _EmployeeManagementPageState
               runSpacing: 6,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF5F6F8),
                     borderRadius: BorderRadius.circular(12),
@@ -1594,17 +1779,29 @@ class _EmployeeManagementPageState
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.business_outlined, size: 13, color: AppColors.textSecondary),
+                      const Icon(
+                        Icons.business_outlined,
+                        size: 13,
+                        color: AppColors.textSecondary,
+                      ),
                       const SizedBox(width: 6),
                       Text(
-                        emp.department.isEmpty ? 'No department' : emp.department,
-                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        emp.department.isEmpty
+                            ? 'No department'
+                            : emp.department,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     ],
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF5F6F8),
                     borderRadius: BorderRadius.circular(12),
@@ -1612,11 +1809,20 @@ class _EmployeeManagementPageState
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.badge_outlined, size: 13, color: AppColors.textSecondary),
+                      const Icon(
+                        Icons.badge_outlined,
+                        size: 13,
+                        color: AppColors.textSecondary,
+                      ),
                       const SizedBox(width: 6),
                       Text(
-                        emp.designation.isEmpty ? 'No designation' : emp.designation,
-                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        emp.designation.isEmpty
+                            ? 'No designation'
+                            : emp.designation,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     ],
                   ),
@@ -1632,11 +1838,17 @@ class _EmployeeManagementPageState
               borderRadius: BorderRadius.circular(12),
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFAFAFE),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFEBF0FF), width: 0.8),
+                  border: Border.all(
+                    color: const Color(0xFFEBF0FF),
+                    width: 0.8,
+                  ),
                 ),
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1669,7 +1881,8 @@ class _EmployeeManagementPageState
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       itemCount: pageItems.length,
       separatorBuilder: (context, index) => const SizedBox(height: 10),
-      itemBuilder: (context, index) => _buildCompactEmployeeCard(context, pageItems[index]),
+      itemBuilder: (context, index) =>
+          _buildCompactEmployeeCard(context, pageItems[index]),
     );
   }
 
@@ -1728,10 +1941,7 @@ class _EmployeeManagementPageState
           totalItems == 0
               ? 'Showing 0 records'
               : 'Showing ${startIndex + 1} - $endIndex of $totalItems',
-          style: const TextStyle(
-            fontSize: 12,
-            color: AppColors.textSecondary,
-          ),
+          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
         );
 
         final controlsRow = Row(
@@ -1749,10 +1959,7 @@ class _EmployeeManagementPageState
                   .map(
                     (val) => DropdownMenuItem(
                       value: val,
-                      child: Text(
-                        '$val',
-                        style: const TextStyle(fontSize: 12),
-                      ),
+                      child: Text('$val', style: const TextStyle(fontSize: 12)),
                     ),
                   )
                   .toList(),
@@ -1801,10 +2008,7 @@ class _EmployeeManagementPageState
                 )
               : Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    showingText,
-                    controlsRow,
-                  ],
+                  children: [showingText, controlsRow],
                 ),
         );
       },

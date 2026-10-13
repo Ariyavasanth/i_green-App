@@ -11,15 +11,20 @@ class EmployeeDetailsDialog extends StatelessWidget {
 
   Widget _buildAvatar() {
     final imgUrl = employee.profileImageUrl.trim();
-    final initials = employee.firstName.isNotEmpty ? employee.firstName[0].toUpperCase() : 'E';
+    final initials = employee.firstName.isNotEmpty
+        ? employee.firstName[0].toUpperCase()
+        : 'E';
     ImageProvider? provider;
 
     if (imgUrl.isNotEmpty) {
       if (imgUrl.startsWith('http://') || imgUrl.startsWith('https://')) {
         provider = NetworkImage(imgUrl);
-      } else if (imgUrl.startsWith('data:image') || imgUrl.contains(';base64,')) {
+      } else if (imgUrl.startsWith('data:image') ||
+          imgUrl.contains(';base64,')) {
         try {
-          final base64Str = imgUrl.contains(',') ? imgUrl.split(',').last : imgUrl;
+          final base64Str = imgUrl.contains(',')
+              ? imgUrl.split(',').last
+              : imgUrl;
           final cleaned = base64Str.replaceAll(RegExp(r'\s+'), '');
           final bytes = base64Decode(cleaned);
           if (bytes.isNotEmpty) provider = MemoryImage(bytes);
@@ -48,7 +53,10 @@ class EmployeeDetailsDialog extends StatelessWidget {
       backgroundColor: AppColors.active,
       child: Text(
         initials,
-        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }
@@ -67,14 +75,24 @@ class EmployeeDetailsDialog extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  employee.fullName.isEmpty ? 'Applicant Details' : employee.fullName,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  employee.fullName.isEmpty
+                      ? 'Applicant Details'
+                      : employee.fullName,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 Text(
                   employee.emailAddress.isNotEmpty
                       ? employee.emailAddress
-                      : (employee.phoneNumber.isNotEmpty ? employee.phoneNumber : 'Registration Link Response'),
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      : (employee.phoneNumber.isNotEmpty
+                            ? employee.phoneNumber
+                            : 'Registration Link Response'),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -172,7 +190,9 @@ class EmployeeDetailsDialog extends StatelessWidget {
           final availablePerms = employee.accessPermissions.isNotEmpty
               ? employee.accessPermissions.toSet()
               : Employee.allSidebarPermissions.toSet();
-          final categoryPerms = entry.value.where((p) => availablePerms.contains(p)).toList();
+          final categoryPerms = entry.value
+              .where((p) => availablePerms.contains(p))
+              .toList();
 
           if (categoryPerms.isEmpty) return const SizedBox.shrink();
 
@@ -194,14 +214,18 @@ class EmployeeDetailsDialog extends StatelessWidget {
               Wrap(
                 spacing: 8,
                 runSpacing: 6,
-                children: categoryPerms.map(
-                  (perm) => Chip(
-                    label: Text(perm, style: const TextStyle(fontSize: 11)),
-                    backgroundColor: AppColors.active.withValues(alpha: 0.1),
-                    side: BorderSide.none,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ).toList(),
+                children: categoryPerms
+                    .map(
+                      (perm) => Chip(
+                        label: Text(perm, style: const TextStyle(fontSize: 11)),
+                        backgroundColor: AppColors.active.withValues(
+                          alpha: 0.1,
+                        ),
+                        side: BorderSide.none,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    )
+                    .toList(),
               ),
             ],
           );
@@ -211,11 +235,21 @@ class EmployeeDetailsDialog extends StatelessWidget {
   }
 
   Widget _buildAddressTab() {
-    final permAddr = employee.permanentAddress.isNotEmpty ? employee.permanentAddress : employee.street;
-    final permCity = employee.permanentCity.isNotEmpty ? employee.permanentCity : employee.city;
-    final permState = employee.permanentState.isNotEmpty ? employee.permanentState : employee.state;
-    final permCountry = employee.permanentCountry.isNotEmpty ? employee.permanentCountry : employee.country;
-    final permPincode = employee.permanentPincode.isNotEmpty ? employee.permanentPincode : employee.postalCode;
+    final permAddr = employee.permanentAddress.isNotEmpty
+        ? employee.permanentAddress
+        : employee.street;
+    final permCity = employee.permanentCity.isNotEmpty
+        ? employee.permanentCity
+        : employee.city;
+    final permState = employee.permanentState.isNotEmpty
+        ? employee.permanentState
+        : employee.state;
+    final permCountry = employee.permanentCountry.isNotEmpty
+        ? employee.permanentCountry
+        : employee.country;
+    final permPincode = employee.permanentPincode.isNotEmpty
+        ? employee.permanentPincode
+        : employee.postalCode;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -232,7 +266,10 @@ class EmployeeDetailsDialog extends StatelessWidget {
         const SizedBox(height: 20),
         _buildSectionHeader('Present Contact Information'),
         _buildInfoGrid([
-          _InfoItem('Same as Permanent', employee.sameAsPermanent ? 'Yes' : 'No'),
+          _InfoItem(
+            'Same as Permanent',
+            employee.sameAsPermanent ? 'Yes' : 'No',
+          ),
           _InfoItem('Address', employee.presentAddress),
           _InfoItem('Country', employee.presentCountry),
           _InfoItem('State', employee.presentState),
@@ -252,7 +289,10 @@ class EmployeeDetailsDialog extends StatelessWidget {
       children: [
         _buildSectionHeader('Education Qualifications'),
         if (employee.educationType == 'Labour')
-          const Text('Category: Labour (Education details not required)', style: TextStyle(fontSize: 13, color: AppColors.textSecondary))
+          const Text(
+            'Category: Labour (Education details not required)',
+            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          )
         else if (eduList.isNotEmpty)
           Table(
             border: TableBorder.all(color: Colors.grey.shade300),
@@ -267,28 +307,106 @@ class EmployeeDetailsDialog extends StatelessWidget {
               TableRow(
                 decoration: BoxDecoration(color: Colors.grey.shade100),
                 children: const [
-                  Padding(padding: EdgeInsets.all(6), child: Text('ID', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                  Padding(padding: EdgeInsets.all(6), child: Text('Degree Name', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                  Padding(padding: EdgeInsets.all(6), child: Text('Institute Name', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                  Padding(padding: EdgeInsets.all(6), child: Text('Result', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                  Padding(padding: EdgeInsets.all(6), child: Text('Passing Year', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                  Padding(
+                    padding: EdgeInsets.all(6),
+                    child: Text(
+                      'ID',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.all(6),
+                    child: Text(
+                      'Degree Name',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.all(6),
+                    child: Text(
+                      'Institute Name',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.all(6),
+                    child: Text(
+                      'Result',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.all(6),
+                    child: Text(
+                      'Passing Year',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
                 ],
               ),
               ...eduList.map(
                 (item) => TableRow(
                   children: [
-                    Padding(padding: const EdgeInsets.all(6), child: Text(item.id, style: const TextStyle(fontSize: 12))),
-                    Padding(padding: const EdgeInsets.all(6), child: Text(item.degreeName, style: const TextStyle(fontSize: 12))),
-                    Padding(padding: const EdgeInsets.all(6), child: Text(item.instituteName, style: const TextStyle(fontSize: 12))),
-                    Padding(padding: const EdgeInsets.all(6), child: Text(item.result, style: const TextStyle(fontSize: 12))),
-                    Padding(padding: const EdgeInsets.all(6), child: Text(item.passingYear, style: const TextStyle(fontSize: 12))),
+                    Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Text(
+                        item.id,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Text(
+                        item.degreeName,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Text(
+                        item.instituteName,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Text(
+                        item.result,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Text(
+                        item.passingYear,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
                   ],
                 ),
               ),
             ],
           )
         else
-          const Text('No education details recorded.', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+          const Text(
+            'No education details recorded.',
+            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          ),
       ],
     );
   }
@@ -314,28 +432,106 @@ class EmployeeDetailsDialog extends StatelessWidget {
               TableRow(
                 decoration: BoxDecoration(color: Colors.grey.shade100),
                 children: const [
-                  Padding(padding: EdgeInsets.all(6), child: Text('ID', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                  Padding(padding: EdgeInsets.all(6), child: Text('Company Name', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                  Padding(padding: EdgeInsets.all(6), child: Text('Position', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                  Padding(padding: EdgeInsets.all(6), child: Text('Address/Duty', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                  Padding(padding: EdgeInsets.all(6), child: Text('Work Duration', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                  Padding(
+                    padding: EdgeInsets.all(6),
+                    child: Text(
+                      'ID',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.all(6),
+                    child: Text(
+                      'Company Name',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.all(6),
+                    child: Text(
+                      'Position',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.all(6),
+                    child: Text(
+                      'Address/Duty',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.all(6),
+                    child: Text(
+                      'Work Duration',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
                 ],
               ),
               ...expList.map(
                 (item) => TableRow(
                   children: [
-                    Padding(padding: const EdgeInsets.all(6), child: Text(item.id, style: const TextStyle(fontSize: 12))),
-                    Padding(padding: const EdgeInsets.all(6), child: Text(item.companyName, style: const TextStyle(fontSize: 12))),
-                    Padding(padding: const EdgeInsets.all(6), child: Text(item.position, style: const TextStyle(fontSize: 12))),
-                    Padding(padding: const EdgeInsets.all(6), child: Text(item.address, style: const TextStyle(fontSize: 12))),
-                    Padding(padding: const EdgeInsets.all(6), child: Text(item.workingDuration, style: const TextStyle(fontSize: 12))),
+                    Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Text(
+                        item.id,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Text(
+                        item.companyName,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Text(
+                        item.position,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Text(
+                        item.address,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Text(
+                        item.workingDuration,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
                   ],
                 ),
               ),
             ],
           )
         else
-          const Text('No experience details recorded.', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+          const Text(
+            'No experience details recorded.',
+            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          ),
       ],
     );
   }
@@ -381,7 +577,10 @@ class EmployeeDetailsDialog extends StatelessWidget {
         const SizedBox(height: 20),
         _buildSectionHeader('Criminal Background Check'),
         _buildInfoGrid([
-          _InfoItem('Has Criminal Cases', employee.hasCriminalCases ? 'Yes' : 'No'),
+          _InfoItem(
+            'Has Criminal Cases',
+            employee.hasCriminalCases ? 'Yes' : 'No',
+          ),
           if (employee.hasCriminalCases)
             _InfoItem('Criminal Case Details', employee.criminalCaseDetails),
         ]),
@@ -426,26 +625,89 @@ class EmployeeDetailsDialog extends StatelessWidget {
               TableRow(
                 decoration: BoxDecoration(color: Colors.grey.shade100),
                 children: const [
-                  Padding(padding: EdgeInsets.all(6), child: Text('ID', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                  Padding(padding: EdgeInsets.all(6), child: Text('Document Type', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                  Padding(padding: EdgeInsets.all(6), child: Text('Doc Number / File', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                  Padding(padding: EdgeInsets.all(6), child: Text('Uploaded Date', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                  Padding(
+                    padding: EdgeInsets.all(6),
+                    child: Text(
+                      'ID',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.all(6),
+                    child: Text(
+                      'Document Type',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.all(6),
+                    child: Text(
+                      'Doc Number / File',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.all(6),
+                    child: Text(
+                      'Uploaded Date',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
                 ],
               ),
               ...docList.map(
                 (item) => TableRow(
                   children: [
-                    Padding(padding: const EdgeInsets.all(6), child: Text(item.id, style: const TextStyle(fontSize: 12))),
-                    Padding(padding: const EdgeInsets.all(6), child: Text(item.documentType, style: const TextStyle(fontSize: 12))),
-                    Padding(padding: const EdgeInsets.all(6), child: Text('${item.documentNumber} (${item.fileName})', style: const TextStyle(fontSize: 12))),
-                    Padding(padding: const EdgeInsets.all(6), child: Text(item.uploadedDate, style: const TextStyle(fontSize: 12))),
+                    Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Text(
+                        item.id,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Text(
+                        item.documentType,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Text(
+                        '${item.documentNumber} (${item.fileName})',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Text(
+                        item.uploadedDate,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
                   ],
                 ),
               ),
             ],
           )
         else
-          const Text('No documents uploaded yet.', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+          const Text(
+            'No documents uploaded yet.',
+            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          ),
       ],
     );
   }
@@ -471,43 +733,85 @@ class EmployeeDetailsDialog extends StatelessWidget {
       children: [
         _buildSectionHeader('Job & Administrative Details'),
         _buildInfoGrid([
-          if (employee.organizationName.isNotEmpty) _InfoItem('Organization', employee.organizationName),
-          if (employee.businessUnit.isNotEmpty) _InfoItem('Business Unit / Division', employee.businessUnit),
-          if (employee.workLocation.isNotEmpty) _InfoItem('Work Location', employee.workLocation),
+          if (employee.organizationName.isNotEmpty)
+            _InfoItem('Organization', employee.organizationName),
+          if (employee.businessUnit.isNotEmpty)
+            _InfoItem('Business Unit / Division', employee.businessUnit),
+          if (employee.workLocation.isNotEmpty)
+            _InfoItem('Work Location', employee.workLocation),
           _InfoItem('Department', employee.department),
           _InfoItem('Designation', employee.designation),
           _InfoItem('User Role / Type', employee.userType),
           _InfoItem('Account Status', employee.status),
           _InfoItem('Date of Joining', employee.joiningDate),
-          _InfoItem('Contract End Date', employee.contractEndDate),
-          _InfoItem('Reporting Manager', employee.reportingManager),
+          _InfoItem(
+            'Reporting Manager',
+            employee.reportingManagerId.isNotEmpty &&
+                    employee.reportingManager.isNotEmpty
+                ? '${employee.reportingManager} (${employee.reportingManagerId})'
+                : (employee.reportingManager.isNotEmpty
+                      ? employee.reportingManager
+                      : (employee.reportingManagerId.isNotEmpty
+                            ? employee.reportingManagerId
+                            : '-')),
+          ),
           _InfoItem('Reporting Manager Title', employee.reportingManagerTitle),
           _InfoItem('Admin Name', employee.adminName),
           _InfoItem('Coordinator Name', employee.coordinatorName),
           _InfoItem('Coordinator Contact', employee.coordinatorPhone),
-          _InfoItem('Work Schedule Type', employee.isDynamicEmployee ? 'Flexible Schedule' : 'Fixed Schedule'),
+          _InfoItem(
+            'Work Schedule Type',
+            employee.isDynamicEmployee ? 'Flexible Schedule' : 'Fixed Schedule',
+          ),
           _InfoItem('Weekly Off Day', employee.weeklyOffDay),
           if (!employee.isDynamicEmployee && employee.inTime.isNotEmpty)
             _InfoItem('Work Hours', '${employee.inTime} - ${employee.outTime}')
           else
-            _InfoItem('Required Working Hours', '${employee.requiredWorkingHours > 0 ? employee.requiredWorkingHours.toStringAsFixed(0) : "9"} Hours'),
+            _InfoItem(
+              'Required Working Hours',
+              '${employee.requiredWorkingHours > 0 ? employee.requiredWorkingHours.toStringAsFixed(0) : "9"} Hours',
+            ),
         ]),
         const SizedBox(height: 20),
         _buildSectionHeader('Attendance & Geo-Fence Settings'),
         _buildInfoGrid([
-          _InfoItem('Site Geo-Fence Location', employee.siteLatitude != 0 ? '${employee.siteLatitude.toStringAsFixed(6)}, ${employee.siteLongitude.toStringAsFixed(6)}' : '-'),
-          _InfoItem('Allowed Radius', employee.siteAllowedRadiusMeters > 0 ? '${employee.siteAllowedRadiusMeters} meters' : '-'),
-          _InfoItem('GPS Verification Required', employee.siteRequireGpsVerification ? 'Yes' : 'No'),
+          _InfoItem(
+            'Site Geo-Fence Location',
+            employee.siteLatitude != 0
+                ? '${employee.siteLatitude.toStringAsFixed(6)}, ${employee.siteLongitude.toStringAsFixed(6)}'
+                : '-',
+          ),
+          _InfoItem(
+            'Allowed Radius',
+            employee.siteAllowedRadiusMeters > 0
+                ? '${employee.siteAllowedRadiusMeters} meters'
+                : '-',
+          ),
+          _InfoItem(
+            'GPS Verification Required',
+            employee.siteRequireGpsVerification ? 'Yes' : 'No',
+          ),
         ]),
         const SizedBox(height: 20),
         _buildSectionHeader('Leave Allocation & Policy'),
         _buildInfoGrid([
           _InfoItem('Leave Type', employee.leaveType),
           _InfoItem('Allocation Frequency', employee.leaveAllocationFrequency),
-          _InfoItem('Allowed Leaves', employee.allowedLeaves > 0 ? employee.allowedLeaves.toString() : '-'),
+          _InfoItem(
+            'Allowed Leaves',
+            employee.allowedLeaves > 0
+                ? employee.allowedLeaves.toString()
+                : '-',
+          ),
           _InfoItem('Leave Effective Date', employee.effectiveDate),
-          _InfoItem('Monthly Permission Limit', '${employee.monthlyPermissionLimitHours.toStringAsFixed(1)} Hours'),
-          _InfoItem('Daily Permission Limit', '${employee.dailyPermissionLimitHours.toStringAsFixed(1)} Hours'),
+          _InfoItem(
+            'Monthly Permission Limit',
+            '${employee.monthlyPermissionLimitHours.toStringAsFixed(1)} Hours',
+          ),
+          _InfoItem(
+            'Daily Permission Limit',
+            '${employee.dailyPermissionLimitHours.toStringAsFixed(1)} Hours',
+          ),
         ]),
       ],
     );
@@ -515,15 +819,27 @@ class EmployeeDetailsDialog extends StatelessWidget {
 
   Widget _buildSalaryTab() {
     final total = employee.salaryTotalCtc;
-    final basic = employee.salaryBasic > 0 ? employee.salaryBasic : (total > 0 ? total * 0.5 : 0.0);
-    final hra = employee.salaryHra > 0 ? employee.salaryHra : (total > 0 ? total * 0.2 : 0.0);
-    final special = employee.salarySpecialAllowance > 0 ? employee.salarySpecialAllowance : (total > 0 ? total * 0.3 : 0.0);
+    final basic = employee.salaryBasic > 0
+        ? employee.salaryBasic
+        : (total > 0 ? total * 0.5 : 0.0);
+    final hra = employee.salaryHra > 0
+        ? employee.salaryHra
+        : (total > 0 ? total * 0.2 : 0.0);
+    final special = employee.salarySpecialAllowance > 0
+        ? employee.salarySpecialAllowance
+        : (total > 0 ? total * 0.3 : 0.0);
     final edu = employee.salaryEducationAllowance;
     final travel = employee.salaryTravelAllowance;
     final other = employee.salaryOtherAllowance;
-    final pf = employee.salaryPf > 0 ? employee.salaryPf : (basic > 0 ? basic * 0.12 : 0.0);
-    final esi = employee.salaryEsi > 0 ? employee.salaryEsi : (total <= 21000 && basic > 0 ? basic * 0.0075 : 0.0);
-    final esiEmployer = employee.salaryEsiEmployer > 0 ? employee.salaryEsiEmployer : (total <= 21000 && total > 0 ? total * 0.0325 : 0.0);
+    final pf = employee.salaryPf > 0
+        ? employee.salaryPf
+        : (basic > 0 ? basic * 0.12 : 0.0);
+    final esi = employee.salaryEsi > 0
+        ? employee.salaryEsi
+        : (total <= 21000 && basic > 0 ? basic * 0.0075 : 0.0);
+    final esiEmployer = employee.salaryEsiEmployer > 0
+        ? employee.salaryEsiEmployer
+        : (total <= 21000 && total > 0 ? total * 0.0325 : 0.0);
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -534,15 +850,43 @@ class EmployeeDetailsDialog extends StatelessWidget {
           _InfoItem('Total CTC', total == 0 ? '-' : total.toStringAsFixed(2)),
           _InfoItem('Basic Pay', basic == 0 ? '-' : basic.toStringAsFixed(2)),
           _InfoItem('HRA', hra == 0 ? '-' : hra.toStringAsFixed(2)),
-          _InfoItem('Special Allowance', special == 0 ? '-' : special.toStringAsFixed(2)),
-          _InfoItem('Education Allowance', edu == 0 ? '-' : edu.toStringAsFixed(2)),
-          _InfoItem('Travel Allowance', travel == 0 ? '-' : travel.toStringAsFixed(2)),
-          _InfoItem('Other Allowance', other == 0 ? '-' : other.toStringAsFixed(2)),
+          _InfoItem(
+            'Special Allowance',
+            special == 0 ? '-' : special.toStringAsFixed(2),
+          ),
+          _InfoItem(
+            'Education Allowance',
+            edu == 0 ? '-' : edu.toStringAsFixed(2),
+          ),
+          _InfoItem(
+            'Travel Allowance',
+            travel == 0 ? '-' : travel.toStringAsFixed(2),
+          ),
+          _InfoItem(
+            'Other Allowance',
+            other == 0 ? '-' : other.toStringAsFixed(2),
+          ),
           _InfoItem('PF Deduction', pf == 0 ? '-' : pf.toStringAsFixed(2)),
-          _InfoItem('ESI Deduction (Employee)', esi == 0 ? '-' : esi.toStringAsFixed(2)),
-          _InfoItem('ESI Contribution (Employer)', esiEmployer == 0 ? '-' : esiEmployer.toStringAsFixed(2)),
-          _InfoItem('Professional Tax', employee.salaryProfessionalTax == 0 ? '-' : employee.salaryProfessionalTax.toStringAsFixed(2)),
-          _InfoItem('TDS', employee.salaryTax == 0 ? '-' : employee.salaryTax.toStringAsFixed(2)),
+          _InfoItem(
+            'ESI Deduction (Employee)',
+            esi == 0 ? '-' : esi.toStringAsFixed(2),
+          ),
+          _InfoItem(
+            'ESI Contribution (Employer)',
+            esiEmployer == 0 ? '-' : esiEmployer.toStringAsFixed(2),
+          ),
+          _InfoItem(
+            'Professional Tax',
+            employee.salaryProfessionalTax == 0
+                ? '-'
+                : employee.salaryProfessionalTax.toStringAsFixed(2),
+          ),
+          _InfoItem(
+            'TDS',
+            employee.salaryTax == 0
+                ? '-'
+                : employee.salaryTax.toStringAsFixed(2),
+          ),
         ]),
       ],
     );
@@ -573,16 +917,21 @@ class EmployeeDetailsDialog extends StatelessWidget {
             spacing: 8,
             runSpacing: 6,
             children: employee.accessPermissions
-                .map((perm) => Chip(
-                      label: Text(perm, style: const TextStyle(fontSize: 11)),
-                      backgroundColor: AppColors.active.withValues(alpha: 0.1),
-                      side: BorderSide.none,
-                      visualDensity: VisualDensity.compact,
-                    ))
+                .map(
+                  (perm) => Chip(
+                    label: Text(perm, style: const TextStyle(fontSize: 11)),
+                    backgroundColor: AppColors.active.withValues(alpha: 0.1),
+                    side: BorderSide.none,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                )
                 .toList(),
           )
         else
-          const Text('No access permissions assigned.', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+          const Text(
+            'No access permissions assigned.',
+            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          ),
       ],
     );
   }

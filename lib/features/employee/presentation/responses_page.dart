@@ -18,7 +18,15 @@ import 'dialogs/registration_links_dialog.dart';
 import 'dialogs/request_correction_dialog.dart';
 import 'widgets/admin_list_toolbar.dart';
 
-enum CandidateCardStatus { pending, submitted, correctionRequested, resubmitted, accepted, registered, rejected }
+enum CandidateCardStatus {
+  pending,
+  submitted,
+  correctionRequested,
+  resubmitted,
+  accepted,
+  registered,
+  rejected,
+}
 
 class ResponsesPage extends ConsumerStatefulWidget {
   const ResponsesPage({super.key});
@@ -51,7 +59,8 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
   int _currentPage = 0;
   int _rowsPerPage = 10;
   final Set<int> _selectedIds = {};
-  late final TextEditingController _mobileSearchController = TextEditingController();
+  late final TextEditingController _mobileSearchController =
+      TextEditingController();
 
   @override
   void dispose() {
@@ -87,12 +96,14 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
           color: Colors.white,
           child: linksAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, _) => Center(
-              child: Text('Unable to load responses: $err'),
-            ),
+            error: (err, _) =>
+                Center(child: Text('Unable to load responses: $err')),
             data: (links) {
-              final employees = employeesAsync.valueOrNull ?? const <Employee>[];
-              final candidateResponses = candidateResponsesAsync.valueOrNull ?? const <CandidateResponse>[];
+              final employees =
+                  employeesAsync.valueOrNull ?? const <Employee>[];
+              final candidateResponses =
+                  candidateResponsesAsync.valueOrNull ??
+                  const <CandidateResponse>[];
 
               // Keep only active candidate links (exclude converted and registered employees)
               final activeLinks = links.where((link) {
@@ -103,10 +114,20 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
               final filtered = activeLinks.where((link) {
                 final q = searchQuery.toLowerCase().trim();
                 final candidateId = _candidateId(link);
-                final employee = _employeeForLink(link, employees, candidateResponses);
-                final resp = _candidateResponseForLink(link, candidateResponses);
-                final effectiveStatus = (resp != null && resp.status.isNotEmpty) ? resp.status : link.linkStatus;
-                final matchesSearch = q.isEmpty ||
+                final employee = _employeeForLink(
+                  link,
+                  employees,
+                  candidateResponses,
+                );
+                final resp = _candidateResponseForLink(
+                  link,
+                  candidateResponses,
+                );
+                final effectiveStatus = (resp != null && resp.status.isNotEmpty)
+                    ? resp.status
+                    : link.linkStatus;
+                final matchesSearch =
+                    q.isEmpty ||
                     candidateId.toLowerCase().contains(q) ||
                     link.linkId.toLowerCase().contains(q) ||
                     link.employeeName.toLowerCase().contains(q) ||
@@ -116,7 +137,11 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                     effectiveStatus.toLowerCase().contains(q) ||
                     link.linkStatus.toLowerCase().contains(q);
 
-                final normStatus = _normalizeStatus(effectiveStatus, link, resp);
+                final normStatus = _normalizeStatus(
+                  effectiveStatus,
+                  link,
+                  resp,
+                );
                 final filter = statusFilter.trim().toLowerCase();
 
                 bool matchesStatus = false;
@@ -126,8 +151,10 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                   matchesStatus = normStatus == CandidateCardStatus.pending;
                 } else if (filter == 'submitted') {
                   matchesStatus = normStatus == CandidateCardStatus.submitted;
-                } else if (filter == 'correction requested' || filter == 'correction_requested') {
-                  matchesStatus = normStatus == CandidateCardStatus.correctionRequested;
+                } else if (filter == 'correction requested' ||
+                    filter == 'correction_requested') {
+                  matchesStatus =
+                      normStatus == CandidateCardStatus.correctionRequested;
                 } else if (filter == 'resubmitted') {
                   matchesStatus = normStatus == CandidateCardStatus.resubmitted;
                 } else if (filter == 'accepted') {
@@ -135,15 +162,15 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                 } else if (filter == 'rejected') {
                   matchesStatus = normStatus == CandidateCardStatus.rejected;
                 } else {
-                  matchesStatus = effectiveStatus.trim().toLowerCase() == filter || link.linkStatus.trim().toLowerCase() == filter;
+                  matchesStatus =
+                      effectiveStatus.trim().toLowerCase() == filter ||
+                      link.linkStatus.trim().toLowerCase() == filter;
                 }
 
                 final matchesDate = _matchesDateRange(link, dateRange);
 
                 return matchesSearch && matchesStatus && matchesDate;
               }).toList();
-
-
 
               // Sort by newest/most recent date descending (recent accepted/submitted on top)
               filtered.sort((a, b) {
@@ -159,9 +186,13 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
               if (isMobile) {
                 final totalItems = filtered.length;
                 final totalPages = (totalItems / _rowsPerPage).ceil();
-                final pageIndex = _currentPage.clamp(0, (totalPages - 1).clamp(0, 999)).toInt();
+                final pageIndex = _currentPage
+                    .clamp(0, (totalPages - 1).clamp(0, 999))
+                    .toInt();
                 final startIndex = (pageIndex * _rowsPerPage).toInt();
-                final endIndex = (startIndex + _rowsPerPage).clamp(0, totalItems).toInt();
+                final endIndex = (startIndex + _rowsPerPage)
+                    .clamp(0, totalItems)
+                    .toInt();
                 final pageItems = filtered.sublist(startIndex, endIndex);
 
                 return Scaffold(
@@ -170,7 +201,11 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildMobileSearchAndFilter(context, searchQuery),
-                      _buildStatusSummaryCards(context, links, candidateResponses),
+                      _buildStatusSummaryCards(
+                        context,
+                        links,
+                        candidateResponses,
+                      ),
                       const SizedBox(height: 8),
                       Expanded(
                         child: RefreshIndicator(
@@ -196,7 +231,11 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                                     ),
                                   ),
                                 )
-                              : _buildMobileList(pageItems, employees, candidateResponses),
+                              : _buildMobileList(
+                                  pageItems,
+                                  employees,
+                                  candidateResponses,
+                                ),
                         ),
                       ),
                     ],
@@ -214,7 +253,11 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                     elevation: 3,
                     shape: const CircleBorder(),
                     onPressed: () => _openAddLinkDialog(context),
-                    child: const Icon(Icons.link_sharp, color: Colors.white, size: 24),
+                    child: const Icon(
+                      Icons.link_sharp,
+                      color: Colors.white,
+                      size: 24,
+                    ),
                   ),
                 );
               }
@@ -245,15 +288,20 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
               }
 
               final pref = prefAsync.valueOrNull;
-              final visibleCols = (pref != null && pref.visibleColumns.isNotEmpty)
+              final visibleCols =
+                  (pref != null && pref.visibleColumns.isNotEmpty)
                   ? pref.visibleColumns
                   : List<String>.from(_defaultAllColumns);
 
               final totalItems = filtered.length;
               final totalPages = (totalItems / _rowsPerPage).ceil();
-              final pageIndex = _currentPage.clamp(0, (totalPages - 1).clamp(0, 999)).toInt();
+              final pageIndex = _currentPage
+                  .clamp(0, (totalPages - 1).clamp(0, 999))
+                  .toInt();
               final startIndex = (pageIndex * _rowsPerPage).toInt();
-              final endIndex = (startIndex + _rowsPerPage).clamp(0, totalItems).toInt();
+              final endIndex = (startIndex + _rowsPerPage)
+                  .clamp(0, totalItems)
+                  .toInt();
               final pageItems = filtered.sublist(startIndex, endIndex);
 
               return Column(
@@ -263,7 +311,13 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                   _buildFiltersRow(_statusList),
                   const Divider(height: 1),
                   Expanded(
-                    child: _buildDesktopTable(pageItems, visibleCols, constraints.maxWidth, employees, candidateResponses),
+                    child: _buildDesktopTable(
+                      pageItems,
+                      visibleCols,
+                      constraints.maxWidth,
+                      employees,
+                      candidateResponses,
+                    ),
                   ),
                   _buildPaginationBar(
                     totalItems: totalItems,
@@ -327,9 +381,14 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
               context: context,
               builder: (ctx) => AlertDialog(
                 title: const Text('Clear All Data?'),
-                content: const Text('This will delete all employee records, candidate responses, and registration links.'),
+                content: const Text(
+                  'This will delete all employee records, candidate responses, and registration links.',
+                ),
                 actions: [
-                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('Cancel'),
+                  ),
                   TextButton(
                     style: TextButton.styleFrom(foregroundColor: Colors.red),
                     onPressed: () => Navigator.pop(ctx, true),
@@ -347,7 +406,9 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('All candidate responses and employee data cleared.'),
+                    content: Text(
+                      'All candidate responses and employee data cleared.',
+                    ),
                     backgroundColor: Colors.redAccent,
                     behavior: SnackBarBehavior.floating,
                   ),
@@ -396,13 +457,23 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                 style: const TextStyle(fontSize: 14),
                 decoration: InputDecoration(
                   hintText: 'Search responses...',
-                  hintStyle: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
-                  prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
+                  hintStyle: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    size: 20,
+                    color: AppColors.textSecondary,
+                  ),
                   suffixIcon: searchQuery.isNotEmpty
                       ? IconButton(
                           icon: const Icon(Icons.clear, size: 18),
                           onPressed: () {
-                            ref.read(responseSearchQueryProvider.notifier).state = '';
+                            ref
+                                    .read(responseSearchQueryProvider.notifier)
+                                    .state =
+                                '';
                             setState(() => _currentPage = 0);
                           },
                         )
@@ -450,7 +521,11 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     );
   }
 
-  Widget _buildStatusSummaryCards(BuildContext context, List<RegistrationLink> allLinks, [List<CandidateResponse>? candidateResponses]) {
+  Widget _buildStatusSummaryCards(
+    BuildContext context,
+    List<RegistrationLink> allLinks, [
+    List<CandidateResponse>? candidateResponses,
+  ]) {
     final activeLinks = allLinks.where((l) {
       final s = l.linkStatus.trim().toLowerCase();
       return s != 'registered' && s != 'converted';
@@ -461,32 +536,45 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     final allCount = activeLinks.length;
     final pendingCount = activeLinks.where((l) {
       final resp = _candidateResponseForLink(l, candidateResponses);
-      final eff = (resp != null && resp.status.isNotEmpty) ? resp.status : l.linkStatus;
+      final eff = (resp != null && resp.status.isNotEmpty)
+          ? resp.status
+          : l.linkStatus;
       return _normalizeStatus(eff, l, resp) == CandidateCardStatus.pending;
     }).length;
     final submittedCount = activeLinks.where((l) {
       final resp = _candidateResponseForLink(l, candidateResponses);
-      final eff = (resp != null && resp.status.isNotEmpty) ? resp.status : l.linkStatus;
+      final eff = (resp != null && resp.status.isNotEmpty)
+          ? resp.status
+          : l.linkStatus;
       return _normalizeStatus(eff, l, resp) == CandidateCardStatus.submitted;
     }).length;
     final correctionCount = activeLinks.where((l) {
       final resp = _candidateResponseForLink(l, candidateResponses);
-      final eff = (resp != null && resp.status.isNotEmpty) ? resp.status : l.linkStatus;
-      return _normalizeStatus(eff, l, resp) == CandidateCardStatus.correctionRequested;
+      final eff = (resp != null && resp.status.isNotEmpty)
+          ? resp.status
+          : l.linkStatus;
+      return _normalizeStatus(eff, l, resp) ==
+          CandidateCardStatus.correctionRequested;
     }).length;
     final resubmittedCount = activeLinks.where((l) {
       final resp = _candidateResponseForLink(l, candidateResponses);
-      final eff = (resp != null && resp.status.isNotEmpty) ? resp.status : l.linkStatus;
+      final eff = (resp != null && resp.status.isNotEmpty)
+          ? resp.status
+          : l.linkStatus;
       return _normalizeStatus(eff, l, resp) == CandidateCardStatus.resubmitted;
     }).length;
     final acceptedCount = activeLinks.where((l) {
       final resp = _candidateResponseForLink(l, candidateResponses);
-      final eff = (resp != null && resp.status.isNotEmpty) ? resp.status : l.linkStatus;
+      final eff = (resp != null && resp.status.isNotEmpty)
+          ? resp.status
+          : l.linkStatus;
       return _normalizeStatus(eff, l, resp) == CandidateCardStatus.accepted;
     }).length;
     final rejectedCount = activeLinks.where((l) {
       final resp = _candidateResponseForLink(l, candidateResponses);
-      final eff = (resp != null && resp.status.isNotEmpty) ? resp.status : l.linkStatus;
+      final eff = (resp != null && resp.status.isNotEmpty)
+          ? resp.status
+          : l.linkStatus;
       return _normalizeStatus(eff, l, resp) == CandidateCardStatus.rejected;
     }).length;
 
@@ -501,9 +589,11 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             count: allCount,
             icon: Icons.grid_view_rounded,
             iconColor: const Color(0xFF3E474E),
-            isSelected: currentFilter == 'All Statuses' || currentFilter == 'All',
+            isSelected:
+                currentFilter == 'All Statuses' || currentFilter == 'All',
             onTap: () {
-              ref.read(responseStatusFilterProvider.notifier).state = 'All Statuses';
+              ref.read(responseStatusFilterProvider.notifier).state =
+                  'All Statuses';
               setState(() => _currentPage = 0);
             },
           ),
@@ -527,7 +617,8 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             iconColor: const Color(0xFF1976D2),
             isSelected: currentFilter == 'Submitted',
             onTap: () {
-              ref.read(responseStatusFilterProvider.notifier).state = 'Submitted';
+              ref.read(responseStatusFilterProvider.notifier).state =
+                  'Submitted';
               setState(() => _currentPage = 0);
             },
           ),
@@ -539,7 +630,8 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             iconColor: const Color(0xFFD97706),
             isSelected: currentFilter == 'Correction Requested',
             onTap: () {
-              ref.read(responseStatusFilterProvider.notifier).state = 'Correction Requested';
+              ref.read(responseStatusFilterProvider.notifier).state =
+                  'Correction Requested';
               setState(() => _currentPage = 0);
             },
           ),
@@ -551,7 +643,8 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             iconColor: const Color(0xFF0284C7),
             isSelected: currentFilter == 'Resubmitted',
             onTap: () {
-              ref.read(responseStatusFilterProvider.notifier).state = 'Resubmitted';
+              ref.read(responseStatusFilterProvider.notifier).state =
+                  'Resubmitted';
               setState(() => _currentPage = 0);
             },
           ),
@@ -563,7 +656,8 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             iconColor: const Color(0xFF2E7D32),
             isSelected: currentFilter == 'Accepted',
             onTap: () {
-              ref.read(responseStatusFilterProvider.notifier).state = 'Accepted';
+              ref.read(responseStatusFilterProvider.notifier).state =
+                  'Accepted';
               setState(() => _currentPage = 0);
             },
           ),
@@ -575,7 +669,8 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             iconColor: const Color(0xFFC62828),
             isSelected: currentFilter == 'Rejected',
             onTap: () {
-              ref.read(responseStatusFilterProvider.notifier).state = 'Rejected';
+              ref.read(responseStatusFilterProvider.notifier).state =
+                  'Rejected';
               setState(() => _currentPage = 0);
             },
           ),
@@ -685,8 +780,14 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
         children: [
           Expanded(
             child: Text(
-              totalItems == 0 ? 'Showing 0-0 of 0' : 'Showing ${startIndex + 1}-$endIndex of $totalItems',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
+              totalItems == 0
+                  ? 'Showing 0-0 of 0'
+                  : 'Showing ${startIndex + 1}-$endIndex of $totalItems',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textSecondary,
+              ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -697,17 +798,24 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                 icon: const Icon(Icons.chevron_left, size: 20),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                onPressed: currentPage > 0 ? () => setState(() => _currentPage -= 1) : null,
+                onPressed: currentPage > 0
+                    ? () => setState(() => _currentPage -= 1)
+                    : null,
               ),
               Text(
                 '${totalPages == 0 ? 0 : currentPage + 1} / $totalPages',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               IconButton(
                 icon: const Icon(Icons.chevron_right, size: 20),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                onPressed: currentPage < totalPages - 1 ? () => setState(() => _currentPage += 1) : null,
+                onPressed: currentPage < totalPages - 1
+                    ? () => setState(() => _currentPage += 1)
+                    : null,
               ),
             ],
           ),
@@ -732,8 +840,15 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
         style: const TextStyle(fontSize: 14),
         decoration: InputDecoration(
           hintText: 'Search responses...',
-          hintStyle: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
-          prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
+          hintStyle: const TextStyle(
+            fontSize: 14,
+            color: AppColors.textSecondary,
+          ),
+          prefixIcon: const Icon(
+            Icons.search,
+            size: 20,
+            color: AppColors.textSecondary,
+          ),
           suffixIcon: searchQuery.isNotEmpty
               ? IconButton(
                   icon: const Icon(Icons.clear, size: 18),
@@ -743,7 +858,10 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                   },
                 )
               : null,
-          contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          contentPadding: const EdgeInsets.symmetric(
+            vertical: 12,
+            horizontal: 16,
+          ),
           filled: true,
           fillColor: Colors.grey.withValues(alpha: 0.05),
           border: OutlineInputBorder(
@@ -767,10 +885,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     );
   }
 
-  Widget _buildMobileFilterChips(
-    BuildContext context,
-    List<String> statuses,
-  ) {
+  Widget _buildMobileFilterChips(BuildContext context, List<String> statuses) {
     final currentStatus = ref.watch(responseStatusFilterProvider);
     final currentDateRange = ref.watch(responseDateRangeProvider);
 
@@ -791,14 +906,19 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
               onTap: () => _openFilterBottomSheet(context, statuses),
               borderRadius: BorderRadius.circular(16),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: activeCount > 0
                       ? AppColors.active.withValues(alpha: 0.12)
                       : Colors.grey.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: activeCount > 0 ? AppColors.active : AppColors.divider,
+                    color: activeCount > 0
+                        ? AppColors.active
+                        : AppColors.divider,
                   ),
                 ),
                 child: Row(
@@ -807,7 +927,9 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                     Icon(
                       Icons.tune,
                       size: 16,
-                      color: activeCount > 0 ? AppColors.active : AppColors.textPrimary,
+                      color: activeCount > 0
+                          ? AppColors.active
+                          : AppColors.textPrimary,
                     ),
                     const SizedBox(width: 6),
                     Text(
@@ -815,7 +937,9 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
-                        color: activeCount > 0 ? AppColors.active : AppColors.textPrimary,
+                        color: activeCount > 0
+                            ? AppColors.active
+                            : AppColors.textPrimary,
                       ),
                     ),
                   ],
@@ -828,13 +952,15 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
               _buildActiveChip(
                 label: currentStatus,
                 onClear: () {
-                  ref.read(responseStatusFilterProvider.notifier).state = 'All Statuses';
+                  ref.read(responseStatusFilterProvider.notifier).state =
+                      'All Statuses';
                   setState(() => _currentPage = 0);
                 },
               ),
             if (currentDateRange != null)
               _buildActiveChip(
-                label: '${DateFormat('MMM d').format(currentDateRange.start)} - ${DateFormat('MMM d').format(currentDateRange.end)}',
+                label:
+                    '${DateFormat('MMM d').format(currentDateRange.start)} - ${DateFormat('MMM d').format(currentDateRange.end)}',
                 onClear: () {
                   ref.read(responseDateRangeProvider.notifier).state = null;
                   setState(() => _currentPage = 0);
@@ -854,22 +980,31 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                     },
                     borderRadius: BorderRadius.circular(16),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: isSelected
                             ? AppColors.active.withValues(alpha: 0.12)
                             : Colors.grey.withValues(alpha: 0.06),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: isSelected ? AppColors.active : AppColors.divider,
+                          color: isSelected
+                              ? AppColors.active
+                              : AppColors.divider,
                         ),
                       ),
                       child: Text(
                         status,
                         style: TextStyle(
                           fontSize: 12,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                          color: isSelected ? AppColors.active : AppColors.textPrimary,
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                          color: isSelected
+                              ? AppColors.active
+                              : AppColors.textPrimary,
                         ),
                       ),
                     ),
@@ -908,21 +1043,14 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
           const SizedBox(width: 4),
           InkWell(
             onTap: onClear,
-            child: const Icon(
-              Icons.close,
-              size: 14,
-              color: AppColors.active,
-            ),
+            child: const Icon(Icons.close, size: 14, color: AppColors.active),
           ),
         ],
       ),
     );
   }
 
-  void _openFilterBottomSheet(
-    BuildContext context,
-    List<String> statuses,
-  ) {
+  void _openFilterBottomSheet(BuildContext context, List<String> statuses) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -969,7 +1097,8 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                     value: currentStatus,
                     items: statuses,
                     onChanged: (val) {
-                      ref.read(responseStatusFilterProvider.notifier).state = val;
+                      ref.read(responseStatusFilterProvider.notifier).state =
+                          val;
                       setState(() => _currentPage = 0);
                     },
                   ),
@@ -979,7 +1108,11 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                     children: [
                       const Text(
                         'Submitted Date Range',
-                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       OutlinedButton.icon(
@@ -987,7 +1120,9 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                           minimumSize: const Size(double.infinity, 44),
                           alignment: Alignment.centerLeft,
                           side: const BorderSide(color: AppColors.divider),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
                         onPressed: () async {
                           final picked = await showDateRangePicker(
@@ -997,16 +1132,24 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                             initialDateRange: currentDateRange,
                           );
                           if (picked != null) {
-                            ref.read(responseDateRangeProvider.notifier).state = picked;
+                            ref.read(responseDateRangeProvider.notifier).state =
+                                picked;
                             setState(() => _currentPage = 0);
                           }
                         },
-                        icon: const Icon(Icons.calendar_today_outlined, size: 16, color: AppColors.textSecondary),
+                        icon: const Icon(
+                          Icons.calendar_today_outlined,
+                          size: 16,
+                          color: AppColors.textSecondary,
+                        ),
                         label: Text(
                           currentDateRange != null
                               ? '${DateFormat('MMM d, yyyy').format(currentDateRange.start)} - ${DateFormat('MMM d, yyyy').format(currentDateRange.end)}'
                               : 'Select Date Range',
-                          style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: AppColors.textPrimary,
+                          ),
                         ),
                       ),
                     ],
@@ -1017,8 +1160,12 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                       Expanded(
                         child: OutlinedButton(
                           onPressed: () {
-                            ref.read(responseStatusFilterProvider.notifier).state = 'All Statuses';
-                            ref.read(responseDateRangeProvider.notifier).state = null;
+                            ref
+                                    .read(responseStatusFilterProvider.notifier)
+                                    .state =
+                                'All Statuses';
+                            ref.read(responseDateRangeProvider.notifier).state =
+                                null;
                             setState(() => _currentPage = 0);
                           },
                           child: const Text('Reset All'),
@@ -1075,7 +1222,12 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
               value: items.contains(value) ? value : items.first,
               isExpanded: true,
               items: items
-                  .map((i) => DropdownMenuItem(value: i, child: Text(i, style: const TextStyle(fontSize: 14))))
+                  .map(
+                    (i) => DropdownMenuItem(
+                      value: i,
+                      child: Text(i, style: const TextStyle(fontSize: 14)),
+                    ),
+                  )
                   .toList(),
               onChanged: (val) {
                 if (val != null) onChanged(val);
@@ -1100,7 +1252,8 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
           }
         }
       }
-      final parsed = DateTime.tryParse(str) ?? DateTime.tryParse(str.replaceAll(' ', 'T'));
+      final parsed =
+          DateTime.tryParse(str) ?? DateTime.tryParse(str.replaceAll(' ', 'T'));
       if (parsed != null) return parsed;
       final formats = [
         DateFormat('d MMM yyyy'),
@@ -1132,15 +1285,32 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
 
   bool _matchesDateRange(RegistrationLink link, DateTimeRange? range) {
     if (range == null) return true;
-    final dateStr = link.submittedDate.isNotEmpty ? link.submittedDate : link.generatedDate;
+    final dateStr = link.submittedDate.isNotEmpty
+        ? link.submittedDate
+        : link.generatedDate;
     final date = _parseDate(dateStr);
     if (date == null) return false;
 
-    final start = DateTime(range.start.year, range.start.month, range.start.day, 0, 0, 0);
-    final end = DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59, 999);
+    final start = DateTime(
+      range.start.year,
+      range.start.month,
+      range.start.day,
+      0,
+      0,
+      0,
+    );
+    final end = DateTime(
+      range.end.year,
+      range.end.month,
+      range.end.day,
+      23,
+      59,
+      59,
+      999,
+    );
 
     return (date.isAfter(start) || date.isAtSameMomentAs(start)) &&
-           (date.isBefore(end) || date.isAtSameMomentAs(end));
+        (date.isBefore(end) || date.isAtSameMomentAs(end));
   }
 
   Widget _buildFiltersRow(List<String> statuses) {
@@ -1154,7 +1324,8 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
         ? '${DateFormat('MMM d, yyyy').format(currentDateRange.start)} - ${DateFormat('MMM d, yyyy').format(currentDateRange.end)}'
         : 'Submitted Date';
 
-    final hasActiveFilter = currentStatus != 'All Statuses' || currentDateRange != null;
+    final hasActiveFilter =
+        currentStatus != 'All Statuses' || currentDateRange != null;
 
     return Container(
       width: double.infinity,
@@ -1189,12 +1360,23 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                   child: DropdownButton<String>(
                     value: selectedStatus,
                     isDense: true,
-                    icon: const Icon(Icons.arrow_drop_down, color: AppColors.textSecondary, size: 20),
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
-                    items: statuses.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                    icon: const Icon(
+                      Icons.arrow_drop_down,
+                      color: AppColors.textSecondary,
+                      size: 20,
+                    ),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textPrimary,
+                    ),
+                    items: statuses
+                        .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                        .toList(),
                     onChanged: (val) {
                       if (val != null) {
-                        ref.read(responseStatusFilterProvider.notifier).state = val;
+                        ref.read(responseStatusFilterProvider.notifier).state =
+                            val;
                         setState(() => _currentPage = 0);
                       }
                     },
@@ -1234,7 +1416,9 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: currentDateRange != null ? AppColors.active : AppColors.divider,
+                      color: currentDateRange != null
+                          ? AppColors.active
+                          : AppColors.divider,
                       width: currentDateRange != null ? 1.2 : 1.0,
                     ),
                   ),
@@ -1244,7 +1428,9 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                       Icon(
                         Icons.calendar_today_outlined,
                         size: 16,
-                        color: currentDateRange != null ? AppColors.active : AppColors.textSecondary,
+                        color: currentDateRange != null
+                            ? AppColors.active
+                            : AppColors.textSecondary,
                       ),
                       const SizedBox(width: 8),
                       Text(
@@ -1252,14 +1438,17 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
-                          color: currentDateRange != null ? AppColors.active : AppColors.textPrimary,
+                          color: currentDateRange != null
+                              ? AppColors.active
+                              : AppColors.textPrimary,
                         ),
                       ),
                       if (currentDateRange != null) ...[
                         const SizedBox(width: 6),
                         GestureDetector(
                           onTap: () {
-                            ref.read(responseDateRangeProvider.notifier).state = null;
+                            ref.read(responseDateRangeProvider.notifier).state =
+                                null;
                             setState(() => _currentPage = 0);
                           },
                           child: const Icon(
@@ -1280,11 +1469,15 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   onPressed: () {
-                    ref.read(responseStatusFilterProvider.notifier).state = 'All Statuses';
+                    ref.read(responseStatusFilterProvider.notifier).state =
+                        'All Statuses';
                     ref.read(responseDateRangeProvider.notifier).state = null;
                     setState(() => _currentPage = 0);
                   },
-                  child: const Text('Reset Filters', style: TextStyle(fontSize: 13, color: AppColors.active)),
+                  child: const Text(
+                    'Reset Filters',
+                    style: TextStyle(fontSize: 13, color: AppColors.active),
+                  ),
                 ),
             ],
           ),
@@ -1310,7 +1503,9 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     }
 
     final buffer = StringBuffer();
-    buffer.writeln('Candidate ID,Candidate Name,Email,Phone Number,Status,Generated Date,Submitted Date');
+    buffer.writeln(
+      'Candidate ID,Candidate Name,Email,Phone Number,Status,Generated Date,Submitted Date',
+    );
     for (final link in links) {
       final emp = _employeeForLink(link, employees);
       final cId = _candidateId(link);
@@ -1327,14 +1522,18 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     }
 
     final String csvContent = buffer.toString();
-    final Uri url = Uri.parse('data:text/csv;charset=utf-8,${Uri.encodeComponent(csvContent)}');
+    final Uri url = Uri.parse(
+      'data:text/csv;charset=utf-8,${Uri.encodeComponent(csvContent)}',
+    );
     try {
       if (await canLaunchUrl(url)) {
         await launchUrl(url);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Successfully exported ${links.length} candidate responses!'),
+              content: Text(
+                'Successfully exported ${links.length} candidate responses!',
+              ),
               backgroundColor: AppColors.active,
               behavior: SnackBarBehavior.floating,
             ),
@@ -1375,7 +1574,8 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
       builder: (context) => ColumnSelectionDialog(
         tableId: _tableId,
         allColumns: _defaultAllColumns,
-        currentVisibleColumns: pref?.visibleColumns ?? List.from(_defaultAllColumns),
+        currentVisibleColumns:
+            pref?.visibleColumns ?? List.from(_defaultAllColumns),
         currentColumnOrder: pref?.columnOrder ?? List.from(_defaultAllColumns),
       ),
     );
@@ -1384,6 +1584,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
       ref.invalidate(empColumnPreferenceProvider(_tableId));
     }
   }
+
   Color _getStatusColor(String status) {
     switch (status.trim().toLowerCase()) {
       case 'submitted':
@@ -1411,8 +1612,17 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     }
   }
 
-  Widget _buildDesktopTable(List<RegistrationLink> links, List<String> visibleColumns, double screenWidth, List<Employee> employees, [List<CandidateResponse>? candidateResponses]) {
-    final minTableWidth = (visibleColumns.length * 140.0 + 220.0).clamp(800.0, 3200.0);
+  Widget _buildDesktopTable(
+    List<RegistrationLink> links,
+    List<String> visibleColumns,
+    double screenWidth,
+    List<Employee> employees, [
+    List<CandidateResponse>? candidateResponses,
+  ]) {
+    final minTableWidth = (visibleColumns.length * 140.0 + 220.0).clamp(
+      800.0,
+      3200.0,
+    );
     return Container(
       margin: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -1435,7 +1645,9 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             width: screenWidth < minTableWidth ? minTableWidth : screenWidth,
             child: SingleChildScrollView(
               child: DataTable(
-                headingRowColor: WidgetStateProperty.all(Colors.grey.withValues(alpha: 0.06)),
+                headingRowColor: WidgetStateProperty.all(
+                  Colors.grey.withValues(alpha: 0.06),
+                ),
                 headingRowHeight: 44,
                 dataRowMinHeight: 52,
                 dataRowMaxHeight: 60,
@@ -1458,11 +1670,16 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                   letterSpacing: 0.5,
                 ),
                 columns: [
-                  for (final colName in visibleColumns) DataColumn(label: Text(colName.toUpperCase())),
+                  for (final colName in visibleColumns)
+                    DataColumn(label: Text(colName.toUpperCase())),
                   const DataColumn(label: Text('ACTIONS')),
                 ],
                 rows: links.map((link) {
-                  final employee = _employeeForLink(link, employees, candidateResponses);
+                  final employee = _employeeForLink(
+                    link,
+                    employees,
+                    candidateResponses,
+                  );
                   final isSelected = _selectedIds.contains(link.id);
                   return DataRow(
                     selected: isSelected,
@@ -1476,8 +1693,21 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                       });
                     },
                     cells: [
-                      for (final colName in visibleColumns) DataCell(_buildCellContent(colName, link, employee, candidateResponses)),
-                      DataCell(_buildRowActions(link, candidateResponses: candidateResponses)),
+                      for (final colName in visibleColumns)
+                        DataCell(
+                          _buildCellContent(
+                            colName,
+                            link,
+                            employee,
+                            candidateResponses,
+                          ),
+                        ),
+                      DataCell(
+                        _buildRowActions(
+                          link,
+                          candidateResponses: candidateResponses,
+                        ),
+                      ),
                     ],
                   );
                 }).toList(),
@@ -1489,7 +1719,12 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     );
   }
 
-  Widget _buildCellContent(String columnName, RegistrationLink link, Employee? employee, [List<CandidateResponse>? candidateResponses]) {
+  Widget _buildCellContent(
+    String columnName,
+    RegistrationLink link,
+    Employee? employee, [
+    List<CandidateResponse>? candidateResponses,
+  ]) {
     String value = '';
     Widget? customWidget;
     TextStyle? style;
@@ -1497,11 +1732,17 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     switch (columnName) {
       case 'Candidate ID':
         value = _candidateId(link);
-        style = const TextStyle(fontWeight: FontWeight.bold, color: AppColors.active);
+        style = const TextStyle(
+          fontWeight: FontWeight.bold,
+          color: AppColors.active,
+        );
         break;
       case 'Candidate Name':
         value = _candidateName(link, employee);
-        style = const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary);
+        style = const TextStyle(
+          fontWeight: FontWeight.w600,
+          color: AppColors.textPrimary,
+        );
         break;
       case 'Email':
         value = _emailForLink(link, employee);
@@ -1511,9 +1752,12 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
         break;
       case 'Status':
         final resp = _candidateResponseForLink(link, candidateResponses);
-        final rawStatus = (resp != null && resp.status.isNotEmpty) ? resp.status.trim() : link.linkStatus.trim();
+        final rawStatus = (resp != null && resp.status.isNotEmpty)
+            ? resp.status.trim()
+            : link.linkStatus.trim();
         final displayStatus = switch (rawStatus.toLowerCase()) {
-          'correction_requested' || 'correction requested' => 'Correction Requested',
+          'correction_requested' ||
+          'correction requested' => 'Correction Requested',
           'resubmitted' => 'Resubmitted',
           'accepted' => 'Accepted',
           'registered' || 'converted' => 'Registered',
@@ -1557,17 +1801,32 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     );
   }
 
-  Widget _buildMobileList(List<RegistrationLink> links, List<Employee> employees, [List<CandidateResponse>? candidateResponses]) {
+  Widget _buildMobileList(
+    List<RegistrationLink> links,
+    List<Employee> employees, [
+    List<CandidateResponse>? candidateResponses,
+  ]) {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       itemCount: links.length,
       separatorBuilder: (context, index) => const SizedBox(height: 10),
-      itemBuilder: (context, index) => _buildCompactResponseCard(context, links[index], employees, candidateResponses),
+      itemBuilder: (context, index) => _buildCompactResponseCard(
+        context,
+        links[index],
+        employees,
+        candidateResponses,
+      ),
     );
   }
 
-  CandidateCardStatus _normalizeStatus(String rawStatus, [RegistrationLink? link, CandidateResponse? response]) {
-    final effectiveStatus = (response != null && response.status.isNotEmpty) ? response.status : rawStatus;
+  CandidateCardStatus _normalizeStatus(
+    String rawStatus, [
+    RegistrationLink? link,
+    CandidateResponse? response,
+  ]) {
+    final effectiveStatus = (response != null && response.status.isNotEmpty)
+        ? response.status
+        : rawStatus;
     final s = effectiveStatus.trim().toLowerCase();
     if (s == 'registered' || s == 'converted') {
       return CandidateCardStatus.registered;
@@ -1595,7 +1854,10 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
       if (name.isNotEmpty && name != '-' && name != 'Name not provided') {
         return CandidateCardStatus.submitted;
       }
-      if (link.submittedDate.isNotEmpty || link.submittedBy.isNotEmpty || link.employeeId.startsWith('CAN-') || link.employeeId.startsWith('EMP-')) {
+      if (link.submittedDate.isNotEmpty ||
+          link.submittedBy.isNotEmpty ||
+          link.employeeId.startsWith('CAN-') ||
+          link.employeeId.startsWith('EMP-')) {
         return CandidateCardStatus.submitted;
       }
     }
@@ -1603,7 +1865,9 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
   }
 
   String _formatAppliedDate(RegistrationLink link) {
-    final raw = link.submittedDate.trim().isNotEmpty ? link.submittedDate.trim() : link.generatedDate.trim();
+    final raw = link.submittedDate.trim().isNotEmpty
+        ? link.submittedDate.trim()
+        : link.generatedDate.trim();
     if (raw.isEmpty) return 'N/A';
     final dt = _parseDate(raw);
     if (dt != null) {
@@ -1613,7 +1877,10 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
   }
 
   Color _getAvatarColor(String name) {
-    if (name.isEmpty || name == '-' || name == 'Name not provided' || name == 'Unknown Applicant') {
+    if (name.isEmpty ||
+        name == '-' ||
+        name == 'Name not provided' ||
+        name == 'Unknown Applicant') {
       return const Color(0xFFE8EAF6);
     }
     final colors = [
@@ -1626,7 +1893,12 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     return colors[name.hashCode.abs() % colors.length];
   }
 
-  Widget _buildCompactResponseCard(BuildContext context, RegistrationLink link, List<Employee> employees, [List<CandidateResponse>? candidateResponses]) {
+  Widget _buildCompactResponseCard(
+    BuildContext context,
+    RegistrationLink link,
+    List<Employee> employees, [
+    List<CandidateResponse>? candidateResponses,
+  ]) {
     final employee = _employeeForLink(link, employees, candidateResponses);
     final rawName = _candidateName(link, employee).trim();
     final hasName = rawName.isNotEmpty && rawName != '-';
@@ -1635,43 +1907,44 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     final resp = _candidateResponseForLink(link, candidateResponses);
     final normalizedStatus = _normalizeStatus(link.linkStatus, link, resp);
 
-    final ({Color bg, Color color, IconData icon}) statusBadge = switch (normalizedStatus) {
-      CandidateCardStatus.submitted => (
-          bg: const Color(0xFFE3F2FD),
-          color: const Color(0xFF1976D2),
-          icon: Icons.assignment_turned_in,
-        ),
-      CandidateCardStatus.correctionRequested => (
-          bg: const Color(0xFFFEF3C7),
-          color: const Color(0xFFD97706),
-          icon: Icons.assignment_return_rounded,
-        ),
-      CandidateCardStatus.resubmitted => (
-          bg: const Color(0xFFE0F2FE),
-          color: const Color(0xFF0284C7),
-          icon: Icons.update_rounded,
-        ),
-      CandidateCardStatus.accepted => (
-          bg: const Color(0xFFE8F5E9),
-          color: const Color(0xFF2E7D32),
-          icon: Icons.check_circle,
-        ),
-      CandidateCardStatus.registered => (
-          bg: const Color(0xFFE0F2F1),
-          color: const Color(0xFF00695C),
-          icon: Icons.how_to_reg,
-        ),
-      CandidateCardStatus.pending => (
-          bg: const Color(0xFFFFF8E1),
-          color: const Color(0xFFE65100),
-          icon: Icons.access_time_filled,
-        ),
-      CandidateCardStatus.rejected => (
-          bg: const Color(0xFFFFEBEE),
-          color: const Color(0xFFC62828),
-          icon: Icons.cancel,
-        ),
-    };
+    final ({Color bg, Color color, IconData icon}) statusBadge =
+        switch (normalizedStatus) {
+          CandidateCardStatus.submitted => (
+            bg: const Color(0xFFE3F2FD),
+            color: const Color(0xFF1976D2),
+            icon: Icons.assignment_turned_in,
+          ),
+          CandidateCardStatus.correctionRequested => (
+            bg: const Color(0xFFFEF3C7),
+            color: const Color(0xFFD97706),
+            icon: Icons.assignment_return_rounded,
+          ),
+          CandidateCardStatus.resubmitted => (
+            bg: const Color(0xFFE0F2FE),
+            color: const Color(0xFF0284C7),
+            icon: Icons.update_rounded,
+          ),
+          CandidateCardStatus.accepted => (
+            bg: const Color(0xFFE8F5E9),
+            color: const Color(0xFF2E7D32),
+            icon: Icons.check_circle,
+          ),
+          CandidateCardStatus.registered => (
+            bg: const Color(0xFFE0F2F1),
+            color: const Color(0xFF00695C),
+            icon: Icons.how_to_reg,
+          ),
+          CandidateCardStatus.pending => (
+            bg: const Color(0xFFFFF8E1),
+            color: const Color(0xFFE65100),
+            icon: Icons.access_time_filled,
+          ),
+          CandidateCardStatus.rejected => (
+            bg: const Color(0xFFFFEBEE),
+            color: const Color(0xFFC62828),
+            icon: Icons.cancel,
+          ),
+        };
 
     final initials = hasName ? _getInitials(candidateName) : '?';
 
@@ -1700,10 +1973,7 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Left Status Accent Strip
-              Container(
-                width: 4,
-                color: statusBadge.color,
-              ),
+              Container(width: 4, color: statusBadge.color),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -1725,7 +1995,9 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.bold,
-                                    color: hasName ? AppColors.active : AppColors.textSecondary,
+                                    color: hasName
+                                        ? AppColors.active
+                                        : AppColors.textSecondary,
                                   ),
                                 ),
                               ),
@@ -1738,7 +2010,10 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                                   decoration: BoxDecoration(
                                     color: const Color(0xFF00C853),
                                     shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white, width: 1.5),
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 1.5,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -1786,19 +2061,36 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                           ),
                           const SizedBox(width: 4),
                           PopupMenuButton<String>(
-                            icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                            icon: const Icon(
+                              Icons.more_vert,
+                              size: 20,
+                              color: AppColors.textSecondary,
+                            ),
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(),
                             itemBuilder: (context) => [
-                              if (normalizedStatus == CandidateCardStatus.submitted ||
-                                  normalizedStatus == CandidateCardStatus.resubmitted) ...[
+                              if (normalizedStatus ==
+                                      CandidateCardStatus.submitted ||
+                                  normalizedStatus ==
+                                      CandidateCardStatus.resubmitted) ...[
                                 const PopupMenuItem(
                                   value: 'request_correction',
                                   child: Row(
                                     children: [
-                                      Icon(Icons.assignment_return_outlined, size: 18, color: Color(0xFF414A51)),
+                                      Icon(
+                                        Icons.assignment_return_outlined,
+                                        size: 18,
+                                        color: Color(0xFF414A51),
+                                      ),
                                       SizedBox(width: 8),
-                                      Text('Request Correction', style: TextStyle(fontSize: 13, color: Color(0xFF414A51), fontWeight: FontWeight.bold)),
+                                      Text(
+                                        'Request Correction',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Color(0xFF414A51),
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -1806,9 +2098,20 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                                   value: 'accept',
                                   child: Row(
                                     children: [
-                                      Icon(Icons.check_circle_outline, size: 18, color: Colors.blue),
+                                      Icon(
+                                        Icons.check_circle_outline,
+                                        size: 18,
+                                        color: Colors.blue,
+                                      ),
                                       SizedBox(width: 8),
-                                      Text('Accept Response', style: TextStyle(fontSize: 13, color: Colors.blue, fontWeight: FontWeight.bold)),
+                                      Text(
+                                        'Accept Response',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.blue,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -1816,21 +2119,44 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                                   value: 'reject',
                                   child: Row(
                                     children: [
-                                      Icon(Icons.cancel_outlined, size: 18, color: Colors.redAccent),
+                                      Icon(
+                                        Icons.cancel_outlined,
+                                        size: 18,
+                                        color: Colors.redAccent,
+                                      ),
                                       SizedBox(width: 8),
-                                      Text('Reject Response', style: TextStyle(fontSize: 13, color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                                      Text(
+                                        'Reject Response',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.redAccent,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
                               ],
-                              if (normalizedStatus == CandidateCardStatus.accepted) ...[
+                              if (normalizedStatus ==
+                                  CandidateCardStatus.accepted) ...[
                                 const PopupMenuItem(
                                   value: 'register',
                                   child: Row(
                                     children: [
-                                      Icon(Icons.person_add_outlined, size: 18, color: Colors.green),
+                                      Icon(
+                                        Icons.person_add_outlined,
+                                        size: 18,
+                                        color: Colors.green,
+                                      ),
                                       SizedBox(width: 8),
-                                      Text('Register Candidate', style: TextStyle(fontSize: 13, color: Colors.green, fontWeight: FontWeight.bold)),
+                                      Text(
+                                        'Register Candidate',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.green,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -1838,9 +2164,20 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                                   value: 'reject',
                                   child: Row(
                                     children: [
-                                      Icon(Icons.cancel_outlined, size: 18, color: Colors.redAccent),
+                                      Icon(
+                                        Icons.cancel_outlined,
+                                        size: 18,
+                                        color: Colors.redAccent,
+                                      ),
                                       SizedBox(width: 8),
-                                      Text('Reject Response', style: TextStyle(fontSize: 13, color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                                      Text(
+                                        'Reject Response',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.redAccent,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -1849,9 +2186,16 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                                 value: 'copy_link',
                                 child: Row(
                                   children: [
-                                    Icon(Icons.copy, size: 18, color: AppColors.textPrimary),
+                                    Icon(
+                                      Icons.copy,
+                                      size: 18,
+                                      color: AppColors.textPrimary,
+                                    ),
                                     SizedBox(width: 8),
-                                    Text('Copy Link URL', style: TextStyle(fontSize: 13)),
+                                    Text(
+                                      'Copy Link URL',
+                                      style: TextStyle(fontSize: 13),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -1879,9 +2223,13 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                               } else if (value == 'reject') {
                                 _setResponseStatus(link, 'Rejected');
                               } else if (value == 'register') {
-                                GoRouter.of(context).push('/employee/register/new?acceptedLinkId=${link.linkId}');
+                                GoRouter.of(context).push(
+                                  '/employee/register/new?acceptedLinkId=${link.linkId}',
+                                );
                               } else if (value == 'copy_link') {
-                                Clipboard.setData(ClipboardData(text: link.fullUrl));
+                                Clipboard.setData(
+                                  ClipboardData(text: link.fullUrl),
+                                );
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                     content: Text('Registration link copied!'),
@@ -1902,7 +2250,10 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                         runSpacing: 6,
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF5F6F8),
                               borderRadius: BorderRadius.circular(12),
@@ -1910,17 +2261,27 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.email_outlined, size: 13, color: AppColors.textSecondary),
+                                const Icon(
+                                  Icons.email_outlined,
+                                  size: 13,
+                                  color: AppColors.textSecondary,
+                                ),
                                 const SizedBox(width: 6),
                                 Text(
                                   email.isEmpty ? 'No email' : email,
-                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textSecondary,
+                                  ),
                                 ),
                               ],
                             ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF5F6F8),
                               borderRadius: BorderRadius.circular(12),
@@ -1928,11 +2289,18 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.phone_outlined, size: 13, color: AppColors.textSecondary),
+                                const Icon(
+                                  Icons.phone_outlined,
+                                  size: 13,
+                                  color: AppColors.textSecondary,
+                                ),
                                 const SizedBox(width: 6),
                                 Text(
                                   phone.isEmpty ? 'No phone' : phone,
-                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textSecondary,
+                                  ),
                                 ),
                               ],
                             ),
@@ -1948,11 +2316,17 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                         borderRadius: BorderRadius.circular(12),
                         child: Container(
                           width: double.infinity,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFAFAFE),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFFEBF0FF), width: 0.8),
+                            border: Border.all(
+                              color: const Color(0xFFEBF0FF),
+                              width: 0.8,
+                            ),
                           ),
                           child: const Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1985,10 +2359,15 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     );
   }
 
-  Widget _buildRowActions(RegistrationLink link, {bool isMobile = false, List<CandidateResponse>? candidateResponses}) {
+  Widget _buildRowActions(
+    RegistrationLink link, {
+    bool isMobile = false,
+    List<CandidateResponse>? candidateResponses,
+  }) {
     final resp = _candidateResponseForLink(link, candidateResponses);
     final normStatus = _normalizeStatus(link.linkStatus, link, resp);
-    final isSubmittedOrResubmitted = normStatus == CandidateCardStatus.submitted ||
+    final isSubmittedOrResubmitted =
+        normStatus == CandidateCardStatus.submitted ||
         normStatus == CandidateCardStatus.resubmitted;
     final isAccepted = normStatus == CandidateCardStatus.accepted;
 
@@ -2002,8 +2381,19 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
           onPressed: () => _openViewDialog(context, link),
-          icon: Icon(Icons.remove_red_eye_outlined, size: isMobile ? 14 : 16, color: AppColors.textPrimary),
-          label: Text('View', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+          icon: Icon(
+            Icons.remove_red_eye_outlined,
+            size: isMobile ? 14 : 16,
+            color: AppColors.textPrimary,
+          ),
+          label: Text(
+            'View',
+            style: TextStyle(
+              fontSize: isMobile ? 12 : 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+          ),
         ),
         if (isSubmittedOrResubmitted) ...[
           const SizedBox(width: 6),
@@ -2014,8 +2404,19 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             onPressed: () => _setResponseStatus(link, 'Accepted'),
-            icon: Icon(Icons.check_circle_outline, size: isMobile ? 14 : 16, color: Colors.blue),
-            label: Text('Accept', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.bold, color: Colors.blue)),
+            icon: Icon(
+              Icons.check_circle_outline,
+              size: isMobile ? 14 : 16,
+              color: Colors.blue,
+            ),
+            label: Text(
+              'Accept',
+              style: TextStyle(
+                fontSize: isMobile ? 12 : 13,
+                fontWeight: FontWeight.bold,
+                color: Colors.blue,
+              ),
+            ),
           ),
           const SizedBox(width: 6),
           TextButton.icon(
@@ -2025,8 +2426,19 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             onPressed: () => _setResponseStatus(link, 'Rejected'),
-            icon: Icon(Icons.cancel_outlined, size: isMobile ? 14 : 16, color: Colors.redAccent),
-            label: Text('Reject', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.bold, color: Colors.redAccent)),
+            icon: Icon(
+              Icons.cancel_outlined,
+              size: isMobile ? 14 : 16,
+              color: Colors.redAccent,
+            ),
+            label: Text(
+              'Reject',
+              style: TextStyle(
+                fontSize: isMobile ? 12 : 13,
+                fontWeight: FontWeight.bold,
+                color: Colors.redAccent,
+              ),
+            ),
           ),
         ],
         if (isAccepted) ...[
@@ -2038,10 +2450,23 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             onPressed: () {
-              GoRouter.of(context).push('/employee/register/new?acceptedLinkId=${link.linkId}');
+              GoRouter.of(
+                context,
+              ).push('/employee/register/new?acceptedLinkId=${link.linkId}');
             },
-            icon: Icon(Icons.person_add_outlined, size: isMobile ? 14 : 16, color: Colors.green),
-            label: Text('Register', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.bold, color: Colors.green)),
+            icon: Icon(
+              Icons.person_add_outlined,
+              size: isMobile ? 14 : 16,
+              color: Colors.green,
+            ),
+            label: Text(
+              'Register',
+              style: TextStyle(
+                fontSize: isMobile ? 12 : 13,
+                fontWeight: FontWeight.bold,
+                color: Colors.green,
+              ),
+            ),
           ),
           const SizedBox(width: 6),
           TextButton.icon(
@@ -2051,8 +2476,19 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             onPressed: () => _setResponseStatus(link, 'Rejected'),
-            icon: Icon(Icons.cancel_outlined, size: isMobile ? 14 : 16, color: Colors.redAccent),
-            label: Text('Reject', style: TextStyle(fontSize: isMobile ? 12 : 13, fontWeight: FontWeight.bold, color: Colors.redAccent)),
+            icon: Icon(
+              Icons.cancel_outlined,
+              size: isMobile ? 14 : 16,
+              color: Colors.redAccent,
+            ),
+            label: Text(
+              'Reject',
+              style: TextStyle(
+                fontSize: isMobile ? 12 : 13,
+                fontWeight: FontWeight.bold,
+                color: Colors.redAccent,
+              ),
+            ),
           ),
         ],
       ],
@@ -2110,20 +2546,30 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
       builder: (context, constraints) {
         final isCompact = constraints.maxWidth < 480;
         final showingText = Text(
-          totalItems == 0 ? 'Showing 0 records' : 'Showing ${startIndex + 1} - $endIndex of $totalItems',
+          totalItems == 0
+              ? 'Showing 0 records'
+              : 'Showing ${startIndex + 1} - $endIndex of $totalItems',
           style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
         );
 
         final controlsRow = Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Rows: ', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            const Text(
+              'Rows: ',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
             DropdownButton<int>(
               value: _rowsPerPage,
               isDense: true,
               underline: const SizedBox(),
               items: [5, 10, 20, 50]
-                  .map((val) => DropdownMenuItem(value: val, child: Text('$val', style: const TextStyle(fontSize: 12))))
+                  .map(
+                    (val) => DropdownMenuItem(
+                      value: val,
+                      child: Text('$val', style: const TextStyle(fontSize: 12)),
+                    ),
+                  )
                   .toList(),
               onChanged: (val) {
                 if (val != null) {
@@ -2137,12 +2583,19 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             const SizedBox(width: 8),
             IconButton(
               icon: const Icon(Icons.chevron_left, size: 20),
-              onPressed: currentPage > 0 ? () => setState(() => _currentPage -= 1) : null,
+              onPressed: currentPage > 0
+                  ? () => setState(() => _currentPage -= 1)
+                  : null,
             ),
-            Text('${totalPages == 0 ? 0 : currentPage + 1} / $totalPages', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            Text(
+              '${totalPages == 0 ? 0 : currentPage + 1} / $totalPages',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
             IconButton(
               icon: const Icon(Icons.chevron_right, size: 20),
-              onPressed: currentPage < totalPages - 1 ? () => setState(() => _currentPage += 1) : null,
+              onPressed: currentPage < totalPages - 1
+                  ? () => setState(() => _currentPage += 1)
+                  : null,
             ),
           ],
         );
@@ -2153,8 +2606,18 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
             border: Border(top: BorderSide(color: AppColors.divider)),
           ),
           child: isCompact
-              ? Column(mainAxisSize: MainAxisSize.min, children: [showingText, const SizedBox(height: 4), controlsRow])
-              : Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [showingText, controlsRow]),
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    showingText,
+                    const SizedBox(height: 4),
+                    controlsRow,
+                  ],
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [showingText, controlsRow],
+                ),
         );
       },
     );
@@ -2167,40 +2630,57 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
   Color _getStatusBgColor(String status) {
     final s = status.trim().toLowerCase();
     if (s == 'submitted' || s == 'completed') return const Color(0xFFE3F2FD);
-    if (s == 'correction_requested' || s == 'correction requested') return const Color(0xFFFEF3C7);
+    if (s == 'correction_requested' || s == 'correction requested')
+      return const Color(0xFFFEF3C7);
     if (s == 'resubmitted') return const Color(0xFFE0F2FE);
     if (s == 'accepted') return const Color(0xFFE8F5E9);
     if (s == 'registered' || s == 'converted') return const Color(0xFFE0F2F1);
-    if (s == 'rejected' || s == 'expired' || s == 'cancelled') return const Color(0xFFFFEBEE);
+    if (s == 'rejected' || s == 'expired' || s == 'cancelled')
+      return const Color(0xFFFFEBEE);
     return const Color(0xFFFFF8E1);
   }
 
   Color _getStatusTextColor(String status) {
     final s = status.trim().toLowerCase();
     if (s == 'submitted' || s == 'completed') return const Color(0xFF1976D2);
-    if (s == 'correction_requested' || s == 'correction requested') return const Color(0xFFD97706);
+    if (s == 'correction_requested' || s == 'correction requested')
+      return const Color(0xFFD97706);
     if (s == 'resubmitted') return const Color(0xFF0284C7);
     if (s == 'accepted') return const Color(0xFF2E7D32);
     if (s == 'registered' || s == 'converted') return const Color(0xFF00695C);
-    if (s == 'rejected' || s == 'expired' || s == 'cancelled') return const Color(0xFFC62828);
+    if (s == 'rejected' || s == 'expired' || s == 'cancelled')
+      return const Color(0xFFC62828);
     return const Color(0xFFE65100);
   }
 
-  Future<void> _openViewDialogAsync(BuildContext context, RegistrationLink link) async {
+  Future<void> _openViewDialogAsync(
+    BuildContext context,
+    RegistrationLink link,
+  ) async {
     final repo = ref.read(employeeRepositoryProvider);
-    final candidateResp = await repo.getCandidateResponseByLinkId(link.linkId) ??
-        (link.employeeId.isNotEmpty ? await repo.getCandidateResponseByCandidateId(link.employeeId) : null);
-    final employee = candidateResp?.employeeData ?? _employeeForLink(link, await ref.read(allEmployeesProvider.future));
+    final candidateResp =
+        await repo.getCandidateResponseByLinkId(link.linkId) ??
+        (link.employeeId.isNotEmpty
+            ? await repo.getCandidateResponseByCandidateId(link.employeeId)
+            : null);
+    final employee =
+        candidateResp?.employeeData ??
+        _employeeForLink(link, await ref.read(allEmployeesProvider.future));
     if (!context.mounted) return;
 
     final candidateName = _candidateName(link, employee);
-    final displayName = (candidateName.isEmpty || candidateName == '-') ? 'Candidate Details' : candidateName;
+    final displayName = (candidateName.isEmpty || candidateName == '-')
+        ? 'Candidate Details'
+        : candidateName;
     final candidateId = _candidateId(link);
     final dateStr = link.submittedDate.isNotEmpty
         ? link.submittedDate
         : (link.generatedDate.isNotEmpty ? link.generatedDate : '');
 
-    final normalized = _normalizeStatus(candidateResp?.status ?? link.linkStatus, link);
+    final normalized = _normalizeStatus(
+      candidateResp?.status ?? link.linkStatus,
+      link,
+    );
     final displayStatus = switch (normalized) {
       CandidateCardStatus.submitted => 'Submitted',
       CandidateCardStatus.correctionRequested => 'Correction Requested',
@@ -2210,8 +2690,6 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
       CandidateCardStatus.rejected => 'Rejected',
       CandidateCardStatus.pending => 'Pending',
     };
-
-
 
     showDialog<void>(
       context: context,
@@ -2258,7 +2736,10 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                 decoration: BoxDecoration(
                   color: const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE2E8F0), width: 0.8),
+                  border: Border.all(
+                    color: const Color(0xFFE2E8F0),
+                    width: 0.8,
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -2299,7 +2780,10 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: _getStatusBgColor(displayStatus),
                         borderRadius: BorderRadius.circular(12),
@@ -2328,11 +2812,29 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                         title: 'Contact Information',
                         icon: Icons.contact_mail_outlined,
                         items: [
-                          _buildModernViewItem('Email', _emailForLink(link, employee), icon: Icons.email_outlined),
-                          _buildModernViewItem('Phone', _phoneForLink(link, employee), icon: Icons.phone_outlined),
-                          _buildModernViewItem('Date of Birth', employee?.dob ?? '', icon: Icons.cake_outlined),
-                          _buildModernViewItem('Gender', employee?.gender ?? ''),
-                          _buildModernViewItem('Candidate ID', _candidateId(link)),
+                          _buildModernViewItem(
+                            'Email',
+                            _emailForLink(link, employee),
+                            icon: Icons.email_outlined,
+                          ),
+                          _buildModernViewItem(
+                            'Phone',
+                            _phoneForLink(link, employee),
+                            icon: Icons.phone_outlined,
+                          ),
+                          _buildModernViewItem(
+                            'Date of Birth',
+                            employee?.dob ?? '',
+                            icon: Icons.cake_outlined,
+                          ),
+                          _buildModernViewItem(
+                            'Gender',
+                            employee?.gender ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Candidate ID',
+                            _candidateId(link),
+                          ),
                           _buildModernViewItem('Status', displayStatus),
                         ],
                       ),
@@ -2340,18 +2842,54 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                         title: 'Address Information',
                         icon: Icons.location_on_outlined,
                         items: [
-                          _buildModernViewItem('Permanent Address', employee?.permanentAddress ?? ''),
-                          _buildModernViewItem('Permanent Country', employee?.permanentCountry ?? ''),
-                          _buildModernViewItem('Permanent State', employee?.permanentState ?? ''),
-                          _buildModernViewItem('Permanent City', employee?.permanentCity ?? ''),
-                          _buildModernViewItem('Permanent District', employee?.permanentDistrict ?? ''),
-                          _buildModernViewItem('Permanent Pincode', employee?.permanentPincode ?? ''),
-                          _buildModernViewItem('Present Address', employee?.presentAddress ?? ''),
-                          _buildModernViewItem('Present Country', employee?.presentCountry ?? ''),
-                          _buildModernViewItem('Present State', employee?.presentState ?? ''),
-                          _buildModernViewItem('Present City', employee?.presentCity ?? ''),
-                          _buildModernViewItem('Present District', employee?.presentDistrict ?? ''),
-                          _buildModernViewItem('Present Pincode', employee?.presentPincode ?? ''),
+                          _buildModernViewItem(
+                            'Permanent Address',
+                            employee?.permanentAddress ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Permanent Country',
+                            employee?.permanentCountry ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Permanent State',
+                            employee?.permanentState ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Permanent City',
+                            employee?.permanentCity ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Permanent District',
+                            employee?.permanentDistrict ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Permanent Pincode',
+                            employee?.permanentPincode ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Present Address',
+                            employee?.presentAddress ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Present Country',
+                            employee?.presentCountry ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Present State',
+                            employee?.presentState ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Present City',
+                            employee?.presentCity ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Present District',
+                            employee?.presentDistrict ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Present Pincode',
+                            employee?.presentPincode ?? '',
+                          ),
                         ],
                       ),
                       _buildModernViewSection(
@@ -2367,7 +2905,13 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                           if (employee?.educationType != 'Labour')
                             _buildModernViewItem(
                               'Education History',
-                              _joinItems(employee?.educationItems.map((e) => '${e.degreeName} | ${e.instituteName} | ${e.result} | ${e.passingYear}') ?? const []),
+                              _joinItems(
+                                employee?.educationItems.map(
+                                      (e) =>
+                                          '${e.degreeName} | ${e.instituteName} | ${e.result} | ${e.passingYear}',
+                                    ) ??
+                                    const [],
+                              ),
                             ),
                         ],
                       ),
@@ -2377,7 +2921,13 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                         items: [
                           _buildModernViewItem(
                             'Experience History',
-                            _joinItems(employee?.experienceItems.map((e) => '${e.companyName} | ${e.position} | ${e.address} | ${e.workingDuration}') ?? const []),
+                            _joinItems(
+                              employee?.experienceItems.map(
+                                    (e) =>
+                                        '${e.companyName} | ${e.position} | ${e.address} | ${e.workingDuration}',
+                                  ) ??
+                                  const [],
+                            ),
                           ),
                         ],
                       ),
@@ -2385,33 +2935,98 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                         title: 'Personal & History',
                         icon: Icons.badge_outlined,
                         items: [
-                          _buildModernViewItem('Original DOB', employee?.originalDob ?? ''),
-                          _buildModernViewItem('Personal Mobile Number', employee?.personalMobile ?? ''),
-                          _buildModernViewItem('PAN Card Number', employee?.panNumber ?? ''),
-                          _buildModernViewItem('Passport Number', employee?.passportNumber ?? ''),
-                          _buildModernViewItem('Driving License Number', employee?.drivingLicenseNumber ?? ''),
-                          _buildModernViewItem('Health Issues', employee?.healthIssues ?? ''),
-                          _buildModernViewItem('Emergency Contact', '${employee?.emergencyName ?? ''} ${employee?.emergencyMobile ?? ''}'.trim()),
-                          _buildModernViewItem('Referred By', '${employee?.referredByName ?? ''} ${employee?.referredByMobile ?? ''}'.trim()),
-                          _buildModernViewItem('Father Name', employee?.fatherName ?? ''),
-                          _buildModernViewItem('Mother Name', employee?.motherName ?? ''),
-                          _buildModernViewItem('Marital Status', employee?.maritalStatus ?? ''),
-                          _buildModernViewItem('Spouse Name', employee?.spouseName ?? ''),
-                          _buildModernViewItem('Kids 1 Name', employee?.kids1Name ?? ''),
-                          _buildModernViewItem('Kids 2 Name', employee?.kids2Name ?? ''),
-                          _buildModernViewItem('Kids 3 Name', employee?.kids3Name ?? ''),
+                          _buildModernViewItem(
+                            'Original DOB',
+                            employee?.originalDob ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Personal Mobile Number',
+                            employee?.personalMobile ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'PAN Card Number',
+                            employee?.panNumber ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Passport Number',
+                            employee?.passportNumber ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Driving License Number',
+                            employee?.drivingLicenseNumber ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Health Issues',
+                            employee?.healthIssues ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Emergency Contact',
+                            '${employee?.emergencyName ?? ''} ${employee?.emergencyMobile ?? ''}'
+                                .trim(),
+                          ),
+                          _buildModernViewItem(
+                            'Referred By',
+                            '${employee?.referredByName ?? ''} ${employee?.referredByMobile ?? ''}'
+                                .trim(),
+                          ),
+                          _buildModernViewItem(
+                            'Father Name',
+                            employee?.fatherName ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Mother Name',
+                            employee?.motherName ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Marital Status',
+                            employee?.maritalStatus ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Spouse Name',
+                            employee?.spouseName ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Kids 1 Name',
+                            employee?.kids1Name ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Kids 2 Name',
+                            employee?.kids2Name ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Kids 3 Name',
+                            employee?.kids3Name ?? '',
+                          ),
                         ],
                       ),
                       _buildModernViewSection(
                         title: 'Bank Account Details',
                         icon: Icons.account_balance_outlined,
                         items: [
-                          _buildModernViewItem('Account Holder Name', employee?.bankAccountHolder ?? ''),
-                          _buildModernViewItem('Bank Name', employee?.bankName ?? ''),
-                          _buildModernViewItem('Account Number', employee?.bankAccountNumber ?? ''),
-                          _buildModernViewItem('IFSC Code', employee?.bankIfsc ?? ''),
-                          _buildModernViewItem('Branch Name', employee?.bankBranch ?? ''),
-                          _buildModernViewItem('Account Type', employee?.bankAccountType ?? ''),
+                          _buildModernViewItem(
+                            'Account Holder Name',
+                            employee?.bankAccountHolder ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Bank Name',
+                            employee?.bankName ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Account Number',
+                            employee?.bankAccountNumber ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'IFSC Code',
+                            employee?.bankIfsc ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Branch Name',
+                            employee?.bankBranch ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Account Type',
+                            employee?.bankAccountType ?? '',
+                          ),
                         ],
                       ),
                       _buildModernViewSection(
@@ -2420,7 +3035,13 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                         items: [
                           _buildModernViewItem(
                             'Uploaded Documents',
-                            _joinItems(employee?.documentItems.map((e) => '${e.documentType} | ${e.documentNumber} | ${e.fileName} | ${e.uploadedDate}') ?? const []),
+                            _joinItems(
+                              employee?.documentItems.map(
+                                    (e) =>
+                                        '${e.documentType} | ${e.documentNumber} | ${e.fileName} | ${e.uploadedDate}',
+                                  ) ??
+                                  const [],
+                            ),
                           ),
                         ],
                       ),
@@ -2428,10 +3049,22 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                         title: 'Social Media',
                         icon: Icons.public_outlined,
                         items: [
-                          _buildModernViewItem('Facebook URL', employee?.facebookUrl ?? ''),
-                          _buildModernViewItem('Twitter URL', employee?.twitterUrl ?? ''),
-                          _buildModernViewItem('LinkedIn URL', employee?.linkedinUrl ?? ''),
-                          _buildModernViewItem('Google URL', employee?.googleUrl ?? ''),
+                          _buildModernViewItem(
+                            'Facebook URL',
+                            employee?.facebookUrl ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Twitter URL',
+                            employee?.twitterUrl ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'LinkedIn URL',
+                            employee?.linkedinUrl ?? '',
+                          ),
+                          _buildModernViewItem(
+                            'Google URL',
+                            employee?.googleUrl ?? '',
+                          ),
                         ],
                       ),
                     ],
@@ -2499,7 +3132,10 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          icon: const Icon(Icons.assignment_return_outlined, size: 16),
+                          icon: const Icon(
+                            Icons.assignment_return_outlined,
+                            size: 16,
+                          ),
                           label: const Text(
                             'Request Correction',
                             style: TextStyle(
@@ -2513,7 +3149,6 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
                   ],
                 ],
               ),
-
             ],
           ),
         ),
@@ -2525,12 +3160,16 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     try {
       final candResponses = ref.read(candidateResponsesProvider).valueOrNull;
       final resp = _candidateResponseForLink(link, candResponses);
-      final effectiveLinkId = (resp != null && resp.linkId.isNotEmpty) ? resp.linkId : link.linkId;
+      final effectiveLinkId = (resp != null && resp.linkId.isNotEmpty)
+          ? resp.linkId
+          : link.linkId;
       final effectiveCandId = (resp != null && resp.candidateId.isNotEmpty)
           ? resp.candidateId
           : (link.employeeId.isNotEmpty ? link.employeeId : null);
 
-      await ref.read(employeeRepositoryProvider).updateRegistrationLinkStatus(
+      await ref
+          .read(employeeRepositoryProvider)
+          .updateRegistrationLinkStatus(
             linkId: effectiveLinkId,
             linkStatus: status,
             candidateId: effectiveCandId,
@@ -2543,18 +3182,25 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
       await ref.read(registrationLinksProvider.future);
       await ref.read(candidateResponsesProvider.future);
       await ref.read(allEmployeesProvider.future);
-      
+
       // Auto-switch to the target status filter tab so the user sees the updated item immediately
-      if (status == 'Accepted' || status == 'Rejected' || status == 'Submitted' || status == 'Pending' || status == 'Correction Requested' || status == 'Resubmitted') {
+      if (status == 'Accepted' ||
+          status == 'Rejected' ||
+          status == 'Submitted' ||
+          status == 'Pending' ||
+          status == 'Correction Requested' ||
+          status == 'Resubmitted') {
         ref.read(responseStatusFilterProvider.notifier).state = status;
       }
-      
+
       if (mounted) {
         setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Candidate response status updated to "$status"'),
-            backgroundColor: status == 'Accepted' ? Colors.green : Colors.blueGrey,
+            backgroundColor: status == 'Accepted'
+                ? Colors.green
+                : Colors.blueGrey,
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 2),
           ),
@@ -2573,49 +3219,76 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
     }
   }
 
-  String _candidateId(RegistrationLink link) => link.employeeId.isNotEmpty ? link.employeeId : link.linkId;
+  String _candidateId(RegistrationLink link) =>
+      link.employeeId.isNotEmpty ? link.employeeId : link.linkId;
 
   String _candidateName(RegistrationLink link, Employee? employee) {
-    if (employee != null && employee.fullName.isNotEmpty) return employee.fullName;
+    if (employee != null && employee.fullName.isNotEmpty)
+      return employee.fullName;
     return link.employeeName.isNotEmpty ? link.employeeName : '-';
   }
 
   String _emailForLink(RegistrationLink link, Employee? employee) {
-    if (employee != null && employee.emailAddress.isNotEmpty) return employee.emailAddress;
+    if (employee != null && employee.emailAddress.isNotEmpty)
+      return employee.emailAddress;
     return '';
   }
 
   String _phoneForLink(RegistrationLink link, Employee? employee) {
-    if (employee != null && employee.phoneNumber.isNotEmpty) return employee.phoneNumber;
+    if (employee != null && employee.phoneNumber.isNotEmpty)
+      return employee.phoneNumber;
     return '';
   }
 
-  Employee? _employeeForLink(RegistrationLink link, List<Employee> employees, [List<CandidateResponse>? candidateResponses]) {
+  Employee? _employeeForLink(
+    RegistrationLink link,
+    List<Employee> employees, [
+    List<CandidateResponse>? candidateResponses,
+  ]) {
     if (candidateResponses != null) {
       for (final resp in candidateResponses) {
-        if ((link.linkId.isNotEmpty && (resp.linkId == link.linkId || resp.candidateId == link.linkId)) ||
-            (link.employeeId.isNotEmpty && (resp.candidateId == link.employeeId || resp.linkId == link.employeeId)) ||
-            (link.employeeName.isNotEmpty && resp.employeeData.fullName.trim().toLowerCase() == link.employeeName.trim().toLowerCase())) {
+        if ((link.linkId.isNotEmpty &&
+                (resp.linkId == link.linkId ||
+                    resp.candidateId == link.linkId)) ||
+            (link.employeeId.isNotEmpty &&
+                (resp.candidateId == link.employeeId ||
+                    resp.linkId == link.employeeId)) ||
+            (link.employeeName.isNotEmpty &&
+                resp.employeeData.fullName.trim().toLowerCase() ==
+                    link.employeeName.trim().toLowerCase())) {
           return resp.employeeData;
         }
       }
     }
     for (final employee in employees) {
-      if ((link.employeeId.isNotEmpty && (employee.employeeId == link.employeeId || employee.id.toString() == link.employeeId)) ||
+      if ((link.employeeId.isNotEmpty &&
+              (employee.employeeId == link.employeeId ||
+                  employee.id.toString() == link.employeeId)) ||
           (link.linkId.isNotEmpty && employee.employeeId == link.linkId) ||
-          (link.employeeName.isNotEmpty && employee.fullName.trim().toLowerCase() == link.employeeName.trim().toLowerCase())) {
+          (link.employeeName.isNotEmpty &&
+              employee.fullName.trim().toLowerCase() ==
+                  link.employeeName.trim().toLowerCase())) {
         return employee;
       }
     }
     return null;
   }
 
-  CandidateResponse? _candidateResponseForLink(RegistrationLink link, [List<CandidateResponse>? candidateResponses]) {
+  CandidateResponse? _candidateResponseForLink(
+    RegistrationLink link, [
+    List<CandidateResponse>? candidateResponses,
+  ]) {
     if (candidateResponses == null) return null;
     for (final resp in candidateResponses) {
-      if ((link.linkId.isNotEmpty && (resp.linkId == link.linkId || resp.candidateId == link.linkId)) ||
-          (link.employeeId.isNotEmpty && (resp.candidateId == link.employeeId || resp.linkId == link.employeeId)) ||
-          (link.employeeName.isNotEmpty && resp.employeeData.fullName.trim().toLowerCase() == link.employeeName.trim().toLowerCase())) {
+      if ((link.linkId.isNotEmpty &&
+              (resp.linkId == link.linkId ||
+                  resp.candidateId == link.linkId)) ||
+          (link.employeeId.isNotEmpty &&
+              (resp.candidateId == link.employeeId ||
+                  resp.linkId == link.employeeId)) ||
+          (link.employeeName.isNotEmpty &&
+              resp.employeeData.fullName.trim().toLowerCase() ==
+                  link.employeeName.trim().toLowerCase())) {
         return resp;
       }
     }
@@ -2688,8 +3361,12 @@ class _ResponsesPageState extends ConsumerState<ResponsesPage> {
               displayValue,
               style: TextStyle(
                 fontSize: 13,
-                color: displayValue == '-' ? AppColors.textSecondary : AppColors.textPrimary,
-                fontWeight: displayValue == '-' ? FontWeight.normal : FontWeight.w600,
+                color: displayValue == '-'
+                    ? AppColors.textSecondary
+                    : AppColors.textPrimary,
+                fontWeight: displayValue == '-'
+                    ? FontWeight.normal
+                    : FontWeight.w600,
               ),
             ),
           ),

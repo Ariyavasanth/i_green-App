@@ -130,7 +130,11 @@ class _AdminListToolbarState extends State<AdminListToolbar> {
                         fontSize: 13,
                         color: AppColors.textSecondary,
                       ),
-                      prefixIcon: const Icon(Icons.search, size: 18, color: AppColors.textSecondary),
+                      prefixIcon: const Icon(
+                        Icons.search,
+                        size: 18,
+                        color: AppColors.textSecondary,
+                      ),
                       suffixIcon: _searchController.text.isNotEmpty
                           ? IconButton(
                               icon: const Icon(Icons.clear, size: 16),
@@ -174,7 +178,10 @@ class _AdminListToolbarState extends State<AdminListToolbar> {
                     icon: Icon(widget.primaryActionIcon, size: 18),
                     label: Text(
                       widget.primaryActionLabel,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
@@ -211,7 +218,11 @@ class _AdminListToolbarState extends State<AdminListToolbar> {
                             fontSize: 13,
                             color: AppColors.textSecondary,
                           ),
-                          prefixIcon: const Icon(Icons.search, size: 18, color: AppColors.textSecondary),
+                          prefixIcon: const Icon(
+                            Icons.search,
+                            size: 18,
+                            color: AppColors.textSecondary,
+                          ),
                           suffixIcon: _searchController.text.isNotEmpty
                               ? IconButton(
                                   icon: const Icon(Icons.clear, size: 16),
@@ -221,20 +232,29 @@ class _AdminListToolbarState extends State<AdminListToolbar> {
                                   },
                                 )
                               : null,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                           filled: true,
                           fillColor: Colors.grey.withValues(alpha: 0.04),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide: const BorderSide(color: AppColors.divider),
+                            borderSide: const BorderSide(
+                              color: AppColors.divider,
+                            ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide: const BorderSide(color: AppColors.divider),
+                            borderSide: const BorderSide(
+                              color: AppColors.divider,
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide: const BorderSide(color: AppColors.active),
+                            borderSide: const BorderSide(
+                              color: AppColors.active,
+                            ),
                           ),
                         ),
                         onChanged: widget.onSearchChanged,
@@ -252,25 +272,48 @@ class _AdminListToolbarState extends State<AdminListToolbar> {
                   for (final action in widget.secondaryActions)
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
                         side: const BorderSide(color: AppColors.divider),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
                       onPressed: action.onPressed,
-                      icon: Icon(action.icon, size: 18, color: AppColors.textPrimary),
-                      label: Text(action.label, style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
+                      icon: Icon(
+                        action.icon,
+                        size: 18,
+                        color: AppColors.textPrimary,
+                      ),
+                      label: Text(
+                        action.label,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
                     ),
                   FilledButton.icon(
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.active,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                     onPressed: widget.onPrimaryAction,
                     icon: Icon(widget.primaryActionIcon, size: 18),
                     label: Text(
                       widget.primaryActionLabel,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],

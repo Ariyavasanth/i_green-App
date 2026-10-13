@@ -44,8 +44,11 @@ class RegistrationLinksDialog extends ConsumerWidget {
           data: (links) {
             final unconvertedLinks = links.where((link) {
               final status = link.linkStatus.trim().toLowerCase();
-              final isAcceptedOrConverted = status == 'accepted' || status == 'converted';
-              final isEmpId = link.employeeId.trim().toUpperCase().startsWith('EMP-');
+              final isAcceptedOrConverted =
+                  status == 'accepted' || status == 'converted';
+              final isEmpId = link.employeeId.trim().toUpperCase().startsWith(
+                'EMP-',
+              );
               return !(isAcceptedOrConverted || isEmpId);
             }).toList();
 
@@ -102,7 +105,10 @@ class RegistrationLinksDialog extends ConsumerWidget {
                             decoration: BoxDecoration(
                               color: statusColor.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: statusColor, width: 0.8),
+                              border: Border.all(
+                                color: statusColor,
+                                width: 0.8,
+                              ),
                             ),
                             child: Text(
                               link.linkStatus,
@@ -117,28 +123,48 @@ class RegistrationLinksDialog extends ConsumerWidget {
                         DataCell(Text(link.generatedBy)),
                         DataCell(Text(link.generatedDate)),
                         DataCell(Text(link.expiryDate)),
-                        DataCell(Text(link.employeeName.isEmpty ? '-' : link.employeeName)),
-                        DataCell(Text(link.employeeId.isEmpty ? '-' : link.employeeId)),
+                        DataCell(
+                          Text(
+                            link.employeeName.isEmpty ? '-' : link.employeeName,
+                          ),
+                        ),
+                        DataCell(
+                          Text(link.employeeId.isEmpty ? '-' : link.employeeId),
+                        ),
                         DataCell(
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               IconButton(
-                                icon: const Icon(Icons.open_in_new, size: 18, color: AppColors.active),
+                                icon: const Icon(
+                                  Icons.open_in_new,
+                                  size: 18,
+                                  color: AppColors.active,
+                                ),
                                 tooltip: 'Open Registration Form',
                                 onPressed: () {
                                   Navigator.of(context).pop();
-                                  GoRouter.of(context).push('/employee/register/${link.linkId}?acceptedLinkId=${link.linkId}');
+                                  GoRouter.of(context).push(
+                                    '/employee/register/${link.linkId}?acceptedLinkId=${link.linkId}',
+                                  );
                                 },
                               ),
                               IconButton(
-                                icon: const Icon(Icons.copy, size: 18, color: AppColors.active),
+                                icon: const Icon(
+                                  Icons.copy,
+                                  size: 18,
+                                  color: AppColors.active,
+                                ),
                                 tooltip: 'Copy Link URL',
                                 onPressed: () {
-                                  Clipboard.setData(ClipboardData(text: link.fullUrl));
+                                  Clipboard.setData(
+                                    ClipboardData(text: link.fullUrl),
+                                  );
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
-                                      content: Text('Registration link copied!'),
+                                      content: Text(
+                                        'Registration link copied!',
+                                      ),
                                       behavior: SnackBarBehavior.floating,
                                     ),
                                   );

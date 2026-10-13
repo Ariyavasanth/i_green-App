@@ -56,9 +56,12 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
   (String, String) _parsePhoneAndCountryCode(String fullPhone) {
     final trimmed = fullPhone.trim();
     if (trimmed.isEmpty) return ('+91', '');
-    
-    final sortedCodes = EmployeeRegistrationPage.allWorldCountryCodes.map((e) => e['code']!).toList()
-      ..sort((a, b) => b.length.compareTo(a.length));
+
+    final sortedCodes =
+        EmployeeRegistrationPage.allWorldCountryCodes
+            .map((e) => e['code']!)
+            .toList()
+          ..sort((a, b) => b.length.compareTo(a.length));
 
     for (final code in sortedCodes) {
       if (trimmed.startsWith(code)) {
@@ -68,7 +71,10 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
     if (trimmed.startsWith('+')) {
       final spaceIdx = trimmed.indexOf(' ');
       if (spaceIdx > 0) {
-        return (trimmed.substring(0, spaceIdx), trimmed.substring(spaceIdx + 1).trim());
+        return (
+          trimmed.substring(0, spaceIdx),
+          trimmed.substring(spaceIdx + 1).trim(),
+        );
       }
     }
     return ('+91', trimmed);
@@ -109,27 +115,45 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
     _leaveAllocationFrequency = emp?.leaveAllocationFrequency ?? 'Monthly';
     _inTimeController = TextEditingController(text: emp?.inTime ?? '');
     _outTimeController = TextEditingController(text: emp?.outTime ?? '');
-    _allowedLeavesController = TextEditingController(text: emp?.allowedLeaves.toString() ?? '1.0');
-    _leaveEffectiveDateController = TextEditingController(text: emp?.effectiveDate ?? '');
-    _bloodGroup = (emp?.bloodGroup.isNotEmpty ?? false) ? emp!.bloodGroup : 'B+';
-    _bloodGroupDocFileName = (emp?.bloodGroupReport.isNotEmpty ?? false) ? emp!.bloodGroupReport : 'No file chosen';
+    _allowedLeavesController = TextEditingController(
+      text: emp?.allowedLeaves.toString() ?? '1.0',
+    );
+    _leaveEffectiveDateController = TextEditingController(
+      text: emp?.effectiveDate ?? '',
+    );
+    _bloodGroup = (emp?.bloodGroup.isNotEmpty ?? false)
+        ? emp!.bloodGroup
+        : 'B+';
+    _bloodGroupDocFileName = (emp?.bloodGroupReport.isNotEmpty ?? false)
+        ? emp!.bloodGroupReport
+        : 'No file chosen';
     _hasCriminalCases = emp?.hasCriminalCases ?? false;
-    _criminalCaseDetailsController = TextEditingController(text: emp?.criminalCaseDetails ?? '');
+    _criminalCaseDetailsController = TextEditingController(
+      text: emp?.criminalCaseDetails ?? '',
+    );
 
     if (emp != null) {
-      if (emp.isDynamicEmployee || (emp.inTime.isEmpty && emp.outTime.isEmpty && !emp.isStaticEmployee)) {
+      if (emp.isDynamicEmployee ||
+          (emp.inTime.isEmpty &&
+              emp.outTime.isEmpty &&
+              !emp.isStaticEmployee)) {
         _workScheduleType = 'Flexible Schedule';
       } else {
         _workScheduleType = 'Fixed Schedule';
       }
       _requiredWorkingHoursController = TextEditingController(
-        text: '${emp.requiredWorkingHours > 0 ? emp.requiredWorkingHours.toStringAsFixed(0) : "9"} Hours',
+        text:
+            '${emp.requiredWorkingHours > 0 ? emp.requiredWorkingHours.toStringAsFixed(0) : "9"} Hours',
       );
-      _employmentType = emp.employmentType.isEmpty ? 'Full-Time' : emp.employmentType;
+      _employmentType = emp.employmentType.isEmpty
+          ? 'Full-Time'
+          : emp.employmentType;
       _status = emp.status.isEmpty ? 'Active' : emp.status;
       _userType = emp.userType.isEmpty ? 'EMPLOYEE' : emp.userType;
       _leaveType = (emp.leaveType.isEmpty || emp.leaveType == 'Once a Month')
-          ? (emp.leaveType == 'Once a Month' ? 'Manual Allocation' : 'As Needed')
+          ? (emp.leaveType == 'Once a Month'
+                ? 'Manual Allocation'
+                : 'As Needed')
           : emp.leaveType;
       _selectedPermissions = Set<String>.from(emp.accessPermissions);
     } else {
@@ -164,7 +188,9 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
     if (controller.text.trim().isNotEmpty) {
       try {
         final text = controller.text.trim().toUpperCase();
-        final match = RegExp(r'^(\d{1,2}):(\d{2})\s*(AM|PM)?$').firstMatch(text);
+        final match = RegExp(
+          r'^(\d{1,2}):(\d{2})\s*(AM|PM)?$',
+        ).firstMatch(text);
         if (match != null) {
           int hour = int.parse(match.group(1)!);
           final minute = int.parse(match.group(2)!);
@@ -201,7 +227,9 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
       final inMins = TimeFormatter.parseTimeToMinutes(_inTimeController.text);
       final outMins = TimeFormatter.parseTimeToMinutes(_outTimeController.text);
       if (inMins != null && outMins != null) {
-        final diffMins = outMins >= inMins ? (outMins - inMins) : ((outMins + 1440) - inMins);
+        final diffMins = outMins >= inMins
+            ? (outMins - inMins)
+            : ((outMins + 1440) - inMins);
         final hours = double.parse((diffMins / 60.0).toStringAsFixed(2));
         _requiredWorkingHoursController.text =
             '${hours.toStringAsFixed(hours.truncateToDouble() == hours ? 0 : 1)} Hours';
@@ -214,11 +242,19 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
       final inMins = TimeFormatter.parseTimeToMinutes(_inTimeController.text);
       final outMins = TimeFormatter.parseTimeToMinutes(_outTimeController.text);
       if (inMins != null && outMins != null) {
-        final diffMins = outMins >= inMins ? (outMins - inMins) : ((outMins + 1440) - inMins);
+        final diffMins = outMins >= inMins
+            ? (outMins - inMins)
+            : ((outMins + 1440) - inMins);
         return double.parse((diffMins / 60.0).toStringAsFixed(2));
       }
     }
-    return double.tryParse(_requiredWorkingHoursController.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 9.0;
+    return double.tryParse(
+          _requiredWorkingHoursController.text.replaceAll(
+            RegExp(r'[^0-9.]'),
+            '',
+          ),
+        ) ??
+        9.0;
   }
 
   Future<void> _pickBloodGroupDocFile() async {
@@ -243,52 +279,70 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
       final repo = ref.read(employeeRepositoryProvider);
       final isEdit = widget.employee != null;
 
-      final updatedEmployee = (widget.employee ??
-              Employee(
-                id: 0,
+      final updatedEmployee =
+          (widget.employee ??
+                  Employee(
+                    id: 0,
+                    employeeId: _empIdController.text.trim(),
+                    firstName: _firstNameController.text.trim(),
+                    lastName: _lastNameController.text.trim(),
+                    emailAddress: _emailController.text.trim(),
+                    phoneNumber: _formatPhoneWithCountryCode(
+                      _phoneCountryCode,
+                      _phoneController.text,
+                    ),
+                    gender: 'Male',
+                    dob: '',
+                    organizationName: _orgController.text.trim(),
+                    department: _deptController.text.trim(),
+                    designation: _designationController.text.trim(),
+                    employmentType: _employmentType,
+                    joiningDate: _joiningDateController.text.trim(),
+                    status: _status,
+                    accessPermissions: _selectedPermissions.toList(),
+                  ))
+              .copyWith(
                 employeeId: _empIdController.text.trim(),
                 firstName: _firstNameController.text.trim(),
                 lastName: _lastNameController.text.trim(),
                 emailAddress: _emailController.text.trim(),
-                phoneNumber: _formatPhoneWithCountryCode(_phoneCountryCode, _phoneController.text),
-                gender: 'Male',
-                dob: '',
+                phoneNumber: _formatPhoneWithCountryCode(
+                  _phoneCountryCode,
+                  _phoneController.text,
+                ),
                 organizationName: _orgController.text.trim(),
                 department: _deptController.text.trim(),
                 designation: _designationController.text.trim(),
                 employmentType: _employmentType,
                 joiningDate: _joiningDateController.text.trim(),
                 status: _status,
+                userType: _userType,
+                bloodGroup: _bloodGroup,
+                bloodGroupReport: _bloodGroupDocFileName,
+                hasCriminalCases: _hasCriminalCases,
+                criminalCaseDetails: _hasCriminalCases
+                    ? _criminalCaseDetailsController.text.trim()
+                    : '',
+                leaveType: _leaveType,
+                leaveAllocationFrequency: _leaveType == 'Manual Allocation'
+                    ? _leaveAllocationFrequency
+                    : '',
+                inTime: _workScheduleType == 'Fixed Schedule'
+                    ? _inTimeController.text.trim()
+                    : '',
+                outTime: _workScheduleType == 'Fixed Schedule'
+                    ? _outTimeController.text.trim()
+                    : '',
+                requiredWorkingHours: _getCalculatedRequiredWorkingHours(),
+                allowedLeaves: _leaveType == 'Manual Allocation'
+                    ? (double.tryParse(_allowedLeavesController.text.trim()) ??
+                          0.0)
+                    : 0.0,
+                effectiveDate: _leaveEffectiveDateController.text.trim(),
                 accessPermissions: _selectedPermissions.toList(),
-              ))
-          .copyWith(
-        employeeId: _empIdController.text.trim(),
-        firstName: _firstNameController.text.trim(),
-        lastName: _lastNameController.text.trim(),
-        emailAddress: _emailController.text.trim(),
-        phoneNumber: _formatPhoneWithCountryCode(_phoneCountryCode, _phoneController.text),
-        organizationName: _orgController.text.trim(),
-        department: _deptController.text.trim(),
-        designation: _designationController.text.trim(),
-        employmentType: _employmentType,
-        joiningDate: _joiningDateController.text.trim(),
-        status: _status,
-        userType: _userType,
-        bloodGroup: _bloodGroup,
-        bloodGroupReport: _bloodGroupDocFileName,
-        hasCriminalCases: _hasCriminalCases,
-        criminalCaseDetails: _hasCriminalCases ? _criminalCaseDetailsController.text.trim() : '',
-        leaveType: _leaveType,
-        leaveAllocationFrequency: _leaveType == 'Manual Allocation' ? _leaveAllocationFrequency : '',
-        inTime: _workScheduleType == 'Fixed Schedule' ? _inTimeController.text.trim() : '',
-        outTime: _workScheduleType == 'Fixed Schedule' ? _outTimeController.text.trim() : '',
-        requiredWorkingHours: _getCalculatedRequiredWorkingHours(),
-        allowedLeaves: _leaveType == 'Manual Allocation' ? (double.tryParse(_allowedLeavesController.text.trim()) ?? 0.0) : 0.0,
-        effectiveDate: _leaveEffectiveDateController.text.trim(),
-        accessPermissions: _selectedPermissions.toList(),
-        isStaticEmployee: _workScheduleType == 'Fixed Schedule',
-        isDynamicEmployee: _workScheduleType == 'Flexible Schedule',
-      );
+                isStaticEmployee: _workScheduleType == 'Fixed Schedule',
+                isDynamicEmployee: _workScheduleType == 'Flexible Schedule',
+              );
 
       if (isEdit) {
         await repo.updateEmployee(updatedEmployee);
@@ -302,9 +356,9 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
     } catch (e) {
       setState(() => _isSaving = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save employee: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to save employee: $e')));
       }
     }
   }
@@ -315,13 +369,7 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
     required bool isMobile,
   }) {
     if (isMobile) {
-      return Column(
-        children: [
-          child1,
-          const SizedBox(height: 12),
-          child2,
-        ],
-      );
+      return Column(children: [child1, const SizedBox(height: 12), child2]);
     }
     return Row(
       children: [
@@ -386,14 +434,24 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                   child1: TextFormField(
                     controller: _firstNameController,
                     textCapitalization: TextCapitalization.words,
-                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s.\-']"))],
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(
+                        RegExp(r"[a-zA-Z\s.\-']"),
+                      ),
+                    ],
                     onChanged: (val) {
-                      final sanitized = val.replaceAll(RegExp(r"[^a-zA-Z\s.\-']"), '');
+                      final sanitized = val.replaceAll(
+                        RegExp(r"[^a-zA-Z\s.\-']"),
+                        '',
+                      );
                       if (sanitized != val) {
-                        _firstNameController.value = _firstNameController.value.copyWith(
-                          text: sanitized,
-                          selection: TextSelection.collapsed(offset: sanitized.length),
-                        );
+                        _firstNameController.value = _firstNameController.value
+                            .copyWith(
+                              text: sanitized,
+                              selection: TextSelection.collapsed(
+                                offset: sanitized.length,
+                              ),
+                            );
                       }
                     },
                     decoration: const InputDecoration(
@@ -402,22 +460,34 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                     ),
                     validator: (v) {
                       if (v == null || v.trim().isEmpty) return 'Required';
-                      if (RegExp(r'[0-9]').hasMatch(v)) return 'Numbers not allowed';
-                      if (RegExp(r"[^a-zA-Z\s.\-']").hasMatch(v)) return 'Special symbols not allowed';
+                      if (RegExp(r'[0-9]').hasMatch(v))
+                        return 'Numbers not allowed';
+                      if (RegExp(r"[^a-zA-Z\s.\-']").hasMatch(v))
+                        return 'Special symbols not allowed';
                       return null;
                     },
                   ),
                   child2: TextFormField(
                     controller: _lastNameController,
                     textCapitalization: TextCapitalization.words,
-                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s.\-']"))],
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(
+                        RegExp(r"[a-zA-Z\s.\-']"),
+                      ),
+                    ],
                     onChanged: (val) {
-                      final sanitized = val.replaceAll(RegExp(r"[^a-zA-Z\s.\-']"), '');
+                      final sanitized = val.replaceAll(
+                        RegExp(r"[^a-zA-Z\s.\-']"),
+                        '',
+                      );
                       if (sanitized != val) {
-                        _lastNameController.value = _lastNameController.value.copyWith(
-                          text: sanitized,
-                          selection: TextSelection.collapsed(offset: sanitized.length),
-                        );
+                        _lastNameController.value = _lastNameController.value
+                            .copyWith(
+                              text: sanitized,
+                              selection: TextSelection.collapsed(
+                                offset: sanitized.length,
+                              ),
+                            );
                       }
                     },
                     decoration: const InputDecoration(
@@ -426,8 +496,10 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                     ),
                     validator: (v) {
                       if (v == null || v.trim().isEmpty) return 'Required';
-                      if (RegExp(r'[0-9]').hasMatch(v)) return 'Numbers not allowed';
-                      if (RegExp(r"[^a-zA-Z\s.\-']").hasMatch(v)) return 'Special symbols not allowed';
+                      if (RegExp(r'[0-9]').hasMatch(v))
+                        return 'Numbers not allowed';
+                      if (RegExp(r"[^a-zA-Z\s.\-']").hasMatch(v))
+                        return 'Special symbols not allowed';
                       return null;
                     },
                   ),
@@ -441,7 +513,8 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                       labelText: 'Email Address *',
                       border: OutlineInputBorder(),
                     ),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                    validator: (v) =>
+                        v == null || v.trim().isEmpty ? 'Required' : null,
                   ),
                   child2: TextFormField(
                     controller: _phoneController,
@@ -451,42 +524,66 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                     onChanged: (val) {
                       final sanitized = val.replaceAll(RegExp(r'[^0-9]'), '');
                       if (sanitized != val) {
-                        _phoneController.value = _phoneController.value.copyWith(
-                          text: sanitized,
-                          selection: TextSelection.collapsed(offset: sanitized.length),
-                        );
+                        _phoneController.value = _phoneController.value
+                            .copyWith(
+                              text: sanitized,
+                              selection: TextSelection.collapsed(
+                                offset: sanitized.length,
+                              ),
+                            );
                       }
                     },
                     decoration: InputDecoration(
                       labelText: 'Phone Number *',
                       border: const OutlineInputBorder(),
-                      prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+                      prefixIconConstraints: const BoxConstraints(
+                        minWidth: 0,
+                        minHeight: 0,
+                      ),
                       prefixIcon: Container(
                         margin: const EdgeInsets.only(right: 6),
                         padding: const EdgeInsets.only(left: 8, right: 4),
                         decoration: const BoxDecoration(
                           border: Border(
-                            right: BorderSide(color: Color(0xFFD0D5DD), width: 0.8),
+                            right: BorderSide(
+                              color: Color(0xFFD0D5DD),
+                              width: 0.8,
+                            ),
                           ),
                         ),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<String>(
-                            value: EmployeeRegistrationPage.allWorldCountryCodes.any((c) => c['code'] == _phoneCountryCode)
+                            value:
+                                EmployeeRegistrationPage.allWorldCountryCodes
+                                    .any((c) => c['code'] == _phoneCountryCode)
                                 ? _phoneCountryCode
                                 : '+91',
                             isDense: true,
                             menuMaxHeight: 300,
-                            style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w500),
-                            icon: const Icon(Icons.keyboard_arrow_down, size: 14, color: Colors.black54),
-                            items: EmployeeRegistrationPage.allWorldCountryCodes.map((item) {
-                              return DropdownMenuItem<String>(
-                                value: item['code'],
-                                child: Text(
-                                  item['label']!,
-                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-                                ),
-                              );
-                            }).toList(),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            icon: const Icon(
+                              Icons.keyboard_arrow_down,
+                              size: 14,
+                              color: Colors.black54,
+                            ),
+                            items: EmployeeRegistrationPage.allWorldCountryCodes
+                                .map((item) {
+                                  return DropdownMenuItem<String>(
+                                    value: item['code'],
+                                    child: Text(
+                                      item['label']!,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  );
+                                })
+                                .toList(),
                             onChanged: (val) {
                               if (val != null) {
                                 setState(() => _phoneCountryCode = val);
@@ -509,16 +606,59 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                 _buildFieldPair(
                   isMobile: isMobile,
                   child1: DropdownButtonFormField<String>(
-                    initialValue: ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-', 'A1+', 'A1-', 'A2+', 'A2-', 'A1B+', 'A1B-', 'A2B+', 'A2B-', 'Bombay Blood Group (hh)', "Other / Don't Know"].contains(_bloodGroup)
+                    initialValue:
+                        [
+                          'A+',
+                          'A-',
+                          'B+',
+                          'B-',
+                          'O+',
+                          'O-',
+                          'AB+',
+                          'AB-',
+                          'A1+',
+                          'A1-',
+                          'A2+',
+                          'A2-',
+                          'A1B+',
+                          'A1B-',
+                          'A2B+',
+                          'A2B-',
+                          'Bombay Blood Group (hh)',
+                          "Other / Don't Know",
+                        ].contains(_bloodGroup)
                         ? _bloodGroup
                         : 'B+',
                     decoration: const InputDecoration(
                       labelText: 'Blood Group',
                       border: OutlineInputBorder(),
                     ),
-                    items: ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-', 'A1+', 'A1-', 'A2+', 'A2-', 'A1B+', 'A1B-', 'A2B+', 'A2B-', 'Bombay Blood Group (hh)', "Other / Don't Know"]
-                        .map((bg) => DropdownMenuItem(value: bg, child: Text(bg)))
-                        .toList(),
+                    items:
+                        [
+                              'A+',
+                              'A-',
+                              'B+',
+                              'B-',
+                              'O+',
+                              'O-',
+                              'AB+',
+                              'AB-',
+                              'A1+',
+                              'A1-',
+                              'A2+',
+                              'A2-',
+                              'A1B+',
+                              'A1B-',
+                              'A2B+',
+                              'A2B-',
+                              'Bombay Blood Group (hh)',
+                              "Other / Don't Know",
+                            ]
+                            .map(
+                              (bg) =>
+                                  DropdownMenuItem(value: bg, child: Text(bg)),
+                            )
+                            .toList(),
                     onChanged: (val) {
                       if (val != null) setState(() => _bloodGroup = val);
                     },
@@ -529,7 +669,11 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                     children: [
                       const Text(
                         'Blood Group Certificate / Test Report Document',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Row(
@@ -538,15 +682,26 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFF2F4F7),
                               foregroundColor: Colors.black87,
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
+                              ),
                               elevation: 0,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(4),
-                                side: const BorderSide(color: Color(0xFFD0D5DD)),
+                                side: const BorderSide(
+                                  color: Color(0xFFD0D5DD),
+                                ),
                               ),
                             ),
                             onPressed: _pickBloodGroupDocFile,
-                            child: const Text('Choose file', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+                            child: const Text(
+                              'Choose file',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                           ),
                           const SizedBox(width: 8),
                           Expanded(
@@ -554,7 +709,10 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                               _bloodGroupDocFileName,
                               style: TextStyle(
                                 fontSize: 11,
-                                color: _bloodGroupDocFileName == 'No file chosen' ? Colors.black54 : AppColors.active,
+                                color:
+                                    _bloodGroupDocFileName == 'No file chosen'
+                                    ? Colors.black54
+                                    : AppColors.active,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -573,15 +731,18 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                       labelText: 'Organization Name *',
                       border: OutlineInputBorder(),
                     ),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                    validator: (v) =>
+                        v == null || v.trim().isEmpty ? 'Required' : null,
                   ),
                   child2: Builder(
                     builder: (context) {
-                      final dbDepts = ref.watch(departmentsProvider).valueOrNull ?? [];
+                      final dbDepts =
+                          ref.watch(departmentsProvider).valueOrNull ?? [];
                       final deptItems = {
                         ...dbDepts.map((d) => d.departmentName),
                         ...Employee.departmentOptions,
-                        if (_deptController.text.isNotEmpty) _deptController.text,
+                        if (_deptController.text.isNotEmpty)
+                          _deptController.text,
                       }.where((s) => s.isNotEmpty).toList();
 
                       return AppSearchableDropdown<String>(
@@ -609,15 +770,27 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                   child1: Builder(
                     builder: (context) {
                       final currentDept = _deptController.text.trim();
-                      final desigsAsync = ref.watch(designationsProvider(currentDept.isEmpty ? null : currentDept));
-                      final desigItems = desigsAsync.valueOrNull?.map((d) => d.designationName).where((s) => s.isNotEmpty).toSet().toList() ?? [];
+                      final desigsAsync = ref.watch(
+                        designationsProvider(
+                          currentDept.isEmpty ? null : currentDept,
+                        ),
+                      );
+                      final desigItems =
+                          desigsAsync.valueOrNull
+                              ?.map((d) => d.designationName)
+                              .where((s) => s.isNotEmpty)
+                              .toSet()
+                              .toList() ??
+                          [];
                       if (desigItems.isEmpty) {
                         desigItems.addAll(Employee.designationOptions);
                       }
-                      if (_designationController.text.isNotEmpty && !desigItems.contains(_designationController.text)) {
+                      if (_designationController.text.isNotEmpty &&
+                          !desigItems.contains(_designationController.text)) {
                         desigItems.insert(0, _designationController.text);
                       }
-                      if (_designationController.text.isEmpty && desigItems.isNotEmpty) {
+                      if (_designationController.text.isEmpty &&
+                          desigItems.isNotEmpty) {
                         _designationController.text = desigItems.first;
                       }
 
@@ -629,7 +802,8 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                         items: desigItems,
                         searchHint: 'Search designation...',
                         onChanged: (val) {
-                          if (val != null) setState(() => _designationController.text = val);
+                          if (val != null)
+                            setState(() => _designationController.text = val);
                         },
                       );
                     },
@@ -663,13 +837,24 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                   isMobile: isMobile,
                   child1: AppSearchableDropdown<String>(
                     label: 'User Role *',
-                    value: {
-                      'SUPER_ADMIN', 'ADMIN', 'EMPLOYEE', 'HR', 'MANAGER',
-                      if (_userType.isNotEmpty) _userType,
-                    }.contains(_userType)
+                    value:
+                        {
+                          'SUPER_ADMIN',
+                          'ADMIN',
+                          'EMPLOYEE',
+                          'HR',
+                          'MANAGER',
+                          if (_userType.isNotEmpty) _userType,
+                        }.contains(_userType)
                         ? _userType
                         : 'EMPLOYEE',
-                    items: const ['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE', 'HR', 'MANAGER'],
+                    items: const [
+                      'SUPER_ADMIN',
+                      'ADMIN',
+                      'EMPLOYEE',
+                      'HR',
+                      'MANAGER',
+                    ],
                     searchHint: 'Search role...',
                     onChanged: (val) {
                       if (val != null) setState(() => _userType = val);
@@ -708,7 +893,12 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                   isMobile: isMobile,
                   child1: AppSearchableDropdown<String>(
                     label: 'Leave Type',
-                    value: ['As Needed', 'Manual Allocation', 'No Leave'].contains(_leaveType)
+                    value:
+                        [
+                          'As Needed',
+                          'Manual Allocation',
+                          'No Leave',
+                        ].contains(_leaveType)
                         ? _leaveType
                         : 'As Needed',
                     items: const ['As Needed', 'Manual Allocation', 'No Leave'],
@@ -724,7 +914,8 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                           items: const ['Monthly', 'Quarterly', 'Yearly'],
                           searchHint: 'Search frequency...',
                           onChanged: (val) {
-                            if (val != null) setState(() => _leaveAllocationFrequency = val);
+                            if (val != null)
+                              setState(() => _leaveAllocationFrequency = val);
                           },
                         )
                       : const SizedBox.shrink(),
@@ -786,9 +977,13 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                   child1: _leaveType == 'Manual Allocation'
                       ? TextFormField(
                           controller: _allowedLeavesController,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
                           inputFormatters: [
-                            FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                            FilteringTextInputFormatter.allow(
+                              RegExp(r'[0-9.]'),
+                            ),
                           ],
                           decoration: const InputDecoration(
                             labelText: 'Allowed Leaves',
@@ -805,7 +1000,11 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                           ),
                           onTap: () async {
                             final now = DateTime.now();
-                            final today = DateTime(now.year, now.month, now.day);
+                            final today = DateTime(
+                              now.year,
+                              now.month,
+                              now.day,
+                            );
                             final picked = await showDatePicker(
                               context: context,
                               initialDate: now,
@@ -829,7 +1028,11 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                           ),
                           onTap: () async {
                             final now = DateTime.now();
-                            final today = DateTime(now.year, now.month, now.day);
+                            final today = DateTime(
+                              now.year,
+                              now.month,
+                              now.day,
+                            );
                             final picked = await showDatePicker(
                               context: context,
                               initialDate: now,
@@ -867,7 +1070,10 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                           const Expanded(
                             child: Text(
                               'Does the employee have any criminal cases or legal history?',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
                         ],
@@ -879,7 +1085,8 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                           maxLines: 2,
                           decoration: const InputDecoration(
                             labelText: 'Criminal Case Details / Description *',
-                            hintText: 'Enter details about the criminal case...',
+                            hintText:
+                                'Enter details about the criminal case...',
                             border: OutlineInputBorder(),
                           ),
                         ),
@@ -892,11 +1099,18 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    const Icon(Icons.security, size: 20, color: AppColors.active),
+                    const Icon(
+                      Icons.security,
+                      size: 20,
+                      color: AppColors.active,
+                    ),
                     const SizedBox(width: 8),
                     const Text(
                       'Access Permissions',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const Spacer(),
                     TextButton(
@@ -906,8 +1120,9 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                               Employee.allSidebarPermissions.length) {
                             _selectedPermissions.clear();
                           } else {
-                            _selectedPermissions =
-                                Set<String>.from(Employee.allSidebarPermissions);
+                            _selectedPermissions = Set<String>.from(
+                              Employee.allSidebarPermissions,
+                            );
                           }
                         });
                       },
@@ -936,145 +1151,155 @@ class _EmployeeFormDialogState extends ConsumerState<EmployeeFormDialog> {
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: Employee.sidebarPermissionsByCategory.entries.map((entry) {
-                      final categoryName = entry.key;
-                      final categoryPermissions = entry.value;
-                      final isFirst = entry.key == Employee.sidebarPermissionsByCategory.keys.first;
+                    children: Employee.sidebarPermissionsByCategory.entries.map(
+                      (entry) {
+                        final categoryName = entry.key;
+                        final categoryPermissions = entry.value;
+                        final isFirst =
+                            entry.key ==
+                            Employee.sidebarPermissionsByCategory.keys.first;
 
-                      final allSelected = categoryPermissions.isNotEmpty &&
-                          categoryPermissions.every(
-                            (p) => _selectedPermissions.contains(p),
-                          );
-                      final someSelected = categoryPermissions.any(
-                        (p) => _selectedPermissions.contains(p),
-                      );
-                      final bool? checkboxValue = allSelected
-                          ? true
-                          : (someSelected ? null : false);
+                        final allSelected =
+                            categoryPermissions.isNotEmpty &&
+                            categoryPermissions.every(
+                              (p) => _selectedPermissions.contains(p),
+                            );
+                        final someSelected = categoryPermissions.any(
+                          (p) => _selectedPermissions.contains(p),
+                        );
+                        final bool? checkboxValue = allSelected
+                            ? true
+                            : (someSelected ? null : false);
 
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: EdgeInsets.only(
-                              top: isFirst ? 0.0 : 12.0,
-                              bottom: 6.0,
-                            ),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(4),
-                              onTap: () {
-                                setState(() {
-                                  if (allSelected) {
-                                    _selectedPermissions.removeAll(
-                                      categoryPermissions,
-                                    );
-                                  } else {
-                                    _selectedPermissions.addAll(
-                                      categoryPermissions,
-                                    );
-                                  }
-                                });
-                              },
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: Checkbox(
-                                      tristate: true,
-                                      value: checkboxValue,
-                                      activeColor: AppColors.active,
-                                      onChanged: (val) {
-                                        setState(() {
-                                          if (allSelected) {
-                                            _selectedPermissions.removeAll(
-                                              categoryPermissions,
-                                            );
-                                          } else {
-                                            _selectedPermissions.addAll(
-                                              categoryPermissions,
-                                            );
-                                          }
-                                        });
-                                      },
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    categoryName,
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF667085),
-                                      letterSpacing: 0.8,
-                                    ),
-                                  ),
-                                ],
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: EdgeInsets.only(
+                                top: isFirst ? 0.0 : 12.0,
+                                bottom: 6.0,
                               ),
-                            ),
-                          ),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 6,
-                            children: categoryPermissions.map((permission) {
-                              final isSelected = _selectedPermissions.contains(permission);
-                              return InkWell(
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(4),
                                 onTap: () {
                                   setState(() {
-                                    if (isSelected) {
-                                      _selectedPermissions.remove(permission);
+                                    if (allSelected) {
+                                      _selectedPermissions.removeAll(
+                                        categoryPermissions,
+                                      );
                                     } else {
-                                      _selectedPermissions.add(permission);
+                                      _selectedPermissions.addAll(
+                                        categoryPermissions,
+                                      );
                                     }
                                   });
                                 },
-                                borderRadius: BorderRadius.circular(6),
-                                child: Container(
-                                  width: isMobile ? double.infinity : 260,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 4,
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      SizedBox(
-                                        width: 22,
-                                        height: 22,
-                                        child: Checkbox(
-                                          value: isSelected,
-                                          activeColor: AppColors.active,
-                                          onChanged: (val) {
-                                            setState(() {
-                                              if (val == true) {
-                                                _selectedPermissions.add(permission);
-                                              } else {
-                                                _selectedPermissions.remove(permission);
-                                              }
-                                            });
-                                          },
-                                        ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: Checkbox(
+                                        tristate: true,
+                                        value: checkboxValue,
+                                        activeColor: AppColors.active,
+                                        onChanged: (val) {
+                                          setState(() {
+                                            if (allSelected) {
+                                              _selectedPermissions.removeAll(
+                                                categoryPermissions,
+                                              );
+                                            } else {
+                                              _selectedPermissions.addAll(
+                                                categoryPermissions,
+                                              );
+                                            }
+                                          });
+                                        },
                                       ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          permission,
-                                          style: const TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w500,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      categoryName,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF667085),
+                                        letterSpacing: 0.8,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 6,
+                              children: categoryPermissions.map((permission) {
+                                final isSelected = _selectedPermissions
+                                    .contains(permission);
+                                return InkWell(
+                                  onTap: () {
+                                    setState(() {
+                                      if (isSelected) {
+                                        _selectedPermissions.remove(permission);
+                                      } else {
+                                        _selectedPermissions.add(permission);
+                                      }
+                                    });
+                                  },
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: Container(
+                                    width: isMobile ? double.infinity : 260,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 4,
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        SizedBox(
+                                          width: 22,
+                                          height: 22,
+                                          child: Checkbox(
+                                            value: isSelected,
+                                            activeColor: AppColors.active,
+                                            onChanged: (val) {
+                                              setState(() {
+                                                if (val == true) {
+                                                  _selectedPermissions.add(
+                                                    permission,
+                                                  );
+                                                } else {
+                                                  _selectedPermissions.remove(
+                                                    permission,
+                                                  );
+                                                }
+                                              });
+                                            },
                                           ),
                                         ),
-                                      ),
-                                    ],
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            permission,
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ],
-                      );
-                    }).toList(),
+                                );
+                              }).toList(),
+                            ),
+                          ],
+                        );
+                      },
+                    ).toList(),
                   ),
                 ),
               ],

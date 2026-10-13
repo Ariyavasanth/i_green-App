@@ -30,22 +30,22 @@ class EducationItem {
   final String certificateName;
 
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'degree_name': degreeName,
-        'institute_name': instituteName,
-        'result': result,
-        'passing_year': passingYear,
-        'certificate_name': certificateName,
-      };
+    'id': id,
+    'degree_name': degreeName,
+    'institute_name': instituteName,
+    'result': result,
+    'passing_year': passingYear,
+    'certificate_name': certificateName,
+  };
 
   factory EducationItem.fromMap(Map<String, dynamic> map) => EducationItem(
-        id: map['id'] as String? ?? '',
-        degreeName: map['degree_name'] as String? ?? '',
-        instituteName: map['institute_name'] as String? ?? '',
-        result: map['result'] as String? ?? '',
-        passingYear: map['passing_year'] as String? ?? '',
-        certificateName: map['certificate_name'] as String? ?? '',
-      );
+    id: map['id'] as String? ?? '',
+    degreeName: map['degree_name'] as String? ?? '',
+    instituteName: map['institute_name'] as String? ?? '',
+    result: map['result'] as String? ?? '',
+    passingYear: map['passing_year'] as String? ?? '',
+    certificateName: map['certificate_name'] as String? ?? '',
+  );
 }
 
 class ExperienceItem {
@@ -64,20 +64,20 @@ class ExperienceItem {
   final String workingDuration;
 
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'company_name': companyName,
-        'position': position,
-        'address': address,
-        'working_duration': workingDuration,
-      };
+    'id': id,
+    'company_name': companyName,
+    'position': position,
+    'address': address,
+    'working_duration': workingDuration,
+  };
 
   factory ExperienceItem.fromMap(Map<String, dynamic> map) => ExperienceItem(
-        id: map['id'] as String? ?? '',
-        companyName: map['company_name'] as String? ?? '',
-        position: map['position'] as String? ?? '',
-        address: map['address'] as String? ?? '',
-        workingDuration: map['working_duration'] as String? ?? '',
-      );
+    id: map['id'] as String? ?? '',
+    companyName: map['company_name'] as String? ?? '',
+    position: map['position'] as String? ?? '',
+    address: map['address'] as String? ?? '',
+    workingDuration: map['working_duration'] as String? ?? '',
+  );
 }
 
 class DocumentItem {
@@ -96,20 +96,20 @@ class DocumentItem {
   final String uploadedDate;
 
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'document_type': documentType,
-        'document_number': documentNumber,
-        'file_name': fileName,
-        'uploaded_date': uploadedDate,
-      };
+    'id': id,
+    'document_type': documentType,
+    'document_number': documentNumber,
+    'file_name': fileName,
+    'uploaded_date': uploadedDate,
+  };
 
   factory DocumentItem.fromMap(Map<String, dynamic> map) => DocumentItem(
-        id: map['id'] as String? ?? '',
-        documentType: map['document_type'] as String? ?? '',
-        documentNumber: map['document_number'] as String? ?? '',
-        fileName: map['file_name'] as String? ?? '',
-        uploadedDate: map['uploaded_date'] as String? ?? '',
-      );
+    id: map['id'] as String? ?? '',
+    documentType: map['document_type'] as String? ?? '',
+    documentNumber: map['document_number'] as String? ?? '',
+    fileName: map['file_name'] as String? ?? '',
+    uploadedDate: map['uploaded_date'] as String? ?? '',
+  );
 }
 
 class Employee {
@@ -282,47 +282,81 @@ class Employee {
       // On Duty aliases:
       // Regular user: 'My On Duty', 'On-Duty', 'On Duty', 'onduty'
       if ((normClean == 'myonduty' || normClean == 'onduty') &&
-          (pClean == 'myonduty' || pClean == 'onduty')) return true;
+          (pClean == 'myonduty' || pClean == 'onduty'))
+        return true;
       // Admin management: 'On-Duty Management', 'On Duty Management'
-      if ((normClean == 'ondutymanagement' || normClean == 'myondutymanagement') &&
-          (pClean == 'ondutymanagement' || pClean == 'myondutymanagement')) return true;
+      if ((normClean == 'ondutymanagement' ||
+              normClean == 'myondutymanagement') &&
+          (pClean == 'ondutymanagement' || pClean == 'myondutymanagement'))
+        return true;
 
       // Leave aliases
-      if ((normClean == 'leave' || normClean == 'leaves' || normClean == 'leavemanagement') &&
-          (pClean == 'leave' || pClean == 'leaves' || pClean == 'leavemanagement')) return true;
+      if ((normClean == 'leave' ||
+              normClean == 'leaves' ||
+              normClean == 'leavemanagement') &&
+          (pClean == 'leave' ||
+              pClean == 'leaves' ||
+              pClean == 'leavemanagement'))
+        return true;
 
       // Permission aliases
-      if ((normClean == 'permission' || normClean == 'permissions' || normClean == 'mypermission') &&
-          (pClean == 'permission' || pClean == 'permissions' || pClean == 'mypermission')) return true;
-      if ((normClean == 'permissionmanagement' || normClean == 'permissionmgmt') &&
-          (pClean == 'permissionmanagement' || pClean == 'permissionmgmt')) return true;
+      if ((normClean == 'permission' ||
+              normClean == 'permissions' ||
+              normClean == 'mypermission') &&
+          (pClean == 'permission' ||
+              pClean == 'permissions' ||
+              pClean == 'mypermission'))
+        return true;
+      if ((normClean == 'permissionmanagement' ||
+              normClean == 'permissionmgmt') &&
+          (pClean == 'permissionmanagement' || pClean == 'permissionmgmt'))
+        return true;
 
       // Tasks & Clocking aliases
-      if ((normClean == 'tasksandclockingmanagement' || normClean == 'tasksclockingmanagement' || normClean == 'tasksandtimesheets') &&
-          (pClean == 'tasksandclockingmanagement' || pClean == 'tasksclockingmanagement' || pClean == 'tasksandtimesheets')) return true;
+      if ((normClean == 'tasksandclockingmanagement' ||
+              normClean == 'tasksclockingmanagement' ||
+              normClean == 'tasksandtimesheets') &&
+          (pClean == 'tasksandclockingmanagement' ||
+              pClean == 'tasksclockingmanagement' ||
+              pClean == 'tasksandtimesheets'))
+        return true;
       if ((normClean == 'mytasks' || normClean == 'tasks') &&
-          (pClean == 'mytasks' || pClean == 'tasks')) return true;
+          (pClean == 'mytasks' || pClean == 'tasks'))
+        return true;
       if ((normClean == 'timeclocking' || normClean == 'clocking') &&
-          (pClean == 'timeclocking' || pClean == 'clocking')) return true;
+          (pClean == 'timeclocking' || pClean == 'clocking'))
+        return true;
 
       // Site visit aliases
-      if ((normClean == 'sitevisitattendancemgmt' || normClean == 'sitevisitattendancemanagement') &&
-          (pClean == 'sitevisitattendancemanagement' || pClean == 'sitevisitattendancemgmt')) return true;
-      if (normClean == 'sitevisitattendance' && pClean == 'sitevisitattendance') return true;
+      if ((normClean == 'sitevisitattendancemgmt' ||
+              normClean == 'sitevisitattendancemanagement') &&
+          (pClean == 'sitevisitattendancemanagement' ||
+              pClean == 'sitevisitattendancemgmt'))
+        return true;
+      if (normClean == 'sitevisitattendance' && pClean == 'sitevisitattendance')
+        return true;
 
       // Organization aliases
-      if (normClean == 'organizationstructure' && pClean == 'organizationstructure') return true;
-      if (normClean == 'organizationmanagement' && pClean == 'organizationmanagement') return true;
+      if (normClean == 'organizationstructure' &&
+          pClean == 'organizationstructure')
+        return true;
+      if (normClean == 'organizationmanagement' &&
+          pClean == 'organizationmanagement')
+        return true;
 
       // Incentive aliases
       if ((normClean == 'incentiverequest' || normClean == 'incentive') &&
-          (pClean == 'incentive' || pClean == 'incentiverequest')) return true;
-      if (normClean == 'incentivemanagement' && pClean == 'incentivemanagement') return true;
+          (pClean == 'incentive' || pClean == 'incentiverequest'))
+        return true;
+      if (normClean == 'incentivemanagement' && pClean == 'incentivemanagement')
+        return true;
 
       // Payroll aliases
       if (normClean == 'mypayslips' && pClean == 'mypayslips') return true;
-      if (normClean == 'payrollhistory' && pClean == 'payrollhistory') return true;
-      if (normClean == 'payrollsettings' && pClean == 'payrollsettings') return true;
+      if (normClean == 'payrollhistory' && pClean == 'payrollhistory')
+        return true;
+      if (normClean == 'payrollsettings' && pClean == 'payrollsettings')
+        return true;
       if (normClean == 'payroll' && pClean == 'payroll') return true;
 
       return false;
@@ -487,13 +521,8 @@ class Employee {
   ];
 
   static const Map<String, List<String>> sidebarPermissionsByCategory = {
-    'OVERVIEW': [
-      'Home',
-    ],
-    'ORGANIZATION': [
-      'Organization Management',
-      'Organization Structure',
-    ],
+    'OVERVIEW': ['Home'],
+    'ORGANIZATION': ['Organization Management', 'Organization Structure'],
     'EMPLOYEE': [
       'Responses',
       'Employee Management',
@@ -521,18 +550,9 @@ class Employee {
       'Exit Management',
       'My Payslips',
     ],
-    'PAYROLL MANAGEMENT': [
-      'Payroll',
-      'Payroll History',
-      'Payroll Settings',
-    ],
-    'LOAN MANAGEMENT': [
-      'Loan Management',
-    ],
-    'STOCK': [
-      'Items',
-      'Inventory Adjustments',
-    ],
+    'PAYROLL MANAGEMENT': ['Payroll', 'Payroll History', 'Payroll Settings'],
+    'LOAN MANAGEMENT': ['Loan Management'],
+    'STOCK': ['Items', 'Inventory Adjustments'],
     'SALES': [
       'Customers',
       'Quotes',
@@ -543,12 +563,7 @@ class Employee {
       'Credit Notes',
       'e-Way Bills',
     ],
-    'PURCHASE': [
-      'Vendors',
-      'Expenses',
-      'Purchase Orders',
-      'Bills',
-    ],
+    'PURCHASE': ['Vendors', 'Expenses', 'Purchase Orders', 'Bills'],
   };
 
   static const List<String> departmentOptions = [
@@ -825,13 +840,17 @@ class Employee {
   String get name => fullName;
 
   String get leavePolicy => leaveType.isNotEmpty ? leaveType : 'As Needed';
-  double get monthlyLeaveAllowanceVal => monthlyLeaveAllowance > 0 ? monthlyLeaveAllowance : (allowedLeaves > 0 ? allowedLeaves : 3.0);
+  double get monthlyLeaveAllowanceVal => monthlyLeaveAllowance > 0
+      ? monthlyLeaveAllowance
+      : (allowedLeaves > 0 ? allowedLeaves : 3.0);
 
   List<EducationItem> get educationItems {
     if (educationListJson.isEmpty) return [];
     try {
       final decoded = jsonDecode(educationListJson) as List;
-      return decoded.map((e) => EducationItem.fromMap(e as Map<String, dynamic>)).toList();
+      return decoded
+          .map((e) => EducationItem.fromMap(e as Map<String, dynamic>))
+          .toList();
     } catch (_) {
       return [];
     }
@@ -841,7 +860,9 @@ class Employee {
     if (experienceListJson.isEmpty) return [];
     try {
       final decoded = jsonDecode(experienceListJson) as List;
-      return decoded.map((e) => ExperienceItem.fromMap(e as Map<String, dynamic>)).toList();
+      return decoded
+          .map((e) => ExperienceItem.fromMap(e as Map<String, dynamic>))
+          .toList();
     } catch (_) {
       return [];
     }
@@ -851,7 +872,9 @@ class Employee {
     if (documentListJson.isEmpty) return [];
     try {
       final decoded = jsonDecode(documentListJson) as List;
-      return decoded.map((e) => DocumentItem.fromMap(e as Map<String, dynamic>)).toList();
+      return decoded
+          .map((e) => DocumentItem.fromMap(e as Map<String, dynamic>))
+          .toList();
     } catch (_) {
       return [];
     }
@@ -1014,8 +1037,18 @@ class Employee {
       phoneNumber: map['phone_number'] as String? ?? '',
       gender: map['gender'] as String? ?? '',
       dob: map['dob'] as String? ?? '',
-      organizationId: (map['organization_id'] ?? map['organizationId'] ?? map['org_id'])?.toString() ?? '',
-      organizationName: (map['organization_name'] ?? map['organizationName'] ?? map['org_name'] ?? map['orgName'] ?? map['organization'])?.toString() ?? '',
+      organizationId:
+          (map['organization_id'] ?? map['organizationId'] ?? map['org_id'])
+              ?.toString() ??
+          '',
+      organizationName:
+          (map['organization_name'] ??
+                  map['organizationName'] ??
+                  map['org_name'] ??
+                  map['orgName'] ??
+                  map['organization'])
+              ?.toString() ??
+          '',
       department: map['department'] as String? ?? '',
       designation: map['designation'] as String? ?? '',
       employmentType: map['employment_type'] as String? ?? 'Full-Time',
@@ -1024,7 +1057,15 @@ class Employee {
       bloodGroup: map['blood_group'] as String? ?? '',
       userType: (map['user_type'] ?? map['userType']) as String? ?? 'EMPLOYEE',
       contractEndDate: map['contract_end_date'] as String? ?? '',
-      profileImageUrl: (map['profile_image_url'] ?? map['profileImageUrl'] ?? map['photo_url'] ?? map['photoUrl'] ?? map['profile_image'] ?? map['profileImage']) as String? ?? '',
+      profileImageUrl:
+          (map['profile_image_url'] ??
+                  map['profileImageUrl'] ??
+                  map['photo_url'] ??
+                  map['photoUrl'] ??
+                  map['profile_image'] ??
+                  map['profileImage'])
+              as String? ??
+          '',
       profileImagePublicId: map['profile_image_public_id'] as String? ?? '',
       profileImageFolder: map['profile_image_folder'] as String? ?? '',
       street: map['street'] as String? ?? '',
@@ -1033,24 +1074,38 @@ class Employee {
       postalCode: map['postal_code'] as String? ?? '',
       country: map['country'] as String? ?? 'India',
       permanentAddress: map['permanent_address'] as String? ?? '',
-      permanentState: (map['permanent_state'] ?? map['permanentState']) as String? ?? '',
+      permanentState:
+          (map['permanent_state'] ?? map['permanentState']) as String? ?? '',
       permanentCity: map['permanent_city'] as String? ?? '',
-      permanentDistrict: (map['permanent_district'] ?? map['permanentDistrict']) as String? ?? '',
-      permanentPincode: (map['permanent_pincode'] ?? map['permanentPincode'] ?? map['postal_code']) as String? ?? '',
+      permanentDistrict:
+          (map['permanent_district'] ?? map['permanentDistrict']) as String? ??
+          '',
+      permanentPincode:
+          (map['permanent_pincode'] ??
+                  map['permanentPincode'] ??
+                  map['postal_code'])
+              as String? ??
+          '',
       permanentCountry: map['permanent_country'] as String? ?? 'India',
-      sameAsPermanent: map['same_as_permanent'] == 1 || map['same_as_permanent'] == true,
+      sameAsPermanent:
+          map['same_as_permanent'] == 1 || map['same_as_permanent'] == true,
       presentAddress: map['present_address'] as String? ?? '',
-      presentState: (map['present_state'] ?? map['presentState']) as String? ?? '',
+      presentState:
+          (map['present_state'] ?? map['presentState']) as String? ?? '',
       presentCity: map['present_city'] as String? ?? '',
-      presentDistrict: (map['present_district'] ?? map['presentDistrict']) as String? ?? '',
-      presentPincode: (map['present_pincode'] ?? map['presentPincode']) as String? ?? '',
+      presentDistrict:
+          (map['present_district'] ?? map['presentDistrict']) as String? ?? '',
+      presentPincode:
+          (map['present_pincode'] ?? map['presentPincode']) as String? ?? '',
       presentCountry: map['present_country'] as String? ?? 'India',
       educationDegree: map['education_degree'] as String? ?? '',
       educationInstitution: map['education_institution'] as String? ?? '',
       educationYear: map['education_year'] as String? ?? '',
       educationGrade: map['education_grade'] as String? ?? '',
       educationListJson: map['education_list_json'] as String? ?? '',
-      educationType: (map['education_type'] ?? map['educationType']) as String? ?? 'Employee',
+      educationType:
+          (map['education_type'] ?? map['educationType']) as String? ??
+          'Employee',
       experienceCompany: map['experience_company'] as String? ?? '',
       experienceRole: map['experience_role'] as String? ?? '',
       experienceYears: map['experience_years'] as String? ?? '',
@@ -1088,21 +1143,28 @@ class Employee {
       linkedinUrl: map['linkedin_url'] as String? ?? '',
       googleUrl: map['google_url'] as String? ?? '',
       personalHistoryDetails: map['personal_history_details'] as String? ?? '',
-      hasCriminalCases: map['has_criminal_cases'] == 1 || map['has_criminal_cases'] == true,
+      hasCriminalCases:
+          map['has_criminal_cases'] == 1 || map['has_criminal_cases'] == true,
       criminalCaseDetails: map['criminal_case_details'] as String? ?? '',
       salaryType: map['salary_type'] as String? ?? 'Monthly',
       salaryBasic: (map['salary_basic'] as num?)?.toDouble() ?? 0.0,
       salaryHra: (map['salary_hra'] as num?)?.toDouble() ?? 0.0,
-      salaryEducationAllowance: (map['salary_education_allowance'] as num?)?.toDouble() ?? 0.0,
-      salarySpecialAllowance: (map['salary_special_allowance'] as num?)?.toDouble() ?? 0.0,
-      salaryTravelAllowance: (map['salary_travel_allowance'] as num?)?.toDouble() ?? 0.0,
-      salaryOtherAllowance: (map['salary_other_allowance'] as num?)?.toDouble() ?? 0.0,
+      salaryEducationAllowance:
+          (map['salary_education_allowance'] as num?)?.toDouble() ?? 0.0,
+      salarySpecialAllowance:
+          (map['salary_special_allowance'] as num?)?.toDouble() ?? 0.0,
+      salaryTravelAllowance:
+          (map['salary_travel_allowance'] as num?)?.toDouble() ?? 0.0,
+      salaryOtherAllowance:
+          (map['salary_other_allowance'] as num?)?.toDouble() ?? 0.0,
       salaryAllowances: (map['salary_allowances'] as num?)?.toDouble() ?? 0.0,
       salaryTax: (map['salary_tax'] as num?)?.toDouble() ?? 0.0,
       salaryPf: (map['salary_pf'] as num?)?.toDouble() ?? 0.0,
       salaryEsi: (map['salary_esi'] as num?)?.toDouble() ?? 0.0,
-      salaryEsiEmployer: (map['salary_esi_employer'] as num?)?.toDouble() ?? 0.0,
-      salaryProfessionalTax: (map['salary_professional_tax'] as num?)?.toDouble() ?? 0.0,
+      salaryEsiEmployer:
+          (map['salary_esi_employer'] as num?)?.toDouble() ?? 0.0,
+      salaryProfessionalTax:
+          (map['salary_professional_tax'] as num?)?.toDouble() ?? 0.0,
       salaryTotalCtc: (map['salary_total_ctc'] as num?)?.toDouble() ?? 0.0,
       insurancePolicyNo: map['insurance_policy_no'] as String? ?? '',
       insuranceProvider: map['insurance_provider'] as String? ?? '',
@@ -1111,14 +1173,30 @@ class Employee {
       pfUan: map['pf_uan'] as String? ?? '',
       esiNumber: map['esi_number'] as String? ?? '',
       leaveDetails: map['leave_details'] as String? ?? '',
-      inTime: (map['in_time'] ?? map['inTime'] ?? map['in_time_slot'] ?? map['shift_in_time']) as String? ?? '',
-      outTime: (map['out_time'] ?? map['outTime'] ?? map['out_time_slot'] ?? map['shift_out_time']) as String? ?? '',
+      inTime:
+          (map['in_time'] ??
+                  map['inTime'] ??
+                  map['in_time_slot'] ??
+                  map['shift_in_time'])
+              as String? ??
+          '',
+      outTime:
+          (map['out_time'] ??
+                  map['outTime'] ??
+                  map['out_time_slot'] ??
+                  map['shift_out_time'])
+              as String? ??
+          '',
       leaveType: map['leave_type'] as String? ?? 'As Needed',
-      leaveAllocationFrequency: map['leave_allocation_frequency'] as String? ?? 'Monthly',
+      leaveAllocationFrequency:
+          map['leave_allocation_frequency'] as String? ?? 'Monthly',
       allowedLeaves: (map['allowed_leaves'] as num?)?.toDouble() ?? 1.0,
-      monthlyLeaveAllowance: (map['monthly_leave_allowance'] as num?)?.toDouble() ?? 3.0,
-      monthlyPermissionLimitHours: (map['monthly_permission_limit_hours'] as num?)?.toDouble() ?? 3.0,
-      dailyPermissionLimitHours: (map['daily_permission_limit_hours'] as num?)?.toDouble() ?? 1.0,
+      monthlyLeaveAllowance:
+          (map['monthly_leave_allowance'] as num?)?.toDouble() ?? 3.0,
+      monthlyPermissionLimitHours:
+          (map['monthly_permission_limit_hours'] as num?)?.toDouble() ?? 3.0,
+      dailyPermissionLimitHours:
+          (map['daily_permission_limit_hours'] as num?)?.toDouble() ?? 1.0,
       effectiveDate: map['effective_date'] as String? ?? '',
       requiresLeaveApproval: () {
         final val = map['requires_leave_approval'];
@@ -1128,13 +1206,26 @@ class Employee {
         return true;
       }(),
       companyAssets: map['company_assets'] as String? ?? '',
-      reportingManager: map['reporting_manager'] as String? ?? '',
-      reportingManagerId: map['reporting_manager_id'] as String? ?? '',
+      reportingManager:
+          (map['reporting_manager'] ?? map['reportingManager']) as String? ??
+          '',
+      reportingManagerId:
+          (map['reporting_manager_id'] ?? map['reportingManagerId'])
+              as String? ??
+          '',
       businessUnit: map['business_unit'] as String? ?? '',
-      workLocation: (map['work_location'] ?? map['workLocation']) as String? ?? '',
-      workScheduleType: (map['work_schedule_type'] ?? map['workScheduleType']) as String? ?? 'Fixed Schedule',
-      reportingManagerTitle: (map['reporting_manager_title'] as String?)?.isNotEmpty == true
-          ? map['reporting_manager_title'] as String
+      workLocation:
+          (map['work_location'] ?? map['workLocation']) as String? ?? '',
+      workScheduleType:
+          (map['work_schedule_type'] ?? map['workScheduleType']) as String? ??
+          'Fixed Schedule',
+      reportingManagerTitle:
+          ((map['reporting_manager_title'] ?? map['reportingManagerTitle'])
+                      as String?)
+                  ?.isNotEmpty ==
+              true
+          ? ((map['reporting_manager_title'] ?? map['reportingManagerTitle'])
+                as String)
           : 'Managing Director',
       adminName: (map['admin_name'] as String?)?.isNotEmpty == true
           ? map['admin_name'] as String
@@ -1142,7 +1233,8 @@ class Employee {
       coordinatorName: (map['coordinator_name'] as String?)?.isNotEmpty == true
           ? map['coordinator_name'] as String
           : '',
-      coordinatorPhone: (map['coordinator_phone'] as String?)?.isNotEmpty == true
+      coordinatorPhone:
+          (map['coordinator_phone'] as String?)?.isNotEmpty == true
           ? map['coordinator_phone'] as String
           : '',
       weeklyOffDay: map['weekly_off_day'] as String? ?? '',
@@ -1165,10 +1257,14 @@ class Employee {
         }
         return <String>[];
       }(),
-      requiredWorkingHours: (map['required_working_hours'] ?? map['requiredWorkingHours'] as num?)?.toDouble() ?? 9.0,
+      requiredWorkingHours:
+          (map['required_working_hours'] ?? map['requiredWorkingHours'] as num?)
+              ?.toDouble() ??
+          9.0,
       isStaticEmployee: () {
         final valStatic = map['is_static_employee'] ?? map['isStaticEmployee'];
-        final valDynamic = map['is_dynamic_employee'] ?? map['isDynamicEmployee'];
+        final valDynamic =
+            map['is_dynamic_employee'] ?? map['isDynamicEmployee'];
         bool? isStatic;
         if (valStatic is bool) {
           isStatic = valStatic;
@@ -1187,9 +1283,15 @@ class Employee {
           isDynamic = valDynamic.toLowerCase() == 'true' || valDynamic == '1';
         }
 
-        if ((isStatic == true && isDynamic == true) || (isStatic == false && isDynamic == false) || (isStatic == null && isDynamic == null)) {
-          final inTime = (map['in_time'] ?? map['inTime'] as String? ?? '').toString().trim();
-          final outTime = (map['out_time'] ?? map['outTime'] as String? ?? '').toString().trim();
+        if ((isStatic == true && isDynamic == true) ||
+            (isStatic == false && isDynamic == false) ||
+            (isStatic == null && isDynamic == null)) {
+          final inTime = (map['in_time'] ?? map['inTime'] as String? ?? '')
+              .toString()
+              .trim();
+          final outTime = (map['out_time'] ?? map['outTime'] as String? ?? '')
+              .toString()
+              .trim();
           if (inTime.isNotEmpty || outTime.isNotEmpty) {
             return true;
           }
@@ -1199,7 +1301,8 @@ class Employee {
       }(),
       isDynamicEmployee: () {
         final valStatic = map['is_static_employee'] ?? map['isStaticEmployee'];
-        final valDynamic = map['is_dynamic_employee'] ?? map['isDynamicEmployee'];
+        final valDynamic =
+            map['is_dynamic_employee'] ?? map['isDynamicEmployee'];
         bool? isStatic;
         if (valStatic is bool) {
           isStatic = valStatic;
@@ -1218,9 +1321,15 @@ class Employee {
           isDynamic = valDynamic.toLowerCase() == 'true' || valDynamic == '1';
         }
 
-        if ((isStatic == true && isDynamic == true) || (isStatic == false && isDynamic == false) || (isStatic == null && isDynamic == null)) {
-          final inTime = (map['in_time'] ?? map['inTime'] as String? ?? '').toString().trim();
-          final outTime = (map['out_time'] ?? map['outTime'] as String? ?? '').toString().trim();
+        if ((isStatic == true && isDynamic == true) ||
+            (isStatic == false && isDynamic == false) ||
+            (isStatic == null && isDynamic == null)) {
+          final inTime = (map['in_time'] ?? map['inTime'] as String? ?? '')
+              .toString()
+              .trim();
+          final outTime = (map['out_time'] ?? map['outTime'] as String? ?? '')
+              .toString()
+              .trim();
           if (inTime.isNotEmpty || outTime.isNotEmpty) {
             return false;
           }
@@ -1228,11 +1337,21 @@ class Employee {
         }
         return isDynamic ?? false;
       }(),
-      siteLatitude: (map['site_latitude'] ?? map['siteLatitude'] as num?)?.toDouble() ?? 0.0,
-      siteLongitude: (map['site_longitude'] ?? map['siteLongitude'] as num?)?.toDouble() ?? 0.0,
-      siteAllowedRadiusMeters: ((map['site_allowed_radius_meters'] ?? map['siteAllowedRadiusMeters']) as num?)?.toInt() ?? 15,
+      siteLatitude:
+          (map['site_latitude'] ?? map['siteLatitude'] as num?)?.toDouble() ??
+          0.0,
+      siteLongitude:
+          (map['site_longitude'] ?? map['siteLongitude'] as num?)?.toDouble() ??
+          0.0,
+      siteAllowedRadiusMeters:
+          ((map['site_allowed_radius_meters'] ?? map['siteAllowedRadiusMeters'])
+                  as num?)
+              ?.toInt() ??
+          15,
       siteRequireGpsVerification: () {
-        final val = map['site_require_gps_verification'] ?? map['siteRequireGpsVerification'];
+        final val =
+            map['site_require_gps_verification'] ??
+            map['siteRequireGpsVerification'];
         if (val is bool) return val;
         if (val is num) return val != 0;
         if (val is String) return val.toLowerCase() == 'true' || val == '1';
@@ -1458,21 +1577,26 @@ class Employee {
       twitterUrl: twitterUrl ?? this.twitterUrl,
       linkedinUrl: linkedinUrl ?? this.linkedinUrl,
       googleUrl: googleUrl ?? this.googleUrl,
-      personalHistoryDetails: personalHistoryDetails ?? this.personalHistoryDetails,
+      personalHistoryDetails:
+          personalHistoryDetails ?? this.personalHistoryDetails,
       hasCriminalCases: hasCriminalCases ?? this.hasCriminalCases,
       criminalCaseDetails: criminalCaseDetails ?? this.criminalCaseDetails,
       salaryBasic: salaryBasic ?? this.salaryBasic,
       salaryHra: salaryHra ?? this.salaryHra,
-      salaryEducationAllowance: salaryEducationAllowance ?? this.salaryEducationAllowance,
-      salarySpecialAllowance: salarySpecialAllowance ?? this.salarySpecialAllowance,
-      salaryTravelAllowance: salaryTravelAllowance ?? this.salaryTravelAllowance,
+      salaryEducationAllowance:
+          salaryEducationAllowance ?? this.salaryEducationAllowance,
+      salarySpecialAllowance:
+          salarySpecialAllowance ?? this.salarySpecialAllowance,
+      salaryTravelAllowance:
+          salaryTravelAllowance ?? this.salaryTravelAllowance,
       salaryOtherAllowance: salaryOtherAllowance ?? this.salaryOtherAllowance,
       salaryAllowances: salaryAllowances ?? this.salaryAllowances,
       salaryTax: salaryTax ?? this.salaryTax,
       salaryPf: salaryPf ?? this.salaryPf,
       salaryEsi: salaryEsi ?? this.salaryEsi,
       salaryEsiEmployer: salaryEsiEmployer ?? this.salaryEsiEmployer,
-      salaryProfessionalTax: salaryProfessionalTax ?? this.salaryProfessionalTax,
+      salaryProfessionalTax:
+          salaryProfessionalTax ?? this.salaryProfessionalTax,
       salaryTotalCtc: salaryTotalCtc ?? this.salaryTotalCtc,
       insurancePolicyNo: insurancePolicyNo ?? this.insurancePolicyNo,
       insuranceProvider: insuranceProvider ?? this.insuranceProvider,
@@ -1484,17 +1608,20 @@ class Employee {
       inTime: inTime ?? this.inTime,
       outTime: outTime ?? this.outTime,
       leaveType: leaveType ?? this.leaveType,
-      leaveAllocationFrequency: leaveAllocationFrequency ?? this.leaveAllocationFrequency,
+      leaveAllocationFrequency:
+          leaveAllocationFrequency ?? this.leaveAllocationFrequency,
       allowedLeaves: allowedLeaves ?? this.allowedLeaves,
       effectiveDate: effectiveDate ?? this.effectiveDate,
-      requiresLeaveApproval: requiresLeaveApproval ?? this.requiresLeaveApproval,
+      requiresLeaveApproval:
+          requiresLeaveApproval ?? this.requiresLeaveApproval,
       companyAssets: companyAssets ?? this.companyAssets,
       reportingManager: reportingManager ?? this.reportingManager,
       reportingManagerId: reportingManagerId ?? this.reportingManagerId,
       businessUnit: businessUnit ?? this.businessUnit,
       workLocation: workLocation ?? this.workLocation,
       workScheduleType: workScheduleType ?? this.workScheduleType,
-      reportingManagerTitle: reportingManagerTitle ?? this.reportingManagerTitle,
+      reportingManagerTitle:
+          reportingManagerTitle ?? this.reportingManagerTitle,
       adminName: adminName ?? this.adminName,
       coordinatorName: coordinatorName ?? this.coordinatorName,
       coordinatorPhone: coordinatorPhone ?? this.coordinatorPhone,
@@ -1508,8 +1635,10 @@ class Employee {
       isDynamicEmployee: isDynamicEmployee ?? this.isDynamicEmployee,
       siteLatitude: siteLatitude ?? this.siteLatitude,
       siteLongitude: siteLongitude ?? this.siteLongitude,
-      siteAllowedRadiusMeters: siteAllowedRadiusMeters ?? this.siteAllowedRadiusMeters,
-      siteRequireGpsVerification: siteRequireGpsVerification ?? this.siteRequireGpsVerification,
+      siteAllowedRadiusMeters:
+          siteAllowedRadiusMeters ?? this.siteAllowedRadiusMeters,
+      siteRequireGpsVerification:
+          siteRequireGpsVerification ?? this.siteRequireGpsVerification,
     );
   }
 
@@ -1517,9 +1646,13 @@ class Employee {
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
     return other is Employee &&
-        (id != 0 && other.id != 0 ? id == other.id : employeeId.trim().toUpperCase() == other.employeeId.trim().toUpperCase());
+        (id != 0 && other.id != 0
+            ? id == other.id
+            : employeeId.trim().toUpperCase() ==
+                  other.employeeId.trim().toUpperCase());
   }
 
   @override
-  int get hashCode => id != 0 ? id.hashCode : employeeId.trim().toUpperCase().hashCode;
+  int get hashCode =>
+      id != 0 ? id.hashCode : employeeId.trim().toUpperCase().hashCode;
 }

@@ -14,7 +14,9 @@ class DepartmentFormDialog extends ConsumerStatefulWidget {
   final Department? department;
 
   static Future<bool?> show(BuildContext context, {Department? department}) {
-    final isMobile = MediaQuery.of(context).size.width < 640 || MediaQuery.of(context).size.height < 700;
+    final isMobile =
+        MediaQuery.of(context).size.width < 640 ||
+        MediaQuery.of(context).size.height < 700;
     if (isMobile) {
       return showModalBottomSheet<bool>(
         context: context,
@@ -24,7 +26,9 @@ class DepartmentFormDialog extends ConsumerStatefulWidget {
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
         builder: (context) => Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
           child: DepartmentFormDialog(department: department),
         ),
       );
@@ -32,7 +36,9 @@ class DepartmentFormDialog extends ConsumerStatefulWidget {
       return showDialog<bool>(
         context: context,
         builder: (context) => Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           child: SizedBox(
             width: 500,
             child: DepartmentFormDialog(department: department),
@@ -43,7 +49,8 @@ class DepartmentFormDialog extends ConsumerStatefulWidget {
   }
 
   @override
-  ConsumerState<DepartmentFormDialog> createState() => _DepartmentFormDialogState();
+  ConsumerState<DepartmentFormDialog> createState() =>
+      _DepartmentFormDialogState();
 }
 
 class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
@@ -93,7 +100,8 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
         departmentName: _nameController.text.trim(),
         departmentHead: _headController.text.trim(),
         reportingHierarchy: widget.department?.reportingHierarchy ?? '',
-        workLocation: _selectedWorkLocation?.trim() ?? _locationController.text.trim(),
+        workLocation:
+            _selectedWorkLocation?.trim() ?? _locationController.text.trim(),
       );
 
       if (widget.department == null) {
@@ -110,9 +118,9 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving department: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error saving department: $e')));
       }
     } finally {
       if (mounted) {
@@ -177,7 +185,11 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, size: 20, color: Color(0xFF667085)),
+                  icon: const Icon(
+                    Icons.close,
+                    size: 20,
+                    color: Color(0xFF667085),
+                  ),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
               ],
@@ -199,14 +211,18 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
                     _buildTextField(
                       label: 'Department Name *',
                       controller: _nameController,
-                      validator: (v) => v == null || v.trim().isEmpty ? 'Name is required' : null,
+                      validator: (v) => v == null || v.trim().isEmpty
+                          ? 'Name is required'
+                          : null,
                       hint: 'e.g. Engineering',
                     ),
                     const SizedBox(height: 16),
                     _buildTextField(
                       label: 'Department Head *',
                       controller: _headController,
-                      validator: (v) => v == null || v.trim().isEmpty ? 'Department Head is required' : null,
+                      validator: (v) => v == null || v.trim().isEmpty
+                          ? 'Department Head is required'
+                          : null,
                       hint: 'e.g. Arun Kumar',
                     ),
                     const SizedBox(height: 16),
@@ -229,12 +245,25 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
               children: [
                 OutlinedButton(
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                     side: const BorderSide(color: Color(0xFFD0D5DD)),
                   ),
-                  onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
-                  child: const Text('Cancel', style: TextStyle(color: Color(0xFF344054), fontWeight: FontWeight.w600)),
+                  onPressed: _isSaving
+                      ? null
+                      : () => Navigator.of(context).pop(),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: Color(0xFF344054),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 12),
                 ElevatedButton(
@@ -242,17 +271,28 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                   onPressed: _isSaving ? null : _submit,
                   child: _isSaving
                       ? const SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         )
-                      : Text(isEdit ? 'Save Changes' : 'Add Department', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      : Text(
+                          isEdit ? 'Save Changes' : 'Add Department',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
                 ),
               ],
             ),
@@ -273,7 +313,11 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF344054)),
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF344054),
+          ),
         ),
         const SizedBox(height: 6),
         TextFormField(
@@ -289,10 +333,14 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
   Widget _buildOrgDropdown(AsyncValue<List<Organization>> orgsAsync) {
     return orgsAsync.when(
       loading: () => const LinearProgressIndicator(),
-      error: (err, _) => Text('Error loading organizations: $err', style: const TextStyle(color: Colors.red, fontSize: 12)),
+      error: (err, _) => Text(
+        'Error loading organizations: $err',
+        style: const TextStyle(color: Colors.red, fontSize: 12),
+      ),
       data: (orgs) {
         final orgNames = orgs.map((o) => o.name).toList();
-        if (_selectedOrganization != null && !orgNames.contains(_selectedOrganization)) {
+        if (_selectedOrganization != null &&
+            !orgNames.contains(_selectedOrganization)) {
           _selectedOrganization = null;
         }
 
@@ -302,7 +350,8 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
           items: orgNames,
           placeholder: 'Select Organization',
           searchHint: 'Search organization...',
-          validator: (v) => v == null || v.trim().isEmpty ? 'Organization is required' : null,
+          validator: (v) =>
+              v == null || v.trim().isEmpty ? 'Organization is required' : null,
           onChanged: (val) {
             setState(() {
               _selectedOrganization = val;
@@ -317,7 +366,8 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
                       .map((s) => s.trim())
                       .where((s) => s.isNotEmpty)
                       .toList();
-                  if (_selectedWorkLocation != null && !orgLocs.contains(_selectedWorkLocation)) {
+                  if (_selectedWorkLocation != null &&
+                      !orgLocs.contains(_selectedWorkLocation)) {
                     _selectedWorkLocation = null;
                     _locationController.clear();
                   }
@@ -332,16 +382,21 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
 
   Widget _buildLocationDropdown(AsyncValue<List<Organization>> orgsAsync) {
     return orgsAsync.when(
-      loading: () => const SizedBox(height: 42, child: Center(child: LinearProgressIndicator())),
+      loading: () => const SizedBox(
+        height: 42,
+        child: Center(child: LinearProgressIndicator()),
+      ),
       error: (err, _) => _buildTextField(
         label: 'Work Location *',
         controller: _locationController,
-        validator: (v) => v == null || v.trim().isEmpty ? 'Work Location is required' : null,
+        validator: (v) =>
+            v == null || v.trim().isEmpty ? 'Work Location is required' : null,
         hint: 'e.g. Chennai Head Office',
       ),
       data: (orgs) {
         List<String> locations = [];
-        if (_selectedOrganization != null && _selectedOrganization!.isNotEmpty) {
+        if (_selectedOrganization != null &&
+            _selectedOrganization!.isNotEmpty) {
           final org = orgs.cast<Organization?>().firstWhere(
             (o) => o?.name == _selectedOrganization,
             orElse: () => null,
@@ -358,7 +413,10 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
           for (final org in orgs) {
             if (org.locations.isNotEmpty) {
               allLocs.addAll(
-                org.locations.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty),
+                org.locations
+                    .split(',')
+                    .map((s) => s.trim())
+                    .where((s) => s.isNotEmpty),
               );
             }
           }
@@ -366,7 +424,8 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
         }
 
         final locOptions = <String>{
-          if (_selectedWorkLocation != null && _selectedWorkLocation!.isNotEmpty)
+          if (_selectedWorkLocation != null &&
+              _selectedWorkLocation!.isNotEmpty)
             _selectedWorkLocation!,
           if (_locationController.text.trim().isNotEmpty)
             _locationController.text.trim(),
@@ -377,12 +436,15 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
           return _buildTextField(
             label: 'Work Location *',
             controller: _locationController,
-            validator: (v) => v == null || v.trim().isEmpty ? 'Work Location is required' : null,
+            validator: (v) => v == null || v.trim().isEmpty
+                ? 'Work Location is required'
+                : null,
             hint: 'e.g. Chennai Head Office',
           );
         }
 
-        if (_selectedWorkLocation != null && !locOptions.contains(_selectedWorkLocation)) {
+        if (_selectedWorkLocation != null &&
+            !locOptions.contains(_selectedWorkLocation)) {
           _selectedWorkLocation = null;
         }
 
@@ -393,7 +455,9 @@ class _DepartmentFormDialogState extends ConsumerState<DepartmentFormDialog> {
           placeholder: 'Select Work Location',
           searchHint: 'Search location...',
           isRequired: true,
-          validator: (v) => v == null || v.trim().isEmpty ? 'Work Location is required' : null,
+          validator: (v) => v == null || v.trim().isEmpty
+              ? 'Work Location is required'
+              : null,
           onChanged: (val) {
             setState(() {
               _selectedWorkLocation = val;

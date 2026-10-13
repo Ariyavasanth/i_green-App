@@ -39,6 +39,7 @@ class _CandidateConversionDialogState
   String? _selectedDesignation;
   String? _selectedReportingManagerId;
   String _selectedReportingManagerName = '';
+  String _selectedReportingManagerTitle = '';
   String _selectedWorkSchedule = 'Fixed Schedule';
   final _joiningDateController = TextEditingController();
 
@@ -48,7 +49,8 @@ class _CandidateConversionDialogState
   void initState() {
     super.initState();
     final todayStr = DateFormat('dd-MMM-yyyy').format(DateTime.now());
-    _joiningDateController.text = widget.candidateEmployee?.joiningDate.isNotEmpty == true
+    _joiningDateController.text =
+        widget.candidateEmployee?.joiningDate.isNotEmpty == true
         ? widget.candidateEmployee!.joiningDate
         : todayStr;
 
@@ -59,9 +61,14 @@ class _CandidateConversionDialogState
       if (emp.workLocation.isNotEmpty) _selectedLocation = emp.workLocation;
       if (emp.department.isNotEmpty) _selectedDepartment = emp.department;
       if (emp.designation.isNotEmpty) _selectedDesignation = emp.designation;
-      if (emp.reportingManagerId.isNotEmpty) _selectedReportingManagerId = emp.reportingManagerId;
-      if (emp.reportingManager.isNotEmpty) _selectedReportingManagerName = emp.reportingManager;
-      if (emp.workScheduleType.isNotEmpty) _selectedWorkSchedule = emp.workScheduleType;
+      if (emp.reportingManagerId.isNotEmpty)
+        _selectedReportingManagerId = emp.reportingManagerId;
+      if (emp.reportingManager.isNotEmpty)
+        _selectedReportingManagerName = emp.reportingManager;
+      if (emp.reportingManagerTitle.isNotEmpty)
+        _selectedReportingManagerTitle = emp.reportingManagerTitle;
+      if (emp.workScheduleType.isNotEmpty)
+        _selectedWorkSchedule = emp.workScheduleType;
     }
   }
 
@@ -75,15 +82,34 @@ class _CandidateConversionDialogState
   Widget build(BuildContext context) {
     final candidateName = widget.candidateEmployee?.fullName.isNotEmpty == true
         ? widget.candidateEmployee!.fullName
-        : (widget.link.employeeName.isNotEmpty ? widget.link.employeeName : widget.link.linkId);
+        : (widget.link.employeeName.isNotEmpty
+              ? widget.link.employeeName
+              : widget.link.linkId);
     final candidateId = widget.candidateEmployee?.employeeId.isNotEmpty == true
         ? widget.candidateEmployee!.employeeId
-        : (widget.link.employeeId.isNotEmpty ? widget.link.employeeId : widget.link.linkId);
+        : (widget.link.employeeId.isNotEmpty
+              ? widget.link.employeeId
+              : widget.link.linkId);
 
     final orgsAsync = ref.watch(organizationsProvider);
     final busAsync = ref.watch(businessUnitsProvider(_selectedOrg));
-    final locsAsync = ref.watch(locationsProvider(LocationFilter(organizationName: _selectedOrg, businessUnitName: _selectedBU)));
-    final deptsAsync = ref.watch(filteredDepartmentsProvider(DepartmentFilter(organizationName: _selectedOrg, businessUnitName: _selectedBU, workLocation: _selectedLocation)));
+    final locsAsync = ref.watch(
+      locationsProvider(
+        LocationFilter(
+          organizationName: _selectedOrg,
+          businessUnitName: _selectedBU,
+        ),
+      ),
+    );
+    final deptsAsync = ref.watch(
+      filteredDepartmentsProvider(
+        DepartmentFilter(
+          organizationName: _selectedOrg,
+          businessUnitName: _selectedBU,
+          workLocation: _selectedLocation,
+        ),
+      ),
+    );
     final desigsAsync = ref.watch(designationsProvider(_selectedDepartment));
     final employeesAsync = ref.watch(allEmployeesProvider);
 
@@ -91,7 +117,9 @@ class _CandidateConversionDialogState
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: Container(
         width: 520,
-        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.88,
+        ),
         padding: const EdgeInsets.all(24),
         child: Form(
           key: _formKey,
@@ -135,8 +163,13 @@ class _CandidateConversionDialogState
                       radius: 20,
                       backgroundColor: AppColors.active,
                       child: Text(
-                        candidateName.isNotEmpty ? candidateName[0].toUpperCase() : 'C',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        candidateName.isNotEmpty
+                            ? candidateName[0].toUpperCase()
+                            : 'C',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -146,12 +179,18 @@ class _CandidateConversionDialogState
                         children: [
                           Text(
                             candidateName,
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                           const SizedBox(height: 2),
                           Text(
                             'Candidate ID: $candidateId',
-                            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
                           ),
                         ],
                       ),
@@ -175,7 +214,17 @@ class _CandidateConversionDialogState
                           return _buildDropdownField<String>(
                             label: 'Organization *',
                             value: _selectedOrg,
-                            items: orgList.map((o) => DropdownMenuItem(value: o.name, child: Text(o.name, style: const TextStyle(fontSize: 13)))).toList(),
+                            items: orgList
+                                .map(
+                                  (o) => DropdownMenuItem(
+                                    value: o.name,
+                                    child: Text(
+                                      o.name,
+                                      style: const TextStyle(fontSize: 13),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
                             onChanged: (val) {
                               setState(() {
                                 _selectedOrg = val;
@@ -184,12 +233,17 @@ class _CandidateConversionDialogState
                                 _selectedDepartment = null;
                                 _selectedDesignation = null;
                                 _selectedReportingManagerId = null;
+                                _selectedReportingManagerName = '';
+                                _selectedReportingManagerTitle = '';
                               });
                             },
                           );
                         },
                         loading: () => const LinearProgressIndicator(),
-                        error: (_, __) => const Text('Failed to load organizations', style: TextStyle(color: Colors.red, fontSize: 12)),
+                        error: (_, __) => const Text(
+                          'Failed to load organizations',
+                          style: TextStyle(color: Colors.red, fontSize: 12),
+                        ),
                       ),
                       const SizedBox(height: 12),
 
@@ -198,9 +252,21 @@ class _CandidateConversionDialogState
                         data: (buList) {
                           return _buildDropdownField<String>(
                             label: 'Business Unit *',
-                            value: buList.any((b) => b.unitName == _selectedBU) ? _selectedBU : null,
+                            value: buList.any((b) => b.unitName == _selectedBU)
+                                ? _selectedBU
+                                : null,
                             hint: 'Select Business Unit...',
-                            items: buList.map((b) => DropdownMenuItem(value: b.unitName, child: Text(b.unitName, style: const TextStyle(fontSize: 13)))).toList(),
+                            items: buList
+                                .map(
+                                  (b) => DropdownMenuItem(
+                                    value: b.unitName,
+                                    child: Text(
+                                      b.unitName,
+                                      style: const TextStyle(fontSize: 13),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
                             onChanged: (val) {
                               setState(() {
                                 _selectedBU = val;
@@ -222,9 +288,24 @@ class _CandidateConversionDialogState
                         data: (locList) {
                           return _buildDropdownField<String>(
                             label: 'Work Location *',
-                            value: locList.any((l) => l.locationName == _selectedLocation) ? _selectedLocation : null,
+                            value:
+                                locList.any(
+                                  (l) => l.locationName == _selectedLocation,
+                                )
+                                ? _selectedLocation
+                                : null,
                             hint: 'Select Work Location...',
-                            items: locList.map((l) => DropdownMenuItem(value: l.locationName, child: Text(l.locationName, style: const TextStyle(fontSize: 13)))).toList(),
+                            items: locList
+                                .map(
+                                  (l) => DropdownMenuItem(
+                                    value: l.locationName,
+                                    child: Text(
+                                      l.locationName,
+                                      style: const TextStyle(fontSize: 13),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
                             onChanged: (val) {
                               setState(() {
                                 _selectedLocation = val;
@@ -245,9 +326,25 @@ class _CandidateConversionDialogState
                         data: (deptList) {
                           return _buildDropdownField<String>(
                             label: 'Department *',
-                            value: deptList.any((d) => d.departmentName == _selectedDepartment) ? _selectedDepartment : null,
+                            value:
+                                deptList.any(
+                                  (d) =>
+                                      d.departmentName == _selectedDepartment,
+                                )
+                                ? _selectedDepartment
+                                : null,
                             hint: 'Select Department...',
-                            items: deptList.map((d) => DropdownMenuItem(value: d.departmentName, child: Text(d.departmentName, style: const TextStyle(fontSize: 13)))).toList(),
+                            items: deptList
+                                .map(
+                                  (d) => DropdownMenuItem(
+                                    value: d.departmentName,
+                                    child: Text(
+                                      d.departmentName,
+                                      style: const TextStyle(fontSize: 13),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
                             onChanged: (val) {
                               setState(() {
                                 _selectedDepartment = val;
@@ -267,12 +364,25 @@ class _CandidateConversionDialogState
                         data: (desigList) {
                           return _buildDropdownField<String>(
                             label: 'Designation *',
-                            value: desigList.any((d) => d.designationName == _selectedDesignation) ? _selectedDesignation : null,
+                            value:
+                                desigList.any(
+                                  (d) =>
+                                      d.designationName == _selectedDesignation,
+                                )
+                                ? _selectedDesignation
+                                : null,
                             hint: 'Select Designation...',
-                            items: desigList.map((d) => DropdownMenuItem(
-                              value: d.designationName,
-                              child: Text(d.designationName, style: const TextStyle(fontSize: 13)),
-                            )).toList(),
+                            items: desigList
+                                .map(
+                                  (d) => DropdownMenuItem(
+                                    value: d.designationName,
+                                    child: Text(
+                                      d.designationName,
+                                      style: const TextStyle(fontSize: 13),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
                             onChanged: (val) {
                               setState(() {
                                 _selectedDesignation = val;
@@ -289,8 +399,29 @@ class _CandidateConversionDialogState
                       // Reporting Manager Dropdown
                       employeesAsync.when(
                         data: (allEmps) {
+                          final candidateEmpId =
+                              widget.candidateEmployee?.employeeId
+                                  .trim()
+                                  .toLowerCase() ??
+                              '';
+                          final candidateDbId = widget.candidateEmployee != null
+                              ? widget.candidateEmployee!.id.toString()
+                              : '';
+
                           final eligibleManagers = allEmps.where((emp) {
-                            if (_selectedOrg != null && _selectedOrg!.isNotEmpty && emp.organizationName.isNotEmpty && emp.organizationName != _selectedOrg) {
+                            if (emp.status.trim().toLowerCase() != 'active')
+                              return false;
+                            if (candidateEmpId.isNotEmpty &&
+                                emp.employeeId.trim().toLowerCase() ==
+                                    candidateEmpId)
+                              return false;
+                            if (candidateDbId.isNotEmpty &&
+                                emp.id.toString() == candidateDbId)
+                              return false;
+                            if (_selectedOrg != null &&
+                                _selectedOrg!.isNotEmpty &&
+                                emp.organizationName.isNotEmpty &&
+                                emp.organizationName != _selectedOrg) {
                               return false;
                             }
                             return true;
@@ -298,22 +429,46 @@ class _CandidateConversionDialogState
 
                           return _buildDropdownField<String>(
                             label: 'Reporting Manager *',
-                            value: eligibleManagers.any((e) => e.employeeId == _selectedReportingManagerId)
+                            value:
+                                eligibleManagers.any(
+                                  (e) =>
+                                      e.employeeId ==
+                                      _selectedReportingManagerId,
+                                )
                                 ? _selectedReportingManagerId
                                 : null,
                             hint: 'Select Reporting Manager...',
                             items: eligibleManagers.map((emp) {
-                              final label = '${emp.fullName} — ${emp.designation.isNotEmpty ? emp.designation : "Manager"}';
+                              final label =
+                                  '${emp.fullName} (${emp.employeeId}) — ${emp.designation.isNotEmpty ? emp.designation : "Manager"}';
                               return DropdownMenuItem(
                                 value: emp.employeeId,
-                                child: Text(label, style: const TextStyle(fontSize: 13)),
+                                child: Text(
+                                  label,
+                                  style: const TextStyle(fontSize: 13),
+                                ),
                               );
                             }).toList(),
                             onChanged: (val) {
-                              final mgr = eligibleManagers.firstWhere((e) => e.employeeId == val, orElse: () => eligibleManagers.first);
+                              if (val == null || val.isEmpty) {
+                                setState(() {
+                                  _selectedReportingManagerId = null;
+                                  _selectedReportingManagerName = '';
+                                  _selectedReportingManagerTitle = '';
+                                });
+                                return;
+                              }
+                              final mgr = eligibleManagers.firstWhere(
+                                (e) => e.employeeId == val,
+                                orElse: () => eligibleManagers.first,
+                              );
                               setState(() {
                                 _selectedReportingManagerId = val;
                                 _selectedReportingManagerName = mgr.fullName;
+                                _selectedReportingManagerTitle =
+                                    mgr.designation.isNotEmpty
+                                    ? mgr.designation
+                                    : 'Manager';
                               });
                             },
                           );
@@ -327,11 +482,25 @@ class _CandidateConversionDialogState
                       _buildDropdownField<String>(
                         label: 'Work Schedule *',
                         value: _selectedWorkSchedule,
-                        items: ['Fixed Schedule', 'General Shift (09:00 AM - 06:00 PM)', 'Flexible Schedule']
-                            .map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 13))))
-                            .toList(),
+                        items:
+                            [
+                                  'Fixed Schedule',
+                                  'General Shift (09:00 AM - 06:00 PM)',
+                                  'Flexible Schedule',
+                                ]
+                                .map(
+                                  (s) => DropdownMenuItem(
+                                    value: s,
+                                    child: Text(
+                                      s,
+                                      style: const TextStyle(fontSize: 13),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
                         onChanged: (val) {
-                          if (val != null) setState(() => _selectedWorkSchedule = val);
+                          if (val != null)
+                            setState(() => _selectedWorkSchedule = val);
                         },
                       ),
                       const SizedBox(height: 12),
@@ -342,7 +511,11 @@ class _CandidateConversionDialogState
                         children: [
                           const Text(
                             'Joining Date *',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondary,
+                            ),
                           ),
                           const SizedBox(height: 4),
                           TextFormField(
@@ -351,13 +524,25 @@ class _CandidateConversionDialogState
                             decoration: InputDecoration(
                               isDense: true,
                               hintText: 'Select Joining Date...',
-                              suffixIcon: const Icon(Icons.calendar_today, size: 16),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              suffixIcon: const Icon(
+                                Icons.calendar_today,
+                                size: 16,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
                             ),
                             onTap: () async {
                               final now = DateTime.now();
-                              final today = DateTime(now.year, now.month, now.day);
+                              final today = DateTime(
+                                now.year,
+                                now.month,
+                                now.day,
+                              );
                               final picked = await showDatePicker(
                                 context: context,
                                 initialDate: now,
@@ -366,7 +551,9 @@ class _CandidateConversionDialogState
                               );
                               if (picked != null) {
                                 setState(() {
-                                  _joiningDateController.text = DateFormat('dd-MMM-yyyy').format(picked);
+                                  _joiningDateController.text = DateFormat(
+                                    'dd-MMM-yyyy',
+                                  ).format(picked);
                                 });
                               }
                             },
@@ -384,19 +571,35 @@ class _CandidateConversionDialogState
                 children: [
                   OutlinedButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Cancel', style: TextStyle(color: Colors.black87)),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(color: Colors.black87),
+                    ),
                   ),
                   const SizedBox(width: 12),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.active,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 10,
+                      ),
                     ),
                     onPressed: _isSubmitting ? null : _submitConversion,
                     child: _isSubmitting
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Text('Create Employee', style: TextStyle(fontWeight: FontWeight.bold)),
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Create Employee',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
                   ),
                 ],
               ),
@@ -419,17 +622,26 @@ class _CandidateConversionDialogState
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
         ),
         const SizedBox(height: 4),
         DropdownButtonFormField<T>(
           value: value,
-          hint: hint != null ? Text(hint, style: const TextStyle(fontSize: 13)) : null,
+          hint: hint != null
+              ? Text(hint, style: const TextStyle(fontSize: 13))
+              : null,
           isDense: true,
           decoration: InputDecoration(
             isDense: true,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
           ),
           items: items,
           onChanged: onChanged,
@@ -439,9 +651,16 @@ class _CandidateConversionDialogState
   }
 
   Future<void> _submitConversion() async {
-    if (_selectedOrg == null || _selectedDepartment == null || _selectedDesignation == null) {
+    if (_selectedOrg == null ||
+        _selectedDepartment == null ||
+        _selectedDesignation == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select Organization, Department, and Designation.'), backgroundColor: Colors.orange),
+        const SnackBar(
+          content: Text(
+            'Please select Organization, Department, and Designation.',
+          ),
+          backgroundColor: Colors.orange,
+        ),
       );
       return;
     }
@@ -451,22 +670,28 @@ class _CandidateConversionDialogState
       final repo = ref.read(employeeRepositoryProvider);
 
       // Fetch base employee candidate or construct
-      final baseEmp = widget.candidateEmployee ?? Employee(
-        id: 0,
-        employeeId: widget.link.employeeId.isNotEmpty ? widget.link.employeeId : 'EMP-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
-        firstName: widget.link.employeeName.isNotEmpty ? widget.link.employeeName : 'Candidate',
-        lastName: '',
-        emailAddress: widget.candidateEmployee?.emailAddress ?? '',
-        phoneNumber: widget.candidateEmployee?.phoneNumber ?? '',
-        gender: 'Male',
-        dob: '',
-        organizationName: _selectedOrg ?? '',
-        department: _selectedDepartment ?? '',
-        designation: _selectedDesignation ?? '',
-        employmentType: 'Full-Time',
-        joiningDate: _joiningDateController.text,
-        status: 'Active',
-      );
+      final baseEmp =
+          widget.candidateEmployee ??
+          Employee(
+            id: 0,
+            employeeId: widget.link.employeeId.isNotEmpty
+                ? widget.link.employeeId
+                : 'EMP-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
+            firstName: widget.link.employeeName.isNotEmpty
+                ? widget.link.employeeName
+                : 'Candidate',
+            lastName: '',
+            emailAddress: widget.candidateEmployee?.emailAddress ?? '',
+            phoneNumber: widget.candidateEmployee?.phoneNumber ?? '',
+            gender: 'Male',
+            dob: '',
+            organizationName: _selectedOrg ?? '',
+            department: _selectedDepartment ?? '',
+            designation: _selectedDesignation ?? '',
+            employmentType: 'Full-Time',
+            joiningDate: _joiningDateController.text,
+            status: 'Active',
+          );
 
       final updatedEmployee = baseEmp.copyWith(
         organizationName: _selectedOrg ?? baseEmp.organizationName,
@@ -474,8 +699,14 @@ class _CandidateConversionDialogState
         workLocation: _selectedLocation ?? baseEmp.workLocation,
         department: _selectedDepartment ?? baseEmp.department,
         designation: _selectedDesignation ?? baseEmp.designation,
-        reportingManager: _selectedReportingManagerName.isNotEmpty ? _selectedReportingManagerName : baseEmp.reportingManager,
-        reportingManagerId: _selectedReportingManagerId ?? baseEmp.reportingManagerId,
+        reportingManager: _selectedReportingManagerName.isNotEmpty
+            ? _selectedReportingManagerName
+            : baseEmp.reportingManager,
+        reportingManagerId:
+            _selectedReportingManagerId ?? baseEmp.reportingManagerId,
+        reportingManagerTitle: _selectedReportingManagerTitle.isNotEmpty
+            ? _selectedReportingManagerTitle
+            : baseEmp.reportingManagerTitle,
         workScheduleType: _selectedWorkSchedule,
         joiningDate: _joiningDateController.text,
         status: 'Active',
@@ -503,7 +734,9 @@ class _CandidateConversionDialogState
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Successfully created Employee profile for ${updatedEmployee.fullName}!'),
+            content: Text(
+              'Successfully created Employee profile for ${updatedEmployee.fullName}!',
+            ),
             backgroundColor: const Color(0xFF28A745),
           ),
         );
@@ -511,7 +744,10 @@ class _CandidateConversionDialogState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error converting candidate: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Error converting candidate: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {

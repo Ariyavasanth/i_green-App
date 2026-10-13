@@ -96,7 +96,9 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
         allowMultiple: false,
         withData: true,
       );
-      final file = result?.files.isNotEmpty == true ? result!.files.first : null;
+      final file = result?.files.isNotEmpty == true
+          ? result!.files.first
+          : null;
       if (file == null || file.bytes == null) return;
 
       if (!mounted) return;
@@ -109,16 +111,17 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
 
       setState(() {
         _selectedPhotoBytes = croppedBytes;
-        _profileImageUrl = 'data:image/jpeg;base64,${base64Encode(croppedBytes)}';
+        _profileImageUrl =
+            'data:image/jpeg;base64,${base64Encode(croppedBytes)}';
         _isPhotoRemoved = false;
       });
 
       await _saveProfile();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to set photo: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to set photo: $e')));
     }
   }
 
@@ -184,7 +187,10 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
           children: [
             Icon(Icons.logout, color: Color(0xFFE53935), size: 22),
             SizedBox(width: 10),
-            Text('Log Out', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            Text(
+              'Log Out',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
           ],
         ),
         content: const Text(
@@ -194,7 +200,10 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Color(0xFF64748B)),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -244,7 +253,9 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
         ? emp.employeeId
         : (emp.id != 0 ? 'EMP-00${emp.id}' : '-');
     final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U';
-    final hasPhoto = _selectedPhotoBytes != null || (_profileImageUrl.isNotEmpty && !_isPhotoRemoved);
+    final hasPhoto =
+        _selectedPhotoBytes != null ||
+        (_profileImageUrl.isNotEmpty && !_isPhotoRemoved);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -320,14 +331,10 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
                           const SizedBox(height: 18),
                           Row(
                             children: [
-                              Expanded(
-                                child: _buildChangePhotoButton(),
-                              ),
+                              Expanded(child: _buildChangePhotoButton()),
                               if (hasPhoto) ...[
                                 const SizedBox(width: 10),
-                                Expanded(
-                                  child: _buildRemovePhotoButton(),
-                                ),
+                                Expanded(child: _buildRemovePhotoButton()),
                               ],
                             ],
                           ),
@@ -448,7 +455,9 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
                                 width: 42,
                                 height: 42,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                                  color: const Color(
+                                    0xFF9CC70A,
+                                  ).withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: const Center(
@@ -490,14 +499,23 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton.icon(
-                              onPressed: () => BackgroundPickerModal.show(context),
-                              icon: const Icon(Icons.palette_outlined, size: 16),
-                              label: const Text('Change Background', style: TextStyle(fontWeight: FontWeight.bold)),
+                              onPressed: () =>
+                                  BackgroundPickerModal.show(context),
+                              icon: const Icon(
+                                Icons.palette_outlined,
+                                size: 16,
+                              ),
+                              label: const Text(
+                                'Change Background',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF9CC70A),
                                 foregroundColor: Colors.white,
                                 elevation: 0,
-                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -511,7 +529,9 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
                                 width: 44,
                                 height: 44,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+                                  color: const Color(
+                                    0xFF9CC70A,
+                                  ).withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: const Center(
@@ -549,14 +569,24 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
                               ),
                               const SizedBox(width: 16),
                               ElevatedButton.icon(
-                                onPressed: () => BackgroundPickerModal.show(context),
-                                icon: const Icon(Icons.palette_outlined, size: 16),
-                                label: const Text('Change Background', style: TextStyle(fontWeight: FontWeight.bold)),
+                                onPressed: () =>
+                                    BackgroundPickerModal.show(context),
+                                icon: const Icon(
+                                  Icons.palette_outlined,
+                                  size: 16,
+                                ),
+                                label: const Text(
+                                  'Change Background',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF9CC70A),
                                   foregroundColor: Colors.white,
                                   elevation: 0,
-                                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 18,
+                                    vertical: 12,
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
@@ -599,7 +629,9 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
                               width: 40,
                               height: 40,
                               decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.12),
+                                color: AppColors.primary.withValues(
+                                  alpha: 0.12,
+                                ),
                                 borderRadius: BorderRadius.circular(11),
                               ),
                               child: const Center(
@@ -677,8 +709,8 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
                           value: emp.workScheduleType.isNotEmpty
                               ? emp.workScheduleType
                               : (emp.isDynamicEmployee
-                                  ? 'Flexible Schedule'
-                                  : 'Fixed Schedule'),
+                                    ? 'Flexible Schedule'
+                                    : 'Fixed Schedule'),
                         ),
                         _buildDetailItem(
                           icon: Icons.calendar_today_outlined,
@@ -706,8 +738,8 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
                           value: emp.phoneNumber.isNotEmpty
                               ? emp.phoneNumber
                               : (emp.personalMobile.isNotEmpty
-                                  ? emp.personalMobile
-                                  : '-'),
+                                    ? emp.personalMobile
+                                    : '-'),
                           isLast: true,
                         ),
                       ],
@@ -790,7 +822,11 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
     );
   }
 
-  Widget _buildAvatar(String displayName, String initial, {required double radius}) {
+  Widget _buildAvatar(
+    String displayName,
+    String initial, {
+    required double radius,
+  }) {
     Widget avatarChild;
     if (_selectedPhotoBytes != null) {
       avatarChild = CircleAvatar(
@@ -838,10 +874,7 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
           customBorder: const CircleBorder(),
           onTap: () => _openPhotoViewer(displayName, initial),
           mouseCursor: SystemMouseCursors.click,
-          child: Tooltip(
-            message: 'View profile photo',
-            child: avatarChild,
-          ),
+          child: Tooltip(message: 'View profile photo', child: avatarChild),
         ),
       ),
     );
@@ -920,19 +953,14 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
           : const Icon(Icons.photo_camera_outlined, size: 16),
       label: const Text(
         'Change Photo',
-        style: TextStyle(
-          fontWeight: FontWeight.w700,
-          fontSize: 13,
-        ),
+        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
       ),
       style: ElevatedButton.styleFrom(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         elevation: 0,
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }
@@ -943,18 +971,13 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
       icon: const Icon(Icons.delete_outline_rounded, size: 16),
       label: const Text(
         'Remove Photo',
-        style: TextStyle(
-          fontWeight: FontWeight.w600,
-          fontSize: 13,
-        ),
+        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
       ),
       style: OutlinedButton.styleFrom(
         foregroundColor: const Color(0xFFE53935),
         side: const BorderSide(color: Color(0xFFFFCDD2)),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }
@@ -973,10 +996,7 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
       decoration: BoxDecoration(
         color: const Color(0xFFFBFDF9),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFFEEF2EA),
-          width: 1,
-        ),
+        border: Border.all(color: const Color(0xFFEEF2EA), width: 1),
       ),
       child: Material(
         color: Colors.transparent,
@@ -995,13 +1015,7 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
                     color: iconBg,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Center(
-                    child: Icon(
-                      icon,
-                      color: iconColor,
-                      size: 20,
-                    ),
-                  ),
+                  child: Center(child: Icon(icon, color: iconColor, size: 20)),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -1029,8 +1043,12 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
                   ),
                 ),
                 Icon(
-                  onTap != null ? Icons.tune_rounded : Icons.chevron_right_rounded,
-                  color: onTap != null ? const Color(0xFF9CC70A) : const Color(0xFF94A3B8),
+                  onTap != null
+                      ? Icons.tune_rounded
+                      : Icons.chevron_right_rounded,
+                  color: onTap != null
+                      ? const Color(0xFF9CC70A)
+                      : const Color(0xFF94A3B8),
                   size: 20,
                 ),
               ],

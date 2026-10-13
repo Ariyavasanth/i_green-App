@@ -24,7 +24,8 @@ class DesignationFormDialog extends ConsumerStatefulWidget {
     String? initialOrganization,
     String? initialDepartment,
   }) {
-    final isMobile = MediaQuery.of(context).size.width < 640 ||
+    final isMobile =
+        MediaQuery.of(context).size.width < 640 ||
         MediaQuery.of(context).size.height < 700;
     if (isMobile) {
       return showModalBottomSheet<bool>(
@@ -35,8 +36,9 @@ class DesignationFormDialog extends ConsumerStatefulWidget {
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
         builder: (context) => Padding(
-          padding:
-              EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
           child: DesignationFormDialog(
             designation: designation,
             initialOrganization: initialOrganization,
@@ -48,8 +50,9 @@ class DesignationFormDialog extends ConsumerStatefulWidget {
       return showDialog<bool>(
         context: context,
         builder: (context) => Dialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           child: SizedBox(
             width: 520,
             child: DesignationFormDialog(
@@ -75,6 +78,9 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
   final List<String> _pendingDesignations = [];
   String? _selectedOrganization;
   String? _selectedDepartment;
+  String? _selectedBandId;
+  String? _selectedBandCode;
+  int? _selectedBandLevel;
   bool _isSaving = false;
 
   @override
@@ -84,14 +90,20 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
     _nameController = TextEditingController(text: d?.designationName ?? '');
     _selectedOrganization = (d != null && d.organizationName.isNotEmpty)
         ? d.organizationName
-        : (widget.initialOrganization != null && widget.initialOrganization != 'All'
-            ? widget.initialOrganization
-            : null);
+        : (widget.initialOrganization != null &&
+                  widget.initialOrganization != 'All'
+              ? widget.initialOrganization
+              : null);
     _selectedDepartment = (d != null && d.departmentName.isNotEmpty)
         ? d.departmentName
         : (widget.initialDepartment != null && widget.initialDepartment != 'All'
-            ? widget.initialDepartment
-            : null);
+              ? widget.initialDepartment
+              : null);
+    _selectedBandId = (d != null && d.bandId.isNotEmpty) ? d.bandId : null;
+    _selectedBandCode = (d != null && d.bandCode.isNotEmpty)
+        ? d.bandCode
+        : null;
+    _selectedBandLevel = (d != null && d.bandLevel > 0) ? d.bandLevel : null;
   }
 
   @override
@@ -152,7 +164,9 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
     final names = _getAllDesignationNames();
     if (names.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter at least one designation name')),
+        const SnackBar(
+          content: Text('Please enter at least one designation name'),
+        ),
       );
       return;
     }
@@ -161,13 +175,30 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
 
     try {
       final repo = ref.read(organizationRepositoryProvider);
+      final orgs = ref.read(organizationsProvider).valueOrNull ?? [];
+      final matchingOrg = orgs
+          .where(
+            (o) =>
+                o.name == _selectedOrganization ||
+                o.canonicalId == _selectedOrganization,
+          )
+          .firstOrNull;
+      final orgId =
+          matchingOrg?.canonicalId ?? widget.designation?.organizationId ?? '';
+      final orgName = matchingOrg?.name ?? _selectedOrganization?.trim() ?? '';
 
       if (isEdit) {
         final item = Designation(
           id: widget.designation!.id,
-          organizationName: _selectedOrganization?.trim() ?? '',
+          organizationId: orgId,
+          organizationName: orgName,
           departmentName: _selectedDepartment!.trim(),
           designationName: names.first,
+          bandId: _selectedBandId ?? '',
+          bandCode: _selectedBandCode ?? '',
+          bandLevel: _selectedBandLevel ?? 0,
+          hierarchyLevel: widget.designation!.hierarchyLevel,
+          description: widget.designation!.description,
         );
         await repo.updateDesignation(item);
       } else {
@@ -175,9 +206,13 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
         for (final name in names) {
           final item = Designation(
             id: 0,
-            organizationName: _selectedOrganization?.trim() ?? '',
+            organizationId: orgId,
+            organizationName: orgName,
             departmentName: _selectedDepartment!.trim(),
             designationName: name,
+            bandId: _selectedBandId ?? '',
+            bandCode: _selectedBandCode ?? '',
+            bandLevel: _selectedBandLevel ?? 0,
           );
           await repo.addDesignation(item);
         }
@@ -185,15 +220,17 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
 
       ref.invalidate(allDesignationsProvider);
       ref.invalidate(designationsProvider(_selectedDepartment));
+      ref.invalidate(organizationBandsProvider);
+      ref.invalidate(filteredBandsProvider);
 
       if (mounted) {
         Navigator.of(context).pop(true);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving designation: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error saving designation: $e')));
       }
     } finally {
       if (mounted) {
@@ -232,16 +269,19 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
                         color: AppColors.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.badge_outlined,
-                          color: AppColors.primary, size: 20),
+                      child: const Icon(
+                        Icons.badge_outlined,
+                        color: AppColors.primary,
+                        size: 20,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Text(
                       isEdit
                           ? 'Edit Designation'
                           : (_pendingDesignations.length > 1
-                              ? 'Add Multiple Designations'
-                              : 'Add Designation'),
+                                ? 'Add Multiple Designations'
+                                : 'Add Designation'),
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -251,7 +291,11 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
                   ],
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, size: 20, color: Color(0xFF667085)),
+                  icon: const Icon(
+                    Icons.close,
+                    size: 20,
+                    color: Color(0xFF667085),
+                  ),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
               ],
@@ -273,11 +317,17 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
                       loading: () => const LinearProgressIndicator(),
                       error: (err, _) => const SizedBox.shrink(),
                       data: (orgs) {
-                        final orgNames = orgs.map((o) => o.name).where((s) => s.isNotEmpty).toSet().toList();
-                        if (_selectedOrganization != null && !orgNames.contains(_selectedOrganization)) {
+                        final orgNames = orgs
+                            .map((o) => o.name)
+                            .where((s) => s.isNotEmpty)
+                            .toSet()
+                            .toList();
+                        if (_selectedOrganization != null &&
+                            !orgNames.contains(_selectedOrganization)) {
                           orgNames.insert(0, _selectedOrganization!);
                         }
-                        if (_selectedOrganization == null && orgNames.isNotEmpty) {
+                        if (_selectedOrganization == null &&
+                            orgNames.isNotEmpty) {
                           _selectedOrganization = orgNames.first;
                         }
 
@@ -291,6 +341,9 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
                             setState(() {
                               _selectedOrganization = val;
                               _selectedDepartment = null;
+                              _selectedBandId = null;
+                              _selectedBandCode = null;
+                              _selectedBandLevel = null;
                             });
                           },
                         );
@@ -307,14 +360,25 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
                       ),
                       data: (depts) {
                         var filteredDepts = depts;
-                        if (_selectedOrganization != null && _selectedOrganization!.isNotEmpty) {
-                          filteredDepts = depts.where((d) => d.organizationName.trim().toLowerCase() == _selectedOrganization!.trim().toLowerCase() || d.organizationName.isEmpty).toList();
+                        if (_selectedOrganization != null &&
+                            _selectedOrganization!.isNotEmpty) {
+                          filteredDepts = depts
+                              .where(
+                                (d) =>
+                                    d.organizationName.trim().toLowerCase() ==
+                                        _selectedOrganization!
+                                            .trim()
+                                            .toLowerCase() ||
+                                    d.organizationName.isEmpty,
+                              )
+                              .toList();
                         }
-                        final deptNames = (filteredDepts.isNotEmpty ? filteredDepts : depts)
-                            .map((d) => d.departmentName)
-                            .where((s) => s.isNotEmpty)
-                            .toSet()
-                            .toList();
+                        final deptNames =
+                            (filteredDepts.isNotEmpty ? filteredDepts : depts)
+                                .map((d) => d.departmentName)
+                                .where((s) => s.isNotEmpty)
+                                .toSet()
+                                .toList();
 
                         if (deptNames.isEmpty) {
                           deptNames.addAll([
@@ -345,6 +409,103 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
                               : null,
                           onChanged: (val) {
                             setState(() => _selectedDepartment = val);
+                          },
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Band Dropdown
+                    Builder(
+                      builder: (context) {
+                        final orgs = orgsAsync.valueOrNull ?? [];
+                        final currentOrg = orgs
+                            .where(
+                              (o) =>
+                                  o.name == _selectedOrganization ||
+                                  o.canonicalId == _selectedOrganization,
+                            )
+                            .firstOrNull;
+                        final orgId =
+                            currentOrg?.canonicalId ??
+                            widget.designation?.organizationId ??
+                            '';
+                        final bandsAsync = ref.watch(
+                          organizationBandsProvider(
+                            orgId.isNotEmpty ? orgId : null,
+                          ),
+                        );
+
+                        return bandsAsync.when(
+                          loading: () => const LinearProgressIndicator(),
+                          error: (err, _) => const SizedBox.shrink(),
+                          data: (bands) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Organization Band (Optional)',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF344054),
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                DropdownButtonFormField<String?>(
+                                  key: ValueKey(
+                                    'band_select_${_selectedOrganization}_$_selectedBandId',
+                                  ),
+                                  initialValue: _selectedBandId,
+                                  isExpanded: true,
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 10,
+                                    ),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: const BorderSide(
+                                        color: Color(0xFFD0D5DD),
+                                      ),
+                                    ),
+                                  ),
+                                  items: [
+                                    const DropdownMenuItem<String?>(
+                                      value: null,
+                                      child: Text(
+                                        'None / Unassigned',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Color(0xFF64748B),
+                                        ),
+                                      ),
+                                    ),
+                                    ...bands.map(
+                                      (b) => DropdownMenuItem<String?>(
+                                        value: b.id,
+                                        child: Text(
+                                          '${b.bandCode} — ${b.title} (Level ${b.level})',
+                                          style: const TextStyle(fontSize: 13),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                  onChanged: (val) {
+                                    setState(() {
+                                      _selectedBandId = val;
+                                      final match = bands
+                                          .where((b) => b.id == val)
+                                          .firstOrNull;
+                                      _selectedBandCode = match?.bandCode;
+                                      _selectedBandLevel = match?.level;
+                                    });
+                                  },
+                                ),
+                              ],
+                            );
                           },
                         );
                       },
@@ -387,10 +548,13 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
                                 minLines: 1,
                                 style: const TextStyle(fontSize: 13),
                                 validator: (v) {
-                                  if (isEdit && (v == null || v.trim().isEmpty)) {
+                                  if (isEdit &&
+                                      (v == null || v.trim().isEmpty)) {
                                     return 'Designation name is required';
                                   }
-                                  if (!isEdit && _pendingDesignations.isEmpty && (v == null || v.trim().isEmpty)) {
+                                  if (!isEdit &&
+                                      _pendingDesignations.isEmpty &&
+                                      (v == null || v.trim().isEmpty)) {
                                     return 'At least one designation is required';
                                   }
                                   return null;
@@ -403,14 +567,19 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
                                       ? 'e.g. HR Executive'
                                       : 'e.g. HR Manager, HR Executive, Recruiter',
                                   hintStyle: const TextStyle(
-                                      color: Color(0xFF667085), fontSize: 12),
+                                    color: Color(0xFF667085),
+                                    fontSize: 12,
+                                  ),
                                   isDense: true,
                                   contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 10),
+                                    horizontal: 12,
+                                    vertical: 10,
+                                  ),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(8),
-                                    borderSide:
-                                        const BorderSide(color: Color(0xFFD0D5DD)),
+                                    borderSide: const BorderSide(
+                                      color: Color(0xFFD0D5DD),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -423,15 +592,23 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
                                   foregroundColor: const Color(0xFF1E293B),
                                   elevation: 0,
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 14, vertical: 12),
+                                    horizontal: 14,
+                                    vertical: 12,
+                                  ),
                                   shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8)),
-                                  side: const BorderSide(color: Color(0xFFCBD5E1)),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  side: const BorderSide(
+                                    color: Color(0xFFCBD5E1),
+                                  ),
                                 ),
                                 onPressed: _addFromInput,
                                 child: const Text(
                                   '+ Add',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ),
                             ],
@@ -444,9 +621,10 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
                           const Text(
                             'Designations to add:',
                             style: TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF475467)),
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF475467),
+                            ),
                           ),
                           const SizedBox(height: 6),
                           Wrap(
@@ -456,10 +634,15 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
                               return Container(
                                 padding: const EdgeInsets.fromLTRB(10, 4, 6, 4),
                                 decoration: BoxDecoration(
-                                  color: AppColors.primary.withValues(alpha: 0.1),
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.1,
+                                  ),
                                   borderRadius: BorderRadius.circular(16),
                                   border: Border.all(
-                                      color: AppColors.primary.withValues(alpha: 0.3)),
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.3,
+                                    ),
+                                  ),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
@@ -512,16 +695,24 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
                 OutlinedButton(
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 12),
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                     side: const BorderSide(color: Color(0xFFD0D5DD)),
                   ),
-                  onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
-                  child: const Text('Cancel',
-                      style: TextStyle(
-                          color: Color(0xFF344054),
-                          fontWeight: FontWeight.w600)),
+                  onPressed: _isSaving
+                      ? null
+                      : () => Navigator.of(context).pop(),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: Color(0xFF344054),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 12),
                 ElevatedButton(
@@ -530,9 +721,12 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
                     foregroundColor: Colors.white,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 12),
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                   onPressed: _isSaving ? null : _submit,
                   child: _isSaving
@@ -540,14 +734,16 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
                           width: 18,
                           height: 18,
                           child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white),
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         )
                       : Text(
                           isEdit
                               ? 'Save Changes'
                               : (count > 1
-                                  ? 'Add $count Designations'
-                                  : 'Add Designation'),
+                                    ? 'Add $count Designations'
+                                    : 'Add Designation'),
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                 ),

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -19,14 +20,31 @@ import '../domain/registration_link.dart';
 class FirebaseEmployeeRepository implements EmployeeRepository {
   final FirebaseFirestore? _customFirestore;
   final FirebaseStorage? _customStorage;
+  final bool _isInMemory;
+  final List<Employee> _memoryEmployees = [];
 
   FirebaseEmployeeRepository({
     FirebaseFirestore? firestore,
     FirebaseStorage? storage,
-  })  : _customFirestore = firestore,
-        _customStorage = storage;
+    bool isInMemory = false,
+  }) : _customFirestore = firestore,
+       _customStorage = storage,
+       _isInMemory = isInMemory;
 
-  FirebaseFirestore get _firestore => _customFirestore ?? FirebaseFirestore.instance;
+  static bool _hasFirebaseApp() {
+    try {
+      return Firebase.apps.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  bool get isInMemory =>
+      _isInMemory || (_customFirestore == null && !_hasFirebaseApp());
+
+  FirebaseFirestore get _firestore =>
+      _customFirestore ?? FirebaseFirestore.instance;
+
   FirebaseStorage get _storage => _customStorage ?? FirebaseStorage.instance;
 
   CollectionReference<Map<String, dynamic>> get _employeesRef =>
@@ -44,10 +62,13 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   CollectionReference<Map<String, dynamic>> get _columnPreferencesRef =>
       _firestore.collection('column_preferences');
 
-
   String _folderForEmployee(String employeeId, String role) {
-    final normalizedRole = role.trim().isEmpty ? 'employees' : role.trim().toLowerCase();
-    final normalizedId = employeeId.trim().isEmpty ? 'unassigned' : employeeId.trim();
+    final normalizedRole = role.trim().isEmpty
+        ? 'employees'
+        : role.trim().toLowerCase();
+    final normalizedId = employeeId.trim().isEmpty
+        ? 'unassigned'
+        : employeeId.trim();
     return 'employee_management/profiles/$normalizedRole/$normalizedId';
   }
 
@@ -56,12 +77,11 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     final map = emp.toMap();
 
     // Convert list objects into native Firestore Array of Maps instead of raw JSON strings
-    map['education_items'] =
-        emp.educationItems.map((e) => e.toMap()).toList();
-    map['experience_items'] =
-        emp.experienceItems.map((e) => e.toMap()).toList();
-    map['document_items'] =
-        emp.documentItems.map((e) => e.toMap()).toList();
+    map['education_items'] = emp.educationItems.map((e) => e.toMap()).toList();
+    map['experience_items'] = emp.experienceItems
+        .map((e) => e.toMap())
+        .toList();
+    map['document_items'] = emp.documentItems.map((e) => e.toMap()).toList();
 
     map['updated_at'] = FieldValue.serverTimestamp();
     return map;
@@ -92,21 +112,26 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
     // Self-healing: persist id back to Firestore if it was missing or zero
     if (docId.isNotEmpty && (currentId == null || currentId == 0)) {
-      _employeesRef.doc(docId).set({'id': resolvedId}, SetOptions(merge: true)).ignore();
+      _employeesRef.doc(docId).set({
+        'id': resolvedId,
+      }, SetOptions(merge: true)).ignore();
     }
 
     // Convert Firestore native array lists back to JSON strings for domain model compatibility
     if (mutableMap['education_items'] is List) {
-      mutableMap['education_list_json'] =
-          jsonEncode(mutableMap['education_items']);
+      mutableMap['education_list_json'] = jsonEncode(
+        mutableMap['education_items'],
+      );
     }
     if (mutableMap['experience_items'] is List) {
-      mutableMap['experience_list_json'] =
-          jsonEncode(mutableMap['experience_items']);
+      mutableMap['experience_list_json'] = jsonEncode(
+        mutableMap['experience_items'],
+      );
     }
     if (mutableMap['document_items'] is List) {
-      mutableMap['document_list_json'] =
-          jsonEncode(mutableMap['document_items']);
+      mutableMap['document_list_json'] = jsonEncode(
+        mutableMap['document_items'],
+      );
     }
 
     return Employee.fromMap(mutableMap);
@@ -122,12 +147,12 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
           .where('email_address', isEqualTo: target)
           .snapshots()
           .map((snapshot) {
-        if (snapshot.docs.isNotEmpty) {
-          final doc = snapshot.docs.first;
-          return _employeeFromFirestore(doc.data(), doc.id);
-        }
-        return null;
-      });
+            if (snapshot.docs.isNotEmpty) {
+              final doc = snapshot.docs.first;
+              return _employeeFromFirestore(doc.data(), doc.id);
+            }
+            return null;
+          });
     }
 
     return _employeesRef.doc(target).snapshots().map((doc) {
@@ -161,9 +186,14 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   Future<void> _fixEmployeeStatuses(List<Employee> employees) async {
     try {
       for (final emp in employees) {
-        final docId = emp.employeeId.isNotEmpty ? emp.employeeId : (emp.id != 0 ? emp.id.toString() : '');
+        final docId = emp.employeeId.isNotEmpty
+            ? emp.employeeId
+            : (emp.id != 0 ? emp.id.toString() : '');
         if (docId.isNotEmpty) {
-          await _employeesRef.doc(docId).set({'status': 'Active', 'updated_at': FieldValue.serverTimestamp()}, SetOptions(merge: true));
+          await _employeesRef.doc(docId).set({
+            'status': 'Active',
+            'updated_at': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
         }
       }
     } catch (_) {}
@@ -182,10 +212,110 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     }
   }
 
+  Future<void> _validateReportingManager(
+    Employee employee, {
+    required bool isUpdate,
+  }) async {
+    final managerId = employee.reportingManagerId.trim();
+    if (managerId.isEmpty) {
+      // Unassigned reporting manager is allowed (legacy record or top-level leadership)
+      return;
+    }
+
+    final empId = employee.employeeId.trim();
+
+    // 1. Prevent self-reporting
+    if (empId.isNotEmpty && managerId.toLowerCase() == empId.toLowerCase()) {
+      throw ArgumentError('An employee cannot report to themselves.');
+    }
+    if (employee.id != 0 && managerId == employee.id.toString()) {
+      throw ArgumentError('An employee cannot report to themselves.');
+    }
+
+    // 2. Fetch manager from repository
+    final all = await getAllEmployees();
+    final manager = all.where((e) {
+      return (e.employeeId.isNotEmpty &&
+              e.employeeId.trim().toLowerCase() == managerId.toLowerCase()) ||
+          (e.id != 0 && e.id.toString() == managerId) ||
+          (e.emailAddress.isNotEmpty &&
+              e.emailAddress.trim().toLowerCase() == managerId.toLowerCase());
+    }).firstOrNull;
+
+    if (manager == null) {
+      // If updating an employee whose managerId was already set and unchanged, allow gracefully
+      if (isUpdate) {
+        final existingEmp = all
+            .where(
+              (e) =>
+                  (empId.isNotEmpty &&
+                      e.employeeId.trim().toLowerCase() ==
+                          empId.toLowerCase()) ||
+                  (employee.id != 0 && e.id == employee.id),
+            )
+            .firstOrNull;
+        if (existingEmp != null &&
+            existingEmp.reportingManagerId.trim().toLowerCase() ==
+                managerId.toLowerCase()) {
+          return;
+        }
+      }
+      throw ArgumentError(
+        'Cannot assign reporting manager "$managerId": manager does not exist.',
+      );
+    }
+
+    // 3. Prevent cross-organization reporting
+    final empOrg = employee.organizationName.trim().toLowerCase();
+    final mgrOrg = manager.organizationName.trim().toLowerCase();
+    if (empOrg.isNotEmpty && mgrOrg.isNotEmpty && empOrg != mgrOrg) {
+      throw ArgumentError(
+        'Cannot assign reporting manager "${manager.fullName}": manager belongs to "${manager.organizationName}", but employee belongs to "${employee.organizationName}".',
+      );
+    }
+
+    // 4. Validate active status
+    final mgrStatus = manager.status.trim().toLowerCase();
+    final isInactive =
+        mgrStatus == 'inactive' ||
+        mgrStatus == 'suspended' ||
+        mgrStatus == 'archived' ||
+        mgrStatus == 'deleted';
+
+    if (isInactive) {
+      // If updating an existing employee without changing managerId, don't lock out record
+      if (isUpdate) {
+        final existingEmp = all
+            .where(
+              (e) =>
+                  (empId.isNotEmpty &&
+                      e.employeeId.trim().toLowerCase() ==
+                          empId.toLowerCase()) ||
+                  (employee.id != 0 && e.id == employee.id),
+            )
+            .firstOrNull;
+        if (existingEmp != null &&
+            existingEmp.reportingManagerId.trim().toLowerCase() ==
+                managerId.toLowerCase()) {
+          return;
+        }
+      }
+      throw ArgumentError(
+        'Cannot assign inactive employee "${manager.fullName}" (${manager.employeeId}) as reporting manager.',
+      );
+    }
+  }
+
   @override
   Future<Employee?> getEmployeeById(int id) async {
-    final snapshot =
-        await _employeesRef.where('id', isEqualTo: id).limit(1).get();
+    final inMem = _memoryEmployees.where((e) => e.id == id).firstOrNull;
+    if (inMem != null) return inMem;
+    if (isInMemory) return null;
+
+    final snapshot = await _employeesRef
+        .where('id', isEqualTo: id)
+        .limit(1)
+        .get();
     if (snapshot.docs.isNotEmpty) {
       return _employeeFromFirestore(
         snapshot.docs.first.data(),
@@ -201,6 +331,7 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
   @override
   Future<Employee> addEmployee(Employee employee) async {
+    await _validateReportingManager(employee, isUpdate: false);
     var emp = employee;
     final empIdUpper = emp.employeeId.trim().toUpperCase();
     if (empIdUpper.isEmpty ||
@@ -211,12 +342,30 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       final newEmpId = await _generateNextEmployeeId();
       emp = emp.copyWith(employeeId: newEmpId);
     }
-    emp = emp.copyWith(status: 'Active');
+    if (emp.status.isEmpty) {
+      emp = emp.copyWith(status: 'Active');
+    }
 
     final docId = emp.employeeId;
-    if (emp.profileImageUrl.isNotEmpty) {
-      final storageUrl = await _uploadEmployeePhotoToStorage(docId, emp.profileImageUrl);
+    if (emp.profileImageUrl.isNotEmpty && !isInMemory) {
+      final storageUrl = await _uploadEmployeePhotoToStorage(
+        docId,
+        emp.profileImageUrl,
+      );
       emp = emp.copyWith(profileImageUrl: storageUrl);
+    }
+
+    if (isInMemory) {
+      final assignedId = resolveEmployeeIntegerId(
+        docId,
+        emp.id != 0 ? emp.id : null,
+      );
+      final saved = emp.copyWith(id: assignedId);
+      _memoryEmployees.removeWhere(
+        (e) => e.employeeId == saved.employeeId || e.id == assignedId,
+      );
+      _memoryEmployees.add(saved);
+      return saved;
     }
 
     final data = _employeeToFirestore(emp);
@@ -224,12 +373,20 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
     await _employeesRef.doc(docId).set(data, SetOptions(merge: true));
 
-    final assignedId = resolveEmployeeIntegerId(docId, emp.id != 0 ? emp.id : null);
-    await _employeesRef.doc(docId).set({'id': assignedId}, SetOptions(merge: true));
-
-    return emp.copyWith(
-      id: assignedId,
+    final assignedId = resolveEmployeeIntegerId(
+      docId,
+      emp.id != 0 ? emp.id : null,
     );
+    await _employeesRef.doc(docId).set({
+      'id': assignedId,
+    }, SetOptions(merge: true));
+
+    final saved = emp.copyWith(id: assignedId);
+    _memoryEmployees.removeWhere(
+      (e) => e.employeeId == saved.employeeId || e.id == assignedId,
+    );
+    _memoryEmployees.add(saved);
+    return saved;
   }
 
   @override
@@ -239,14 +396,36 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
   @override
   Future<void> updateEmployee(Employee employee) async {
+    await _validateReportingManager(employee, isUpdate: true);
     var emp = employee;
     String docId = emp.employeeId.isNotEmpty
         ? emp.employeeId
         : (emp.id != 0 ? emp.id.toString() : '');
 
+    if (isInMemory) {
+      if (docId.isEmpty) {
+        final newEmpId = await _generateNextEmployeeId();
+        docId = newEmpId;
+        emp = emp.copyWith(employeeId: newEmpId);
+      }
+      final idx = _memoryEmployees.indexWhere(
+        (e) =>
+            (e.employeeId.isNotEmpty && e.employeeId == emp.employeeId) ||
+            (emp.id != 0 && e.id == emp.id),
+      );
+      if (idx != -1) {
+        _memoryEmployees[idx] = emp;
+      } else {
+        _memoryEmployees.add(emp);
+      }
+      return;
+    }
+
     if (docId.isEmpty) {
-      final snapshot =
-          await _employeesRef.where('id', isEqualTo: emp.id).limit(1).get();
+      final snapshot = await _employeesRef
+          .where('id', isEqualTo: emp.id)
+          .limit(1)
+          .get();
       if (snapshot.docs.isNotEmpty) {
         docId = snapshot.docs.first.id;
       } else {
@@ -257,12 +436,25 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     }
 
     if (emp.profileImageUrl.isNotEmpty) {
-      final storageUrl = await _uploadEmployeePhotoToStorage(docId, emp.profileImageUrl);
+      final storageUrl = await _uploadEmployeePhotoToStorage(
+        docId,
+        emp.profileImageUrl,
+      );
       emp = emp.copyWith(profileImageUrl: storageUrl);
     }
 
     final data = _employeeToFirestore(emp);
     await _employeesRef.doc(docId).set(data, SetOptions(merge: true));
+    final idx = _memoryEmployees.indexWhere(
+      (e) =>
+          (e.employeeId.isNotEmpty && e.employeeId == emp.employeeId) ||
+          (emp.id != 0 && e.id == emp.id),
+    );
+    if (idx != -1) {
+      _memoryEmployees[idx] = emp;
+    } else {
+      _memoryEmployees.add(emp);
+    }
   }
 
   @override
@@ -300,9 +492,14 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
   @override
   Future<void> deleteEmployee(int id) async {
+    _memoryEmployees.removeWhere((e) => e.id == id);
+    if (isInMemory) return;
+
     // 1. Try querying by the stored integer 'id' field
-    final snapshot =
-        await _employeesRef.where('id', isEqualTo: id).limit(1).get();
+    final snapshot = await _employeesRef
+        .where('id', isEqualTo: id)
+        .limit(1)
+        .get();
     if (snapshot.docs.isNotEmpty) {
       await _employeesRef.doc(snapshot.docs.first.id).delete();
       return;
@@ -426,6 +623,9 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
   @override
   Future<List<Employee>> getAllEmployees() async {
+    if (isInMemory) {
+      return List.unmodifiable(_memoryEmployees);
+    }
     final result = <Employee>[];
     final seenKeys = <String>{};
 
@@ -433,7 +633,9 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       final snapshot = await _employeesRef.get();
       for (final doc in snapshot.docs) {
         final emp = _employeeFromFirestore(doc.data(), doc.id);
-        final key = doc.id.isNotEmpty ? doc.id : (emp.employeeId.isNotEmpty ? emp.employeeId : emp.id.toString());
+        final key = doc.id.isNotEmpty
+            ? doc.id
+            : (emp.employeeId.isNotEmpty ? emp.employeeId : emp.id.toString());
         if (seenKeys.add(key)) {
           result.add(emp);
         }
@@ -447,8 +649,13 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         await _employeesRef.doc('EMP-001').set(data, SetOptions(merge: true));
         result.insert(0, _superAdminMotherAccount);
       }
+      _memoryEmployees.clear();
+      _memoryEmployees.addAll(result);
     } catch (e) {
       debugPrint('Firebase getAllEmployees error: $e');
+      if (result.isEmpty && _memoryEmployees.isNotEmpty) {
+        return List.unmodifiable(_memoryEmployees);
+      }
       if (result.isEmpty) {
         result.add(_superAdminMotherAccount);
       }
@@ -483,21 +690,27 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         final linkId = (data['link_id']?.toString() ?? doc.id).trim();
         data['link_id'] = linkId.isNotEmpty ? linkId : doc.id;
         final empId = (data['employee_id']?.toString() ?? '').trim();
-        final empName = (data['employee_name']?.toString() ?? '').trim().toLowerCase();
+        final empName = (data['employee_name']?.toString() ?? '')
+            .trim()
+            .toLowerCase();
 
-        final cand = candMap[linkId] ??
+        final cand =
+            candMap[linkId] ??
             candMap[doc.id] ??
             (empId.isNotEmpty ? candMap[empId] : null) ??
             (empName.isNotEmpty && empName != '-' ? candMap[empName] : null);
 
         if (cand != null) {
-          if ((data['employee_name']?.toString() ?? '').isEmpty || data['employee_name'] == '-') {
+          if ((data['employee_name']?.toString() ?? '').isEmpty ||
+              data['employee_name'] == '-') {
             data['employee_name'] = cand.employeeData.fullName;
           }
-          if ((data['employee_id']?.toString() ?? '').isEmpty || data['employee_id'] == '-') {
+          if ((data['employee_id']?.toString() ?? '').isEmpty ||
+              data['employee_id'] == '-') {
             data['employee_id'] = cand.candidateId;
           }
-          if (cand.status.isNotEmpty && cand.status.toLowerCase() != 'pending') {
+          if (cand.status.isNotEmpty &&
+              cand.status.toLowerCase() != 'pending') {
             data['link_status'] = cand.status;
             data['status'] = cand.status;
           }
@@ -528,25 +741,33 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         final cand = CandidateResponse.fromMap(doc.data());
         final s = cand.status.toLowerCase();
         if (s != 'converted' && s != 'registered') {
-          final exists = links.any((l) =>
-              (cand.linkId.isNotEmpty && l.linkId == cand.linkId) ||
-              (cand.candidateId.isNotEmpty && (l.employeeId == cand.candidateId || l.linkId == cand.candidateId)) ||
-              (cand.employeeData.fullName.isNotEmpty && l.employeeName.trim().toLowerCase() == cand.employeeData.fullName.trim().toLowerCase()));
+          final exists = links.any(
+            (l) =>
+                (cand.linkId.isNotEmpty && l.linkId == cand.linkId) ||
+                (cand.candidateId.isNotEmpty &&
+                    (l.employeeId == cand.candidateId ||
+                        l.linkId == cand.candidateId)) ||
+                (cand.employeeData.fullName.isNotEmpty &&
+                    l.employeeName.trim().toLowerCase() ==
+                        cand.employeeData.fullName.trim().toLowerCase()),
+          );
           if (!exists) {
-            links.add(RegistrationLink(
-              id: cand.id,
-              linkId: cand.linkId.isNotEmpty ? cand.linkId : cand.candidateId,
-              generatedBy: 'Candidate',
-              generatedDate: cand.submittedDate,
-              expiryDate: '',
-              linkStatus: cand.status,
-              employeeName: cand.employeeData.fullName,
-              employeeId: cand.candidateId,
-              organizationName: cand.employeeData.organizationName,
-              department: cand.employeeData.department,
-              submittedDate: cand.submittedDate,
-              submittedBy: cand.employeeData.fullName,
-            ));
+            links.add(
+              RegistrationLink(
+                id: cand.id,
+                linkId: cand.linkId.isNotEmpty ? cand.linkId : cand.candidateId,
+                generatedBy: 'Candidate',
+                generatedDate: cand.submittedDate,
+                expiryDate: '',
+                linkStatus: cand.status,
+                employeeName: cand.employeeData.fullName,
+                employeeId: cand.candidateId,
+                organizationName: cand.employeeData.organizationName,
+                department: cand.employeeData.department,
+                submittedDate: cand.submittedDate,
+                submittedBy: cand.employeeData.fullName,
+              ),
+            );
           }
         }
       }
@@ -563,7 +784,8 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       final doc = await _registrationLinksRef.doc(linkId).get();
       if (doc.exists && doc.data() != null) {
         final link = RegistrationLink.fromMap(doc.data()!);
-        if (link.linkStatus.trim().toLowerCase() == 'pending' && link.expiryDate.isNotEmpty) {
+        if (link.linkStatus.trim().toLowerCase() == 'pending' &&
+            link.expiryDate.isNotEmpty) {
           final expiry = DateTime.tryParse(link.expiryDate);
           if (expiry != null && DateTime.now().isAfter(expiry)) {
             await doc.reference.delete();
@@ -572,7 +794,6 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         }
         return link;
       }
-
 
       final query = await _registrationLinksRef
           .where('link_id', isEqualTo: linkId)
@@ -618,67 +839,53 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     try {
       final batch = _firestore.batch();
       if (linkId.isNotEmpty) {
-        batch.set(
-          _registrationLinksRef.doc(linkId),
-          {
-            'link_status': linkStatus,
-            'status': linkStatus,
-            'updated_at': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
+        batch.set(_registrationLinksRef.doc(linkId), {
+          'link_status': linkStatus,
+          'status': linkStatus,
+          'updated_at': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       }
       if (candidateId != null && candidateId.isNotEmpty) {
-        batch.set(
-          _candidateResponsesRef.doc(candidateId),
-          {
-            'status': linkStatus,
-            'updated_at': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
+        batch.set(_candidateResponsesRef.doc(candidateId), {
+          'status': linkStatus,
+          'updated_at': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       }
 
       // Also batch update any candidate_responses matching linkId
       if (linkId.isNotEmpty) {
-        final candByLink = await _candidateResponsesRef.where('link_id', isEqualTo: linkId).get();
+        final candByLink = await _candidateResponsesRef
+            .where('link_id', isEqualTo: linkId)
+            .get();
         for (final doc in candByLink.docs) {
-          batch.set(
-            doc.reference,
-            {
-              'status': linkStatus,
-              'updated_at': FieldValue.serverTimestamp(),
-            },
-            SetOptions(merge: true),
-          );
+          batch.set(doc.reference, {
+            'status': linkStatus,
+            'updated_at': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
         }
       }
 
       // Also batch update any candidate_responses or registration_links matching candidateId
       if (candidateId != null && candidateId.isNotEmpty) {
-        final candById = await _candidateResponsesRef.where('candidate_id', isEqualTo: candidateId).get();
+        final candById = await _candidateResponsesRef
+            .where('candidate_id', isEqualTo: candidateId)
+            .get();
         for (final doc in candById.docs) {
-          batch.set(
-            doc.reference,
-            {
-              'status': linkStatus,
-              'updated_at': FieldValue.serverTimestamp(),
-            },
-            SetOptions(merge: true),
-          );
+          batch.set(doc.reference, {
+            'status': linkStatus,
+            'updated_at': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
         }
 
-        final linksByCand = await _registrationLinksRef.where('employee_id', isEqualTo: candidateId).get();
+        final linksByCand = await _registrationLinksRef
+            .where('employee_id', isEqualTo: candidateId)
+            .get();
         for (final doc in linksByCand.docs) {
-          batch.set(
-            doc.reference,
-            {
-              'link_status': linkStatus,
-              'status': linkStatus,
-              'updated_at': FieldValue.serverTimestamp(),
-            },
-            SetOptions(merge: true),
-          );
+          batch.set(doc.reference, {
+            'link_status': linkStatus,
+            'status': linkStatus,
+            'updated_at': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
         }
       }
 
@@ -688,14 +895,11 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
           .where('link_id', isEqualTo: linkId)
           .get();
       for (final doc in query.docs) {
-        await doc.reference.set(
-          {
-            'link_status': linkStatus,
-            'status': linkStatus,
-            'updated_at': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
+        await doc.reference.set({
+          'link_status': linkStatus,
+          'status': linkStatus,
+          'updated_at': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       }
     } catch (e) {
       debugPrint('updateRegistrationLinkStatus error: $e');
@@ -711,7 +915,8 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     final batch = _firestore.batch();
     final nowIso = DateTime.now().toIso8601String();
 
-    DocumentSnapshot<Map<String, dynamic>>? linkDoc = await _registrationLinksRef.doc(linkId).get();
+    DocumentSnapshot<Map<String, dynamic>>? linkDoc =
+        await _registrationLinksRef.doc(linkId).get();
     if (!linkDoc.exists || linkDoc.data() == null) {
       final query = await _registrationLinksRef
           .where('link_id', isEqualTo: linkId)
@@ -723,9 +928,14 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     }
 
     if (linkDoc.exists && linkDoc.data() != null) {
-      final currentStatus = (linkDoc.data()!['link_status'] as String? ?? 'Pending').trim().toLowerCase();
+      final currentStatus =
+          (linkDoc.data()!['link_status'] as String? ?? 'Pending')
+              .trim()
+              .toLowerCase();
       if (currentStatus == 'converted' || currentStatus == 'registered') {
-        throw Exception('This candidate link has already been converted into an employee.');
+        throw Exception(
+          'This candidate link has already been converted into an employee.',
+        );
       }
     }
 
@@ -734,8 +944,12 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         : '';
 
     String candidateId = employeeData.employeeId;
-    if (candidateId.isEmpty || candidateId.startsWith('pending_') || candidateId.startsWith('EMP-')) {
-      candidateId = existingCandidateId.isNotEmpty && existingCandidateId.startsWith('CAN-')
+    if (candidateId.isEmpty ||
+        candidateId.startsWith('pending_') ||
+        candidateId.startsWith('EMP-')) {
+      candidateId =
+          existingCandidateId.isNotEmpty &&
+              existingCandidateId.startsWith('CAN-')
           ? existingCandidateId
           : await _generateNextCandidateId();
     }
@@ -746,7 +960,10 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     );
 
     if (finalEmployee.profileImageUrl.isNotEmpty) {
-      final storageUrl = await _uploadEmployeePhotoToStorage(candidateId, finalEmployee.profileImageUrl);
+      final storageUrl = await _uploadEmployeePhotoToStorage(
+        candidateId,
+        finalEmployee.profileImageUrl,
+      );
       finalEmployee = finalEmployee.copyWith(profileImageUrl: storageUrl);
     }
 
@@ -758,7 +975,9 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
     batch.set(linkRef, {
       'link_id': linkId,
-      'link_status': isSubmit ? 'Submitted' : (existingStatus.isEmpty ? 'Pending' : existingStatus),
+      'link_status': isSubmit
+          ? 'Submitted'
+          : (existingStatus.isEmpty ? 'Pending' : existingStatus),
       'submitted_date': isSubmit ? nowIso : '',
       'submitted_by': isSubmit ? finalEmployee.fullName : '',
       'employee_name': finalEmployee.fullName,
@@ -774,7 +993,11 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
       status: isSubmit ? 'Submitted' : 'Draft',
     );
 
-    batch.set(_candidateResponsesRef.doc(candidateId), candidateResponse.toMap(), SetOptions(merge: true));
+    batch.set(
+      _candidateResponsesRef.doc(candidateId),
+      candidateResponse.toMap(),
+      SetOptions(merge: true),
+    );
 
     await batch.commit();
     return finalEmployee;
@@ -783,7 +1006,10 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   @override
   Future<CandidateResponse?> getCandidateResponseByLinkId(String linkId) async {
     try {
-      final query = await _candidateResponsesRef.where('link_id', isEqualTo: linkId).limit(1).get();
+      final query = await _candidateResponsesRef
+          .where('link_id', isEqualTo: linkId)
+          .limit(1)
+          .get();
       if (query.docs.isNotEmpty) {
         return CandidateResponse.fromMap(query.docs.first.data());
       }
@@ -794,7 +1020,9 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   }
 
   @override
-  Future<CandidateResponse?> getCandidateResponseByCandidateId(String candidateId) async {
+  Future<CandidateResponse?> getCandidateResponseByCandidateId(
+    String candidateId,
+  ) async {
     try {
       final doc = await _candidateResponsesRef.doc(candidateId).get();
       if (doc.exists && doc.data() != null) {
@@ -810,7 +1038,9 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   Future<List<CandidateResponse>> getCandidateResponses() async {
     try {
       final snapshot = await _candidateResponsesRef.get();
-      return snapshot.docs.map((doc) => CandidateResponse.fromMap(doc.data())).toList();
+      return snapshot.docs
+          .map((doc) => CandidateResponse.fromMap(doc.data()))
+          .toList();
     } catch (_) {
       return [];
     }
@@ -845,7 +1075,9 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     // Generate a cryptographically secure 32-byte token
     final random = Random.secure();
     final values = List<int>.generate(32, (i) => random.nextInt(256));
-    final rawToken = values.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    final rawToken = values
+        .map((b) => b.toRadixString(16).padLeft(2, '0'))
+        .join();
     final tokenHash = CorrectionRequest.hashToken(rawToken);
 
     final now = DateTime.now();
@@ -854,7 +1086,9 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
     final request = CorrectionRequest(
       id: reqDocRef.id,
-      candidateResponseId: candidateResponseId.isNotEmpty ? candidateResponseId : candidateId,
+      candidateResponseId: candidateResponseId.isNotEmpty
+          ? candidateResponseId
+          : candidateId,
       candidateId: candidateId,
       linkId: linkId,
       remarks: remarks.trim(),
@@ -870,15 +1104,11 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
     // Update candidate response and registration link status to 'Correction Requested'
     if (candidateId.isNotEmpty) {
-      batch.set(
-        _candidateResponsesRef.doc(candidateId),
-        {
-          'status': 'Correction Requested',
-          'has_correction_request': true,
-          'updated_at': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      batch.set(_candidateResponsesRef.doc(candidateId), {
+        'status': 'Correction Requested',
+        'has_correction_request': true,
+        'updated_at': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
     }
 
     if (linkId.isNotEmpty) {
@@ -887,15 +1117,11 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
           .limit(1)
           .get();
       if (linkQuery.docs.isNotEmpty) {
-        batch.set(
-          linkQuery.docs.first.reference,
-          {
-            'link_status': 'Correction Requested',
-            'status': 'Correction Requested',
-            'updated_at': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
+        batch.set(linkQuery.docs.first.reference, {
+          'link_status': 'Correction Requested',
+          'status': 'Correction Requested',
+          'updated_at': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       }
     }
 
@@ -938,7 +1164,9 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   }
 
   @override
-  Future<CandidateResponse?> getCandidateResponseForCorrection(String rawToken) async {
+  Future<CandidateResponse?> getCandidateResponseForCorrection(
+    String rawToken,
+  ) async {
     final req = await validateCorrectionToken(rawToken);
     if (req == null) return null;
 
@@ -956,7 +1184,9 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   }
 
   @override
-  Future<List<CorrectionRequest>> getCorrectionRequestsForCandidate(String candidateId) async {
+  Future<List<CorrectionRequest>> getCorrectionRequestsForCandidate(
+    String candidateId,
+  ) async {
     try {
       final query = await _correctionRequestsRef
           .where('candidate_id', isEqualTo: candidateId)
@@ -984,8 +1214,12 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
     Employee finalEmp = updatedEmployee;
     if (finalEmp.profileImageUrl.isNotEmpty &&
-        (finalEmp.profileImageUrl.startsWith('data:') || finalEmp.profileImageUrl.startsWith('blob:'))) {
-      final storageUrl = await _uploadEmployeePhotoToStorage(req.candidateId, finalEmp.profileImageUrl);
+        (finalEmp.profileImageUrl.startsWith('data:') ||
+            finalEmp.profileImageUrl.startsWith('blob:'))) {
+      final storageUrl = await _uploadEmployeePhotoToStorage(
+        req.candidateId,
+        finalEmp.profileImageUrl,
+      );
       finalEmp = finalEmp.copyWith(profileImageUrl: storageUrl);
     }
 
@@ -1005,7 +1239,8 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         SetOptions(merge: true),
       );
     }
-    if (req.candidateResponseId.isNotEmpty && req.candidateResponseId != req.candidateId) {
+    if (req.candidateResponseId.isNotEmpty &&
+        req.candidateResponseId != req.candidateId) {
       batch.set(
         _candidateResponsesRef.doc(req.candidateResponseId),
         candidateResp.toMap(),
@@ -1014,19 +1249,15 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     }
 
     if (req.linkId.isNotEmpty) {
-      batch.set(
-        _registrationLinksRef.doc(req.linkId),
-        {
-          'link_status': 'Resubmitted',
-          'status': 'Resubmitted',
-          'submitted_date': nowIso,
-          'submitted_by': finalEmp.fullName,
-          'employee_name': finalEmp.fullName,
-          'employee_id': req.candidateId,
-          'updated_at': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      batch.set(_registrationLinksRef.doc(req.linkId), {
+        'link_status': 'Resubmitted',
+        'status': 'Resubmitted',
+        'submitted_date': nowIso,
+        'submitted_by': finalEmp.fullName,
+        'employee_name': finalEmp.fullName,
+        'employee_id': req.candidateId,
+        'updated_at': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
     }
 
     batch.update(_correctionRequestsRef.doc(req.id), {
@@ -1039,35 +1270,33 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
     // Also update any queried docs
     if (req.linkId.isNotEmpty) {
-      final linkQuery = await _registrationLinksRef.where('link_id', isEqualTo: req.linkId).get();
+      final linkQuery = await _registrationLinksRef
+          .where('link_id', isEqualTo: req.linkId)
+          .get();
       for (final doc in linkQuery.docs) {
-        await doc.reference.set(
-          {
-            'link_status': 'Resubmitted',
-            'status': 'Resubmitted',
-            'submitted_date': nowIso,
-            'submitted_by': finalEmp.fullName,
-            'employee_name': finalEmp.fullName,
-            'updated_at': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
+        await doc.reference.set({
+          'link_status': 'Resubmitted',
+          'status': 'Resubmitted',
+          'submitted_date': nowIso,
+          'submitted_by': finalEmp.fullName,
+          'employee_name': finalEmp.fullName,
+          'updated_at': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       }
     }
     if (req.candidateId.isNotEmpty) {
-      final candLinkQuery = await _registrationLinksRef.where('employee_id', isEqualTo: req.candidateId).get();
+      final candLinkQuery = await _registrationLinksRef
+          .where('employee_id', isEqualTo: req.candidateId)
+          .get();
       for (final doc in candLinkQuery.docs) {
-        await doc.reference.set(
-          {
-            'link_status': 'Resubmitted',
-            'status': 'Resubmitted',
-            'submitted_date': nowIso,
-            'submitted_by': finalEmp.fullName,
-            'employee_name': finalEmp.fullName,
-            'updated_at': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
+        await doc.reference.set({
+          'link_status': 'Resubmitted',
+          'status': 'Resubmitted',
+          'submitted_date': nowIso,
+          'submitted_by': finalEmp.fullName,
+          'employee_name': finalEmp.fullName,
+          'updated_at': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       }
     }
 
@@ -1094,10 +1323,16 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     String empId = employeeData.employeeId;
     if (!empId.startsWith('EMP-')) {
       final all = await getAllEmployees();
-      final existing = all.where((e) =>
-          (employeeData.aadhaarNumber.isNotEmpty && e.aadhaarNumber == employeeData.aadhaarNumber) ||
-          (employeeData.emailAddress.isNotEmpty && e.emailAddress.toLowerCase() == employeeData.emailAddress.toLowerCase())
-      ).firstOrNull;
+      final existing = all
+          .where(
+            (e) =>
+                (employeeData.aadhaarNumber.isNotEmpty &&
+                    e.aadhaarNumber == employeeData.aadhaarNumber) ||
+                (employeeData.emailAddress.isNotEmpty &&
+                    e.emailAddress.toLowerCase() ==
+                        employeeData.emailAddress.toLowerCase()),
+          )
+          .firstOrNull;
 
       if (existing != null && existing.employeeId.startsWith('EMP-')) {
         empId = existing.employeeId;
@@ -1109,7 +1344,9 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     final activeEmployee = employeeData.copyWith(
       employeeId: empId,
       status: 'Active',
-      userType: employeeData.userType.isEmpty ? 'EMPLOYEE' : employeeData.userType,
+      userType: employeeData.userType.isEmpty
+          ? 'EMPLOYEE'
+          : employeeData.userType,
     );
 
     final savedEmployee = await addEmployee(activeEmployee);
@@ -1121,7 +1358,6 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
     return savedEmployee;
   }
-
 
   /// Generates the next CAN-XXXX candidate ID for registration form submissions.
   /// This sequence is independent from the EMP-XXXX employee ID sequence.
@@ -1147,6 +1383,21 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
 
   /// Generates the next EMP-XXXX employee ID for active employees.
   Future<String> _generateNextEmployeeId() async {
+    if (isInMemory) {
+      int maxNum = 0;
+      for (final emp in _memoryEmployees) {
+        final code = emp.employeeId;
+        if (!code.toUpperCase().startsWith('EMP-')) continue;
+        final numPart = code.replaceAll(RegExp(r'[^0-9]'), '');
+        if (numPart.isNotEmpty) {
+          final val = int.tryParse(numPart) ?? 0;
+          if (val > maxNum) maxNum = val;
+        }
+      }
+      final nextNum = maxNum + 1;
+      return 'EMP-${nextNum.toString().padLeft(4, '0')}';
+    }
+
     final snapshot = await _employeesRef.get();
     int maxNum = 0;
     for (final doc in snapshot.docs) {
@@ -1165,7 +1416,10 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   String _generateRandomCode(int length) {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     final rand = Random();
-    return List.generate(length, (_) => chars[rand.nextInt(chars.length)]).join();
+    return List.generate(
+      length,
+      (_) => chars[rand.nextInt(chars.length)],
+    ).join();
   }
 
   @override
@@ -1202,8 +1456,13 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
         .set(preference.toMap(), SetOptions(merge: true));
   }
 
-  Future<String> _uploadEmployeePhotoToStorage(String docId, String imagePathOrData) async {
-    if (imagePathOrData.isEmpty || imagePathOrData.startsWith('http://') || imagePathOrData.startsWith('https://')) {
+  Future<String> _uploadEmployeePhotoToStorage(
+    String docId,
+    String imagePathOrData,
+  ) async {
+    if (imagePathOrData.isEmpty ||
+        imagePathOrData.startsWith('http://') ||
+        imagePathOrData.startsWith('https://')) {
       return imagePathOrData;
     }
     try {
@@ -1240,16 +1499,24 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
               final resized = (decoded.width > 720 || decoded.height > 720)
                   ? img.copyResize(decoded, width: 720, height: 720)
                   : decoded;
-              uploadBytes = Uint8List.fromList(img.encodeJpg(resized, quality: 85));
+              uploadBytes = Uint8List.fromList(
+                img.encodeJpg(resized, quality: 85),
+              );
               ext = 'jpg';
             }
           } catch (_) {}
         }
 
-        final storagePath = 'Employee Photo/${docId}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+        final storagePath =
+            'Employee Photo/${docId}_${DateTime.now().millisecondsSinceEpoch}.$ext';
         final ref = _storage.ref().child(storagePath);
-        final contentType = ext == 'png' ? 'image/png' : (ext == 'webp' ? 'image/webp' : 'image/jpeg');
-        final uploadTask = await ref.putData(uploadBytes, SettableMetadata(contentType: contentType));
+        final contentType = ext == 'png'
+            ? 'image/png'
+            : (ext == 'webp' ? 'image/webp' : 'image/jpeg');
+        final uploadTask = await ref.putData(
+          uploadBytes,
+          SettableMetadata(contentType: contentType),
+        );
         return await uploadTask.ref.getDownloadURL();
       }
     } catch (e) {
@@ -1261,7 +1528,9 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     if (imagePathOrData.length > 400000) {
       try {
         final commaIdx = imagePathOrData.indexOf(',');
-        final rawStr = commaIdx != -1 ? imagePathOrData.substring(commaIdx + 1) : imagePathOrData;
+        final rawStr = commaIdx != -1
+            ? imagePathOrData.substring(commaIdx + 1)
+            : imagePathOrData;
         final rawBytes = base64Decode(rawStr);
         final decoded = img.decodeImage(rawBytes);
         if (decoded != null) {

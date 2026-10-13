@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../domain/department.dart';
 import '../domain/designation.dart';
+import '../domain/organization_band.dart';
 import '../domain/column_preference.dart';
 import '../providers/organization_providers.dart';
+import 'widgets/band_form_dialog.dart';
 import 'widgets/column_selection_dialog.dart';
 import 'widgets/department_details_dialog.dart';
 import 'widgets/department_form_dialog.dart';
@@ -31,7 +33,7 @@ class _OrganizationStructurePageState
     'Work Location',
   ];
 
-  int _selectedTab = 0; // 0 = Departments, 1 = Designations
+  int _selectedTab = 0; // 0 = Departments, 1 = Designations, 2 = Bands
 
   // Departments tab state
   int _currentPage = 0;
@@ -44,6 +46,10 @@ class _OrganizationStructurePageState
   // Designations tab state
   String _selectedDesigOrg = 'All';
   String _selectedDesigDept = 'All';
+
+  // Bands tab state
+  String _selectedBandOrg = 'All';
+  String _bandSearchQuery = '';
 
   int get _activeFiltersCount {
     int count = 0;
@@ -58,18 +64,28 @@ class _OrganizationStructurePageState
     final isMobile = MediaQuery.of(context).size.width < 650;
     final deptsAsync = ref.watch(departmentsProvider);
     final desigsAsync = ref.watch(allDesignationsProvider);
+    final bandsAsync = ref.watch(
+      filteredBandsProvider(const OrganizationBandFilter()),
+    );
 
     final totalDepts = deptsAsync.valueOrNull?.length;
-    final deptTabTitle = totalDepts != null ? 'Departments ($totalDepts)' : 'Departments';
+    final deptTabTitle = totalDepts != null
+        ? 'Departments ($totalDepts)'
+        : 'Departments';
 
     final totalDesigs = desigsAsync.valueOrNull?.length;
-    final desigTabTitle = totalDesigs != null ? 'Designations ($totalDesigs)' : 'Designations';
+    final desigTabTitle = totalDesigs != null
+        ? 'Designations ($totalDesigs)'
+        : 'Designations';
+
+    final totalBands = bandsAsync.valueOrNull?.length;
+    final bandTabTitle = totalBands != null ? 'Bands ($totalBands)' : 'Bands';
 
     return Scaffold(
       backgroundColor: Colors.white,
       body: Column(
         children: [
-          // Top Tab Bar [ Departments (n) ] [ Designations (n) ]
+          // Top Tab Bar [ Departments (n) ] [ Designations (n) ] [ Bands (n) ]
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
@@ -77,22 +93,32 @@ class _OrganizationStructurePageState
               color: Colors.white,
               border: Border(bottom: BorderSide(color: Color(0xFFEAECF0))),
             ),
-            child: Row(
-              children: [
-                _buildTabButton(
-                  title: deptTabTitle,
-                  icon: Icons.apartment_rounded,
-                  isSelected: _selectedTab == 0,
-                  onTap: () => setState(() => _selectedTab = 0),
-                ),
-                const SizedBox(width: 8),
-                _buildTabButton(
-                  title: desigTabTitle,
-                  icon: Icons.badge_outlined,
-                  isSelected: _selectedTab == 1,
-                  onTap: () => setState(() => _selectedTab = 1),
-                ),
-              ],
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _buildTabButton(
+                    title: deptTabTitle,
+                    icon: Icons.apartment_rounded,
+                    isSelected: _selectedTab == 0,
+                    onTap: () => setState(() => _selectedTab = 0),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildTabButton(
+                    title: desigTabTitle,
+                    icon: Icons.badge_outlined,
+                    isSelected: _selectedTab == 1,
+                    onTap: () => setState(() => _selectedTab = 1),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildTabButton(
+                    title: bandTabTitle,
+                    icon: Icons.layers_outlined,
+                    isSelected: _selectedTab == 2,
+                    onTap: () => setState(() => _selectedTab = 2),
+                  ),
+                ],
+              ),
             ),
           ),
           // Tab Content
@@ -103,14 +129,17 @@ class _OrganizationStructurePageState
                 ref.invalidate(departmentsProvider);
                 ref.invalidate(allDesignationsProvider);
                 ref.invalidate(organizationsProvider);
+                ref.invalidate(organizationBandsProvider);
+                ref.invalidate(filteredBandsProvider);
                 await Future.delayed(const Duration(milliseconds: 500));
               },
               child: _selectedTab == 0
                   ? _buildDepartmentsView(context, isMobile)
-                  : _buildDesignationsView(context, isMobile),
+                  : (_selectedTab == 1
+                        ? _buildDesignationsView(context, isMobile)
+                        : _buildBandsView(context, isMobile)),
             ),
           ),
-
         ],
       ),
     );
@@ -171,15 +200,19 @@ class _OrganizationStructurePageState
 
     return Column(
       children: [
-        _buildDeptToolbar(context, prefAsync, deptsAsync.valueOrNull ?? [], isMobile),
+        _buildDeptToolbar(
+          context,
+          prefAsync,
+          deptsAsync.valueOrNull ?? [],
+          isMobile,
+        ),
         _buildActiveDeptFilterChips(),
         const Divider(height: 1, color: Color(0xFFEAECF0)),
         Expanded(
           child: deptsAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, _) => Center(
-              child: Text('Unable to load departments: $err'),
-            ),
+            error: (err, _) =>
+                Center(child: Text('Unable to load departments: $err')),
             data: (depts) {
               final filtered = depts.where((dept) {
                 if (_selectedOrgFilter != 'All' &&
@@ -187,10 +220,12 @@ class _OrganizationStructurePageState
                     dept.organizationId != _selectedOrgFilter) {
                   return false;
                 }
-                if (_selectedDeptFilter != 'All' && dept.departmentName != _selectedDeptFilter) {
+                if (_selectedDeptFilter != 'All' &&
+                    dept.departmentName != _selectedDeptFilter) {
                   return false;
                 }
-                if (_selectedLocationFilter != 'All' && dept.workLocation != _selectedLocationFilter) {
+                if (_selectedLocationFilter != 'All' &&
+                    dept.workLocation != _selectedLocationFilter) {
                   return false;
                 }
                 if (searchQuery.trim().isEmpty) return true;
@@ -226,7 +261,10 @@ class _OrganizationStructurePageState
 
               final totalItems = filtered.length;
               final totalPages = (totalItems / _rowsPerPage).ceil();
-              final pageIndex = _currentPage.clamp(0, (totalPages - 1).clamp(0, 999));
+              final pageIndex = _currentPage.clamp(
+                0,
+                (totalPages - 1).clamp(0, 999),
+              );
               final startIndex = pageIndex * _rowsPerPage;
               final endIndex = (startIndex + _rowsPerPage).clamp(0, totalItems);
               final pageItems = filtered.sublist(startIndex, endIndex);
@@ -284,16 +322,28 @@ class _OrganizationStructurePageState
                 style: const TextStyle(fontSize: 13),
                 decoration: InputDecoration(
                   hintText: 'Search departments...',
-                  hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF667085)),
-                  prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF667085)),
+                  hintStyle: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF667085),
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    size: 20,
+                    color: Color(0xFF667085),
+                  ),
                   suffixIcon: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (searchController.text.isNotEmpty)
                         IconButton(
-                          icon: const Icon(Icons.clear, size: 18, color: Color(0xFF667085)),
+                          icon: const Icon(
+                            Icons.clear,
+                            size: 18,
+                            color: Color(0xFF667085),
+                          ),
                           onPressed: () {
-                            ref.read(deptSearchQueryProvider.notifier).state = '';
+                            ref.read(deptSearchQueryProvider.notifier).state =
+                                '';
                             setState(() => _currentPage = 0);
                           },
                         ),
@@ -352,7 +402,10 @@ class _OrganizationStructurePageState
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                    borderSide: const BorderSide(
+                      color: AppColors.primary,
+                      width: 1.5,
+                    ),
                   ),
                 ),
                 onChanged: (val) {
@@ -368,7 +421,9 @@ class _OrganizationStructurePageState
               style: IconButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 minimumSize: const Size(42, 42),
               ),
               tooltip: 'Add Department',
@@ -381,9 +436,14 @@ class _OrganizationStructurePageState
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 minimumSize: const Size(0, 42),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
               onPressed: () => _openAddDeptDialog(context),
               icon: const Icon(Icons.add, size: 18),
@@ -408,7 +468,14 @@ class _OrganizationStructurePageState
         runSpacing: 6,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          const Text('Filters:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
+          const Text(
+            'Filters:',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF64748B),
+            ),
+          ),
           if (_selectedOrgFilter != 'All')
             _buildFilterChip('Org: $_selectedOrgFilter', () {
               setState(() {
@@ -441,7 +508,14 @@ class _OrganizationStructurePageState
             },
             child: const Padding(
               padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              child: Text('Reset All', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.red)),
+              child: Text(
+                'Reset All',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.red,
+                ),
+              ),
             ),
           ),
         ],
@@ -462,7 +536,11 @@ class _OrganizationStructurePageState
         children: [
           Text(
             label,
-            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+            style: const TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
           ),
           const SizedBox(width: 4),
           InkWell(
@@ -475,9 +553,18 @@ class _OrganizationStructurePageState
   }
 
   void _openDeptFilterModal(BuildContext context, List<Department> allDepts) {
-    final orgOptions = <String>{'All', ...allDepts.map((d) => d.organizationName).where((s) => s.isNotEmpty)}.toList();
-    final deptOptions = <String>{'All', ...allDepts.map((d) => d.departmentName).where((s) => s.isNotEmpty)}.toList();
-    final locOptions = <String>{'All', ...allDepts.map((d) => d.workLocation).where((s) => s.isNotEmpty)}.toList();
+    final orgOptions = <String>{
+      'All',
+      ...allDepts.map((d) => d.organizationName).where((s) => s.isNotEmpty),
+    }.toList();
+    final deptOptions = <String>{
+      'All',
+      ...allDepts.map((d) => d.departmentName).where((s) => s.isNotEmpty),
+    }.toList();
+    final locOptions = <String>{
+      'All',
+      ...allDepts.map((d) => d.workLocation).where((s) => s.isNotEmpty),
+    }.toList();
 
     String tempOrg = _selectedOrgFilter;
     String tempDept = _selectedDeptFilter;
@@ -509,7 +596,11 @@ class _OrganizationStructurePageState
                     children: [
                       const Text(
                         'Filter Departments',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E293B),
+                        ),
                       ),
                       TextButton(
                         onPressed: () {
@@ -519,7 +610,10 @@ class _OrganizationStructurePageState
                             tempLoc = 'All';
                           });
                         },
-                        child: const Text('Reset', style: TextStyle(color: Colors.red, fontSize: 13)),
+                        child: const Text(
+                          'Reset',
+                          style: TextStyle(color: Colors.red, fontSize: 13),
+                        ),
                       ),
                     ],
                   ),
@@ -558,15 +652,32 @@ class _OrganizationStructurePageState
                         child: OutlinedButton.icon(
                           onPressed: () {
                             Navigator.pop(ctx);
-                            _openColumnSelection(context, ref.read(columnPreferenceProvider(_deptTableId)).valueOrNull);
+                            _openColumnSelection(
+                              context,
+                              ref
+                                  .read(columnPreferenceProvider(_deptTableId))
+                                  .valueOrNull,
+                            );
                           },
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             side: const BorderSide(color: Color(0xFFD0D5DD)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
-                          icon: const Icon(Icons.view_column_outlined, size: 16, color: Color(0xFF344054)),
-                          label: const Text('Columns', style: TextStyle(color: Color(0xFF344054), fontSize: 12.5)),
+                          icon: const Icon(
+                            Icons.view_column_outlined,
+                            size: 16,
+                            color: Color(0xFF344054),
+                          ),
+                          label: const Text(
+                            'Columns',
+                            style: TextStyle(
+                              color: Color(0xFF344054),
+                              fontSize: 12.5,
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -587,9 +698,17 @@ class _OrganizationStructurePageState
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             elevation: 0,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
-                          child: const Text('Apply Filters', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          child: const Text(
+                            'Apply Filters',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -670,7 +789,10 @@ class _OrganizationStructurePageState
     List<String> visibleColumns,
     double screenWidth,
   ) {
-    final minTableWidth = (visibleColumns.length * 180.0 + 120.0).clamp(600.0, 1600.0);
+    final minTableWidth = (visibleColumns.length * 180.0 + 120.0).clamp(
+      600.0,
+      1600.0,
+    );
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -716,17 +838,29 @@ class _OrganizationStructurePageState
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.remove_red_eye_outlined, size: 18, color: AppColors.primary),
+                          icon: const Icon(
+                            Icons.remove_red_eye_outlined,
+                            size: 18,
+                            color: AppColors.primary,
+                          ),
                           tooltip: 'View Details',
                           onPressed: () => _openViewDeptDialog(context, dept),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                          icon: const Icon(
+                            Icons.edit_outlined,
+                            size: 18,
+                            color: AppColors.primary,
+                          ),
                           tooltip: 'Edit Department',
                           onPressed: () => _openEditDeptDialog(context, dept),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            size: 18,
+                            color: Colors.redAccent,
+                          ),
                           tooltip: 'Delete Department',
                           onPressed: () => _confirmDeleteDept(context, dept),
                         ),
@@ -749,11 +883,18 @@ class _OrganizationStructurePageState
     switch (columnName) {
       case 'Organization Name':
         value = dept.organizationName;
-        style = const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF667085));
+        style = const TextStyle(
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF667085),
+        );
         break;
       case 'Department Name':
         value = dept.departmentName;
-        style = const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF101828), fontSize: 14);
+        style = const TextStyle(
+          fontWeight: FontWeight.bold,
+          color: Color(0xFF101828),
+          fontSize: 14,
+        );
         break;
       case 'Department Head':
         value = dept.departmentHead;
@@ -847,17 +988,31 @@ class _OrganizationStructurePageState
                       width: 44,
                       height: 44,
                       child: PopupMenuButton<String>(
-                        icon: const Icon(Icons.more_vert, size: 20, color: Color(0xFF667085)),
+                        icon: const Icon(
+                          Icons.more_vert,
+                          size: 20,
+                          color: Color(0xFF667085),
+                        ),
                         padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                        constraints: const BoxConstraints(
+                          minWidth: 44,
+                          minHeight: 44,
+                        ),
                         itemBuilder: (context) => [
                           const PopupMenuItem(
                             value: 'view',
                             child: Row(
                               children: [
-                                Icon(Icons.remove_red_eye_outlined, size: 18, color: AppColors.primary),
+                                Icon(
+                                  Icons.remove_red_eye_outlined,
+                                  size: 18,
+                                  color: AppColors.primary,
+                                ),
                                 SizedBox(width: 8),
-                                Text('View Details', style: TextStyle(fontSize: 13)),
+                                Text(
+                                  'View Details',
+                                  style: TextStyle(fontSize: 13),
+                                ),
                               ],
                             ),
                           ),
@@ -865,9 +1020,16 @@ class _OrganizationStructurePageState
                             value: 'edit',
                             child: Row(
                               children: [
-                                Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                                Icon(
+                                  Icons.edit_outlined,
+                                  size: 18,
+                                  color: AppColors.primary,
+                                ),
                                 SizedBox(width: 8),
-                                Text('Edit Department', style: TextStyle(fontSize: 13)),
+                                Text(
+                                  'Edit Department',
+                                  style: TextStyle(fontSize: 13),
+                                ),
                               ],
                             ),
                           ),
@@ -875,9 +1037,19 @@ class _OrganizationStructurePageState
                             value: 'delete',
                             child: Row(
                               children: [
-                                Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                                Icon(
+                                  Icons.delete_outline,
+                                  size: 18,
+                                  color: Colors.redAccent,
+                                ),
                                 SizedBox(width: 8),
-                                Text('Delete Department', style: TextStyle(fontSize: 13, color: Colors.redAccent)),
+                                Text(
+                                  'Delete Department',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.redAccent,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -885,7 +1057,8 @@ class _OrganizationStructurePageState
                         onSelected: (val) {
                           if (val == 'view') _openViewDeptDialog(context, dept);
                           if (val == 'edit') _openEditDeptDialog(context, dept);
-                          if (val == 'delete') _confirmDeleteDept(context, dept);
+                          if (val == 'delete')
+                            _confirmDeleteDept(context, dept);
                         },
                       ),
                     ),
@@ -897,19 +1070,33 @@ class _OrganizationStructurePageState
                 ),
                 Row(
                   children: [
-                    const Icon(Icons.person_outline, size: 16, color: Color(0xFF667085)),
+                    const Icon(
+                      Icons.person_outline,
+                      size: 16,
+                      color: Color(0xFF667085),
+                    ),
                     const SizedBox(width: 6),
-                    const Text('Head: ', style: TextStyle(fontSize: 13, color: Color(0xFF667085))),
+                    const Text(
+                      'Head: ',
+                      style: TextStyle(fontSize: 13, color: Color(0xFF667085)),
+                    ),
                     Text(
                       dept.departmentHead.isEmpty ? '-' : dept.departmentHead,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF101828)),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF101828),
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
                 if (dept.workLocation.isNotEmpty)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFEFF6FF),
                       borderRadius: BorderRadius.circular(16),
@@ -918,11 +1105,19 @@ class _OrganizationStructurePageState
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.location_on_outlined, size: 13, color: Color(0xFF2563EB)),
+                        const Icon(
+                          Icons.location_on_outlined,
+                          size: 13,
+                          color: Color(0xFF2563EB),
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           dept.workLocation,
-                          style: const TextStyle(fontSize: 11.5, color: Color(0xFF1E40AF), fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            color: Color(0xFF1E40AF),
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
@@ -962,10 +1157,19 @@ class _OrganizationStructurePageState
                     // Organization Selector
                     Expanded(
                       child: orgsAsync.when(
-                        loading: () => const SizedBox(height: 42, child: Center(child: CircularProgressIndicator())),
+                        loading: () => const SizedBox(
+                          height: 42,
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
                         error: (_, __) => const SizedBox.shrink(),
                         data: (orgs) {
-                          final orgNames = ['All', ...orgs.map((o) => o.name).where((s) => s.isNotEmpty).toSet()];
+                          final orgNames = [
+                            'All',
+                            ...orgs
+                                .map((o) => o.name)
+                                .where((s) => s.isNotEmpty)
+                                .toSet(),
+                          ];
                           return AppSearchableDropdown<String>(
                             label: 'Organization',
                             value: _selectedDesigOrg,
@@ -986,14 +1190,28 @@ class _OrganizationStructurePageState
                     // Department Selector
                     Expanded(
                       child: deptsAsync.when(
-                        loading: () => const SizedBox(height: 42, child: Center(child: CircularProgressIndicator())),
+                        loading: () => const SizedBox(
+                          height: 42,
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
                         error: (_, __) => const SizedBox.shrink(),
                         data: (depts) {
                           var filteredDepts = depts;
                           if (_selectedDesigOrg != 'All') {
-                            filteredDepts = depts.where((d) => d.organizationName == _selectedDesigOrg).toList();
+                            filteredDepts = depts
+                                .where(
+                                  (d) =>
+                                      d.organizationName == _selectedDesigOrg,
+                                )
+                                .toList();
                           }
-                          final deptNames = ['All', ...filteredDepts.map((d) => d.departmentName).where((s) => s.isNotEmpty).toSet()];
+                          final deptNames = [
+                            'All',
+                            ...filteredDepts
+                                .map((d) => d.departmentName)
+                                .where((s) => s.isNotEmpty)
+                                .toSet(),
+                          ];
                           return AppSearchableDropdown<String>(
                             label: 'Department',
                             value: _selectedDesigDept,
@@ -1016,7 +1234,13 @@ class _OrganizationStructurePageState
                       loading: () => const SizedBox(height: 42),
                       error: (_, __) => const SizedBox.shrink(),
                       data: (orgs) {
-                        final orgNames = ['All', ...orgs.map((o) => o.name).where((s) => s.isNotEmpty).toSet()];
+                        final orgNames = [
+                          'All',
+                          ...orgs
+                              .map((o) => o.name)
+                              .where((s) => s.isNotEmpty)
+                              .toSet(),
+                        ];
                         return AppSearchableDropdown<String>(
                           label: 'Organization',
                           value: _selectedDesigOrg,
@@ -1039,9 +1263,19 @@ class _OrganizationStructurePageState
                       data: (depts) {
                         var filteredDepts = depts;
                         if (_selectedDesigOrg != 'All') {
-                          filteredDepts = depts.where((d) => d.organizationName == _selectedDesigOrg).toList();
+                          filteredDepts = depts
+                              .where(
+                                (d) => d.organizationName == _selectedDesigOrg,
+                              )
+                              .toList();
                         }
-                        final deptNames = ['All', ...filteredDepts.map((d) => d.departmentName).where((s) => s.isNotEmpty).toSet()];
+                        final deptNames = [
+                          'All',
+                          ...filteredDepts
+                              .map((d) => d.departmentName)
+                              .where((s) => s.isNotEmpty)
+                              .toSet(),
+                        ];
                         return AppSearchableDropdown<String>(
                           label: 'Department',
                           value: _selectedDesigDept,
@@ -1072,9 +1306,18 @@ class _OrganizationStructurePageState
                     style: const TextStyle(fontSize: 13),
                     decoration: InputDecoration(
                       hintText: 'Search designations...',
-                      hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF667085)),
-                      prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF667085)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                      hintStyle: const TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF667085),
+                      ),
+                      prefixIcon: const Icon(
+                        Icons.search,
+                        size: 20,
+                        color: Color(0xFF667085),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                      ),
                       filled: true,
                       fillColor: const Color(0xFFF9FAFB),
                       border: OutlineInputBorder(
@@ -1087,7 +1330,10 @@ class _OrganizationStructurePageState
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                        borderSide: const BorderSide(
+                          color: AppColors.primary,
+                          width: 1.5,
+                        ),
                       ),
                     ),
                     onChanged: (val) {
@@ -1102,7 +1348,9 @@ class _OrganizationStructurePageState
                   style: IconButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                     minimumSize: const Size(42, 42),
                   ),
                   tooltip: 'Add Designation',
@@ -1115,9 +1363,14 @@ class _OrganizationStructurePageState
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
                     minimumSize: const Size(0, 42),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                   onPressed: () => _openAddDesigDialog(context),
                   icon: const Icon(Icons.add, size: 18),
@@ -1136,11 +1389,13 @@ class _OrganizationStructurePageState
         Expanded(
           child: desigsAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, _) => Center(child: Text('Unable to load designations: $err')),
+            error: (err, _) =>
+                Center(child: Text('Unable to load designations: $err')),
             data: (desigs) {
               final filtered = desigs.where((d) {
                 if (_selectedDesigOrg != 'All' &&
-                    (d.organizationName.isNotEmpty || d.organizationId.isNotEmpty) &&
+                    (d.organizationName.isNotEmpty ||
+                        d.organizationId.isNotEmpty) &&
                     d.organizationName != _selectedDesigOrg &&
                     d.organizationId != _selectedDesigOrg) {
                   return false;
@@ -1163,11 +1418,18 @@ class _OrganizationStructurePageState
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.badge_outlined, size: 48, color: Color(0xFF94A3B8)),
+                        const Icon(
+                          Icons.badge_outlined,
+                          size: 48,
+                          color: Color(0xFF94A3B8),
+                        ),
                         const SizedBox(height: 12),
                         const Text(
                           'No designations found for selected criteria.',
-                          style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 14,
+                          ),
                         ),
                         const SizedBox(height: 16),
                         ElevatedButton.icon(
@@ -1205,7 +1467,10 @@ class _OrganizationStructurePageState
                         ),
                       ],
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     child: Row(
                       children: [
                         Container(
@@ -1215,7 +1480,11 @@ class _OrganizationStructurePageState
                             color: AppColors.primary.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Icon(Icons.badge_outlined, color: AppColors.primary, size: 20),
+                          child: const Icon(
+                            Icons.badge_outlined,
+                            color: AppColors.primary,
+                            size: 20,
+                          ),
                         ),
                         const SizedBox(width: 14),
                         Expanded(
@@ -1237,33 +1506,88 @@ class _OrganizationStructurePageState
                                 crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: const Color(0xFFF1F5F9),
                                       borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                                      border: Border.all(
+                                        color: const Color(0xFFE2E8F0),
+                                      ),
                                     ),
                                     child: Text(
                                       d.departmentName,
-                                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF475467)),
+                                      style: const TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF475467),
+                                      ),
                                     ),
                                   ),
                                   Builder(
                                     builder: (context) {
-                                      final orgName = d.organizationName.isNotEmpty
+                                      final orgName =
+                                          d.organizationName.isNotEmpty
                                           ? d.organizationName
                                           : (deptsAsync.valueOrNull
-                                                  ?.where((dept) => dept.departmentName == d.departmentName)
-                                                  .firstOrNull
-                                                  ?.organizationName ??
-                                              '');
-                                      if (orgName.isEmpty) return const SizedBox.shrink();
+                                                    ?.where(
+                                                      (dept) =>
+                                                          dept.departmentName ==
+                                                          d.departmentName,
+                                                    )
+                                                    .firstOrNull
+                                                    ?.organizationName ??
+                                                '');
+                                      if (orgName.isEmpty)
+                                        return const SizedBox.shrink();
                                       return Text(
                                         '•  $orgName',
-                                        style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                                        style: const TextStyle(
+                                          fontSize: 11.5,
+                                          color: Color(0xFF64748B),
+                                        ),
                                       );
                                     },
                                   ),
+                                  if (d.bandCode.isNotEmpty)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(
+                                          0xFF9CC70A,
+                                        ).withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: const Color(
+                                            0xFF9CC70A,
+                                          ).withValues(alpha: 0.3),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(
+                                            Icons.layers_outlined,
+                                            size: 11,
+                                            color: Color(0xFF414A51),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            d.bandCode,
+                                            style: const TextStyle(
+                                              fontSize: 11.5,
+                                              fontWeight: FontWeight.bold,
+                                              color: Color(0xFF414A51),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                 ],
                               ),
                             ],
@@ -1273,12 +1597,20 @@ class _OrganizationStructurePageState
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                              icon: const Icon(
+                                Icons.edit_outlined,
+                                size: 18,
+                                color: AppColors.primary,
+                              ),
                               tooltip: 'Edit Designation',
                               onPressed: () => _openEditDesigDialog(context, d),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                              icon: const Icon(
+                                Icons.delete_outline,
+                                size: 18,
+                                color: Colors.redAccent,
+                              ),
                               tooltip: 'Delete Designation',
                               onPressed: () => _confirmDeleteDesig(context, d),
                             ),
@@ -1308,7 +1640,10 @@ class _OrganizationStructurePageState
     DesignationFormDialog.show(context, designation: designation);
   }
 
-  Future<void> _confirmDeleteDesig(BuildContext context, Designation designation) async {
+  Future<void> _confirmDeleteDesig(
+    BuildContext context,
+    Designation designation,
+  ) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1337,13 +1672,566 @@ class _OrganizationStructurePageState
     );
 
     if (confirm == true) {
-      await ref.read(organizationRepositoryProvider).deleteDesignation(designation.id);
+      await ref
+          .read(organizationRepositoryProvider)
+          .deleteDesignation(designation.id);
       ref.invalidate(allDesignationsProvider);
       ref.invalidate(designationsProvider(designation.departmentName));
+      ref.invalidate(organizationBandsProvider);
+      ref.invalidate(filteredBandsProvider);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Deleted "${designation.designationName}"')),
       );
+    }
+  }
+
+  // ==========================================
+  // BANDS TAB VIEW
+  // ==========================================
+  Widget _buildBandsView(BuildContext context, bool isMobile) {
+    final orgsAsync = ref.watch(organizationsProvider);
+    final bandsAsync = ref.watch(
+      filteredBandsProvider(
+        OrganizationBandFilter(
+          organizationId: _selectedBandOrg != 'All' ? _selectedBandOrg : null,
+        ),
+      ),
+    );
+
+    return Column(
+      children: [
+        // Organization Filter Bar
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          decoration: const BoxDecoration(
+            color: Color(0xFFF9FAFB),
+            border: Border(bottom: BorderSide(color: Color(0xFFEAECF0))),
+          ),
+          child: orgsAsync.when(
+            loading: () => const LinearProgressIndicator(),
+            error: (err, _) => Text('Error loading organizations: $err'),
+            data: (orgs) {
+              final orgItems = ['All', ...orgs.map((o) => o.canonicalId)];
+              return Row(
+                children: [
+                  const Text(
+                    'Organization:',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF344054),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    width: 240,
+                    child: AppSearchableDropdown<String>(
+                      value: _selectedBandOrg,
+                      items: orgItems,
+                      itemLabel: (id) {
+                        if (id == 'All') return 'All Organizations';
+                        final match = orgs
+                            .where((o) => o.canonicalId == id)
+                            .firstOrNull;
+                        return match?.name ?? id;
+                      },
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() => _selectedBandOrg = val);
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+
+        // Search & Add Toolbar
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 42,
+                  child: TextField(
+                    style: const TextStyle(fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'Search bands by code, title, or level...',
+                      hintStyle: const TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF667085),
+                      ),
+                      prefixIcon: const Icon(
+                        Icons.search,
+                        size: 20,
+                        color: Color(0xFF667085),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                      ),
+                      filled: true,
+                      fillColor: const Color(0xFFF9FAFB),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: Color(0xFFD0D5DD)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: Color(0xFFD0D5DD)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                          color: AppColors.primary,
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                    onChanged: (val) {
+                      setState(() => _bandSearchQuery = val);
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (isMobile)
+                IconButton(
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    minimumSize: const Size(42, 42),
+                  ),
+                  tooltip: 'Add Band',
+                  onPressed: () => _openAddBandDialog(context),
+                  icon: const Icon(Icons.add, size: 20),
+                )
+              else
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    minimumSize: const Size(0, 42),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  onPressed: () => _openAddBandDialog(context),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text(
+                    'Add Band',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                ),
+            ],
+          ),
+        ),
+
+        const Divider(height: 1, color: Color(0xFFEAECF0)),
+
+        // Bands List View
+        Expanded(
+          child: bandsAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (err, _) => Center(
+              child: Text(
+                'Unable to load organization bands: $err',
+                style: const TextStyle(color: Colors.red),
+              ),
+            ),
+            data: (bands) {
+              final filtered = bands.where((b) {
+                if (_bandSearchQuery.trim().isEmpty) return true;
+                final q = _bandSearchQuery.toLowerCase();
+                return b.bandCode.toLowerCase().contains(q) ||
+                    b.title.toLowerCase().contains(q) ||
+                    b.description.toLowerCase().contains(q) ||
+                    'level ${b.level}'.contains(q) ||
+                    b.organizationName.toLowerCase().contains(q);
+              }).toList();
+
+              // Ensure descending sort by level (Band 7 down to Band 1)
+              filtered.sort();
+
+              if (filtered.isEmpty) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.layers_outlined,
+                          size: 48,
+                          color: Color(0xFF94A3B8),
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'No organization bands configured yet.',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                          ),
+                          onPressed: () => _openAddBandDialog(context),
+                          icon: const Icon(Icons.add, size: 16),
+                          label: const Text('Add First Band'),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              return ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: filtered.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 10),
+                itemBuilder: (context, index) {
+                  final band = filtered[index];
+                  final accentColor = Color(band.colorHex ?? 0xFF9CC70A);
+
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.02),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // Band Level Badge (Icon/Indicator)
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: accentColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: accentColor.withValues(alpha: 0.3),
+                              width: 1.5,
+                            ),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            'L${band.level}',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: accentColor,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+
+                        // Band Content
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    band.bandCode,
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF101828),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      '—  ${band.title}',
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF344054),
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 4,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  // Hierarchy level tag
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF1F5F9),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: const Color(0xFFE2E8F0),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Level ${band.level} of 7',
+                                      style: const TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF475467),
+                                      ),
+                                    ),
+                                  ),
+
+                                  // Assigned Designations Reference Count
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: band.designationCount > 0
+                                          ? AppColors.primary.withValues(
+                                              alpha: 0.12,
+                                            )
+                                          : const Color(0xFFF8FAFC),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: band.designationCount > 0
+                                            ? AppColors.primary.withValues(
+                                                alpha: 0.3,
+                                              )
+                                            : const Color(0xFFE2E8F0),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.badge_outlined,
+                                          size: 12,
+                                          color: band.designationCount > 0
+                                              ? const Color(0xFF414A51)
+                                              : const Color(0xFF64748B),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '${band.designationCount} ${band.designationCount == 1 ? "designation" : "designations"}',
+                                          style: TextStyle(
+                                            fontSize: 11.5,
+                                            fontWeight:
+                                                band.designationCount > 0
+                                                ? FontWeight.bold
+                                                : FontWeight.w500,
+                                            color: band.designationCount > 0
+                                                ? const Color(0xFF414A51)
+                                                : const Color(0xFF64748B),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+
+                                  // Organization display if All orgs filter
+                                  if (_selectedBandOrg == 'All' &&
+                                      band.organizationName.isNotEmpty)
+                                    Text(
+                                      '•  ${band.organizationName}',
+                                      style: const TextStyle(
+                                        fontSize: 11.5,
+                                        color: Color(0xFF64748B),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              if (band.description.isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  band.description,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF64748B),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+
+                        // Edit & Delete Actions
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(
+                                Icons.edit_outlined,
+                                size: 18,
+                                color: AppColors.primary,
+                              ),
+                              tooltip: 'Edit Band',
+                              onPressed: () =>
+                                  _openEditBandDialog(context, band),
+                            ),
+                            IconButton(
+                              icon: Icon(
+                                Icons.delete_outline,
+                                size: 18,
+                                color: band.designationCount > 0
+                                    ? const Color(0xFF94A3B8)
+                                    : Colors.red.shade400,
+                              ),
+                              tooltip: band.designationCount > 0
+                                  ? 'Assigned to designations (cannot delete)'
+                                  : 'Delete Band',
+                              onPressed: () => _confirmDeleteBand(band),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _openAddBandDialog(BuildContext context) {
+    BandFormDialog.show(
+      context,
+      initialOrganizationId: _selectedBandOrg != 'All'
+          ? _selectedBandOrg
+          : null,
+    );
+  }
+
+  void _openEditBandDialog(BuildContext context, OrganizationBand band) {
+    BandFormDialog.show(
+      context,
+      band: band,
+      initialOrganizationId: band.organizationId,
+      initialOrganizationName: band.organizationName,
+    );
+  }
+
+  Future<void> _confirmDeleteBand(OrganizationBand band) async {
+    // 1. Referential integrity guard: prevent deletion if assigned
+    if (band.designationCount > 0) {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          title: Row(
+            children: const [
+              Icon(Icons.info_outline, color: Color(0xFF414A51)),
+              SizedBox(width: 8),
+              Text('Cannot Delete Band', style: TextStyle(fontSize: 16)),
+            ],
+          ),
+          content: Text(
+            'Band "${band.bandCode}" (${band.title}) is currently assigned to ${band.designationCount} designation(s).\n\nTo preserve organizational integrity, please reassign or remove the designations referencing this Band before deleting it.',
+            style: const TextStyle(fontSize: 13, height: 1.4),
+          ),
+          actions: [
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Understood'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // 2. Confirmation dialog for unreferenced band
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Row(
+          children: const [
+            Icon(Icons.warning_amber_rounded, color: Colors.amber),
+            SizedBox(width: 8),
+            Text('Confirm Delete', style: TextStyle(fontSize: 16)),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete Band "${band.bandCode}" (${band.title})?\nThis action cannot be undone.',
+          style: const TextStyle(fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await ref
+            .read(organizationRepositoryProvider)
+            .deleteBand(band.id, organizationId: band.organizationId);
+        ref.invalidate(organizationBandsProvider);
+        ref.invalidate(filteredBandsProvider);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Band "${band.bandCode}" deleted successfully.'),
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e is StateError ? e.message : 'Error deleting Band: $e',
+            ),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      }
     }
   }
 
@@ -1365,18 +2253,37 @@ class _OrganizationStructurePageState
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            totalItems == 0 ? 'Showing 0 of 0' : 'Showing ${startIndex + 1} - $endIndex of $totalItems',
-            style: const TextStyle(fontSize: 12, color: Color(0xFF667085), fontWeight: FontWeight.w500),
+            totalItems == 0
+                ? 'Showing 0 of 0'
+                : 'Showing ${startIndex + 1} - $endIndex of $totalItems',
+            style: const TextStyle(
+              fontSize: 12,
+              color: Color(0xFF667085),
+              fontWeight: FontWeight.w500,
+            ),
           ),
           if (!isMobile)
             Row(
               children: [
-                const Text('Rows per page ', style: TextStyle(fontSize: 12, color: Color(0xFF667085))),
+                const Text(
+                  'Rows per page ',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF667085)),
+                ),
                 DropdownButtonHideUnderline(
                   child: DropdownButton<int>(
                     value: _rowsPerPage,
                     isDense: true,
-                    items: [5, 10, 20, 50].map((val) => DropdownMenuItem(value: val, child: Text('$val', style: const TextStyle(fontSize: 12)))).toList(),
+                    items: [5, 10, 20, 50]
+                        .map(
+                          (val) => DropdownMenuItem(
+                            value: val,
+                            child: Text(
+                              '$val',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                        )
+                        .toList(),
                     onChanged: (val) {
                       if (val != null) {
                         setState(() {
@@ -1390,27 +2297,44 @@ class _OrganizationStructurePageState
                 const SizedBox(width: 12),
                 IconButton(
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  constraints: const BoxConstraints(
+                    minWidth: 28,
+                    minHeight: 28,
+                  ),
                   icon: const Icon(Icons.chevron_left, size: 20),
-                  onPressed: currentPage > 0 ? () => setState(() => _currentPage -= 1) : null,
+                  onPressed: currentPage > 0
+                      ? () => setState(() => _currentPage -= 1)
+                      : null,
                 ),
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.primary,
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
                     '${currentPage + 1}',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
                 IconButton(
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  constraints: const BoxConstraints(
+                    minWidth: 28,
+                    minHeight: 28,
+                  ),
                   icon: const Icon(Icons.chevron_right, size: 20),
-                  onPressed: currentPage < totalPages - 1 ? () => setState(() => _currentPage += 1) : null,
+                  onPressed: currentPage < totalPages - 1
+                      ? () => setState(() => _currentPage += 1)
+                      : null,
                 ),
               ],
             )
@@ -1419,19 +2343,33 @@ class _OrganizationStructurePageState
               children: [
                 IconButton(
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
                   icon: const Icon(Icons.chevron_left, size: 22),
-                  onPressed: currentPage > 0 ? () => setState(() => _currentPage -= 1) : null,
+                  onPressed: currentPage > 0
+                      ? () => setState(() => _currentPage -= 1)
+                      : null,
                 ),
                 Text(
                   '${currentPage + 1} / ${totalPages == 0 ? 1 : totalPages}',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF344054)),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF344054),
+                  ),
                 ),
                 IconButton(
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
                   icon: const Icon(Icons.chevron_right, size: 22),
-                  onPressed: currentPage < totalPages - 1 ? () => setState(() => _currentPage += 1) : null,
+                  onPressed: currentPage < totalPages - 1
+                      ? () => setState(() => _currentPage += 1)
+                      : null,
                 ),
               ],
             ),

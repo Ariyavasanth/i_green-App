@@ -60,7 +60,8 @@ class ProfilePhotoViewerDialog extends StatefulWidget {
   }
 
   @override
-  State<ProfilePhotoViewerDialog> createState() => _ProfilePhotoViewerDialogState();
+  State<ProfilePhotoViewerDialog> createState() =>
+      _ProfilePhotoViewerDialogState();
 }
 
 class _ProfilePhotoViewerDialogState extends State<ProfilePhotoViewerDialog>
@@ -75,14 +76,15 @@ class _ProfilePhotoViewerDialogState extends State<ProfilePhotoViewerDialog>
   void initState() {
     super.initState();
     _transformationController = TransformationController();
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 250),
-    )..addListener(() {
-        if (_animation != null) {
-          _transformationController.value = _animation!.value;
-        }
-      });
+    _animationController =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 250),
+        )..addListener(() {
+          if (_animation != null) {
+            _transformationController.value = _animation!.value;
+          }
+        });
   }
 
   @override
@@ -115,15 +117,16 @@ class _ProfilePhotoViewerDialogState extends State<ProfilePhotoViewerDialog>
         ..scale(zoomFactor);
     }
 
-    _animation = Matrix4Tween(
-      begin: _transformationController.value,
-      end: targetMatrix,
-    ).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeOutCubic,
-      ),
-    );
+    _animation =
+        Matrix4Tween(
+          begin: _transformationController.value,
+          end: targetMatrix,
+        ).animate(
+          CurvedAnimation(
+            parent: _animationController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
 
     _animationController.forward(from: 0);
   }
@@ -176,13 +179,16 @@ class _ProfilePhotoViewerDialogState extends State<ProfilePhotoViewerDialog>
             final loaded = loadingProgress.cumulativeBytesLoaded;
             return Center(
               child: CircularProgressIndicator(
-                value: expected != null && expected > 0 ? loaded / expected : null,
+                value: expected != null && expected > 0
+                    ? loaded / expected
+                    : null,
                 color: AppColors.primary,
                 strokeWidth: 2.5,
               ),
             );
           },
-          errorBuilder: (context, error, stackTrace) => _buildDefaultAvatarView(),
+          errorBuilder: (context, error, stackTrace) =>
+              _buildDefaultAvatarView(),
         );
       }
     }
@@ -248,7 +254,11 @@ class _ProfilePhotoViewerDialogState extends State<ProfilePhotoViewerDialog>
             backgroundColor: Colors.black.withValues(alpha: 0.7),
             elevation: 0,
             leading: IconButton(
-              icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 24),
+              icon: const Icon(
+                Icons.arrow_back_rounded,
+                color: Colors.white,
+                size: 24,
+              ),
               tooltip: 'Back',
               onPressed: () => Navigator.of(context).pop(),
             ),
@@ -287,8 +297,14 @@ class _ProfilePhotoViewerDialogState extends State<ProfilePhotoViewerDialog>
                   clipBehavior: Clip.antiAlias,
                   child: ConstrainedBox(
                     constraints: BoxConstraints(
-                      maxWidth: math.min(MediaQuery.of(context).size.width, 600),
-                      maxHeight: math.min(MediaQuery.of(context).size.height, 600),
+                      maxWidth: math.min(
+                        MediaQuery.of(context).size.width,
+                        600,
+                      ),
+                      maxHeight: math.min(
+                        MediaQuery.of(context).size.height,
+                        600,
+                      ),
                     ),
                     child: _buildImageContent(),
                   ),

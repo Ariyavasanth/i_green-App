@@ -62,26 +62,36 @@ Future<void> saveAndDownloadOfferLetter({
     dir = await getApplicationDocumentsDirectory();
     locationLabel = 'Files / Documents';
   } else {
-    dir = (await getDownloadsDirectory()) ?? await getApplicationDocumentsDirectory();
+    dir =
+        (await getDownloadsDirectory()) ??
+        await getApplicationDocumentsDirectory();
     locationLabel = 'Downloads';
   }
 
   final file = File('${dir.path}/$fileName');
   await file.writeAsBytes(bytes);
 
-  final titleStr = docTitle ?? (fileName.startsWith('BOM') ? 'BOM Details' : 'File');
+  final titleStr =
+      docTitle ?? (fileName.startsWith('BOM') ? 'BOM Details' : 'File');
 
   if (context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
-            const Icon(Icons.download_done_rounded, color: Colors.white, size: 22),
+            const Icon(
+              Icons.download_done_rounded,
+              color: Colors.white,
+              size: 22,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 '$titleStr saved to $locationLabel: $fileName',
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
               ),
             ),
           ],
@@ -102,18 +112,14 @@ Future<void> saveAndDownloadOfferLetter({
               } else {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('File saved: ${file.path}'),
-                    ),
+                    SnackBar(content: Text('File saved: ${file.path}')),
                   );
                 }
               }
             } catch (_) {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Saved to: ${file.path}'),
-                  ),
+                  SnackBar(content: Text('Saved to: ${file.path}')),
                 );
               }
             }
@@ -123,4 +129,3 @@ Future<void> saveAndDownloadOfferLetter({
     );
   }
 }
-

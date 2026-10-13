@@ -54,12 +54,18 @@ class MigrationReport {
   String toFormattedString() {
     final buffer = StringBuffer();
     buffer.writeln('====================================================');
-    buffer.writeln(' HRMS ORGANIZATION ID MIGRATION REPORT (${isDryRun ? "DRY-RUN" : "APPLIED"})');
+    buffer.writeln(
+      ' HRMS ORGANIZATION ID MIGRATION REPORT (${isDryRun ? "DRY-RUN" : "APPLIED"})',
+    );
     buffer.writeln(' Timestamp: ${timestamp.toIso8601String()}');
     buffer.writeln('====================================================');
-    buffer.writeln('Organizations Found in Firestore: $totalOrganizationsFound');
+    buffer.writeln(
+      'Organizations Found in Firestore: $totalOrganizationsFound',
+    );
     for (final org in organizations) {
-      buffer.writeln(' - [ID: ${org.canonicalId}] "${org.name}" (status: ${org.status})');
+      buffer.writeln(
+        ' - [ID: ${org.canonicalId}] "${org.name}" (status: ${org.status})',
+      );
     }
     buffer.writeln('----------------------------------------------------');
 
@@ -107,7 +113,7 @@ class OrganizationMigrationService {
   final FirebaseFirestore _firestore;
 
   OrganizationMigrationService({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+    : _firestore = firestore ?? FirebaseFirestore.instance;
 
   static const List<String> targetCollections = [
     'employees',
@@ -176,18 +182,29 @@ class OrganizationMigrationService {
 
     for (final doc in snapshot.docs) {
       final data = doc.data();
-      final existingOrgId = (data['organization_id'] ?? data['organizationId'] ?? data['org_id'])?.toString().trim();
-      final rawOrgName = (data['organization_name'] ?? data['organizationName'])?.toString().trim() ?? '';
+      final existingOrgId =
+          (data['organization_id'] ?? data['organizationId'] ?? data['org_id'])
+              ?.toString()
+              .trim();
+      final rawOrgName =
+          (data['organization_name'] ?? data['organizationName'])
+              ?.toString()
+              .trim() ??
+          '';
 
       // If document already has a valid non-empty organization_id and it's not a placeholder
-      if (existingOrgId != null && existingOrgId.isNotEmpty && existingOrgId != '0') {
+      if (existingOrgId != null &&
+          existingOrgId.isNotEmpty &&
+          existingOrgId != '0') {
         alreadyMigrated++;
         continue;
       }
 
       if (rawOrgName.isEmpty) {
         unmatched++;
-        unmatchedDetails.add('Doc ID "${doc.id}": missing organization_name field');
+        unmatchedDetails.add(
+          'Doc ID "${doc.id}": missing organization_name field',
+        );
         continue;
       }
 
@@ -196,7 +213,9 @@ class OrganizationMigrationService {
 
       if (matches.isEmpty) {
         unmatched++;
-        unmatchedDetails.add('Doc ID "${doc.id}": name "$rawOrgName" does not match any organization');
+        unmatchedDetails.add(
+          'Doc ID "${doc.id}": name "$rawOrgName" does not match any organization',
+        );
       } else if (matches.length > 1) {
         ambiguous++;
         ambiguousDetails.add(
@@ -205,7 +224,9 @@ class OrganizationMigrationService {
       } else {
         matched++;
         final targetOrg = matches.first;
-        matchedDetails.add('Doc ID "${doc.id}": linked to [${targetOrg.canonicalId}] "${targetOrg.name}"');
+        matchedDetails.add(
+          'Doc ID "${doc.id}": linked to [${targetOrg.canonicalId}] "${targetOrg.name}"',
+        );
         pendingUpdates[doc.reference] = {
           'organization_id': targetOrg.canonicalId,
           'organization_name': targetOrg.name,
@@ -235,7 +256,9 @@ class OrganizationMigrationService {
         }
         await batch.commit();
       }
-      debugPrint('[OrganizationMigrationService] Applied ${pendingUpdates.length} updates to collection "$collectionName".');
+      debugPrint(
+        '[OrganizationMigrationService] Applied ${pendingUpdates.length} updates to collection "$collectionName".',
+      );
     }
 
     return CollectionMigrationSummary(

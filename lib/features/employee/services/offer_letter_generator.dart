@@ -15,12 +15,38 @@ class OfferLetterGenerator {
     if (val <= 0) return 'Rupees Zero Only';
 
     final units = [
-      '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
-      'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
-      'Seventeen', 'Eighteen', 'Nineteen'
+      '',
+      'One',
+      'Two',
+      'Three',
+      'Four',
+      'Five',
+      'Six',
+      'Seven',
+      'Eight',
+      'Nine',
+      'Ten',
+      'Eleven',
+      'Twelve',
+      'Thirteen',
+      'Fourteen',
+      'Fifteen',
+      'Sixteen',
+      'Seventeen',
+      'Eighteen',
+      'Nineteen',
     ];
     final tens = [
-      '', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'
+      '',
+      '',
+      'Twenty',
+      'Thirty',
+      'Forty',
+      'Fifty',
+      'Sixty',
+      'Seventy',
+      'Eighty',
+      'Ninety',
     ];
 
     String convertChunk(int n) {
@@ -73,13 +99,15 @@ class OfferLetterGenerator {
     final empName = employee.fullName.trim().isNotEmpty
         ? employee.fullName.trim()
         : 'XXXXX';
-    
+
     String salutation = 'Mr.';
     final lowerGender = employee.gender.toLowerCase().trim();
     if (lowerGender == 'female' || lowerGender == 'f') {
       salutation = 'Ms.';
     }
-    final hasTitlePrefix = empName.startsWith(RegExp(r'^(Mr\.|Ms\.|Mrs\.|Dr\.)', caseSensitive: false));
+    final hasTitlePrefix = empName.startsWith(
+      RegExp(r'^(Mr\.|Ms\.|Mrs\.|Dr\.)', caseSensitive: false),
+    );
     final salutationName = hasTitlePrefix ? empName : '$salutation $empName';
 
     final designation = employee.designation.trim().isNotEmpty
@@ -95,7 +123,9 @@ class OfferLetterGenerator {
         ? employee.joiningDate.trim()
         : todayStr;
 
-    final totalSalary = employee.salaryTotalCtc > 0 ? employee.salaryTotalCtc : 0.0;
+    final totalSalary = employee.salaryTotalCtc > 0
+        ? employee.salaryTotalCtc
+        : 0.0;
     final formattedSalary = totalSalary > 0
         ? NumberFormat('#,##,##0', 'en_IN').format(totalSalary)
         : '---';
@@ -103,7 +133,8 @@ class OfferLetterGenerator {
         ? numberToWords(totalSalary)
         : 'Amount in words';
 
-    final docXmlContent = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    final docXmlContent =
+        '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
     <!-- PAGE 1: OFFER LETTER TERMS HEADER & DETAILS -->
@@ -480,7 +511,8 @@ class OfferLetterGenerator {
   </w:body>
 </w:document>''';
 
-    const contentTypesXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    const contentTypesXml =
+        '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
@@ -493,9 +525,23 @@ class OfferLetterGenerator {
 </Relationships>''';
 
     final archive = Archive();
-    archive.addFile(ArchiveFile('[Content_Types].xml', contentTypesXml.length, utf8.encode(contentTypesXml)));
-    archive.addFile(ArchiveFile('_rels/.rels', relsXml.length, utf8.encode(relsXml)));
-    archive.addFile(ArchiveFile('word/document.xml', docXmlContent.length, utf8.encode(docXmlContent)));
+    archive.addFile(
+      ArchiveFile(
+        '[Content_Types].xml',
+        contentTypesXml.length,
+        utf8.encode(contentTypesXml),
+      ),
+    );
+    archive.addFile(
+      ArchiveFile('_rels/.rels', relsXml.length, utf8.encode(relsXml)),
+    );
+    archive.addFile(
+      ArchiveFile(
+        'word/document.xml',
+        docXmlContent.length,
+        utf8.encode(docXmlContent),
+      ),
+    );
 
     return ZipEncoder().encode(archive) ?? [];
   }
@@ -510,11 +556,18 @@ class OfferLetterGenerator {
   }
 
   /// Triggers immediate download of the offer letter .docx file in browser or device.
-  static Future<void> downloadOfferLetter(BuildContext context, Employee employee) async {
+  static Future<void> downloadOfferLetter(
+    BuildContext context,
+    Employee employee,
+  ) async {
     try {
       final docxBytes = generateDocxBytes(employee);
-      final rawName = employee.fullName.trim().replaceAll(RegExp(r'[^\w\s\-]'), '');
-      final fileName = 'Offer_Letter_${rawName.isEmpty ? "Employee" : rawName.replaceAll(" ", "_")}.docx';
+      final rawName = employee.fullName.trim().replaceAll(
+        RegExp(r'[^\w\s\-]'),
+        '',
+      );
+      final fileName =
+          'Offer_Letter_${rawName.isEmpty ? "Employee" : rawName.replaceAll(" ", "_")}.docx';
 
       await saveAndDownloadOfferLetter(
         context: context,

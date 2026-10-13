@@ -10,10 +10,12 @@ class AttendanceSettingsDialog extends ConsumerStatefulWidget {
   const AttendanceSettingsDialog({super.key});
 
   @override
-  ConsumerState<AttendanceSettingsDialog> createState() => _AttendanceSettingsDialogState();
+  ConsumerState<AttendanceSettingsDialog> createState() =>
+      _AttendanceSettingsDialogState();
 }
 
-class _AttendanceSettingsDialogState extends ConsumerState<AttendanceSettingsDialog> {
+class _AttendanceSettingsDialogState
+    extends ConsumerState<AttendanceSettingsDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _graceController;
   late final TextEditingController _latitudeController;
@@ -27,11 +29,21 @@ class _AttendanceSettingsDialogState extends ConsumerState<AttendanceSettingsDia
   @override
   void initState() {
     super.initState();
-    final settings = ref.read(attendanceSettingsProvider).valueOrNull ?? AttendanceSettings.defaults();
-    _graceController = TextEditingController(text: settings.gracePeriodMinutes.toString());
-    _latitudeController = TextEditingController(text: settings.officeLatitude.toStringAsFixed(6));
-    _longitudeController = TextEditingController(text: settings.officeLongitude.toStringAsFixed(6));
-    _radiusController = TextEditingController(text: settings.allowedAttendanceRadiusMeters.toString());
+    final settings =
+        ref.read(attendanceSettingsProvider).valueOrNull ??
+        AttendanceSettings.defaults();
+    _graceController = TextEditingController(
+      text: settings.gracePeriodMinutes.toString(),
+    );
+    _latitudeController = TextEditingController(
+      text: settings.officeLatitude.toStringAsFixed(6),
+    );
+    _longitudeController = TextEditingController(
+      text: settings.officeLongitude.toStringAsFixed(6),
+    );
+    _radiusController = TextEditingController(
+      text: settings.allowedAttendanceRadiusMeters.toString(),
+    );
     _requireGpsVerification = settings.requireGpsVerification;
     _locations = List.from(settings.locations);
   }
@@ -56,7 +68,9 @@ class _AttendanceSettingsDialogState extends ConsumerState<AttendanceSettingsDia
       requireGpsVerification: _requireGpsVerification,
       locations: _locations,
     );
-    await ref.read(attendanceSettingsRepositoryProvider).saveAttendanceSettings(settings);
+    await ref
+        .read(attendanceSettingsRepositoryProvider)
+        .saveAttendanceSettings(settings);
     ref.invalidate(attendanceSettingsProvider);
     if (!mounted) return;
     Navigator.of(context).pop();
@@ -73,24 +87,42 @@ class _AttendanceSettingsDialogState extends ConsumerState<AttendanceSettingsDia
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextFormField(controller: _graceController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Grace Period (minutes)'), validator: _validator),
+              TextFormField(
+                controller: _graceController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Grace Period (minutes)',
+                ),
+                validator: _validator,
+              ),
               AttendanceLocationFields(
                 latitudeController: _latitudeController,
                 longitudeController: _longitudeController,
                 radiusController: _radiusController,
                 requireGpsVerification: _requireGpsVerification,
-                onRequireGpsChanged: (val) => setState(() => _requireGpsVerification = val),
+                onRequireGpsChanged: (val) =>
+                    setState(() => _requireGpsVerification = val),
                 enabled: !_saving,
               ),
               const SizedBox(height: 8),
-              const Text('Each employee still uses their own Check-In Time from the profile.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              const Text(
+                'Each employee still uses their own Check-In Time from the profile.',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
             ],
           ),
         ),
       ),
       actions: [
-        TextButton(onPressed: _saving ? null : () => Navigator.of(context).pop(), child: const Text('Cancel')),
-        ElevatedButton(onPressed: _saving ? null : _save, style: ElevatedButton.styleFrom(backgroundColor: AppColors.active), child: Text(_saving ? 'Saving...' : 'Save')),
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _saving ? null : _save,
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.active),
+          child: Text(_saving ? 'Saving...' : 'Save'),
+        ),
       ],
     );
   }

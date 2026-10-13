@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -523,15 +525,36 @@ class _OrganizationFormDialogState
           setState(() {
             _uploadStatusMessage = 'Uploading ${docItem.title}...';
           });
-          final uploaded = await repo.uploadDocument(
-            orgId: orgId,
-            docTitle: docItem.title,
-            file: docItem.pickedFile,
-          );
-          if (uploaded.fileUrl.isEmpty) {
-            throw Exception('Failed to upload "${docItem.title}". Please try again.');
+          try {
+            final uploaded = await repo.uploadDocument(
+              orgId: orgId,
+              docTitle: docItem.title,
+              file: docItem.pickedFile,
+            );
+            if (uploaded.fileUrl.isNotEmpty) {
+              finalDocs.add(uploaded);
+            } else {
+              throw Exception('Empty URL');
+            }
+          } catch (e) {
+            final fileBytes = docItem.pickedFile?.bytes;
+            if (fileBytes != null) {
+              final ext = docItem.pickedFile?.extension?.toLowerCase();
+              final mime = ext == 'pdf'
+                  ? 'application/pdf'
+                  : (ext == 'png' ? 'image/png' : 'image/jpeg');
+              finalDocs.add(
+                OrgDocument(
+                  title: docItem.title,
+                  fileName: docItem.pickedFile!.name,
+                  fileUrl: 'data:$mime;base64,${base64Encode(fileBytes)}',
+                  uploadedAt: DateTime.now().toIso8601String(),
+                ),
+              );
+            } else if (docItem.existingDoc != null) {
+              finalDocs.add(docItem.existingDoc!);
+            }
           }
-          finalDocs.add(uploaded);
         } else if (docItem.existingDoc != null) {
           finalDocs.add(docItem.existingDoc!);
         }
@@ -563,8 +586,22 @@ class _OrganizationFormDialogState
               file: bankItem.pickedChequeFile,
             );
           } catch (e) {
-            debugPrint('Failed to upload cancelled cheque: $e');
-            chequeDoc = bankItem.existingChequeDoc;
+            final cBytes = bankItem.pickedChequeFile?.bytes;
+            if (cBytes != null) {
+              final ext = bankItem.pickedChequeFile?.extension?.toLowerCase();
+              final mime = ext == 'pdf'
+                  ? 'application/pdf'
+                  : (ext == 'png' ? 'image/png' : 'image/jpeg');
+              chequeDoc = OrgDocument(
+                title:
+                    'Cancelled Cheque - ${aNum.isNotEmpty ? aNum : bankItem.id}',
+                fileName: bankItem.pickedChequeFile!.name,
+                fileUrl: 'data:$mime;base64,${base64Encode(cBytes)}',
+                uploadedAt: DateTime.now().toIso8601String(),
+              );
+            } else {
+              chequeDoc = bankItem.existingChequeDoc;
+            }
           }
         }
 
@@ -1307,7 +1344,8 @@ class _OrganizationFormDialogState
     final hasPicked = item.pickedFile != null;
     final hasExisting =
         item.existingDoc != null &&
-        (item.existingDoc!.fileUrl.isNotEmpty || item.existingDoc!.fileName.isNotEmpty);
+        (item.existingDoc!.fileUrl.isNotEmpty ||
+            item.existingDoc!.fileName.isNotEmpty);
     final fileName = hasPicked
         ? item.pickedFile!.name
         : (hasExisting ? item.existingDoc!.fileName : null);

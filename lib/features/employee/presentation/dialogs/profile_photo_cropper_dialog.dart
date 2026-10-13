@@ -15,10 +15,7 @@ import '../../../../core/theme/app_colors.dart';
 /// - Mobile (width < 650): WhatsApp Mobile style with 1:1 square crop box, corner brackets,
 ///   3x3 rule-of-thirds grid, Cancel button, Rotate button, and Done button.
 class ProfilePhotoCropperDialog extends StatefulWidget {
-  const ProfilePhotoCropperDialog({
-    required this.initialBytes,
-    super.key,
-  });
+  const ProfilePhotoCropperDialog({required this.initialBytes, super.key});
 
   final Uint8List initialBytes;
 
@@ -42,7 +39,8 @@ class ProfilePhotoCropperDialog extends StatefulWidget {
   }
 
   @override
-  State<ProfilePhotoCropperDialog> createState() => _ProfilePhotoCropperDialogState();
+  State<ProfilePhotoCropperDialog> createState() =>
+      _ProfilePhotoCropperDialogState();
 }
 
 class _ProfilePhotoCropperDialogState extends State<ProfilePhotoCropperDialog> {
@@ -94,8 +92,12 @@ class _ProfilePhotoCropperDialogState extends State<ProfilePhotoCropperDialog> {
     if (_uiImage == null || _viewportSize == Size.zero) return;
 
     final isRotated = (_rotation % 180) != 0;
-    final imgW = isRotated ? _uiImage!.height.toDouble() : _uiImage!.width.toDouble();
-    final imgH = isRotated ? _uiImage!.width.toDouble() : _uiImage!.height.toDouble();
+    final imgW = isRotated
+        ? _uiImage!.height.toDouble()
+        : _uiImage!.width.toDouble();
+    final imgH = isRotated
+        ? _uiImage!.width.toDouble()
+        : _uiImage!.height.toDouble();
 
     final scaleX = _cropSize / imgW;
     final scaleY = _cropSize / imgH;
@@ -163,7 +165,10 @@ class _ProfilePhotoCropperDialogState extends State<ProfilePhotoCropperDialog> {
       // 720x720 canvas gives crystal-clear, razor-sharp clarity while keeping compressed size ~50-70KB
       const double outputSize = 720.0;
       final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, outputSize, outputSize));
+      final canvas = Canvas(
+        recorder,
+        const Rect.fromLTWH(0, 0, outputSize, outputSize),
+      );
 
       final double s = outputSize / _cropSize;
 
@@ -192,8 +197,13 @@ class _ProfilePhotoCropperDialogState extends State<ProfilePhotoCropperDialog> {
       canvas.restore();
 
       final picture = recorder.endRecording();
-      final imgResult = await picture.toImage(outputSize.toInt(), outputSize.toInt());
-      final byteData = await imgResult.toByteData(format: ui.ImageByteFormat.png);
+      final imgResult = await picture.toImage(
+        outputSize.toInt(),
+        outputSize.toInt(),
+      );
+      final byteData = await imgResult.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
 
       if (byteData == null) {
         if (mounted) setState(() => _isExporting = false);
@@ -254,7 +264,11 @@ class _ProfilePhotoCropperDialogState extends State<ProfilePhotoCropperDialog> {
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Colors.white, size: 24),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
                     tooltip: 'Cancel',
                     onPressed: () => Navigator.of(context).pop(null),
                   ),
@@ -273,11 +287,18 @@ class _ProfilePhotoCropperDialogState extends State<ProfilePhotoCropperDialog> {
                     borderRadius: BorderRadius.circular(8),
                     onTap: _pickAnotherPhoto,
                     child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.upload_rounded, color: Colors.white, size: 19),
+                          Icon(
+                            Icons.upload_rounded,
+                            color: Colors.white,
+                            size: 19,
+                          ),
                           SizedBox(width: 6),
                           Text(
                             'Upload',
@@ -299,9 +320,15 @@ class _ProfilePhotoCropperDialogState extends State<ProfilePhotoCropperDialog> {
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  _viewportSize = Size(constraints.maxWidth, constraints.maxHeight);
+                  _viewportSize = Size(
+                    constraints.maxWidth,
+                    constraints.maxHeight,
+                  );
                   _cropSize = math.min(
-                    math.min(constraints.maxWidth * 0.75, constraints.maxHeight * 0.72),
+                    math.min(
+                      constraints.maxWidth * 0.75,
+                      constraints.maxHeight * 0.72,
+                    ),
                     380.0,
                   );
                   _recalculateConstraints();
@@ -317,7 +344,10 @@ class _ProfilePhotoCropperDialogState extends State<ProfilePhotoCropperDialog> {
                         child: CustomPaint(
                           size: _viewportSize,
                           painter: _CircleCropMaskPainter(
-                            cropCenter: Offset(_viewportSize.width / 2, _viewportSize.height / 2),
+                            cropCenter: Offset(
+                              _viewportSize.width / 2,
+                              _viewportSize.height / 2,
+                            ),
                             cropRadius: _cropSize / 2,
                           ),
                         ),
@@ -328,7 +358,9 @@ class _ProfilePhotoCropperDialogState extends State<ProfilePhotoCropperDialog> {
                         right: 24,
                         child: Container(
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1F2C34).withValues(alpha: 0.9),
+                            color: const Color(
+                              0xFF1F2C34,
+                            ).withValues(alpha: 0.9),
                             borderRadius: BorderRadius.circular(24),
                             boxShadow: [
                               BoxShadow(
@@ -342,11 +374,18 @@ class _ProfilePhotoCropperDialogState extends State<ProfilePhotoCropperDialog> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               IconButton(
-                                icon: const Icon(Icons.add, color: Colors.white, size: 20),
+                                icon: const Icon(
+                                  Icons.add,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
                                 tooltip: 'Zoom In',
                                 onPressed: () {
                                   setState(() {
-                                    _scale = (_scale * 1.15).clamp(_minScale, _maxScale);
+                                    _scale = (_scale * 1.15).clamp(
+                                      _minScale,
+                                      _maxScale,
+                                    );
                                     _clampOffset();
                                   });
                                 },
@@ -357,11 +396,18 @@ class _ProfilePhotoCropperDialogState extends State<ProfilePhotoCropperDialog> {
                                 color: Colors.white24,
                               ),
                               IconButton(
-                                icon: const Icon(Icons.remove, color: Colors.white, size: 20),
+                                icon: const Icon(
+                                  Icons.remove,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
                                 tooltip: 'Zoom Out',
                                 onPressed: () {
                                   setState(() {
-                                    _scale = (_scale / 1.15).clamp(_minScale, _maxScale);
+                                    _scale = (_scale / 1.15).clamp(
+                                      _minScale,
+                                      _maxScale,
+                                    );
                                     _clampOffset();
                                   });
                                 },
@@ -428,8 +474,14 @@ class _ProfilePhotoCropperDialogState extends State<ProfilePhotoCropperDialog> {
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  _viewportSize = Size(constraints.maxWidth, constraints.maxHeight);
-                  _cropSize = math.min(constraints.maxWidth * 0.88, constraints.maxHeight * 0.75);
+                  _viewportSize = Size(
+                    constraints.maxWidth,
+                    constraints.maxHeight,
+                  );
+                  _cropSize = math.min(
+                    constraints.maxWidth * 0.88,
+                    constraints.maxHeight * 0.75,
+                  );
                   _recalculateConstraints();
 
                   return Stack(
@@ -443,7 +495,10 @@ class _ProfilePhotoCropperDialogState extends State<ProfilePhotoCropperDialog> {
                         child: CustomPaint(
                           size: _viewportSize,
                           painter: _SquareCropMaskPainter(
-                            cropCenter: Offset(_viewportSize.width / 2, _viewportSize.height / 2),
+                            cropCenter: Offset(
+                              _viewportSize.width / 2,
+                              _viewportSize.height / 2,
+                            ),
                             cropSize: _cropSize,
                           ),
                         ),
@@ -594,11 +649,7 @@ class _ImageCanvasPainter extends CustomPainter {
       ..isAntiAlias = true
       ..filterQuality = FilterQuality.high;
 
-    canvas.drawImage(
-      image,
-      Offset(-image.width / 2, -image.height / 2),
-      paint,
-    );
+    canvas.drawImage(image, Offset(-image.width / 2, -image.height / 2), paint);
 
     canvas.restore();
   }
@@ -614,10 +665,7 @@ class _ImageCanvasPainter extends CustomPainter {
 
 /// Circular mask for Desktop / Laptop (WhatsApp Web style).
 class _CircleCropMaskPainter extends CustomPainter {
-  _CircleCropMaskPainter({
-    required this.cropCenter,
-    required this.cropRadius,
-  });
+  _CircleCropMaskPainter({required this.cropCenter, required this.cropRadius});
 
   final Offset cropCenter;
   final double cropRadius;
@@ -646,23 +694,25 @@ class _CircleCropMaskPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _CircleCropMaskPainter oldDelegate) {
-    return oldDelegate.cropCenter != cropCenter || oldDelegate.cropRadius != cropRadius;
+    return oldDelegate.cropCenter != cropCenter ||
+        oldDelegate.cropRadius != cropRadius;
   }
 }
 
 /// Square 1:1 crop mask with corner brackets & 3x3 grid for Mobile (WhatsApp Mobile style).
 class _SquareCropMaskPainter extends CustomPainter {
-  _SquareCropMaskPainter({
-    required this.cropCenter,
-    required this.cropSize,
-  });
+  _SquareCropMaskPainter({required this.cropCenter, required this.cropSize});
 
   final Offset cropCenter;
   final double cropSize;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final cropRect = Rect.fromCenter(center: cropCenter, width: cropSize, height: cropSize);
+    final cropRect = Rect.fromCenter(
+      center: cropCenter,
+      width: cropSize,
+      height: cropSize,
+    );
 
     // Darkened outer area
     final path = Path()
@@ -722,35 +772,84 @@ class _SquareCropMaskPainter extends CustomPainter {
     const double cl = 28.0;
 
     // Top-left corner
-    canvas.drawLine(Offset(cropRect.left, cropRect.top), Offset(cropRect.left + cl, cropRect.top), cornerPaint);
-    canvas.drawLine(Offset(cropRect.left, cropRect.top), Offset(cropRect.left, cropRect.top + cl), cornerPaint);
+    canvas.drawLine(
+      Offset(cropRect.left, cropRect.top),
+      Offset(cropRect.left + cl, cropRect.top),
+      cornerPaint,
+    );
+    canvas.drawLine(
+      Offset(cropRect.left, cropRect.top),
+      Offset(cropRect.left, cropRect.top + cl),
+      cornerPaint,
+    );
 
     // Top-right corner
-    canvas.drawLine(Offset(cropRect.right, cropRect.top), Offset(cropRect.right - cl, cropRect.top), cornerPaint);
-    canvas.drawLine(Offset(cropRect.right, cropRect.top), Offset(cropRect.right, cropRect.top + cl), cornerPaint);
+    canvas.drawLine(
+      Offset(cropRect.right, cropRect.top),
+      Offset(cropRect.right - cl, cropRect.top),
+      cornerPaint,
+    );
+    canvas.drawLine(
+      Offset(cropRect.right, cropRect.top),
+      Offset(cropRect.right, cropRect.top + cl),
+      cornerPaint,
+    );
 
     // Bottom-left corner
-    canvas.drawLine(Offset(cropRect.left, cropRect.bottom), Offset(cropRect.left + cl, cropRect.bottom), cornerPaint);
-    canvas.drawLine(Offset(cropRect.left, cropRect.bottom), Offset(cropRect.left, cropRect.bottom - cl), cornerPaint);
+    canvas.drawLine(
+      Offset(cropRect.left, cropRect.bottom),
+      Offset(cropRect.left + cl, cropRect.bottom),
+      cornerPaint,
+    );
+    canvas.drawLine(
+      Offset(cropRect.left, cropRect.bottom),
+      Offset(cropRect.left, cropRect.bottom - cl),
+      cornerPaint,
+    );
 
     // Bottom-right corner
-    canvas.drawLine(Offset(cropRect.right, cropRect.bottom), Offset(cropRect.right - cl, cropRect.bottom), cornerPaint);
-    canvas.drawLine(Offset(cropRect.right, cropRect.bottom), Offset(cropRect.right, cropRect.bottom - cl), cornerPaint);
+    canvas.drawLine(
+      Offset(cropRect.right, cropRect.bottom),
+      Offset(cropRect.right - cl, cropRect.bottom),
+      cornerPaint,
+    );
+    canvas.drawLine(
+      Offset(cropRect.right, cropRect.bottom),
+      Offset(cropRect.right, cropRect.bottom - cl),
+      cornerPaint,
+    );
 
     // 4 Edge center markers (tick marks)
     const double ml = 18.0;
     // Top edge
-    canvas.drawLine(Offset(cropCenter.dx - ml / 2, cropRect.top), Offset(cropCenter.dx + ml / 2, cropRect.top), cornerPaint);
+    canvas.drawLine(
+      Offset(cropCenter.dx - ml / 2, cropRect.top),
+      Offset(cropCenter.dx + ml / 2, cropRect.top),
+      cornerPaint,
+    );
     // Bottom edge
-    canvas.drawLine(Offset(cropCenter.dx - ml / 2, cropRect.bottom), Offset(cropCenter.dx + ml / 2, cropRect.bottom), cornerPaint);
+    canvas.drawLine(
+      Offset(cropCenter.dx - ml / 2, cropRect.bottom),
+      Offset(cropCenter.dx + ml / 2, cropRect.bottom),
+      cornerPaint,
+    );
     // Left edge
-    canvas.drawLine(Offset(cropRect.left, cropCenter.dy - ml / 2), Offset(cropRect.left, cropCenter.dy + ml / 2), cornerPaint);
+    canvas.drawLine(
+      Offset(cropRect.left, cropCenter.dy - ml / 2),
+      Offset(cropRect.left, cropCenter.dy + ml / 2),
+      cornerPaint,
+    );
     // Right edge
-    canvas.drawLine(Offset(cropRect.right, cropCenter.dy - ml / 2), Offset(cropRect.right, cropCenter.dy + ml / 2), cornerPaint);
+    canvas.drawLine(
+      Offset(cropRect.right, cropCenter.dy - ml / 2),
+      Offset(cropRect.right, cropCenter.dy + ml / 2),
+      cornerPaint,
+    );
   }
 
   @override
   bool shouldRepaint(covariant _SquareCropMaskPainter oldDelegate) {
-    return oldDelegate.cropCenter != cropCenter || oldDelegate.cropSize != cropSize;
+    return oldDelegate.cropCenter != cropCenter ||
+        oldDelegate.cropSize != cropSize;
   }
 }

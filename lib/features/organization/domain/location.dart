@@ -47,10 +47,23 @@ class Location {
   factory Location.fromMap(Map<String, dynamic> map) {
     return Location(
       id: (map['id'] as num?)?.toInt() ?? 0,
-      organizationId: map['organization_id']?.toString() ?? map['organizationId']?.toString() ?? map['org_id']?.toString() ?? '',
-      organizationName: map['organization_name']?.toString() ?? map['organizationName']?.toString() ?? '',
-      businessUnitName: map['business_unit_name']?.toString() ?? map['businessUnitName']?.toString() ?? '',
-      locationName: map['location_name']?.toString() ?? map['locationName']?.toString() ?? '',
+      organizationId:
+          map['organization_id']?.toString() ??
+          map['organizationId']?.toString() ??
+          map['org_id']?.toString() ??
+          '',
+      organizationName:
+          map['organization_name']?.toString() ??
+          map['organizationName']?.toString() ??
+          '',
+      businessUnitName:
+          map['business_unit_name']?.toString() ??
+          map['businessUnitName']?.toString() ??
+          '',
+      locationName:
+          map['location_name']?.toString() ??
+          map['locationName']?.toString() ??
+          '',
       address: map['address']?.toString() ?? '',
     );
   }

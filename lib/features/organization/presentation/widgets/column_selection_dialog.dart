@@ -31,11 +31,13 @@ class ColumnSelectionDialog extends ConsumerStatefulWidget {
       builder: (context) => ColumnSelectionDialog(
         tableId: tableId,
         allColumns: allColumns,
-        currentVisibleColumns: (currentPreferences != null &&
+        currentVisibleColumns:
+            (currentPreferences != null &&
                 currentPreferences.visibleColumns.isNotEmpty)
             ? currentPreferences.visibleColumns
             : allColumns,
-        currentColumnOrder: (currentPreferences != null &&
+        currentColumnOrder:
+            (currentPreferences != null &&
                 currentPreferences.columnOrder.isNotEmpty)
             ? currentPreferences.columnOrder
             : allColumns,
@@ -48,8 +50,7 @@ class ColumnSelectionDialog extends ConsumerStatefulWidget {
       _ColumnSelectionDialogState();
 }
 
-class _ColumnSelectionDialogState
-    extends ConsumerState<ColumnSelectionDialog> {
+class _ColumnSelectionDialogState extends ConsumerState<ColumnSelectionDialog> {
   late List<String> _orderedColumns;
   late Set<String> _visibleColumns;
 
@@ -107,9 +108,7 @@ class _ColumnSelectionDialogState
     // Ensure at least one column is visible
     if (_visibleColumns.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('At least one column must be visible.'),
-        ),
+        const SnackBar(content: Text('At least one column must be visible.')),
       );
       return;
     }
@@ -215,17 +214,25 @@ class _ColumnSelectionDialogState
                                   ),
                                 ),
                                 IconButton(
-                                  icon: const Icon(Icons.arrow_upward, size: 16),
+                                  icon: const Icon(
+                                    Icons.arrow_upward,
+                                    size: 16,
+                                  ),
                                   padding: EdgeInsets.zero,
                                   constraints: const BoxConstraints(
                                     minWidth: 28,
                                     minHeight: 28,
                                   ),
                                   tooltip: 'Move Up',
-                                  onPressed: index > 0 ? () => _moveUp(index) : null,
+                                  onPressed: index > 0
+                                      ? () => _moveUp(index)
+                                      : null,
                                 ),
                                 IconButton(
-                                  icon: const Icon(Icons.arrow_downward, size: 16),
+                                  icon: const Icon(
+                                    Icons.arrow_downward,
+                                    size: 16,
+                                  ),
                                   padding: EdgeInsets.zero,
                                   constraints: const BoxConstraints(
                                     minWidth: 28,
@@ -239,7 +246,9 @@ class _ColumnSelectionDialogState
                                 ReorderableDragStartListener(
                                   index: index,
                                   child: const Padding(
-                                    padding: EdgeInsets.symmetric(horizontal: 8),
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
                                     child: Icon(
                                       Icons.drag_handle,
                                       color: AppColors.textSecondary,

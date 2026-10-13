@@ -49,9 +49,7 @@ class WelcomeLetterData {
       reportingManagerTitle: emp.reportingManagerTitle.trim().isNotEmpty
           ? emp.reportingManagerTitle.trim()
           : 'Reporting Manager',
-      adminName: emp.adminName.trim().isNotEmpty
-          ? emp.adminName.trim()
-          : '',
+      adminName: emp.adminName.trim().isNotEmpty ? emp.adminName.trim() : '',
       coordinatorName: emp.coordinatorName.trim().isNotEmpty
           ? emp.coordinatorName.trim()
           : '',

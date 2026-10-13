@@ -15,9 +15,37 @@ class ProjectDetailsDialog extends StatelessWidget {
 
   final SiteProject project;
 
-  Future<String> _resolveFileUrl(ProjectDocument doc) async {
+  static String? _formatStorageError(dynamic e) {
+    if (e == null) return null;
+    final str = e.toString().toLowerCase();
+    final message = (e is FirebaseException ? e.message?.toLowerCase() : '') ?? '';
+
+    if (str.contains('402') ||
+        str.contains('payment required') ||
+        message.contains('402') ||
+        message.contains('payment required') ||
+        str.contains('delinquent')) {
+      return 'Firebase Cloud Storage requires an active Blaze plan or billing account (HTTP 402 Payment Required). Please check your Firebase Console.';
+    }
+
+    if (str.contains('quota-exceeded') ||
+        (e is FirebaseException && e.code == 'quota-exceeded')) {
+      return 'Firebase Cloud Storage quota exceeded. Please check your storage quota in Firebase Console.';
+    }
+
+    if (str.contains('unauthorized') ||
+        str.contains('permission-denied') ||
+        (e is FirebaseException &&
+            (e.code == 'permission-denied' || e.code == 'unauthenticated'))) {
+      return 'Storage permission denied. Please verify your Firebase Storage security rules.';
+    }
+
+    return null;
+  }
+
+  Future<({String url, String? error})> _resolveFileUrl(ProjectDocument doc) async {
     String url = doc.downloadUrl.trim();
-    if (url.isNotEmpty) return url;
+    if (url.isNotEmpty) return (url: url, error: null);
 
     try {
       final storage = FirebaseStorage.instance;
@@ -65,8 +93,11 @@ class ProjectDetailsDialog extends StatelessWidget {
       for (final path in candidates) {
         try {
           final resolved = await storage.ref().child(path).getDownloadURL();
-          if (resolved.isNotEmpty) return resolved;
-        } catch (_) {}
+          if (resolved.isNotEmpty) return (url: resolved, error: null);
+        } catch (e) {
+          final fatal = _formatStorageError(e);
+          if (fatal != null) return (url: '', error: fatal);
+        }
       }
 
       final folderCandidates = <String>[
@@ -93,23 +124,38 @@ class ProjectDetailsDialog extends StatelessWidget {
             if (item.name.toLowerCase().contains(cleanFileName.toLowerCase()) ||
                 item.name.toLowerCase().contains(rawFileName.toLowerCase())) {
               final resolved = await item.getDownloadURL();
-              if (resolved.isNotEmpty) return resolved;
+              if (resolved.isNotEmpty) return (url: resolved, error: null);
             }
           }
-        } catch (_) {}
+        } catch (e) {
+          final fatal = _formatStorageError(e);
+          if (fatal != null) return (url: '', error: fatal);
+        }
       }
-    } catch (_) {}
+    } on FirebaseException catch (e) {
+      debugPrint('[FirebaseStorage] Error: ${e.code} - ${e.message}');
+      final msg = _formatStorageError(e) ?? (e.message ?? e.code);
+      return (url: '', error: msg);
+    } catch (e) {
+      debugPrint('[FirebaseStorage] Unexpected error: $e');
+      final msg = _formatStorageError(e) ?? e.toString();
+      return (url: '', error: msg);
+    }
 
-    return '';
+    return (url: '', error: null);
   }
 
   Future<void> _handleView(BuildContext context, ProjectDocument doc) async {
-    final url = await _resolveFileUrl(doc);
+    final result = await _resolveFileUrl(doc);
+    final url = result.url;
     if (url.isEmpty) {
       if (context.mounted) {
+        final msg = (result.error != null && result.error!.isNotEmpty)
+            ? result.error!
+            : 'Document link not available for ${doc.name}';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Document link not available for ${doc.name}'),
+            content: Text(msg),
             backgroundColor: const Color(0xFFDC2626),
           ),
         );
@@ -138,12 +184,16 @@ class ProjectDetailsDialog extends StatelessWidget {
   }
 
   Future<void> _handleDownload(BuildContext context, ProjectDocument doc) async {
-    final url = await _resolveFileUrl(doc);
+    final result = await _resolveFileUrl(doc);
+    final url = result.url;
     if (url.isEmpty) {
       if (context.mounted) {
+        final msg = (result.error != null && result.error!.isNotEmpty)
+            ? result.error!
+            : 'Document link not available for ${doc.name}';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Document link not available for ${doc.name}'),
+            content: Text(msg),
             backgroundColor: const Color(0xFFDC2626),
           ),
         );

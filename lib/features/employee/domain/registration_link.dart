@@ -52,7 +52,6 @@ class RegistrationLink {
     return '/#/employee/register/$linkId';
   }
 
-
   String buildFullUrl({String? customBaseUrl}) {
     if (customBaseUrl != null && customBaseUrl.trim().isNotEmpty) {
       final base = customBaseUrl.trim().replaceAll(RegExp(r'/$'), '');
@@ -103,17 +102,37 @@ class RegistrationLink {
       linkStatus: map['link_status']?.toString() ?? 'Pending',
       employeeName: map['employee_name']?.toString() ?? '',
       employeeId: map['employee_id']?.toString() ?? '',
-      organizationId: map['organization_id']?.toString() ?? map['organizationId']?.toString() ?? map['org_id']?.toString() ?? '',
-      organizationName: map['organization_name']?.toString() ?? map['organizationName']?.toString() ?? '',
+      organizationId:
+          map['organization_id']?.toString() ??
+          map['organizationId']?.toString() ??
+          map['org_id']?.toString() ??
+          '',
+      organizationName:
+          map['organization_name']?.toString() ??
+          map['organizationName']?.toString() ??
+          '',
       department: map['department']?.toString() ?? '',
-      designation: map['designation']?.toString() ?? map['designation_name']?.toString() ?? '',
+      designation:
+          map['designation']?.toString() ??
+          map['designation_name']?.toString() ??
+          '',
       submittedDate: map['submitted_date']?.toString() ?? '',
       submittedBy: map['submitted_by']?.toString() ?? '',
-      isExperienceMandatory: map['is_experience_mandatory'] as bool? ??
+      isExperienceMandatory:
+          map['is_experience_mandatory'] as bool? ??
           (map['isExperienceMandatory'] as bool? ?? false),
-      referredBy: map['referred_by']?.toString() ?? map['referredByName']?.toString() ?? '',
-      referredByMobile: map['referred_by_mobile']?.toString() ?? map['referredByMobile']?.toString() ?? '',
-      referredByEmployeeId: map['referred_by_employee_id']?.toString() ?? map['referredByEmployeeId']?.toString() ?? '',
+      referredBy:
+          map['referred_by']?.toString() ??
+          map['referredByName']?.toString() ??
+          '',
+      referredByMobile:
+          map['referred_by_mobile']?.toString() ??
+          map['referredByMobile']?.toString() ??
+          '',
+      referredByEmployeeId:
+          map['referred_by_employee_id']?.toString() ??
+          map['referredByEmployeeId']?.toString() ??
+          '',
     );
   }
 
@@ -152,7 +171,8 @@ class RegistrationLink {
       designation: designation ?? this.designation,
       submittedDate: submittedDate ?? this.submittedDate,
       submittedBy: submittedBy ?? this.submittedBy,
-      isExperienceMandatory: isExperienceMandatory ?? this.isExperienceMandatory,
+      isExperienceMandatory:
+          isExperienceMandatory ?? this.isExperienceMandatory,
       referredBy: referredBy ?? this.referredBy,
       referredByMobile: referredByMobile ?? this.referredByMobile,
       referredByEmployeeId: referredByEmployeeId ?? this.referredByEmployeeId,
@@ -160,22 +180,16 @@ class RegistrationLink {
   }
 }
 
-enum RegistrationStatus {
-  pending,
-  submitted,
-  accepted,
-  rejected,
-  registered,
-}
+enum RegistrationStatus { pending, submitted, accepted, rejected, registered }
 
 extension RegistrationStatusX on RegistrationStatus {
   String get value => switch (this) {
-        RegistrationStatus.pending => 'Pending',
-        RegistrationStatus.submitted => 'Submitted',
-        RegistrationStatus.accepted => 'Accepted',
-        RegistrationStatus.rejected => 'Rejected',
-        RegistrationStatus.registered => 'Registered',
-      };
+    RegistrationStatus.pending => 'Pending',
+    RegistrationStatus.submitted => 'Submitted',
+    RegistrationStatus.accepted => 'Accepted',
+    RegistrationStatus.rejected => 'Rejected',
+    RegistrationStatus.registered => 'Registered',
+  };
 
   static RegistrationStatus fromString(String status) {
     return switch (status.trim().toLowerCase()) {
@@ -187,4 +201,3 @@ extension RegistrationStatusX on RegistrationStatus {
     };
   }
 }
-

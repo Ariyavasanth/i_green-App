@@ -35,7 +35,11 @@ class DepartmentDetailsDialog extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildDetailItem('Organization Name', department.organizationName, isHeader: true),
+              _buildDetailItem(
+                'Organization Name',
+                department.organizationName,
+                isHeader: true,
+              ),
               const SizedBox(height: 12),
               _buildDetailItem('Department Name', department.departmentName),
               const Divider(height: 20),

@@ -57,7 +57,9 @@ class _RequestCorrectionDialogState
 
   String _buildEditUrl(String rawToken) {
     final base = _getBaseOrigin();
-    final linkId = widget.link.linkId.isNotEmpty ? widget.link.linkId : widget.candidateId;
+    final linkId = widget.link.linkId.isNotEmpty
+        ? widget.link.linkId
+        : widget.candidateId;
     final prefix = base.isNotEmpty ? '$base/' : '';
     return '$prefix#/employee/register/$linkId?correctionToken=$rawToken';
   }
@@ -65,7 +67,10 @@ class _RequestCorrectionDialogState
   Future<String?> _generateCorrectionRequest() async {
     final remarks = _remarksController.text.trim();
     if (remarks.isEmpty) {
-      setState(() => _errorMessage = 'Please enter a reason or remarks for correction.');
+      setState(
+        () =>
+            _errorMessage = 'Please enter a reason or remarks for correction.',
+      );
       return null;
     }
 
@@ -76,12 +81,16 @@ class _RequestCorrectionDialogState
 
     try {
       final currentEmp = ref.read(currentEmployeeProvider);
-      final adminName = currentEmp?.fullName.isNotEmpty == true ? currentEmp!.fullName : 'HR Admin';
+      final adminName = currentEmp?.fullName.isNotEmpty == true
+          ? currentEmp!.fullName
+          : 'HR Admin';
       final repo = ref.read(employeeRepositoryProvider);
 
       final candId = widget.candidateId.isNotEmpty
           ? widget.candidateId
-          : (widget.link.employeeId.isNotEmpty ? widget.link.employeeId : 'CAN-${widget.link.id}');
+          : (widget.link.employeeId.isNotEmpty
+                ? widget.link.employeeId
+                : 'CAN-${widget.link.id}');
 
       final rawToken = await repo.createCorrectionRequest(
         candidateId: candId,
@@ -137,9 +146,13 @@ class _RequestCorrectionDialogState
     final editUrl = _buildEditUrl(rawToken);
     await Clipboard.setData(ClipboardData(text: editUrl));
 
-    final name = widget.candidateName.isNotEmpty ? widget.candidateName : 'Candidate';
+    final name = widget.candidateName.isNotEmpty
+        ? widget.candidateName
+        : 'Candidate';
     final remarks = _remarksController.text.trim();
-    final subject = Uri.encodeComponent('Action Required: Correction Requested for your Registration ($name)');
+    final subject = Uri.encodeComponent(
+      'Action Required: Correction Requested for your Registration ($name)',
+    );
     final body = Uri.encodeComponent(
       'Dear $name,\n\n'
       'The HR team has reviewed your registration details and requested updates before approval.\n\n'
@@ -169,7 +182,9 @@ class _RequestCorrectionDialogState
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Correction request created & link copied to clipboard!'),
+          content: Text(
+            'Correction request created & link copied to clipboard!',
+          ),
           behavior: SnackBarBehavior.floating,
           backgroundColor: Color(0xFF16A34A),
         ),
@@ -235,9 +250,13 @@ class _RequestCorrectionDialogState
             const SizedBox(height: 16),
 
             // Candidate info subtitle
-            if (widget.candidateName.isNotEmpty || widget.candidateId.isNotEmpty)
+            if (widget.candidateName.isNotEmpty ||
+                widget.candidateId.isNotEmpty)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 margin: const EdgeInsets.only(bottom: 14),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF8FAFC),
@@ -246,10 +265,16 @@ class _RequestCorrectionDialogState
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.person_outline, size: 16, color: AppColors.textSecondary),
+                    const Icon(
+                      Icons.person_outline,
+                      size: 16,
+                      color: AppColors.textSecondary,
+                    ),
                     const SizedBox(width: 6),
                     Text(
-                      widget.candidateName.isNotEmpty ? widget.candidateName : 'Candidate',
+                      widget.candidateName.isNotEmpty
+                          ? widget.candidateName
+                          : 'Candidate',
                       style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -284,8 +309,12 @@ class _RequestCorrectionDialogState
               controller: _remarksController,
               maxLines: 4,
               decoration: InputDecoration(
-                hintText: 'e.g. Please correct the district in your permanent address and re-upload the PAN card document.',
-                hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                hintText:
+                    'e.g. Please correct the district in your permanent address and re-upload the PAN card document.',
+                hintStyle: const TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF94A3B8),
+                ),
                 filled: true,
                 fillColor: const Color(0xFFF8FAFC),
                 border: OutlineInputBorder(
@@ -298,7 +327,10 @@ class _RequestCorrectionDialogState
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppColors.active, width: 1.5),
+                  borderSide: const BorderSide(
+                    color: AppColors.active,
+                    width: 1.5,
+                  ),
                 ),
               ),
             ),
@@ -306,7 +338,11 @@ class _RequestCorrectionDialogState
               const SizedBox(height: 6),
               Text(
                 _errorMessage!,
-                style: const TextStyle(fontSize: 12, color: Colors.red, fontWeight: FontWeight.w500),
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.red,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ],
             const SizedBox(height: 14),
@@ -350,10 +386,15 @@ class _RequestCorrectionDialogState
             Row(
               children: [
                 OutlinedButton(
-                  onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(),
+                  onPressed: _isSubmitting
+                      ? null
+                      : () => Navigator.of(context).pop(),
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: Color(0xFFCBD5E1)),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -372,12 +413,19 @@ class _RequestCorrectionDialogState
                   onPressed: _isSubmitting ? null : _handleCopyLink,
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: Color(0xFFCBD5E1)),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  icon: const Icon(Icons.copy_rounded, size: 15, color: AppColors.textPrimary),
+                  icon: const Icon(
+                    Icons.copy_rounded,
+                    size: 15,
+                    color: AppColors.textPrimary,
+                  ),
                   label: const Text(
                     'Copy Edit Link',
                     style: TextStyle(
@@ -393,7 +441,10 @@ class _RequestCorrectionDialogState
                   style: FilledButton.styleFrom(
                     backgroundColor: const Color(0xFF414A51),
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -402,7 +453,10 @@ class _RequestCorrectionDialogState
                       ? const SizedBox(
                           width: 14,
                           height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         )
                       : const Icon(Icons.send_rounded, size: 15),
                   label: Text(
