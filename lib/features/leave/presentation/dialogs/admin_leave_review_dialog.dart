@@ -79,6 +79,36 @@ class _AdminLeaveReviewDialogState extends ConsumerState<AdminLeaveReviewDialog>
   void _initCustomStatusIfNeeded(double availLeaves, String policy, double reqDays) {
     if (_customStatusInitialized) return;
     _customStatusInitialized = true;
+
+    if (widget.request.lopDates.isNotEmpty || widget.request.approvedDates.isNotEmpty) {
+      final allDates = _datesBetween(widget.request.fromDate, widget.request.toDate);
+      final map = <String, String>{};
+      final approvedSet = widget.request.approvedDates.map((d) => d.trim()).toSet();
+      final lopSet = widget.request.lopDates.map((d) => d.trim()).toSet();
+
+      for (final d in allDates) {
+        final trimmed = d.trim();
+        if (lopSet.contains(trimmed)) {
+          map[trimmed] = 'lop';
+        } else if (approvedSet.contains(trimmed)) {
+          map[trimmed] = 'paid';
+        } else {
+          map[trimmed] = 'paid';
+        }
+      }
+
+      for (final d in widget.request.approvedDates) {
+        map[d.trim()] = 'paid';
+      }
+      for (final d in widget.request.lopDates) {
+        map[d.trim()] = 'lop';
+      }
+
+      _customDayStatus = map;
+      _selectedMode = 'custom_split';
+      return;
+    }
+
     _resetCustomStatusToCalculated(availLeaves, policy, reqDays);
   }
 
