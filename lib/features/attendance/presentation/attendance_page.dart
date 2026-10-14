@@ -1731,6 +1731,42 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     );
   }
 
+  Widget _buildPaidLopBadge(LeaveRequest req) {
+    num paid = 0;
+    num lop = 0;
+
+    if (req.approvedDates.isNotEmpty || req.lopDates.isNotEmpty) {
+      paid = req.approvedDates.length;
+      lop = req.lopDates.length;
+    } else if (req.paidDays > 0 || req.lopDays > 0) {
+      paid = req.paidDays % 1 == 0 ? req.paidDays.toInt() : req.paidDays;
+      lop = req.lopDays % 1 == 0 ? req.lopDays.toInt() : req.lopDays;
+    } else if (req.calculatedPaidDays > 0 || req.calculatedLopDays > 0) {
+      paid = req.calculatedPaidDays % 1 == 0 ? req.calculatedPaidDays.toInt() : req.calculatedPaidDays;
+      lop = req.calculatedLopDays % 1 == 0 ? req.calculatedLopDays.toInt() : req.calculatedLopDays;
+    } else {
+      final total = req.requestedDays > 0 ? req.requestedDays : req.numDays;
+      paid = total % 1 == 0 ? total.toInt() : total;
+      lop = 0;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: const Color(0xFF9CC70A).withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        '$paid Paid • $lop LOP',
+        style: const TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 11,
+          color: Color(0xFF2E7D32),
+        ),
+      ),
+    );
+  }
+
   Widget _buildLeaveActivityCard(LeaveRequest req, Employee currentEmp) {
     final statusColor = _getStatusColor(req.status);
     final isPermission = req.leaveType.toLowerCase().startsWith('permission');
@@ -1839,6 +1875,10 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                 ),
               ),
               const Spacer(),
+              if (req.status == 'Approved') ...[
+                _buildPaidLopBadge(req),
+                const SizedBox(width: 6),
+              ],
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(
