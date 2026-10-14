@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -217,6 +219,204 @@ class OrganizationDetailsDialog extends StatelessWidget {
     }
   }
 
+  bool _isImageDoc(OrgDocument doc, String url) {
+    final lowerName = doc.fileName.toLowerCase();
+    final lowerUrl = url.toLowerCase();
+    return lowerName.endsWith('.png') ||
+        lowerName.endsWith('.jpg') ||
+        lowerName.endsWith('.jpeg') ||
+        lowerName.endsWith('.webp') ||
+        lowerName.endsWith('.gif') ||
+        lowerUrl.contains('.png') ||
+        lowerUrl.contains('.jpg') ||
+        lowerUrl.contains('.jpeg') ||
+        lowerUrl.contains('.webp') ||
+        lowerUrl.startsWith('data:image/');
+  }
+
+  void _showDocumentPreview(BuildContext context, OrgDocument doc, String url) {
+    final isImg = _isImageDoc(doc, url);
+    final isDataUri = url.startsWith('data:');
+
+    Uint8List? imageBytes;
+    if (isImg && isDataUri) {
+      try {
+        final commaIdx = url.indexOf(',');
+        final base64Str = commaIdx != -1 ? url.substring(commaIdx + 1) : url;
+        imageBytes = base64Decode(base64Str);
+      } catch (e) {
+        debugPrint('Failed to decode preview image bytes: $e');
+      }
+    }
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 700, maxHeight: 750),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF9CC70A).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        isImg ? Icons.image_outlined : Icons.description_outlined,
+                        color: const Color(0xFF9CC70A),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            doc.title,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1E293B),
+                            ),
+                          ),
+                          Text(
+                            doc.fileName,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF64748B),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 20),
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Preview Body
+              Flexible(
+                child: Container(
+                  color: const Color(0xFFF8FAFC),
+                  padding: const EdgeInsets.all(12),
+                  child: Center(
+                    child: isImg
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: InteractiveViewer(
+                              maxScale: 4.0,
+                              minScale: 0.5,
+                              child: imageBytes != null
+                                  ? Image.memory(
+                                      imageBytes,
+                                      fit: BoxFit.contain,
+                                    )
+                                  : (isDataUri
+                                      ? const Icon(Icons.broken_image, size: 64, color: Colors.grey)
+                                      : Image.network(
+                                          url,
+                                          fit: BoxFit.contain,
+                                          errorBuilder: (_, __, ___) => const Icon(
+                                            Icons.broken_image,
+                                            size: 64,
+                                            color: Colors.grey,
+                                          ),
+                                          loadingBuilder: (context, child, progress) {
+                                            if (progress == null) return child;
+                                            return const Center(
+                                              child: CircularProgressIndicator(),
+                                            );
+                                          },
+                                        )),
+                            ),
+                          )
+                        : Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.picture_as_pdf_outlined,
+                                size: 64,
+                                color: Color(0xFFE11D48),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                doc.fileName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                  color: Color(0xFF1E293B),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              const Text(
+                                'Tap Download below to save and view this document on your device.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF64748B),
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                  ),
+                ),
+              ),
+
+              // Footer Actions
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      child: const Text('Close'),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF9CC70A),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                      ),
+                      icon: const Icon(Icons.download_rounded, size: 18),
+                      label: const Text('Download'),
+                      onPressed: () {
+                        Navigator.of(ctx).pop();
+                        _handleDownload(context, doc);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _handleView(BuildContext context, OrgDocument doc) async {
     final result = await _resolveFileUrl(doc);
     final url = result.url;
@@ -236,12 +436,16 @@ class OrganizationDetailsDialog extends StatelessWidget {
     }
 
     if (context.mounted) {
-      await _openDocUrl(
-        context,
-        url,
-        fileName: doc.fileName.isNotEmpty ? doc.fileName : '${doc.title}.pdf',
-        docTitle: doc.title,
-      );
+      if (_isImageDoc(doc, url)) {
+        _showDocumentPreview(context, doc, url);
+      } else {
+        await _openDocUrl(
+          context,
+          url,
+          fileName: doc.fileName.isNotEmpty ? doc.fileName : '${doc.title}.pdf',
+          docTitle: doc.title,
+        );
+      }
     }
   }
 
