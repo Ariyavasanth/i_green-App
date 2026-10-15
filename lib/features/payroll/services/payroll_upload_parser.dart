@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 
 import '../../employee/domain/employee.dart';
+import '../domain/payroll.dart';
 import '../domain/payroll_input_override.dart';
 
 class PayrollUploadParser {
@@ -51,6 +52,7 @@ class PayrollUploadParser {
     required Uint8List bytes,
     required String fileName,
     required List<Employee> allowedEmployees,
+    List<PayrollRecord> currentRecords = const [],
   }) async {
     final lowerFileName = fileName.toLowerCase();
     List<List<String>> rawTable = [];
@@ -240,11 +242,95 @@ class PayrollUploadParser {
           rowIndex: r + 1,
           employeeIdRaw: empIdRaw,
           employeeNameRaw: nameRaw.isNotEmpty ? nameRaw : matchedEmp.fullName,
+          email: matchedEmp.emailAddress,
+          contactNumber: matchedEmp.phoneNumber,
+          department: matchedEmp.department,
+          designation: matchedEmp.designation,
+          joiningDate: matchedEmp.joiningDate,
           isValid: false,
           errorMessage: parseError,
+          hasChanges: false,
+          changes: const [],
         ));
         continue;
       }
+
+      // Find current existing record or master fallback to detect actual changes
+      final existingRecord = currentRecords.where((rec) => rec.employeeId == matchedEmp.id).firstOrNull;
+
+      double getCurrentVal(String key) {
+        if (existingRecord != null) {
+          switch (key) {
+            case 'basic': return existingRecord.basicPay;
+            case 'hra': return existingRecord.hra;
+            case 'education_allowance': return existingRecord.educationAllowance;
+            case 'special_allowance': return existingRecord.specialAllowance;
+            case 'travel_allowance': return existingRecord.travelAllowance;
+            case 'other_allowance': return existingRecord.otherAllowance;
+            case 'incentive': return existingRecord.incentive;
+            case 'others_earning': return existingRecord.othersEarning;
+            case 'bonus': return existingRecord.bonus;
+            case 'ot': return existingRecord.ot;
+            case 'pf': return existingRecord.pf;
+            case 'tax': return existingRecord.tax;
+            case 'esi': return existingRecord.esi;
+            case 'salary_advance': return existingRecord.salaryAdvance;
+            case 'others_deduction': return existingRecord.othersDeduction;
+            case 'staff_welfare': return existingRecord.staffWelfareContribution;
+          }
+        }
+        switch (key) {
+          case 'basic': return (matchedEmp.salaryBasic as num?)?.toDouble() ?? 0.0;
+          case 'hra': return (matchedEmp.salaryHra as num?)?.toDouble() ?? 0.0;
+          case 'education_allowance': return (matchedEmp.salaryEducationAllowance as num?)?.toDouble() ?? 0.0;
+          case 'special_allowance': return (matchedEmp.salarySpecialAllowance as num?)?.toDouble() ?? 0.0;
+          case 'travel_allowance': return (matchedEmp.salaryTravelAllowance as num?)?.toDouble() ?? 0.0;
+          case 'other_allowance': return (matchedEmp.salaryOtherAllowance as num?)?.toDouble() ?? 0.0;
+          case 'incentive': return 0.0;
+          case 'others_earning': return 0.0;
+          case 'bonus': return 0.0;
+          case 'ot': return 0.0;
+          case 'pf': return (matchedEmp.salaryPf as num?)?.toDouble() ?? 0.0;
+          case 'tax': return (matchedEmp.salaryTax as num?)?.toDouble() ?? 0.0;
+          case 'esi': return (matchedEmp.salaryEsi as num?)?.toDouble() ?? 0.0;
+          case 'salary_advance': return 0.0;
+          case 'others_deduction': return 0.0;
+          case 'staff_welfare': return 0.0;
+        }
+        return 0.0;
+      }
+
+      final changes = <PayrollFieldChange>[];
+      void checkChange(String key, String label, double? newVal) {
+        if (newVal != null) {
+          final cur = getCurrentVal(key);
+          if ((newVal - cur).abs() > 0.009) {
+            changes.add(PayrollFieldChange(
+              key: key,
+              label: label,
+              oldValue: cur,
+              newValue: newVal,
+            ));
+          }
+        }
+      }
+
+      checkChange('basic', 'Basic', basic);
+      checkChange('hra', 'HRA', hra);
+      checkChange('education_allowance', 'Education Allowance', edu);
+      checkChange('special_allowance', 'Special Allowance', special);
+      checkChange('travel_allowance', 'Travel Allowance', travel);
+      checkChange('other_allowance', 'Other Allowance', otherAllow);
+      checkChange('incentive', 'Incentive', incentive);
+      checkChange('others_earning', 'Others Earning', othersEarning);
+      checkChange('bonus', 'Bonus', bonus);
+      checkChange('ot', 'OT', ot);
+      checkChange('pf', 'PF', pf);
+      checkChange('tax', 'TDS', tax);
+      checkChange('esi', 'ESI', esi);
+      checkChange('salary_advance', 'Salary Advance', advance);
+      checkChange('others_deduction', 'Others Deduction', othersDed);
+      checkChange('staff_welfare', 'Staff Welfare', welfare);
 
       final override = PayrollInputOverride(
         employeeId: matchedEmp.id.toString(),
@@ -271,8 +357,15 @@ class PayrollUploadParser {
         rowIndex: r + 1,
         employeeIdRaw: empIdRaw,
         employeeNameRaw: matchedEmp.fullName,
+        email: matchedEmp.emailAddress,
+        contactNumber: matchedEmp.phoneNumber,
+        department: matchedEmp.department,
+        designation: matchedEmp.designation,
+        joiningDate: matchedEmp.joiningDate,
         isValid: true,
         overrideData: override,
+        hasChanges: changes.isNotEmpty,
+        changes: changes,
       ));
     }
 

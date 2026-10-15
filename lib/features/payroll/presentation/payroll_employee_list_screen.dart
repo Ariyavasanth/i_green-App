@@ -12,7 +12,6 @@ import '../../attendance/providers/attendance_providers.dart';
 import '../../employee/domain/employee.dart';
 import '../../employee/providers/employee_providers.dart';
 import '../../incentive/domain/incentive_payout_ledger.dart';
-import '../../incentive/domain/incentive_settings.dart';
 import '../../incentive/providers/incentive_providers.dart';
 import '../../leave/providers/leave_providers.dart';
 import '../../loan/providers/loan_providers.dart';
@@ -21,8 +20,6 @@ import '../../organization/domain/department.dart';
 import '../../organization/domain/organization.dart';
 
 import '../../organization/providers/organization_providers.dart';
-import '../../permission/domain/permission_enums.dart';
-import '../../permission/domain/permission_request.dart';
 import '../../permission/providers/permission_providers.dart';
 import '../domain/payroll.dart';
 import '../domain/payroll_input_override.dart';
@@ -120,10 +117,13 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
     });
   }
 
-  Future<void> _handlePickAndValidateUpload(
-    BuildContext context,
-    List<Employee> matchingEmployees,
-  ) async {
+  Future<void> _handlePickAndValidateUpload({
+    required BuildContext context,
+    required List<Employee> matchingEmployees,
+    required List<PayrollRecord> records,
+    required String month,
+    required PayrollSettings settings,
+  }) async {
     if (matchingEmployees.isEmpty) return;
 
     try {
@@ -147,7 +147,7 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
 
       if (bytes == null || bytes.isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(this.context).showSnackBar(
             const SnackBar(
               content: Text('Could not read file data. Please select a valid file.'),
               backgroundColor: Colors.red,
@@ -158,24 +158,25 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
         return;
       }
 
-      // Parse and validate against currently filtered employees
+      // Parse and validate against currently filtered employees and existing records
       final report = await PayrollUploadParser.parseAndValidate(
         bytes: bytes,
         fileName: file.name,
         allowedEmployees: matchingEmployees,
+        currentRecords: records,
       );
 
       if (!mounted) return;
 
-      // Show Preview & Validation Dialog
+      // Show Preview & Validation Dialog matching reference template
       _showUploadPreviewDialog(
-        context: context,
+        context: this.context,
         report: report,
-        onApply: (validOverrides) {
+        onApply: (changedRows) {
           setState(() {
             _appliedOverrides.clear();
-            for (final row in validOverrides) {
-              if (row.overrideData != null) {
+            for (final row in changedRows) {
+              if (row.overrideData != null && row.hasChanges) {
                 _appliedOverrides[row.overrideData!.employeeId] = row.overrideData!;
               }
             }
@@ -183,20 +184,22 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
             ref.read(payrollInputOverridesProvider.notifier).state = Map.from(_appliedOverrides);
           });
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Payroll input uploaded successfully for ${validOverrides.length} employees.',
+          if (mounted) {
+            ScaffoldMessenger.of(this.context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Payroll overrides applied successfully for ${_appliedOverrides.length} employees with detected changes.',
+                ),
+                backgroundColor: const Color(0xFF16A34A),
+                behavior: SnackBarBehavior.floating,
               ),
-              backgroundColor: const Color(0xFF16A34A),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+            );
+          }
         },
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(this.context).showSnackBar(
           SnackBar(
             content: Text('Error uploading file: $e'),
             backgroundColor: Colors.red,
@@ -379,253 +382,615 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
   void _showUploadPreviewDialog({
     required BuildContext context,
     required PayrollUploadValidationReport report,
-    required void Function(List<UploadRowValidation> validRows) onApply,
+    required void Function(List<UploadRowValidation> changedRows) onApply,
   }) {
+    final allRows = report.allRows;
+    final horizontalScrollCtrl = ScrollController();
+    final verticalScrollCtrl = ScrollController();
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => Dialog(
         backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: const Row(
-          children: [
-            Icon(Icons.file_present_rounded, color: Color(0xFF414A51), size: 24),
-            SizedBox(width: 8),
-            Text(
-              'Upload Validation Preview',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-            ),
-          ],
-        ),
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 540, maxHeight: 500),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'File: ${report.fileName}',
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary),
-                ),
-                const SizedBox(height: 12),
-                Row(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        clipBehavior: Clip.antiAlias,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 1120,
+            maxHeight: MediaQuery.of(context).size.height * 0.85,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 1. Header matching Reference Template
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                child: Row(
                   children: [
-                    _buildStatChip('Total Rows', report.totalRows.toString(), Colors.blueGrey[800]!, const Color(0xFFF1F5F9)),
-                    const SizedBox(width: 8),
-                    _buildStatChip('Valid', report.validRows.length.toString(), Colors.green[700]!, const Color(0xFFE8F5E9)),
-                    const SizedBox(width: 8),
-                    _buildStatChip('Invalid', report.invalidRows.length.toString(), Colors.red[700]!, const Color(0xFFFFEBEE)),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.table_chart_rounded,
+                        color: Color(0xFF2563EB),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Preview Payroll Upload (${report.totalRows} Records)',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          const Text(
+                            'Payroll details extracted from the uploaded Excel file.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Summary Badges matching Top Right of Template
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFBFDBFE)),
+                      ),
+                      child: Text(
+                        'Total: ${report.totalRows}',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1D4ED8)),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFA7F3D0)),
+                      ),
+                      child: Text(
+                        'Changed: ${report.changedCount}',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF047857)),
+                      ),
+                    ),
+                    if (report.hasErrors) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF1F2),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFFECDD3)),
+                        ),
+                        child: Text(
+                          'Invalid: ${report.invalidRows.length}',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFBE123C)),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
-                const SizedBox(height: 16),
+              ),
+              const Divider(height: 1, color: Color(0xFFE2E8F0)),
 
-                // 1. Detected Editable Columns
-                if (report.detectedEditableColumns.isNotEmpty) ...[
-                  Row(
-                    children: [
-                      const Icon(Icons.check_circle_outline, size: 16, color: Color(0xFF16A34A)),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Editable fields detected (${report.detectedEditableColumns.length}):',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF166534)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF0FDF4),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFF86EFAC)),
-                    ),
-                    child: Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: report.detectedEditableColumns
-                          .map((col) => Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(color: const Color(0xFF86EFAC)),
-                                ),
-                                child: Text(
-                                  col,
-                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF15803D)),
-                                ),
-                              ))
-                          .toList(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-
-                // 2. Detected System-Controlled Columns
-                if (report.detectedSystemColumns.isNotEmpty) ...[
-                  Row(
-                    children: [
-                      const Icon(Icons.info_outline, size: 16, color: Color(0xFF414A51)),
-                      const SizedBox(width: 6),
-                      Text(
-                        'System-controlled fields are ignored (${report.detectedSystemColumns.length}):',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF414A51)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.divider),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 4,
-                          children: report.detectedSystemColumns
-                              .map((col) => Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(4),
-                                      border: Border.all(color: AppColors.divider),
+              // 2. Exact Table Template (Horizontal and Vertical scrollable)
+              Expanded(
+                child: Scrollbar(
+                  controller: verticalScrollCtrl,
+                  thumbVisibility: true,
+                  child: SingleChildScrollView(
+                    controller: verticalScrollCtrl,
+                    scrollDirection: Axis.vertical,
+                    child: Scrollbar(
+                      controller: horizontalScrollCtrl,
+                      thumbVisibility: true,
+                      child: SingleChildScrollView(
+                        controller: horizontalScrollCtrl,
+                        scrollDirection: Axis.horizontal,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(minWidth: 1270),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Table Header matching reference template
+                              Container(
+                                color: const Color(0xFFF8FAFC),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                child: const Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 55,
+                                      child: Center(
+                                        child: Text(
+                                          'S.No.',
+                                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF475569)),
+                                        ),
+                                      ),
                                     ),
+                                    SizedBox(
+                                      width: 145,
+                                      child: Padding(
+                                        padding: EdgeInsets.symmetric(horizontal: 8),
+                                        child: Text(
+                                          'Full Name',
+                                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF475569)),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: 110,
+                                      child: Padding(
+                                        padding: EdgeInsets.symmetric(horizontal: 8),
+                                        child: Text(
+                                          'Username',
+                                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF475569)),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: 175,
+                                      child: Padding(
+                                        padding: EdgeInsets.symmetric(horizontal: 8),
+                                        child: Text(
+                                          'Email',
+                                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF475569)),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: 125,
+                                      child: Padding(
+                                        padding: EdgeInsets.symmetric(horizontal: 8),
+                                        child: Text(
+                                          'Contact Number',
+                                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF475569)),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: 100,
+                                      child: Padding(
+                                        padding: EdgeInsets.symmetric(horizontal: 8),
+                                        child: Text(
+                                          'Role',
+                                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF475569)),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: 120,
+                                      child: Padding(
+                                        padding: EdgeInsets.symmetric(horizontal: 8),
+                                        child: Text(
+                                          'Department',
+                                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF475569)),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: 100,
+                                      child: Padding(
+                                        padding: EdgeInsets.symmetric(horizontal: 8),
+                                        child: Text(
+                                          'Joining Date',
+                                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF475569)),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: 320,
+                                      child: Padding(
+                                        padding: EdgeInsets.symmetric(horizontal: 8),
+                                        child: Text(
+                                          'Changed Values',
+                                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF475569)),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: 120,
+                                      child: Center(
+                                        child: Text(
+                                          'Status',
+                                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF475569)),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Divider(height: 1, color: Color(0xFFE2E8F0)),
+
+                              // Table Rows matching Reference Template
+                              if (allRows.isEmpty)
+                                const Padding(
+                                  padding: EdgeInsets.all(32),
+                                  child: Center(
                                     child: Text(
-                                      col,
-                                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                      'No data rows found in the uploaded file.',
+                                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
                                     ),
-                                  ))
-                              .toList(),
+                                  ),
+                                )
+                              else
+                                ...allRows.asMap().entries.map((entry) {
+                                  final idx = entry.key;
+                                  final row = entry.value;
+
+                                  // Row background tint:
+                                  // Invalid rows tinted soft light red/pink matching reference image
+                                  // Changed rows have clean subtle highlight
+                                  // Unchanged rows have white/clean background
+                                  final Color rowBg = !row.isValid
+                                      ? const Color(0xFFFFF1F2)
+                                      : (row.hasChanges ? const Color(0xFFFAFEFB) : (idx % 2 == 1 ? const Color(0xFFFCFDFD) : Colors.white));
+
+                                  final isRoleAdmin = row.designation.toLowerCase().contains('admin');
+
+                                  return Container(
+                                    decoration: BoxDecoration(
+                                      color: rowBg,
+                                      border: const Border(
+                                        bottom: BorderSide(color: Color(0xFFF1F5F9), width: 1),
+                                      ),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.center,
+                                      children: [
+                                        // 1. S.No.
+                                        SizedBox(
+                                          width: 55,
+                                          child: Center(
+                                            child: Text(
+                                              '${idx + 1}',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: !row.isValid ? const Color(0xFFBE123C) : const Color(0xFF64748B),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+
+                                        // 2. Full Name
+                                        SizedBox(
+                                          width: 145,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                                            child: Text(
+                                              row.employeeNameRaw.isNotEmpty ? row.employeeNameRaw : '-',
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w500,
+                                                color: Color(0xFF334155),
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ),
+
+                                        // 3. Username / Employee ID
+                                        SizedBox(
+                                          width: 110,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                                            child: Text(
+                                              row.employeeIdRaw.isNotEmpty ? row.employeeIdRaw : '-',
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
+                                                color: Color(0xFF1E293B),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+
+                                        // 4. Email
+                                        SizedBox(
+                                          width: 175,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                                            child: Text(
+                                              row.email.isNotEmpty ? row.email : '-',
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                color: Color(0xFF475569),
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ),
+
+                                        // 5. Contact Number
+                                        SizedBox(
+                                          width: 125,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                                            child: Text(
+                                              row.contactNumber.isNotEmpty ? row.contactNumber : '-',
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                color: Color(0xFF475569),
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ),
+
+                                        // 6. Role (Pill badge like Admin lavender / User blue in reference template)
+                                        SizedBox(
+                                          width: 100,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                                            child: Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                decoration: BoxDecoration(
+                                                  color: isRoleAdmin ? const Color(0xFFEDE9FE) : const Color(0xFFEFF6FF),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                ),
+                                                child: Text(
+                                                  row.designation.isNotEmpty ? row.designation : 'User',
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: isRoleAdmin ? const Color(0xFF6366F1) : const Color(0xFF2563EB),
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+
+                                        // 7. Department
+                                        SizedBox(
+                                          width: 120,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                                            child: Text(
+                                              row.department.isNotEmpty ? row.department : '-',
+                                              style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ),
+
+                                        // 8. Joining Date
+                                        SizedBox(
+                                          width: 100,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                                            child: Text(
+                                              row.joiningDate.isNotEmpty ? row.joiningDate : '-',
+                                              style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ),
+
+                                        // 9. Changed Values (Mention which value is changed in DIFFERENT COLOR!)
+                                        SizedBox(
+                                          width: 320,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                                            child: row.hasChanges
+                                                ? Wrap(
+                                                    spacing: 6,
+                                                    runSpacing: 4,
+                                                    children: row.changes.map((c) {
+                                                      return Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                                        decoration: BoxDecoration(
+                                                          color: const Color(0xFFECFDF5),
+                                                          borderRadius: BorderRadius.circular(4),
+                                                          border: Border.all(color: const Color(0xFFA7F3D0)),
+                                                        ),
+                                                        child: Text(
+                                                          '${c.label}: ${c.formattedOldValue} → ${c.formattedNewValue}',
+                                                          style: const TextStyle(
+                                                            fontSize: 11,
+                                                            fontWeight: FontWeight.bold,
+                                                            color: Color(0xFF047857), // Changed value in distinct green color!
+                                                          ),
+                                                        ),
+                                                      );
+                                                    }).toList(),
+                                                  )
+                                                : (row.isValid
+                                                    ? const Text(
+                                                        'No changes detected',
+                                                        style: TextStyle(
+                                                          fontSize: 12,
+                                                          color: Color(0xFF94A3B8),
+                                                          fontStyle: FontStyle.italic,
+                                                        ),
+                                                      )
+                                                    : Text(
+                                                        row.errorMessage ?? 'Invalid data row',
+                                                        style: const TextStyle(
+                                                          fontSize: 12,
+                                                          color: Color(0xFFDC2626),
+                                                          fontWeight: FontWeight.w500,
+                                                        ),
+                                                      )),
+                                          ),
+                                        ),
+
+                                        // 10. Status Column (Round pill with dot matching reference image)
+                                        SizedBox(
+                                          width: 120,
+                                          child: Center(
+                                            child: !row.isValid
+                                                ? Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFFFEE2E2),
+                                                      borderRadius: BorderRadius.circular(12),
+                                                      border: Border.all(color: const Color(0xFFFECACA)),
+                                                    ),
+                                                    child: const Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Icon(Icons.circle, size: 7, color: Color(0xFFDC2626)),
+                                                        SizedBox(width: 5),
+                                                        Text(
+                                                          'Invalid',
+                                                          style: TextStyle(
+                                                            fontSize: 11,
+                                                            fontWeight: FontWeight.bold,
+                                                            color: Color(0xFFDC2626),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  )
+                                                : (row.hasChanges
+                                                    ? Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                        decoration: BoxDecoration(
+                                                          color: const Color(0xFFDCFCE7),
+                                                          borderRadius: BorderRadius.circular(12),
+                                                          border: Border.all(color: const Color(0xFF86EFAC)),
+                                                        ),
+                                                        child: const Row(
+                                                          mainAxisSize: MainAxisSize.min,
+                                                          children: [
+                                                            Icon(Icons.circle, size: 7, color: Color(0xFF16A34A)),
+                                                            SizedBox(width: 5),
+                                                            Text(
+                                                              'Changed',
+                                                              style: TextStyle(
+                                                                fontSize: 11,
+                                                                fontWeight: FontWeight.bold,
+                                                                color: Color(0xFF16A34A),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      )
+                                                    : Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                        decoration: BoxDecoration(
+                                                          color: const Color(0xFFF1F5F9),
+                                                          borderRadius: BorderRadius.circular(12),
+                                                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                                                        ),
+                                                        child: const Row(
+                                                          mainAxisSize: MainAxisSize.min,
+                                                          children: [
+                                                            Icon(Icons.circle, size: 7, color: Color(0xFF64748B)),
+                                                            SizedBox(width: 5),
+                                                            Text(
+                                                              'Unchanged',
+                                                              style: TextStyle(
+                                                                fontSize: 11,
+                                                                fontWeight: FontWeight.bold,
+                                                                color: Color(0xFF64748B),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      )),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }),
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'Attendance and calculated totals will be dynamically calculated by the system during generation.',
-                          style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: AppColors.textSecondary),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              const Divider(height: 1, color: Color(0xFFE2E8F0)),
+
+              // 3. Footer Action Buttons
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        report.changedCount > 0
+                            ? '${report.changedCount} employee(s) have updated values ready to override.'
+                            : 'All values in the uploaded file match current payroll data. No overrides to apply.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                          color: report.changedCount > 0 ? const Color(0xFF047857) : const Color(0xFF64748B),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        OutlinedButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.textPrimary,
+                            side: const BorderSide(color: Color(0xFFCBD5E1)),
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: const Text('Cancel'),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton(
+                          onPressed: report.changedCount > 0
+                              ? () {
+                                  Navigator.pop(ctx);
+                                  onApply(report.changedValidRows);
+                                }
+                              : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF9CC70A),
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor: const Color(0xFFE2E8F0),
+                            disabledForegroundColor: const Color(0xFF94A3B8),
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: Text(
+                            report.changedCount > 0
+                                ? 'Apply Changes (${report.changedCount})'
+                                : 'No Changes to Apply',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-
-                // 3. Validation Issues
-                if (report.hasErrors) ...[
-                  Text(
-                    'Validation Issues (${report.invalidRows.length}):',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.red),
-                  ),
-                  const SizedBox(height: 6),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFEBEE),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red[200]!),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: report.invalidRows
-                          .map((row) => Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 3),
-                                child: Text(
-                                  '• ${row.errorMessage ?? "Invalid row data"}',
-                                  style: TextStyle(fontSize: 12, color: Colors.red[900]),
-                                ),
-                              ))
-                          .toList(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-
-                // 4. Valid Rows
-                if (report.hasValidRows) ...[
-                  Text(
-                    'Valid Rows Ready to Apply (${report.validRows.length}):',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
-                  ),
-                  const SizedBox(height: 6),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF9FAFB),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.divider),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: report.validRows
-                          .take(10)
-                          .map((row) => Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 2),
-                                child: Text(
-                                  '✓ ${row.employeeNameRaw} (${row.employeeIdRaw})',
-                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                                ),
-                              ))
-                          .toList()
-                        ..addAll(
-                          report.validRows.length > 10
-                              ? [
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 4),
-                                    child: Text(
-                                      '... and ${report.validRows.length - 10} more employees',
-                                      style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: AppColors.textSecondary),
-                                    ),
-                                  )
-                                ]
-                              : [],
-                        ),
-                    ),
-                  ),
-                ],
-                if (!report.hasValidRows) ...[
-                  const Text(
-                    'No valid rows could be parsed. Please correct the errors in the file and try again.',
-                    style: TextStyle(fontSize: 13, color: Colors.red),
-                  ),
-                ],
-              ],
-            ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
-        actions: [
-          OutlinedButton(
-            onPressed: () => Navigator.pop(ctx),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.textPrimary,
-              side: const BorderSide(color: AppColors.divider),
-            ),
-            child: const Text('Cancel'),
-          ),
-          if (report.hasValidRows)
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                onApply(report.validRows);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF9CC70A),
-                foregroundColor: Colors.white,
-              ),
-              child: Text(
-                report.hasErrors
-                    ? 'Apply Valid Rows (${report.validRows.length})'
-                    : 'Apply Overrides (${report.validRows.length})',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-        ],
       ),
     );
   }
@@ -1456,7 +1821,12 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
                                 isMobile: isMobile,
                               ),
                               if (_appliedOverrides.isNotEmpty)
-                                _buildActiveUploadBanner(matchingEmployees),
+                                _buildActiveUploadBanner(
+                                  matchingEmployees: matchingEmployees,
+                                  records: records,
+                                  activeMonth: activeMonth,
+                                  settings: settings,
+                                ),
                               const SizedBox(height: 16),
                               if (filteredEmployees.isEmpty)
                                 _buildNoSearchResultsCard()
@@ -1493,7 +1863,12 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
     );
   }
 
-  Widget _buildActiveUploadBanner(List<Employee> matchingEmployees) {
+  Widget _buildActiveUploadBanner({
+    required List<Employee> matchingEmployees,
+    required List<PayrollRecord> records,
+    required String activeMonth,
+    required PayrollSettings settings,
+  }) {
     return Container(
       margin: const EdgeInsets.only(top: 12),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -1508,12 +1883,18 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Upload active: "$_uploadedFileName" applied for ${_appliedOverrides.length} employees.',
+              'Upload active: "$_uploadedFileName" applied for ${_appliedOverrides.length} employees with overrides.',
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF166534)),
             ),
           ),
           TextButton(
-            onPressed: () => _handlePickAndValidateUpload(context, matchingEmployees),
+            onPressed: () => _handlePickAndValidateUpload(
+              context: context,
+              matchingEmployees: matchingEmployees,
+              records: records,
+              month: activeMonth,
+              settings: settings,
+            ),
             child: const Text('Replace', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary)),
           ),
           const SizedBox(width: 2),
@@ -1752,7 +2133,13 @@ class _PayrollEmployeeListScreenState extends ConsumerState<PayrollEmployeeListS
     final uploadBtn = OutlinedButton.icon(
       onPressed: _isGeneratingAll
           ? null
-          : () => _handlePickAndValidateUpload(context, matchingEmployees),
+          : () => _handlePickAndValidateUpload(
+              context: context,
+              matchingEmployees: matchingEmployees,
+              records: records,
+              month: activeMonth,
+              settings: settings,
+            ),
       icon: const Icon(Icons.upload_file_outlined, size: 18),
       label: Text(
         _appliedOverrides.isEmpty ? 'Upload Excel/CSV' : 'Uploaded (${_appliedOverrides.length})',

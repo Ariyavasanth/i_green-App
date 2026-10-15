@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -393,6 +392,7 @@ class PayrollExportService {
     <sheet name="Payroll Data" sheetId="1" r:id="rId1"/>
     <sheet name="Instructions" sheetId="2" r:id="rId3"/>
   </sheets>
+  <calcPr calcId="162913" fullCalcOnLoad="1"/>
 </workbook>''';
     archive.addFile(ArchiveFile('xl/workbook.xml', workbook.length, utf8.encode(workbook)));
 
@@ -430,7 +430,7 @@ class PayrollExportService {
     sheet1Buffer.writeln('    <row r="1">');
     final headers = PayrollReportDataset.columnHeaders;
     for (int col = 0; col < headers.length; col++) {
-      final colRef = _indexToColLetter(col) + '1';
+      final colRef = '${_indexToColLetter(col)}1';
       final text = _escapeXml(headers[col]);
       sheet1Buffer.writeln('      <c r="$colRef" t="inlineStr" s="1"><is><t>$text</t></is></c>');
     }
@@ -445,7 +445,22 @@ class PayrollExportService {
         final colRef = _indexToColLetter(c) + rowNum.toString();
         final val = cells[c];
         final numVal = double.tryParse(val.toString());
-        if (numVal != null && c >= 5 && c <= 32) {
+        if (c == 30) {
+          // Gross Salary: SUM(M:V) (Earnings from Basic to OT)
+          final formula = 'SUM(M$rowNum:V$rowNum)';
+          final fallbackVal = numVal != null ? numVal.toStringAsFixed(2) : '0.00';
+          sheet1Buffer.writeln('      <c r="$colRef"><f>$formula</f><v>$fallbackVal</v></c>');
+        } else if (c == 31) {
+          // Total Deductions: SUM(W:AD) (Deductions from PF to Company Loan)
+          final formula = 'SUM(W$rowNum:AD$rowNum)';
+          final fallbackVal = numVal != null ? numVal.toStringAsFixed(2) : '0.00';
+          sheet1Buffer.writeln('      <c r="$colRef"><f>$formula</f><v>$fallbackVal</v></c>');
+        } else if (c == 32) {
+          // Net Salary: Gross Salary - Total Deductions (AE - AF)
+          final formula = 'AE$rowNum-AF$rowNum';
+          final fallbackVal = numVal != null ? numVal.toStringAsFixed(2) : '0.00';
+          sheet1Buffer.writeln('      <c r="$colRef"><f>$formula</f><v>$fallbackVal</v></c>');
+        } else if (numVal != null && c >= 5 && c <= 32) {
           sheet1Buffer.writeln('      <c r="$colRef"><v>$numVal</v></c>');
         } else {
           final text = _escapeXml(val.toString());

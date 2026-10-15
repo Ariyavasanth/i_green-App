@@ -46,21 +46,59 @@ class PayrollInputOverride {
   });
 }
 
+class PayrollFieldChange {
+  final String key;
+  final String label;
+  final double oldValue;
+  final double newValue;
+
+  const PayrollFieldChange({
+    required this.key,
+    required this.label,
+    required this.oldValue,
+    required this.newValue,
+  });
+
+  String get formattedOldValue => _formatCurrency(oldValue);
+  String get formattedNewValue => _formatCurrency(newValue);
+
+  static String _formatCurrency(double val) {
+    if (val == val.roundToDouble()) {
+      return '₹${val.toInt()}';
+    }
+    return '₹${val.toStringAsFixed(2)}';
+  }
+}
+
 class UploadRowValidation {
   final int rowIndex;
   final String employeeIdRaw;
   final String employeeNameRaw;
+  final String email;
+  final String contactNumber;
+  final String department;
+  final String designation;
+  final String joiningDate;
   final bool isValid;
   final String? errorMessage;
   final PayrollInputOverride? overrideData;
+  final bool hasChanges;
+  final List<PayrollFieldChange> changes;
 
   const UploadRowValidation({
     required this.rowIndex,
     required this.employeeIdRaw,
     required this.employeeNameRaw,
+    this.email = '',
+    this.contactNumber = '',
+    this.department = '',
+    this.designation = '',
+    this.joiningDate = '',
     required this.isValid,
     this.errorMessage,
     this.overrideData,
+    this.hasChanges = false,
+    this.changes = const [],
   });
 }
 
@@ -74,6 +112,15 @@ class PayrollUploadValidationReport {
 
   bool get hasErrors => invalidRows.isNotEmpty;
   bool get hasValidRows => validRows.isNotEmpty;
+  int get changedCount => validRows.where((r) => r.hasChanges).length;
+  int get unchangedCount => validRows.where((r) => !r.hasChanges).length;
+  List<UploadRowValidation> get changedValidRows => validRows.where((r) => r.hasChanges).toList();
+
+  List<UploadRowValidation> get allRows {
+    final list = [...validRows, ...invalidRows];
+    list.sort((a, b) => a.rowIndex.compareTo(b.rowIndex));
+    return list;
+  }
 
   const PayrollUploadValidationReport({
     required this.fileName,
@@ -84,4 +131,5 @@ class PayrollUploadValidationReport {
     this.detectedSystemColumns = const [],
   });
 }
+
 

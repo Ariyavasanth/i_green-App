@@ -4,8 +4,6 @@ import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_application_1/features/employee/domain/employee.dart';
 import 'package:flutter_application_1/features/payroll/domain/payroll.dart';
-import 'package:flutter_application_1/features/payroll/domain/payroll_report_dataset.dart';
-import 'package:flutter_application_1/features/payroll/services/payroll_export_service.dart';
 import 'package:flutter_application_1/features/payroll/services/payroll_upload_parser.dart';
 
 Employee _makeEmployee({
@@ -235,6 +233,130 @@ EMP-5410,Keshav rajan,IGREEN TECHNOLOGIES,execution,September 2026,0,0,0.0,0,0,0
       expect(report.validRows[0].overrideData?.basic, equals(520000.0));
       expect(report.validRows[1].employeeIdRaw, equals('EMP5406'));
       expect(report.validRows[1].overrideData?.basic, equals(31000.0));
+    });
+  });
+
+  group('PayrollUploadParser Change Tracking & Selective Overrides', () {
+    final existingRecords = [
+      const PayrollRecord(
+        id: 101,
+        employeeId: 5405,
+        employeeName: 'Dummy Testing',
+        month: 'September 2026',
+        presentDays: 26,
+        lateDays: 0,
+        absentDays: 0,
+        leaveDays: 0,
+        basicPay: 500000.0,
+        hra: 250000.0,
+        educationAllowance: 0.0,
+        specialAllowance: 250000.0,
+        pf: 60000.0,
+        tax: 0.0,
+        netSalary: 940000.0,
+        status: 'Draft',
+      ),
+      const PayrollRecord(
+        id: 102,
+        employeeId: 5406,
+        employeeName: 'Nithya Sri J',
+        month: 'September 2026',
+        presentDays: 26,
+        lateDays: 0,
+        absentDays: 0,
+        leaveDays: 0,
+        basicPay: 30000.0,
+        hra: 15000.0,
+        educationAllowance: 0.0,
+        specialAllowance: 15000.0,
+        pf: 3600.0,
+        tax: 0.0,
+        netSalary: 56400.0,
+        status: 'Not Generated',
+      ),
+    ];
+
+    test('Detects no changes when uploaded values are identical to current records', () async {
+      const csvIdentical = '''Employee ID,Basic,HRA,Special Allowance
+EMP-5405,500000.00,250000.00,250000.00
+EMP-5406,30000.00,15000.00,15000.00''';
+
+      final report = await PayrollUploadParser.parseAndValidate(
+        bytes: Uint8List.fromList(utf8.encode(csvIdentical)),
+        fileName: 'identical.csv',
+        allowedEmployees: testEmployees,
+        currentRecords: existingRecords,
+      );
+
+      expect(report.validRows.length, equals(2));
+      expect(report.changedCount, equals(0));
+      expect(report.unchangedCount, equals(2));
+      expect(report.changedValidRows, isEmpty);
+      expect(report.validRows[0].hasChanges, isFalse);
+      expect(report.validRows[1].hasChanges, isFalse);
+    });
+
+    test('Detects only changed rows and fields when values are modified', () async {
+      // EMP-5405: Basic changed 500,000 -> 550,000
+      // EMP-5406: Unchanged (30,000 and 15,000 match current record)
+      const csvWithOneChange = '''Employee ID,Basic,HRA
+EMP-5405,550000.00,250000.00
+EMP-5406,30000.00,15000.00''';
+
+      final report = await PayrollUploadParser.parseAndValidate(
+        bytes: Uint8List.fromList(utf8.encode(csvWithOneChange)),
+        fileName: 'one_change.csv',
+        allowedEmployees: testEmployees,
+        currentRecords: existingRecords,
+      );
+
+      expect(report.validRows.length, equals(2));
+      expect(report.changedCount, equals(1));
+      expect(report.unchangedCount, equals(1));
+      expect(report.changedValidRows.length, equals(1));
+
+      // Row 1 (EMP-5405) has changes
+      final changedRow = report.validRows[0];
+      expect(changedRow.hasChanges, isTrue);
+      expect(changedRow.changes.length, equals(1));
+      expect(changedRow.changes[0].key, equals('basic'));
+      expect(changedRow.changes[0].oldValue, equals(500000.0));
+      expect(changedRow.changes[0].newValue, equals(550000.0));
+
+      // Row 2 (EMP-5406) has no changes
+      final unchangedRow = report.validRows[1];
+      expect(unchangedRow.hasChanges, isFalse);
+      expect(unchangedRow.changes, isEmpty);
+    });
+
+    test('Parses XLSX with dynamic formula cells <f>...</f><v>...</v>', () async {
+      final archive = Archive();
+      const sheetXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData>
+    <row r="1">
+      <c r="A1" t="inlineStr"><is><t>Employee ID</t></is></c>
+      <c r="B1" t="inlineStr"><is><t>Basic</t></is></c>
+      <c r="C1" t="inlineStr"><is><t>Gross Salary</t></is></c>
+    </row>
+    <row r="2">
+      <c r="A2" t="inlineStr"><is><t>EMP-5405</t></is></c>
+      <c r="B2"><v>520000</v></c>
+      <c r="C2"><f>SUM(B2:B2)</f><v>520000</v></c>
+    </row>
+  </sheetData>
+</worksheet>''';
+      archive.addFile(ArchiveFile('xl/worksheets/sheet1.xml', sheetXml.length, utf8.encode(sheetXml)));
+      final bytes = Uint8List.fromList(ZipEncoder().encode(archive)!);
+
+      final report = await PayrollUploadParser.parseAndValidate(
+        bytes: bytes,
+        fileName: 'formula_test.xlsx',
+        allowedEmployees: testEmployees,
+      );
+
+      expect(report.validRows.length, equals(1));
+      expect(report.validRows[0].overrideData?.basic, equals(520000.0));
     });
   });
 }
