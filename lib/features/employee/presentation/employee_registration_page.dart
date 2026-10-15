@@ -457,9 +457,28 @@ class _EmployeeRegistrationPageState
         initialIndex: newIndex,
         vsync: this,
       );
-      _tabController.addListener(() {
-        if (mounted) setState(() {});
-      });
+      _tabController.addListener(_onTabChanged);
+    }
+  }
+
+  void _onTabChanged() {
+    if (!mounted) return;
+    setState(() {});
+    if (_tabController.index < _tabs.length) {
+      final currentTab = _tabs[_tabController.index];
+      if (currentTab == 'Document') {
+        final types = _dynamicAvailableDocumentTypes;
+        if (!types.contains(_docType)) {
+          _docType = types.first;
+        }
+        if (_docNumberController.text.trim().isEmpty) {
+          _autoFillDocNumberForType(_docType);
+        }
+      } else if (_isManagementAdd &&
+          currentTab == 'Credentials' &&
+          _employeeCustomIdController.text.trim().isEmpty) {
+        _autoGenerateNextEmpId();
+      }
     }
   }
 
@@ -1833,6 +1852,27 @@ class _EmployeeRegistrationPageState
         } catch (_) {}
       }
 
+      if (emp.bloodGroupReport.isNotEmpty &&
+          emp.bloodGroupReport != 'No file chosen') {
+        _bloodGroupDocFileName = emp.bloodGroupReport;
+        final hasBloodDoc = _documentList.any(
+          (d) => d.documentType.toLowerCase().contains('blood'),
+        );
+        if (!hasBloodDoc) {
+          _documentList.add(
+            DocumentItem(
+              id: (_documentList.length + 1).toString(),
+              documentType: 'Blood Group Certificate',
+              documentNumber: emp.bloodGroup.isNotEmpty
+                  ? emp.bloodGroup
+                  : 'Blood Group Report',
+              fileName: emp.bloodGroupReport,
+              uploadedDate: DateTime.now().toString().split(' ')[0],
+            ),
+          );
+        }
+      }
+
       _selectedPermissions = Set<String>.from(emp.accessPermissions);
 
       _updateSavedTabsFromData();
@@ -1911,17 +1951,7 @@ class _EmployeeRegistrationPageState
               ? <String>{}
               : Set<String>.from(Employee.allSidebarPermissions));
     _tabController = TabController(length: _tabs.length, vsync: this);
-    _tabController.addListener(() {
-      if (mounted) {
-        setState(() {});
-        if (_isManagementAdd &&
-            _tabController.index < _tabs.length &&
-            _tabs[_tabController.index] == 'Credentials' &&
-            _employeeCustomIdController.text.trim().isEmpty) {
-          _autoGenerateNextEmpId();
-        }
-      }
-    });
+    _tabController.addListener(_onTabChanged);
     if (widget.correctionToken != null && widget.correctionToken!.isNotEmpty) {
       _registrationMode = 'candidate_correction';
       _isCorrectionMode = true;
@@ -2453,30 +2483,6 @@ class _EmployeeRegistrationPageState
     });
   }
 
-  Future<void> _pickBloodGroupDocFile() async {
-    try {
-      final result = await FilePicker.pickFiles(
-        type: FileType.any,
-        allowMultiple: false,
-        withData: true,
-      );
-      final file = result?.files.isNotEmpty == true
-          ? result!.files.first
-          : null;
-      if (file == null) return;
-      setState(() {
-        _bloodGroupDocFileName = file.name;
-      });
-      _markTabUnsaved('Personal Info');
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to select file: $e')));
-      }
-    }
-  }
-
   Future<void> _pickProfileImage() async {
     try {
       final result = await FilePicker.pickFiles(
@@ -2689,7 +2695,25 @@ class _EmployeeRegistrationPageState
                   ? _status
                   : 'Draft'),
         bloodGroup: _bloodGroup,
-        bloodGroupReport: _bloodGroupDocFileName,
+        bloodGroupReport: () {
+          final bloodDoc = _documentList.firstWhere(
+            (d) => d.documentType.toLowerCase().contains('blood'),
+            orElse: () => DocumentItem(
+              id: '',
+              documentType: '',
+              documentNumber: '',
+              fileName: _bloodGroupDocFileName != 'No file chosen'
+                  ? _bloodGroupDocFileName
+                  : '',
+              uploadedDate: '',
+            ),
+          );
+          return bloodDoc.fileName.isNotEmpty
+              ? bloodDoc.fileName
+              : (_bloodGroupDocFileName != 'No file chosen'
+                  ? _bloodGroupDocFileName
+                  : '');
+        }(),
         userType: _userType,
         contractEndDate: _contractEndDateController.text.trim(),
         permanentAddress: _permAddressController.text.trim(),
@@ -4133,95 +4157,6 @@ class _EmployeeRegistrationPageState
                   _markTabUnsaved('Personal Info');
                 }
               },
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Blood Group Certificate / Test Report Document',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Container(
-                  height: 38,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: const Color(0xFFD0D5DD),
-                      width: 0.8,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFF2F4F7),
-                          foregroundColor: Colors.black87,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(4),
-                            side: const BorderSide(color: Color(0xFFD0D5DD)),
-                          ),
-                        ),
-                        onPressed: _pickBloodGroupDocFile,
-                        child: const Text(
-                          'Choose file',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _bloodGroupDocFileName,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: _bloodGroupDocFileName == 'No file chosen'
-                                ? Colors.black54
-                                : AppColors.active,
-                            fontWeight:
-                                _bloodGroupDocFileName == 'No file chosen'
-                                ? FontWeight.normal
-                                : FontWeight.w600,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (_bloodGroupDocFileName != 'No file chosen')
-                        GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _bloodGroupDocFileName = 'No file chosen';
-                            });
-                            _markTabUnsaved('Personal Info');
-                          },
-                          child: const Padding(
-                            padding: EdgeInsets.only(left: 4),
-                            child: Icon(
-                              Icons.close,
-                              size: 16,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
             ),
             _buildDropdown('Gender *', _gender, ['Male', 'Female', 'Other'], (
               val,
@@ -6720,6 +6655,200 @@ class _EmployeeRegistrationPageState
     }
   }
 
+  List<String> get _dynamicAvailableDocumentTypes {
+    final types = <String>{};
+
+    // 1. Aadhaar Card (from Personal Info)
+    if (_aadhaarController.text.trim().isNotEmpty) {
+      types.add('Aadhaar Card');
+    }
+
+    // 2. Blood Group Certificate (from Personal Info)
+    if (_bloodGroup.isNotEmpty && _bloodGroup != "Other / Don't Know") {
+      types.add('Blood Group Certificate');
+    }
+
+    // 3. Education -> 10th Marksheet & Degree Certificates
+    for (final edu in _educationList) {
+      final deg = edu.degreeName.trim();
+      if (deg.isEmpty) continue;
+      final lower = deg.toLowerCase();
+      if (lower.contains('10th') ||
+          lower.contains('sslc') ||
+          lower.contains('matric') ||
+          lower.contains('class 10') ||
+          lower.contains('tenth')) {
+        types.add('10th Marksheet');
+      } else if (lower.contains('12th') ||
+          lower.contains('hsc') ||
+          lower.contains('inter') ||
+          lower.contains('class 12') ||
+          lower.contains('twelfth')) {
+        types.add('12th Marksheet');
+      } else {
+        if (lower.contains('certificate') ||
+            lower.contains('marksheet') ||
+            lower.contains('degree')) {
+          types.add(deg);
+        } else {
+          types.add('$deg Certificate');
+        }
+      }
+    }
+    final activeEdu = _eduDegreeController.text.trim();
+    if (activeEdu.isNotEmpty) {
+      final lower = activeEdu.toLowerCase();
+      if (lower.contains('10th') ||
+          lower.contains('sslc') ||
+          lower.contains('matric') ||
+          lower.contains('class 10') ||
+          lower.contains('tenth')) {
+        types.add('10th Marksheet');
+      } else if (lower.contains('12th') ||
+          lower.contains('hsc') ||
+          lower.contains('inter') ||
+          lower.contains('class 12') ||
+          lower.contains('twelfth')) {
+        types.add('12th Marksheet');
+      } else {
+        if (lower.contains('certificate') ||
+            lower.contains('marksheet') ||
+            lower.contains('degree')) {
+          types.add(activeEdu);
+        } else {
+          types.add('$activeEdu Certificate');
+        }
+      }
+    }
+
+    // 4. Work Experience -> Relieving Letter / Experience Certificate
+    if (_experienceList.isNotEmpty ||
+        _expCompanyController.text.trim().isNotEmpty) {
+      types.add('Relieving Letter');
+      types.add('Experience Certificate');
+    }
+
+    // 5. PAN Card (from History)
+    if (_panController.text.trim().isNotEmpty) {
+      types.add('PAN Card');
+    }
+
+    // 6. Driving Licence (from History)
+    if (_drivingLicenseController.text.trim().isNotEmpty) {
+      types.add('Driving Licence');
+    }
+
+    // 7. Passport (from History)
+    if (_passportController.text.trim().isNotEmpty) {
+      types.add('Passport');
+    }
+
+    // 8. Bank Account Details (Passbook & Check Leaf)
+    types.add('Passbook Image');
+    types.add('Check Leaf Image');
+
+    // 9. Statutory IDs
+    if (_pfNumberController.text.trim().isNotEmpty) {
+      types.add('PF / UAN Document');
+    }
+    if (_esiNumberController.text.trim().isNotEmpty) {
+      types.add('ESI Document');
+    }
+
+    // 10. Existing uploaded documents in _documentList (retain so existing records never break)
+    for (final doc in _documentList) {
+      if (doc.documentType.trim().isNotEmpty) {
+        types.add(doc.documentType.trim());
+      }
+    }
+
+    // 11. Other Supporting Document (always available fallback)
+    types.add('Other Supporting Document');
+
+    return types.toList();
+  }
+
+  void _autoFillDocNumberForType(String type) {
+    final lower = type.toLowerCase();
+    if (lower.contains('aadhaar')) {
+      _docNumberController.text = _aadhaarController.text.trim();
+    } else if (lower.contains('pan')) {
+      _docNumberController.text = _panController.text.trim();
+    } else if (lower.contains('driving') ||
+        lower.contains('licence') ||
+        lower.contains('license')) {
+      _docNumberController.text = _drivingLicenseController.text.trim();
+    } else if (lower.contains('passport')) {
+      _docNumberController.text = _passportController.text.trim();
+    } else if (lower.contains('blood')) {
+      _docNumberController.text =
+          _bloodGroup.isNotEmpty && _bloodGroup != "Other / Don't Know"
+              ? _bloodGroup
+              : '';
+    } else if (lower.contains('10th') || lower.contains('sslc')) {
+      final edu10 = _educationList.firstWhere(
+        (e) {
+          final l = e.degreeName.toLowerCase();
+          return l.contains('10th') ||
+              l.contains('sslc') ||
+              l.contains('matric');
+        },
+        orElse: () => EducationItem(
+          id: '',
+          degreeName: '',
+          instituteName: _eduInstController.text.trim(),
+          result: _eduResultController.text.trim(),
+          passingYear: _eduYearController.text.trim(),
+        ),
+      );
+      if (edu10.instituteName.isNotEmpty) {
+        _docNumberController.text =
+            edu10.instituteName +
+            (edu10.passingYear.isNotEmpty ? ' (${edu10.passingYear})' : '');
+      } else if (edu10.result.isNotEmpty) {
+        _docNumberController.text = edu10.result;
+      }
+    } else if (lower.contains('12th') || lower.contains('hsc')) {
+      final edu12 = _educationList.firstWhere(
+        (e) {
+          final l = e.degreeName.toLowerCase();
+          return l.contains('12th') ||
+              l.contains('hsc') ||
+              l.contains('inter');
+        },
+        orElse: () => EducationItem(
+          id: '',
+          degreeName: '',
+          instituteName: _eduInstController.text.trim(),
+          result: _eduResultController.text.trim(),
+          passingYear: _eduYearController.text.trim(),
+        ),
+      );
+      if (edu12.instituteName.isNotEmpty) {
+        _docNumberController.text =
+            edu12.instituteName +
+            (edu12.passingYear.isNotEmpty ? ' (${edu12.passingYear})' : '');
+      }
+    } else if (lower.contains('passbook') ||
+        lower.contains('check') ||
+        lower.contains('cheque') ||
+        lower.contains('bank')) {
+      _docNumberController.text = _bankAccNumController.text.trim().isNotEmpty
+          ? _bankAccNumController.text.trim()
+          : _bankNameController.text.trim();
+    } else if (lower.contains('relieving') || lower.contains('experience')) {
+      if (_experienceList.isNotEmpty) {
+        _docNumberController.text = _experienceList.first.companyName;
+      } else if (_expCompanyController.text.trim().isNotEmpty) {
+        _docNumberController.text = _expCompanyController.text.trim();
+      }
+    } else if (lower.contains('pf') || lower.contains('uan')) {
+      _docNumberController.text = _pfNumberController.text.trim();
+    } else if (lower.contains('esi')) {
+      _docNumberController.text = _esiNumberController.text.trim();
+    }
+  }
+
   // TAB 7: DOCUMENT
   Widget _buildDocumentTab(RegistrationLink link, bool isMobile) {
     return SingleChildScrollView(
@@ -6761,6 +6890,34 @@ class _EmployeeRegistrationPageState
                     style: TextStyle(
                       color: Colors.red,
                       fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8F9FA),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: const Color(0xFFE4E7EC)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: AppColors.textSecondary,
+                  ),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Document types in the dropdown are generated dynamically based on the details you entered across Personal Info, Education, Experience, History, etc. Select a document type, verify or enter the document reference, choose your file, and click Add Document.',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ),
                 ],
@@ -6914,35 +7071,40 @@ class _EmployeeRegistrationPageState
               ],
             ),
             const SizedBox(height: 24),
-            _buildRow2or3(
-              isMobile: isMobile,
-              children: [
-                _buildDropdown(
-                  'Document Type *',
-                  _docType,
-                  [
-                    'Aadhaar Card',
-                    'PAN Card',
-                    'Educational Certificate',
-                    'Passport',
-                    'Relieving Letter',
-                    'Blood Group Certificate',
-                    'Test Report',
-                    'Other',
+            Builder(
+              builder: (context) {
+                final availableDocTypes = _dynamicAvailableDocumentTypes;
+                if (!availableDocTypes.contains(_docType)) {
+                  _docType = availableDocTypes.first;
+                  if (_docNumberController.text.trim().isEmpty) {
+                    _autoFillDocNumberForType(_docType);
+                  }
+                }
+                return _buildRow2or3(
+                  isMobile: isMobile,
+                  children: [
+                    _buildDropdown(
+                      'Document Type *',
+                      _docType,
+                      availableDocTypes,
+                      (val) {
+                        if (val != null) {
+                          setState(() {
+                            _docType = val;
+                            _autoFillDocNumberForType(val);
+                          });
+                          _markTabUnsaved('Document');
+                        }
+                      },
+                    ),
+                    _buildTextField(
+                      'Document Number / Reference',
+                      _docNumberController,
+                      placeholder: 'Document Number',
+                    ),
                   ],
-                  (val) {
-                    if (val != null) {
-                      setState(() => _docType = val);
-                      _markTabUnsaved('Document');
-                    }
-                  },
-                ),
-                _buildTextField(
-                  'Document Number / Reference',
-                  _docNumberController,
-                  placeholder: 'Document Number',
-                ),
-              ],
+                );
+              },
             ),
             const SizedBox(height: 12),
             Row(
@@ -6990,7 +7152,7 @@ class _EmployeeRegistrationPageState
                           DocumentItem(
                             id: (_documentList.length + 1).toString(),
                             documentType: _docType,
-                            documentNumber: _docNumberController.text,
+                            documentNumber: _docNumberController.text.trim(),
                             fileName: _docFileName,
                             uploadedDate: DateTime.now().toString().split(
                               ' ',
@@ -6999,7 +7161,13 @@ class _EmployeeRegistrationPageState
                         );
                         _docNumberController.clear();
                         _docFileName = 'No file chosen';
+                        final nextAvailable = _dynamicAvailableDocumentTypes;
+                        if (!nextAvailable.contains(_docType)) {
+                          _docType = nextAvailable.first;
+                          _autoFillDocNumberForType(_docType);
+                        }
                       });
+                      _markTabUnsaved('Document');
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('Document added to list.'),
@@ -7037,7 +7205,7 @@ class _EmployeeRegistrationPageState
                       DocumentItem(
                         id: (_documentList.length + 1).toString(),
                         documentType: _docType,
-                        documentNumber: _docNumberController.text,
+                        documentNumber: _docNumberController.text.trim(),
                         fileName: _docFileName,
                         uploadedDate: DateTime.now().toString().split(' ')[0],
                       ),
@@ -8503,10 +8671,6 @@ class _EmployeeRegistrationPageState
                                 _lastNameController.text,
                               ),
                               _buildPreviewField('Blood Group', _bloodGroup),
-                              _buildPreviewField(
-                                'Blood Group Report Doc',
-                                _bloodGroupDocFileName,
-                              ),
                               _buildPreviewField('Gender', _gender),
                               _buildPreviewField(
                                 'Date of Birth',
@@ -10698,6 +10862,25 @@ class _EmployeeRegistrationPageState
       joiningDate: _joiningDateController.text.trim(),
       status: _status,
       bloodGroup: _bloodGroup,
+      bloodGroupReport: () {
+        final bloodDoc = _documentList.firstWhere(
+          (d) => d.documentType.toLowerCase().contains('blood'),
+          orElse: () => DocumentItem(
+            id: '',
+            documentType: '',
+            documentNumber: '',
+            fileName: _bloodGroupDocFileName != 'No file chosen'
+                ? _bloodGroupDocFileName
+                : '',
+            uploadedDate: '',
+          ),
+        );
+        return bloodDoc.fileName.isNotEmpty
+            ? bloodDoc.fileName
+            : (_bloodGroupDocFileName != 'No file chosen'
+                ? _bloodGroupDocFileName
+                : '');
+      }(),
       contractEndDate: _contractEndDateController.text.trim(),
       permanentAddress: _permAddressController.text.trim(),
       permanentState: _permState,
