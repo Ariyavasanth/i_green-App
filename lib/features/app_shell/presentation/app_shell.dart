@@ -12,7 +12,6 @@ import '../../../core/widgets/visual_effects.dart';
 import '../../../widgets/app_background_wrapper.dart';
 import '../../../widgets/navigation/sidebar_drawer.dart';
 import '../../authentication/providers/authentication_providers.dart';
-import '../../books/providers/books_providers.dart';
 import '../../employee/providers/employee_providers.dart';
 import '../../loan/providers/loan_providers.dart';
 import '../../permission/providers/permission_providers.dart';
@@ -392,6 +391,10 @@ class _TopBar extends ConsumerWidget {
     if (cleanLoc == '/permission/apply') return 'Apply Permission';
     if (cleanLoc == '/permission/emergency') return 'Emergency Exception Permission';
     if (cleanLoc == '/permission/details') return 'Permission Details';
+    if (cleanLoc == '/payroll/run') return 'Run Payroll';
+    if (cleanLoc.startsWith('/payroll/generate')) return 'Generate Payroll';
+    if (cleanLoc.startsWith('/payroll/details')) return 'Payroll Details';
+    if (cleanLoc.startsWith('/payroll/payslip')) return 'Payslip Detail';
     for (final dest in AppShell.destinations) {
       if (dest.path == cleanLoc || (dest.path != '/home' && cleanLoc.startsWith(dest.path))) {
         return dest.label;

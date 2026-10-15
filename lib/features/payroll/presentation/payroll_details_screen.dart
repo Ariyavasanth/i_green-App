@@ -114,15 +114,6 @@ class _PayrollDetailsScreenState extends ConsumerState<PayrollDetailsScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => context.pop(),
-        ),
-        title: const Text('Payroll Details'),
-      ),
       body: payrollAsync.when(
         data: (record) {
           if (record == null) {

@@ -698,15 +698,6 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => context.pop(),
-        ),
-        title: const Text('Generate Payroll'),
-      ),
       body: employeesAsync.when(
         data: (employees) {
           final matching = employees.where((e) => e.id == widget.employeeId).toList();
