@@ -173,14 +173,20 @@ class PayrollUploadParser {
       seenEmployeeIds.add(normalizedEmpId);
 
       // Check matching against allowed employees (currently filtered organisation & department)
+      final rawDigits = empIdRaw.replaceAll(RegExp(r'\D'), '');
       final matchedEmp = allowedEmployees.where((e) {
         final idStr = e.id.toString();
         final codeStr = e.employeeId.trim().toLowerCase().replaceAll('-', '').replaceAll(' ', '');
         final empIdWithPrefix = 'emp${e.id}'.toLowerCase();
-        return idStr == empIdRaw ||
-            codeStr == normalizedEmpId ||
-            empIdWithPrefix == normalizedEmpId ||
-            e.employeeId.trim().toLowerCase() == empIdRaw.toLowerCase();
+        final empDigits = e.employeeId.replaceAll(RegExp(r'\D'), '');
+
+        if (idStr == empIdRaw) return true;
+        if (codeStr == normalizedEmpId) return true;
+        if (empIdWithPrefix == normalizedEmpId) return true;
+        if (e.employeeId.trim().toLowerCase() == empIdRaw.toLowerCase()) return true;
+        if (rawDigits.isNotEmpty && rawDigits == empDigits) return true;
+        if (rawDigits.isNotEmpty && int.tryParse(rawDigits) == e.id) return true;
+        return false;
       }).firstOrNull;
 
       if (matchedEmp == null) {
@@ -281,43 +287,69 @@ class PayrollUploadParser {
   }
 
   static String _normalizeHeader(String header) {
-    final clean = header.trim().toLowerCase().replaceAll(RegExp(r'[\s_\-\(\)\/\.]'), '');
-    
+    final clean = header
+        .replaceAll('\uFEFF', '')
+        .replaceAll(RegExp(r'[\u200B-\u200D\u00A0]'), '')
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[\s_\-\(\)\/\.]'), '');
+
     // System-controlled identifiers
-    if (clean == 'employeeid' || clean == 'empid' || clean == 'employeecode' || clean == 'empcode' || clean == 'id') {
+    if (clean == 'employeeid' ||
+        clean == 'empid' ||
+        clean == 'employeecode' ||
+        clean == 'empcode' ||
+        clean == 'employeeno' ||
+        clean == 'empno' ||
+        clean == 'staffid' ||
+        clean == 'staffno' ||
+        clean == 'id') {
       return 'employee_id';
     }
-    if (clean == 'employeename' || clean == 'empname' || clean == 'name' || clean == 'fullname') {
+    if (clean == 'employeename' ||
+        clean == 'empname' ||
+        clean == 'name' ||
+        clean == 'fullname' ||
+        clean == 'staffname') {
       return 'employee_name';
     }
-    if (clean == 'organisation' || clean == 'organization' || clean == 'org' || clean == 'company') {
+    if (clean == 'organisation' ||
+        clean == 'organization' ||
+        clean == 'org' ||
+        clean == 'company' ||
+        clean == 'companyname') {
       return 'organisation';
     }
-    if (clean == 'department' || clean == 'dept') {
+    if (clean == 'department' || clean == 'dept' || clean == 'division') {
       return 'department';
     }
-    if (clean == 'payrollmonth' || clean == 'month' || clean == 'cycle') {
+    if (clean == 'payrollmonth' ||
+        clean == 'month' ||
+        clean == 'cycle' ||
+        clean == 'salarymonth' ||
+        clean == 'paymonth' ||
+        clean == 'period') {
       return 'payroll_month';
     }
-    if (clean == 'presentdays' || clean == 'presentcount' || clean == 'present') {
+    if (clean == 'presentdays' || clean == 'presentcount' || clean == 'present' || clean == 'presents') {
       return 'present_days';
     }
-    if (clean == 'latedays' || clean == 'latecount' || clean == 'late') {
+    if (clean == 'latedays' || clean == 'latecount' || clean == 'late' || clean == 'lates') {
       return 'late_days';
     }
-    if (clean == 'lophours' || clean == 'shortfallhours' || clean == 'lophour') {
+    if (clean == 'lophours' || clean == 'shortfallhours' || clean == 'lophour' || clean == 'shortfallhour') {
       return 'lop_hours';
     }
-    if (clean == 'leavedays' || clean == 'onleavecount' || clean == 'leave') {
+    if (clean == 'leavedays' || clean == 'onleavecount' || clean == 'leave' || clean == 'leaves' || clean == 'leavecount') {
       return 'leave_days';
     }
-    if (clean == 'absentdays' || clean == 'absentcount' || clean == 'absent') {
+    if (clean == 'absentdays' || clean == 'absentcount' || clean == 'absent' || clean == 'absents') {
       return 'absent_days';
     }
-    if (clean == 'weeklyoff' || clean == 'weeklyoffcount' || clean == 'offdays') {
+    if (clean == 'weeklyoff' || clean == 'weeklyoffcount' || clean == 'offdays' || clean == 'weekoff' || clean == 'weekoffs') {
       return 'weekly_off';
     }
-    if (clean == 'workingdays' || clean == 'totalworkingdays') {
+    if (clean == 'workingdays' || clean == 'totalworkingdays' || clean == 'workdays' || clean == 'totalworkdays') {
       return 'working_days';
     }
     if (clean == 'lopdeduction' || clean == 'lop' || clean == 'lopamount') {
@@ -332,7 +364,7 @@ class PayrollUploadParser {
     if (clean == 'totaldeductions' || clean == 'totaldeduction' || clean == 'deductions' || clean == 'totalded') {
       return 'total_deductions';
     }
-    if (clean == 'netsalary' || clean == 'net' || clean == 'netpay' || clean == 'takehome') {
+    if (clean == 'netsalary' || clean == 'net' || clean == 'netpay' || clean == 'takehome' || clean == 'takehomepay') {
       return 'net_salary';
     }
     if (clean == 'status') {
@@ -349,10 +381,10 @@ class PayrollUploadParser {
     if (clean == 'educationalallowance' || clean == 'educationallowance' || clean == 'eduallowance') {
       return 'education_allowance';
     }
-    if (clean == 'specialallowance' || clean == 'special') {
+    if (clean == 'specialallowance' || clean == 'special' || clean == 'specialallow') {
       return 'special_allowance';
     }
-    if (clean == 'travelallowance' || clean == 'travel' || clean == 'conveyance') {
+    if (clean == 'travelallowance' || clean == 'travel' || clean == 'conveyance' || clean == 'conveyanceallowance') {
       return 'travel_allowance';
     }
     if (clean == 'otherallowance' || clean == 'otherallowances') {
@@ -361,13 +393,17 @@ class PayrollUploadParser {
     if (clean == 'incentive' || clean == 'incentives') {
       return 'incentive';
     }
-    if (clean == 'othersearning' || clean == 'otherearning' || clean == 'othersexpense' || clean == 'additionlearning') {
+    if (clean == 'othersearning' ||
+        clean == 'otherearning' ||
+        clean == 'othersexpense' ||
+        clean == 'additionlearning' ||
+        clean == 'additionalearning') {
       return 'others_earning';
     }
-    if (clean == 'bonus') {
+    if (clean == 'bonus' || clean == 'bonuses') {
       return 'bonus';
     }
-    if (clean == 'ot' || clean == 'overtime') {
+    if (clean == 'ot' || clean == 'overtime' || clean == 'otamount' || clean == 'overtimeamount') {
       return 'ot';
     }
     if (clean == 'pf' || clean == 'providentfund' || clean == 'pfcontribution') {
@@ -391,7 +427,6 @@ class PayrollUploadParser {
     return '';
   }
 
-
   static List<List<String>> _parseCsvOrTsv(Uint8List bytes) {
     String content;
     try {
@@ -400,13 +435,34 @@ class PayrollUploadParser {
       content = latin1.decode(bytes);
     }
 
+    // Strip UTF-8 Byte Order Mark (BOM) if present
+    if (content.startsWith('\uFEFF')) {
+      content = content.substring(1);
+    }
+
     final lines = content.split(RegExp(r'\r\n|\r|\n'));
     final table = <List<String>>[];
 
+    // Auto-detect delimiter from the first non-empty line
+    String delimiter = ',';
+    for (final line in lines) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) continue;
+      final tabCount = '\t'.allMatches(trimmed).length;
+      final semiCount = ';'.allMatches(trimmed).length;
+      final commaCount = ','.allMatches(trimmed).length;
+      if (tabCount > commaCount && tabCount > semiCount) {
+        delimiter = '\t';
+      } else if (semiCount > commaCount && semiCount > tabCount) {
+        delimiter = ';';
+      } else {
+        delimiter = ',';
+      }
+      break;
+    }
+
     for (final line in lines) {
       if (line.trim().isEmpty) continue;
-      // Check delimiter (tab or comma)
-      final delimiter = line.contains('\t') ? '\t' : ',';
       table.add(_parseCsvLine(line, delimiter));
     }
     return table;
@@ -442,12 +498,12 @@ class PayrollUploadParser {
       final archive = ZipDecoder().decodeBytes(bytes);
       final sharedStrings = <String>[];
 
-      // 1. Read shared strings
+      // 1. Read shared strings if available
       final sharedStringsFile = archive.findFile('xl/sharedStrings.xml');
       if (sharedStringsFile != null) {
         final xml = utf8.decode(sharedStringsFile.content as List<int>);
-        final siRegex = RegExp(r'<si>(.*?)</si>', dotAll: true);
-        final tRegex = RegExp(r'<t[^>]*>(.*?)</t>', dotAll: true);
+        final siRegex = RegExp(r'<si\b[^>]*>(.*?)</si>', dotAll: true);
+        final tRegex = RegExp(r'<t\b[^>]*>(.*?)</t>', dotAll: true);
 
         for (final match in siRegex.allMatches(xml)) {
           final siContent = match.group(1) ?? '';
@@ -455,61 +511,133 @@ class PayrollUploadParser {
           for (final tMatch in tRegex.allMatches(siContent)) {
             textBuffer.write(tMatch.group(1));
           }
-          sharedStrings.add(textBuffer.toString().replaceAll('&amp;', '&').replaceAll('&lt;', '<').replaceAll('&gt;', '>'));
+          sharedStrings.add(_decodeXml(textBuffer.toString()));
         }
       }
 
-      // 2. Read sheet1
-      final sheetFile = archive.findFile('xl/worksheets/sheet1.xml') ??
-          archive.files.where((f) => f.name.startsWith('xl/worksheets/sheet') && f.name.endsWith('.xml')).firstOrNull;
+      // 2. Locate candidate worksheets
+      final sheetFiles = archive.files
+          .where((f) => f.name.startsWith('xl/worksheets/sheet') && f.name.endsWith('.xml'))
+          .toList();
 
-      if (sheetFile == null) return [];
+      if (sheetFiles.isEmpty) return [];
 
-      final sheetXml = utf8.decode(sheetFile.content as List<int>);
-      final table = <List<String>>[];
+      // Sort sheets to evaluate sheet1 first if available
+      sheetFiles.sort((a, b) => a.name.compareTo(b.name));
 
-      final rowRegex = RegExp(r'<row[^>]*>(.*?)</row>', dotAll: true);
-      final cellRegex = RegExp(r'<c\s+r="([A-Z]+)(\d+)"(?:\s+t="([^"]*)")?[^>]*>(?:<v>(.*?)</v>)?', dotAll: true);
-
-      for (final rowMatch in rowRegex.allMatches(sheetXml)) {
-        final rowXml = rowMatch.group(1) ?? '';
-        final rowMap = <int, String>{};
-        int maxCol = 0;
-
-        for (final cellMatch in cellRegex.allMatches(rowXml)) {
-          final colLetters = cellMatch.group(1) ?? 'A';
-          final colIdx = _colLetterToIndex(colLetters);
-          final cellType = cellMatch.group(3) ?? '';
-          final val = cellMatch.group(4) ?? '';
-
-          String cellText = val;
-          if (cellType == 's') {
-            final sIdx = int.tryParse(val);
-            if (sIdx != null && sIdx >= 0 && sIdx < sharedStrings.length) {
-              cellText = sharedStrings[sIdx];
-            }
+      List<List<String>> bestTable = [];
+      for (final sf in sheetFiles) {
+        final xml = utf8.decode(sf.content as List<int>);
+        final table = _parseSheetTable(xml, sharedStrings);
+        if (table.isNotEmpty) {
+          final firstRow = table.first;
+          final hasEmpId = firstRow.any((h) => _normalizeHeader(h) == 'employee_id');
+          if (hasEmpId) {
+            return table; // Found the payroll data sheet!
           }
-          rowMap[colIdx] = cellText;
-          if (colIdx > maxCol) maxCol = colIdx;
+          if (bestTable.isEmpty) {
+            bestTable = table;
+          }
         }
-
-        final rowList = <String>[];
-        for (int c = 0; c <= maxCol; c++) {
-          rowList.add(rowMap[c] ?? '');
-        }
-        table.add(rowList);
       }
-      return table;
+
+      return bestTable;
     } catch (_) {
       // If zip decoding fails, fallback to raw text splitting
       return _parseCsvOrTsv(bytes);
     }
   }
 
+  static List<List<String>> _parseSheetTable(String sheetXml, List<String> sharedStrings) {
+    final table = <List<String>>[];
+    final rowRegex = RegExp(r'<row\b[^>]*>(.*?)</row>', dotAll: true);
+    final cellRegex = RegExp(r'<c\b([^>]*?)(?:/>|>(.*?)</c>)', dotAll: true);
+
+    for (final rowMatch in rowRegex.allMatches(sheetXml)) {
+      final rowXml = rowMatch.group(1) ?? '';
+      final rowMap = <int, String>{};
+      int maxCol = -1;
+      int autoCol = 0;
+
+      for (final cellMatch in cellRegex.allMatches(rowXml)) {
+        final attrs = cellMatch.group(1) ?? '';
+        final body = cellMatch.group(2) ?? '';
+
+        final colLetters = RegExp(r'\br="([A-Za-z]+)(\d+)"').firstMatch(attrs)?.group(1);
+        final colIdx = colLetters != null ? _colLetterToIndex(colLetters) : autoCol;
+        autoCol = colIdx + 1;
+
+        final cellType = RegExp(r'\bt="([^"]*)"').firstMatch(attrs)?.group(1) ?? '';
+        String cellText = '';
+
+        if (cellType == 's') {
+          final vMatch = RegExp(r'<v\b[^>]*>(.*?)</v>', dotAll: true).firstMatch(body);
+          final sIdx = int.tryParse(vMatch?.group(1) ?? '');
+          if (sIdx != null && sIdx >= 0 && sIdx < sharedStrings.length) {
+            cellText = sharedStrings[sIdx];
+          }
+        } else if (cellType == 'inlineStr') {
+          final tMatches = RegExp(r'<t\b[^>]*>(.*?)</t>', dotAll: true).allMatches(body);
+          cellText = _decodeXml(tMatches.map((m) => m.group(1) ?? '').join());
+        } else if (cellType == 'str') {
+          final vMatch = RegExp(r'<v\b[^>]*>(.*?)</v>', dotAll: true).firstMatch(body);
+          cellText = _decodeXml(vMatch?.group(1) ?? '');
+        } else if (cellType == 'b') {
+          final vMatch = RegExp(r'<v\b[^>]*>(.*?)</v>', dotAll: true).firstMatch(body);
+          final v = vMatch?.group(1)?.trim();
+          cellText = (v == '1' || v == 'true') ? 'true' : 'false';
+        } else {
+          final vMatch = RegExp(r'<v\b[^>]*>(.*?)</v>', dotAll: true).firstMatch(body);
+          if (vMatch != null) {
+            cellText = _decodeXml(vMatch.group(1) ?? '');
+          } else {
+            final tMatches = RegExp(r'<t\b[^>]*>(.*?)</t>', dotAll: true).allMatches(body);
+            if (tMatches.isNotEmpty) {
+              cellText = _decodeXml(tMatches.map((m) => m.group(1) ?? '').join());
+            }
+          }
+        }
+
+        rowMap[colIdx] = cellText.trim();
+        if (colIdx > maxCol) maxCol = colIdx;
+      }
+
+      if (maxCol >= 0) {
+        final rowList = <String>[];
+        for (int c = 0; c <= maxCol; c++) {
+          rowList.add(rowMap[c] ?? '');
+        }
+        table.add(rowList);
+      }
+    }
+    return table;
+  }
+
+  static String _decodeXml(String text) {
+    if (!text.contains('&')) return text;
+    return text
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&apos;', "'")
+        .replaceAll('&#39;', "'")
+        .replaceAll('&#160;', ' ')
+        .replaceAllMapped(RegExp(r'&#(\d+);'), (m) {
+          final code = int.tryParse(m.group(1) ?? '');
+          return code != null ? String.fromCharCode(code) : m.group(0)!;
+        })
+        .replaceAllMapped(RegExp(r'&#x([0-9a-fA-F]+);'), (m) {
+          final code = int.tryParse(m.group(1) ?? '', radix: 16);
+          return code != null ? String.fromCharCode(code) : m.group(0)!;
+        });
+  }
+
   static int _colLetterToIndex(String letters) {
     int result = 0;
-    for (int i = 0; i < letters.length; i++) {
-      result = result * 26 + (letters.codeUnitAt(i) - 64);
+    final upper = letters.toUpperCase();
+    for (int i = 0; i < upper.length; i++) {
+      result = result * 26 + (upper.codeUnitAt(i) - 64);
     }
     return result - 1;
   }
