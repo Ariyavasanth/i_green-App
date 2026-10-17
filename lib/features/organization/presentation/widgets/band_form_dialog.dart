@@ -382,37 +382,65 @@ class _BandFormDialogState extends ConsumerState<BandFormDialog> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Band Title / Role Scope
-                    const Text(
-                      'Title / Role Scope *',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF344054),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    TextFormField(
-                      controller: _titleController,
-                      style: const TextStyle(fontSize: 13),
-                      decoration: InputDecoration(
-                        hintText:
-                            'e.g. Executive Leadership, Department Head, Associate',
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(
-                            color: Color(0xFFD0D5DD),
-                          ),
-                        ),
-                      ),
-                      validator: (v) => v == null || v.trim().isEmpty
-                          ? 'Title is required'
-                          : null,
+                    // Designation Dropdown (Only created designations)
+                    Builder(
+                      builder: (context) {
+                        final desigsAsync = ref.watch(allDesignationsProvider);
+                        final allDesigs = desigsAsync.valueOrNull ?? [];
+                        final orgDesigs = allDesigs.where((d) {
+                          if (_selectedOrgId != null &&
+                              _selectedOrgId!.isNotEmpty &&
+                              d.organizationId.isNotEmpty) {
+                            return d.organizationId == _selectedOrgId;
+                          }
+                          if (_selectedOrgName != null &&
+                              _selectedOrgName!.isNotEmpty &&
+                              d.organizationName.isNotEmpty) {
+                            return d.organizationName.toLowerCase() ==
+                                _selectedOrgName!.toLowerCase();
+                          }
+                          return true;
+                        }).toList();
+
+                        // Only actual designations created in the organization
+                        final desigItems = orgDesigs
+                            .map((d) => d.designationName.trim())
+                            .where((name) => name.isNotEmpty)
+                            .toSet()
+                            .toList();
+
+                        desigItems.sort(
+                          (a, b) => a.toLowerCase().compareTo(b.toLowerCase()),
+                        );
+
+                        final currentTitle = _titleController.text.trim();
+                        final selectedValue = currentTitle.isNotEmpty &&
+                                desigItems.contains(currentTitle)
+                            ? currentTitle
+                            : null;
+
+                        return AppSearchableDropdown<String>(
+                          label: 'Designation *',
+                          value: selectedValue,
+                          items: desigItems,
+                          placeholder: desigItems.isEmpty
+                              ? 'No designations available'
+                              : 'Select Designation',
+                          searchHint: 'Search designation...',
+                          isRequired: true,
+                          validator: (v) {
+                            if (_titleController.text.trim().isEmpty) {
+                              return 'Designation is required';
+                            }
+                            return null;
+                          },
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() => _titleController.text = val);
+                            }
+                          },
+                        );
+                      },
                     ),
                     const SizedBox(height: 16),
 

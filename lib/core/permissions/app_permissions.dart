@@ -9,6 +9,7 @@ class AppPermissions {
   // Organization
   static const String organizationManagement = 'Organization Management';
   static const String organizationStructure = 'Organization Structure';
+  static const String hierarchy = 'Hierarchy';
 
   // Employee
   static const String employeeManagement = 'Employee Management';
@@ -74,6 +75,7 @@ class AppPermissions {
     home,
     organizationManagement,
     organizationStructure,
+    hierarchy,
     responses,
     employeeManagement,
     attendance,
@@ -127,6 +129,7 @@ class AppPermissions {
     'ORGANIZATION': [
       organizationManagement,
       organizationStructure,
+      hierarchy,
     ],
     'EMPLOYEE MANAGEMENT': [
       employeeManagement,

@@ -343,6 +343,9 @@ class Employee {
       if (normClean == 'organizationmanagement' &&
           pClean == 'organizationmanagement')
         return true;
+      if ((normClean == 'hierarchy' || normClean == 'employeehierarchy') &&
+          (pClean == 'hierarchy' || pClean == 'employeehierarchy'))
+        return true;
 
       // Incentive aliases
       if ((normClean == 'incentiverequest' || normClean == 'incentive') &&

@@ -69,6 +69,12 @@ class AppShell extends ConsumerWidget {
       'Organization',
     ),
     SidebarDestination(
+      'Hierarchy',
+      '/hierarchy',
+      Icons.schema_outlined,
+      'Organization',
+    ),
+    SidebarDestination(
       'Responses',
       '/responses',
       Icons.rate_review_outlined,

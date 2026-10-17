@@ -32,6 +32,7 @@ import '../../features/bills/presentation/bills_page.dart';
 import '../../features/bills/presentation/new_bill_page.dart';
 import '../../features/organization/presentation/organization_management_page.dart';
 import '../../features/organization/presentation/organization_structure_page.dart';
+import '../../features/hierarchy/presentation/hierarchy_page.dart';
 import '../../features/employee/presentation/responses_page.dart';
 import '../../features/employee/presentation/employee_management_page.dart';
 import '../../features/employee/presentation/my_profile_page.dart';
@@ -90,6 +91,7 @@ String? _getRequiredPermissionForPath(String path) {
   if (path == '/home') return 'Home';
   if (path == '/organization-management') return 'Organization Management';
   if (path == '/organization-structure') return 'Organization Structure';
+  if (path == '/hierarchy') return 'Hierarchy';
   if (path == '/employee' || path == '/employee-management') return 'Employee Management';
   if (path == '/responses' || path == '/employee/responses') return 'Responses';
   if (path == '/leave' || path == '/leave-management') return 'Leave Management';
@@ -178,6 +180,8 @@ String _getFirstAllowedPath(Employee emp) {
     'payroll settings': '/payroll-settings',
     'organization management': '/organization-management',
     'organization structure': '/organization-structure',
+    'hierarchy': '/hierarchy',
+    'employee hierarchy': '/hierarchy',
     'items': '/items',
     'inventory adjustments': '/inventory-adjustments',
     'customers': '/customers',
@@ -294,6 +298,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/organization-structure',
             builder: (_, _) => const OrganizationStructurePage(),
+          ),
+          GoRoute(
+            path: '/hierarchy',
+            builder: (_, _) => const HierarchyPage(),
           ),
           GoRoute(
             path: '/employee',

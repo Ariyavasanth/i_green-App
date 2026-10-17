@@ -55,6 +55,13 @@ class HrmsModuleScreen extends ConsumerStatefulWidget {
         customIcon: _icon('Organisation_structure.png'),
         containerColor: const Color(0xFFE0F9F8),
       ),
+      _SubModule(
+        'Employee\nHierarchy',
+        Icons.schema_outlined,
+        '/hierarchy',
+        const Color(0xFF9CC70A),
+        containerColor: const Color(0xFFF4F9E6),
+      ),
     ],
     'EMPLOYEE': [
       _SubModule(
