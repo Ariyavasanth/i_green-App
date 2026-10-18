@@ -162,17 +162,22 @@ class FirebaseLoanRepository implements LoanRepository {
     required double amount,
     required String paymentDate,
     String referenceNote = '',
+    String paymentType = 'Salary Deduction',
+    String paymentMode = 'Payroll',
+    String receivedBy = '',
   }) async {
     try {
       final loan = await getLoanByLoanId(loanId);
       if (loan == null) return;
 
       // Idempotency: check if this payroll repayment is already recorded
-      final alreadyRecorded = loan.repayments.any(
-        (r) => r.payrollId == payrollId || (r.month == month && r.payrollId.isNotEmpty && r.payrollId == payrollId),
-      );
-      if (alreadyRecorded) {
-        return; // Do not deduct twice!
+      if (payrollId.isNotEmpty && payrollId != 'DIRECT_PAYMENT') {
+        final alreadyRecorded = loan.repayments.any(
+          (r) => r.payrollId == payrollId || (r.month == month && r.payrollId == payrollId),
+        );
+        if (alreadyRecorded) {
+          return; // Do not deduct twice!
+        }
       }
 
       final newRepayment = LoanRepayment(
@@ -183,6 +188,9 @@ class FirebaseLoanRepository implements LoanRepository {
         paymentDate: paymentDate.isNotEmpty ? paymentDate : DateFormat('yyyy-MM-dd').format(DateTime.now()),
         referenceNote: referenceNote.isNotEmpty ? referenceNote : 'Payroll deduction for $month',
         createdAt: DateTime.now().toIso8601String(),
+        paymentType: paymentType,
+        paymentMode: paymentMode,
+        receivedBy: receivedBy,
       );
 
       final updatedRepayments = [...loan.repayments, newRepayment];
@@ -209,6 +217,31 @@ class FirebaseLoanRepository implements LoanRepository {
         'updated_at': FieldValue.serverTimestamp(),
       });
     } catch (_) {}
+  }
+
+  @override
+  Future<void> recordDirectPayment({
+    required String loanId,
+    required double amount,
+    required String month,
+    required String paymentDate,
+    String paymentMode = 'Cash',
+    String referenceNote = '',
+    String receivedBy = 'Admin',
+  }) async {
+    return recordRepayment(
+      loanId: loanId,
+      payrollId: 'DIRECT_PAYMENT',
+      month: month,
+      amount: amount,
+      paymentDate: paymentDate,
+      referenceNote: referenceNote.isNotEmpty
+          ? referenceNote
+          : 'Direct payment of ₹${amount.toStringAsFixed(0)} ($paymentMode) to $receivedBy for $month',
+      paymentType: 'Direct Payment',
+      paymentMode: paymentMode,
+      receivedBy: receivedBy,
+    );
   }
 
   @override

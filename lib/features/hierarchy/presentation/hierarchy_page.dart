@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/widgets/app_searchable_dropdown.dart';
+import '../../employee/providers/employee_providers.dart';
 import '../../organization/domain/organization.dart';
 import '../../organization/providers/organization_providers.dart';
 import '../domain/hierarchy_node.dart';
@@ -374,24 +375,39 @@ class _HierarchyPageState extends ConsumerState<HierarchyPage> {
       data: (orgs) {
         if (orgs.isEmpty) return const SizedBox.shrink();
 
-        final items = ['All', ...orgs.map((o) => o.canonicalId)];
+        final items = orgs.map((o) => o.canonicalId).toList();
+        final currentEmp = ref.watch(currentEmployeeProvider);
+        final userOrg = orgs.where((o) =>
+            (currentEmp != null &&
+                currentEmp.organizationName.isNotEmpty &&
+                o.name.trim().toLowerCase() ==
+                    currentEmp.organizationName.trim().toLowerCase()) ||
+            (currentEmp != null &&
+                currentEmp.organizationId.isNotEmpty &&
+                (o.canonicalId == currentEmp.organizationId ||
+                    o.docId == currentEmp.organizationId ||
+                    o.id.toString() == currentEmp.organizationId)),
+        ).firstOrNull;
+
+        final defaultOrgId = userOrg?.canonicalId ?? items.first;
+        final selectedValue = (selectedOrgId != null && items.contains(selectedOrgId))
+            ? selectedOrgId
+            : defaultOrgId;
 
         return SizedBox(
           width: 240,
           child: AppSearchableDropdown<String>(
             label: 'Organization',
-            value: (selectedOrgId != null && items.contains(selectedOrgId))
-                ? selectedOrgId
-                : 'All',
+            value: selectedValue,
             items: items,
             itemLabel: (id) {
-              if (id == 'All') return 'All Organizations';
               final found = orgs.where((o) => o.canonicalId == id).firstOrNull;
               return found?.name ?? id;
             },
             onChanged: (val) {
-              ref.read(selectedHierarchyOrgIdProvider.notifier).state =
-                  (val == null || val == 'All') ? null : val;
+              if (val != null) {
+                ref.read(selectedHierarchyOrgIdProvider.notifier).state = val;
+              }
             },
           ),
         );

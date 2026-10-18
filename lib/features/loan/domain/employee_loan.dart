@@ -1,11 +1,14 @@
 class LoanRepayment {
   final String repaymentId;
-  final String payrollId; // e.g. "6_June_2026" or "PAY-001"
+  final String payrollId; // e.g. "6_June_2026", "PAY-001", or "DIRECT_PAYMENT"
   final String month; // e.g. "September 2026"
   final double amount;
   final String paymentDate; // e.g. "2026-09-30"
   final String referenceNote;
   final String createdAt;
+  final String paymentType; // 'Salary Deduction' or 'Direct Payment'
+  final String paymentMode; // 'Payroll', 'Cash', 'UPI', 'Bank Transfer', 'Cheque', 'Other'
+  final String receivedBy; // Name of admin / authority who received direct payment
 
   const LoanRepayment({
     required this.repaymentId,
@@ -15,7 +18,15 @@ class LoanRepayment {
     required this.paymentDate,
     this.referenceNote = '',
     this.createdAt = '',
+    this.paymentType = 'Salary Deduction',
+    this.paymentMode = 'Payroll',
+    this.receivedBy = '',
   });
+
+  bool get isDirectPayment =>
+      paymentType.trim().toLowerCase() == 'direct payment' ||
+      payrollId == 'DIRECT_PAYMENT' ||
+      (paymentMode.trim().isNotEmpty && paymentMode.trim().toLowerCase() != 'payroll');
 
   Map<String, dynamic> toMap() {
     return {
@@ -26,18 +37,62 @@ class LoanRepayment {
       'payment_date': paymentDate,
       'reference_note': referenceNote,
       'created_at': createdAt,
+      'payment_type': paymentType,
+      'payment_mode': paymentMode,
+      'received_by': receivedBy,
     };
   }
 
   factory LoanRepayment.fromMap(Map<String, dynamic> map) {
+    final rawPayrollId = map['payroll_id'] as String? ?? '';
+    final rawPaymentType = map['payment_type'] as String?;
+    final rawPaymentMode = map['payment_mode'] as String?;
+
+    final resolvedPaymentType = rawPaymentType != null && rawPaymentType.isNotEmpty
+        ? rawPaymentType
+        : (rawPayrollId.isNotEmpty && rawPayrollId != 'DIRECT_PAYMENT' ? 'Salary Deduction' : 'Direct Payment');
+
+    final resolvedPaymentMode = rawPaymentMode != null && rawPaymentMode.isNotEmpty
+        ? rawPaymentMode
+        : (resolvedPaymentType == 'Salary Deduction' ? 'Payroll' : 'Cash');
+
     return LoanRepayment(
       repaymentId: map['repayment_id'] as String? ?? '',
-      payrollId: map['payroll_id'] as String? ?? '',
+      payrollId: rawPayrollId,
       month: map['month'] as String? ?? '',
       amount: (map['amount'] as num?)?.toDouble() ?? 0.0,
       paymentDate: map['payment_date'] as String? ?? '',
       referenceNote: map['reference_note'] as String? ?? '',
       createdAt: map['created_at'] as String? ?? '',
+      paymentType: resolvedPaymentType,
+      paymentMode: resolvedPaymentMode,
+      receivedBy: map['received_by'] as String? ?? '',
+    );
+  }
+
+  LoanRepayment copyWith({
+    String? repaymentId,
+    String? payrollId,
+    String? month,
+    double? amount,
+    String? paymentDate,
+    String? referenceNote,
+    String? createdAt,
+    String? paymentType,
+    String? paymentMode,
+    String? receivedBy,
+  }) {
+    return LoanRepayment(
+      repaymentId: repaymentId ?? this.repaymentId,
+      payrollId: payrollId ?? this.payrollId,
+      month: month ?? this.month,
+      amount: amount ?? this.amount,
+      paymentDate: paymentDate ?? this.paymentDate,
+      referenceNote: referenceNote ?? this.referenceNote,
+      createdAt: createdAt ?? this.createdAt,
+      paymentType: paymentType ?? this.paymentType,
+      paymentMode: paymentMode ?? this.paymentMode,
+      receivedBy: receivedBy ?? this.receivedBy,
     );
   }
 }
@@ -441,10 +496,11 @@ class EmployeeLoan {
       final month = getMonthAtOffset(firstDeductionMonth, monthIndex);
       final monthNorm = month.trim().toLowerCase();
 
-      // Check if this month is already recorded in repayments
-      final repayment = repayments.where((r) => r.month.trim().toLowerCase() == monthNorm).firstOrNull;
-      if (repayment != null) {
-        balance -= repayment.amount;
+      // Check if this month is already recorded in repayments (including direct payments to admin)
+      final monthRepayments = repayments.where((r) => r.month.trim().toLowerCase() == monthNorm);
+      if (monthRepayments.isNotEmpty) {
+        final paidInMonth = monthRepayments.fold<double>(0.0, (sum, r) => sum + r.amount);
+        balance -= paidInMonth;
       } else {
         // Upcoming month: check for approved pause or flexible request
         final pauseReq = getPauseRequestForMonth(month);
@@ -500,15 +556,41 @@ class EmployeeLoan {
     return lastDeductionMonth;
   }
 
-  /// Paid installments count
+  /// Paid installments count (accounts for accelerated payments and direct prepayments)
   int get paidInstallments {
     final total = totalTenureMonths;
-    if (repayments.isNotEmpty) {
-      return repayments.length > total ? total : repayments.length;
-    }
-    if (emiAmount <= 0) return 0;
-    final count = (totalPaid / emiAmount).floor();
-    return count > total ? total : count;
+    if (emiAmount <= 0) return repayments.length;
+    final coveredByAmount = (totalPaid / emiAmount).floor();
+    final effective = coveredByAmount > repayments.length ? coveredByAmount : repayments.length;
+    return effective > total ? total : effective;
+  }
+
+  /// Direct payments recorded outside payroll
+  List<LoanRepayment> get directRepayments =>
+      repayments.where((r) => r.isDirectPayment).toList();
+
+  /// Payroll deduction repayments
+  List<LoanRepayment> get payrollRepayments =>
+      repayments.where((r) => !r.isDirectPayment).toList();
+
+  /// Total direct payments paid directly to admin
+  double get totalDirectPaid =>
+      directRepayments.fold<double>(0.0, (sum, r) => sum + r.amount);
+
+  /// Direct payments for a specific month
+  double getDirectPaymentsForMonth(String month) {
+    final norm = month.trim().toLowerCase();
+    return repayments
+        .where((r) => r.month.trim().toLowerCase() == norm && r.isDirectPayment)
+        .fold<double>(0.0, (sum, r) => sum + r.amount);
+  }
+
+  /// Total repayments for a specific month (direct + payroll)
+  double getTotalRepaymentsForMonth(String month) {
+    final norm = month.trim().toLowerCase();
+    return repayments
+        .where((r) => r.month.trim().toLowerCase() == norm)
+        .fold<double>(0.0, (sum, r) => sum + r.amount);
   }
 
   /// Remaining installments count

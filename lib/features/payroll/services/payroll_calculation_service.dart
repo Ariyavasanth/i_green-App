@@ -244,6 +244,10 @@ class PayrollCalculationService {
       return (emiAmount: 0.0, loanDescription: pauseNote);
     }
 
+    // Determine baseline scheduled target EMI for this month before considering direct payments
+    final double scheduledTargetEmi;
+    final String baseDescription;
+
     // 3. Case B: Current month has an approved Flexible EMI request (partial deduction)
     final flexibleReq = loan.getApprovedFlexibleRequestForMonth(month);
     if (flexibleReq != null) {
@@ -253,59 +257,111 @@ class PayrollCalculationService {
       final String flexNote = loan.loanId.isNotEmpty
           ? 'Partial EMI (₹${finalEmi.toStringAsFixed(0)} of ₹${loan.emiAmount.toStringAsFixed(0)}) - ₹${unpaid.toStringAsFixed(0)} carried forward (${loan.loanId})'
           : 'Partial EMI (₹${finalEmi.toStringAsFixed(0)} of ₹${loan.emiAmount.toStringAsFixed(0)}) - Carried forward';
-      return (emiAmount: double.parse(finalEmi.toStringAsFixed(2)), loanDescription: flexNote);
-    }
-
-    // 4. Case C: Recovering an unrecovered deferred pause from an earlier month (2x EMI)
-    final unrecoveredDeferred = loan.getUnrecoveredDeferredRequestBefore(month);
-    if (unrecoveredDeferred != null) {
-      final defMonthIdx = loan.scheduleMonths.indexWhere((m) => m.trim().toLowerCase() == unrecoveredDeferred.month.trim().toLowerCase());
-      final defMonthEmi = defMonthIdx != -1
-          ? loan.emiForInstallment(defMonthIdx, payrollStartDay: pStart, payrollEndDay: pEnd)
-          : (loan.interestRate > 0 ? loan.emiForInstallment(loan.paidInstallments, payrollStartDay: pStart, payrollEndDay: pEnd) : loan.emiAmount);
-
-      final monthIdx = loan.scheduleMonths.indexWhere((m) => m.trim().toLowerCase() == month.trim().toLowerCase());
-      final currentMonthEmi = monthIdx != -1
-          ? loan.emiForInstallment(monthIdx, payrollStartDay: pStart, payrollEndDay: pEnd)
-          : (loan.interestRate > 0 ? loan.emiForInstallment(loan.paidInstallments, payrollStartDay: pStart, payrollEndDay: pEnd) : loan.emiAmount);
-
-      final total2xAmount = currentMonthEmi + defMonthEmi;
-      final maxRecoverable = loan.actualRemainingBalance;
-      final finalEmi = (total2xAmount > maxRecoverable && maxRecoverable > 0) ? maxRecoverable : total2xAmount;
-
-      final note = loan.loanId.isNotEmpty
-          ? 'Loan EMI (${loan.loanId} - 2 EMIs: deferred ${unrecoveredDeferred.month} + $month)'
-          : 'Loan EMI (2 EMIs: deferred ${unrecoveredDeferred.month} + $month)';
-
-      return (emiAmount: double.parse(finalEmi.toStringAsFixed(2)), loanDescription: note);
-    }
-
-    // 5. Case D: Normal installment or extended tenure installment
-    final monthIdx = loan.scheduleMonths.indexWhere((m) => m.trim().toLowerCase() == month.trim().toLowerCase());
-    final currentMonthEmi = monthIdx != -1 && monthIdx < loan.installments
-        ? loan.emiForInstallment(monthIdx, payrollStartDay: pStart, payrollEndDay: pEnd)
-        : (loan.interestRate > 0 ? loan.emiForInstallment(loan.paidInstallments, payrollStartDay: pStart, payrollEndDay: pEnd) : loan.emiAmount);
-
-    final maxRecoverable = loan.actualRemainingBalance;
-    final finalEmi = (currentMonthEmi > maxRecoverable && maxRecoverable > 0) ? maxRecoverable : currentMonthEmi;
-
-    final bool isExtended = monthIdx != -1 && (monthIdx + 1 > loan.baseInstallments);
-    final String installmentNote;
-    if (isExtended) {
-      installmentNote = loan.loanId.isNotEmpty
-          ? 'Extended Installment ${monthIdx + 1} of ${loan.totalTenureMonths} (${loan.loanId})'
-          : 'Extended Installment ${monthIdx + 1} of ${loan.totalTenureMonths}';
-    } else if (finalEmi < currentMonthEmi && finalEmi == maxRecoverable) {
-      installmentNote = loan.loanId.isNotEmpty
-          ? 'Final Installment (Balance ₹${finalEmi.toStringAsFixed(0)}) - ${loan.loanId}'
-          : 'Final Installment (Balance ₹${finalEmi.toStringAsFixed(0)})';
+      scheduledTargetEmi = finalEmi;
+      baseDescription = flexNote;
     } else {
-      installmentNote = monthIdx != -1
-          ? 'Installment ${monthIdx + 1} of ${loan.totalTenureMonths} (${loan.loanId})'
-          : (loan.loanId.isNotEmpty ? 'Loan EMI (${loan.loanId})' : 'Loan EMI');
+      // 4. Case C: Recovering an unrecovered deferred pause from an earlier month (2x EMI)
+      final unrecoveredDeferred = loan.getUnrecoveredDeferredRequestBefore(month);
+      if (unrecoveredDeferred != null) {
+        final defMonthIdx = loan.scheduleMonths.indexWhere((m) => m.trim().toLowerCase() == unrecoveredDeferred.month.trim().toLowerCase());
+        final defMonthEmi = defMonthIdx != -1
+            ? loan.emiForInstallment(defMonthIdx, payrollStartDay: pStart, payrollEndDay: pEnd)
+            : (loan.interestRate > 0 ? loan.emiForInstallment(loan.paidInstallments, payrollStartDay: pStart, payrollEndDay: pEnd) : loan.emiAmount);
+
+        final monthIdx = loan.scheduleMonths.indexWhere((m) => m.trim().toLowerCase() == month.trim().toLowerCase());
+        final currentMonthEmi = monthIdx != -1
+            ? loan.emiForInstallment(monthIdx, payrollStartDay: pStart, payrollEndDay: pEnd)
+            : (loan.interestRate > 0 ? loan.emiForInstallment(loan.paidInstallments, payrollStartDay: pStart, payrollEndDay: pEnd) : loan.emiAmount);
+
+        final total2xAmount = currentMonthEmi + defMonthEmi;
+        final maxRecoverable = loan.actualRemainingBalance;
+        final finalEmi = (total2xAmount > maxRecoverable && maxRecoverable > 0) ? maxRecoverable : total2xAmount;
+
+        final note = loan.loanId.isNotEmpty
+            ? 'Loan EMI (${loan.loanId} - 2 EMIs: deferred ${unrecoveredDeferred.month} + $month)'
+            : 'Loan EMI (2 EMIs: deferred ${unrecoveredDeferred.month} + $month)';
+
+        scheduledTargetEmi = finalEmi;
+        baseDescription = note;
+      } else {
+        // 5. Case D: Normal installment or extended tenure installment
+        final monthIdx = loan.scheduleMonths.indexWhere((m) => m.trim().toLowerCase() == month.trim().toLowerCase());
+        final currentMonthEmi = monthIdx != -1 && monthIdx < loan.installments
+            ? loan.emiForInstallment(monthIdx, payrollStartDay: pStart, payrollEndDay: pEnd)
+            : (loan.interestRate > 0 ? loan.emiForInstallment(loan.paidInstallments, payrollStartDay: pStart, payrollEndDay: pEnd) : loan.emiAmount);
+
+        final maxRecoverable = loan.actualRemainingBalance;
+        final finalEmi = (currentMonthEmi > maxRecoverable && maxRecoverable > 0) ? maxRecoverable : currentMonthEmi;
+
+        final bool isExtended = monthIdx != -1 && (monthIdx + 1 > loan.baseInstallments);
+        final String installmentNote;
+        if (isExtended) {
+          installmentNote = loan.loanId.isNotEmpty
+              ? 'Extended Installment ${monthIdx + 1} of ${loan.totalTenureMonths} (${loan.loanId})'
+              : 'Extended Installment ${monthIdx + 1} of ${loan.totalTenureMonths}';
+        } else if (finalEmi < currentMonthEmi && finalEmi == maxRecoverable) {
+          installmentNote = loan.loanId.isNotEmpty
+              ? 'Final Installment (Balance ₹${finalEmi.toStringAsFixed(0)}) - ${loan.loanId}'
+              : 'Final Installment (Balance ₹${finalEmi.toStringAsFixed(0)})';
+        } else {
+          installmentNote = monthIdx != -1
+              ? 'Installment ${monthIdx + 1} of ${loan.totalTenureMonths} (${loan.loanId})'
+              : (loan.loanId.isNotEmpty ? 'Loan EMI (${loan.loanId})' : 'Loan EMI');
+        }
+
+        scheduledTargetEmi = finalEmi;
+        baseDescription = installmentNote;
+      }
     }
 
-    return (emiAmount: double.parse(finalEmi.toStringAsFixed(2)), loanDescription: installmentNote);
+    // 6. Direct Payment to Admin / Prepayment check:
+    // If the employee already paid directly to the admin for this month, adjust or zero out salary deduction
+    final alreadyPaidForMonth = loan.repayments
+        .where((r) => r.month.trim().toLowerCase() == month.trim().toLowerCase())
+        .fold<double>(0.0, (sum, r) => sum + r.amount);
+
+    final hasDirectPayment = loan.repayments.any(
+        (r) => r.month.trim().toLowerCase() == month.trim().toLowerCase() && r.isDirectPayment);
+
+    if (alreadyPaidForMonth > 0) {
+      if (alreadyPaidForMonth >= scheduledTargetEmi) {
+        // Fully covered or overpaid directly to admin
+        final extraAdvance = alreadyPaidForMonth - scheduledTargetEmi;
+        final String note;
+        if (hasDirectPayment) {
+          if (extraAdvance > 0.01) {
+            note = loan.loanId.isNotEmpty
+                ? 'Paid Directly to Admin: ₹${alreadyPaidForMonth.toStringAsFixed(0)} received (Covered full EMI + ₹${extraAdvance.toStringAsFixed(0)} advance) - ${loan.loanId}'
+                : 'Paid Directly to Admin: ₹${alreadyPaidForMonth.toStringAsFixed(0)} received (Covered full EMI + ₹${extraAdvance.toStringAsFixed(0)} advance)';
+          } else {
+            note = loan.loanId.isNotEmpty
+                ? 'Paid Directly to Admin: ₹${alreadyPaidForMonth.toStringAsFixed(0)} received (${loan.loanId})'
+                : 'Paid Directly to Admin: ₹${alreadyPaidForMonth.toStringAsFixed(0)} received';
+          }
+        } else {
+          note = loan.loanId.isNotEmpty
+              ? 'Already Paid: ₹${alreadyPaidForMonth.toStringAsFixed(0)} (${loan.loanId})'
+              : 'Already Paid: ₹${alreadyPaidForMonth.toStringAsFixed(0)}';
+        }
+        return (emiAmount: 0.0, loanDescription: note);
+      } else {
+        // Partially covered directly, deduct only the remaining difference from salary
+        final remainingDeduction = (scheduledTargetEmi - alreadyPaidForMonth).clamp(0.0, loan.actualRemainingBalance);
+        final String note;
+        if (hasDirectPayment) {
+          note = loan.loanId.isNotEmpty
+              ? 'Partial Direct Payment: ₹${alreadyPaidForMonth.toStringAsFixed(0)} paid to admin, ₹${remainingDeduction.toStringAsFixed(0)} from salary (${loan.loanId})'
+              : 'Partial Direct Payment: ₹${alreadyPaidForMonth.toStringAsFixed(0)} paid to admin, ₹${remainingDeduction.toStringAsFixed(0)} from salary';
+        } else {
+          note = loan.loanId.isNotEmpty
+              ? 'Partial Payment: ₹${alreadyPaidForMonth.toStringAsFixed(0)} already paid, ₹${remainingDeduction.toStringAsFixed(0)} from salary (${loan.loanId})'
+              : 'Partial Payment: ₹${alreadyPaidForMonth.toStringAsFixed(0)} already paid, ₹${remainingDeduction.toStringAsFixed(0)} from salary';
+        }
+        return (emiAmount: double.parse(remainingDeduction.toStringAsFixed(2)), loanDescription: note);
+      }
+    }
+
+    return (emiAmount: double.parse(scheduledTargetEmi.toStringAsFixed(2)), loanDescription: baseDescription);
   }
 
   /// Single Source of Truth for Employee Payroll Calculation

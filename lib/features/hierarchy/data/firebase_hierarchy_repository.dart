@@ -164,10 +164,6 @@ class FirebaseHierarchyRepository implements HierarchyRepository {
       final departmentsSet = <String>{};
 
       for (final emp in orgEmployees) {
-        if (emp.department.trim().isNotEmpty) {
-          departmentsSet.add(emp.department.trim());
-        }
-
         final desigClean = emp.designation.trim().toLowerCase();
         final deptClean = emp.department.trim().toLowerCase();
 
@@ -200,6 +196,15 @@ class FirebaseHierarchyRepository implements HierarchyRepository {
           resolvedColorHex = matchedBand.colorHex;
         }
 
+        // Only show employees in hierarchy if their designation is assigned to a Band
+        if (resolvedLevel <= 0) {
+          continue;
+        }
+
+        if (emp.department.trim().isNotEmpty) {
+          departmentsSet.add(emp.department.trim());
+        }
+
         if (resolvedTitle.isEmpty && resolvedLevel > 0) {
           resolvedTitle = _defaultBandTitleForLevel(resolvedLevel);
         }
@@ -226,6 +231,16 @@ class FirebaseHierarchyRepository implements HierarchyRepository {
         if (emp.emailAddress.trim().isNotEmpty) {
           nodeMap[emp.emailAddress.trim().toLowerCase()] = node;
         }
+      }
+
+      if (nodesList.isEmpty) {
+        return HierarchyTree(
+          organizationId: effectiveOrgId ?? '',
+          organizationName: effectiveOrgName ?? '',
+          rootNodes: const [],
+          totalEmployees: 0,
+          departmentsCount: 0,
+        );
       }
 
       // 5. Build Parent-Child Relationships with Cycle Detection
@@ -467,7 +482,7 @@ class FirebaseHierarchyRepository implements HierarchyRepository {
         organizationId: effectiveOrgId,
         organizationName: effectiveOrgName,
         rootNodes: rootNodes,
-        totalEmployees: orgEmployees.length,
+        totalEmployees: nodesList.length,
         departmentsCount: departmentsSet.length,
         maxDepth: maxDepth,
         hasCycles: hasCycles,

@@ -257,5 +257,206 @@ void main() {
       expect(loan12.scheduleMonths[11], 'September 2027');
       expect(loan12.scheduleMonths[12], 'October 2027');
     });
+
+    test('8. Employee gives 3000 directly to admin in Month 2: balance drops from 9000 to 6000, and Month 2 payroll deducts 0 from salary', () {
+      const settings = PayrollSettings(
+        id: 1,
+        payrollStartDay: 20,
+        payrollEndDay: 20,
+      );
+
+      // 10,000 loan, 1,000/mo EMI, 10 installments
+      final loan10k = EmployeeLoan(
+        id: 3,
+        loanId: 'LN10K',
+        employeeId: 303,
+        employeeCustomId: 'EMP303',
+        employeeName: 'Karthik S',
+        department: 'Operations',
+        designation: 'Technician',
+        loanType: 'Salary Advance',
+        loanAmount: 10000.0,
+        loanDate: '2026-08-01',
+        disbursementDate: '2026-08-01',
+        purpose: 'Advance',
+        requestedBy: 'Karthik S',
+        totalRepayableAmount: 10000.0,
+        installments: 10,
+        originalInstallments: 10,
+        emiAmount: 1000.0,
+        remainingBalance: 9000.0,
+        firstDeductionMonth: 'September 2026',
+        lastDeductionMonth: 'June 2027',
+        status: 'Active',
+        repayments: const [
+          // Month 1: 1,000 deducted from salary via payroll
+          LoanRepayment(
+            repaymentId: 'REP_M1',
+            payrollId: 'PAY_SEP',
+            month: 'September 2026',
+            amount: 1000.0,
+            paymentDate: '2026-09-30',
+            paymentType: 'Salary Deduction',
+            paymentMode: 'Payroll',
+          ),
+          // Month 2: Employee gave 3,000 directly to admin in cash outside salary
+          LoanRepayment(
+            repaymentId: 'DIR_M2',
+            payrollId: 'DIRECT_PAYMENT',
+            month: 'October 2026',
+            amount: 3000.0,
+            paymentDate: '2026-10-15',
+            paymentType: 'Direct Payment',
+            paymentMode: 'Cash',
+            receivedBy: 'Admin',
+            referenceNote: 'Direct cash payment given to admin',
+          ),
+        ],
+      );
+
+      // Remaining balance: 10,000 - 1,000 (Month 1) - 3,000 (Direct Month 2) = 6,000
+      expect(loan10k.totalPaid, 4000.0);
+      expect(loan10k.actualRemainingBalance, 6000.0);
+      expect(loan10k.paidInstallments, 4); // 4000 covers 4 installments of 1000
+
+      // Payroll calculation for Month 2 (October 2026):
+      // The employee already paid 3,000 directly to admin for October 2026.
+      // Therefore, payroll should deduct 0 from salary!
+      final octMetrics = PayrollCalculationService.calculateLoanEmi(
+        loan: loan10k,
+        month: 'October 2026',
+        settings: settings,
+      );
+
+      expect(octMetrics.emiAmount, 0.0);
+      expect(octMetrics.loanDescription, contains('Paid Directly to Admin'));
+      expect(octMetrics.loanDescription, contains('₹3000 received'));
+      expect(octMetrics.loanDescription, contains('advance'));
+    });
+
+    test('9. Following month (Month 3 / November 2026) payroll calculates normal 1000 EMI from remaining 6000 balance', () {
+      const settings = PayrollSettings(
+        id: 1,
+        payrollStartDay: 20,
+        payrollEndDay: 20,
+      );
+
+      final loan10k = EmployeeLoan(
+        id: 3,
+        loanId: 'LN10K',
+        employeeId: 303,
+        employeeCustomId: 'EMP303',
+        employeeName: 'Karthik S',
+        department: 'Operations',
+        designation: 'Technician',
+        loanType: 'Salary Advance',
+        loanAmount: 10000.0,
+        loanDate: '2026-08-01',
+        disbursementDate: '2026-08-01',
+        purpose: 'Advance',
+        requestedBy: 'Karthik S',
+        totalRepayableAmount: 10000.0,
+        installments: 10,
+        originalInstallments: 10,
+        emiAmount: 1000.0,
+        remainingBalance: 9000.0,
+        firstDeductionMonth: 'September 2026',
+        lastDeductionMonth: 'June 2027',
+        status: 'Active',
+        repayments: const [
+          LoanRepayment(
+            repaymentId: 'REP_M1',
+            payrollId: 'PAY_SEP',
+            month: 'September 2026',
+            amount: 1000.0,
+            paymentDate: '2026-09-30',
+          ),
+          LoanRepayment(
+            repaymentId: 'DIR_M2',
+            payrollId: 'DIRECT_PAYMENT',
+            month: 'October 2026',
+            amount: 3000.0,
+            paymentDate: '2026-10-15',
+            paymentType: 'Direct Payment',
+            paymentMode: 'Cash',
+          ),
+        ],
+      );
+
+      final novMetrics = PayrollCalculationService.calculateLoanEmi(
+        loan: loan10k,
+        month: 'November 2026',
+        settings: settings,
+      );
+
+      expect(novMetrics.emiAmount, 1000.0);
+      expect(novMetrics.loanDescription, contains('Installment 3 of 10 (LN10K)'));
+    });
+
+    test('10. Partial direct payment of 400 for Month 2 deducts remaining 600 from salary', () {
+      const settings = PayrollSettings(
+        id: 1,
+        payrollStartDay: 20,
+        payrollEndDay: 20,
+      );
+
+      final loan10k = EmployeeLoan(
+        id: 3,
+        loanId: 'LN10K',
+        employeeId: 303,
+        employeeCustomId: 'EMP303',
+        employeeName: 'Karthik S',
+        department: 'Operations',
+        designation: 'Technician',
+        loanType: 'Salary Advance',
+        loanAmount: 10000.0,
+        loanDate: '2026-08-01',
+        disbursementDate: '2026-08-01',
+        purpose: 'Advance',
+        requestedBy: 'Karthik S',
+        totalRepayableAmount: 10000.0,
+        installments: 10,
+        originalInstallments: 10,
+        emiAmount: 1000.0,
+        remainingBalance: 9000.0,
+        firstDeductionMonth: 'September 2026',
+        lastDeductionMonth: 'June 2027',
+        status: 'Active',
+        repayments: const [
+          LoanRepayment(
+            repaymentId: 'REP_M1',
+            payrollId: 'PAY_SEP',
+            month: 'September 2026',
+            amount: 1000.0,
+            paymentDate: '2026-09-30',
+          ),
+          // 400 given directly to admin for October 2026
+          LoanRepayment(
+            repaymentId: 'DIR_M2',
+            payrollId: 'DIRECT_PAYMENT',
+            month: 'October 2026',
+            amount: 400.0,
+            paymentDate: '2026-10-10',
+            paymentType: 'Direct Payment',
+            paymentMode: 'Cash',
+          ),
+        ],
+      );
+
+      expect(loan10k.totalPaid, 1400.0);
+      expect(loan10k.actualRemainingBalance, 8600.0);
+
+      final octMetrics = PayrollCalculationService.calculateLoanEmi(
+        loan: loan10k,
+        month: 'October 2026',
+        settings: settings,
+      );
+
+      // 1000 scheduled - 400 direct = 600 from salary
+      expect(octMetrics.emiAmount, 600.0);
+      expect(octMetrics.loanDescription, contains('Partial Direct Payment'));
+      expect(octMetrics.loanDescription, contains('₹400 paid to admin'));
+      expect(octMetrics.loanDescription, contains('₹600 from salary'));
+    });
   });
 }

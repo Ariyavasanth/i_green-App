@@ -14,6 +14,7 @@ import '../domain/employee_loan.dart';
 import '../providers/loan_providers.dart';
 import '../services/loan_statement_pdf_generator.dart';
 import 'widgets/approve_loan_dialog.dart';
+import 'widgets/record_direct_payment_dialog.dart';
 import 'widgets/review_emi_pause_dialog.dart';
 
 class LoanManagementPage extends ConsumerStatefulWidget {
@@ -854,6 +855,11 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
             value: 'activate',
             child: Row(children: [Icon(Icons.play_circle_outline, size: 16, color: Colors.green), SizedBox(width: 8), Text('Activate Loan', style: TextStyle(color: Colors.green))]),
           ),
+        if ((loan.status == 'Active' || loan.status == 'Approved') && loan.actualRemainingBalance > 0)
+          const PopupMenuItem(
+            value: 'direct_payment',
+            child: Row(children: [Icon(Icons.payments_outlined, size: 16, color: AppColors.primary), SizedBox(width: 8), Text('Record Payment')]),
+          ),
         if (loan.status == 'Active')
           const PopupMenuItem(
             value: 'close',
@@ -883,6 +889,9 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
           break;
         case 'approve':
           await ApproveLoanDialog.show(context, loan);
+          break;
+        case 'direct_payment':
+          await RecordDirectPaymentDialog.show(context, loan);
           break;
         case 'reject':
           await repository.changeLoanStatus(loan.id, 'Rejected');

@@ -431,15 +431,6 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
                                 color: Color(0xFF344054),
                               ),
                             ),
-                            SizedBox(width: 4),
-                            Text(
-                              '*',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.red,
-                              ),
-                            ),
                           ],
                         ),
                         const SizedBox(height: 6),
@@ -528,12 +519,7 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
                               ),
                             ),
                           ],
-                          validator: (val) {
-                            if (val == null || val == 0) {
-                              return 'Please select an organization band';
-                            }
-                            return null;
-                          },
+                          validator: (val) => null,
                           onChanged: (val) {
                             setState(() {
                               _selectedBandLevel = val;

@@ -34,19 +34,38 @@ final hierarchyTreeProvider = FutureProvider.autoDispose<HierarchyTree>((ref) as
   final repo = ref.watch(hierarchyRepositoryProvider);
   final selectedOrgId = ref.watch(selectedHierarchyOrgIdProvider);
   final orgsAsync = ref.watch(organizationsProvider);
+  final currentEmp = ref.watch(currentEmployeeProvider);
 
   String? effectiveOrgId;
   String? effectiveOrgName;
 
+  final orgs = orgsAsync.valueOrNull ?? const [];
+
   if (selectedOrgId != null && selectedOrgId.isNotEmpty && selectedOrgId != 'All') {
     effectiveOrgId = selectedOrgId;
-    final orgs = orgsAsync.valueOrNull ?? const [];
+  } else if (orgs.isNotEmpty) {
+    final userOrg = orgs.where((o) =>
+        (currentEmp != null &&
+            currentEmp.organizationName.isNotEmpty &&
+            o.name.trim().toLowerCase() ==
+                currentEmp.organizationName.trim().toLowerCase()) ||
+        (currentEmp != null &&
+            currentEmp.organizationId.isNotEmpty &&
+            (o.canonicalId == currentEmp.organizationId ||
+                o.docId == currentEmp.organizationId ||
+                o.id.toString() == currentEmp.organizationId)),
+    ).firstOrNull;
+
+    effectiveOrgId = userOrg?.canonicalId ?? orgs.first.canonicalId;
+  }
+
+  if (effectiveOrgId != null && orgs.isNotEmpty) {
     final matchedOrg = orgs.where((o) =>
-        o.canonicalId.toLowerCase() == selectedOrgId.toLowerCase() ||
-        o.docId.toLowerCase() == selectedOrgId.toLowerCase() ||
-        (o.id != 0 && o.id.toString() == selectedOrgId) ||
-        (o.id != 0 && 'org_${o.id}' == selectedOrgId) ||
-        o.name.trim().toLowerCase() == selectedOrgId.trim().toLowerCase()
+        o.canonicalId.toLowerCase() == effectiveOrgId!.toLowerCase() ||
+        o.docId.toLowerCase() == effectiveOrgId.toLowerCase() ||
+        (o.id != 0 && o.id.toString() == effectiveOrgId) ||
+        (o.id != 0 && 'org_${o.id}' == effectiveOrgId) ||
+        o.name.trim().toLowerCase() == effectiveOrgId.trim().toLowerCase()
     ).firstOrNull;
     if (matchedOrg != null) {
       effectiveOrgName = matchedOrg.name;

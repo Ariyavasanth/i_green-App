@@ -16,6 +16,18 @@ abstract class LoanRepository {
     required double amount,
     required String paymentDate,
     String referenceNote,
+    String paymentType,
+    String paymentMode,
+    String receivedBy,
+  });
+  Future<void> recordDirectPayment({
+    required String loanId,
+    required double amount,
+    required String month,
+    required String paymentDate,
+    String paymentMode,
+    String referenceNote,
+    String receivedBy,
   });
   Future<void> changeLoanStatus(int id, String status);
   Future<String> approveLoan({

@@ -369,7 +369,14 @@ class LoanStatementPdfGenerator {
                   PdfColor statusColor = PdfColors.grey700;
 
                   if (isPaid) {
-                    if (paidAmount < (monthEmi - 1.0)) {
+                    if (ledgerRepayment != null && ledgerRepayment.isDirectPayment) {
+                      if (paidAmount > (monthEmi * 1.05)) {
+                        statusText = 'PAID (DIRECT + ADV)';
+                      } else {
+                        statusText = 'PAID (DIRECT)';
+                      }
+                      statusColor = primaryColor;
+                    } else if (paidAmount < (monthEmi - 1.0)) {
                       statusText = 'PARTIAL PAID';
                       statusColor = PdfColors.amber800;
                     } else if (isExtended) {

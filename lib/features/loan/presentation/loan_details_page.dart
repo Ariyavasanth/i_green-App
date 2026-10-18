@@ -15,6 +15,7 @@ import '../domain/employee_loan.dart';
 import '../providers/loan_providers.dart';
 import '../services/loan_statement_pdf_generator.dart';
 import 'widgets/approve_loan_dialog.dart';
+import 'widgets/record_direct_payment_dialog.dart';
 import 'widgets/request_emi_pause_dialog.dart';
 import 'widgets/review_emi_pause_dialog.dart';
 
@@ -645,8 +646,6 @@ class LoanDetailsPage extends ConsumerWidget {
     final monthlyPrincipal = loan.monthlyPrincipal;
     final firstMonthEmi = loan.emiForInstallment(0, payrollStartDay: pStart, payrollEndDay: pEnd);
     final lastMonthEmi = loan.emiForInstallment(loan.installments > 0 ? loan.installments - 1 : 0, payrollStartDay: pStart, payrollEndDay: pEnd);
-    final activeDays = loan.activeDaysForInstallment(0, payrollStartDay: pStart, payrollEndDay: pEnd);
-    final daysInMonth = loan.daysInMonthForInstallment(0);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -801,6 +800,18 @@ class LoanDetailsPage extends ConsumerWidget {
                 runSpacing: 6,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
+                  if ((loan.status.trim().toLowerCase() == 'active' || loan.status.trim().toLowerCase() == 'approved') && loan.actualRemainingBalance > 0)
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      icon: const Icon(Icons.payments_outlined, size: 16),
+                      label: const Text('Record Direct Payment', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      onPressed: () => _showRecordDirectPayment(context, ref, loan),
+                    ),
                   if (loan.status.trim().toLowerCase() == 'active' && loan.remainingInstallments > 0)
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
@@ -864,6 +875,10 @@ class LoanDetailsPage extends ConsumerWidget {
                 bool isPausePending,
                 bool isUpcoming,
                 String payrollRef,
+                bool isDirectPayment,
+                String paymentMode,
+                bool isOverpaid,
+                double overpaidAdvance,
               })> rowList = [];
 
               double pendingDeferredPrincipal = 0.0;
@@ -946,9 +961,16 @@ class LoanDetailsPage extends ConsumerWidget {
                 final remainingPrincipal = runningPrincipal < 0.01 ? 0.0 : runningPrincipal;
                 final is2xPaid = isPaid && (matchingPayroll != null && matchingPayroll.companyLoan > monthEmi * 1.3 || is2xDue);
 
-                final payrollRef = ledgerRepayment?.payrollId.isNotEmpty == true
-                    ? ledgerRepayment!.payrollId
-                    : (matchingPayroll != null ? matchingPayroll.month : '-');
+                final isDirectPayment = ledgerRepayment?.isDirectPayment ?? false;
+                final paymentMode = ledgerRepayment?.paymentMode ?? '';
+                final isOverpaid = isPaid && paidAmount > (monthEmi * 1.05);
+                final overpaidAdvance = isOverpaid ? (paidAmount - monthEmi) : 0.0;
+
+                final payrollRef = isDirectPayment
+                    ? (paymentMode.isNotEmpty ? 'Direct ($paymentMode)' : 'Direct to Admin')
+                    : (ledgerRepayment?.payrollId.isNotEmpty == true
+                        ? ledgerRepayment!.payrollId
+                        : (matchingPayroll != null ? matchingPayroll.month : '-'));
 
                 final isUpcoming = !isPaid && !isPaused && (loan.status == 'Active' && index == loan.paidInstallments);
                 final carriedToMonth = (index + 1 < scheduleMonths.length) ? scheduleMonths[index + 1] : 'Next cycle';
@@ -977,6 +999,10 @@ class LoanDetailsPage extends ConsumerWidget {
                   isPausePending: isPausePending,
                   isUpcoming: isUpcoming,
                   payrollRef: payrollRef,
+                  isDirectPayment: isDirectPayment,
+                  paymentMode: paymentMode,
+                  isOverpaid: isOverpaid,
+                  overpaidAdvance: overpaidAdvance,
                 ));
               }
 
@@ -1002,7 +1028,23 @@ class LoanDetailsPage extends ConsumerWidget {
                   // Status Cell formatting
                   Widget statusWidget;
                   if (row.isPaid) {
-                    if (row.isPartialPaid) {
+                    if (row.isDirectPayment) {
+                      if (row.isOverpaid) {
+                        statusWidget = _buildStatusWithSubtext(
+                          icon: Icons.payments,
+                          color: AppColors.primary,
+                          title: 'Paid (Direct to Admin)',
+                          subtitle: '${formatCurrency.format(row.paidAmount)} (+${formatCurrency.format(row.overpaidAdvance)} Adv)',
+                        );
+                      } else {
+                        statusWidget = _buildStatusWithSubtext(
+                          icon: Icons.payments,
+                          color: AppColors.primary,
+                          title: 'Paid (Direct to Admin)',
+                          subtitle: row.paymentMode.isNotEmpty ? row.paymentMode : 'To Admin',
+                        );
+                      }
+                    } else if (row.isPartialPaid) {
                       statusWidget = _buildStatusWithSubtext(
                         icon: Icons.check_circle_outline,
                         color: Colors.blue.shade700,
@@ -1239,7 +1281,16 @@ class LoanDetailsPage extends ConsumerWidget {
               label: const Text('Disburse / Activate Loan'),
               onPressed: () => _disburseLoan(context, ref, loan),
             ),
-          if (isActive)
+          if (isActive) ...[
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              icon: const Icon(Icons.payments_outlined, size: 16),
+              label: const Text('Record Direct Payment'),
+              onPressed: () => _showRecordDirectPayment(context, ref, loan),
+            ),
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.grey[700],
@@ -1248,9 +1299,18 @@ class LoanDetailsPage extends ConsumerWidget {
               label: const Text('Mark as Closed'),
               onPressed: () => _closeLoan(context, ref, loan),
             ),
+          ],
         ],
       ),
     );
+  }
+
+  Future<void> _showRecordDirectPayment(BuildContext context, WidgetRef ref, EmployeeLoan loan) async {
+    final result = await RecordDirectPaymentDialog.show(context, loan);
+    if (result == true) {
+      ref.invalidate(loanByIdProvider(loan.id));
+      ref.invalidate(allLoansProvider);
+    }
   }
 
   Future<void> _approveLoan(BuildContext context, WidgetRef ref, EmployeeLoan loan) async {

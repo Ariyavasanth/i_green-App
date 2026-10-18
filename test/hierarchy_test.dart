@@ -524,5 +524,36 @@ void main() {
       final treeAll = await hierarchyRepo.getHierarchyTree(organizationId: 'All');
       expect(treeAll.totalEmployees, 2);
     });
+
+    test('Scenario 11: Employees without an assigned band are excluded from the hierarchy module', () async {
+      final employees = [
+        // Has Band 7
+        createEmp(id: 1, empId: 'EMP-10', name: 'Leader Alice', dept: 'Engineering', desig: 'Managing Director'),
+        // Has Band 6
+        createEmp(id: 2, empId: 'EMP-20', name: 'Manager Bob', dept: 'Engineering', desig: 'Engineering Director'),
+        // Has NO BAND (designation "Accountant" or "Intern" has no band mapping)
+        createEmp(id: 3, empId: 'EMP-30', name: 'Unassigned Charlie', dept: 'Finance', desig: 'Intern'),
+        createEmp(id: 4, empId: 'EMP-40', name: 'NoBand Dave', dept: 'Operations', desig: 'Helper'),
+      ];
+
+      empRepo = MockEmployeeRepository(employees);
+      orgRepo = MockOrganizationRepository(
+        bands: testBands,
+        designations: testDesignations, // Only Managing Director (7), Eng Dir (6), Team Lead (4), Jr Dev (1), Fin Dir (6)
+      );
+      hierarchyRepo = FirebaseHierarchyRepository(
+        employeeRepository: empRepo,
+        organizationRepository: orgRepo,
+      );
+
+      final tree = await hierarchyRepo.getHierarchyTree(organizationId: 'org_1');
+
+      // Only Leader Alice (Band 7) and Manager Bob (Band 6) must be included!
+      expect(tree.totalEmployees, 2);
+      expect(tree.allNodes.map((n) => n.employee.employeeId).toSet(), {'EMP-10', 'EMP-20'});
+      // Unassigned Charlie and Dave must NOT appear anywhere in the tree
+      expect(tree.findNode('EMP-30'), isNull);
+      expect(tree.findNode('EMP-40'), isNull);
+    });
   });
 }
