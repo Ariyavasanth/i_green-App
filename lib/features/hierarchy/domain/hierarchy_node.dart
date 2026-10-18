@@ -14,6 +14,7 @@ class HierarchyNode {
     this.missingManagerId,
     this.missingManagerName,
     this.depth = 0,
+    this.parentLeaderNames = const [],
   }) : children = children ?? [];
 
   final Employee employee;
@@ -26,6 +27,7 @@ class HierarchyNode {
   final bool isMissingManager;
   final String? missingManagerId;
   final String? missingManagerName;
+  final List<String> parentLeaderNames;
   int depth;
 
   /// Whether this node represents a Band 7 top leadership authority.
@@ -82,6 +84,7 @@ class HierarchyNode {
     String? missingManagerId,
     String? missingManagerName,
     int? depth,
+    List<String>? parentLeaderNames,
   }) {
     return HierarchyNode(
       employee: employee ?? this.employee,
@@ -95,6 +98,7 @@ class HierarchyNode {
       missingManagerId: missingManagerId ?? this.missingManagerId,
       missingManagerName: missingManagerName ?? this.missingManagerName,
       depth: depth ?? this.depth,
+      parentLeaderNames: parentLeaderNames ?? this.parentLeaderNames,
     );
   }
 }

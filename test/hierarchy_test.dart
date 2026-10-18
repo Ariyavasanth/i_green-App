@@ -411,5 +411,118 @@ void main() {
       expect(node.matchesQuery('Band 5'), isTrue);
       expect(node.matchesQuery('NonExistent'), isFalse);
     });
+
+    test('Scenario 9: Multiple Band 7 co-leaders share subordinates collectively without dropping any leader', () async {
+      // Priya M (Band 7) & Thanigavel E (Band 7), with Sandya K (No Band) and Super Admin (No Band)
+      final employees = [
+        createEmp(id: 1, empId: 'EMP-5408', name: 'Thanigavel E', dept: 'Production', desig: 'Managing Director'), // Band 7
+        createEmp(id: 2, empId: 'EMP-5409', name: 'Priya M', dept: 'Production', desig: 'Managing Director'), // Band 7
+        createEmp(id: 3, empId: 'EMP-5403', name: 'Sandya K', dept: 'Finance & Accounts', desig: 'Junior Developer'), // Band 1
+        createEmp(id: 4, empId: 'EMP-001', name: 'Super Admin', dept: 'Finance & Accounts', desig: 'Junior Developer'), // Band 1
+      ];
+
+      empRepo = MockEmployeeRepository(employees);
+      orgRepo = MockOrganizationRepository(bands: testBands, designations: testDesignations);
+      hierarchyRepo = FirebaseHierarchyRepository(
+        employeeRepository: empRepo,
+        organizationRepository: orgRepo,
+      );
+
+      final tree = await hierarchyRepo.getHierarchyTree(organizationId: 'org_1');
+
+      // Both Priya and Thanigavel should be roots
+      expect(tree.rootNodes.length, 2);
+      final thanigavel = tree.rootNodes.firstWhere((r) => r.employee.employeeId == 'EMP-5408');
+      final priya = tree.rootNodes.firstWhere((r) => r.employee.employeeId == 'EMP-5409');
+
+      expect(thanigavel.bandLevel, 7);
+      expect(priya.bandLevel, 7);
+
+      // BOTH leaders must have the 2 subordinates!
+      expect(thanigavel.directReportsCount, 2);
+      expect(priya.directReportsCount, 2);
+
+      // Unique employees count in tree must remain 4 (no duplicate counting)
+      expect(tree.allNodes.length, 4);
+
+      // Check reporting chain for unmanaged subordinate Sandya resolves to Band 7
+      final chain = await hierarchyRepo.getReportingChain('EMP-5403', organizationId: 'org_1');
+      expect(chain.length, greaterThanOrEqualTo(2));
+      expect(chain.last.bandLevel, 7);
+    });
+
+    test('Scenario 10: Filtering by organization matches employees with organizationName or ID, and All Organizations returns everyone', () async {
+      final testOrgs = [
+        const Organization(
+          id: 1,
+          docId: 'doc_org_1',
+          name: 'IGREEN TECHNOLOGIES',
+          status: 'active',
+          businessType: '',
+          industryType: '',
+          businessUnits: '',
+          locations: '',
+          address: '',
+          pincode: '',
+          phoneNumber: '',
+          emailAddress: '',
+          website: '',
+          taxId: '',
+        ),
+        const Organization(
+          id: 2,
+          docId: 'doc_org_2',
+          name: 'IGREENTEC ENGINEERING INDIA P LTD',
+          status: 'active',
+          businessType: '',
+          industryType: '',
+          businessUnits: '',
+          locations: '',
+          address: '',
+          pincode: '',
+          phoneNumber: '',
+          emailAddress: '',
+          website: '',
+          taxId: '',
+        ),
+      ];
+
+      // Employee 1 has organizationName only, empty organizationId
+      final emp1 = createEmp(id: 1, empId: 'EMP-1', name: 'John Tech', dept: 'Engineering', desig: 'Managing Director')
+          .copyWith(organizationId: '', organizationName: 'IGREEN TECHNOLOGIES');
+      // Employee 2 has organizationName only for org 2
+      final emp2 = createEmp(id: 2, empId: 'EMP-2', name: 'Mary Eng', dept: 'Engineering', desig: 'Managing Director')
+          .copyWith(organizationId: '', organizationName: 'IGREENTEC ENGINEERING INDIA P LTD');
+
+      empRepo = MockEmployeeRepository([emp1, emp2]);
+      orgRepo = MockOrganizationRepository(
+        organizations: testOrgs,
+        bands: testBands,
+        designations: testDesignations,
+      );
+      hierarchyRepo = FirebaseHierarchyRepository(
+        employeeRepository: empRepo,
+        organizationRepository: orgRepo,
+      );
+
+      // 1. Filter by docId 'doc_org_1' -> matches John Tech by organizationName via cross-reference!
+      final treeOrg1 = await hierarchyRepo.getHierarchyTree(organizationId: 'doc_org_1');
+      expect(treeOrg1.totalEmployees, 1);
+      expect(treeOrg1.rootNodes.first.employee.employeeId, 'EMP-1');
+
+      // 2. Filter by docId 'doc_org_2' -> matches Mary Eng
+      final treeOrg2 = await hierarchyRepo.getHierarchyTree(organizationId: 'doc_org_2');
+      expect(treeOrg2.totalEmployees, 1);
+      expect(treeOrg2.rootNodes.first.employee.employeeId, 'EMP-2');
+
+      // 3. Filter by organizationName 'IGREEN TECHNOLOGIES'
+      final treeOrgName = await hierarchyRepo.getHierarchyTree(organizationName: 'IGREEN TECHNOLOGIES');
+      expect(treeOrgName.totalEmployees, 1);
+      expect(treeOrgName.rootNodes.first.employee.employeeId, 'EMP-1');
+
+      // 4. 'All' Organizations -> returns both employees
+      final treeAll = await hierarchyRepo.getHierarchyTree(organizationId: 'All');
+      expect(treeAll.totalEmployees, 2);
+    });
   });
 }

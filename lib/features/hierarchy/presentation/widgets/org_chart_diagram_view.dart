@@ -106,16 +106,11 @@ class _OrgChartDiagramViewState extends State<OrgChartDiagramView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Render root nodes side-by-side if multiple, or single CEO
+                // Render root nodes (with co-leaders grouped and bridged)
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: widget.tree.rootNodes.map((root) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 40),
-                      child: _buildTreeNode(root),
-                    );
-                  }).toList(),
+                  children: _buildRootTreeWidgets(),
                 ),
               ],
             ),
@@ -241,6 +236,155 @@ class _OrgChartDiagramViewState extends State<OrgChartDiagramView> {
       },
     );
   }
+
+  List<Widget> _buildRootTreeWidgets() {
+    final roots = widget.tree.rootNodes;
+    if (roots.isEmpty) return const [];
+
+    final visited = <HierarchyNode>{};
+    final widgets = <Widget>[];
+
+    for (final root in roots) {
+      if (visited.contains(root)) continue;
+
+      if (root.children.isNotEmpty) {
+        final childIds = root.children
+            .map((c) => c.employee.employeeId.trim().toLowerCase())
+            .toSet();
+
+        // Check if other root nodes share this identical set of children
+        final coLeaders = roots.where((other) {
+          if (other.children.length != root.children.length) return false;
+          final otherChildIds = other.children
+              .map((c) => c.employee.employeeId.trim().toLowerCase())
+              .toSet();
+          return childIds.containsAll(otherChildIds);
+        }).toList();
+
+        if (coLeaders.length > 1) {
+          visited.addAll(coLeaders);
+          widgets.add(
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 40),
+              child: _buildCoLeaderSubtree(coLeaders, root.children),
+            ),
+          );
+          continue;
+        }
+      }
+
+      visited.add(root);
+      widgets.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 40),
+          child: _buildTreeNode(root),
+        ),
+      );
+    }
+
+    return widgets;
+  }
+
+  Widget _buildCoLeaderSubtree(
+    List<HierarchyNode> leaders,
+    List<HierarchyNode> sharedChildren,
+  ) {
+    final isAnyExpanded = leaders.any((l) =>
+        widget.expandedIds.contains(l.employee.employeeId.trim().toLowerCase()));
+    final hasSearchMatchInSubtree = widget.searchQuery.isNotEmpty &&
+        sharedChildren.any((c) => c.matchesOrHasDescendantMatch(widget.searchQuery));
+    final isExpanded = isAnyExpanded || hasSearchMatchInSubtree;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // Row of Co-Leader Cards side-by-side
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: leaders.map((leader) {
+            final empId = leader.employee.employeeId.trim().toLowerCase();
+            final isHighlighted = widget.searchQuery.isNotEmpty &&
+                leader.matchesQuery(widget.searchQuery);
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 40),
+              child: HierarchyNodeCard(
+                node: leader,
+                isExpanded: isExpanded,
+                isHighlighted: isHighlighted,
+                onToggleExpand: () {
+                  for (final l in leaders) {
+                    widget.onToggleExpand(l.employee.employeeId.trim().toLowerCase());
+                  }
+                },
+                onTap: () =>
+                    EmployeeHierarchyDetailSheet.show(context, node: leader),
+              ),
+            );
+          }).toList(),
+        ),
+
+        // Connecting Lines and Children
+        if (sharedChildren.isNotEmpty && isExpanded) ...[
+          // Co-leader connector with top bridge and center drop stem
+          CustomPaint(
+            painter: _CoLeaderConnectorPainter(leaderCount: leaders.length),
+            child: SizedBox(
+              width: leaders.length * 360.0,
+              height: 40,
+            ),
+          ),
+
+          // Custom horizontal branch connecting lines to children
+          _buildChildrenWithBranchLines(sharedChildren),
+        ],
+      ],
+    );
+  }
+}
+
+/// Custom painter for the co-leader bridge connecting lines.
+class _CoLeaderConnectorPainter extends CustomPainter {
+  final int leaderCount;
+  final double cardSpan;
+
+  const _CoLeaderConnectorPainter({
+    required this.leaderCount,
+    this.cardSpan = 360.0,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (leaderCount <= 1) return;
+
+    final paint = Paint()
+      ..color = const Color(0xFF94A3B8)
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    final cx = size.width / 2;
+
+    // Center of leader i is at: 180 + i * cardSpan
+    final firstX = 180.0;
+    final lastX = 180.0 + (leaderCount - 1) * cardSpan;
+
+    // Vertical lines from bottom of each leader card down to Y = 20
+    for (int i = 0; i < leaderCount; i++) {
+      final lx = 180.0 + i * cardSpan;
+      canvas.drawLine(Offset(lx, 0), Offset(lx, 20), paint);
+    }
+
+    // Horizontal bridge connecting all leader stems at Y = 20
+    canvas.drawLine(Offset(firstX, 20), Offset(lastX, 20), paint);
+
+    // Central vertical drop line from Y = 20 to Y = 40
+    canvas.drawLine(Offset(cx, 20), Offset(cx, 40), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _CoLeaderConnectorPainter oldDelegate) =>
+      oldDelegate.leaderCount != leaderCount || oldDelegate.cardSpan != cardSpan;
 }
 
 /// Custom painter for the orthogonal connecting branch lines.

@@ -4,6 +4,7 @@ import '../../employee/data/firebase_employee_repository.dart';
 import '../../employee/domain/employee_repository.dart';
 import '../../organization/data/firebase_organization_repository.dart';
 import '../../organization/domain/designation.dart';
+import '../../organization/domain/organization.dart';
 import '../../organization/domain/organization_band.dart';
 import '../../organization/domain/organization_repository.dart';
 import '../domain/hierarchy_node.dart';
@@ -31,7 +32,9 @@ class FirebaseHierarchyRepository implements HierarchyRepository {
       // 1. Fetch all active employees
       final allEmployees = await _employeeRepository.getEmployees();
 
-      // 2. Filter employees by organization if provided
+      // 2. Fetch all organizations to cross-reference canonicalId, docId, int ID and name
+      final allOrgs = await _organizationRepository.getOrganizations();
+
       final hasOrgId =
           organizationId != null &&
           organizationId.isNotEmpty &&
@@ -41,30 +44,73 @@ class FirebaseHierarchyRepository implements HierarchyRepository {
           organizationName.isNotEmpty &&
           organizationName != 'All';
 
+      // Find the matched organization object if filter provided
+      Organization? matchedOrg;
+      if (hasOrgId) {
+        final targetId = organizationId.trim().toLowerCase();
+        matchedOrg = allOrgs.where((o) =>
+            o.canonicalId.toLowerCase() == targetId ||
+            o.docId.toLowerCase() == targetId ||
+            (o.id != 0 && o.id.toString() == targetId) ||
+            (o.id != 0 && 'org_${o.id}' == targetId)
+        ).firstOrNull;
+      }
+      if (matchedOrg == null && hasOrgName) {
+        final targetName = organizationName.trim().toLowerCase();
+        matchedOrg = allOrgs.where((o) =>
+            o.name.trim().toLowerCase() == targetName
+        ).firstOrNull;
+      }
+
+      // Collect all acceptable identifiers and names for this organization
+      final matchOrgNames = <String>{};
+      final matchOrgIds = <String>{};
+
+      if (hasOrgName) matchOrgNames.add(organizationName.trim().toLowerCase());
+      if (matchedOrg != null && matchedOrg.name.trim().isNotEmpty) {
+        matchOrgNames.add(matchedOrg.name.trim().toLowerCase());
+      }
+
+      if (hasOrgId) {
+        final cleanId = organizationId.trim();
+        matchOrgIds.add(cleanId.toLowerCase());
+        if (cleanId.startsWith('org_')) {
+          matchOrgIds.add(cleanId.substring(4).toLowerCase());
+        }
+      }
+      if (matchedOrg != null) {
+        if (matchedOrg.docId.trim().isNotEmpty) matchOrgIds.add(matchedOrg.docId.trim().toLowerCase());
+        if (matchedOrg.canonicalId.trim().isNotEmpty) matchOrgIds.add(matchedOrg.canonicalId.trim().toLowerCase());
+        if (matchedOrg.id != 0) {
+          matchOrgIds.add(matchedOrg.id.toString());
+          matchOrgIds.add('org_${matchedOrg.id}');
+        }
+      }
+
+      final isFiltering = hasOrgId || hasOrgName || matchedOrg != null;
+
       final orgEmployees = allEmployees.where((e) {
         // Exclude archived, deleted, or draft records
         final s = e.status.trim().toLowerCase();
         if (s == 'archived' || s == 'deleted' || s == 'draft') return false;
 
-        if (hasOrgId) {
-          final eOrgId = e.organizationId.trim();
-          if (eOrgId.isNotEmpty && eOrgId == organizationId.trim()) return true;
-        }
-        if (hasOrgName) {
-          final eOrgName = e.organizationName.trim().toLowerCase();
-          if (eOrgName.isNotEmpty &&
-              eOrgName == organizationName.trim().toLowerCase()) {
-            return true;
-          }
-        }
-        // If neither filter is specified, include all
-        return !hasOrgId && !hasOrgName;
+        if (!isFiltering) return true; // 'All' selected -> include all active employees
+
+        // Match by organization name
+        final eName = e.organizationName.trim().toLowerCase();
+        if (eName.isNotEmpty && matchOrgNames.contains(eName)) return true;
+
+        // Match by organization ID
+        final eId = e.organizationId.trim().toLowerCase();
+        if (eId.isNotEmpty && matchOrgIds.contains(eId)) return true;
+
+        return false;
       }).toList();
 
       if (orgEmployees.isEmpty) {
         return HierarchyTree(
           organizationId: organizationId ?? '',
-          organizationName: organizationName ?? '',
+          organizationName: organizationName ?? (matchedOrg?.name ?? ''),
           rootNodes: const [],
           totalEmployees: 0,
           departmentsCount: 0,
@@ -72,20 +118,22 @@ class FirebaseHierarchyRepository implements HierarchyRepository {
       }
 
       // Determine effective organization identifiers
-      final effectiveOrgId = organizationId ??
+      final effectiveOrgId = matchedOrg?.canonicalId ??
+          (hasOrgId ? organizationId : null) ??
           orgEmployees.firstWhere((e) => e.organizationId.isNotEmpty, orElse: () => orgEmployees.first).organizationId;
-      final effectiveOrgName = organizationName ??
+      final effectiveOrgName = matchedOrg?.name ??
+          (hasOrgName ? organizationName : null) ??
           orgEmployees.firstWhere((e) => e.organizationName.isNotEmpty, orElse: () => orgEmployees.first).organizationName;
 
       // 3. Fetch designations and bands for the organization
       final designations = await _organizationRepository.getDesignations(
-        organizationId: effectiveOrgId.isNotEmpty ? effectiveOrgId : null,
-        organizationName: effectiveOrgName.isNotEmpty ? effectiveOrgName : null,
+        organizationId: isFiltering ? effectiveOrgId : null,
+        organizationName: isFiltering ? effectiveOrgName : null,
       );
 
       final bands = await _organizationRepository.getBands(
-        organizationId: effectiveOrgId.isNotEmpty ? effectiveOrgId : null,
-        organizationName: effectiveOrgName.isNotEmpty ? effectiveOrgName : null,
+        organizationId: isFiltering ? effectiveOrgId : null,
+        organizationName: isFiltering ? effectiveOrgName : null,
       );
 
       // Build designation lookup maps:
@@ -318,21 +366,59 @@ class FirebaseHierarchyRepository implements HierarchyRepository {
           }
         }
 
+        final targetParents = <HierarchyNode>[];
         if (bestParent != null) {
-          bool createsCycle = false;
-          HierarchyNode? cur = bestParent;
-          while (cur != null) {
-            if (cur.employee.employeeId.trim().toLowerCase() == empIdKey) {
-              createsCycle = true;
-              break;
+          // If bestParent is in top leadership (Band >= 7 or maxBandInOrg),
+          // all leaders at that tier act as co-leaders!
+          if (bestParent.bandLevel >= 7 || (maxBandInOrg > 0 && bestParent.bandLevel == maxBandInOrg)) {
+            final tierLevel = bestParent.bandLevel;
+            final coLeaders = nodesList.where((p) {
+              final pKey = p.employee.employeeId.trim().toLowerCase();
+              return pKey != empIdKey && p.bandLevel == tierLevel;
+            }).toList();
+            targetParents.addAll(coLeaders.isNotEmpty ? coLeaders : [bestParent]);
+          } else {
+            targetParents.add(bestParent);
+          }
+        }
+
+        if (targetParents.isNotEmpty) {
+          final parentNames = <String>[];
+          for (final parent in targetParents) {
+            bool createsCycle = false;
+            HierarchyNode? cur = parent;
+            while (cur != null) {
+              if (cur.employee.employeeId.trim().toLowerCase() == empIdKey) {
+                createsCycle = true;
+                break;
+              }
+              final parentMgrId = cur.employee.reportingManagerId.trim().toLowerCase();
+              cur = parentMgrId.isNotEmpty ? nodeMap[parentMgrId] : null;
             }
-            final parentMgrId = cur.employee.reportingManagerId.trim().toLowerCase();
-            cur = parentMgrId.isNotEmpty ? nodeMap[parentMgrId] : null;
+
+            if (!createsCycle) {
+              if (!parent.children.any((c) => c.employee.employeeId.trim().toLowerCase() == empIdKey)) {
+                parent.children.add(node);
+              }
+              if (!parentNames.contains(parent.employee.fullName)) {
+                parentNames.add(parent.employee.fullName);
+              }
+            }
           }
 
-          if (!createsCycle) {
-            bestParent.children.add(node);
+          if (parentNames.isNotEmpty) {
             childEmployeeIds.add(empIdKey);
+            final nodeIdx = nodesList.indexOf(node);
+            if (nodeIdx != -1) {
+              final updated = node.copyWith(parentLeaderNames: parentNames);
+              nodesList[nodeIdx] = updated;
+              for (final parent in targetParents) {
+                final childIdx = parent.children.indexWhere((c) => c.employee.employeeId.trim().toLowerCase() == empIdKey);
+                if (childIdx != -1) {
+                  parent.children[childIdx] = updated;
+                }
+              }
+            }
           }
         }
       }
@@ -427,9 +513,14 @@ class FirebaseHierarchyRepository implements HierarchyRepository {
     var current = targetNode;
     while (true) {
       final mgrId = current.employee.reportingManagerId.trim().toLowerCase();
-      if (mgrId.isEmpty) break;
-
-      final parent = nodeById[mgrId];
+      HierarchyNode? parent;
+      if (mgrId.isNotEmpty) {
+        parent = nodeById[mgrId];
+      } else {
+        // Fallback: look up parent in tree structure
+        final curId = current.employee.employeeId.trim().toLowerCase();
+        parent = allNodes.where((p) => p.children.any((c) => c.employee.employeeId.trim().toLowerCase() == curId)).firstOrNull;
+      }
       if (parent == null) break;
 
       final pId = parent.employee.employeeId.trim().toLowerCase();

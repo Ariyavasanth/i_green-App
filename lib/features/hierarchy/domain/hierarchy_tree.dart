@@ -25,10 +25,16 @@ class HierarchyTree {
   bool get isEmpty => rootNodes.isEmpty;
   bool get isNotEmpty => rootNodes.isNotEmpty;
 
-  /// Flatten all nodes in the tree.
+  /// Flatten all nodes in the tree without duplicates.
   List<HierarchyNode> get allNodes {
     final list = <HierarchyNode>[];
+    final visited = <String>{};
     void collect(HierarchyNode node) {
+      final key = node.employee.employeeId.trim().toLowerCase();
+      if (key.isNotEmpty) {
+        if (visited.contains(key)) return;
+        visited.add(key);
+      }
       list.add(node);
       for (final child in node.children) {
         collect(child);

@@ -33,18 +33,23 @@ final hierarchyExpandedNodeIdsProvider = StateProvider<Set<String>>((ref) => {})
 final hierarchyTreeProvider = FutureProvider.autoDispose<HierarchyTree>((ref) async {
   final repo = ref.watch(hierarchyRepositoryProvider);
   final selectedOrgId = ref.watch(selectedHierarchyOrgIdProvider);
-  final currentEmp = ref.watch(currentEmployeeProvider);
+  final orgsAsync = ref.watch(organizationsProvider);
 
-  String? effectiveOrgId = selectedOrgId;
+  String? effectiveOrgId;
   String? effectiveOrgName;
 
-  // Default to logged-in user's organization if not explicitly selected
-  if ((effectiveOrgId == null || effectiveOrgId.isEmpty || effectiveOrgId == 'All') &&
-      currentEmp != null) {
-    if (currentEmp.organizationId.isNotEmpty) {
-      effectiveOrgId = currentEmp.organizationId;
-    } else if (currentEmp.organizationName.isNotEmpty) {
-      effectiveOrgName = currentEmp.organizationName;
+  if (selectedOrgId != null && selectedOrgId.isNotEmpty && selectedOrgId != 'All') {
+    effectiveOrgId = selectedOrgId;
+    final orgs = orgsAsync.valueOrNull ?? const [];
+    final matchedOrg = orgs.where((o) =>
+        o.canonicalId.toLowerCase() == selectedOrgId.toLowerCase() ||
+        o.docId.toLowerCase() == selectedOrgId.toLowerCase() ||
+        (o.id != 0 && o.id.toString() == selectedOrgId) ||
+        (o.id != 0 && 'org_${o.id}' == selectedOrgId) ||
+        o.name.trim().toLowerCase() == selectedOrgId.trim().toLowerCase()
+    ).firstOrNull;
+    if (matchedOrg != null) {
+      effectiveOrgName = matchedOrg.name;
     }
   }
 
