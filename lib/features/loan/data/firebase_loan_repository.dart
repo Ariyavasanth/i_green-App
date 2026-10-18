@@ -465,4 +465,67 @@ class FirebaseLoanRepository implements LoanRepository {
       return [];
     }
   }
+
+  @override
+  Future<void> configureTenureExtension({
+    required String loanId,
+    required int extensionInstallments,
+    required double extensionEmiAmount,
+    required String extensionStartMonth,
+    required String extensionApprovedBy,
+    required String extensionApprovalDate,
+    required String extensionRemarks,
+    double extensionInterestRate = 0.0,
+  }) async {
+    try {
+      final loan = await getLoanByLoanId(loanId);
+      if (loan == null) return;
+
+      final totalInterest = extensionInterestRate > 0
+          ? (loan.actualRemainingBalance * (extensionInterestRate / 100.0))
+          : 0.0;
+      final newTotalRepayable = loan.totalRepayableAmount + totalInterest;
+      final newRemainingBalance = loan.actualRemainingBalance + totalInterest;
+
+      final updatedLoan = loan.copyWith(
+        extensionInstallments: extensionInstallments,
+        extensionEmiAmount: extensionEmiAmount,
+        extensionStartMonth: extensionStartMonth,
+        extensionApprovedBy: extensionApprovedBy,
+        extensionApprovalDate: extensionApprovalDate,
+        extensionRemarks: extensionRemarks,
+        extensionInterestRate: extensionInterestRate,
+        totalRepayableAmount: newTotalRepayable,
+        remainingBalance: newRemainingBalance,
+      );
+
+      final newTotalTenure = updatedLoan.totalTenureMonths;
+      final newLastMonth = updatedLoan.effectiveLastDeductionMonth;
+
+      final updateData = <String, dynamic>{
+        'extension_installments': extensionInstallments,
+        'extension_emi_amount': extensionEmiAmount,
+        'extension_start_month': extensionStartMonth,
+        'extension_approved_by': extensionApprovedBy,
+        'extension_approval_date': extensionApprovalDate,
+        'extension_remarks': extensionRemarks,
+        'extension_interest_rate': extensionInterestRate,
+        'total_repayable_amount': newTotalRepayable,
+        'remaining_balance': newRemainingBalance,
+        'installments': newTotalTenure,
+        'original_installments': loan.baseInstallments,
+        'last_deduction_month': newLastMonth,
+        'status': 'Active',
+        'updated_at': FieldValue.serverTimestamp(),
+      };
+
+      final snap = await _loansRef.where('loan_id', isEqualTo: loanId).limit(1).get();
+      if (snap.docs.isNotEmpty) {
+        await snap.docs.first.reference.update(updateData);
+      } else {
+        final docId = loan.loanId.isNotEmpty ? loan.loanId : 'loan_${loan.id}';
+        await _loansRef.doc(docId).set(updateData, SetOptions(merge: true));
+      }
+    } catch (_) {}
+  }
 }

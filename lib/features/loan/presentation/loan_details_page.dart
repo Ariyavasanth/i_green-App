@@ -869,6 +869,19 @@ class LoanDetailsPage extends ConsumerWidget {
                       ],
                     ),
                   ),
+                  if (isAdminManagementView) ...[
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.amber.shade800,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      ),
+                      icon: const Icon(Icons.extension_rounded, size: 16),
+                      label: const Text('Configure Extension', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      onPressed: () => ConfigureLoanExtensionDialog.show(context, loan),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1616,7 +1629,7 @@ class LoanDetailsPage extends ConsumerWidget {
               onPressed: () => _disburseLoan(context, ref, loan),
             ),
           if (isActive) ...[
-            if (loan.actualRemainingBalance > 0.01)
+            if (loan.actualRemainingBalance > 0.01 && (loan.isOriginalTenureFinished || loan.isTenureExtended))
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: loan.isAwaitingExtensionDecision

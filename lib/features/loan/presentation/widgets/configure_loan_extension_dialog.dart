@@ -31,6 +31,7 @@ class _ConfigureLoanExtensionDialogState extends ConsumerState<ConfigureLoanExte
   late final TextEditingController _percentageController;
   late final TextEditingController _interestRateController;
   late final TextEditingController _remarksController;
+  late final List<String> _availableStartMonths;
   late String _startMonth;
   bool _isSubmitting = false;
   bool _isSyncing = false;
@@ -42,7 +43,9 @@ class _ConfigureLoanExtensionDialogState extends ConsumerState<ConfigureLoanExte
     super.initState();
     final defaultMonths = widget.loan.extensionInstallments > 0
         ? widget.loan.extensionInstallments
-        : 4;
+        : (widget.loan.emiAmount > 0
+            ? (_outstanding / widget.loan.emiAmount).ceil().clamp(1, 60)
+            : 3);
     final defaultInterest = widget.loan.extensionInterestRate;
     final totalToRecover = _outstanding + (_outstanding * (defaultInterest / 100.0));
     final defaultEmi = defaultMonths > 0 ? (totalToRecover / defaultMonths) : 0.0;
@@ -54,11 +57,18 @@ class _ConfigureLoanExtensionDialogState extends ConsumerState<ConfigureLoanExte
     _interestRateController = TextEditingController(text: defaultInterest.toStringAsFixed(1));
     _remarksController = TextEditingController(text: widget.loan.extensionRemarks);
 
-    if (widget.loan.extensionStartMonth.isNotEmpty) {
-      _startMonth = widget.loan.extensionStartMonth;
-    } else {
-      _startMonth = EmployeeLoan.getMonthAtOffset(widget.loan.originalLastDeductionMonth, 1);
+    final firstCandidate = EmployeeLoan.getMonthAtOffset(widget.loan.originalLastDeductionMonth, 1);
+    final list = <String>[];
+    for (int i = 0; i < 12; i++) {
+      list.add(EmployeeLoan.getMonthAtOffset(firstCandidate, i));
     }
+    if (widget.loan.extensionStartMonth.isNotEmpty && !list.contains(widget.loan.extensionStartMonth)) {
+      list.insert(0, widget.loan.extensionStartMonth);
+    }
+    _availableStartMonths = list;
+    _startMonth = widget.loan.extensionStartMonth.isNotEmpty
+        ? widget.loan.extensionStartMonth
+        : (list.isNotEmpty ? list.first : firstCandidate);
   }
 
   @override
@@ -147,10 +157,10 @@ class _ConfigureLoanExtensionDialogState extends ConsumerState<ConfigureLoanExte
     if (!_formKey.currentState!.validate()) return;
 
     final currentEmp = ref.read(currentEmployeeProvider);
-    final hasPermission = currentEmp == null ||
-        currentEmp.isSuperAdmin ||
-        currentEmp.hasPermission('Loan Management') ||
-        currentEmp.userType.toUpperCase() == 'ADMIN';
+    final hasPermission = currentEmp != null &&
+        (currentEmp.isSuperAdmin ||
+            currentEmp.hasPermission('Loan Management') ||
+            currentEmp.userType.toUpperCase() == 'ADMIN');
 
     if (!hasPermission) {
       if (mounted) {
@@ -182,9 +192,9 @@ class _ConfigureLoanExtensionDialogState extends ConsumerState<ConfigureLoanExte
     setState(() => _isSubmitting = true);
 
     try {
-      final approverName = currentEmp != null && currentEmp.fullName.isNotEmpty
+      final approverName = currentEmp.fullName.isNotEmpty
           ? currentEmp.fullName
-          : 'Admin';
+          : (currentEmp.employeeId.isNotEmpty ? currentEmp.employeeId : 'Admin');
 
       final interestRate = double.tryParse(_interestRateController.text.trim()) ?? 0.0;
       final totalInterest = _outstanding * (interestRate / 100.0);
@@ -192,19 +202,20 @@ class _ConfigureLoanExtensionDialogState extends ConsumerState<ConfigureLoanExte
       final emiPerMonth = double.tryParse(_amountController.text.trim()) ??
           double.parse((totalToRecover / extraMonths).toStringAsFixed(2));
 
-      final updatedLoan = widget.loan.copyWith(
+      await ref.read(loanRepositoryProvider).configureTenureExtension(
+        loanId: widget.loan.loanId,
         extensionInstallments: extraMonths,
         extensionEmiAmount: emiPerMonth,
-        extensionInterestRate: interestRate,
         extensionStartMonth: _startMonth,
         extensionApprovedBy: approverName,
         extensionApprovalDate: DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now()),
         extensionRemarks: _remarksController.text.trim(),
+        extensionInterestRate: interestRate,
       );
 
-      await ref.read(loanRepositoryProvider).saveLoan(updatedLoan);
       ref.invalidate(loanByIdProvider(widget.loan.id));
       ref.invalidate(allLoansProvider);
+      ref.invalidate(employeeLoansProvider(widget.loan.employeeId));
 
       if (mounted) {
         Navigator.of(context).pop(true);
@@ -657,18 +668,37 @@ class _ConfigureLoanExtensionDialogState extends ConsumerState<ConfigureLoanExte
                   ),
                   const SizedBox(height: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: const Color(0xFFCBD5E1)),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(_startMonth, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                        const Text('(Following Month)', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                      ],
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _availableStartMonths.contains(_startMonth) ? _startMonth : null,
+                        isExpanded: true,
+                        icon: const Icon(Icons.arrow_drop_down, color: AppColors.textSecondary),
+                        items: _availableStartMonths.map((m) {
+                          final isFirst = m == _availableStartMonths.first;
+                          return DropdownMenuItem<String>(
+                            value: m,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(m, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                if (isFirst)
+                                  const Text('(Immediate Next Month)', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() => _startMonth = val);
+                          }
+                        },
+                      ),
                     ),
                   ),
                   const SizedBox(height: 18),

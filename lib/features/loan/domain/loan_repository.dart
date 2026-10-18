@@ -60,4 +60,14 @@ abstract class LoanRepository {
     required String requestId,
   });
   Future<List<LoanEmiPauseRequest>> getAllPendingPauseRequests();
+  Future<void> configureTenureExtension({
+    required String loanId,
+    required int extensionInstallments,
+    required double extensionEmiAmount,
+    required String extensionStartMonth,
+    required String extensionApprovedBy,
+    required String extensionApprovalDate,
+    required String extensionRemarks,
+    double extensionInterestRate = 0.0,
+  });
 }

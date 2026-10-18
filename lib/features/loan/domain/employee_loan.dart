@@ -406,9 +406,9 @@ class EmployeeLoan {
   }) {
     if (index >= baseInstallments && extensionInstallments > 0) {
       if (extensionEmiAmount > 0) {
-        // Final installment clears exact remaining balance without overcharging
-        if (index == totalTenureMonths - 1) {
-          if (actualRemainingBalance > 0 && actualRemainingBalance < extensionEmiAmount) {
+        // Final installment clears exact remaining balance without overcharging or leaving rounding residue
+        if (index == totalTenureMonths - 1 && actualRemainingBalance > 0) {
+          if (actualRemainingBalance <= extensionEmiAmount * 1.5) {
             return actualRemainingBalance;
           }
         }

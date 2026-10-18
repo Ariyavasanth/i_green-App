@@ -240,8 +240,10 @@ class PayrollCalculationService {
     final (reqYear, reqMonthNum) = EmployeeLoan.parseMonthYear(month);
     final (origLastYear, origLastMonthNum) = EmployeeLoan.parseMonthYear(loan.originalLastDeductionMonth);
     final isBeyondOriginalTenure = reqYear > origLastYear || (reqYear == origLastYear && reqMonthNum > origLastMonthNum);
+    final isNotInSchedule = loan.scheduleMonths.isNotEmpty &&
+        !loan.scheduleMonths.any((m) => m.trim().toLowerCase() == month.trim().toLowerCase());
 
-    if (isBeyondOriginalTenure && loan.extensionInstallments <= 0) {
+    if ((isBeyondOriginalTenure || (isNotInSchedule && loan.isOriginalTenureFinished)) && loan.extensionInstallments <= 0) {
       // Payroll must not deduct loan EMI beyond original tenure until an extension is approved by Admin
       final desc = loan.loanId.isNotEmpty
           ? 'Tenure Completed (Pending Balance ₹${loan.actualRemainingBalance.toStringAsFixed(0)} - Awaiting Extension Decision) - ${loan.loanId}'
@@ -299,11 +301,15 @@ class PayrollCalculationService {
       } else {
         // 6. Case D: Normal installment or admin-approved extended tenure installment
         final monthIdx = loan.scheduleMonths.indexWhere((m) => m.trim().toLowerCase() == month.trim().toLowerCase());
-        final currentMonthEmi = monthIdx != -1
+        double currentMonthEmi = monthIdx != -1
             ? loan.emiForInstallment(monthIdx, payrollStartDay: pStart, payrollEndDay: pEnd)
             : (loan.interestRate > 0 ? loan.emiForInstallment(loan.paidInstallments, payrollStartDay: pStart, payrollEndDay: pEnd) : loan.emiAmount);
 
         final maxRecoverable = loan.actualRemainingBalance;
+        // On final installment, clear the remaining balance cleanly if within rounding tolerance
+        if (monthIdx != -1 && monthIdx == loan.totalTenureMonths - 1 && maxRecoverable > 0 && maxRecoverable <= currentMonthEmi * 1.5) {
+          currentMonthEmi = maxRecoverable;
+        }
         final finalEmi = (currentMonthEmi > maxRecoverable && maxRecoverable > 0) ? maxRecoverable : currentMonthEmi;
 
         final bool isExtended = monthIdx != -1 && (monthIdx >= loan.baseInstallments);
