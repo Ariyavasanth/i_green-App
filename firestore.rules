@@ -239,5 +239,84 @@ service cloud.firestore {
         getAuthEmployee().organization_id == resource.data.org_id
       );
     }
+
+    // ── Purchase Orders & Vendors ─────────────────────────────────────────────
+    match /purchase_orders/{orderId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin() || hasPermission('Purchase Orders') || hasPermission('Inventory Management');
+    }
+
+    match /vendors/{vendorId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin() || hasPermission('Vendors') || hasPermission('Inventory Management');
+    }
+
+    // ── Bills & Expenses ──────────────────────────────────────────────────────
+    match /bills/{billId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin() || hasPermission('Finance') || hasPermission('Bills');
+    }
+
+    match /expenses/{expenseId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin() || hasPermission('Finance') || hasPermission('Expenses');
+    }
+
+    // ── Exit Process Modules ──────────────────────────────────────────────────
+    match /exit_clearances/{clearanceId} {
+      allow read: if isAuthenticated() && (
+        hasPermission('Exit Management') ||
+        resource.data.employee_id == getAuthEmployeeCode()
+      );
+      allow write: if isSuperAdmin() || hasPermission('Exit Management');
+    }
+
+    match /exit_interviews/{interviewId} {
+      allow read: if isAuthenticated() && (
+        hasPermission('Exit Management') ||
+        resource.data.employee_id == getAuthEmployeeCode()
+      );
+      allow write: if isSuperAdmin() || hasPermission('Exit Management');
+    }
+
+    match /exit_settlements/{settlementId} {
+      allow read: if isAuthenticated() && (
+        hasPermission('Exit Management') ||
+        resource.data.employee_id == getAuthEmployeeCode()
+      );
+      allow write: if isSuperAdmin() || hasPermission('Exit Management');
+    }
+
+    // ── Books & Materials ────────────────────────────────────────────────────
+    match /items/{itemId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin() || hasPermission('Books') || hasPermission('Inventory Management');
+    }
+
+    match /material_requests/{reqId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /material_returns/{retId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /stock_entries/{entryId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin() || hasPermission('Books') || hasPermission('Inventory Management');
+    }
+
+    match /transactions/{txnId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin() || hasPermission('Books') || hasPermission('Finance');
+    }
+
+    // ── Payroll Settings ─────────────────────────────────────────────────────
+    match /payroll_settings/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin() || hasPermission('Payroll');
+    }
   }
 }
