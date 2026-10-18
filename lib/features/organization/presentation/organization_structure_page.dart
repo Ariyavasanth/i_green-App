@@ -4,10 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../domain/department.dart';
 import '../domain/designation.dart';
-import '../domain/organization_band.dart';
 import '../domain/column_preference.dart';
 import '../providers/organization_providers.dart';
-import 'widgets/band_form_dialog.dart';
 import 'widgets/column_selection_dialog.dart';
 import 'widgets/department_details_dialog.dart';
 import 'widgets/department_form_dialog.dart';
@@ -33,7 +31,7 @@ class _OrganizationStructurePageState
     'Work Location',
   ];
 
-  int _selectedTab = 0; // 0 = Departments, 1 = Designations, 2 = Bands
+  int _selectedTab = 0; // 0 = Departments, 1 = Designations
 
   // Departments tab state
   int _currentPage = 0;
@@ -46,10 +44,6 @@ class _OrganizationStructurePageState
   // Designations tab state
   String _selectedDesigOrg = 'All';
   String _selectedDesigDept = 'All';
-
-  // Bands tab state
-  String _selectedBandOrg = 'All';
-  String _bandSearchQuery = '';
 
   int get _activeFiltersCount {
     int count = 0;
@@ -64,9 +58,6 @@ class _OrganizationStructurePageState
     final isMobile = MediaQuery.of(context).size.width < 650;
     final deptsAsync = ref.watch(departmentsProvider);
     final desigsAsync = ref.watch(allDesignationsProvider);
-    final bandsAsync = ref.watch(
-      filteredBandsProvider(const OrganizationBandFilter()),
-    );
 
     final totalDepts = deptsAsync.valueOrNull?.length;
     final deptTabTitle = totalDepts != null
@@ -78,14 +69,11 @@ class _OrganizationStructurePageState
         ? 'Designations ($totalDesigs)'
         : 'Designations';
 
-    final totalBands = bandsAsync.valueOrNull?.length;
-    final bandTabTitle = totalBands != null ? 'Bands ($totalBands)' : 'Bands';
-
     return Scaffold(
       backgroundColor: Colors.white,
       body: Column(
         children: [
-          // Top Tab Bar [ Departments (n) ] [ Designations (n) ] [ Bands (n) ]
+          // Top Tab Bar [ Departments (n) ] [ Designations (n) ]
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
@@ -110,13 +98,6 @@ class _OrganizationStructurePageState
                     isSelected: _selectedTab == 1,
                     onTap: () => setState(() => _selectedTab = 1),
                   ),
-                  const SizedBox(width: 8),
-                  _buildTabButton(
-                    title: bandTabTitle,
-                    icon: Icons.layers_outlined,
-                    isSelected: _selectedTab == 2,
-                    onTap: () => setState(() => _selectedTab = 2),
-                  ),
                 ],
               ),
             ),
@@ -129,15 +110,11 @@ class _OrganizationStructurePageState
                 ref.invalidate(departmentsProvider);
                 ref.invalidate(allDesignationsProvider);
                 ref.invalidate(organizationsProvider);
-                ref.invalidate(organizationBandsProvider);
-                ref.invalidate(filteredBandsProvider);
                 await Future.delayed(const Duration(milliseconds: 500));
               },
               child: _selectedTab == 0
                   ? _buildDepartmentsView(context, isMobile)
-                  : (_selectedTab == 1
-                        ? _buildDesignationsView(context, isMobile)
-                        : _buildBandsView(context, isMobile)),
+                  : _buildDesignationsView(context, isMobile),
             ),
           ),
         ],
@@ -1686,554 +1663,6 @@ class _OrganizationStructurePageState
     }
   }
 
-  // ==========================================
-  // BANDS TAB VIEW
-  // ==========================================
-  Widget _buildBandsView(BuildContext context, bool isMobile) {
-    final orgsAsync = ref.watch(organizationsProvider);
-    final bandsAsync = ref.watch(
-      filteredBandsProvider(
-        OrganizationBandFilter(
-          organizationId: _selectedBandOrg != 'All' ? _selectedBandOrg : null,
-        ),
-      ),
-    );
-
-    return Column(
-      children: [
-        // Organization Filter Bar
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          decoration: const BoxDecoration(
-            color: Color(0xFFF9FAFB),
-            border: Border(bottom: BorderSide(color: Color(0xFFEAECF0))),
-          ),
-          child: orgsAsync.when(
-            loading: () => const LinearProgressIndicator(),
-            error: (err, _) => Text('Error loading organizations: $err'),
-            data: (orgs) {
-              final orgItems = ['All', ...orgs.map((o) => o.canonicalId)];
-              return Row(
-                children: [
-                  const Text(
-                    'Organization:',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF344054),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  SizedBox(
-                    width: 240,
-                    child: AppSearchableDropdown<String>(
-                      value: _selectedBandOrg,
-                      items: orgItems,
-                      itemLabel: (id) {
-                        if (id == 'All') return 'All Organizations';
-                        final match = orgs
-                            .where((o) => o.canonicalId == id)
-                            .firstOrNull;
-                        return match?.name ?? id;
-                      },
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() => _selectedBandOrg = val);
-                        }
-                      },
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-
-        // Search & Add Toolbar
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          child: Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 42,
-                  child: TextField(
-                    style: const TextStyle(fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: 'Search bands by code, title, or level...',
-                      hintStyle: const TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF667085),
-                      ),
-                      prefixIcon: const Icon(
-                        Icons.search,
-                        size: 20,
-                        color: Color(0xFF667085),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                      ),
-                      filled: true,
-                      fillColor: const Color(0xFFF9FAFB),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: Color(0xFFD0D5DD)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: Color(0xFFD0D5DD)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(
-                          color: AppColors.primary,
-                          width: 1.5,
-                        ),
-                      ),
-                    ),
-                    onChanged: (val) {
-                      setState(() => _bandSearchQuery = val);
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (isMobile)
-                IconButton(
-                  style: IconButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    minimumSize: const Size(42, 42),
-                  ),
-                  tooltip: 'Add Band',
-                  onPressed: () => _openAddBandDialog(context),
-                  icon: const Icon(Icons.add, size: 20),
-                )
-              else
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
-                    ),
-                    minimumSize: const Size(0, 42),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  onPressed: () => _openAddBandDialog(context),
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text(
-                    'Add Band',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                  ),
-                ),
-            ],
-          ),
-        ),
-
-        const Divider(height: 1, color: Color(0xFFEAECF0)),
-
-        // Bands List View
-        Expanded(
-          child: bandsAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, _) => Center(
-              child: Text(
-                'Unable to load organization bands: $err',
-                style: const TextStyle(color: Colors.red),
-              ),
-            ),
-            data: (bands) {
-              final filtered = bands.where((b) {
-                if (_bandSearchQuery.trim().isEmpty) return true;
-                final q = _bandSearchQuery.toLowerCase();
-                return b.bandCode.toLowerCase().contains(q) ||
-                    b.title.toLowerCase().contains(q) ||
-                    b.description.toLowerCase().contains(q) ||
-                    'level ${b.level}'.contains(q) ||
-                    b.organizationName.toLowerCase().contains(q);
-              }).toList();
-
-              // Ensure descending sort by level (Band 7 down to Band 1)
-              filtered.sort();
-
-              if (filtered.isEmpty) {
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.layers_outlined,
-                          size: 48,
-                          color: Color(0xFF94A3B8),
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'No organization bands configured yet.',
-                          style: TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                          ),
-                          onPressed: () => _openAddBandDialog(context),
-                          icon: const Icon(Icons.add, size: 16),
-                          label: const Text('Add First Band'),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }
-
-              return ListView.separated(
-                padding: const EdgeInsets.all(16),
-                itemCount: filtered.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 10),
-                itemBuilder: (context, index) {
-                  final band = filtered[index];
-                  final accentColor = Color(band.colorHex ?? 0xFF9CC70A);
-
-                  return Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.02),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        // Band Level Badge (Icon/Indicator)
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: accentColor.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: accentColor.withValues(alpha: 0.3),
-                              width: 1.5,
-                            ),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            'L${band.level}',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: accentColor,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-
-                        // Band Content
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Text(
-                                    band.bandCode,
-                                    style: const TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF101828),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      '—  ${band.title}',
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: Color(0xFF344054),
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 4,
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                children: [
-                                  // Hierarchy level tag
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF1F5F9),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: const Color(0xFFE2E8F0),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      'Level ${band.level} of 7',
-                                      style: const TextStyle(
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.w600,
-                                        color: Color(0xFF475467),
-                                      ),
-                                    ),
-                                  ),
-
-                                  // Assigned Designations Reference Count
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: band.designationCount > 0
-                                          ? AppColors.primary.withValues(
-                                              alpha: 0.12,
-                                            )
-                                          : const Color(0xFFF8FAFC),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: band.designationCount > 0
-                                            ? AppColors.primary.withValues(
-                                                alpha: 0.3,
-                                              )
-                                            : const Color(0xFFE2E8F0),
-                                      ),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.badge_outlined,
-                                          size: 12,
-                                          color: band.designationCount > 0
-                                              ? const Color(0xFF414A51)
-                                              : const Color(0xFF64748B),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          '${band.designationCount} ${band.designationCount == 1 ? "designation" : "designations"}',
-                                          style: TextStyle(
-                                            fontSize: 11.5,
-                                            fontWeight:
-                                                band.designationCount > 0
-                                                ? FontWeight.bold
-                                                : FontWeight.w500,
-                                            color: band.designationCount > 0
-                                                ? const Color(0xFF414A51)
-                                                : const Color(0xFF64748B),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-
-                                  // Organization display if All orgs filter
-                                  if (_selectedBandOrg == 'All' &&
-                                      band.organizationName.isNotEmpty)
-                                    Text(
-                                      '•  ${band.organizationName}',
-                                      style: const TextStyle(
-                                        fontSize: 11.5,
-                                        color: Color(0xFF64748B),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                              if (band.description.isNotEmpty) ...[
-                                const SizedBox(height: 6),
-                                Text(
-                                  band.description,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Color(0xFF64748B),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-
-                        // Edit & Delete Actions
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(
-                                Icons.edit_outlined,
-                                size: 18,
-                                color: AppColors.primary,
-                              ),
-                              tooltip: 'Edit Band',
-                              onPressed: () =>
-                                  _openEditBandDialog(context, band),
-                            ),
-                            IconButton(
-                              icon: Icon(
-                                Icons.delete_outline,
-                                size: 18,
-                                color: band.designationCount > 0
-                                    ? const Color(0xFF94A3B8)
-                                    : Colors.red.shade400,
-                              ),
-                              tooltip: band.designationCount > 0
-                                  ? 'Assigned to designations (cannot delete)'
-                                  : 'Delete Band',
-                              onPressed: () => _confirmDeleteBand(band),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _openAddBandDialog(BuildContext context) {
-    BandFormDialog.show(
-      context,
-      initialOrganizationId: _selectedBandOrg != 'All'
-          ? _selectedBandOrg
-          : null,
-    );
-  }
-
-  void _openEditBandDialog(BuildContext context, OrganizationBand band) {
-    BandFormDialog.show(
-      context,
-      band: band,
-      initialOrganizationId: band.organizationId,
-      initialOrganizationName: band.organizationName,
-    );
-  }
-
-  Future<void> _confirmDeleteBand(OrganizationBand band) async {
-    // 1. Referential integrity guard: prevent deletion if assigned
-    if (band.designationCount > 0) {
-      await showDialog<void>(
-        context: context,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          title: Row(
-            children: const [
-              Icon(Icons.info_outline, color: Color(0xFF414A51)),
-              SizedBox(width: 8),
-              Text('Cannot Delete Band', style: TextStyle(fontSize: 16)),
-            ],
-          ),
-          content: Text(
-            'Band "${band.bandCode}" (${band.title}) is currently assigned to ${band.designationCount} designation(s).\n\nTo preserve organizational integrity, please reassign or remove the designations referencing this Band before deleting it.',
-            style: const TextStyle(fontSize: 13, height: 1.4),
-          ),
-          actions: [
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Understood'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
-    // 2. Confirmation dialog for unreferenced band
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: Row(
-          children: const [
-            Icon(Icons.warning_amber_rounded, color: Colors.amber),
-            SizedBox(width: 8),
-            Text('Confirm Delete', style: TextStyle(fontSize: 16)),
-          ],
-        ),
-        content: Text(
-          'Are you sure you want to delete Band "${band.bandCode}" (${band.title})?\nThis action cannot be undone.',
-          style: const TextStyle(fontSize: 13, height: 1.4),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      try {
-        await ref
-            .read(organizationRepositoryProvider)
-            .deleteBand(band.id, organizationId: band.organizationId);
-        ref.invalidate(organizationBandsProvider);
-        ref.invalidate(filteredBandsProvider);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Band "${band.bandCode}" deleted successfully.'),
-          ),
-        );
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              e is StateError ? e.message : 'Error deleting Band: $e',
-            ),
-            backgroundColor: Colors.red.shade700,
-          ),
-        );
-      }
-    }
-  }
 
   Widget _buildPaginationBar({
     required int totalItems,

@@ -738,17 +738,7 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
 
   @override
   Future<void> addDesignation(Designation designation) async {
-    if (designation.bandId.isNotEmpty) {
-      final bands = await getBands(organizationId: designation.organizationId);
-      final matchingBand = bands
-          .where((b) => b.id == designation.bandId)
-          .firstOrNull;
-      if (matchingBand == null) {
-        throw ArgumentError(
-          'Cannot assign Band "${designation.bandId}": Band does not exist or does not belong to organization "${designation.organizationId}".',
-        );
-      }
-    }
+
 
     final nextId = designation.id != 0
         ? designation.id
@@ -777,16 +767,12 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
           final bandDocRef = bandsRef.doc(designation.bandId);
           await firestore.runTransaction((transaction) async {
             final bSnap = await transaction.get(bandDocRef);
-            if (!bSnap.exists) {
-              throw ArgumentError(
-                'Cannot assign Band "${designation.bandId}": Band does not exist.',
-              );
-            }
-            final bOrg = bSnap.data()?['organization_id']?.toString() ?? '';
-            if (bOrg != designation.organizationId) {
-              throw ArgumentError(
-                'Cannot assign Band "${designation.bandId}": Band belongs to organization "$bOrg", not "${designation.organizationId}".',
-              );
+            if (bSnap.exists) {
+              final currentCount =
+                  (bSnap.data()?['designation_count'] as num?)?.toInt() ?? 0;
+              transaction.update(bandDocRef, {
+                'designation_count': currentCount + 1,
+              });
             }
 
             final currentCount =
@@ -808,17 +794,7 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
 
   @override
   Future<void> updateDesignation(Designation designation) async {
-    if (designation.bandId.isNotEmpty) {
-      final bands = await getBands(organizationId: designation.organizationId);
-      final matchingBand = bands
-          .where((b) => b.id == designation.bandId)
-          .firstOrNull;
-      if (matchingBand == null) {
-        throw ArgumentError(
-          'Cannot assign Band "${designation.bandId}": Band does not exist or does not belong to organization "${designation.organizationId}".',
-        );
-      }
-    }
+
 
     final idx = _memoryDesignations.indexWhere((d) => d.id == designation.id);
     final oldDesig = idx != -1 ? _memoryDesignations[idx] : null;
@@ -891,18 +867,6 @@ class FirebaseOrganizationRepository implements OrganizationRepository {
             }
             if (newBDocRef != null) {
               newBSnap = await transaction.get(newBDocRef);
-              if (!newBSnap.exists) {
-                throw ArgumentError(
-                  'Cannot assign Band "$newBandId": Band does not exist.',
-                );
-              }
-              final bOrg =
-                  newBSnap.data()?['organization_id']?.toString() ?? '';
-              if (bOrg != designation.organizationId) {
-                throw ArgumentError(
-                  'Cannot assign Band "$newBandId": Band belongs to organization "$bOrg", not "${designation.organizationId}".',
-                );
-              }
             }
 
             // Transaction writes

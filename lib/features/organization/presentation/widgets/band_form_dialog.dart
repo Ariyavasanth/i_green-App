@@ -104,14 +104,39 @@ class _BandFormDialogState extends ConsumerState<BandFormDialog> {
     1: 'Level 1 — Entry Level / Trainee (e.g. Junior / Intern)',
   };
 
+  static String _defaultTitleForLevel(int level) {
+    switch (level) {
+      case 7:
+        return 'Top Leadership';
+      case 6:
+        return 'Senior Leadership';
+      case 5:
+        return 'Senior Management';
+      case 4:
+        return 'Middle Management';
+      case 3:
+        return 'Senior Professional';
+      case 2:
+        return 'Associate / Operational';
+      case 1:
+        return 'Entry Level / Trainee';
+      default:
+        return 'Level $level';
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     final b = widget.band;
-    _codeController = TextEditingController(text: b?.bandCode ?? 'Band 7');
-    _titleController = TextEditingController(text: b?.title ?? '');
-    _descController = TextEditingController(text: b?.description ?? '');
     _selectedLevel = b?.level ?? 7;
+    _codeController = TextEditingController(text: b?.bandCode ?? 'Band $_selectedLevel');
+    _titleController = TextEditingController(
+      text: (b != null && b.title.isNotEmpty)
+          ? b.title
+          : _defaultTitleForLevel(_selectedLevel),
+    );
+    _descController = TextEditingController(text: b?.description ?? '');
     _selectedColorHex = b?.colorHex ?? _colorPalette.first;
     _selectedOrgId = b?.organizationId ?? widget.initialOrganizationId;
     _selectedOrgName = b?.organizationName ?? widget.initialOrganizationName;
@@ -128,12 +153,17 @@ class _BandFormDialogState extends ConsumerState<BandFormDialog> {
   void _onLevelChanged(int? newLevel) {
     if (newLevel == null) return;
     final oldDefaultCode = 'Band $_selectedLevel';
+    final oldDefaultTitle = _defaultTitleForLevel(_selectedLevel);
     setState(() {
       _selectedLevel = newLevel;
       // Auto-update code if the user hasn't typed a custom code
       if (_codeController.text.trim().isEmpty ||
           _codeController.text.trim() == oldDefaultCode) {
         _codeController.text = 'Band $newLevel';
+      }
+      if (_titleController.text.trim().isEmpty ||
+          _titleController.text.trim() == oldDefaultTitle) {
+        _titleController.text = _defaultTitleForLevel(newLevel);
       }
     });
   }
@@ -154,13 +184,17 @@ class _BandFormDialogState extends ConsumerState<BandFormDialog> {
       final repo = ref.read(organizationRepositoryProvider);
       final isEdit = widget.band != null;
 
+      final bandTitle = _titleController.text.trim().isNotEmpty
+          ? _titleController.text.trim()
+          : _defaultTitleForLevel(_selectedLevel);
+
       final bandItem = OrganizationBand(
         id: widget.band?.id ?? '',
         organizationId: _selectedOrgId!.trim(),
         organizationName: _selectedOrgName?.trim() ?? '',
         level: _selectedLevel,
         bandCode: _codeController.text.trim(),
-        title: _titleController.text.trim(),
+        title: bandTitle,
         description: _descController.text.trim(),
         colorHex: _selectedColorHex,
         designationCount: widget.band?.designationCount ?? 0,
@@ -379,68 +413,6 @@ class _BandFormDialogState extends ConsumerState<BandFormDialog> {
                       validator: (v) => v == null || v.trim().isEmpty
                           ? 'Band code is required'
                           : null,
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Designation Dropdown (Only created designations)
-                    Builder(
-                      builder: (context) {
-                        final desigsAsync = ref.watch(allDesignationsProvider);
-                        final allDesigs = desigsAsync.valueOrNull ?? [];
-                        final orgDesigs = allDesigs.where((d) {
-                          if (_selectedOrgId != null &&
-                              _selectedOrgId!.isNotEmpty &&
-                              d.organizationId.isNotEmpty) {
-                            return d.organizationId == _selectedOrgId;
-                          }
-                          if (_selectedOrgName != null &&
-                              _selectedOrgName!.isNotEmpty &&
-                              d.organizationName.isNotEmpty) {
-                            return d.organizationName.toLowerCase() ==
-                                _selectedOrgName!.toLowerCase();
-                          }
-                          return true;
-                        }).toList();
-
-                        // Only actual designations created in the organization
-                        final desigItems = orgDesigs
-                            .map((d) => d.designationName.trim())
-                            .where((name) => name.isNotEmpty)
-                            .toSet()
-                            .toList();
-
-                        desigItems.sort(
-                          (a, b) => a.toLowerCase().compareTo(b.toLowerCase()),
-                        );
-
-                        final currentTitle = _titleController.text.trim();
-                        final selectedValue = currentTitle.isNotEmpty &&
-                                desigItems.contains(currentTitle)
-                            ? currentTitle
-                            : null;
-
-                        return AppSearchableDropdown<String>(
-                          label: 'Designation *',
-                          value: selectedValue,
-                          items: desigItems,
-                          placeholder: desigItems.isEmpty
-                              ? 'No designations available'
-                              : 'Select Designation',
-                          searchHint: 'Search designation...',
-                          isRequired: true,
-                          validator: (v) {
-                            if (_titleController.text.trim().isEmpty) {
-                              return 'Designation is required';
-                            }
-                            return null;
-                          },
-                          onChanged: (val) {
-                            if (val != null) {
-                              setState(() => _titleController.text = val);
-                            }
-                          },
-                        );
-                      },
                     ),
                     const SizedBox(height: 16),
 

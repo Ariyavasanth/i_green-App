@@ -30,13 +30,13 @@ class _OrgChartDiagramViewState extends State<OrgChartDiagramView> {
 
   void _zoomIn() {
     final matrix = _transformController.value.clone();
-    matrix.scale(1.25, 1.25, 1.0);
+    matrix.scaleByDouble(1.25, 1.25, 1.0, 1.0);
     _transformController.value = matrix;
   }
 
   void _zoomOut() {
     final matrix = _transformController.value.clone();
-    matrix.scale(0.8, 0.8, 1.0);
+    matrix.scaleByDouble(0.8, 0.8, 1.0, 1.0);
     _transformController.value = matrix;
   }
 
@@ -263,17 +263,21 @@ class _TreeBranchPainter extends CustomPainter {
     // Vertical top half connector (from Y=0 to Y=20)
     canvas.drawLine(Offset(centerX, 0), Offset(centerX, 20), paint);
 
-    // Calculate approximate branch start and end based on child count
     // The horizontal branch line extends across the width of all children
-    // Leave a small margin so it lines up with each child node's center
-    final startX = 140.0; // Half of first card width
-    final endX = size.width - 140.0; // Half of last card width
+    // Aligns with the center of each 280px-wide card with 16px horizontal padding
+    final startX = 156.0;
+    final endX = size.width - 156.0;
 
-    if (endX > startX) {
+    if (endX >= startX) {
       canvas.drawLine(Offset(startX, 20), Offset(endX, 20), paint);
 
-      // Droppers for first, middle, and last
-      // Note: Row layout children automatically align under the branch
+      // Vertical droppers down into the top center of each child card (from Y=20 to Y=40)
+      for (int i = 0; i < childCount; i++) {
+        final childX = childCount == 1
+            ? centerX
+            : startX + i * (endX - startX) / (childCount - 1);
+        canvas.drawLine(Offset(childX, 20), Offset(childX, 40), paint);
+      }
     }
   }
 

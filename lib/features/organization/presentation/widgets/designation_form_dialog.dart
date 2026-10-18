@@ -99,11 +99,13 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
         : (widget.initialDepartment != null && widget.initialDepartment != 'All'
               ? widget.initialDepartment
               : null);
-    _selectedBandId = (d != null && d.bandId.isNotEmpty) ? d.bandId : null;
+    _selectedBandLevel = (d != null && d.bandLevel > 0) ? d.bandLevel : null;
     _selectedBandCode = (d != null && d.bandCode.isNotEmpty)
         ? d.bandCode
-        : null;
-    _selectedBandLevel = (d != null && d.bandLevel > 0) ? d.bandLevel : null;
+        : (_selectedBandLevel != null ? 'Band $_selectedBandLevel' : null);
+    _selectedBandId = (d != null && d.bandId.isNotEmpty)
+        ? d.bandId
+        : (_selectedBandLevel != null ? 'band_$_selectedBandLevel' : null);
   }
 
   @override
@@ -415,100 +417,137 @@ class _DesignationFormDialogState extends ConsumerState<DesignationFormDialog> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Band Dropdown
-                    Builder(
-                      builder: (context) {
-                        final orgs = orgsAsync.valueOrNull ?? [];
-                        final currentOrg = orgs
-                            .where(
-                              (o) =>
-                                  o.name == _selectedOrganization ||
-                                  o.canonicalId == _selectedOrganization,
-                            )
-                            .firstOrNull;
-                        final orgId =
-                            currentOrg?.canonicalId ??
-                            widget.designation?.organizationId ??
-                            '';
-                        final bandsAsync = ref.watch(
-                          organizationBandsProvider(
-                            orgId.isNotEmpty ? orgId : null,
+                    // Organization Band (Mandatory)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: const [
+                            Text(
+                              'Organization Band',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF344054),
+                              ),
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              '*',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.red,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        DropdownButtonFormField<int?>(
+                          key: ValueKey('band_select_$_selectedBandLevel'),
+                          initialValue: _selectedBandLevel,
+                          isExpanded: true,
+                          decoration: InputDecoration(
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(
+                                color: Color(0xFFD0D5DD),
+                              ),
+                            ),
                           ),
-                        );
-
-                        return bandsAsync.when(
-                          loading: () => const LinearProgressIndicator(),
-                          error: (err, _) => const SizedBox.shrink(),
-                          data: (bands) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Organization Band (Optional)',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF344054),
-                                  ),
+                          items: const [
+                            DropdownMenuItem<int?>(
+                              value: null,
+                              child: Text(
+                                'None / Unassigned',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Color(0xFF64748B),
                                 ),
-                                const SizedBox(height: 6),
-                                DropdownButtonFormField<String?>(
-                                  key: ValueKey(
-                                    'band_select_${_selectedOrganization}_$_selectedBandId',
-                                  ),
-                                  initialValue: _selectedBandId,
-                                  isExpanded: true,
-                                  decoration: InputDecoration(
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 10,
-                                    ),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      borderSide: const BorderSide(
-                                        color: Color(0xFFD0D5DD),
-                                      ),
-                                    ),
-                                  ),
-                                  items: [
-                                    const DropdownMenuItem<String?>(
-                                      value: null,
-                                      child: Text(
-                                        'None / Unassigned',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          color: Color(0xFF64748B),
-                                        ),
-                                      ),
-                                    ),
-                                    ...bands.map(
-                                      (b) => DropdownMenuItem<String?>(
-                                        value: b.id,
-                                        child: Text(
-                                          '${b.bandCode} — ${b.title} (Level ${b.level})',
-                                          style: const TextStyle(fontSize: 13),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                  onChanged: (val) {
-                                    setState(() {
-                                      _selectedBandId = val;
-                                      final match = bands
-                                          .where((b) => b.id == val)
-                                          .firstOrNull;
-                                      _selectedBandCode = match?.bandCode;
-                                      _selectedBandLevel = match?.level;
-                                    });
-                                  },
-                                ),
-                              ],
-                            );
+                              ),
+                            ),
+                            DropdownMenuItem<int?>(
+                              value: 7,
+                              child: Text(
+                                'Level 7 — Top Leadership (e.g. Managing Director / C-Suite)',
+                                style: TextStyle(fontSize: 13),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            DropdownMenuItem<int?>(
+                              value: 6,
+                              child: Text(
+                                'Level 6 — Senior Leadership (e.g. Director / Head of Department)',
+                                style: TextStyle(fontSize: 13),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            DropdownMenuItem<int?>(
+                              value: 5,
+                              child: Text(
+                                'Level 5 — Senior Management (e.g. Senior Manager / Lead)',
+                                style: TextStyle(fontSize: 13),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            DropdownMenuItem<int?>(
+                              value: 4,
+                              child: Text(
+                                'Level 4 — Middle Management / Specialist (e.g. Manager)',
+                                style: TextStyle(fontSize: 13),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            DropdownMenuItem<int?>(
+                              value: 3,
+                              child: Text(
+                                'Level 3 — Senior Professional / Associate (e.g. Senior Engineer)',
+                                style: TextStyle(fontSize: 13),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            DropdownMenuItem<int?>(
+                              value: 2,
+                              child: Text(
+                                'Level 2 — Operational / Associate (e.g. Executive / Officer)',
+                                style: TextStyle(fontSize: 13),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            DropdownMenuItem<int?>(
+                              value: 1,
+                              child: Text(
+                                'Level 1 — Entry Level / Trainee (e.g. Junior / Intern)',
+                                style: TextStyle(fontSize: 13),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                          validator: (val) {
+                            if (val == null || val == 0) {
+                              return 'Please select an organization band';
+                            }
+                            return null;
                           },
-                        );
-                      },
+                          onChanged: (val) {
+                            setState(() {
+                              _selectedBandLevel = val;
+                              if (val != null && val > 0) {
+                                _selectedBandCode = 'Band $val';
+                                _selectedBandId = 'band_$val';
+                              } else {
+                                _selectedBandCode = null;
+                                _selectedBandId = null;
+                              }
+                            });
+                          },
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
 

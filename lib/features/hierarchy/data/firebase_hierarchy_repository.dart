@@ -254,6 +254,89 @@ class FirebaseHierarchyRepository implements HierarchyRepository {
         childEmployeeIds.add(node.employee.employeeId.trim().toLowerCase());
       }
 
+      // 5b. Band-based Hierarchy Fallback for Unmanaged Employees:
+      // If an employee does not have an explicit manager, organize them under higher band leadership
+      // (e.g. Band 6 under Band 7, Band 5 under Band 6, operational staff under department heads)
+      // matching the multi-tier hierarchical tree diagram.
+      final maxBandInOrg = nodesList.fold<int>(0, (m, n) => n.bandLevel > m ? n.bandLevel : m);
+
+      final unmanagedCandidates = nodesList.where((n) {
+        final empIdKey = n.employee.employeeId.trim().toLowerCase();
+        if (childEmployeeIds.contains(empIdKey)) return false; // Already linked
+        if (n.isMissingManager || n.hasCycle) return false; // Flagged nodes remain visible root candidates
+        if (n.employee.reportingManagerId.trim().isNotEmpty) return false; // Has explicit manager
+        if (n.bandLevel >= 7) return false; // Band 7 is top apex root
+        if (maxBandInOrg > 0 && n.bandLevel >= maxBandInOrg) return false; // Highest tier in org stays root
+        return true;
+      }).toList();
+
+      // Sort descending by bandLevel so higher tiers link first (Band 6 -> Band 5 -> Band 4 ...)
+      unmanagedCandidates.sort((a, b) => b.bandLevel.compareTo(a.bandLevel));
+
+      for (final node in unmanagedCandidates) {
+        final empIdKey = node.employee.employeeId.trim().toLowerCase();
+        if (childEmployeeIds.contains(empIdKey)) continue;
+
+        // Find candidate parents with a higher band level
+        // 1. Same department higher band leader
+        // 2. Organization-wide closest higher band leader
+        HierarchyNode? bestParent;
+        final dept = node.employee.department.trim().toLowerCase();
+
+        // Check same department first
+        if (dept.isNotEmpty) {
+          final deptHigher = nodesList.where((p) {
+            final pKey = p.employee.employeeId.trim().toLowerCase();
+            return pKey != empIdKey &&
+                p.bandLevel > node.bandLevel &&
+                p.employee.department.trim().toLowerCase() == dept;
+          }).toList();
+          if (deptHigher.isNotEmpty) {
+            // Pick closest higher level in the department
+            deptHigher.sort((a, b) => a.bandLevel.compareTo(b.bandLevel));
+            bestParent = deptHigher.first;
+          }
+        }
+
+        // If no same-department higher leader, link to company leadership
+        if (bestParent == null) {
+          final orgHigher = nodesList.where((p) {
+            final pKey = p.employee.employeeId.trim().toLowerCase();
+            return pKey != empIdKey && p.bandLevel > node.bandLevel;
+          }).toList();
+          if (orgHigher.isNotEmpty) {
+            if (node.bandLevel >= 5) {
+              bestParent = orgHigher.where((p) => p.bandLevel >= 7).firstOrNull ??
+                  orgHigher.where((p) => p.bandLevel == maxBandInOrg).firstOrNull ??
+                  orgHigher.first;
+            } else {
+              bestParent = orgHigher.where((p) => p.bandLevel >= 7).firstOrNull ??
+                  orgHigher.where((p) => p.bandLevel >= 6).firstOrNull ??
+                  orgHigher.where((p) => p.bandLevel == maxBandInOrg).firstOrNull ??
+                  orgHigher.first;
+            }
+          }
+        }
+
+        if (bestParent != null) {
+          bool createsCycle = false;
+          HierarchyNode? cur = bestParent;
+          while (cur != null) {
+            if (cur.employee.employeeId.trim().toLowerCase() == empIdKey) {
+              createsCycle = true;
+              break;
+            }
+            final parentMgrId = cur.employee.reportingManagerId.trim().toLowerCase();
+            cur = parentMgrId.isNotEmpty ? nodeMap[parentMgrId] : null;
+          }
+
+          if (!createsCycle) {
+            bestParent.children.add(node);
+            childEmployeeIds.add(empIdKey);
+          }
+        }
+      }
+
       // 6. Collect root nodes (nodes that are NOT children of any other node)
       final rootNodes = <HierarchyNode>[];
       for (final node in nodesList) {
