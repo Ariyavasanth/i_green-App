@@ -48,7 +48,6 @@ class PdfGeneratorService {
     buffer.writeln('----------------------------------------------------------------');
     buffer.writeln('VENDOR DETAILS:');
     buffer.writeln(order.vendorName);
-    buffer.writeln('GSTIN: 33XXXXX1234X1Z5');
     buffer.writeln('----------------------------------------------------------------');
     buffer.writeln('DELIVERY DESTINATION:');
     buffer.writeln(order.deliveryAddressType == 'Organization' ? 'IGreen Technologies Warehouse' : order.customerName);
@@ -57,7 +56,7 @@ class PdfGeneratorService {
     buffer.writeln('ITEM DETAILS:');
     buffer.writeln('----------------------------------------------------------------');
     if (order.items.isEmpty) {
-      buffer.writeln('1. Sample Item | Qty: 1 | Rate: ${_money.format(order.amount)} | Amount: ${_money.format(order.amount)}');
+      buffer.writeln('No items listed');
     } else {
       for (int i = 0; i < order.items.length; i++) {
         final item = order.items[i];

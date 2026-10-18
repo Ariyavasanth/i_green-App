@@ -17,108 +17,22 @@ class FirebaseVendorRepository implements VendorRepository {
   CollectionReference<Map<String, dynamic>> get _vendorsRef =>
       _firestore.collection('vendors');
 
-  static final List<Vendor> _seedVendors = [
-    const Vendor(
-      id: 1,
-      vendorCode: 'VEN-0001',
-      displayName: 'IGreen Technologies',
-      companyName: 'IGreen Technologies',
-      gstTreatment: 'Registered Business - Regular',
-      sourceOfSupply: 'Tamil Nadu',
-      status: 'Active',
-    ),
-    const Vendor(
-      id: 2,
-      vendorCode: 'VEN-0002',
-      displayName: 'RS Industrial Equipments',
-      companyName: 'RS Industrial Equipments',
-      gstTreatment: 'Registered Business - Regular',
-      sourceOfSupply: 'Tamil Nadu',
-      status: 'Active',
-    ),
-    const Vendor(
-      id: 3,
-      vendorCode: 'VEN-0003',
-      displayName: 'RAJLAXMI METAL SUPPLYS',
-      companyName: 'RAJLAXMI METAL SUPPLYS',
-      gstTreatment: 'Registered Business - Regular',
-      sourceOfSupply: 'Tamil Nadu',
-      status: 'Active',
-    ),
-    const Vendor(
-      id: 4,
-      vendorCode: 'VEN-0004',
-      displayName: 'MAHAVIR METAL CORP/RAJLAXMI METALS SUPPLYS',
-      companyName: 'MAHAVIR METAL CORP',
-      gstTreatment: 'Registered Business - Regular',
-      sourceOfSupply: 'Tamil Nadu',
-      status: 'Active',
-    ),
-    const Vendor(
-      id: 5,
-      vendorCode: 'VEN-0005',
-      displayName: 'Srinivaas Additives & Labs',
-      companyName: 'Srinivaas Additives & Labs',
-      gstTreatment: 'Registered Business - Regular',
-      sourceOfSupply: 'Tamil Nadu',
-      status: 'Active',
-    ),
-    const Vendor(
-      id: 6,
-      vendorCode: 'VEN-0006',
-      displayName: 'Balambiga metal finishers',
-      companyName: 'Balambiga metal finishers',
-      gstTreatment: 'Registered Business - Regular',
-      sourceOfSupply: 'Tamil Nadu',
-      status: 'Active',
-    ),
-    const Vendor(
-      id: 7,
-      vendorCode: 'VEN-0007',
-      displayName: 'The Light Companie',
-      companyName: 'The Light Companie',
-      gstTreatment: 'Registered Business - Regular',
-      sourceOfSupply: 'Tamil Nadu',
-      status: 'Active',
-    ),
-    const Vendor(
-      id: 8,
-      vendorCode: 'VEN-0008',
-      displayName: 'M K Enterprises',
-      companyName: 'M K Enterprises',
-      gstTreatment: 'Registered Business - Regular',
-      sourceOfSupply: 'Tamil Nadu',
-      status: 'Active',
-    ),
-  ];
-
-  static final List<Vendor> _localStore = List<Vendor>.from(_seedVendors);
-
   @override
   Future<String> generateNextVendorCode() async {
     try {
       final snap = await _vendorsRef.get();
-      if (snap.docs.isNotEmpty) {
-        int maxNum = 0;
-        for (final doc in snap.docs) {
-          final code = (doc.data()['vendorCode'] as String?) ?? '';
-          final numStr = code.replaceAll(RegExp(r'[^0-9]'), '');
-          final n = int.tryParse(numStr) ?? 0;
-          if (n > maxNum) maxNum = n;
-        }
-        return 'VEN-${(maxNum + 1).toString().padLeft(4, '0')}';
+      int maxNum = 0;
+      for (final doc in snap.docs) {
+        final code = (doc.data()['vendorCode'] as String?) ?? '';
+        final numStr = code.replaceAll(RegExp(r'[^0-9]'), '');
+        final n = int.tryParse(numStr) ?? 0;
+        if (n > maxNum) maxNum = n;
       }
+      return 'VEN-${(maxNum + 1).toString().padLeft(4, '0')}';
     } catch (e) {
       debugPrint('Firestore generateNextVendorCode error: $e');
+      return 'VEN-0001';
     }
-
-    int maxNum = 0;
-    for (final v in _localStore) {
-      final numStr = v.vendorCode.replaceAll(RegExp(r'[^0-9]'), '');
-      final n = int.tryParse(numStr) ?? 0;
-      if (n > maxNum) maxNum = n;
-    }
-    return 'VEN-${(maxNum + 1).toString().padLeft(4, '0')}';
   }
 
   @override
@@ -131,20 +45,12 @@ class FirebaseVendorRepository implements VendorRepository {
           return list.where((v) => v.status == 'Active').toList();
         }
         return list;
-      } else {
-        // Populate Firestore initial collection
-        for (final vendor in _seedVendors) {
-          await _vendorsRef.doc(vendor.id.toString()).set(_mapVendorToData(vendor));
-        }
       }
+      return [];
     } catch (e) {
       debugPrint('Firestore getVendors error: $e');
+      return [];
     }
-
-    if (!includeInactive) {
-      return _localStore.where((v) => v.status == 'Active').toList();
-    }
-    return List.unmodifiable(_localStore);
   }
 
   @override
@@ -157,8 +63,7 @@ class FirebaseVendorRepository implements VendorRepository {
     } catch (e) {
       debugPrint('Firestore getVendorById error: $e');
     }
-    final index = _localStore.indexWhere((v) => v.id == id);
-    return index != -1 ? _localStore[index] : null;
+    return null;
   }
 
   @override
@@ -173,39 +78,33 @@ class FirebaseVendorRepository implements VendorRepository {
         : vendor.id;
 
     final newVendor = vendor.copyWith(id: id, vendorCode: code);
-    _localStore.insert(0, newVendor);
 
     try {
       await _vendorsRef.doc(id.toString()).set(_mapVendorToData(newVendor));
     } catch (e) {
       debugPrint('Firestore createVendor error: $e');
+      rethrow;
     }
     return id;
   }
 
   @override
   Future<void> updateVendor(Vendor vendor) async {
-    final index = _localStore.indexWhere((v) => v.id == vendor.id);
-    if (index != -1) {
-      _localStore[index] = vendor;
-    } else {
-      _localStore.insert(0, vendor);
-    }
-
     try {
       await _vendorsRef.doc(vendor.id.toString()).set(_mapVendorToData(vendor), SetOptions(merge: true));
     } catch (e) {
       debugPrint('Firestore updateVendor error: $e');
+      rethrow;
     }
   }
 
   @override
   Future<void> deleteVendor(int id) async {
-    _localStore.removeWhere((v) => v.id == id);
     try {
       await _vendorsRef.doc(id.toString()).delete();
     } catch (e) {
       debugPrint('Firestore deleteVendor error: $e');
+      rethrow;
     }
   }
 

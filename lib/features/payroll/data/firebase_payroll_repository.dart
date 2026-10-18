@@ -12,7 +12,7 @@ class FirebasePayrollRepository implements PayrollRepository {
   FirebasePayrollRepository({FirebaseFirestore? firestore, LoanRepository? loanRepository})
       : _firestore = firestore ?? FirebaseFirestore.instance,
         _loanRepository = loanRepository {
-    _seedDataIfNeeded();
+    _ensureSettings();
   }
 
   CollectionReference<Map<String, dynamic>> get _payrollsRef =>
@@ -21,131 +21,15 @@ class FirebasePayrollRepository implements PayrollRepository {
   CollectionReference<Map<String, dynamic>> get _settingsRef =>
       _firestore.collection('payroll_settings');
 
-  // Seed default settings and mock payroll records if they don't exist
-  // Errors are silently ignored — the app still works with fallback defaults.
-  Future<void> _seedDataIfNeeded() async {
+  // Ensure default settings exist if absent without fabricating mock records
+  Future<void> _ensureSettings() async {
     try {
-      // Ensure a settings document exists
       final settingsDoc = await _settingsRef.doc('settings_1').get();
       if (!settingsDoc.exists) {
         await _settingsRef.doc('settings_1').set(const PayrollSettings().toMap());
       }
-
-      // Seed payroll records only once
-      final existing = await _payrollsRef
-          .where('employee_name', isEqualTo: 'Ganesh Chandra Das')
-          .limit(1)
-          .get();
-      if (existing.docs.isEmpty) {
-        // Record matching screenshot (June 2026)
-        await _payrollsRef.doc('6_June_2026').set({
-          'employee_id': 6,
-          'employee_name': 'Ganesh Chandra Das',
-          'month': 'June 2026',
-          'present_days': 27,
-          'late_days': 0,
-          'absent_days': 0,
-          'leave_days': 3,
-          'designation': 'Bore Path Specialist',
-          'department': 'Execution',
-          'email_id': 'ganeshsavita8056338@gmail.com',
-          'pan_number': 'ANAPG6040R',
-          'pf_number': '101325736568',
-          'esi_number': '',
-          'bank_name': 'Axis Bank',
-          'bank_acct_no': '920010047315532',
-          'branch': 'Ram Nagar Madipakkam',
-          'ifsc_code': 'UTIB0003876',
-          'basic_pay': 33500.0,
-          'hra': 16750.0,
-          'education_allowance': 0.0,
-          'special_allowance': 16750.0,
-          'travel_allowance': 0.0,
-          'other_allowance': 0.0,
-          'incentive': 8880.0,
-          'carry_forward': '-',
-          'others_earning': 3000.0,
-          'cumulative_incentive': 31067.0,
-          'bonus': 0.0,
-          'ot': 0.0,
-          'pf': 1800.0,
-          'tax': 0.0,
-          'esi': 0.0,
-          'lop': 0.0,
-          'company_loan': 20000.0,
-          'salary_advance': 12200.0,
-          'others_deduction': 3392.0,
-          'staff_welfare_contribution': 0.0,
-          'greeting': 0.0,
-          'net_salary': 72555.0,
-          'status': 'Paid',
-          'payment_date': '21-07-2026',
-          'payment_method': 'Bank Transfer',
-          'period_start_date': '20-06-2026',
-          'period_end_date': '20-07-2026',
-          'processing_date': '21-07-2026',
-          'loan_description': '',
-          'advance_description': '',
-          'is_disputed': 0,
-          'dispute_comment': '',
-        });
-
-        // Additional mock record (Ariya Vasanth) for completeness
-        await _payrollsRef.doc('101_June_2026').set({
-          'employee_id': 101,
-          'employee_name': 'Ariya Vasanth',
-          'month': 'June 2026',
-          'present_days': 26,
-          'late_days': 2,
-          'absent_days': 0,
-          'leave_days': 2,
-          'designation': 'Senior Flutter Engineer',
-          'department': 'Product Development',
-          'email_id': 'ariya@example.com',
-          'pan_number': 'ABCDE1234F',
-          'pf_number': '100827364512',
-          'esi_number': '3109827364',
-          'bank_name': 'HDFC Bank',
-          'bank_acct_no': '50100234567890',
-          'branch': 'Adyar Chennai',
-          'ifsc_code': 'HDFC0000005',
-          'basic_pay': 35000.0,
-          'hra': 15000.0,
-          'education_allowance': 0.0,
-          'special_allowance': 8000.0,
-          'travel_allowance': 0.0,
-          'other_allowance': 0.0,
-          'incentive': 2000.0,
-          'carry_forward': '-',
-          'others_earning': 0.0,
-          'cumulative_incentive': 0.0,
-          'bonus': 0.0,
-          'ot': 0.0,
-          'pf': 4200.0,
-          'tax': 2500.0,
-          'esi': 0.0,
-          'lop': 0.0,
-          'company_loan': 0.0,
-          'salary_advance': 0.0,
-          'others_deduction': 200.0,
-          'staff_welfare_contribution': 0.0,
-          'greeting': 0.0,
-          'net_salary': 53100.0,
-          'status': 'Paid',
-          'payment_date': '21-07-2026',
-          'payment_method': 'Bank Transfer',
-          'period_start_date': '20-06-2026',
-          'period_end_date': '20-07-2026',
-          'processing_date': '21-07-2026',
-          'loan_description': '',
-          'advance_description': '',
-          'is_disputed': 0,
-          'dispute_comment': '',
-        });
-      }
     } catch (_) {
-      // Firestore unavailable (e.g. no internet). Skip seeding — defaults will
-      // be returned by getPayrollSettings() and getPayrollRecordsForMonth().
+      // Firestore unavailable. Settings defaults will be returned by getPayrollSettings().
     }
   }
 
@@ -368,17 +252,4 @@ class FirebasePayrollRepository implements PayrollRepository {
     }
   }
 
-  bool _payrollValuesMatch(Map<String, dynamic> existingData, PayrollRecord record) {
-    final existingNet = (existingData['net_salary'] as num?)?.toDouble() ?? 0.0;
-    final existingBasic = (existingData['basic_pay'] as num?)?.toDouble() ?? 0.0;
-    final existingLop = (existingData['lop'] as num?)?.toDouble() ?? 0.0;
-    final existingPresent = (existingData['present_days'] as num?)?.toInt() ?? (existingData['present_count'] as num?)?.toInt() ?? 0;
-    final existingAbsent = (existingData['absent_days'] as num?)?.toInt() ?? (existingData['absent_count'] as num?)?.toInt() ?? 0;
-
-    return (record.netSalary - existingNet).abs() < 0.01 &&
-        (record.basicPay - existingBasic).abs() < 0.01 &&
-        (record.lop - existingLop).abs() < 0.01 &&
-        record.presentDays == existingPresent &&
-        record.absentDays == existingAbsent;
-  }
 }

@@ -199,7 +199,7 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
           ? _calculateLastDeductionMonth(_firstDeductionMonth, installments)
           : '';
 
-      final dummyLoan = EmployeeLoan(
+      final calculationLoan = EmployeeLoan(
         id: 0,
         loanId: '',
         employeeId: 0,
@@ -223,8 +223,8 @@ class _CreateLoanPageState extends ConsumerState<CreateLoanPage> {
         remainingBalance: 0.0,
       );
 
-      final total = dummyLoan.calculatedTotalRepayableWithDays(payrollStartDay: pStart, payrollEndDay: pEnd);
-      final firstMonthEmi = dummyLoan.emiForInstallment(0, payrollStartDay: pStart, payrollEndDay: pEnd);
+      final total = calculationLoan.calculatedTotalRepayableWithDays(payrollStartDay: pStart, payrollEndDay: pEnd);
+      final firstMonthEmi = calculationLoan.emiForInstallment(0, payrollStartDay: pStart, payrollEndDay: pEnd);
 
       setState(() {
         _totalRepayableController.text = total.toStringAsFixed(2);

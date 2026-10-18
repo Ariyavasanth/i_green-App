@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
@@ -29,8 +28,6 @@ class FirebaseBooksRepository implements BooksRepository {
       _firestore.collection('material_returns');
   CollectionReference<Map<String, dynamic>> get _transactionsRef =>
       _firestore.collection('transactions');
-  CollectionReference<Map<String, dynamic>> get _customersRef =>
-      _firestore.collection('customers');
 
   static final List<BookItem> _itemsStore = [
     const BookItem(
@@ -249,24 +246,9 @@ class FirebaseBooksRepository implements BooksRepository {
     ),
   ];
 
-  static final List<SalesTransaction> _transactionsStore = [
-    SalesTransaction(
-      id: 1,
-      type: TransactionType.invoice,
-      number: 'INV-000001',
-      customer: 'NEXORA INFRATECH',
-      date: DateTime.now(),
-      status: 'Draft',
-      amount: 0,
-    ),
-  ];
+  static final List<SalesTransaction> _transactionsStore = [];
 
-  static final List<Customer> _customersStore = [
-    const Customer(id: 1, name: 'NEXORA INFRATECH', company: 'NEXORA INFRATECH'),
-    const Customer(id: 2, name: 'Poomari Engineering', company: 'Poomari Engineering'),
-    const Customer(id: 3, name: 'Sark Telecom', company: 'Sark Telecom'),
-    const Customer(id: 4, name: 'Indwel Precision Gears Pvt Ltd', company: 'Indwel Precision Gears Pvt Ltd'),
-  ];
+  static final List<Customer> _customersStore = [];
 
   @override
   Future<List<BookItem>> getItems() async {
@@ -403,17 +385,7 @@ class FirebaseBooksRepository implements BooksRepository {
     );
     _historyStore.add(historyEntry);
 
-    // Initial transaction entry
-    final transactionEntry = SalesTransaction(
-      id: DateTime.now().millisecondsSinceEpoch + 1,
-      type: TransactionType.invoice,
-      number: 'INV-${itemId.toString().substring(itemId.toString().length - 6)}',
-      customer: 'NEXORA INFRATECH',
-      date: DateTime.now(),
-      status: 'Draft',
-      amount: rate,
-    );
-    _transactionsStore.add(transactionEntry);
+
 
     try {
       final partsMapList = parts.map((p) => {
@@ -475,16 +447,7 @@ class FirebaseBooksRepository implements BooksRepository {
         'details': historyEntry.details,
       });
 
-      // Save initial Transaction document
-      await _firestore.collection('transactions').add({
-        'itemId': itemId,
-        'type': 'invoice',
-        'number': transactionEntry.number,
-        'customerName': transactionEntry.customer,
-        'date': Timestamp.fromDate(transactionEntry.date),
-        'status': transactionEntry.status,
-        'amount': transactionEntry.amount,
-      });
+
     } catch (e) {
       debugPrint('Firestore addItem error: $e');
     }
@@ -544,7 +507,7 @@ class FirebaseBooksRepository implements BooksRepository {
     } catch (e) {
       debugPrint('Firestore getTransactions error: $e');
     }
-    return _transactionsStore.where((t) => t.type == type).toList();
+    return [];
   }
 
   @override
@@ -554,19 +517,23 @@ class FirebaseBooksRepository implements BooksRepository {
       if (snap.docs.isNotEmpty) {
         return snap.docs.map((doc) {
           final data = doc.data();
+          final rawId = data['id'];
+          final int id = rawId is num
+              ? rawId.toInt()
+              : int.tryParse(rawId?.toString() ?? doc.id) ?? doc.id.hashCode;
           return Customer(
-            id: doc.id.hashCode,
-            name: data['name'] ?? '',
-            company: data['company'] ?? '',
-            email: data['email'] ?? '',
-            phone: data['phone'] ?? '',
-            gstTreatment: data['gstTreatment'] ?? 'Registered Business - Regular',
+            id: id,
+            name: (data['displayName'] ?? data['name'] ?? '').toString(),
+            company: (data['companyName'] ?? data['company'] ?? '').toString(),
+            email: (data['email'] ?? '').toString(),
+            phone: (data['workPhone'] ?? data['phone'] ?? '').toString(),
+            gstTreatment: (data['gstTreatment'] ?? 'Registered Business - Regular').toString(),
             receivables: (data['receivables'] as num?)?.toDouble() ?? 0,
           );
         }).toList();
       }
     } catch (_) {}
-    return List.unmodifiable(_customersStore);
+    return [];
   }
 
   @override

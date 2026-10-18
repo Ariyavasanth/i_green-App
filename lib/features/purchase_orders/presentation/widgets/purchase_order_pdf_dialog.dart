@@ -185,7 +185,6 @@ class PurchaseOrderPdfDialog extends StatelessWidget {
           const Text('VENDOR DETAILS', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
           const SizedBox(height: 4),
           Text(order.vendorName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-          const Text('GSTIN: 33XXXXX1234X1Z5\nPhone: +91 98765 43210', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, height: 1.3)),
         ],
       ),
     );
@@ -269,13 +268,13 @@ class PurchaseOrderPdfDialog extends StatelessWidget {
                 if (order.items.isEmpty)
                   TableRow(
                     children: [
-                      _tableCell('1'),
-                      _tableCell('Sample Purchase Item'),
-                      _tableCell('Cost of Goods Sold'),
-                      _tableCell('1 pcs', alignRight: true),
-                      _tableCell(_moneyFormat.format(order.amount), alignRight: true),
-                      _tableCell('18%', alignRight: true),
-                      _tableCell(_moneyFormat.format(order.amount), alignRight: true),
+                      _tableCell('-'),
+                      _tableCell('No items listed'),
+                      _tableCell('-'),
+                      _tableCell('-', alignRight: true),
+                      _tableCell('-', alignRight: true),
+                      _tableCell('-', alignRight: true),
+                      _tableCell('-', alignRight: true),
                     ],
                   )
                 else

@@ -17,60 +17,22 @@ class FirebasePurchaseOrderRepository implements PurchaseOrderRepository {
   CollectionReference<Map<String, dynamic>> get _poRef =>
       _firestore.collection('purchase_orders');
 
-  static final List<PurchaseOrder> _seedOrders = [
-    PurchaseOrder(
-      id: 1,
-      number: 'PO-00225',
-      vendorName: 'Shahnaz Bright Steel Industries Pvt Ltd.',
-      date: DateTime.parse('2026-07-14'),
-      amount: 18150.76,
-      subTotal: 15382.00,
-      taxAmount: 2768.76,
-      status: 'DRAFT',
-      billedStatus: 'YET TO BE BILLED',
-      paymentTerms: 'Due on Receipt',
-    ),
-    PurchaseOrder(
-      id: 2,
-      number: 'PO-00224',
-      vendorName: 'Shahnaz Bright Steel Industries Pvt Ltd.',
-      date: DateTime.parse('2026-06-20'),
-      amount: 17452.20,
-      subTotal: 14790.00,
-      taxAmount: 2662.20,
-      status: 'DRAFT',
-      billedStatus: 'YET TO BE BILLED',
-      paymentTerms: 'Net 30',
-    ),
-  ];
-
-  static final List<PurchaseOrder> _localStore = List<PurchaseOrder>.from(_seedOrders);
-
   @override
   Future<String> generateNextPoNumber() async {
     try {
       final snap = await _poRef.get();
-      if (snap.docs.isNotEmpty) {
-        int maxNum = 0;
-        for (final doc in snap.docs) {
-          final code = (doc.data()['number'] as String?) ?? '';
-          final numStr = code.replaceAll(RegExp(r'[^0-9]'), '');
-          final n = int.tryParse(numStr) ?? 0;
-          if (n > maxNum) maxNum = n;
-        }
-        return 'PO-${(maxNum + 1).toString().padLeft(5, '0')}';
+      int maxNum = 0;
+      for (final doc in snap.docs) {
+        final code = (doc.data()['number'] as String?) ?? '';
+        final numStr = code.replaceAll(RegExp(r'[^0-9]'), '');
+        final n = int.tryParse(numStr) ?? 0;
+        if (n > maxNum) maxNum = n;
       }
+      return 'PO-${(maxNum + 1).toString().padLeft(5, '0')}';
     } catch (e) {
       debugPrint('Firestore generateNextPoNumber error: $e');
+      return 'PO-00001';
     }
-
-    int maxNum = 0;
-    for (final po in _localStore) {
-      final numStr = po.number.replaceAll(RegExp(r'[^0-9]'), '');
-      final n = int.tryParse(numStr) ?? 0;
-      if (n > maxNum) maxNum = n;
-    }
-    return 'PO-${(maxNum + 1).toString().padLeft(5, '0')}';
   }
 
   @override
@@ -81,16 +43,12 @@ class FirebasePurchaseOrderRepository implements PurchaseOrderRepository {
         final list = snap.docs.map((doc) => _mapDocToPo(doc)).toList();
         list.sort((a, b) => b.date.compareTo(a.date));
         return list;
-      } else {
-        for (final po in _seedOrders) {
-          await _poRef.doc(po.id.toString()).set(_mapPoToData(po));
-        }
       }
+      return [];
     } catch (e) {
       debugPrint('Firestore getPurchaseOrders error: $e');
+      return [];
     }
-
-    return List.unmodifiable(_localStore);
   }
 
   @override
@@ -103,8 +61,7 @@ class FirebasePurchaseOrderRepository implements PurchaseOrderRepository {
     } catch (e) {
       debugPrint('Firestore getPurchaseOrderById error: $e');
     }
-    final index = _localStore.indexWhere((p) => p.id == id);
-    return index != -1 ? _localStore[index] : null;
+    return null;
   }
 
   @override
@@ -159,12 +116,11 @@ class FirebasePurchaseOrderRepository implements PurchaseOrderRepository {
           .toList(),
     );
 
-    _localStore.insert(0, po);
-
     try {
       await _poRef.doc(id.toString()).set(_mapPoToData(po));
     } catch (e) {
       debugPrint('Firestore addPurchaseOrder error: $e');
+      rethrow;
     }
   }
 
@@ -224,62 +180,16 @@ class FirebasePurchaseOrderRepository implements PurchaseOrderRepository {
           .toList(),
     );
 
-    final idx = _localStore.indexWhere((p) => p.id == id);
-    if (idx != -1) {
-      _localStore[idx] = po;
-    } else {
-      _localStore.insert(0, po);
-    }
-
     try {
       await _poRef.doc(id.toString()).set(_mapPoToData(po), SetOptions(merge: true));
     } catch (e) {
       debugPrint('Firestore updatePurchaseOrder error: $e');
+      rethrow;
     }
   }
 
   @override
   Future<void> updatePoStatus(int id, String newStatus) async {
-    final idx = _localStore.indexWhere((p) => p.id == id);
-    if (idx != -1) {
-      final old = _localStore[idx];
-      _localStore[idx] = PurchaseOrder(
-        id: old.id,
-        number: old.number,
-        vendorId: old.vendorId,
-        vendorName: old.vendorName,
-        reference: old.reference,
-        status: newStatus,
-        billedStatus: newStatus == 'BILLED' ? 'BILLED' : old.billedStatus,
-        date: old.date,
-        deliveryDate: old.deliveryDate,
-        deliveryAddressType: old.deliveryAddressType,
-        deliveryAddress: old.deliveryAddress,
-        customerId: old.customerId,
-        customerName: old.customerName,
-        shipmentPreference: old.shipmentPreference,
-        paymentTerms: old.paymentTerms,
-        reverseCharge: old.reverseCharge,
-        notes: old.notes,
-        terms: old.terms,
-        subTotal: old.subTotal,
-        discountType: old.discountType,
-        discountValue: old.discountValue,
-        discountAmount: old.discountAmount,
-        taxAmount: old.taxAmount,
-        tdsRate: old.tdsRate,
-        tdsAmount: old.tdsAmount,
-        tcsRate: old.tcsRate,
-        tcsAmount: old.tcsAmount,
-        roundOff: old.roundOff,
-        amount: old.amount,
-        attachments: old.attachments,
-        items: old.items,
-        createdAt: old.createdAt,
-        updatedAt: DateTime.now(),
-      );
-    }
-
     try {
       await _poRef.doc(id.toString()).update({
         'status': newStatus,
@@ -287,6 +197,7 @@ class FirebasePurchaseOrderRepository implements PurchaseOrderRepository {
       });
     } catch (e) {
       debugPrint('Firestore updatePoStatus error: $e');
+      rethrow;
     }
   }
 
@@ -296,11 +207,11 @@ class FirebasePurchaseOrderRepository implements PurchaseOrderRepository {
     if (existing != null && (existing.isBilled || existing.status == 'RECEIVED')) {
       throw StateError('Cannot delete Purchase Order #${existing.number} because it is already ${existing.status}.');
     }
-    _localStore.removeWhere((p) => p.id == id);
     try {
       await _poRef.doc(id.toString()).delete();
     } catch (e) {
       debugPrint('Firestore deletePurchaseOrder error: $e');
+      rethrow;
     }
   }
 

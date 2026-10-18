@@ -32,7 +32,6 @@ import 'widgets/attendance_audit_logs_embedded_view.dart';
 import 'widgets/attendance_matrix_view.dart';
 import 'widgets/attendance_table_view.dart';
 import 'widgets/monthly_attendance_result_view.dart';
-import '../../../tools/seed_all_employees_attendance.dart';
 import '../../payroll/providers/payroll_providers.dart';
 import '../../permission/providers/permission_providers.dart';
 
@@ -83,15 +82,6 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
   void initState() {
     super.initState();
     _activeTab = widget.initialTab;
-    Future.microtask(() async {
-      await syncEmployeeJoiningAndAttendance();
-      if (mounted) {
-        ref.invalidate(attendanceManagementRecordsProvider);
-        ref.invalidate(attendanceManagementStatsProvider);
-        ref.invalidate(allLeaveRequestsProvider);
-        ref.invalidate(employeesProvider);
-      }
-    });
   }
 
   @override
@@ -466,23 +456,22 @@ class _AttendanceManagementPageState extends ConsumerState<AttendanceManagementP
                 onTap: () async {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Syncing attendance database...'),
+                      content: Text('Refreshing attendance database...'),
                       duration: Duration(seconds: 1),
                     ),
                   );
-                  await syncEmployeeJoiningAndAttendance();
+                  ref.invalidate(attendanceManagementRecordsProvider);
+                  ref.invalidate(attendanceManagementStatsProvider);
+                  ref.invalidate(allAttendanceRecordsProvider);
+                  ref.invalidate(attendanceRecordsProvider);
+                  ref.invalidate(allLeaveRequestsProvider);
+                  ref.invalidate(employeesProvider);
+                  ref.invalidate(payrollRecordsForMonthProvider);
+                  ref.invalidate(allPayrollRecordsProvider);
                   if (mounted) {
-                    ref.invalidate(attendanceManagementRecordsProvider);
-                    ref.invalidate(attendanceManagementStatsProvider);
-                    ref.invalidate(allAttendanceRecordsProvider);
-                    ref.invalidate(attendanceRecordsProvider);
-                    ref.invalidate(allLeaveRequestsProvider);
-                    ref.invalidate(employeesProvider);
-                    ref.invalidate(payrollRecordsForMonthProvider);
-                    ref.invalidate(allPayrollRecordsProvider);
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Attendance & Payroll synced successfully!'),
+                        content: Text('Attendance & Payroll refreshed successfully!'),
                         duration: Duration(seconds: 2),
                       ),
                     );
