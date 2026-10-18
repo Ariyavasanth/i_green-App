@@ -562,7 +562,7 @@ class _LoanPageState extends ConsumerState<LoanPage> {
                             IconButton(
                               icon: const Icon(Icons.pause_circle_outline, size: 20, color: Colors.orange),
                               onPressed: () => RequestEmiPauseDialog.show(context, loan),
-                              tooltip: 'Request EMI Pause',
+                              tooltip: 'Flexible EMI / Pause',
                             ),
                           IconButton(
                             icon: const Icon(Icons.visibility_outlined, size: 20),
@@ -770,7 +770,7 @@ class _EmployeeMobileLoanCard extends StatelessWidget {
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         leading: Icon(Icons.pause_circle_outline, size: 20, color: Colors.orange),
-                        title: Text('Request EMI Pause'),
+                        title: Text('Flexible EMI / Pause'),
                       ),
                     ),
                   const PopupMenuItem(

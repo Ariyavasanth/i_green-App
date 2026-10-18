@@ -403,10 +403,10 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
         children: [
           Row(
             children: [
-              Icon(Icons.pause_circle_outline, color: Colors.amber.shade900, size: 20),
+              Icon(Icons.currency_exchange, color: Colors.amber.shade900, size: 20),
               const SizedBox(width: 8),
               Text(
-                'Pending EMI Pause Requests (${pendingList.length})',
+                'Pending EMI Pause / Flexible Deduction Requests (${pendingList.length})',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
@@ -417,6 +417,8 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
           ),
           const SizedBox(height: 10),
           ...pendingList.map((item) {
+            final isFlex = item.request.isFlexible;
+            final reqAmt = item.request.requestedAmount ?? 0.0;
             return Container(
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.all(12),
@@ -431,9 +433,30 @@ class _LoanManagementPageState extends ConsumerState<LoanManagementPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          '${item.loan.employeeName} (${item.loan.employeeCustomId}) — ${item.request.month}',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '${item.loan.employeeName} (${item.loan.employeeCustomId}) — ${item.request.month}',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: isFlex ? AppColors.primary.withValues(alpha: 0.12) : Colors.orange.shade50,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                isFlex ? 'Flexible: ₹${reqAmt.toStringAsFixed(0)}' : 'Pause (₹0)',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: isFlex ? AppColors.primary : Colors.orange.shade800,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 3),
                         Text(

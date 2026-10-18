@@ -236,6 +236,7 @@ class PayrollUploadParser {
       final advance = parseNum('salary_advance', 'Salary Advance');
       final othersDed = parseNum('others_deduction', 'Others Deduction');
       final welfare = parseNum('staff_welfare', 'Staff Welfare');
+      final companyLoan = parseNum('company_loan', 'Company Loan');
 
       if (parseError != null) {
         invalidRows.add(UploadRowValidation(
@@ -277,6 +278,7 @@ class PayrollUploadParser {
             case 'salary_advance': return existingRecord.salaryAdvance;
             case 'others_deduction': return existingRecord.othersDeduction;
             case 'staff_welfare': return existingRecord.staffWelfareContribution;
+            case 'company_loan': return existingRecord.companyLoan;
           }
         }
         switch (key) {
@@ -296,6 +298,7 @@ class PayrollUploadParser {
           case 'salary_advance': return 0.0;
           case 'others_deduction': return 0.0;
           case 'staff_welfare': return 0.0;
+          case 'company_loan': return 0.0;
         }
         return 0.0;
       }
@@ -331,6 +334,7 @@ class PayrollUploadParser {
       checkChange('salary_advance', 'Salary Advance', advance);
       checkChange('others_deduction', 'Others Deduction', othersDed);
       checkChange('staff_welfare', 'Staff Welfare', welfare);
+      checkChange('company_loan', 'Company Loan', companyLoan);
 
       final override = PayrollInputOverride(
         employeeId: matchedEmp.id.toString(),
@@ -351,6 +355,7 @@ class PayrollUploadParser {
         salaryAdvance: advance,
         othersDeduction: othersDed,
         staffWelfare: welfare,
+        companyLoan: companyLoan,
       );
 
       validRows.add(UploadRowValidation(

@@ -216,8 +216,9 @@ class LoanStatementPdfGenerator {
                         ),
                         pw.SizedBox(height: 6),
                         _buildInfoRow('Loan Type:', loan.loanType),
-                        _buildInfoRow('Tenure:', '${loan.installments} Months'),
+                        _buildInfoRow('Tenure:', loan.isTenureExtended ? '${loan.totalTenureMonths} Months (${loan.extendedMonthsCount} mo extended)' : '${loan.installments} Months'),
                         _buildInfoRow('Disbursement Date:', loan.disbursementDate.isNotEmpty ? loan.disbursementDate : '-'),
+                        _buildInfoRow('Last Deduction Month:', loan.effectiveLastDeductionMonth),
                         _buildInfoRow('Status:', loan.status),
                       ],
                     ),
@@ -271,7 +272,6 @@ class LoanStatementPdfGenerator {
                 double runningPrincipal = loan.loanAmount;
                 double pendingDeferredPrincipal = 0.0;
                 double pendingDeferredEmi = 0.0;
-                String pendingDeferredMonth = '';
 
                 final rows = <pw.TableRow>[
                   // Table Header
@@ -309,54 +309,85 @@ class LoanStatementPdfGenerator {
                       p.companyLoan > 0).firstOrNull;
 
                   final pauseReq = loan.getPauseRequestForMonth(month);
-                  final isPaused = pauseReq != null && pauseReq.status.toLowerCase() == 'approved';
+                  final isApprovedReq = pauseReq != null && pauseReq.status.toLowerCase() == 'approved';
+                  final isFullPause = isApprovedReq && pauseReq.isFullPause;
+                  final isFlexibleReq = isApprovedReq && pauseReq.isFlexible;
 
                   final isPaid = ledgerRepayment != null || matchingPayroll != null || index < loan.paidInstallments;
 
                   double deferredEmi = 0.0;
                   bool is2xDue = false;
 
-                  if (pendingDeferredEmi > 0 && !isPaused) {
+                  if (pendingDeferredEmi > 0 && !isFullPause) {
                     deferredEmi = pendingDeferredEmi;
                     is2xDue = true;
                   }
 
+                  final isExtended = index >= loan.baseInstallments;
                   double amountDue = monthEmi;
-                  if (isPaused) {
+                  if (isFullPause) {
                     amountDue = 0.0;
                     pendingDeferredPrincipal += monthlyPrincipal;
                     pendingDeferredEmi += monthEmi;
-                    pendingDeferredMonth = month;
+                  } else if (isFlexibleReq) {
+                    final approvedAmt = pauseReq.approvedAmount ?? pauseReq.requestedAmount ?? monthEmi;
+                    amountDue = approvedAmt;
+                    final deficit = (monthEmi - approvedAmt).clamp(0.0, double.infinity);
+                    if (deficit > 0) {
+                      pendingDeferredPrincipal += (monthlyPrincipal * (deficit / (monthEmi > 0 ? monthEmi : 1)));
+                      pendingDeferredEmi += deficit;
+                    }
                   } else if (is2xDue) {
                     amountDue = monthEmi + deferredEmi;
+                  } else if (isExtended) {
+                    amountDue = (runningPrincipal > 0 && runningPrincipal < monthEmi) ? runningPrincipal : monthEmi;
                   }
 
                   // Dynamic principal deduction
-                  if (isPaused) {
+                  if (isFullPause) {
                     // No principal deducted
+                  } else if (isFlexibleReq) {
+                    final approvedAmt = pauseReq.approvedAmount ?? pauseReq.requestedAmount ?? monthEmi;
+                    final fraction = monthEmi > 0 ? (approvedAmt / monthEmi).clamp(0.0, 1.0) : 1.0;
+                    runningPrincipal -= (monthlyPrincipal * fraction);
                   } else if (is2xDue) {
                     runningPrincipal -= (monthlyPrincipal + pendingDeferredPrincipal);
                     pendingDeferredPrincipal = 0.0;
                     pendingDeferredEmi = 0.0;
-                    pendingDeferredMonth = '';
                   } else {
-                    runningPrincipal -= monthlyPrincipal;
+                    final effectiveP = amountDue < monthlyPrincipal ? amountDue : monthlyPrincipal;
+                    runningPrincipal -= effectiveP;
                   }
 
                   final remainingPrincipal = runningPrincipal < 0.01 ? 0.0 : runningPrincipal;
                   final is2xPaid = isPaid && (matchingPayroll != null && matchingPayroll.companyLoan > monthEmi * 1.3 || is2xDue);
-                  final paidAmount = isPaid ? (ledgerRepayment?.amount ?? (is2xPaid ? amountDue : monthEmi)) : 0.0;
+                  final paidAmount = isPaid
+                      ? (ledgerRepayment?.amount ?? (matchingPayroll != null ? matchingPayroll.companyLoan : (is2xPaid ? amountDue : (isFlexibleReq ? amountDue : monthEmi))))
+                      : 0.0;
                   final rowBgColor = index % 2 == 0 ? PdfColors.white : lightBgColor;
-
-                  String statusText = 'SCHEDULED';
+                  String statusText = isExtended ? 'EXTENDED' : 'SCHEDULED';
                   PdfColor statusColor = PdfColors.grey700;
 
                   if (isPaid) {
-                    statusText = is2xPaid ? 'PAID (2 EMIs)' : 'PAID';
-                    statusColor = primaryColor;
-                  } else if (isPaused) {
+                    if (paidAmount < (monthEmi - 1.0)) {
+                      statusText = 'PARTIAL PAID';
+                      statusColor = PdfColors.amber800;
+                    } else if (isExtended) {
+                      statusText = 'PAID (EXTENDED)';
+                      statusColor = primaryColor;
+                    } else if (is2xPaid) {
+                      statusText = 'PAID (2 EMIs)';
+                      statusColor = primaryColor;
+                    } else {
+                      statusText = 'PAID';
+                      statusColor = primaryColor;
+                    }
+                  } else if (isFullPause) {
                     statusText = 'DEFERRED';
                     statusColor = PdfColors.orange800;
+                  } else if (isFlexibleReq) {
+                    statusText = 'FLEXIBLE DUE';
+                    statusColor = PdfColors.blue800;
                   } else if (is2xDue) {
                     statusText = '2 EMIs DUE';
                     statusColor = PdfColors.blue800;
@@ -375,7 +406,7 @@ class LoanStatementPdfGenerator {
                         _buildTableCell(_currencyFormat.format(monthInterest), align: pw.TextAlign.right),
                         _buildTableCell(_currencyFormat.format(monthEmi), align: pw.TextAlign.right),
                         _buildTableCell(deferredEmi > 0 ? '+${_currencyFormat.format(deferredEmi)}' : '—', align: pw.TextAlign.right, color: deferredEmi > 0 ? PdfColors.blue800 : PdfColors.grey600),
-                        _buildTableCell(_currencyFormat.format(amountDue), align: pw.TextAlign.right, isBold: true, color: isPaused ? PdfColors.orange800 : (is2xDue ? PdfColors.blue800 : PdfColors.black)),
+                        _buildTableCell(_currencyFormat.format(amountDue), align: pw.TextAlign.right, isBold: true, color: isFullPause ? PdfColors.orange800 : (isFlexibleReq ? PdfColors.blue800 : (is2xDue ? PdfColors.blue800 : PdfColors.black))),
                         _buildTableCell(_currencyFormat.format(paidAmount), align: pw.TextAlign.right, color: isPaid ? primaryColor : PdfColors.grey600),
                         _buildTableCell(_currencyFormat.format(remainingPrincipal), align: pw.TextAlign.right),
                         _buildTableCell(

@@ -23,6 +23,7 @@ class PayrollInputOverride {
   final double? salaryAdvance;
   final double? othersDeduction;
   final double? staffWelfare;
+  final double? companyLoan;
 
   const PayrollInputOverride({
     required this.employeeId,
@@ -43,6 +44,7 @@ class PayrollInputOverride {
     this.salaryAdvance,
     this.othersDeduction,
     this.staffWelfare,
+    this.companyLoan,
   });
 }
 

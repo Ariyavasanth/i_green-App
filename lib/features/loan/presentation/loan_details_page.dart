@@ -168,7 +168,7 @@ class LoanDetailsPage extends ConsumerWidget {
                   ),
                   const SizedBox(width: 8),
                   const Text(
-                    'EMI Pause / Deferral Requests',
+                    'EMI Pause / Flexible Deduction Requests',
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                   ),
                 ],
@@ -182,8 +182,8 @@ class LoanDetailsPage extends ConsumerWidget {
                     visualDensity: VisualDensity.compact,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('Request EMI Pause', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  icon: const Icon(Icons.currency_exchange, size: 16),
+                  label: const Text('Flexible EMI / Pause', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                   onPressed: () => RequestEmiPauseDialog.show(context, loan),
                 ),
             ],
@@ -228,9 +228,31 @@ class LoanDetailsPage extends ConsumerWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'Month: ${req.month}',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
+                        Row(
+                          children: [
+                            Text(
+                              'Month: ${req.month}',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: req.isFlexible ? AppColors.primary.withValues(alpha: 0.12) : Colors.orange.shade50,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                req.isFlexible
+                                    ? 'Flexible: ₹${(req.approvedAmount ?? req.requestedAmount ?? 0).toStringAsFixed(0)}'
+                                    : 'Pause (₹0)',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: req.isFlexible ? AppColors.primary : Colors.orange.shade800,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -270,7 +292,7 @@ class LoanDetailsPage extends ConsumerWidget {
                             visualDensity: VisualDensity.compact,
                           ),
                           icon: const Icon(Icons.rate_review_outlined, size: 14),
-                          label: const Text('Review Pause Request', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          label: const Text('Review Request', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                           onPressed: () => ReviewEmiPauseDialog.show(context, loan: loan, request: req),
                         ),
                       ),
@@ -282,7 +304,7 @@ class LoanDetailsPage extends ConsumerWidget {
           ] else if (canRequestPause) ...[
             const SizedBox(height: 10),
             const Text(
-              'Need to skip an EMI for financial reasons? Click "Request EMI Pause" to request deferral to the next month.',
+              'Facing temporary financial difficulty? Click "Flexible EMI / Pause" to request a partial deduction or pause for an upcoming month. Any unpaid balance automatically carries forward and extends your loan tenure.',
               style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
             ),
           ],
@@ -664,10 +686,11 @@ class LoanDetailsPage extends ConsumerWidget {
           _buildRowDetail('Total Repayable', formatCurrency.format(totalRepayable)),
           _buildRowDetail('Total Paid', formatCurrency.format(loan.totalPaid)),
           _buildRowDetail('Remaining Balance', formatCurrency.format(loan.actualRemainingBalance)),
-          _buildRowDetail('Paid Installments', '${loan.paidInstallments} of ${loan.installments}'),
+          _buildRowDetail('Paid Installments', '${loan.paidInstallments} of ${loan.totalTenureMonths}'),
           _buildRowDetail('Remaining Installments', '${loan.remainingInstallments}'),
+          _buildRowDetail('Tenure', loan.isTenureExtended ? '${loan.totalTenureMonths} Months (${loan.extendedMonthsCount} Month${loan.extendedMonthsCount > 1 ? 's' : ''} Extended)' : '${loan.installments} Months'),
           _buildRowDetail('First Deduction Month', loan.firstDeductionMonth),
-          _buildRowDetail('Last Deduction Month', loan.lastDeductionMonth),
+          _buildRowDetail('Last Deduction Month', loan.isTenureExtended ? '${loan.effectiveLastDeductionMonth} (Extended from ${loan.lastDeductionMonth})' : loan.lastDeductionMonth),
           _buildRowDetail('Next EMI Month', loan.nextEmiMonth),
           _buildRowDetail('Disbursement Date', loan.disbursementDate.isNotEmpty ? loan.disbursementDate : '-'),
           _buildRowDetail('Purpose', loan.purpose.isNotEmpty ? loan.purpose : '-'),
@@ -781,13 +804,13 @@ class LoanDetailsPage extends ConsumerWidget {
                   if (loan.status.trim().toLowerCase() == 'active' && loan.remainingInstallments > 0)
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.orange.shade800,
-                        side: BorderSide(color: Colors.orange.shade400),
+                        foregroundColor: AppColors.primary,
+                        side: const BorderSide(color: AppColors.primary),
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         visualDensity: VisualDensity.compact,
                       ),
-                      icon: const Icon(Icons.pause_circle_outline, size: 16),
-                      label: const Text('Request EMI Pause', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      icon: const Icon(Icons.currency_exchange, size: 16),
+                      label: const Text('Flexible EMI / Pause', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                       onPressed: () => RequestEmiPauseDialog.show(context, loan),
                     ),
                   OutlinedButton.icon(
@@ -802,7 +825,7 @@ class LoanDetailsPage extends ConsumerWidget {
                     onPressed: () => _downloadStatement(context, ref, loan, payrolls),
                   ),
                   Text(
-                    '${loan.paidInstallments} / ${loan.installments} Paid',
+                    '${loan.paidInstallments} / ${loan.totalTenureMonths} Paid',
                     style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
                   ),
                 ],
@@ -815,7 +838,7 @@ class LoanDetailsPage extends ConsumerWidget {
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: () {
-              // Pre-calculate running dynamic principal and deferrals
+              // Pre-calculate running dynamic principal, deferrals, and flexible EMIs
               double runningPrincipal = loan.loanAmount;
               final List<({
                 int index,
@@ -830,8 +853,12 @@ class LoanDetailsPage extends ConsumerWidget {
                 double paidAmount,
                 double remainingPrincipal,
                 bool isPaid,
+                bool isPartialPaid,
+                double carriedForward,
                 bool is2xPaid,
                 bool isPaused,
+                bool isFlexApproved,
+                bool isExtended,
                 String carriedToMonth,
                 bool is2xDue,
                 bool isPausePending,
@@ -849,8 +876,10 @@ class LoanDetailsPage extends ConsumerWidget {
                 final monthEmi = loan.emiForInstallment(index, payrollStartDay: pStart, payrollEndDay: pEnd);
 
                 final pauseReq = loan.getPauseRequestForMonth(month);
-                final isPaused = pauseReq != null && pauseReq.status.toLowerCase() == 'approved';
+                final isPaused = pauseReq != null && pauseReq.status.toLowerCase() == 'approved' && pauseReq.isFullPause;
+                final isFlexApproved = pauseReq != null && pauseReq.status.toLowerCase() == 'approved' && pauseReq.isFlexible;
                 final isPausePending = pauseReq != null && pauseReq.status.toLowerCase() == 'pending';
+                final isExtended = index >= loan.baseInstallments;
 
                 final ledgerRepayment = loan.repayments.where((r) => r.month.trim().toLowerCase() == month.trim().toLowerCase()).firstOrNull;
                 final matchingPayroll = payrolls.where((p) =>
@@ -880,13 +909,29 @@ class LoanDetailsPage extends ConsumerWidget {
                   pendingDeferredPrincipal += monthlyPrincipal;
                   pendingDeferredEmi += monthEmi;
                   pendingDeferredMonth = month;
+                } else if (isFlexApproved) {
+                  final approvedAmt = pauseReq.approvedAmount ?? pauseReq.requestedAmount ?? (monthEmi / 2);
+                  amountDue = approvedAmt.clamp(0.0, runningPrincipal > 0 ? runningPrincipal : monthEmi);
+                  final unpaid = (monthEmi - amountDue).clamp(0.0, double.infinity);
+                  amountDueSubtext = 'Flexible: -${formatCurrency.format(unpaid)}';
                 } else if (is2xDue) {
                   amountDue = monthEmi + deferredEmi;
                   amountDueSubtext = '${formatCurrency.format(deferredEmi)} def. + ${formatCurrency.format(monthEmi)} cur.';
+                } else if (isExtended) {
+                  amountDue = (runningPrincipal > 0 && runningPrincipal < monthEmi) ? runningPrincipal : monthEmi;
+                  amountDueSubtext = 'Extended Tenure';
                 }
 
+                final paidAmount = isPaid
+                    ? (ledgerRepayment?.amount ?? (matchingPayroll != null ? matchingPayroll.companyLoan : (isFlexApproved ? amountDue : (is2xDue ? amountDue : monthEmi))))
+                    : 0.0;
+                final bool isPartialPaid = isPaid && (paidAmount < (monthEmi - 1.0));
+                final double carriedForward = isPartialPaid ? (monthEmi - paidAmount) : 0.0;
+
                 // Dynamic principal reduction calculation
-                if (isPaused) {
+                if (isPaid) {
+                  runningPrincipal -= paidAmount;
+                } else if (isPaused) {
                   // No principal deducted in deferred month
                 } else if (is2xDue) {
                   runningPrincipal -= (monthlyPrincipal + pendingDeferredPrincipal);
@@ -894,12 +939,12 @@ class LoanDetailsPage extends ConsumerWidget {
                   pendingDeferredEmi = 0.0;
                   pendingDeferredMonth = '';
                 } else {
-                  runningPrincipal -= monthlyPrincipal;
+                  final effectiveP = amountDue < monthlyPrincipal ? amountDue : monthlyPrincipal;
+                  runningPrincipal -= effectiveP;
                 }
 
                 final remainingPrincipal = runningPrincipal < 0.01 ? 0.0 : runningPrincipal;
                 final is2xPaid = isPaid && (matchingPayroll != null && matchingPayroll.companyLoan > monthEmi * 1.3 || is2xDue);
-                final paidAmount = isPaid ? (ledgerRepayment?.amount ?? (is2xPaid ? amountDue : monthEmi)) : 0.0;
 
                 final payrollRef = ledgerRepayment?.payrollId.isNotEmpty == true
                     ? ledgerRepayment!.payrollId
@@ -921,8 +966,12 @@ class LoanDetailsPage extends ConsumerWidget {
                   paidAmount: paidAmount,
                   remainingPrincipal: remainingPrincipal,
                   isPaid: isPaid,
+                  isPartialPaid: isPartialPaid,
+                  carriedForward: carriedForward,
                   is2xPaid: is2xPaid,
                   isPaused: isPaused,
+                  isFlexApproved: isFlexApproved,
+                  isExtended: isExtended,
                   carriedToMonth: carriedToMonth,
                   is2xDue: is2xDue,
                   isPausePending: isPausePending,
@@ -953,7 +1002,14 @@ class LoanDetailsPage extends ConsumerWidget {
                   // Status Cell formatting
                   Widget statusWidget;
                   if (row.isPaid) {
-                    if (row.is2xPaid) {
+                    if (row.isPartialPaid) {
+                      statusWidget = _buildStatusWithSubtext(
+                        icon: Icons.check_circle_outline,
+                        color: Colors.blue.shade700,
+                        title: 'Partial Paid',
+                        subtitle: '${formatCurrency.format(row.paidAmount)} (-${formatCurrency.format(row.carriedForward)})',
+                      );
+                    } else if (row.is2xPaid) {
                       final defShort = row.deferredMonthName.isNotEmpty ? row.deferredMonthName.split(' ')[0] : 'Prev';
                       final curShort = row.month.split(' ')[0];
                       statusWidget = _buildStatusWithSubtext(
@@ -961,6 +1017,13 @@ class LoanDetailsPage extends ConsumerWidget {
                         color: AppColors.primary,
                         title: 'Paid — 2 EMIs',
                         subtitle: '$defShort + $curShort',
+                      );
+                    } else if (row.isExtended) {
+                      statusWidget = _buildStatusWithSubtext(
+                        icon: Icons.check_circle,
+                        color: AppColors.primary,
+                        title: 'Paid (Extended)',
+                        subtitle: 'Installment ${row.index + 1}',
                       );
                     } else {
                       statusWidget = _buildStatusWithSubtext(
@@ -978,6 +1041,13 @@ class LoanDetailsPage extends ConsumerWidget {
                       title: 'Deferred',
                       subtitle: 'Carried to $carriedShort',
                     );
+                  } else if (row.isFlexApproved) {
+                    statusWidget = _buildStatusWithSubtext(
+                      icon: Icons.currency_exchange,
+                      color: AppColors.primary,
+                      title: 'Flexible Due',
+                      subtitle: row.amountDueSubtext,
+                    );
                   } else if (row.is2xDue) {
                     statusWidget = _buildStatusWithSubtext(
                       icon: Icons.error_outline,
@@ -989,15 +1059,22 @@ class LoanDetailsPage extends ConsumerWidget {
                     statusWidget = _buildStatusWithSubtext(
                       icon: Icons.hourglass_empty,
                       color: Colors.amber.shade800,
-                      title: 'Pause Pending',
+                      title: 'Request Pending',
                       subtitle: 'Awaiting review',
                     );
                   } else if (row.isUpcoming) {
                     statusWidget = _buildStatusWithSubtext(
                       icon: Icons.schedule,
                       color: Colors.orange.shade700,
-                      title: 'Upcoming',
+                      title: row.isExtended ? 'Extended (Upcoming)' : 'Upcoming',
                       subtitle: 'Due this cycle',
+                    );
+                  } else if (row.isExtended) {
+                    statusWidget = _buildStatusWithSubtext(
+                      icon: Icons.update,
+                      color: Colors.purple.shade700,
+                      title: 'Extended Tenure',
+                      subtitle: 'Carried forward',
                     );
                   } else {
                     statusWidget = _buildStatusWithSubtext(

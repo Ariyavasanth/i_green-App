@@ -212,6 +212,7 @@ class PayrollCalculationService {
     required EmployeeLoan? loan,
     required String month,
     required PayrollSettings settings,
+    double? customOverrideAmount,
   }) {
     if (loan == null || loan.actualRemainingBalance <= 0 || loan.status == 'Closed') {
       return (emiAmount: 0.0, loanDescription: '');
@@ -220,7 +221,22 @@ class PayrollCalculationService {
     final pStart = settings.payrollStartDay;
     final pEnd = settings.payrollEndDay;
 
-    // 1. Case A: Current month has an approved EMI pause request
+    // 1. Direct admin override (from custom input or file upload override)
+    if (customOverrideAmount != null) {
+      final finalEmi = customOverrideAmount.clamp(0.0, loan.actualRemainingBalance);
+      final unpaidDeficit = (loan.emiAmount - finalEmi);
+      final String desc;
+      if (unpaidDeficit > 0.01) {
+        desc = loan.loanId.isNotEmpty
+            ? 'Partial EMI (₹${finalEmi.toStringAsFixed(0)} of ₹${loan.emiAmount.toStringAsFixed(0)}) - ₹${unpaidDeficit.toStringAsFixed(0)} carried forward (${loan.loanId})'
+            : 'Partial EMI (₹${finalEmi.toStringAsFixed(0)} of ₹${loan.emiAmount.toStringAsFixed(0)}) - Carried forward';
+      } else {
+        desc = loan.loanId.isNotEmpty ? 'Loan EMI (${loan.loanId})' : 'Loan EMI';
+      }
+      return (emiAmount: double.parse(finalEmi.toStringAsFixed(2)), loanDescription: desc);
+    }
+
+    // 2. Case A: Current month has an approved full EMI pause request (0 deduction)
     if (loan.isMonthPaused(month)) {
       final String pauseNote = loan.loanId.isNotEmpty
           ? 'EMI Deferred for $month (${loan.loanId}) - Carried forward'
@@ -228,17 +244,29 @@ class PayrollCalculationService {
       return (emiAmount: 0.0, loanDescription: pauseNote);
     }
 
-    final monthIdx = loan.scheduleMonths.indexWhere((m) => m.trim().toLowerCase() == month.trim().toLowerCase());
-    final currentMonthEmi = monthIdx != -1
-        ? loan.emiForInstallment(monthIdx, payrollStartDay: pStart, payrollEndDay: pEnd)
-        : (loan.interestRate > 0 ? loan.emiForInstallment(loan.paidInstallments, payrollStartDay: pStart, payrollEndDay: pEnd) : loan.emiAmount);
+    // 3. Case B: Current month has an approved Flexible EMI request (partial deduction)
+    final flexibleReq = loan.getApprovedFlexibleRequestForMonth(month);
+    if (flexibleReq != null) {
+      final approvedAmt = flexibleReq.approvedAmount ?? flexibleReq.requestedAmount ?? (loan.emiAmount / 2);
+      final finalEmi = approvedAmt.clamp(0.0, loan.actualRemainingBalance);
+      final unpaid = (loan.emiAmount - finalEmi).clamp(0.0, double.infinity);
+      final String flexNote = loan.loanId.isNotEmpty
+          ? 'Partial EMI (₹${finalEmi.toStringAsFixed(0)} of ₹${loan.emiAmount.toStringAsFixed(0)}) - ₹${unpaid.toStringAsFixed(0)} carried forward (${loan.loanId})'
+          : 'Partial EMI (₹${finalEmi.toStringAsFixed(0)} of ₹${loan.emiAmount.toStringAsFixed(0)}) - Carried forward';
+      return (emiAmount: double.parse(finalEmi.toStringAsFixed(2)), loanDescription: flexNote);
+    }
 
-    // 2. Case B: Recovering an unrecovered deferred pause from an earlier month (2x EMI)
+    // 4. Case C: Recovering an unrecovered deferred pause from an earlier month (2x EMI)
     final unrecoveredDeferred = loan.getUnrecoveredDeferredRequestBefore(month);
     if (unrecoveredDeferred != null) {
       final defMonthIdx = loan.scheduleMonths.indexWhere((m) => m.trim().toLowerCase() == unrecoveredDeferred.month.trim().toLowerCase());
       final defMonthEmi = defMonthIdx != -1
           ? loan.emiForInstallment(defMonthIdx, payrollStartDay: pStart, payrollEndDay: pEnd)
+          : (loan.interestRate > 0 ? loan.emiForInstallment(loan.paidInstallments, payrollStartDay: pStart, payrollEndDay: pEnd) : loan.emiAmount);
+
+      final monthIdx = loan.scheduleMonths.indexWhere((m) => m.trim().toLowerCase() == month.trim().toLowerCase());
+      final currentMonthEmi = monthIdx != -1
+          ? loan.emiForInstallment(monthIdx, payrollStartDay: pStart, payrollEndDay: pEnd)
           : (loan.interestRate > 0 ? loan.emiForInstallment(loan.paidInstallments, payrollStartDay: pStart, payrollEndDay: pEnd) : loan.emiAmount);
 
       final total2xAmount = currentMonthEmi + defMonthEmi;
@@ -252,13 +280,30 @@ class PayrollCalculationService {
       return (emiAmount: double.parse(finalEmi.toStringAsFixed(2)), loanDescription: note);
     }
 
-    // 3. Case C: Normal installment deduction
+    // 5. Case D: Normal installment or extended tenure installment
+    final monthIdx = loan.scheduleMonths.indexWhere((m) => m.trim().toLowerCase() == month.trim().toLowerCase());
+    final currentMonthEmi = monthIdx != -1 && monthIdx < loan.installments
+        ? loan.emiForInstallment(monthIdx, payrollStartDay: pStart, payrollEndDay: pEnd)
+        : (loan.interestRate > 0 ? loan.emiForInstallment(loan.paidInstallments, payrollStartDay: pStart, payrollEndDay: pEnd) : loan.emiAmount);
+
     final maxRecoverable = loan.actualRemainingBalance;
     final finalEmi = (currentMonthEmi > maxRecoverable && maxRecoverable > 0) ? maxRecoverable : currentMonthEmi;
 
-    final String installmentNote = monthIdx != -1
-        ? 'Installment ${monthIdx + 1} of ${loan.installments} (${loan.loanId})'
-        : (loan.loanId.isNotEmpty ? 'Loan EMI (${loan.loanId})' : 'Loan EMI');
+    final bool isExtended = monthIdx != -1 && (monthIdx + 1 > loan.baseInstallments);
+    final String installmentNote;
+    if (isExtended) {
+      installmentNote = loan.loanId.isNotEmpty
+          ? 'Extended Installment ${monthIdx + 1} of ${loan.totalTenureMonths} (${loan.loanId})'
+          : 'Extended Installment ${monthIdx + 1} of ${loan.totalTenureMonths}';
+    } else if (finalEmi < currentMonthEmi && finalEmi == maxRecoverable) {
+      installmentNote = loan.loanId.isNotEmpty
+          ? 'Final Installment (Balance ₹${finalEmi.toStringAsFixed(0)}) - ${loan.loanId}'
+          : 'Final Installment (Balance ₹${finalEmi.toStringAsFixed(0)})';
+    } else {
+      installmentNote = monthIdx != -1
+          ? 'Installment ${monthIdx + 1} of ${loan.totalTenureMonths} (${loan.loanId})'
+          : (loan.loanId.isNotEmpty ? 'Loan EMI (${loan.loanId})' : 'Loan EMI');
+    }
 
     return (emiAmount: double.parse(finalEmi.toStringAsFixed(2)), loanDescription: installmentNote);
   }
@@ -386,6 +431,7 @@ class PayrollCalculationService {
       loan: activeLoan,
       month: month,
       settings: settings,
+      customOverrideAmount: overrideInput?.companyLoan,
     );
     final effectiveSalaryAdvance = overrideInput?.salaryAdvance ?? manualSalaryAdvance;
     final effectiveOthersDeduction = overrideInput?.othersDeduction ?? manualOthersDeduction;

@@ -17,6 +17,7 @@ import '../providers/payroll_providers.dart';
 import '../services/payroll_calculation_service.dart';
 import '../../leave/domain/leave_request.dart';
 import '../../leave/providers/leave_providers.dart';
+import '../../loan/domain/employee_loan.dart';
 import '../../loan/providers/loan_providers.dart';
 import '../../on_duty/domain/on_duty_assignment.dart';
 import '../../on_duty/providers/on_duty_providers.dart';
@@ -87,6 +88,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
   IncentiveCalculationResult? _incentiveResult;
   double? _lastCalculatedIncentive;
   double? _lastCalculatedCumulativeIncentive;
+  EmployeeLoan? _activeLoan;
 
 
   @override
@@ -113,6 +115,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
 
     _lopController.addListener(_recalculate);
     _companyLoanController.addListener(_recalculate);
+    _companyLoanController.addListener(_onCompanyLoanChanged);
     _salaryAdvanceController.addListener(_recalculate);
     _othersDeductionController.addListener(_recalculate);
     _staffWelfareController.addListener(_recalculate);
@@ -139,6 +142,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     _esiController.dispose();
 
     _lopController.dispose();
+    _companyLoanController.removeListener(_onCompanyLoanChanged);
     _companyLoanController.dispose();
     _salaryAdvanceController.dispose();
     _othersDeductionController.dispose();
@@ -211,7 +215,11 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     _esiController.text = esi.toStringAsFixed(2);
 
     _lopController.text = '0.00';
-    _companyLoanController.text = '0.00';
+    if (overrideInput?.companyLoan != null) {
+      _companyLoanController.text = overrideInput!.companyLoan!.toStringAsFixed(2);
+    } else {
+      _companyLoanController.text = '0.00';
+    }
     _loanDescController.text = '';
     _salaryAdvanceController.text = overrideInput?.salaryAdvance?.toStringAsFixed(2) ?? '0.00';
     _othersDeductionController.text = overrideInput?.othersDeduction?.toStringAsFixed(2) ?? '0.00';
@@ -340,19 +348,43 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
     try {
       final loan = await ref.read(loanRepositoryProvider).getActiveLoanForEmployee(employeeId, month);
       if (loan != null && mounted) {
+        final currentEntered = double.tryParse(_companyLoanController.text);
+        final customOverride = (currentEntered != null && currentEntered > 0) ? currentEntered : null;
+
         final loanMetrics = PayrollCalculationService.calculateLoanEmi(
           loan: loan,
           month: month,
           settings: settings,
+          customOverrideAmount: customOverride,
         );
 
         setState(() {
-          _companyLoanController.text = loanMetrics.emiAmount.toStringAsFixed(2);
+          _activeLoan = loan;
+          if (customOverride == null) {
+            _companyLoanController.text = loanMetrics.emiAmount.toStringAsFixed(2);
+          }
           _loanDescController.text = loanMetrics.loanDescription;
           _recalculate();
         });
       }
     } catch (_) {}
+  }
+
+  void _onCompanyLoanChanged() {
+    if (_activeLoan == null) return;
+    final entered = double.tryParse(_companyLoanController.text);
+    if (entered == null) return;
+    final currentMonth = ref.read(selectedPayrollMonthProvider);
+    final settings = ref.read(payrollSettingsProvider).value ?? const PayrollSettings();
+    final metrics = PayrollCalculationService.calculateLoanEmi(
+      loan: _activeLoan!,
+      month: currentMonth,
+      settings: settings,
+      customOverrideAmount: entered,
+    );
+    if (_loanDescController.text.isEmpty || _loanDescController.text.startsWith(_activeLoan!.loanId)) {
+      _loanDescController.text = metrics.loanDescription;
+    }
   }
 
   void _calculateAttendanceMetrics(
@@ -1180,6 +1212,24 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
         ? '${_lopHours.toStringAsFixed(1)} Hours × ₹${_hourlyRate.toStringAsFixed(2)}/hr'
         : '0.0 Hours LOP (₹${_hourlyRate.toStringAsFixed(2)}/hr)';
 
+    String? loanHelper;
+    if (_activeLoan != null) {
+      final enteredAmount = double.tryParse(_companyLoanController.text) ?? 0.0;
+      final regularEmi = _activeLoan!.emiAmount;
+      final remaining = _activeLoan!.remainingBalance;
+
+      if (enteredAmount == 0) {
+        loanHelper = 'Full EMI paused for this month. Remaining ₹${remaining.toStringAsFixed(0)} carries forward (Tenure extends by 1 mo).';
+      } else if (enteredAmount < regularEmi) {
+        final deficit = regularEmi - enteredAmount;
+        loanHelper = 'Flexible deduction: ₹${enteredAmount.toStringAsFixed(0)} (Deficit ₹${deficit.toStringAsFixed(0)} carries forward & auto-extends tenure)';
+      } else if (enteredAmount > regularEmi) {
+        loanHelper = 'Accelerated repayment: ₹${enteredAmount.toStringAsFixed(0)} (Regular EMI: ₹${regularEmi.toStringAsFixed(0)})';
+      } else {
+        loanHelper = 'Regular EMI: ₹${regularEmi.toStringAsFixed(0)}/mo | Balance: ₹${remaining.toStringAsFixed(0)} (Inst. ${_activeLoan!.paidInstallments + 1} of ${_activeLoan!.totalTenureMonths})';
+      }
+    }
+
     return Card(
       elevation: 0,
       color: Colors.white,
@@ -1204,7 +1254,7 @@ class _GeneratePayrollScreenState extends ConsumerState<GeneratePayrollScreen> {
             const SizedBox(height: 12),
             _buildInputField('Hourly Loss of Pay (LOP)', _lopController, helperText: lopHelper),
             const SizedBox(height: 12),
-            _buildInputField('Company Loan Recovery', _companyLoanController),
+            _buildInputField('Company Loan Recovery', _companyLoanController, helperText: loanHelper),
             const SizedBox(height: 8),
             _buildInputField('Loan Details Note (e.g. Installment 4 of 12)', _loanDescController, isText: true),
             const SizedBox(height: 12),

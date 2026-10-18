@@ -190,11 +190,22 @@ class FirebaseLoanRepository implements LoanRepository {
       final newBalance = (loan.totalRepayableAmount - totalRepaid).clamp(0.0, loan.totalRepayableAmount);
       final newStatus = newBalance <= 0.01 ? 'Closed' : loan.status;
 
+      // Evaluate tenure auto-extension
+      final updatedLoanModel = loan.copyWith(
+        repayments: updatedRepayments,
+        remainingBalance: newBalance,
+      );
+      final newTotalTenure = updatedLoanModel.totalTenureMonths;
+      final newLastMonth = updatedLoanModel.effectiveLastDeductionMonth;
+
       final docId = loan.loanId.isNotEmpty ? loan.loanId : 'loan_${loan.id}';
       await _loansRef.doc(docId).update({
         'repayments': updatedRepayments.map((r) => r.toMap()).toList(),
         'remaining_balance': newBalance,
         'status': newStatus,
+        'installments': newTotalTenure,
+        'original_installments': loan.baseInstallments,
+        'last_deduction_month': newLastMonth,
         'updated_at': FieldValue.serverTimestamp(),
       });
     } catch (_) {}
@@ -319,6 +330,7 @@ class FirebaseLoanRepository implements LoanRepository {
     required String status,
     required String reviewedBy,
     String? adminRemarks,
+    double? approvedAmount,
   }) async {
     try {
       final loan = await getLoanByLoanId(loanId);
@@ -334,13 +346,21 @@ class FirebaseLoanRepository implements LoanRepository {
             reviewedBy: reviewedBy,
             reviewedAt: nowStr,
             adminRemarks: adminRemarks ?? r.adminRemarks,
+            approvedAmount: approvedAmount ?? r.approvedAmount,
           );
         }
         return r;
       }).toList();
 
+      final updatedLoan = loan.copyWith(pauseRequests: updatedList);
+      final newTotalTenure = updatedLoan.totalTenureMonths;
+      final newLastMonth = updatedLoan.effectiveLastDeductionMonth;
+
       await _loansRef.doc(docId).update({
         'pause_requests': updatedList.map((r) => r.toMap()).toList(),
+        'installments': newTotalTenure,
+        'original_installments': loan.baseInstallments,
+        'last_deduction_month': newLastMonth,
         'updated_at': FieldValue.serverTimestamp(),
       });
     } catch (_) {}

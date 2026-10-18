@@ -26,13 +26,19 @@ class RequestEmiPauseDialog extends ConsumerStatefulWidget {
 class _RequestEmiPauseDialogState extends ConsumerState<RequestEmiPauseDialog> {
   final _formKey = GlobalKey<FormState>();
   final _reasonController = TextEditingController();
+  final _amountController = TextEditingController();
   late String _selectedMonth;
   late List<String> _availableMonths;
+  String _requestType = 'Flexible'; // 'Flexible' or 'Pause'
   bool _isSubmitting = false;
 
   @override
   void initState() {
     super.initState();
+    // Default partial amount to 50% of regular EMI rounded
+    final defaultPartial = (widget.loan.emiAmount / 2).roundToDouble();
+    _amountController.text = defaultPartial > 0 ? defaultPartial.toStringAsFixed(0) : '1000';
+
     // Eligible months are upcoming unpaid schedule months that are not already approved or pending
     final paidCount = widget.loan.paidInstallments;
     final allMonths = widget.loan.scheduleMonths;
@@ -55,6 +61,7 @@ class _RequestEmiPauseDialogState extends ConsumerState<RequestEmiPauseDialog> {
   @override
   void dispose() {
     _reasonController.dispose();
+    _amountController.dispose();
     super.dispose();
   }
 
@@ -64,8 +71,9 @@ class _RequestEmiPauseDialogState extends ConsumerState<RequestEmiPauseDialog> {
     setState(() => _isSubmitting = true);
 
     try {
+      final customAmount = _requestType == 'Flexible' ? double.tryParse(_amountController.text.trim()) : 0.0;
       final request = LoanEmiPauseRequest(
-        requestId: 'PAUSE_${DateTime.now().millisecondsSinceEpoch}',
+        requestId: 'REQ_${DateTime.now().millisecondsSinceEpoch}',
         loanId: widget.loan.loanId,
         employeeId: widget.loan.employeeId,
         employeeName: widget.loan.employeeName,
@@ -73,6 +81,8 @@ class _RequestEmiPauseDialogState extends ConsumerState<RequestEmiPauseDialog> {
         reason: _reasonController.text.trim(),
         status: 'Pending',
         requestedAt: DateTime.now().toIso8601String(),
+        requestType: _requestType,
+        requestedAmount: customAmount,
       );
 
       await ref.read(loanRepositoryProvider).submitEmiPauseRequest(request);
@@ -86,7 +96,11 @@ class _RequestEmiPauseDialogState extends ConsumerState<RequestEmiPauseDialog> {
         Navigator.of(context).pop(true);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('EMI Pause request for $_selectedMonth submitted successfully.'),
+            content: Text(
+              _requestType == 'Flexible'
+                  ? 'Flexible EMI request (₹${customAmount?.toStringAsFixed(0)}) for $_selectedMonth submitted.'
+                  : 'EMI Pause request for $_selectedMonth submitted successfully.',
+            ),
             backgroundColor: AppColors.primary,
           ),
         );
@@ -107,6 +121,9 @@ class _RequestEmiPauseDialogState extends ConsumerState<RequestEmiPauseDialog> {
   @override
   Widget build(BuildContext context) {
     final formatCurrency = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+    final regularEmi = widget.loan.emiAmount;
+    final enteredAmt = double.tryParse(_amountController.text.trim()) ?? 0.0;
+    final carriedForwardAmt = (regularEmi - enteredAmt).clamp(0.0, regularEmi);
 
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -121,12 +138,12 @@ class _RequestEmiPauseDialogState extends ConsumerState<RequestEmiPauseDialog> {
               color: AppColors.primary.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.pause_circle_outline, color: AppColors.primary, size: 24),
+            child: const Icon(Icons.currency_exchange, color: AppColors.primary, size: 24),
           ),
           const SizedBox(width: 12),
           const Expanded(
             child: Text(
-              'Request EMI Pause / Skip',
+              'Flexible EMI / Pause Request',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
             ),
           ),
@@ -161,7 +178,7 @@ class _RequestEmiPauseDialogState extends ConsumerState<RequestEmiPauseDialog> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Monthly EMI', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                        const Text('Regular EMI', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                         Text(formatCurrency.format(widget.loan.emiAmount), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                       ],
                     ),
@@ -169,7 +186,7 @@ class _RequestEmiPauseDialogState extends ConsumerState<RequestEmiPauseDialog> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Balance', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                        const Text('Remaining Balance', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                         Text(formatCurrency.format(widget.loan.actualRemainingBalance), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.primary)),
                       ],
                     ),
@@ -178,11 +195,91 @@ class _RequestEmiPauseDialogState extends ConsumerState<RequestEmiPauseDialog> {
               ),
               const SizedBox(height: 16),
 
+              // Request Type Tabs / Segment
+              const Text('Request Type', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary)),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () => setState(() => _requestType = 'Flexible'),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: _requestType == 'Flexible' ? AppColors.primary.withValues(alpha: 0.12) : const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: _requestType == 'Flexible' ? AppColors.primary : const Color(0xFFCBD5E1),
+                            width: _requestType == 'Flexible' ? 1.5 : 1.0,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.payments_outlined,
+                              size: 20,
+                              color: _requestType == 'Flexible' ? AppColors.primary : AppColors.textSecondary,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Flexible EMI (Partial)',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: _requestType == 'Flexible' ? AppColors.primary : AppColors.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () => setState(() => _requestType = 'Pause'),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: _requestType == 'Pause' ? AppColors.primary.withValues(alpha: 0.12) : const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: _requestType == 'Pause' ? AppColors.primary : const Color(0xFFCBD5E1),
+                            width: _requestType == 'Pause' ? 1.5 : 1.0,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.pause_circle_outline,
+                              size: 20,
+                              color: _requestType == 'Pause' ? AppColors.primary : AppColors.textSecondary,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Full Pause (Defer)',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: _requestType == 'Pause' ? AppColors.primary : AppColors.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
               // Month Selector
-              const Text('Select Month to Skip', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary)),
+              const Text('Select Month', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary)),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
-                value: _selectedMonth,
+                initialValue: _selectedMonth,
                 decoration: InputDecoration(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
@@ -200,14 +297,58 @@ class _RequestEmiPauseDialogState extends ConsumerState<RequestEmiPauseDialog> {
               ),
               const SizedBox(height: 16),
 
+              // If Flexible, Amount Field
+              if (_requestType == 'Flexible') ...[
+                const Text(
+                  'Affordable Deduction Amount for this Month (₹) *',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary),
+                ),
+                const SizedBox(height: 6),
+                TextFormField(
+                  controller: _amountController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    prefixText: '₹ ',
+                    hintText: 'e.g. 1000',
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                    ),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                  validator: (val) {
+                    if (_requestType != 'Flexible') return null;
+                    if (val == null || val.trim().isEmpty) {
+                      return 'Please enter the amount you can afford to pay';
+                    }
+                    final parsed = double.tryParse(val.trim());
+                    if (parsed == null || parsed <= 0) {
+                      return 'Amount must be greater than ₹0';
+                    }
+                    if (parsed >= widget.loan.emiAmount) {
+                      return 'Must be less than regular EMI (${formatCurrency.format(widget.loan.emiAmount)})';
+                    }
+                    if (parsed > widget.loan.actualRemainingBalance) {
+                      return 'Cannot exceed remaining balance (${formatCurrency.format(widget.loan.actualRemainingBalance)})';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 14),
+              ],
+
               // Reason
-              const Text('Reason for Deferral *', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary)),
+              const Text('Reason *', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary)),
               const SizedBox(height: 6),
               TextFormField(
                 controller: _reasonController,
                 maxLines: 3,
                 decoration: InputDecoration(
-                  hintText: 'e.g. Unexpected medical expense this month. Please defer EMI to next month.',
+                  hintText: _requestType == 'Flexible'
+                      ? 'e.g. Facing temporary cash crunch. Requesting ₹1,000 deduction this month.'
+                      : 'e.g. Unexpected medical expense this month. Please defer EMI to next month.',
                   hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
@@ -218,7 +359,7 @@ class _RequestEmiPauseDialogState extends ConsumerState<RequestEmiPauseDialog> {
                 ),
                 validator: (val) {
                   if (val == null || val.trim().isEmpty) {
-                    return 'Please enter a reason for pausing your EMI';
+                    return 'Please enter a reason for your request';
                   }
                   return null;
                 },
@@ -240,7 +381,9 @@ class _RequestEmiPauseDialogState extends ConsumerState<RequestEmiPauseDialog> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'If approved, ₹0 will be deducted in $_selectedMonth. The deferred EMI will be automatically recovered in the following month\'s payroll (2× EMI).',
+                        _requestType == 'Flexible'
+                            ? 'If approved, only ${formatCurrency.format(enteredAmt)} will be deducted in $_selectedMonth. The unpaid ${formatCurrency.format(carriedForwardAmt)} will automatically carry forward to your remaining balance, and your loan tenure will auto-extend by 1 month to recover the balance.'
+                            : 'If approved, ₹0 will be deducted in $_selectedMonth. The full EMI will carry forward and the tenure will be extended accordingly.',
                         style: TextStyle(color: Colors.blue.shade900, fontSize: 12, height: 1.3),
                       ),
                     ),

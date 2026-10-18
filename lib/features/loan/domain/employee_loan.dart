@@ -55,6 +55,9 @@ class LoanEmiPauseRequest {
   final String reviewedAt;
   final String adminRemarks;
   final bool isRecovered; // true once the following month recovers the deferred 2x EMI
+  final String requestType; // 'Pause' (full deferral) or 'Flexible' (partial deduction)
+  final double? requestedAmount; // Custom amount requested to deduct (e.g. 1000.0)
+  final double? approvedAmount; // Admin-approved deduction amount
 
   const LoanEmiPauseRequest({
     required this.requestId,
@@ -69,7 +72,13 @@ class LoanEmiPauseRequest {
     this.reviewedAt = '',
     this.adminRemarks = '',
     this.isRecovered = false,
+    this.requestType = 'Pause',
+    this.requestedAmount,
+    this.approvedAmount,
   });
+
+  bool get isFlexible => requestType.trim().toLowerCase() == 'flexible' || (requestedAmount != null && requestedAmount! > 0);
+  bool get isFullPause => !isFlexible;
 
   Map<String, dynamic> toMap() {
     return {
@@ -85,10 +94,19 @@ class LoanEmiPauseRequest {
       'reviewed_at': reviewedAt,
       'admin_remarks': adminRemarks,
       'is_recovered': isRecovered,
+      'request_type': requestType,
+      if (requestedAmount != null) 'requested_amount': requestedAmount,
+      if (approvedAmount != null) 'approved_amount': approvedAmount,
     };
   }
 
   factory LoanEmiPauseRequest.fromMap(Map<String, dynamic> map) {
+    final rawAmount = (map['requested_amount'] as num?)?.toDouble();
+    final rawType = map['request_type'] as String?;
+    final resolvedType = rawType != null && rawType.isNotEmpty
+        ? rawType
+        : (rawAmount != null && rawAmount > 0 ? 'Flexible' : 'Pause');
+
     return LoanEmiPauseRequest(
       requestId: map['request_id'] as String? ?? '',
       loanId: map['loan_id'] as String? ?? '',
@@ -102,6 +120,9 @@ class LoanEmiPauseRequest {
       reviewedAt: map['reviewed_at'] as String? ?? '',
       adminRemarks: map['admin_remarks'] as String? ?? '',
       isRecovered: map['is_recovered'] as bool? ?? false,
+      requestType: resolvedType,
+      requestedAmount: rawAmount,
+      approvedAmount: (map['approved_amount'] as num?)?.toDouble(),
     );
   }
 
@@ -118,6 +139,9 @@ class LoanEmiPauseRequest {
     String? reviewedAt,
     String? adminRemarks,
     bool? isRecovered,
+    String? requestType,
+    double? requestedAmount,
+    double? approvedAmount,
   }) {
     return LoanEmiPauseRequest(
       requestId: requestId ?? this.requestId,
@@ -132,6 +156,9 @@ class LoanEmiPauseRequest {
       reviewedAt: reviewedAt ?? this.reviewedAt,
       adminRemarks: adminRemarks ?? this.adminRemarks,
       isRecovered: isRecovered ?? this.isRecovered,
+      requestType: requestType ?? this.requestType,
+      requestedAmount: requestedAmount ?? this.requestedAmount,
+      approvedAmount: approvedAmount ?? this.approvedAmount,
     );
   }
 }
@@ -150,6 +177,7 @@ class EmployeeLoan {
   final String disbursementDate;
   final String purpose;
   final int installments; // in Months
+  final int originalInstallments; // Original agreed tenure
   final double emiAmount;
   final String firstDeductionMonth; // e.g. "September 2026"
   final String lastDeductionMonth; // e.g. "August 2027"
@@ -178,6 +206,7 @@ class EmployeeLoan {
     required this.disbursementDate,
     required this.purpose,
     required this.installments,
+    this.originalInstallments = 0,
     required this.emiAmount,
     required this.firstDeductionMonth,
     required this.lastDeductionMonth,
@@ -365,27 +394,11 @@ class EmployeeLoan {
     return remainingBalance < 0.01 ? 0.0 : remainingBalance;
   }
 
-  /// Paid installments count
-  int get paidInstallments {
-    if (repayments.isNotEmpty) {
-      return repayments.length > installments ? installments : repayments.length;
-    }
-    if (emiAmount <= 0) return 0;
-    final count = (totalPaid / emiAmount).round();
-    return count > installments ? installments : count;
-  }
-
-  /// Remaining installments count
-  int get remainingInstallments {
-    final rem = installments - paidInstallments;
-    return rem < 0 ? 0 : rem;
-  }
-
-  /// Generate chronological list of deduction months
-  List<String> get scheduleMonths {
-    if (installments <= 0 || firstDeductionMonth.isEmpty) return [];
-    final parts = firstDeductionMonth.trim().split(' ');
-    if (parts.length < 2) return [firstDeductionMonth];
+  /// Calculate month string at offset from firstDeductionMonth
+  static String getMonthAtOffset(String startMonth, int offset) {
+    if (startMonth.isEmpty) return '';
+    final parts = startMonth.trim().split(' ');
+    if (parts.length < 2) return startMonth;
     final monthName = parts[0];
     final year = int.tryParse(parts[1]) ?? DateTime.now().year;
 
@@ -394,14 +407,123 @@ class EmployeeLoan {
       'July', 'August', 'September', 'October', 'November', 'December'
     ];
     final startIndex = months.indexOf(monthName);
-    if (startIndex == -1) return [firstDeductionMonth];
+    if (startIndex == -1) return startMonth;
 
+    final totalMonths = startIndex + offset;
+    final finalMonthIndex = totalMonths % 12;
+    final finalYear = year + (totalMonths ~/ 12);
+    return '${months[finalMonthIndex]} $finalYear';
+  }
+
+  /// Base installment count representing original agreed duration
+  int get baseInstallments => originalInstallments > 0 ? originalInstallments : installments;
+
+  /// Calculate effective total installments needed to fully recover the loan,
+  /// factoring in both historical partial repayments and approved future flexible/pause requests.
+  int get effectiveInstallments {
+    if (actualRemainingBalance <= 0 || status == 'Closed' || emiAmount <= 0) {
+      return installments;
+    }
+
+    final baseline = baseInstallments;
+    if (firstDeductionMonth.isEmpty) {
+      final paidCount = repayments.length;
+      final futureCount = (actualRemainingBalance / emiAmount).ceil();
+      final totalNeeded = paidCount + futureCount;
+      return totalNeeded > baseline ? totalNeeded : baseline;
+    }
+
+    double balance = totalRepayableAmount;
+    int monthIndex = 0;
+
+    // Simulate month-by-month deduction until balance reaches 0 (or at least baseline installments)
+    while ((balance > 0.01 || monthIndex < baseline) && monthIndex < 240) {
+      final month = getMonthAtOffset(firstDeductionMonth, monthIndex);
+      final monthNorm = month.trim().toLowerCase();
+
+      // Check if this month is already recorded in repayments
+      final repayment = repayments.where((r) => r.month.trim().toLowerCase() == monthNorm).firstOrNull;
+      if (repayment != null) {
+        balance -= repayment.amount;
+      } else {
+        // Upcoming month: check for approved pause or flexible request
+        final pauseReq = getPauseRequestForMonth(month);
+        final isApproved = pauseReq != null && pauseReq.status.trim().toLowerCase() == 'approved';
+
+        if (isApproved && pauseReq.isFullPause) {
+          // Full pause: 0 deduction in this month
+        } else if (isApproved && pauseReq.isFlexible) {
+          final approvedAmt = pauseReq.approvedAmount ?? pauseReq.requestedAmount ?? emiAmount;
+          final deduction = approvedAmt < balance ? approvedAmt : balance;
+          balance -= deduction;
+        } else {
+          // Standard EMI deduction
+          final deduction = emiAmount < balance ? emiAmount : balance;
+          balance -= deduction;
+        }
+      }
+
+      monthIndex++;
+      if (balance <= 0.01 && monthIndex >= baseline) {
+        break;
+      }
+    }
+
+    return monthIndex > baseline ? monthIndex : baseline;
+  }
+
+  /// Total tenure in months taking into account any extended tenure
+  int get totalTenureMonths {
+    int maxM = baseInstallments;
+    if (installments > maxM) {
+      maxM = installments;
+    }
+    if (effectiveInstallments > maxM) {
+      maxM = effectiveInstallments;
+    }
+    if (repayments.isNotEmpty && repayments.length > maxM) {
+      maxM = repayments.length;
+    }
+    return maxM;
+  }
+
+  /// Check if total tenure has been extended beyond original duration
+  bool get isTenureExtended => totalTenureMonths > baseInstallments;
+
+  /// Number of extra months added to the loan
+  int get extendedMonthsCount => isTenureExtended ? totalTenureMonths - baseInstallments : 0;
+
+  /// Effective last deduction month (extended if needed)
+  String get effectiveLastDeductionMonth {
+    final months = scheduleMonths;
+    if (months.isNotEmpty) return months.last;
+    return lastDeductionMonth;
+  }
+
+  /// Paid installments count
+  int get paidInstallments {
+    final total = totalTenureMonths;
+    if (repayments.isNotEmpty) {
+      return repayments.length > total ? total : repayments.length;
+    }
+    if (emiAmount <= 0) return 0;
+    final count = (totalPaid / emiAmount).floor();
+    return count > total ? total : count;
+  }
+
+  /// Remaining installments count
+  int get remainingInstallments {
+    final rem = totalTenureMonths - paidInstallments;
+    return rem < 0 ? 0 : rem;
+  }
+
+  /// Generate chronological list of deduction months (dynamically extended if tenure is prolonged)
+  List<String> get scheduleMonths {
+    final count = totalTenureMonths;
+    if (count <= 0 || firstDeductionMonth.isEmpty) return [];
     final result = <String>[];
-    for (int i = 0; i < installments; i++) {
-      final totalMonths = startIndex + i;
-      final finalMonthIndex = totalMonths % 12;
-      final finalYear = year + (totalMonths ~/ 12);
-      result.add('${months[finalMonthIndex]} $finalYear');
+    for (int i = 0; i < count; i++) {
+      result.add(getMonthAtOffset(firstDeductionMonth, i));
     }
     return result;
   }
@@ -418,23 +540,33 @@ class EmployeeLoan {
     return months.last;
   }
 
-  /// Get pause/deferral request for a specific month
+  /// Get pause/flexible request for a specific month
   LoanEmiPauseRequest? getPauseRequestForMonth(String month) {
     final norm = month.trim().toLowerCase();
     return pauseRequests.where((r) => r.month.trim().toLowerCase() == norm).firstOrNull;
   }
 
-  /// Check if a given month has an approved EMI pause
+  /// Check if a given month has an approved full EMI pause (0 deduction)
   bool isMonthPaused(String month) {
     final req = getPauseRequestForMonth(month);
-    return req != null && req.status.trim().toLowerCase() == 'approved';
+    return req != null && req.status.trim().toLowerCase() == 'approved' && req.isFullPause;
+  }
+
+  /// Get approved flexible EMI request for a specific month (partial deduction)
+  LoanEmiPauseRequest? getApprovedFlexibleRequestForMonth(String month) {
+    final norm = month.trim().toLowerCase();
+    return pauseRequests.where((r) =>
+        r.month.trim().toLowerCase() == norm &&
+        r.status.trim().toLowerCase() == 'approved' &&
+        r.isFlexible
+    ).firstOrNull;
   }
 
   /// Get unrecovered approved pause request from an earlier month
   LoanEmiPauseRequest? getUnrecoveredDeferredRequestBefore(String currentMonth) {
     final (cYear, cMonth) = parseMonthYear(currentMonth);
     for (final req in pauseRequests) {
-      if (req.status.trim().toLowerCase() == 'approved' && !req.isRecovered) {
+      if (req.status.trim().toLowerCase() == 'approved' && req.isFullPause && !req.isRecovered) {
         final (rYear, rMonth) = parseMonthYear(req.month);
         final isBefore = rYear < cYear || (rYear == cYear && rMonth < cMonth);
         if (isBefore) {
@@ -460,9 +592,10 @@ class EmployeeLoan {
       'disbursement_date': disbursementDate,
       'purpose': purpose,
       'installments': installments,
+      'original_installments': originalInstallments > 0 ? originalInstallments : installments,
       'emi_amount': emiAmount,
       'first_deduction_month': firstDeductionMonth,
-      'last_deduction_month': lastDeductionMonth,
+      'last_deduction_month': effectiveLastDeductionMonth,
       'interest_rate': interestRate,
       'total_repayable_amount': totalRepayableAmount,
       'requested_by': requestedBy,
@@ -507,6 +640,7 @@ class EmployeeLoan {
       disbursementDate: map['disbursement_date'] as String? ?? '',
       purpose: map['purpose'] as String? ?? '',
       installments: map['installments'] as int? ?? 0,
+      originalInstallments: map['original_installments'] as int? ?? (map['installments'] as int? ?? 0),
       emiAmount: (map['emi_amount'] as num?)?.toDouble() ?? 0.0,
       firstDeductionMonth: map['first_deduction_month'] as String? ?? '',
       lastDeductionMonth: map['last_deduction_month'] as String? ?? '',
@@ -537,6 +671,7 @@ class EmployeeLoan {
     String? disbursementDate,
     String? purpose,
     int? installments,
+    int? originalInstallments,
     double? emiAmount,
     String? firstDeductionMonth,
     String? lastDeductionMonth,
@@ -565,6 +700,7 @@ class EmployeeLoan {
       disbursementDate: disbursementDate ?? this.disbursementDate,
       purpose: purpose ?? this.purpose,
       installments: installments ?? this.installments,
+      originalInstallments: originalInstallments ?? this.originalInstallments,
       emiAmount: emiAmount ?? this.emiAmount,
       firstDeductionMonth: firstDeductionMonth ?? this.firstDeductionMonth,
       lastDeductionMonth: lastDeductionMonth ?? this.lastDeductionMonth,

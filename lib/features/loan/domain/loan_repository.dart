@@ -37,6 +37,7 @@ abstract class LoanRepository {
     required String status,
     required String reviewedBy,
     String? adminRemarks,
+    double? approvedAmount,
   });
   Future<void> markPauseRequestRecovered({
     required String loanId,

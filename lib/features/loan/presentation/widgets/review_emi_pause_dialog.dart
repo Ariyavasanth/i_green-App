@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../employee/providers/employee_providers.dart';
@@ -34,11 +35,22 @@ class ReviewEmiPauseDialog extends ConsumerStatefulWidget {
 
 class _ReviewEmiPauseDialogState extends ConsumerState<ReviewEmiPauseDialog> {
   final _remarksController = TextEditingController();
+  late TextEditingController _approvedAmountController;
   bool _isProcessing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final reqAmt = widget.request.requestedAmount ?? (widget.loan.emiAmount / 2);
+    _approvedAmountController = TextEditingController(
+      text: reqAmt > 0 ? reqAmt.toStringAsFixed(0) : widget.loan.emiAmount.toStringAsFixed(0),
+    );
+  }
 
   @override
   void dispose() {
     _remarksController.dispose();
+    _approvedAmountController.dispose();
     super.dispose();
   }
 
@@ -48,6 +60,9 @@ class _ReviewEmiPauseDialogState extends ConsumerState<ReviewEmiPauseDialog> {
     try {
       final currentEmp = ref.read(currentEmployeeProvider);
       final reviewerName = currentEmp?.fullName ?? 'Administrator';
+      final approvedAmt = widget.request.isFlexible
+          ? double.tryParse(_approvedAmountController.text.trim())
+          : null;
 
       await ref.read(loanRepositoryProvider).reviewEmiPauseRequest(
         loanId: widget.loan.loanId,
@@ -55,6 +70,7 @@ class _ReviewEmiPauseDialogState extends ConsumerState<ReviewEmiPauseDialog> {
         status: newStatus,
         reviewedBy: reviewerName,
         adminRemarks: _remarksController.text.trim(),
+        approvedAmount: approvedAmt,
       );
 
       ref.invalidate(loanByIdProvider(widget.loan.id));
@@ -66,7 +82,11 @@ class _ReviewEmiPauseDialogState extends ConsumerState<ReviewEmiPauseDialog> {
         Navigator.of(context).pop(true);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('EMI Pause request for ${widget.request.month} $newStatus.'),
+            content: Text(
+              widget.request.isFlexible
+                  ? 'Flexible EMI request for ${widget.request.month} $newStatus.'
+                  : 'EMI Pause request for ${widget.request.month} $newStatus.',
+            ),
             backgroundColor: newStatus == 'Approved' ? AppColors.primary : Colors.red.shade700,
           ),
         );
@@ -83,6 +103,11 @@ class _ReviewEmiPauseDialogState extends ConsumerState<ReviewEmiPauseDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final formatCurrency = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+    final isFlexible = widget.request.isFlexible;
+    final approvedNum = double.tryParse(_approvedAmountController.text.trim()) ?? (widget.request.requestedAmount ?? 0.0);
+    final carriedForward = (widget.loan.emiAmount - approvedNum).clamp(0.0, widget.loan.emiAmount);
+
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
@@ -93,16 +118,20 @@ class _ReviewEmiPauseDialogState extends ConsumerState<ReviewEmiPauseDialog> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.amber.shade50,
+              color: isFlexible ? AppColors.primary.withValues(alpha: 0.12) : Colors.amber.shade50,
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.rule_folder_outlined, color: Colors.amber.shade800, size: 24),
+            child: Icon(
+              isFlexible ? Icons.currency_exchange : Icons.rule_folder_outlined,
+              color: isFlexible ? AppColors.primary : Colors.amber.shade800,
+              size: 24,
+            ),
           ),
           const SizedBox(width: 12),
-          const Expanded(
+          Expanded(
             child: Text(
-              'Review EMI Pause Request',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              isFlexible ? 'Review Flexible EMI Request' : 'Review EMI Pause Request',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
             ),
           ),
         ],
@@ -127,12 +156,45 @@ class _ReviewEmiPauseDialogState extends ConsumerState<ReviewEmiPauseDialog> {
                   const SizedBox(height: 6),
                   _buildDetailRow('Loan ID', widget.loan.loanId),
                   const SizedBox(height: 6),
-                  _buildDetailRow('Month to Pause', widget.request.month, highlight: true),
+                  _buildDetailRow('Target Month', widget.request.month, highlight: true),
+                  const SizedBox(height: 6),
+                  _buildDetailRow('Request Type', isFlexible ? 'Flexible EMI (Partial Deduction)' : 'Full EMI Pause (Defer)'),
+                  const SizedBox(height: 6),
+                  _buildDetailRow('Regular EMI', formatCurrency.format(widget.loan.emiAmount)),
+                  if (isFlexible) ...[
+                    const SizedBox(height: 6),
+                    _buildDetailRow('Requested Deduction', formatCurrency.format(widget.request.requestedAmount ?? 0), highlight: true),
+                    const SizedBox(height: 6),
+                    _buildDetailRow('Carry Forward Unpaid', formatCurrency.format(carriedForward)),
+                  ],
                   const SizedBox(height: 6),
                   _buildDetailRow('Reason', widget.request.reason),
                 ],
               ),
             ),
+            if (isFlexible) ...[
+              const SizedBox(height: 16),
+              const Text(
+                'Approved Monthly Deduction (₹)',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _approvedAmountController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  prefixText: '₹ ',
+                  hintText: 'Enter approved deduction',
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                  ),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+            ],
             const SizedBox(height: 16),
             const Text('Admin Remarks (Optional)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary)),
             const SizedBox(height: 6),
@@ -165,7 +227,9 @@ class _ReviewEmiPauseDialogState extends ConsumerState<ReviewEmiPauseDialog> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Approving this request will skip EMI deduction (₹0) for ${widget.request.month}. The salary deduction will recover 2× EMI in the subsequent payroll cycle.',
+                      isFlexible
+                          ? 'Approving will set salary deduction to ${formatCurrency.format(approvedNum)} for ${widget.request.month}. Unpaid ${formatCurrency.format(carriedForward)} automatically carries forward, and loan tenure auto-extends by 1 month to recover the balance.'
+                          : 'Approving this request will skip EMI deduction (₹0) for ${widget.request.month}. The salary deduction will recover in subsequent cycles, auto-extending tenure.',
                       style: TextStyle(color: Colors.blue.shade900, fontSize: 12, height: 1.3),
                     ),
                   ),
@@ -200,7 +264,7 @@ class _ReviewEmiPauseDialogState extends ConsumerState<ReviewEmiPauseDialog> {
           onPressed: _isProcessing ? null : () => _processReview('Approved'),
           child: _isProcessing
               ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : const Text('Approve Pause', style: TextStyle(fontWeight: FontWeight.bold)),
+              : Text(isFlexible ? 'Approve Flexible EMI' : 'Approve Pause', style: const TextStyle(fontWeight: FontWeight.bold)),
         ),
       ],
     );
